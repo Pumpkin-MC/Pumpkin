@@ -13,7 +13,7 @@ pub struct CCombatDeath<'a> {
 }
 
 impl<'a> CCombatDeath<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(player_id: VarInt, message: &'a TextComponent) -> Self {
         Self { player_id, message }
     }

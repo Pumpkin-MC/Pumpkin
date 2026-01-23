@@ -93,7 +93,10 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         }
     }
 
-    pub const fn set_compression(&mut self, compression_info: (CompressionThreshold, CompressionLevel)) {
+    pub const fn set_compression(
+        &mut self,
+        compression_info: (CompressionThreshold, CompressionLevel),
+    ) {
         self.compression = Some(compression_info);
     }
 

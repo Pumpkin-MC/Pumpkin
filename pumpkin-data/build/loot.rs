@@ -17,11 +17,17 @@ pub struct LootTableStruct {
 impl ToTokens for LootTableStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let loot_table_type = self.r#type.to_token_stream();
-        let random_sequence = if let Some(seq) = &self.random_sequence { quote! { Some(#seq) } } else { quote! { None } };
+        let random_sequence = if let Some(seq) = &self.random_sequence {
+            quote! { Some(#seq) }
+        } else {
+            quote! { None }
+        };
         let pools = if let Some(pools) = &self.pools {
             let pool_tokens: Vec<_> = pools.iter().map(quote::ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#pool_tokens),*]) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
 
         tokens.extend(quote! {
             LootTable {
@@ -54,11 +60,15 @@ impl ToTokens for LootPoolStruct {
         let conditions_tokens = if let Some(conds) = &self.conditions {
             let cond_tokens: Vec<_> = conds.iter().map(quote::ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
         let functions_tokens = if let Some(fns) = &self.functions {
             let cond_tokens: Vec<_> = fns.iter().map(quote::ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
 
         tokens.extend(quote! {
             LootPool {
@@ -258,7 +268,9 @@ impl ToTokens for LootFunctionStruct {
         let conditions_tokens = if let Some(conds) = &self.conditions {
             let cond_tokens: Vec<_> = conds.iter().map(quote::ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
 
         tokens.extend(quote! {
             LootFunction {
@@ -328,8 +340,16 @@ impl ToTokens for LootFunctionTypesStruct {
                 quote! { LootFunctionTypes::EnchantedCountIncrease }
             }
             Self::LimitCount { limit } => {
-                let min = if let Some(min) = limit.min { quote! { Some(#min) } } else { quote! { None } };
-                let max = if let Some(max) = limit.max { quote! { Some(#max) } } else { quote! { None } };
+                let min = if let Some(min) = limit.min {
+                    quote! { Some(#min) }
+                } else {
+                    quote! { None }
+                };
+                let max = if let Some(max) = limit.max {
+                    quote! { Some(#max) }
+                } else {
+                    quote! { None }
+                };
                 quote! { LootFunctionTypes::LimitCount { min: #min, max: #max } }
             }
             Self::ApplyBonus {
@@ -340,7 +360,9 @@ impl ToTokens for LootFunctionTypesStruct {
                 let parameters = if let Some(params) = parameters {
                     let params = params.to_token_stream();
                     quote! { Some(#params) }
-                } else { quote! { None } };
+                } else {
+                    quote! { None }
+                };
 
                 quote! {
                     LootFunctionTypes::ApplyBonus {
@@ -452,11 +474,15 @@ impl ToTokens for LootPoolEntryStruct {
         let conditions_tokens = if let Some(conds) = &self.conditions {
             let cond_tokens: Vec<_> = conds.iter().map(quote::ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
         let functions_tokens = if let Some(fns) = &self.functions {
             let cond_tokens: Vec<_> = fns.iter().map(quote::ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
 
         tokens.extend(quote! {
             LootPoolEntry {

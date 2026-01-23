@@ -14,7 +14,7 @@ pub struct CBlockUpdate {
 }
 
 impl CBlockUpdate {
-    #[must_use] 
+    #[must_use]
     pub const fn new(location: BlockPos, block_id: VarInt) -> Self {
         Self { location, block_id }
     }

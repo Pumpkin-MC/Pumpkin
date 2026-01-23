@@ -1,8 +1,7 @@
 use pumpkin_data::{
     Block,
     block_properties::{
-        BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties,
-        WheatLikeProperties,
+        BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties, WheatLikeProperties,
     },
 };
 use pumpkin_util::math::position::BlockPos;

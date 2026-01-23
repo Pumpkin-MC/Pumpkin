@@ -129,9 +129,7 @@ impl<R: Read> NetworkReadExt for R {
             .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
 
         if return_buf.len() > bound {
-            return Err(ReadingError::TooLarge(
-                "Read remaining too long".to_owned(),
-            ));
+            return Err(ReadingError::TooLarge("Read remaining too long".to_owned()));
         }
 
         Ok(return_buf.into_boxed_slice())

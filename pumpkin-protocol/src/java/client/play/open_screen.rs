@@ -15,8 +15,12 @@ pub struct COpenScreen<'a> {
 }
 
 impl<'a> COpenScreen<'a> {
-    #[must_use] 
-    pub const fn new(window_id: VarInt, window_type: VarInt, window_title: &'a TextComponent) -> Self {
+    #[must_use]
+    pub const fn new(
+        window_id: VarInt,
+        window_type: VarInt,
+        window_title: &'a TextComponent,
+    ) -> Self {
         Self {
             sync_id: window_id,
             window_type,

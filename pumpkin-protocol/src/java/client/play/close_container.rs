@@ -11,7 +11,7 @@ pub struct CCloseContainer {
 }
 
 impl CCloseContainer {
-    #[must_use] 
+    #[must_use]
     pub const fn new(window_id: VarInt) -> Self {
         Self { sync_id: window_id }
     }

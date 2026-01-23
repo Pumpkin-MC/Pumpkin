@@ -27,7 +27,7 @@ impl<const N: usize> Bitset<N> {
 
 impl<const N: usize> Default for Bitset<N> {
     fn default() -> Self {
-        assert!(N <= 80, );
+        assert!(N <= 80,);
         Self { bits: 0 }
     }
 }

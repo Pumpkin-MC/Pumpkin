@@ -14,16 +14,16 @@ impl Pool {
         let mut index = random.next_bounded_i32(total_weight);
         if total_weight < 64 {
             return Some(FlattenedContent::get(index, distribution, total_weight));
-        } else {
-            // WrappedContent
-            for dist in distribution {
-                index -= dist.weight;
-                if index >= 0 {
-                    continue;
-                }
-                return Some(dist.data.clone());
-            }
         }
+        // WrappedContent
+        for dist in distribution {
+            index -= dist.weight;
+            if index >= 0 {
+                continue;
+            }
+            return Some(dist.data.clone());
+        }
+
         None
     }
 }

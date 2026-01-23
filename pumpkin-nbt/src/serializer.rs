@@ -199,9 +199,11 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     }
 
     fn serialize_u8(self, v: u8) -> Result<()> {
-        if let State::Named(_) = self.state { Err(Error::UnsupportedType(
-            "u8; NBT only supports signed values".to_owned(),
-        )) } else {
+        if let State::Named(_) = self.state {
+            Err(Error::UnsupportedType(
+                "u8; NBT only supports signed values".to_owned(),
+            ))
+        } else {
             self.parse_state(BYTE_ID)?;
             self.output.write_u8_be(v)?;
             Ok(())
@@ -209,15 +211,15 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     }
 
     fn serialize_u16(self, v: u16) -> Result<()> {
-        self.serialize_i16(v as i16)
+        self.serialize_i16(v.cast_signed())
     }
 
     fn serialize_u32(self, v: u32) -> Result<()> {
-        self.serialize_i32(v as i32)
+        self.serialize_i32(v.cast_signed())
     }
 
     fn serialize_u64(self, v: u64) -> Result<()> {
-        self.serialize_i64(v as i64)
+        self.serialize_i64(v.cast_signed())
     }
 
     fn serialize_f32(self, v: f32) -> Result<()> {

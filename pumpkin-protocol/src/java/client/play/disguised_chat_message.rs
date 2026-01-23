@@ -16,7 +16,7 @@ pub struct CDisguisedChatMessage<'a> {
 }
 
 impl<'a> CDisguisedChatMessage<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(
         message: &'a TextComponent,
         chat_type: VarInt,

@@ -37,7 +37,9 @@ impl Click {
     }
 
     fn new_normal_click(button: i8, slot: i16) -> Result<Self, InventoryError> {
-        let slot = if slot == SLOT_INDEX_OUTSIDE { Slot::OutsideInventory } else {
+        let slot = if slot == SLOT_INDEX_OUTSIDE {
+            Slot::OutsideInventory
+        } else {
             let slot = slot.try_into().unwrap_or(0);
             Slot::Normal(slot)
         };
@@ -76,7 +78,9 @@ impl Click {
 
     fn new_drop_item(button: i8, slot: i16) -> Result<Self, InventoryError> {
         let drop_type = DropType::from_i8(button)?;
-        let slot = if slot == SLOT_INDEX_OUTSIDE { Slot::OutsideInventory } else {
+        let slot = if slot == SLOT_INDEX_OUTSIDE {
+            Slot::OutsideInventory
+        } else {
             let slot = slot.try_into().unwrap_or(0);
             Slot::Normal(slot)
         };

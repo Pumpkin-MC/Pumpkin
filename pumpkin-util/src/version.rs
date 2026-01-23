@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 pub enum MinecraftVersion {
     V_1_7_2,
     V_1_7_6,

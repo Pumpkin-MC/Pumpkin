@@ -10,7 +10,7 @@ pub struct CLoginDisconnect {
 
 impl CLoginDisconnect {
     // input json!
-    #[must_use] 
+    #[must_use]
     pub const fn new(json_reason: String) -> Self {
         Self { json_reason }
     }

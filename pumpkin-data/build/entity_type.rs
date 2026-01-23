@@ -63,9 +63,17 @@ impl ToTokens for NamedEntityType<'_> {
         let entity = self.1;
         let id = LitInt::new(&entity.id.to_string(), proc_macro2::Span::call_site());
 
-        let max_health = if let Some(mh) = entity.max_health { quote! { Some(#mh) } } else { quote! { None } };
+        let max_health = if let Some(mh) = entity.max_health {
+            quote! { Some(#mh) }
+        } else {
+            quote! { None }
+        };
 
-        let attackable = if let Some(a) = entity.attackable { quote! { Some(#a) } } else { quote! { None } };
+        let attackable = if let Some(a) = entity.attackable {
+            quote! { Some(#a) }
+        } else {
+            quote! { None }
+        };
 
         let spawn_restriction_location = match entity.spawn_restriction.location {
             SpawnLocation::InLava => quote! {SpawnLocation::InLava},
@@ -105,8 +113,14 @@ impl ToTokens for NamedEntityType<'_> {
         let summonable = entity.summonable;
         let fire_immune = entity.fire_immune;
         let eye_height = entity.eye_height;
-        assert!(!(entity.mob.is_none() && name != "player"), "missing field 'mob', entity name {name}");
-        assert!(!(entity.limit_per_chunk.is_none() && name != "player"), "missing field 'mob', entity name {name}");
+        assert!(
+            !(entity.mob.is_none() && name != "player"),
+            "missing field 'mob', entity name {name}"
+        );
+        assert!(
+            !(entity.limit_per_chunk.is_none() && name != "player"),
+            "missing field 'mob', entity name {name}"
+        );
         let mob = entity.mob.unwrap_or(false);
         let limit_per_chunk = entity.limit_per_chunk.unwrap_or(0);
         let can_spawn_far_from_player = entity.can_spawn_far_from_player;
@@ -117,7 +131,9 @@ impl ToTokens for NamedEntityType<'_> {
         let loot_table = if let Some(table) = &entity.loot_table {
             let table_tokens = table.to_token_stream();
             quote! { Some(#table_tokens) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
 
         tokens.extend(quote! {
             EntityType {

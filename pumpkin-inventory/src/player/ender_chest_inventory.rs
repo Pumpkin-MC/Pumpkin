@@ -21,7 +21,7 @@ impl Default for EnderChestInventory {
 impl EnderChestInventory {
     pub const INVENTORY_SIZE: usize = 27;
 
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),

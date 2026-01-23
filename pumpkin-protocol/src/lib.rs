@@ -461,7 +461,7 @@ impl PositionFlag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_bitfield(flags: &[Self]) -> i32 {
         flags.iter().fold(0, |acc, flag| acc | flag.get_mask())
     }
@@ -489,7 +489,7 @@ pub struct Link<'a> {
 }
 
 impl<'a> Link<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(label: Label, url: &'a String) -> Self {
         Self {
             is_built_in: match label {

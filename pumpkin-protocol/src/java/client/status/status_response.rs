@@ -8,7 +8,7 @@ pub struct CStatusResponse {
     pub json_response: String, // 32767
 }
 impl CStatusResponse {
-    #[must_use] 
+    #[must_use]
     pub const fn new(json_response: String) -> Self {
         Self { json_response }
     }

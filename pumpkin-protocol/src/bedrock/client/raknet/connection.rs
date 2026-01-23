@@ -11,7 +11,7 @@ pub struct CConnectedPong {
 }
 
 impl CConnectedPong {
-    #[must_use] 
+    #[must_use]
     pub const fn new(ping_time: u64, pong_time: u64) -> Self {
         Self {
             ping_time,
@@ -31,7 +31,7 @@ pub struct CConnectionRequestAccepted {
 }
 
 impl CConnectionRequestAccepted {
-    #[must_use] 
+    #[must_use]
     pub const fn new(
         client_address: SocketAddr,
         system_index: u16,

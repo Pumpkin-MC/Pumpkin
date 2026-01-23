@@ -35,7 +35,7 @@ pub enum RakReliability {
 }
 
 impl RakReliability {
-    #[must_use] 
+    #[must_use]
     pub const fn is_reliable(&self) -> bool {
         matches!(
             self,
@@ -47,15 +47,12 @@ impl RakReliability {
         )
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn is_sequenced(&self) -> bool {
-        matches!(
-            self,
-            Self::ReliableSequenced | Self::UnreliableSequenced
-        )
+        matches!(self, Self::ReliableSequenced | Self::UnreliableSequenced)
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn is_ordered(&self) -> bool {
         matches!(
             self,
@@ -66,7 +63,7 @@ impl RakReliability {
         )
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn is_order_exclusive(&self) -> bool {
         matches!(
             self,
@@ -74,7 +71,7 @@ impl RakReliability {
         )
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn from_id(id: u8) -> Option<Self> {
         match id {
             0 => Some(Self::Unreliable),
@@ -89,7 +86,7 @@ impl RakReliability {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn to_id(&self) -> u8 {
         match self {
             Self::Unreliable => 0,

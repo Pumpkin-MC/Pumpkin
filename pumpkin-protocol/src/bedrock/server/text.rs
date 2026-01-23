@@ -19,7 +19,7 @@ pub struct SText {
 }
 
 impl SText {
-    #[must_use] 
+    #[must_use]
     pub fn new(message: String, source_name: String) -> Self {
         Self {
             needs_translation: false,
@@ -99,9 +99,7 @@ impl PacketRead for SText {
             if actual != expected {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
-                    format!(
-                        "Dummy string mismatch: expected {expected}, got {actual}"
-                    ),
+                    format!("Dummy string mismatch: expected {expected}, got {actual}"),
                 ));
             }
         }

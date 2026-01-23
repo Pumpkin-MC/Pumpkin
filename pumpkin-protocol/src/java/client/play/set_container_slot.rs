@@ -15,7 +15,7 @@ pub struct CSetContainerSlot<'a> {
 }
 
 impl<'a> CSetContainerSlot<'a> {
-    #[must_use] 
+    #[must_use]
     pub fn new(
         window_id: i8,
         state_id: i32,

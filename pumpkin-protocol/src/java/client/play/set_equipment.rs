@@ -21,8 +21,11 @@ pub struct CSetEquipment {
 }
 
 impl CSetEquipment {
-    #[must_use] 
-    pub const fn new(entity_id: VarInt, equipment: Vec<(i8, ItemStackSerializer<'static>)>) -> Self {
+    #[must_use]
+    pub const fn new(
+        entity_id: VarInt,
+        equipment: Vec<(i8, ItemStackSerializer<'static>)>,
+    ) -> Self {
         Self {
             entity_id,
             equipment,

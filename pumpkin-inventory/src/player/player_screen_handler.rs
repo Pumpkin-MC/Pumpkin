@@ -31,7 +31,7 @@ impl PlayerScreenHandler {
         EquipmentSlot::FEET,
     ];
 
-    #[must_use] 
+    #[must_use]
     pub fn is_in_hotbar(slot: u8) -> bool {
         (36..=45).contains(&slot)
     }

@@ -41,10 +41,7 @@ pub fn parse_packets(phases: BTreeMap<String, BTreeMap<String, i32>>) -> TokenSt
 
     for (phase_name, packets) in phases {
         for (packet_name, packet_id) in packets {
-            let sanitized_name = packet_name
-                .replace('/', "_")
-                .replace('-', "_")
-                .to_uppercase();
+            let sanitized_name = packet_name.replace(['/', '-'], "_").to_uppercase();
 
             let const_name = format_ident!("{}_{}", phase_name.to_uppercase(), sanitized_name);
 

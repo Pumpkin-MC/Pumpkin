@@ -4,8 +4,7 @@ use pumpkin_data::{
     Block,
     BlockDirection::{East, North, South, West},
     block_properties::{
-        BlockProperties, EnumVariants, FarmlandLikeProperties, Integer0To7,
-        WheatLikeProperties,
+        BlockProperties, EnumVariants, FarmlandLikeProperties, Integer0To7, WheatLikeProperties,
     },
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};

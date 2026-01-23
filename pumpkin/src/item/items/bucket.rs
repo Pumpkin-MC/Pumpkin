@@ -15,9 +15,7 @@ use pumpkin_util::{
     GameMode,
     math::{position::BlockPos, vector3::Vector3},
 };
-use pumpkin_world::{
-    inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags,
-};
+use pumpkin_world::{inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags};
 
 use crate::world::World;
 

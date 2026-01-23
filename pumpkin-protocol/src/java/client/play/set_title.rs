@@ -11,7 +11,7 @@ pub struct CTitleText<'a> {
 }
 
 impl<'a> CTitleText<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(title: &'a TextComponent) -> Self {
         Self { title }
     }

@@ -4,7 +4,11 @@ use io::Read;
 use serde::{Deserialize, Serialize};
 use serializer::WriteAdaptor;
 
-use crate::{io, compound, deserializer, serializer, END_ID, BYTE_ID, SHORT_ID, INT_ID, LONG_ID, FLOAT_ID, DOUBLE_ID, BYTE_ARRAY_ID, STRING_ID, LIST_ID, COMPOUND_ID, INT_ARRAY_ID, LONG_ARRAY_ID, Write, Error, Seek, get_nbt_string, nbt_byte_array, nbt_int_array, nbt_long_array};
+use crate::{
+    BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, DOUBLE_ID, END_ID, Error, FLOAT_ID, INT_ARRAY_ID, INT_ID,
+    LIST_ID, LONG_ARRAY_ID, LONG_ID, SHORT_ID, STRING_ID, Seek, Write, compound, deserializer,
+    get_nbt_string, io, nbt_byte_array, nbt_int_array, nbt_long_array, serializer,
+};
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 #[repr(u8)]
@@ -26,7 +30,7 @@ pub enum NbtTag {
 
 impl NbtTag {
     /// Returns the numeric id associated with the data type.
-    #[must_use] 
+    #[must_use]
     pub const fn get_type_id(&self) -> u8 {
         // Safety: Since Self is repr(u8), it is guaranteed to hold the discriminant in the first byte
         // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
@@ -122,9 +126,8 @@ impl NbtTag {
             END_ID => Ok(()),
             BYTE_ID => reader.skip_bytes(1),
             SHORT_ID => reader.skip_bytes(2),
-            INT_ID => reader.skip_bytes(4),
+            INT_ID | FLOAT_ID => reader.skip_bytes(4),
             LONG_ID => reader.skip_bytes(8),
-            FLOAT_ID => reader.skip_bytes(4),
             DOUBLE_ID => reader.skip_bytes(8),
             BYTE_ARRAY_ID => {
                 let len = reader.get_i32_be()?;
@@ -259,7 +262,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn extract_byte(&self) -> Option<i8> {
         match self {
             Self::Byte(byte) => Some(*byte),
@@ -267,7 +270,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn extract_short(&self) -> Option<i16> {
         match self {
             Self::Short(short) => Some(*short),
@@ -275,7 +278,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn extract_int(&self) -> Option<i32> {
         match self {
             Self::Int(int) => Some(*int),
@@ -283,7 +286,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn extract_long(&self) -> Option<i64> {
         match self {
             Self::Long(long) => Some(*long),
@@ -291,7 +294,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn extract_float(&self) -> Option<f32> {
         match self {
             Self::Float(float) => Some(*float),
@@ -299,7 +302,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn extract_double(&self) -> Option<f64> {
         match self {
             Self::Double(double) => Some(*double),
@@ -307,7 +310,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn extract_bool(&self) -> Option<bool> {
         match self {
             Self::Byte(byte) => Some(*byte != 0),
@@ -315,7 +318,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn extract_byte_array(&self) -> Option<Box<[u8]>> {
         match self {
             // Note: Bytes are free to clone, so we can hand out an owned type.
@@ -324,7 +327,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn extract_string(&self) -> Option<&str> {
         match self {
             Self::String(string) => Some(string),
@@ -332,7 +335,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn extract_list(&self) -> Option<&[Self]> {
         match self {
             Self::List(list) => Some(list),
@@ -340,7 +343,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn extract_compound(&self) -> Option<&NbtCompound> {
         match self {
             Self::Compound(compound) => Some(compound),
@@ -348,7 +351,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn extract_int_array(&self) -> Option<&[i32]> {
         match self {
             Self::IntArray(int_array) => Some(int_array),
@@ -356,7 +359,7 @@ impl NbtTag {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn extract_long_array(&self) -> Option<&[i64]> {
         match self {
             Self::LongArray(long_array) => Some(long_array),

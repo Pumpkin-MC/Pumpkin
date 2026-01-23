@@ -76,7 +76,7 @@ pub struct Nbt {
 }
 
 impl Nbt {
-    #[must_use] 
+    #[must_use]
     pub const fn new(name: String, tag: NbtCompound) -> Self {
         Self {
             name,
@@ -111,7 +111,7 @@ impl Nbt {
         })
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn write(&self) -> Bytes {
         let mut bytes = Vec::new();
         let mut writer = WriteAdaptor::new(&mut bytes);
@@ -130,7 +130,7 @@ impl Nbt {
     }
 
     /// Writes an NBT tag without a root `Compound` name.
-    #[must_use] 
+    #[must_use]
     pub fn write_unnamed(&self) -> Bytes {
         let mut bytes = Vec::new();
         let mut writer = WriteAdaptor::new(&mut bytes);

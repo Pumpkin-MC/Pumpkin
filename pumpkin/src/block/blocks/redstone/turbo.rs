@@ -4,9 +4,7 @@
 
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
-    block_properties::{
-        BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties,
-    },
+    block_properties::{BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;

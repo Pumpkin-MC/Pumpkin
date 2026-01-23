@@ -11,7 +11,7 @@ pub struct CChunkBatchEnd {
 }
 
 impl CChunkBatchEnd {
-    #[must_use] 
+    #[must_use]
     pub fn new(count: u16) -> Self {
         Self {
             batch_size: count.into(),

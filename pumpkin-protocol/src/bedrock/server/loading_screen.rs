@@ -13,7 +13,7 @@ pub struct SLoadingScreen {
 }
 
 impl SLoadingScreen {
-    #[must_use] 
+    #[must_use]
     pub const fn is_loading_done(&self) -> bool {
         self.status.0 == 2
     }

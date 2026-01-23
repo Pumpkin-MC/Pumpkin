@@ -12,7 +12,7 @@ pub struct CHeadRot {
 }
 
 impl CHeadRot {
-    #[must_use] 
+    #[must_use]
     pub const fn new(entity_id: VarInt, head_yaw: u8) -> Self {
         Self {
             entity_id,

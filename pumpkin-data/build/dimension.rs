@@ -60,7 +60,11 @@ pub fn build() -> TokenStream {
                 .to_shouty_snake_case()
         );
 
-        let fixed_time = if let Some(t) = dim.fixed_time { quote! { Some(#t) } } else { quote! { None } };
+        let fixed_time = if let Some(t) = dim.fixed_time {
+            quote! { Some(#t) }
+        } else {
+            quote! { None }
+        };
 
         let ambient_light = dim.ambient_light;
         let coordinate_scale = dim.coordinate_scale;

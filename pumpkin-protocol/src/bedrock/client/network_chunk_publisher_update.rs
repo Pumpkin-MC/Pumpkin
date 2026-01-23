@@ -19,7 +19,7 @@ pub struct CNetworkChunkPublisherUpdate {
 }
 
 impl CNetworkChunkPublisherUpdate {
-    #[must_use] 
+    #[must_use]
     pub const fn new(pos_for_view: BlockPos, new_radius: u32) -> Self {
         Self {
             pos_for_view,

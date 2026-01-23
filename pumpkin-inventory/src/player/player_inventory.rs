@@ -58,18 +58,12 @@ impl PlayerInventory {
 
     /// getOffHandStack in source
     pub async fn off_hand_item(&self) -> Arc<Mutex<ItemStack>> {
-        let slot = self
-            .equipment_slots
-            .get(&Self::OFF_HAND_SLOT)
-            .unwrap();
+        let slot = self.equipment_slots.get(&Self::OFF_HAND_SLOT).unwrap();
         self.entity_equipment.lock().await.get(slot)
     }
 
     pub async fn swap_item(&self) -> (ItemStack, ItemStack) {
-        let slot = self
-            .equipment_slots
-            .get(&Self::OFF_HAND_SLOT)
-            .unwrap();
+        let slot = self.equipment_slots.get(&Self::OFF_HAND_SLOT).unwrap();
         let mut equipment = self.entity_equipment.lock().await;
         let binding = self.held_item();
         let mut main_hand_item = binding.lock().await;
@@ -78,7 +72,7 @@ impl PlayerInventory {
         (main_hand_item.clone(), off_hand_item)
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn is_valid_hotbar_index(slot: usize) -> bool {
         slot < Self::HOTBAR_SIZE
     }

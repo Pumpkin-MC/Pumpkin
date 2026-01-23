@@ -30,7 +30,7 @@ impl VarInt {
 
     /// Returns the exact number of bytes this `VarInt` will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
-    #[must_use] 
+    #[must_use]
     pub const fn written_size(&self) -> usize {
         match self.0 {
             0 => 1,

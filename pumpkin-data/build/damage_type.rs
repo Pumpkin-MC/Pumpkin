@@ -69,12 +69,16 @@ pub fn build() -> TokenStream {
         let death_message_type = if let Some(msg) = &data.death_message_type {
             let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
             quote! { DeathMessageType::#msg_ident }
-        } else { quote! { DeathMessageType::Default } };
+        } else {
+            quote! { DeathMessageType::Default }
+        };
 
         let effects = if let Some(msg) = &data.effects {
             let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
             quote! { Some(DamageEffects::#msg_ident) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
 
         let exhaustion = data.exhaustion;
         let message_id = &data.message_id;

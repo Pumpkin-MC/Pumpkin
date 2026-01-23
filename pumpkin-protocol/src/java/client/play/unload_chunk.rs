@@ -10,7 +10,7 @@ pub struct CUnloadChunk {
 }
 
 impl CUnloadChunk {
-    #[must_use] 
+    #[must_use]
     pub const fn new(x: i32, z: i32) -> Self {
         Self { z, x }
     }

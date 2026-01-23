@@ -13,7 +13,7 @@ pub struct CSetExperience {
 }
 
 impl CSetExperience {
-    #[must_use] 
+    #[must_use]
     pub const fn new(progress: f32, level: VarInt, total_experience: VarInt) -> Self {
         Self {
             progress,

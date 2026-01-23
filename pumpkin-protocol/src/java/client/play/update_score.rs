@@ -17,7 +17,7 @@ pub struct CUpdateScore {
 }
 
 impl CUpdateScore {
-    #[must_use] 
+    #[must_use]
     pub const fn new(
         entity_name: String,
         objective_name: String,

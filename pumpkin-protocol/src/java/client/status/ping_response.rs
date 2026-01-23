@@ -9,7 +9,7 @@ pub struct CPingResponse {
 }
 
 impl CPingResponse {
-    #[must_use] 
+    #[must_use]
     pub const fn new(payload: i64) -> Self {
         Self { payload }
     }

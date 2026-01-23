@@ -14,7 +14,7 @@ pub struct CBossEvent<'a> {
 }
 
 impl<'a> CBossEvent<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(uuid: &'a uuid::Uuid, action: BosseventAction) -> Self {
         Self { uuid, action }
     }

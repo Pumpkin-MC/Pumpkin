@@ -55,7 +55,7 @@ impl TryFrom<i32> for BlockDirection {
 }
 
 impl BlockDirection {
-    #[must_use] 
+    #[must_use]
     pub const fn to_index(&self) -> u8 {
         match self {
             Self::Down => 0,
@@ -67,7 +67,7 @@ impl BlockDirection {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn from_index(index: u8) -> Option<Self> {
         match index {
             0 => Some(Self::Down),
@@ -88,12 +88,12 @@ impl BlockDirection {
         Self::horizontal()[random.next_bounded_i32(Self::horizontal().len() as i32 - 1) as usize]
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn by_index(index: usize) -> Option<Self> {
         Self::all().get(index % Self::all().len()).copied()
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn to_offset(&self) -> Vector3<i32> {
         match self {
             Self::Down => (0, -1, 0),
@@ -106,7 +106,7 @@ impl BlockDirection {
         .into()
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn opposite(&self) -> Self {
         match self {
             Self::Down => Self::Up,
@@ -118,12 +118,12 @@ impl BlockDirection {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn positive(&self) -> bool {
         matches!(self, Self::South | Self::East | Self::Up)
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn all() -> [Self; 6] {
         [
             Self::Down,
@@ -134,7 +134,7 @@ impl BlockDirection {
             Self::East,
         ]
     }
-    #[must_use] 
+    #[must_use]
     pub const fn update_order() -> [Self; 6] {
         [
             Self::West,
@@ -146,7 +146,7 @@ impl BlockDirection {
         ]
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn abstract_block_update_order() -> [Self; 6] {
         [
             Self::West,
@@ -158,44 +158,27 @@ impl BlockDirection {
         ]
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn horizontal() -> [Self; 4] {
-        [
-            Self::North,
-            Self::South,
-            Self::West,
-            Self::East,
-        ]
+        [Self::North, Self::South, Self::West, Self::East]
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn flow_directions() -> [Self; 5] {
-        [
-            Self::Down,
-            Self::North,
-            Self::South,
-            Self::West,
-            Self::East,
-        ]
+        [Self::Down, Self::North, Self::South, Self::West, Self::East]
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn is_horizontal(&self) -> bool {
-        matches!(
-            self,
-            Self::North
-                | Self::South
-                | Self::West
-                | Self::East
-        )
+        matches!(self, Self::North | Self::South | Self::West | Self::East)
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn vertical() -> [Self; 2] {
         [Self::Down, Self::Up]
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn to_horizontal_facing(&self) -> Option<HorizontalFacing> {
         match self {
             Self::North => Some(HorizontalFacing::North),
@@ -206,7 +189,7 @@ impl BlockDirection {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn to_horizontal_axis(&self) -> Option<HorizontalAxis> {
         match self {
             Self::North | Self::South => Some(HorizontalAxis::Z),
@@ -215,7 +198,7 @@ impl BlockDirection {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn to_cardinal_direction(&self) -> HorizontalFacing {
         match self {
             Self::North => HorizontalFacing::North,
@@ -226,7 +209,7 @@ impl BlockDirection {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn from_cardinal_direction(direction: HorizontalFacing) -> Self {
         match direction {
             HorizontalFacing::North => Self::North,
@@ -235,7 +218,7 @@ impl BlockDirection {
             HorizontalFacing::East => Self::East,
         }
     }
-    #[must_use] 
+    #[must_use]
     pub const fn to_axis(&self) -> Axis {
         match self {
             Self::North | Self::South => Axis::Z,
@@ -244,7 +227,7 @@ impl BlockDirection {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn to_facing(&self) -> Facing {
         match self {
             Self::North => Facing::North,
@@ -256,7 +239,7 @@ impl BlockDirection {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn rotate_clockwise(&self) -> Self {
         match self {
             Self::North => Self::East,
@@ -268,7 +251,7 @@ impl BlockDirection {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn rotate_counter_clockwise(&self) -> Self {
         match self {
             Self::North => Self::West,

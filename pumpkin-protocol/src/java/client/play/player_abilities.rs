@@ -11,7 +11,7 @@ pub struct CPlayerAbilities {
 }
 
 impl CPlayerAbilities {
-    #[must_use] 
+    #[must_use]
     pub const fn new(flags: i8, flying_speed: f32, field_of_view: f32) -> Self {
         Self {
             flags,

@@ -10,7 +10,7 @@ pub struct CEntityStatus {
 }
 
 impl CEntityStatus {
-    #[must_use] 
+    #[must_use]
     pub const fn new(entity_id: i32, entity_status: i8) -> Self {
         Self {
             entity_id,

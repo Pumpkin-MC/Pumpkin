@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block,
-    block_properties::{
-        BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties,
-    },
+    block_properties::{BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties},
     damage::DamageType,
     entity::EntityType,
     item::Item,

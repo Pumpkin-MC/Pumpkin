@@ -13,7 +13,7 @@ pub struct CDisconnectPlayer {
 }
 
 impl CDisconnectPlayer {
-    #[must_use] 
+    #[must_use]
     pub const fn new(reason: i32, message: String) -> Self {
         Self {
             reason: VarInt(reason),

@@ -9,7 +9,7 @@ pub struct CSetTime {
 }
 
 impl CSetTime {
-    #[must_use] 
+    #[must_use]
     pub const fn new(time: i32) -> Self {
         Self { time: VarInt(time) }
     }

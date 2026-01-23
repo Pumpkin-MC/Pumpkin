@@ -16,7 +16,7 @@ pub struct CEntitySoundEffect {
 }
 
 impl CEntitySoundEffect {
-    #[must_use] 
+    #[must_use]
     pub const fn new(
         sound_event: IdOr<SoundEvent>,
         sound_category: SoundCategory,

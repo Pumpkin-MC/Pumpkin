@@ -88,7 +88,7 @@ impl Default for UDPNetworkDecoder {
 }
 
 impl UDPNetworkDecoder {
-    #[must_use] 
+    #[must_use]
     pub const fn new() -> Self {
         Self { compression: None }
     }

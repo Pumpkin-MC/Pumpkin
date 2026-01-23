@@ -25,7 +25,7 @@ pub struct SConfigResourcePack {
 }
 
 impl SConfigResourcePack {
-    #[must_use] 
+    #[must_use]
     pub const fn response_result(&self) -> ResourcePackResponseResult {
         match self.result.0 {
             0 => ResourcePackResponseResult::DownloadSuccess,

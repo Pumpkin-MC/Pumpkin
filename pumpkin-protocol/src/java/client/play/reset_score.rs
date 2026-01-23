@@ -10,7 +10,7 @@ pub struct CResetScore {
 }
 
 impl CResetScore {
-    #[must_use] 
+    #[must_use]
     pub const fn new(entity_name: String, objective_name: Option<String>) -> Self {
         Self {
             entity_name,

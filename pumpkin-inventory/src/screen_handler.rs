@@ -360,11 +360,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn update_tracked_properties(
-        &mut self,
-        idx: i32,
-        value: i32,
-    ) -> ScreenHandlerFuture<'_, ()> {
+    fn update_tracked_properties(&mut self, idx: i32, value: i32) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
             if idx <= behaviour.tracked_property_values.len() as i32 {
@@ -378,11 +374,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn check_property_updates(
-        &mut self,
-        idx: i32,
-        value: i32,
-    ) -> ScreenHandlerFuture<'_, ()> {
+    fn check_property_updates(&mut self, idx: i32, value: i32) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
             if !behaviour.disable_sync
@@ -396,7 +388,8 @@ pub trait ScreenHandler: Send + Sync {
                     if let Some(ref sync_handler) = behaviour.sync_handler {
                         sync_handler.update_property(behaviour, idx, value).await;
                     }
-                }}
+                }
+            }
         })
     }
 
@@ -420,11 +413,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn check_slot_updates(
-        &mut self,
-        slot: usize,
-        stack: ItemStack,
-    ) -> ScreenHandlerFuture<'_, ()> {
+    fn check_slot_updates(&mut self, slot: usize, stack: ItemStack) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
             if !behaviour.disable_sync {

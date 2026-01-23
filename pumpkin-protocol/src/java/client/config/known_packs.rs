@@ -11,7 +11,7 @@ pub struct CKnownPacks<'a> {
 }
 
 impl<'a> CKnownPacks<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(known_packs: &'a [KnownPack]) -> Self {
         Self { known_packs }
     }

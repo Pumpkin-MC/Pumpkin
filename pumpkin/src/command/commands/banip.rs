@@ -7,8 +7,7 @@ use crate::{
         tree::{CommandTree, builder::argument},
     },
     data::{
-        SaveJSONConfiguration, banlist_serializer::BannedIpEntry,
-        banned_ip_data::BANNED_IP_LIST,
+        SaveJSONConfiguration, banlist_serializer::BannedIpEntry, banned_ip_data::BANNED_IP_LIST,
     },
     net::DisconnectReason,
     server::Server,

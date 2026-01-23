@@ -12,7 +12,7 @@ pub struct CRegistryData<'a> {
 }
 
 impl<'a> CRegistryData<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(registry_id: &'a ResourceLocation, entries: &'a [RegistryEntry]) -> Self {
         Self {
             registry_id,
@@ -30,7 +30,7 @@ pub struct RegistryEntry {
 
 // TODO: No unwraps
 impl RegistryEntry {
-    #[must_use] 
+    #[must_use]
     pub const fn new(entry_id: ResourceLocation, data: Option<Box<[u8]>>) -> Self {
         Self { entry_id, data }
     }
@@ -43,7 +43,7 @@ impl RegistryEntry {
             data: Some(data_buf.into_boxed_slice()),
         }
     }
-    #[must_use] 
+    #[must_use]
     pub fn none(name: &str) -> Self {
         Self {
             entry_id: ResourceLocation::vanilla(name),

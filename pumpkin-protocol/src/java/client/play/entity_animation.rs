@@ -13,7 +13,7 @@ pub struct CEntityAnimation {
 }
 
 impl CEntityAnimation {
-    #[must_use] 
+    #[must_use]
     pub const fn new(entity_id: VarInt, animation: Animation) -> Self {
         Self {
             entity_id,

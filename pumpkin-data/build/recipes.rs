@@ -50,7 +50,11 @@ impl ToTokens for CookingRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = if let Some(group) = &self.group { quote! { Some(#group) } } else { quote! { None } };
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
+        };
         let ingredient = self.ingredient.to_token_stream();
         let cookingtime = self.cookingtime.to_token_stream();
         let experience = self.experience.to_token_stream();
@@ -85,7 +89,11 @@ impl ToTokens for CraftingShapedRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = if let Some(group) = &self.group { quote! { Some(#group) } } else { quote! { None } };
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
+        };
         let show_notification = self.show_notification.unwrap_or(true);
         let key = self
             .key
@@ -129,7 +137,11 @@ impl ToTokens for CraftingShapelessRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = if let Some(group) = &self.group { quote! { Some(#group) } } else { quote! { None } };
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
+        };
         let ingredients = self
             .ingredients
             .iter()
@@ -163,7 +175,11 @@ impl ToTokens for CraftingTransmuteRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = if let Some(group) = &self.group { quote! { Some(#group) } } else { quote! { None } };
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
+        };
         let input = self.input.to_token_stream();
         let material = self.material.to_token_stream();
         let result = self.result.to_token_stream();

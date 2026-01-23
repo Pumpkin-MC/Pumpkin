@@ -36,14 +36,16 @@ pub enum EnchantmentTable {
 // TODO: No more magic numbers
 impl WindowPropertyTrait for EnchantmentTable {
     fn to_id(self) -> i16 {
-        use EnchantmentTable::{LevelRequirement, EnchantmentSeed, EnchantmentId, EnchantmentLevel};
+        use EnchantmentTable::{
+            EnchantmentId, EnchantmentLevel, EnchantmentSeed, LevelRequirement,
+        };
 
         i16::from(match self {
             LevelRequirement { slot } => slot,
             EnchantmentSeed => 3,
             EnchantmentId { slot } => 4 + slot,
             EnchantmentLevel { slot } => 7 + slot,
-        } )
+        })
     }
 }
 pub enum Beacon {

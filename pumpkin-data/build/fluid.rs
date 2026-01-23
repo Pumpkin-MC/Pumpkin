@@ -512,9 +512,12 @@ pub fn build() -> TokenStream {
                 .entry(renamed_property.clone())
                 .or_insert_with(|| property.values.clone());
 
-            assert!(expected_values == &property.values, 
+            assert!(
+                expected_values == &property.values,
                 "Enum overlap for '{}' ({:?} vs {:?})",
-                property.name, &property.values, expected_values
+                property.name,
+                &property.values,
+                expected_values
             );
 
             property_mapping.push(PropertyVariantMapping {
@@ -589,8 +592,12 @@ pub fn build() -> TokenStream {
         });
     }
 
-    let fluid_props = fluid_properties.iter().map(quote::ToTokens::to_token_stream);
-    let properties = property_enums.values().map(quote::ToTokens::to_token_stream);
+    let fluid_props = fluid_properties
+        .iter()
+        .map(quote::ToTokens::to_token_stream);
+    let properties = property_enums
+        .values()
+        .map(quote::ToTokens::to_token_stream);
 
     quote! {
         use std::hash::{Hash, Hasher};

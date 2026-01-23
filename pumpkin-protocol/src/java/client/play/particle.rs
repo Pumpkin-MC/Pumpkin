@@ -22,7 +22,7 @@ pub struct CParticle<'a> {
 
 impl<'a> CParticle<'a> {
     #[expect(clippy::too_many_arguments)]
-    #[must_use] 
+    #[must_use]
     pub const fn new(
         force_spawn: bool,
         important: bool,

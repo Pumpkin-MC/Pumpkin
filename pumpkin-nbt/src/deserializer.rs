@@ -1,7 +1,10 @@
 use std::cell::RefCell;
 use std::io::{Seek, SeekFrom};
 
-use crate::{io, Error, Write, NbtTag, END_ID, LIST_ID, INT_ARRAY_ID, LONG_ARRAY_ID, BYTE_ARRAY_ID, INT_ID, LONG_ID, BYTE_ID, COMPOUND_ID, get_nbt_string};
+use crate::{
+    BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, END_ID, Error, INT_ARRAY_ID, INT_ID, LIST_ID,
+    LONG_ARRAY_ID, LONG_ID, NbtTag, Write, get_nbt_string, io,
+};
 use io::Read;
 use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, forward_to_deserialize_any};

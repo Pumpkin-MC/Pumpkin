@@ -131,7 +131,7 @@ impl Serialize for ItemStackSerializer<'_> {
 }
 
 impl ItemStackSerializer<'_> {
-    #[must_use] 
+    #[must_use]
     pub fn to_stack(self) -> ItemStack {
         self.0.into_owned()
     }
@@ -166,7 +166,7 @@ pub struct ItemStackHash {
 }
 
 impl OptionalItemStackHash {
-    #[must_use] 
+    #[must_use]
     pub fn hash_equals(&self, other: &ItemStack) -> bool {
         if let Some(hash) = &self.0 {
             if hash.item_id != other.item.id.into() || hash.count != other.item_count.into() {

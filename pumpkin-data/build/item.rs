@@ -138,10 +138,8 @@ impl ToTokens for ItemComponents {
                             Blocks(Cow::Borrowed(&[&Block::#ident]))
                         }
                     } else if let TagType::Tag(str) = t {
-                        let ident = format_ident!(
-                            "{}",
-                            str.replace([':', '/'], "_").to_uppercase()
-                        );
+                        let ident =
+                            format_ident!("{}", str.replace([':', '/'], "_").to_uppercase());
                         block_array = quote! {
                             Tag(&tag::Block::#ident)
                         }
@@ -170,11 +168,15 @@ impl ToTokens for ItemComponents {
                 }
                 let speed = if let Some(speed) = rule.speed {
                     quote! { Some(#speed) }
-                } else { quote! { None } };
+                } else {
+                    quote! { None }
+                };
                 let correct_for_drops = if let Some(correct_for_drops) = rule.correct_for_drops {
                     let correct_for_drops = LitBool::new(correct_for_drops, Span::call_site());
                     quote! { Some(#correct_for_drops) }
-                } else { quote! { None } };
+                } else {
+                    quote! { None }
+                };
                 quote! {
                     ToolRule {
                         blocks: #block_array,

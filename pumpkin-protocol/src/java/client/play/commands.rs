@@ -13,7 +13,7 @@ pub struct CCommands<'a> {
 }
 
 impl<'a> CCommands<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(nodes: Box<[ProtoNode<'a>]>, root_node_index: VarInt) -> Self {
         Self {
             nodes,

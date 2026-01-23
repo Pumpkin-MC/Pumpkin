@@ -11,7 +11,7 @@ pub struct CAcknowledgeBlockChange {
 }
 
 impl CAcknowledgeBlockChange {
-    #[must_use] 
+    #[must_use]
     pub const fn new(sequence_id: VarInt) -> Self {
         Self { sequence_id }
     }

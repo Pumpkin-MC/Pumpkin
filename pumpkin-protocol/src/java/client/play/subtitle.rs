@@ -11,7 +11,7 @@ pub struct CSubtitle<'a> {
 }
 
 impl<'a> CSubtitle<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(subtitle: &'a TextComponent) -> Self {
         Self { subtitle }
     }

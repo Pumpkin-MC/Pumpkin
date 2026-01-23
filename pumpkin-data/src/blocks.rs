@@ -83,7 +83,7 @@ impl FromResourceLocation for &'static Block {
 }
 
 impl Block {
-    #[must_use] 
+    #[must_use]
     pub fn is_waterlogged(&self, state_id: u16) -> bool {
         self.properties(state_id).is_some_and(|properties| {
             properties

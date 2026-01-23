@@ -13,7 +13,7 @@ pub struct CSetPlayerInventory<'a> {
 }
 
 impl<'a> CSetPlayerInventory<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(slot: VarInt, item: &'a ItemStackSerializer<'a>) -> Self {
         Self { slot, item }
     }

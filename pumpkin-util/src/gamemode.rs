@@ -4,7 +4,7 @@ use std::str::FromStr;
 #[derive(Debug, PartialEq, Eq)]
 pub struct ParseGameModeError;
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GameMode {
     Survival = 0,
     Creative = 1,
@@ -13,7 +13,8 @@ pub enum GameMode {
 }
 
 impl GameMode {
-    pub fn to_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn to_str(&self) -> &'static str {
         match self {
             Self::Survival => "Survival",
             Self::Creative => "Creative",

@@ -29,7 +29,7 @@ impl VarUInt {
 
     /// Returns the exact number of bytes this `VarUInt` will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
-    #[must_use] 
+    #[must_use]
     pub fn written_size(&self) -> usize {
         (32 - self.0.leading_zeros() as usize).max(1).div_ceil(7)
     }

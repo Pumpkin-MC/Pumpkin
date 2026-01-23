@@ -90,12 +90,15 @@ impl Default for UDPNetworkEncoder {
 }
 
 impl UDPNetworkEncoder {
-    #[must_use] 
+    #[must_use]
     pub const fn new() -> Self {
         Self { compression: None }
     }
 
-    pub const fn set_compression(&mut self, compression_info: (CompressionThreshold, CompressionLevel)) {
+    pub const fn set_compression(
+        &mut self,
+        compression_info: (CompressionThreshold, CompressionLevel),
+    ) {
         self.compression = Some(compression_info);
     }
 

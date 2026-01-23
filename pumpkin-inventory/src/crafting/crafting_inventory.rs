@@ -16,7 +16,7 @@ pub struct CraftingInventory {
 }
 
 impl CraftingInventory {
-    #[must_use] 
+    #[must_use]
     pub fn new(width: u8, height: u8) -> Self {
         Self {
             width,

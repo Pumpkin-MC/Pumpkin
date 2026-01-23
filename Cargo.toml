@@ -123,7 +123,6 @@ pedantic = { level = "warn", priority = -1 }
 cargo = { level = "allow", priority = -1 }
 
 # Restriction lints (warn level)
-absolute_paths = "warn"
 allow_attributes = "warn"
 arithmetic_side_effects = "warn"
 as_conversions = "warn"
@@ -133,7 +132,6 @@ field_scoped_visibility_modifiers = "warn"
 indexing_slicing = "warn"
 infinite_loop = "warn"
 large_include_file = "warn"
-mod_module_files = "warn"
 panic = "warn"
 panic_in_result_fn = "warn"
 redundant_type_annotations = "warn"
@@ -154,3 +152,10 @@ print_stderr = "deny"
 
 # Lints to allow
 unused_trait_names = "allow"
+absolute_paths = "allow"
+missing_errors_doc = "allow"
+mod_module_files = "allow"
+missing_panics_doc = "allow"
+unreadable_literal = "allow"
+many_single_char_names = "allow"
+too_many_lines = "allow"

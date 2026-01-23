@@ -16,7 +16,7 @@ pub struct CDamageEvent {
 }
 
 impl CDamageEvent {
-    #[must_use] 
+    #[must_use]
     pub fn new(
         entity_id: VarInt,
         source_type_id: VarInt,

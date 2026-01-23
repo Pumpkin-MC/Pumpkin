@@ -6,8 +6,7 @@ use crate::block::{
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{
-        BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties,
-        WheatLikeProperties,
+        BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties, WheatLikeProperties,
     },
     tag,
     tag::Taggable,

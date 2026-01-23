@@ -11,7 +11,7 @@ pub struct CTransfer<'a> {
 }
 
 impl<'a> CTransfer<'a> {
-    #[must_use] 
+    #[must_use]
     pub const fn new(host: &'a str, port: &'a VarInt) -> Self {
         Self { host, port }
     }
