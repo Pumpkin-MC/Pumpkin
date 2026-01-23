@@ -131,7 +131,6 @@ use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::task::JoinSet;
 use tracing::{Instrument, debug_span, info_span, instrument};
-
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
@@ -636,12 +635,13 @@ impl World {
 
         let chunk_loading_lock_start = Instant::now();
         let mut guard = self.level.chunk_loading.lock().unwrap();
-        let chunk_loading_lock_elapased = chunk_loading_lock_start.elapsed();
+        let chunk_loading_lock_elapsed = chunk_loading_lock_start.elapsed();
 
         let span =
-            debug_span!("chunk_loading.send_change", lock_wait = ?chunk_loading_lock_elapased);
+            debug_span!("chunk_loading.send_change", lock_wait = ?chunk_loading_lock_elapsed);
         span.in_scope(|| {
             guard.send_change();
+            drop(guard);
         });
 
         let total_elapsed = start.elapsed();
@@ -842,7 +842,7 @@ impl World {
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), fields(loaded_chunks_length = tracing::field::Empty, num_tasks = tracing::field::Empty))]
     /// Calculate Block-, Fluid- and Randomticks and write into the `tick_data` field
     pub async fn calculate_tick_data(&self) {
         let random_tick_speed = {
@@ -850,14 +850,14 @@ impl World {
             lock.game_rules.random_tick_speed
         };
 
-        const NUM_WORKERS: usize = 64; // TODO non hardcoded value
-
         let mut ticks = self.tick_data.lock().await;
         ticks.clear();
 
         ticks
             .cloned_chunks
             .extend(self.level.loaded_chunks.iter().map(|x| x.value().clone()));
+
+        pub const NUM_TICK_DATA_TASKS: usize = 64; // TODO non hardcoded value
 
         let TickData {
             block_ticks,
@@ -868,7 +868,7 @@ impl World {
             worker_pool,
         } = &mut *ticks;
 
-        while worker_pool.len() < NUM_WORKERS {
+        while worker_pool.len() < NUM_TICK_DATA_TASKS {
             worker_pool.push(TickBatch {
                 block_ticks: Vec::new(),
                 fluid_ticks: Vec::new(),
@@ -879,75 +879,87 @@ impl World {
 
         let mut set = JoinSet::new();
 
-        for chunk in cloned_chunks.drain(..) {
-            if worker_pool.is_empty() {
-                let filled = set.join_next().await.unwrap().unwrap();
-                worker_pool.push(filled);
-            }
+        let cloned_chunks_len = cloned_chunks.len();
 
-            let mut batch = worker_pool.pop().unwrap();
-            batch.clear();
-            set.spawn(async move {
-                let mut rng = SmallRng::from_rng(&mut rand::rng());
-                let mut chunk = chunk.write().await;
-                batch.block_ticks.append(&mut chunk.block_ticks.step_tick());
-                batch.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
+        async {
+            for chunk in cloned_chunks.drain(..) {
+                if worker_pool.is_empty() {
+                    let filled = set.join_next().await.unwrap().unwrap();
+                    worker_pool.push(filled);
+                }
 
-                let chunk = chunk.downgrade();
+                let mut batch = worker_pool.pop().unwrap();
+                batch.clear();
+                set.spawn(async move {
+                    let mut rng = SmallRng::from_rng(&mut rand::rng());
+                    let mut chunk = chunk.write().await;
+                    batch.block_ticks.append(&mut chunk.block_ticks.step_tick());
+                    batch.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
 
-                let chunk_base_x = chunk.x * 16;
-                let chunk_base_z = chunk.z * 16;
-                for i in 0..chunk.section.sections.len() {
-                    for _ in 0..random_tick_speed {
-                        let r = rng.random::<u32>();
-                        let x_offset = (r & 0xF) as i32;
-                        let y_offset = ((r >> 4) & 0xF) as i32 - 32;
-                        let z_offset = (r >> 8 & 0xF) as i32;
+                    let chunk = chunk.downgrade();
 
-                        let random_pos = BlockPos::new(
-                            chunk_base_x + x_offset,
-                            i as i32 * 16 + y_offset,
-                            chunk_base_z + z_offset,
-                        );
+                    let chunk_base_x = chunk.x * 16;
+                    let chunk_base_z = chunk.z * 16;
+                    for i in 0..chunk.section.sections.len() {
+                        for _ in 0..random_tick_speed {
+                            let r = rng.random::<u32>();
+                            let x_offset = (r & 0xF) as i32;
+                            let y_offset = ((r >> 4) & 0xF) as i32 - 32;
+                            let z_offset = (r >> 8 & 0xF) as i32;
 
-                        let block_result = chunk.section.get_block_absolute_y(
-                            x_offset as usize,
-                            random_pos.0.y,
-                            z_offset as usize,
-                        );
+                            let random_pos = BlockPos::new(
+                                chunk_base_x + x_offset,
+                                i as i32 * 16 + y_offset,
+                                chunk_base_z + z_offset,
+                            );
 
-                        if let Some(block_id) = block_result
-                            && block_id != Block::AIR.default_state.id
-                            && has_random_ticks(block_id)
-                        {
-                            batch.random_ticks.push(ScheduledTick {
-                                position: random_pos,
-                                delay: 0,
-                                priority: TickPriority::Normal,
-                                value: (),
-                            });
+                            let block_result = chunk.section.get_block_absolute_y(
+                                x_offset as usize,
+                                random_pos.0.y,
+                                z_offset as usize,
+                            );
+
+                            if let Some(block_id) = block_result
+                                && block_id != Block::AIR.default_state.id
+                                && has_random_ticks(block_id)
+                            {
+                                batch.random_ticks.push(ScheduledTick {
+                                    position: random_pos,
+                                    delay: 0,
+                                    priority: TickPriority::Normal,
+                                    value: (),
+                                });
+                            }
                         }
                     }
-                }
-                batch
-                    .block_entities
-                    .extend(chunk.block_entities.values().cloned());
-                batch
-            });
+                    batch
+                        .block_entities
+                        .extend(chunk.block_entities.values().cloned());
+                    batch
+                });
+            }
+
+            while let Some(result) = set.join_next().await {
+                let mut batch = result.unwrap();
+
+                block_ticks.append(&mut batch.block_ticks);
+                fluid_ticks.append(&mut batch.fluid_ticks);
+                random_ticks.append(&mut batch.random_ticks);
+                block_entities.append(&mut batch.block_entities);
+
+                worker_pool.push(batch);
+            }
         }
+        .instrument(debug_span!(
+            "chunk_calculation",
+            loaded_chunks_len = cloned_chunks_len
+        ))
+        .await;
 
-        while let Some(result) = set.join_next().await {
-            let mut batch = result.unwrap();
-
-            block_ticks.append(&mut batch.block_ticks);
-            fluid_ticks.append(&mut batch.fluid_ticks);
-            random_ticks.append(&mut batch.random_ticks);
-            block_entities.append(&mut batch.block_entities);
-
-            worker_pool.push(batch);
-        }
-        block_ticks.sort_unstable();
-        fluid_ticks.sort_unstable();
+        debug_span!("sorting").in_scope(|| {
+            block_ticks.sort_unstable();
+            fluid_ticks.sort_unstable();
+        });
     }
 
     pub async fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<Fluid> {
@@ -3193,6 +3205,7 @@ impl World {
             .await;
 
         if new_state_id != block_state_id {
+            let flags = flags & !BlockFlags::SKIP_DROPS;
             if is_air(new_state_id) {
                 self.break_block(block_pos, None, flags).await;
             } else {
