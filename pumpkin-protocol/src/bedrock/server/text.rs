@@ -19,13 +19,14 @@ pub struct SText {
 }
 
 impl SText {
+    #[must_use] 
     pub fn new(message: String, source_name: String) -> Self {
         Self {
             needs_translation: false,
             r#type: TextPacketType::Chat,
             source_name,
             message: if message.is_empty() {
-                " ".to_string()
+                " ".to_owned()
             } else {
                 message
             },
@@ -43,7 +44,7 @@ impl SText {
             r#type: TextPacketType::System,
             source_name: String::new(),
             message: if message.is_empty() {
-                " ".to_string()
+                " ".to_owned()
             } else {
                 message
             },
@@ -54,7 +55,7 @@ impl SText {
         }
     }
 
-    fn get_dummy_strings(category: u8) -> &'static [&'static str] {
+    const fn get_dummy_strings(category: u8) -> &'static [&'static str] {
         match category {
             0 => &[
                 "raw",
@@ -70,7 +71,7 @@ impl SText {
         }
     }
 
-    fn get_category(&self) -> u8 {
+    const fn get_category(&self) -> u8 {
         match self.r#type {
             TextPacketType::Raw
             | TextPacketType::Tip
@@ -99,8 +100,7 @@ impl PacketRead for SText {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     format!(
-                        "Dummy string mismatch: expected {}, got {}",
-                        expected, actual
+                        "Dummy string mismatch: expected {expected}, got {actual}"
                     ),
                 ));
             }
@@ -166,7 +166,7 @@ impl PacketWrite for SText {
         category.write(writer)?;
 
         for &dummy in Self::get_dummy_strings(category) {
-            dummy.to_string().write(writer)?;
+            dummy.to_owned().write(writer)?;
         }
 
         self.r#type.write(writer)?;
@@ -207,7 +207,7 @@ impl PacketWrite for SText {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TextPacketType {
     Raw = 0,

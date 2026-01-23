@@ -63,7 +63,7 @@ impl ToTokens for EnumCreator {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     // --- Rerun Triggers ---
     println!("cargo:rerun-if-changed=../assets/blocks.json");
     println!("cargo:rerun-if-changed=../assets/items.json");
@@ -115,7 +115,7 @@ pub(crate) fn build() -> TokenStream {
     let versions = vec![latest_version_key, legacy_version_key];
 
     for version in versions {
-        let file_path = format!("../assets/tags/{}_tags.json", version);
+        let file_path = format!("../assets/tags/{version}_tags.json");
         if !Path::new(&file_path).exists() {
             continue;
         }
@@ -144,13 +144,13 @@ pub(crate) fn build() -> TokenStream {
                 let ids: Vec<u16> = values
                     .iter()
                     .filter_map(|v| match key.as_str() {
-                        "worldgen/biome" => biomes.get(v).map(|b| b.id as u16),
+                        "worldgen/biome" => biomes.get(v).map(|b| u16::from(b.id)),
                         "fluid" => fluid_id_map.get(v).copied(),
                         "item" => items.get(v).map(|i| i.id),
                         "block" => block_id_map.get(v).copied(),
                         "enchantment" => enchantments
-                            .get(&format!("minecraft:{}", v))
-                            .map(|e| e.id as u16),
+                            .get(&format!("minecraft:{v}"))
+                            .map(|e| u16::from(e.id)),
                         "entity_type" => entities.get(v).map(|e| e.id),
                         _ => None,
                     })
@@ -210,7 +210,7 @@ pub(crate) fn build() -> TokenStream {
 
     // --- Generate RegistryKey Enum ---
     let registry_key_enum = EnumCreator {
-        name: "RegistryKey".to_string(),
+        name: "RegistryKey".to_owned(),
         values: all_registry_keys.into_iter().collect(),
     }
     .to_token_stream();

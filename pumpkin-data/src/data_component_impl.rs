@@ -2,7 +2,7 @@
 
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
-use crate::data_component::DataComponent::*;
+use crate::data_component::DataComponent::{MaxStackSize, Enchantments, Damage, Unbreakable, CustomData, MaxDamage, CustomName, ItemName, AttributeModifiers, Food, Consumable, Tool, Equippable, DeathProtection, BlocksAttacks, JukeboxPlayable};
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
 use crate::{AttributeModifierSlot, Block, Enchantment};
@@ -153,7 +153,7 @@ impl DataComponentImpl for DamageImpl {
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct UnbreakableImpl;
 impl UnbreakableImpl {
-    fn read_data(_data: &NbtTag) -> Option<Self> {
+    const fn read_data(_data: &NbtTag) -> Option<Self> {
         Some(Self)
     }
 }
@@ -166,7 +166,7 @@ impl DataComponentImpl for UnbreakableImpl {
     }
     default_impl!(Unbreakable);
 }
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CustomNameImpl {
     // TODO make TextComponent const
     pub name: &'static str,

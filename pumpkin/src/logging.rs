@@ -236,7 +236,7 @@ impl ReadlineLogWrapper {
             .map_or_else(|_| None, |mut result| result.take())
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn return_readline(&self, rl: Editor<PumpkinCommandCompleter, FileHistory>) {
         if let Ok(mut result) = self.readline.lock() {
             let _ = result.insert(rl);

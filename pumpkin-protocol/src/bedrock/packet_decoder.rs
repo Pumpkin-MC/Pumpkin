@@ -135,7 +135,7 @@ impl UDPNetworkDecoder {
             err => PacketDecodeError::MalformedLength(err.to_string()),
         })?;
 
-        let packet_len = packet_len.0 as u64;
+        let packet_len = u64::from(packet_len.0);
 
         let var_header = VarUInt::decode(&mut reader)?;
 

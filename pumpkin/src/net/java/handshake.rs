@@ -19,13 +19,13 @@ impl JavaClient {
             if protocol < LOWEST_SUPPRORTED_PROTOCOL_VERSION {
                 self.kick(TextComponent::translate(
                     "multiplayer.disconnect.outdated_client",
-                    [TextComponent::text(CURRENT_MC_VERSION.to_string())],
+                    [TextComponent::text(CURRENT_MC_VERSION.to_owned())],
                 ))
                 .await;
             } else if protocol > CURRENT_MC_PROTOCOL {
                 self.kick(TextComponent::translate(
                     "multiplayer.disconnect.incompatible",
-                    [TextComponent::text(CURRENT_MC_VERSION.to_string())],
+                    [TextComponent::text(CURRENT_MC_VERSION.to_owned())],
                 ))
                 .await;
             }

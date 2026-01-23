@@ -824,8 +824,8 @@ pub fn build() -> TokenStream {
 
     let air_state_ids = quote! { #(#air_states)|* };
 
-    let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
-    let properties = property_enums.values().map(|prop| prop.to_token_stream());
+    let block_props = block_properties.iter().map(quote::ToTokens::to_token_stream);
+    let properties = property_enums.values().map(quote::ToTokens::to_token_stream);
 
     let block_entity_types = blocks_assets
         .block_entity_types

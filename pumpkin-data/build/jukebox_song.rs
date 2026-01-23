@@ -4,7 +4,7 @@ use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use std::fs;
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/jukebox_song.json");
 
     let songs: BTreeMap<String, u32> = serde_json::from_str(

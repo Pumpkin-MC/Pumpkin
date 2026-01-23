@@ -11,7 +11,7 @@ pub struct Packets {
     clientbound: BTreeMap<String, BTreeMap<String, i32>>,
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/packet/1_21_11_packets.json");
 
     let packets: Packets =
@@ -36,14 +36,14 @@ pub(crate) fn build() -> TokenStream {
     )
 }
 
-pub(crate) fn parse_packets(phases: BTreeMap<String, BTreeMap<String, i32>>) -> TokenStream {
+pub fn parse_packets(phases: BTreeMap<String, BTreeMap<String, i32>>) -> TokenStream {
     let mut consts = TokenStream::new();
 
     for (phase_name, packets) in phases {
         for (packet_name, packet_id) in packets {
             let sanitized_name = packet_name
-                .replace("/", "_")
-                .replace("-", "_")
+                .replace('/', "_")
+                .replace('-', "_")
                 .to_uppercase();
 
             let const_name = format_ident!("{}_{}", phase_name.to_uppercase(), sanitized_name);

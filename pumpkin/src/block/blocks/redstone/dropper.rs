@@ -200,7 +200,7 @@ impl BlockBehaviour for DropperBlock {
                         _ => 0.15625,
                     };
                     let entity = Entity::new(args.world.clone(), position, &EntityType::ITEM);
-                    let rd = rng().random::<f64>() * 0.1 + 0.2;
+                    let rd = rng().random::<f64>().mul_add(0.1, 0.2);
                     let velocity = Vector3::new(
                         triangle(&mut rng(), facing.x * rd, 0.017_227_5 * 6.),
                         triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),

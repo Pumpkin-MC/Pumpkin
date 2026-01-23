@@ -1165,7 +1165,7 @@ impl World {
         self.dimension.min_y
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
         base_config: &BasicConfiguration,
@@ -1258,7 +1258,7 @@ impl World {
                 yaw: 0.0,
                 level_settings,
                 level_id: String::new(),
-                level_name: "Pumpkin world".to_string(),
+                level_name: "Pumpkin world".to_owned(),
                 premium_world_template_id: String::new(),
                 is_trial: false,
                 rewind_history_size: VarInt(40),
@@ -1324,7 +1324,7 @@ impl World {
                         default_min_value: 0.0,
                         default_max_value: f32::MAX,
                         default_value: 0.1,
-                        name: "minecraft:movement".to_string(),
+                        name: "minecraft:movement".to_owned(),
                         modifiers_list_size: VarUInt(0),
                     }],
                     player_tick: VarULong(0),

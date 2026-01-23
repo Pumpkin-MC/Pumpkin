@@ -230,26 +230,25 @@ impl PumpkinServer {
                 Ok(l) => l,
                 Err(e) => match e.kind() {
                     ErrorKind::AddrInUse => {
-                        log::error!("Error: Address {} is already in use.", address);
+                        log::error!("Error: Address {address} is already in use.");
                         log::error!(
                             "Make sure another instance of the server isn't already running"
                         );
                         std::process::exit(1);
                     }
                     ErrorKind::PermissionDenied => {
-                        log::error!("Error: Permission denied when binding to {}.", address);
+                        log::error!("Error: Permission denied when binding to {address}.");
                         log::error!("You might need sudo/admin privileges to use ports below 1024");
                         std::process::exit(1);
                     }
                     ErrorKind::AddrNotAvailable => {
                         log::error!(
-                            "Error: The address {} is not available on this machine",
-                            address
+                            "Error: The address {address} is not available on this machine"
                         );
                         std::process::exit(1);
                     }
                     _ => {
-                        log::error!("Failed to start TcpListener on {}: {}", address, e);
+                        log::error!("Failed to start TcpListener on {address}: {e}");
                         std::process::exit(1);
                     }
                 },

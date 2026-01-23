@@ -4,19 +4,19 @@ use quote::quote;
 use serde_json::Value;
 use std::fs;
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/registry/1_21_9_synced_registries.json");
     println!("cargo:rerun-if-changed=../assets/registry/1_21_11_synced_registries.json");
 
     let process_version = |path: &str| -> TokenStream {
         let json_str =
-            fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {}", path));
+            fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"));
         let mut data: IndexMap<String, IndexMap<String, Value>> =
             serde_json::from_str(&json_str).expect("Failed to parse JSON");
 
         // Inject "raw" chat type for vanilla parity
         if let Some(chat) = data.get_mut("minecraft:chat_type") {
-            chat.insert("raw".to_string(), serde_json::json!({
+            chat.insert("raw".to_owned(), serde_json::json!({
                 "chat": { "translation_key": "%s", "parameters": ["content"] },
                 "narration": { "translation_key": "%s says %s", "parameters": ["sender", "content"] }
             }));
