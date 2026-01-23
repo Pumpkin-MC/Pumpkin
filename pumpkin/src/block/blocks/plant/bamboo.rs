@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::{
-    BambooLeaves, BambooLikeProperties, BlockProperties as _, EnumVariants as _, Integer0To1,
+    BambooLeaves, BambooLikeProperties, BlockProperties, EnumVariants, Integer0To1,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Block::MINECRAFT_BAMBOO_PLANTABLE_ON;
-use pumpkin_data::tag::Taggable as _;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::{self};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
@@ -13,7 +13,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
-use rand::Rng as _;
+use rand::Rng;
 
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs, blocks::plant::PlantBlockBase};

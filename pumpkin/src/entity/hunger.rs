@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::entity::NbtFuture;
 
-use super::{EntityBase as _, NBTStorage, NBTStorageInit, player::Player};
+use super::{EntityBase, NBTStorage, NBTStorageInit, player::Player};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;

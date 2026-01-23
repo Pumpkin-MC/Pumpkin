@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
-    block_properties::{BlockProperties as _, HorizontalAxis, NetherPortalLikeProperties},
+    block_properties::{BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
     tag,
-    tag::Taggable as _,
+    tag::Taggable,
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;

@@ -1,10 +1,10 @@
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
-    BlockProperties as _, EnumVariants as _, Integer0To1, TorchflowerCropLikeProperties,
+    BlockProperties, EnumVariants, Integer0To1, TorchflowerCropLikeProperties,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
-use rand::Rng as _;
+use rand::Rng;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;

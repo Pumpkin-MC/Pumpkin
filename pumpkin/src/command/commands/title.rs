@@ -3,12 +3,12 @@ use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandResult;
 use crate::command::args::time::TimeArgumentConsumer;
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
         args::{
-            Arg, ConsumedArgs, FindArg as _, players::PlayersArgumentConsumer,
+            Arg, ConsumedArgs, FindArg, players::PlayersArgumentConsumer,
             textcomponent::TextComponentArgConsumer,
         },
         tree::CommandTree,

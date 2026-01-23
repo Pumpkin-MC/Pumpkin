@@ -1,5 +1,5 @@
-use pumpkin_data::block_properties::BlockProperties as _;
-use pumpkin_data::{Block, FacingExt as _};
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::{Block, FacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 

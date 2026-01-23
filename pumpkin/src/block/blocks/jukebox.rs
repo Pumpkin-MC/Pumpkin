@@ -8,7 +8,7 @@ use pumpkin_data::jukebox_song::JukeboxSong;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties as _, JukeboxLikeProperties},
+    block_properties::{BlockProperties, JukeboxLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;

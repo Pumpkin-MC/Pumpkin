@@ -3,7 +3,7 @@ use crate::block::{BlockFuture, UseWithItemArgs};
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use pumpkin_data::Block;
-use pumpkin_data::block_properties::{BlockProperties as _, WallTorchLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;

@@ -2,7 +2,7 @@ use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::player_server_data::ServerPlayerData;
-use crate::entity::{EntityBase, NBTStorage as _};
+use crate::entity::{EntityBase, NBTStorage};
 use crate::item::registry::ItemRegistry;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
 use crate::plugin::player::player_login::PlayerLoginEvent;
@@ -24,13 +24,13 @@ use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::lock::LevelLocker as _;
+use pumpkin_world::lock::LevelLocker;
 use pumpkin_world::lock::anvil::AnvilLevelLocker;
 use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
-use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader as _, WorldInfoWriter};
-use rand::seq::{IndexedRandom as _, IteratorRandom as _, SliceRandom as _};
+use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
+use rand::seq::{IndexedRandom, IteratorRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
 use std::fs;

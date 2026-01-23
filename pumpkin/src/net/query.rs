@@ -10,7 +10,7 @@ use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
 use pumpkin_world::CURRENT_MC_VERSION;
-use rand::Rng as _;
+use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
 use crate::{PLUGIN_MANAGER, SHOULD_STOP, STOP_INTERRUPT, server::Server};

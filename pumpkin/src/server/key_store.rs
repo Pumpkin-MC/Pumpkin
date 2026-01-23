@@ -1,11 +1,11 @@
 use std::time::Instant;
 
 use num_bigint::BigInt;
-use pkcs8::EncodePublicKey as _;
+use pkcs8::EncodePublicKey;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
 use sha1::Sha1;
-use sha2::Digest as _;
+use sha2::Digest;
 
 use crate::net::EncryptionError;
 

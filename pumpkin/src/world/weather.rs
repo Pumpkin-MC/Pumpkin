@@ -1,6 +1,6 @@
 use super::World;
 use pumpkin_protocol::java::client::play::{CGameEvent, GameEvent};
-use rand::Rng as _;
+use rand::Rng;
 
 // Weather timing constants
 const RAIN_DELAY_MIN: i32 = 12_000;

@@ -4,7 +4,7 @@ use pumpkin_data::{
     Block,
     BlockDirection::{East, North, South, West},
     block_properties::{
-        BlockProperties as _, EnumVariants as _, FarmlandLikeProperties, Integer0To7,
+        BlockProperties, EnumVariants, FarmlandLikeProperties, Integer0To7,
         WheatLikeProperties,
     },
 };
@@ -13,7 +13,7 @@ use pumpkin_world::{
     BlockStateId,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::Rng as _;
+use rand::Rng;
 
 use crate::{block::blocks::plant::PlantBlockBase, world::World};
 

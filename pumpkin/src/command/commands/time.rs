@@ -2,7 +2,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 
 use crate::command::CommandResult;
-use crate::command::args::{FindArg as _, time::TimeArgumentConsumer};
+use crate::command::args::{FindArg, time::TimeArgumentConsumer};
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender, ConsumedArgs, tree::CommandTree};
 

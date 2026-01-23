@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockDirection,
-    block_properties::{BlockProperties as _, CampfireLikeProperties},
+    block_properties::{BlockProperties, CampfireLikeProperties},
     damage::DamageType,
     fluid::Fluid,
 };
@@ -11,7 +11,7 @@ use crate::{
         BlockBehaviour, BlockFuture, BlockIsReplacing, BlockMetadata,
         GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnPlaceArgs,
     },
-    entity::EntityBase as _,
+    entity::EntityBase,
 };
 
 pub struct CampfireBlock;

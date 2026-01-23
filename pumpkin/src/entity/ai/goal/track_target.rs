@@ -4,7 +4,7 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::{EntityBase, mob::MobEntity};
-use rand::Rng as _;
+use rand::Rng;
 use std::sync::Arc;
 
 const UNSET: i32 = 0;

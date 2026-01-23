@@ -4,7 +4,7 @@ use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
 use pumpkin_config::RCONConfig;
 use std::sync::Arc;
 use tokio::{
-    io::{AsyncReadExt as _, AsyncWriteExt as _},
+    io::{AsyncReadExt, AsyncWriteExt},
     select,
 };
 

@@ -5,7 +5,7 @@ use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::{EntityBase, player::Player};
 use pumpkin_data::entity::EntityType;
-use rand::Rng as _;
+use rand::Rng;
 use std::sync::{Arc, Weak};
 
 #[expect(dead_code)]

@@ -31,7 +31,7 @@ use pumpkin_util::{
 
 use crate::{
     command::CommandSender,
-    entity::{EntityBase as _, player::Player},
+    entity::{EntityBase, player::Player},
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent},
     server::{Server, seasonal_events},

@@ -9,7 +9,7 @@ use pumpkin_protocol::bedrock::{
     client::raknet::connection::{CConnectedPong, CConnectionRequestAccepted},
     server::raknet::connection::{SConnectedPing, SConnectionRequest, SNewIncomingConnection},
 };
-use pumpkin_protocol::{codec::u24, serial::PacketRead as _};
+use pumpkin_protocol::{codec::u24, serial::PacketRead};
 
 use crate::net::bedrock::BedrockClient;
 

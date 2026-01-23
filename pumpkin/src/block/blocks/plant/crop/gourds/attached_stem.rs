@@ -1,7 +1,7 @@
 use pumpkin_data::{
     Block,
     block_properties::{
-        BlockProperties as _, EnumVariants as _, Integer0To7, WallTorchLikeProperties,
+        BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties,
         WheatLikeProperties,
     },
 };

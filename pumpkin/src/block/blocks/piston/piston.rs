@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use pumpkin_data::{
-    Block, BlockDirection, BlockState, FacingExt as _,
+    Block, BlockDirection, BlockState, FacingExt,
     block_properties::{
-        BlockProperties as _, MovingPistonLikeProperties, PistonHeadLikeProperties, PistonType,
+        BlockProperties, MovingPistonLikeProperties, PistonHeadLikeProperties, PistonType,
     },
     block_state::PistonBehavior,
 };

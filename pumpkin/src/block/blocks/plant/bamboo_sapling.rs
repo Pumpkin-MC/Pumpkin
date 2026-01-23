@@ -1,8 +1,8 @@
 use pumpkin_data::{
     Block, BlockDirection,
-    block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties as _},
+    block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties},
     item::Item,
-    tag::Taggable as _,
+    tag::Taggable,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -10,7 +10,7 @@ use pumpkin_world::{
     BlockStateId,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::Rng as _;
+use rand::Rng;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,

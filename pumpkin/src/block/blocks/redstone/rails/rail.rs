@@ -11,9 +11,9 @@ use crate::block::OnNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use crate::block::PlacedArgs;
 
-use super::StraightRailShapeExt as _;
+use super::StraightRailShapeExt;
 use super::common::{can_place_rail_at, rail_placement_is_valid, update_flanking_rails_shape};
-use super::{HorizontalFacingRailExt as _, Rail, RailElevation, RailProperties};
+use super::{HorizontalFacingRailExt, Rail, RailElevation, RailProperties};
 
 #[pumpkin_block("minecraft:rail")]
 pub struct RailBlock;

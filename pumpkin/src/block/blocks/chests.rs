@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use futures::future::join;
 use pumpkin_data::block_properties::{
-    BlockProperties as _, ChestLikeProperties, ChestType, HorizontalFacing,
+    BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
@@ -26,7 +26,7 @@ use crate::block::{
     BlockFuture, BlockMetadata, BrokenArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs,
     PlacedArgs,
 };
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 use crate::world::World;
 use crate::{
     block::{BlockBehaviour, registry::BlockActionResult},

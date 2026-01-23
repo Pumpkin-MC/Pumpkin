@@ -1,4 +1,4 @@
-use crate::command::args::GetCloned as _;
+use crate::command::args::GetCloned;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions};

@@ -6,11 +6,11 @@ use pumpkin_util::text::color::{Color, NamedColor};
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArg as _};
+use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 
 const NAMES: [&str; 2] = ["experience", "xp"];

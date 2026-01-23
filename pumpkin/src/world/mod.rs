@@ -54,7 +54,7 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState};
-use pumpkin_inventory::screen_handler::InventoryPlayer as _;
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::start_game::CStartGame;
 use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
@@ -106,20 +106,20 @@ use pumpkin_util::{
 };
 use pumpkin_util::{
     math::{position::chunk_section_from_pos, vector2::Vector2},
-    random::{RandomImpl as _, get_seed, xoroshiro128::Xoroshiro},
+    random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::chunk::palette::BlockPalette;
 use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldFuture};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable as _, inventory::Inventory, item::ItemStack, world::SimpleWorld,
+    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
-use rand::seq::SliceRandom as _;
-use rand::{Rng as _, rng};
+use rand::seq::SliceRandom;
+use rand::{Rng, rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
 use time::LevelTime;

@@ -3,7 +3,7 @@ use std::collections::{BinaryHeap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
-use std::ops::AddAssign as _;
+use std::ops::AddAssign;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::time::{Duration, Instant};

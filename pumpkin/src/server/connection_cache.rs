@@ -1,5 +1,5 @@
 use crate::entity::player::Player;
-use base64::{Engine as _, engine::general_purpose};
+use base64::{Engine, engine::general_purpose};
 use core::error;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
@@ -9,7 +9,7 @@ use pumpkin_protocol::{
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
 use pumpkin_world::CURRENT_MC_VERSION;
-use std::{fs::File, io::Read as _, path::Path};
+use std::{fs::File, io::Read, path::Path};
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
 

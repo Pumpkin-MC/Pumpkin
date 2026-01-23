@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::BedPart;
-use pumpkin_data::block_properties::BlockProperties as _;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
@@ -21,7 +21,7 @@ use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
     PlacedArgs,
 };
-use crate::entity::{Entity, EntityBase as _};
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;

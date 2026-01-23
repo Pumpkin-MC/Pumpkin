@@ -1,17 +1,17 @@
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::text::TextComponent;
-use rand::{Rng as _, rng};
+use rand::{Rng, rng};
 
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{
-        Arg, ConsumedArgs, FindArg as _, bounded_num::BoundedNumArgumentConsumer,
+        Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
         players::PlayersArgumentConsumer, position_3d::Position3DArgumentConsumer,
         sound::SoundArgumentConsumer, sound_category::SoundCategoryArgumentConsumer,
     },
     tree::{CommandTree, builder::argument},
 };
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 
 /// Command: playsound <sound> [<source>] [<targets>] [<pos>] [<volume>] [<pitch>] [<minVolume>]
 ///

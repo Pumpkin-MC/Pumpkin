@@ -5,7 +5,7 @@ use pumpkin_protocol::java::client::play::{
 use crate::{
     command::{
         CommandSender,
-        args::{ConsumeResult, SplitSingleWhitespaceIncludingEmptyParts as _, SuggestResult},
+        args::{ConsumeResult, SplitSingleWhitespaceIncludingEmptyParts, SuggestResult},
         dispatcher::CommandError,
         tree::{CommandTree, RawArgs},
     },

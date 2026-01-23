@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
-    block_properties::{BlockProperties as _, EnumVariants as _, Integer0To15},
+    block_properties::{BlockProperties, EnumVariants, Integer0To15},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{BlockStateId, world::BlockFlags};

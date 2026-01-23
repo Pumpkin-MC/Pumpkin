@@ -4,7 +4,7 @@ use crate::block::{
     BlockBehaviour, BlockFuture, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
     registry::BlockActionResult,
 };
-use pumpkin_data::block_properties::{BlockProperties as _, LadderLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties, LadderLikeProperties};
 use pumpkin_inventory::{
     generic_container_screen_handler::create_generic_9x3,
     player::player_inventory::PlayerInventory,

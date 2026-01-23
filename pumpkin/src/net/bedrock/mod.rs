@@ -41,8 +41,8 @@ use pumpkin_protocol::{
         },
     },
     codec::u24,
-    packet::Packet as _,
-    serial::PacketRead as _,
+    packet::Packet,
+    serial::PacketRead,
 };
 use std::net::SocketAddr;
 use tokio::{

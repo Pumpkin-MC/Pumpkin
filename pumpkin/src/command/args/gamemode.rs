@@ -1,4 +1,4 @@
-use std::str::FromStr as _;
+use std::str::FromStr;
 
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::GameMode;

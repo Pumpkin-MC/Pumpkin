@@ -1,5 +1,5 @@
 use pumpkin_data::tag;
-use pumpkin_data::tag::Taggable as _;
+use pumpkin_data::tag::Taggable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 

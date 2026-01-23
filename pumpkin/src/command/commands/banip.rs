@@ -1,4 +1,4 @@
-use std::{net::IpAddr, str::FromStr as _};
+use std::{net::IpAddr, str::FromStr};
 
 use crate::{
     command::{
@@ -7,7 +7,7 @@ use crate::{
         tree::{CommandTree, builder::argument},
     },
     data::{
-        SaveJSONConfiguration as _, banlist_serializer::BannedIpEntry,
+        SaveJSONConfiguration, banlist_serializer::BannedIpEntry,
         banned_ip_data::BANNED_IP_LIST,
     },
     net::DisconnectReason,

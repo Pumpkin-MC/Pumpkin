@@ -7,7 +7,7 @@ use pumpkin_util::text::{
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{
-        Arg, ConsumedArgs, FindArg as _, bounded_num::BoundedNumArgumentConsumer,
+        Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
         entity::EntityArgumentConsumer, position_3d::Position3DArgumentConsumer,
         resource::damage_type::DamageTypeArgumentConsumer,
     },

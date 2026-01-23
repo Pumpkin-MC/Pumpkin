@@ -15,7 +15,7 @@ use tokio::sync::RwLock;
 
 use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
-use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration as _};
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
     text::{TextComponent, color::NamedColor},

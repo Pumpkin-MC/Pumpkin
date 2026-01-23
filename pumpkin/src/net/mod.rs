@@ -17,7 +17,7 @@ use crate::{
 use pumpkin_protocol::{ClientPacket, Property};
 use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
 use serde::Deserialize;
-use sha1::Digest as _;
+use sha1::Digest;
 use sha2::Sha256;
 use tokio::task::JoinHandle;
 

@@ -1,6 +1,6 @@
 use crate::command::CommandResult;
 use crate::command::args::gamemode::GamemodeArgumentConsumer;
-use crate::command::args::{Arg, GetCloned as _};
+use crate::command::args::{Arg, GetCloned};
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::builder::argument;
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};

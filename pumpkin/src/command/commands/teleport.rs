@@ -4,7 +4,7 @@ use pumpkin_util::text::TextComponent;
 use crate::command::CommandError;
 use crate::command::CommandResult;
 use crate::command::args::ConsumedArgs;
-use crate::command::args::FindArg as _;
+use crate::command::args::FindArg;
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::entity::EntityArgumentConsumer;
 use crate::command::args::position_3d::Position3DArgumentConsumer;
@@ -12,7 +12,7 @@ use crate::command::args::rotation::RotationArgumentConsumer;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 use crate::world::World;
 
 const NAMES: [&str; 2] = ["teleport", "tp"];

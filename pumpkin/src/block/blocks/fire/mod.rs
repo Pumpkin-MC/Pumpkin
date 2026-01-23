@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::tag::Taggable as _;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
-use rand::Rng as _;
+use rand::Rng;
 use soul_fire::SoulFireBlock;
 
 use crate::block::blocks::fire::fire::FireBlock;
-use crate::block::{BlockBehaviour as _, CanPlaceAtArgs};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs};
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 

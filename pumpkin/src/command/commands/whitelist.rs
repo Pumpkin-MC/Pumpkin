@@ -4,7 +4,7 @@ use pumpkin_config::whitelist::WhitelistEntry;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandResult;
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandExecutor, CommandSender,
@@ -16,7 +16,7 @@ use crate::{
         },
     },
     data::{
-        LoadJSONConfiguration as _, SaveJSONConfiguration as _,
+        LoadJSONConfiguration, SaveJSONConfiguration,
         whitelist_data::{WHITELIST_CONFIG, WhitelistConfig},
     },
     net::DisconnectReason,

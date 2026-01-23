@@ -7,7 +7,7 @@ use crate::entity::mob::Mob;
 use crate::entity::{EntityBase, mob::MobEntity, player::Player};
 use crate::world::World;
 use pumpkin_data::entity::EntityType;
-use rand::Rng as _;
+use rand::Rng;
 use std::sync::Arc;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;

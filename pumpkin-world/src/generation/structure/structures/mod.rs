@@ -417,7 +417,7 @@ impl StructurePiecesCollector {
                     .bounding_box
                     .intersects(box_to_check)
             })
-            .map(|v| v as _)
+            .map(|v| v)
     }
 
     /// Iterates over all pieces and generates them if they intersect the current chunk.

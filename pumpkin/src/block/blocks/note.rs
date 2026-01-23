@@ -8,7 +8,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
     Block,
     block_properties::{
-        BlockProperties as _, EnumVariants as _, Instrument, Integer0To24, NoteBlockLikeProperties,
+        BlockProperties, EnumVariants, Instrument, Integer0To24, NoteBlockLikeProperties,
     },
 };
 use pumpkin_macros::pumpkin_block;

@@ -21,7 +21,7 @@ use super::{EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
-use crate::world::loot::{LootContextParameters, LootTableExt as _};
+use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;

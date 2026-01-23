@@ -1,6 +1,6 @@
 use super::{Controls, Goal};
 use crate::entity::{ai::goal::GoalFuture, mob::Mob};
-use rand::Rng as _;
+use rand::Rng;
 
 pub struct AmbientStandGoal {
     goal_control: Controls,

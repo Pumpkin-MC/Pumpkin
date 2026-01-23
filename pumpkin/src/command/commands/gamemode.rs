@@ -1,4 +1,4 @@
-use crate::command::args::GetCloned as _;
+use crate::command::args::GetCloned;
 use crate::command::args::gamemode::GamemodeArgumentConsumer;
 
 use crate::TextComponent;
@@ -11,7 +11,7 @@ use crate::command::dispatcher::CommandError::{InvalidConsumption, InvalidRequir
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 
 const NAMES: [&str; 1] = ["gamemode"];
 

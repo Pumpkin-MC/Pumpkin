@@ -149,3 +149,6 @@ separated_literal_suffix = "deny"
 non_zero_suggestions = "deny"
 string_lit_chars_any = "deny"
 print_stderr = "deny"
+
+# Lints to allow
+unused_trait_names = "allow"

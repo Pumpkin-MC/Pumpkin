@@ -5,22 +5,22 @@ use crate::{
         BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs,
         OnPlaceArgs, PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
     },
-    entity::{EntityBase as _, player::Player},
+    entity::{EntityBase, player::Player},
     world::World,
 };
 use pumpkin_data::{
-    block_properties::{BlockProperties as _, ChiseledBookshelfLikeProperties, HorizontalFacing},
+    block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
     item::Item,
     sound::{Sound, SoundCategory},
     tag,
-    tag::Taggable as _,
+    tag::Taggable,
 };
-use pumpkin_inventory::screen_handler::InventoryPlayer as _;
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_world::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
-    inventory::Inventory as _, item::ItemStack,
+    inventory::Inventory, item::ItemStack,
 };
 use tokio::sync::Mutex;
 

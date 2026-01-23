@@ -8,11 +8,11 @@ use pumpkin_world::item::ItemStack;
 use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds};
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource::item::ItemArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArg as _, FindArgDefaultName as _};
+use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 
 const NAMES: [&str; 1] = ["give"];
 

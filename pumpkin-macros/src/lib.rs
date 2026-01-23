@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site, proc_macro_error};
 use quote::quote;
-use syn::spanned::Spanned as _;
+use syn::spanned::Spanned;
 use syn::{self, Attribute, DeriveInput, LitStr, Type, parse_quote};
 use syn::{Block, Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
 

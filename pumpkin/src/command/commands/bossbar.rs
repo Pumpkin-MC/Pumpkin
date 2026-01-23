@@ -5,7 +5,7 @@ use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource_location::ResourceLocationArgumentConsumer;
 
-use crate::command::args::{ConsumedArgs, FindArg as _, FindArgDefaultName as _};
+use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 
 use crate::command::args::textcomponent::TextComponentArgConsumer;
 use crate::command::tree::CommandTree;
@@ -16,7 +16,7 @@ use crate::world::custom_bossbar::BossbarUpdateError;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
-use std::fmt::Write as _;
+use std::fmt::Write;
 use uuid::Uuid;
 
 const NAMES: [&str; 1] = ["bossbar"];

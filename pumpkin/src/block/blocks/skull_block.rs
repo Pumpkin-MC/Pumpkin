@@ -1,7 +1,7 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
-use crate::entity::EntityBase as _;
-use pumpkin_data::block_properties::BlockProperties as _;
+use crate::entity::EntityBase;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 

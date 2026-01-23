@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_data::{
     Block, BlockState,
-    tag::{self, Taggable as _},
+    tag::{self, Taggable},
 };
 use pumpkin_world::{BlockStateId, tick::TickPriority};
 pub struct FallingBlock;

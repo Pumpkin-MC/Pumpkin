@@ -5,7 +5,7 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{
-        BlockProperties as _, EnumVariants as _, Integer0To15, RedstoneWireLikeProperties,
+        BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties,
     },
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};

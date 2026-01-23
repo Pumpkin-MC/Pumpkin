@@ -1,8 +1,8 @@
 use crate::block::{BlockFuture, BlockIsReplacing};
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockProperties as _, Facing};
-use pumpkin_data::{Block, FacingExt as _, HorizontalFacingExt as _};
+use pumpkin_data::block_properties::{BlockProperties, Facing};
+use pumpkin_data::{Block, FacingExt, HorizontalFacingExt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;

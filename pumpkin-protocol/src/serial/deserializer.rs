@@ -192,9 +192,7 @@ impl PacketRead for SocketAddr {
 
                 let scope_id = u32::read_be(reader)?;
 
-                Ok(Self::V6(SocketAddrV6::new(
-                    ip, port, flowinfo, scope_id,
-                )))
+                Ok(Self::V6(SocketAddrV6::new(ip, port, flowinfo, scope_id)))
             }
             _ => Err(Error::other("Invalid socket address version")),
         }

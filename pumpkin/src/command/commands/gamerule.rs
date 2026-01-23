@@ -1,6 +1,6 @@
 use pumpkin_data::game_rules::{GameRule, GameRuleRegistry, GameRuleValue};
 
-use crate::command::args::FindArg as _;
+use crate::command::args::FindArg;
 use crate::command::args::bool::BoolArgConsumer;
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 

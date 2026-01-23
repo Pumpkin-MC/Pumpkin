@@ -6,7 +6,7 @@ use crate::block::{
     {BlockBehaviour, NormalUseArgs},
 };
 
-use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties as _};
+use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{

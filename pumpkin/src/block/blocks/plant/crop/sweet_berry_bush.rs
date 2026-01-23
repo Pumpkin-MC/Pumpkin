@@ -3,12 +3,12 @@ use std::sync::Arc;
 use pumpkin_data::{
     Block,
     block_properties::{
-        BlockProperties as _, EnumVariants as _, Integer0To3, NetherWartLikeProperties,
+        BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties,
     },
     damage::DamageType,
     entity::EntityType,
     item::Item,
-    tag::{self, Taggable as _},
+    tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -17,7 +17,7 @@ use pumpkin_world::{
     item::ItemStack,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::Rng as _;
+use rand::Rng;
 
 use crate::{
     block::{

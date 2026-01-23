@@ -1,9 +1,9 @@
 use crate::{
-    entity::{NBTStorage as _, player::Player},
+    entity::{NBTStorage, player::Player},
     server::Server,
 };
 use crossbeam::atomic::AtomicCell;
-use pumpkin_inventory::screen_handler::ScreenHandler as _;
+use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
 use std::sync::Arc;

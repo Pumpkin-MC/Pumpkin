@@ -1,5 +1,5 @@
 use crate::command::CommandResult;
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -7,7 +7,7 @@ use crate::{
         tree::{CommandTree, builder::argument},
     },
     data::{
-        SaveJSONConfiguration as _, banlist_serializer::BannedPlayerEntry,
+        SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry,
         banned_player_data::BANNED_PLAYER_LIST,
     },
     entity::player::Player,

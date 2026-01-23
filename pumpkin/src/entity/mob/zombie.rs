@@ -15,7 +15,7 @@ use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
-use rand::{Rng as _, rng};
+use rand::{Rng, rng};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 

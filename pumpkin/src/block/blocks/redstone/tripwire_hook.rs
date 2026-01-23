@@ -12,7 +12,7 @@ use pumpkin_world::{
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::{Rng as _, rng};
+use rand::{Rng, rng};
 
 use crate::{
     block::{

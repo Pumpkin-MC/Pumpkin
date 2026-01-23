@@ -9,7 +9,7 @@ use pumpkin_util::{
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{
-        ConsumedArgs, DefaultNameArgConsumer as _, FindArgDefaultName as _,
+        ConsumedArgs, DefaultNameArgConsumer, FindArgDefaultName,
         bounded_num::BoundedNumArgumentConsumer, position_2d::Position2DArgumentConsumer,
     },
     tree::{

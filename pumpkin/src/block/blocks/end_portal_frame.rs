@@ -1,10 +1,10 @@
-use pumpkin_data::block_properties::BlockProperties as _;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 
 use crate::{
     block::{BlockBehaviour, BlockFuture, OnPlaceArgs},
-    entity::EntityBase as _,
+    entity::EntityBase,
 };
 
 type EndPortalFrameProperties = pumpkin_data::block_properties::EndPortalFrameLikeProperties;

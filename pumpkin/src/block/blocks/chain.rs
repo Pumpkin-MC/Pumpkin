@@ -2,7 +2,7 @@ use crate::block::BlockFuture;
 use crate::block::{BlockBehaviour, OnPlaceArgs};
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::Axis;
-use pumpkin_data::block_properties::BlockProperties as _;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 

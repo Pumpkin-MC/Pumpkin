@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::{
-    BlockProperties as _, EastWireConnection, EnumVariants as _, Integer0To15, NorthWireConnection,
+    BlockProperties, EastWireConnection, EnumVariants, Integer0To15, NorthWireConnection,
     ObserverLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties,
     SouthWireConnection, WestWireConnection,
 };
-use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt as _};
+use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;

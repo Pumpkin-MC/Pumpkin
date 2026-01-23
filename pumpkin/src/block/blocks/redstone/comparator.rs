@@ -3,7 +3,7 @@ use std::sync::{Arc, atomic::Ordering};
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{
-        BlockProperties as _, ComparatorLikeProperties, ComparatorMode, HorizontalFacing,
+        BlockProperties, ComparatorLikeProperties, ComparatorMode, HorizontalFacing,
     },
     entity::EntityType,
 };

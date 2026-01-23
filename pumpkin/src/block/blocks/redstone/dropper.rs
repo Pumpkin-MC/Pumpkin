@@ -7,8 +7,8 @@ use crate::block::{
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 
-use pumpkin_data::FacingExt as _;
-use pumpkin_data::block_properties::{BlockProperties as _, Facing};
+use pumpkin_data::FacingExt;
+use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_3x3;

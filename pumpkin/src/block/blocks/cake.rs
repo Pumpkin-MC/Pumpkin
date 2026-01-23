@@ -12,7 +12,7 @@ use crate::{
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties as _, CakeLikeProperties, EnumVariants as _, Integer0To6},
+    block_properties::{BlockProperties, CakeLikeProperties, EnumVariants, Integer0To6},
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;

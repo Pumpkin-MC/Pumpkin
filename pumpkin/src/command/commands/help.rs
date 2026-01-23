@@ -1,11 +1,11 @@
-use futures::StreamExt as _;
+use futures::StreamExt;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::command::CommandTreeArgumentConsumer;
-use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName as _};
+use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::tree::{Command, CommandTree};

@@ -2,7 +2,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::{
     BlockDirection,
     block_properties::{
-        BlockProperties as _, CandleLikeProperties, EnumVariants as _, Integer1To4,
+        BlockProperties, CandleLikeProperties, EnumVariants, Integer1To4,
     },
     entity::EntityPose,
     tag::{RegistryKey, get_tag_values},
@@ -23,7 +23,7 @@ use crate::{
             UseWithItemArgs,
         },
     },
-    entity::EntityBase as _,
+    entity::EntityBase,
 };
 
 #[pumpkin_block_from_tag("minecraft:candles")]

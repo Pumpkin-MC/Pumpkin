@@ -1,6 +1,6 @@
 use pumpkin_data::{
-    Block, BlockDirection, HorizontalFacingExt as _,
-    block_properties::{BlockFace, BlockProperties as _, GrindstoneLikeProperties},
+    Block, BlockDirection, HorizontalFacingExt,
+    block_properties::{BlockFace, BlockProperties, GrindstoneLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;

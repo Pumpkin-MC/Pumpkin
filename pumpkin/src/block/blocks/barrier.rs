@@ -1,6 +1,6 @@
 use crate::block::{BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnPlaceArgs};
 use pumpkin_data::block_properties::{
-    BlockProperties as _, MangroveRootsLikeProperties as BarrierLikeProperties,
+    BlockProperties, MangroveRootsLikeProperties as BarrierLikeProperties,
 };
 use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;

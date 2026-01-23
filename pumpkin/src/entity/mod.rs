@@ -1,12 +1,12 @@
 use crate::entity::item::ItemEntity;
 use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
-use bytes::BufMut as _;
+use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::{EnumVariants as _, Integer0To15};
+use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;

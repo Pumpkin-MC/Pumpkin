@@ -73,7 +73,7 @@ mod format {
     );
 
     pub mod date {
-        use serde::{self, Deserialize as _, Deserializer, Serializer};
+        use serde::{self, Deserialize, Deserializer, Serializer};
         use time::OffsetDateTime;
 
         use super::DATE_FORMAT;
@@ -95,7 +95,7 @@ mod format {
     }
 
     pub mod option_date {
-        use serde::{self, Deserialize as _, Deserializer, Serializer};
+        use serde::{self, Deserialize, Deserializer, Serializer};
         use time::OffsetDateTime;
 
         use crate::data::banlist_serializer::format::DATE_FORMAT;

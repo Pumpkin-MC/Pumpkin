@@ -1,10 +1,10 @@
 use std::{collections::HashMap, net::IpAddr};
 
-use base64::{Engine as _, engine::general_purpose};
+use base64::{Engine, engine::general_purpose};
 use pumpkin_config::{AuthenticationConfig, networking::auth::TextureConfig};
 use pumpkin_protocol::Property;
 use rsa::RsaPublicKey;
-use rsa::pkcs8::DecodePublicKey as _;
+use rsa::pkcs8::DecodePublicKey;
 use serde::Deserialize;
 use thiserror::Error;
 use ureq::http::{StatusCode, Uri};

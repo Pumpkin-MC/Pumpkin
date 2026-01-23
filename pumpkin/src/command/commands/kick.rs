@@ -8,7 +8,7 @@ use crate::command::tree::CommandTree;
 use crate::command::tree::builder::argument;
 use crate::command::{CommandError, CommandResult};
 use crate::command::{CommandExecutor, CommandSender};
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 use crate::net::DisconnectReason;
 use CommandError::InvalidConsumption;
 

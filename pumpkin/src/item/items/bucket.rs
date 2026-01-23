@@ -16,7 +16,7 @@ use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
 };
 use pumpkin_world::{
-    inventory::Inventory as _, item::ItemStack, tick::TickPriority, world::BlockFlags,
+    inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags,
 };
 
 use crate::world::World;

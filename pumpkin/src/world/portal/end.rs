@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, block_properties::BlockProperties as _};
+use pumpkin_data::{Block, BlockDirection, block_properties::BlockProperties};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 

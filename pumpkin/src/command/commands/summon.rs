@@ -5,7 +5,7 @@ use crate::{
     command::{
         CommandError, CommandExecutor, CommandResult, CommandSender,
         args::{
-            ConsumedArgs, FindArg as _, position_3d::Position3DArgumentConsumer,
+            ConsumedArgs, FindArg, position_3d::Position3DArgumentConsumer,
             summonable_entities::SummonableEntitiesArgumentConsumer,
         },
         tree::{CommandTree, builder::argument},

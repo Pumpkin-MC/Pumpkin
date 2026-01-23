@@ -4,7 +4,7 @@
 //! sent by a Minecraft: Bedrock Edition client. It handles cryptographic signature
 //! verification, public key extraction, and decoding of player data.
 
-use base64::{Engine as _, engine::general_purpose};
+use base64::{Engine, engine::general_purpose};
 use p384::PublicKey;
 use p384::ecdsa::{Signature as EcdsaSignature, VerifyingKey, signature::Verifier};
 use p384::pkcs8::{DecodePublicKey, EncodePublicKey};

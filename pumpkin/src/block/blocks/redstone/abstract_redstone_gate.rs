@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockDirection, BlockState, HorizontalFacingExt as _,
+    Block, BlockDirection, BlockState, HorizontalFacingExt,
     block_properties::{
-        BlockProperties, ComparatorLikeProperties, EnumVariants as _, HorizontalFacing,
+        BlockProperties, ComparatorLikeProperties, EnumVariants, HorizontalFacing,
         RedstoneWireLikeProperties, RepeaterLikeProperties,
     },
 };

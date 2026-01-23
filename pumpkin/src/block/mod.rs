@@ -8,7 +8,7 @@ use pumpkin_world::BlockStateId;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::Player;
 use crate::world::World;
-use crate::world::loot::{LootContextParameters, LootTableExt as _};
+use crate::world::loot::{LootContextParameters, LootTableExt};
 use std::pin::Pin;
 use std::sync::Arc;
 

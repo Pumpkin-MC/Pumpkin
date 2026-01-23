@@ -1,7 +1,7 @@
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{
-        ConsumedArgs, FindArg as _, players::PlayersArgumentConsumer, sound::SoundArgumentConsumer,
+        ConsumedArgs, FindArg, players::PlayersArgumentConsumer, sound::SoundArgumentConsumer,
         sound_category::SoundCategoryArgumentConsumer,
     },
     tree::{CommandTree, builder::argument},

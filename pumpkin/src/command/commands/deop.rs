@@ -1,5 +1,5 @@
 use crate::command::CommandResult;
-use crate::entity::EntityBase as _;
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -7,7 +7,7 @@ use crate::{
         tree::CommandTree,
         tree::builder::argument,
     },
-    data::{SaveJSONConfiguration as _, op_data::OPERATOR_CONFIG},
+    data::{SaveJSONConfiguration, op_data::OPERATOR_CONFIG},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
