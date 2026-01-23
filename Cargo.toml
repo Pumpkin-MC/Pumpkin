@@ -31,9 +31,6 @@ inherits = "release"
 debug = true
 strip = false
 
-[profile.dev]
-debug = "line-tables-only"
-
 [workspace.dependencies]
 log = "0.4"
 tokio = { version = "1.49", default-features = false }
