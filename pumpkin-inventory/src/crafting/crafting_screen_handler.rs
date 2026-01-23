@@ -287,9 +287,9 @@ impl ResultSlot {
                 &*self.inventory,
             )
             .await
-            {
-                return Some((result, cached_recipe));
-            }
+        {
+            return Some((result, cached_recipe));
+        }
 
         for recipe in RECIPES_CRAFTING {
             if let Some(result) = recipe_matches(

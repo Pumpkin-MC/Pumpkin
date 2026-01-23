@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "pumpkin-api-macros",
     "pumpkin-config",
@@ -19,6 +19,7 @@ rust-version = "1.89"
 
 [profile.release]
 lto = true
+strip = "debuginfo"
 codegen-units = 1
 
 [profile.bench]
@@ -27,6 +28,7 @@ debug = true
 [profile.profiling]
 inherits = "release"
 debug = true
+strip = false
 
 [workspace.dependencies]
 log = "0.4"

@@ -484,7 +484,6 @@ impl BedrockClient {
         packet: RawPacket,
     ) -> Result<(), Error> {
         let payload = &mut Cursor::new(&packet.payload);
-        log::error!("packet id {}", packet.id);
         match packet.id {
             SRequestNetworkSettings::PACKET_ID => {
                 self.handle_request_network_settings(SRequestNetworkSettings::read(payload)?)

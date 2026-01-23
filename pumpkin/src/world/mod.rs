@@ -1,3 +1,4 @@
+use std::num::NonZeroU32;
 use std::pin::Pin;
 use std::sync::Weak;
 use std::sync::atomic::Ordering::Relaxed;
@@ -56,7 +57,10 @@ use pumpkin_data::{
 use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
+use pumpkin_protocol::bedrock::client::chunk_radius_update::CChunkRadiusUpdate;
+use pumpkin_protocol::bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate;
 use pumpkin_protocol::bedrock::client::start_game::CStartGame;
+use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::ser::serializer::Serializer;
@@ -1161,7 +1165,7 @@ impl World {
         self.dimension.min_y
     }
 
-    #[expect(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
         base_config: &BasicConfiguration,
@@ -1249,15 +1253,15 @@ impl World {
                 entity_id: VarLong(runtime_id as _),
                 runtime_entity_id: VarULong(runtime_id),
                 player_gamemode: player.gamemode.load(),
-                position: Vector3::new(0.0, 100.0, 0.0),
+                position: Vector3::new(0.0, 200.0, 0.0),
                 pitch: 0.0,
                 yaw: 0.0,
                 level_settings,
                 level_id: String::new(),
-                level_name: "World".to_owned(),
+                level_name: "Pumpkin world".to_string(),
                 premium_world_template_id: String::new(),
                 is_trial: false,
-                rewind_history_size: VarInt(0),
+                rewind_history_size: VarInt(40),
                 server_authoritative_block_breaking: false,
                 current_level_time: self.level_time.lock().await.world_age as _,
                 enchantment_seed: VarInt(0),
@@ -1278,10 +1282,15 @@ impl World {
                 // TODO The client needs extra biome data for this
                 enable_clientside_generation: false,
                 blocknetwork_ids_are_hashed: false,
-                disable_client_sounds: false,
+                server_auth_sounds: false,
             })
             .await;
-        // chunker::update_position(&player).await;
+        client
+            .send_game_packet(&CChunkRadiusUpdate {
+                chunk_radius: VarInt(player.config.read().await.view_distance.get().into()),
+            })
+            .await;
+        chunker::update_position(&player).await;
         client
             .send_game_packet(&CreativeContent {
                 groups: &[Group {
@@ -1293,29 +1302,48 @@ impl World {
             })
             .await;
 
+        let mut frame_set = FrameSet::default();
         client
-            .send_game_packet(&CUpdateAttributes {
-                runtime_id: VarULong(runtime_id),
-                attributes: vec![Attribute {
-                    min_value: 0.0,
-                    max_value: f32::MAX,
-                    current_value: 0.1,
-                    default_min_value: 0.0,
-                    default_max_value: f32::MAX,
-                    default_value: 0.1,
-                    name: "minecraft:movement".to_owned(),
-                    modifiers_list_size: VarUInt(0),
-                }],
-                player_tick: VarULong(0),
-            })
+            .write_game_packet_to_set(
+                &CNetworkChunkPublisherUpdate::new(
+                    BlockPos::new(0, 200, 0),
+                    NonZeroU32::from(player.config.read().await.view_distance).into(),
+                ),
+                &mut frame_set,
+            )
             .await;
-        player.send_abilities_update().await;
+
+        client
+            .write_game_packet_to_set(
+                &CUpdateAttributes {
+                    runtime_id: VarULong(runtime_id),
+                    attributes: vec![Attribute {
+                        min_value: 0.0,
+                        max_value: f32::MAX,
+                        current_value: 0.1,
+                        default_min_value: 0.0,
+                        default_max_value: f32::MAX,
+                        default_value: 0.1,
+                        name: "minecraft:movement".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    }],
+                    player_tick: VarULong(0),
+                },
+                &mut frame_set,
+            )
+            .await;
+
+        client
+            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
+            .await;
+        client.send_frame_set(frame_set, 0x84).await;
+
         {
             let mut abilities = player.abilities.lock().await;
             abilities.set_for_gamemode(player.gamemode.load());
         };
 
-        client.send_game_packet(&CPlayStatus::PlayerSpawn).await;
+        player.send_abilities_update().await;
     }
 
     #[expect(clippy::too_many_lines)]

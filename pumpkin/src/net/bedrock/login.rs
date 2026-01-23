@@ -49,14 +49,12 @@ struct CertificateChainPayload {
 
 impl BedrockClient {
     pub async fn handle_request_network_settings(&self, _packet: SRequestNetworkSettings) {
-        log::debug!("Bedrock: Sending Network settings");
         self.send_game_packet(&CNetworkSettings::new(0, 0, false, 0, 0.0))
             .await;
         self.set_compression(CompressionInfo::default()).await;
     }
 
     pub async fn handle_login(self: &Arc<Self>, packet: SLogin, server: &Server) -> Option<()> {
-        log::debug!("Bedrock: handle login");
         match self.try_handle_login(packet, server).await {
             Ok(()) => Some(()),
             Err(error) => {
@@ -103,15 +101,7 @@ impl BedrockClient {
         self.write_game_packet_to_set(&CPlayStatus::LoginSuccess, &mut frame_set)
             .await;
         self.write_game_packet_to_set(
-            &CResourcePacksInfo::new(
-                false,
-                false,
-                false,
-                true,
-                uuid::Uuid::default(),
-                String::new(),
-                Vec::new(),
-            ),
+            &CResourcePacksInfo::new(false, false, false, false, Uuid::default(), String::new()),
             &mut frame_set,
         )
         .await;

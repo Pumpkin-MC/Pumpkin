@@ -1786,18 +1786,7 @@ impl Player {
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {
-        match &self.client {
-            ClientPlatform::Java(client) => {
-                client
-                    .enqueue_packet(&CSystemChatMessage::new(text, false))
-                    .await;
-            }
-            ClientPlatform::Bedrock(client) => {
-                client
-                    .send_game_packet(&SText::system_message(text.clone().get_text()))
-                    .await;
-            }
-        }
+        self.send_system_message_raw(text, false).await;
     }
 
     pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
@@ -2509,13 +2498,6 @@ impl EntityBase for Player {
             if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
                 return false;
             }
-            let dyn_self = self
-                .living_entity
-                .entity
-                .world
-                .get_entity_by_id(self.living_entity.entity.entity_id)
-                .await
-                .expect("Entity not found in world");
             let result = self
                 .living_entity
                 .damage_with_context(caller, amount, damage_type, position, source, cause)
@@ -2524,8 +2506,7 @@ impl EntityBase for Player {
                 let health = self.living_entity.health.load();
                 if health <= 0.0 {
                     let death_message =
-                        LivingEntity::get_death_message(&*dyn_self, damage_type, source, cause)
-                            .await;
+                        LivingEntity::get_death_message(caller, damage_type, source, cause).await;
                     self.handle_killed(death_message).await;
                 }
             }
