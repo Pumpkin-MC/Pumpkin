@@ -1444,19 +1444,30 @@ impl Player {
                         VarInt(self.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                         new_world.sea_level.into(),
                         1,
-                    )).await
-                    ;
+                    )).await;
+
                 self.send_permission_lvl_update().await;
-                self.clone().request_teleport(position, yaw, pitch).await;
-                self.living_entity.entity.last_pos.store(position);
+
+                let cooldown = self.living_entity.entity.portal_cooldown.load(Ordering::Relaxed);
+                new_player_ref.living_entity.entity.portal_cooldown.store(cooldown, Ordering::Relaxed);
+
+                // Use new_player_ref for teleport request - the new player needs to have the correct position
+                new_player_ref.clone().request_teleport(position, yaw, pitch).await;
+                new_player_ref.living_entity.entity.last_pos.store(position);
+
                 self.send_abilities_update().await;
+
                 self.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
                    self.get_inventory().get_selected_slot() as i8,
                 )).await;
+
                 self.on_screen_handler_opened(self.player_screen_handler.clone()).await;
+
                 self.send_health().await;
 
-                new_world.send_world_info(self, position, yaw, pitch).await;
+                // Use new_player_ref here, not self, because self still has its world
+                // pointing to the old world. new_player_ref has the correct world.
+                new_world.send_world_info(&new_player_ref, position, yaw, pitch).await;
             }
         }}
     }

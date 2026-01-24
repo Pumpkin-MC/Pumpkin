@@ -1,7 +1,7 @@
 use crate::entity::item::ItemEntity;
 use crate::net::ClientPlatform;
 use crate::world::World;
-use crate::{server::Server, world::portal::PortalManager};
+use crate::{server::Server, world::portal::{NetherPortal, PortalManager}};
 use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
@@ -1313,31 +1313,48 @@ impl Entity {
             self.portal_cooldown.fetch_sub(1, Ordering::Relaxed);
         }
         let mut manager_guard = self.portal_manager.lock().await;
-        // I know this is ugly, but a quick fix because i can't modify the thing while using it
         let mut should_remove = false;
         if let Some(pmanager_mutex) = manager_guard.as_ref() {
             let mut portal_manager = pmanager_mutex.lock().await;
             if portal_manager.tick() {
-                // reset cooldown
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
                 let pos = self.pos.load();
                 let scale_factor_new = portal_manager.portal_world.dimension.coordinate_scale;
                 let scale_factor_current = self.world.dimension.coordinate_scale;
 
+                // Scale coordinates: Overworld/8 = Nether, Nether*8 = Overworld
                 let scale_factor = scale_factor_current / scale_factor_new;
-                // TODO
-                let pos = BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
-                caller
-                    .clone()
-                    .teleport(
-                        pos.0.to_f64(),
-                        None,
-                        None,
-                        portal_manager.portal_world.clone(),
-                    )
-                    .await;
+                let target_pos = BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
+
+                let dest_world = portal_manager.portal_world.clone();
                 drop(portal_manager);
+
+                let teleport_pos = if let Some(result) =
+                    NetherPortal::search_for_portal(&dest_world, target_pos).await
+                {
+                    result.get_teleport_position()
+                } else if let Some((build_pos, axis, is_fallback)) =
+                    NetherPortal::find_safe_location(&dest_world, target_pos).await
+                {
+                    NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback).await;
+
+                    let x = build_pos.0.x as f64;
+                    let y = build_pos.0.y as f64;
+                    let z = build_pos.0.z as f64;
+                    match axis {
+                        pumpkin_data::block_properties::HorizontalAxis::X => {
+                            Vector3::new(x + 1.0, y, z + 0.5)
+                        }
+                        pumpkin_data::block_properties::HorizontalAxis::Z => {
+                            Vector3::new(x + 0.5, y, z + 1.0)
+                        }
+                    }
+                } else {
+                    target_pos.0.to_f64()
+                };
+
+                caller.clone().teleport(teleport_pos, None, None, dest_world).await;
             } else if portal_manager.ticks_in_portal == 0 {
                 should_remove = true;
             }

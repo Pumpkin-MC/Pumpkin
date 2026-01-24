@@ -7,6 +7,8 @@ use super::World;
 pub mod end;
 pub mod nether;
 
+pub use nether::{NetherPortal, PortalSearchResult};
+
 pub struct PortalManager {
     pub portal_delay: u32,
     pub portal_world: Arc<World>,
