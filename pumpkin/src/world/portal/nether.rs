@@ -266,13 +266,13 @@ impl NetherPortal {
             || block == &Block::NETHER_PORTAL
     }
 
-    /// Search for existing portal. Radius: 16 blocks (Nether), 128 blocks (Overworld).
     pub async fn search_for_portal(
         world: &Arc<World>,
         target_pos: BlockPos,
     ) -> Option<PortalSearchResult> {
         let min_y = world.min_y;
         let max_y = min_y + world.dimension.height - 1;
+        let worldborder = world.worldborder.lock().await;
 
         let search_radius = if world.dimension.has_ceiling {
             SEARCH_RADIUS_NETHER
@@ -286,8 +286,14 @@ impl NetherPortal {
             max_y
         };
 
+        let mut best: Option<(PortalSearchResult, f64, i32)> = None;
+
         for pos in BlockPos::iterate_outwards(target_pos, search_radius, search_radius, search_radius) {
             if pos.0.y < min_y || pos.0.y > search_max_y {
+                continue;
+            }
+
+            if !worldborder.contains_block(pos.0.x, pos.0.z) {
                 continue;
             }
 
@@ -298,18 +304,38 @@ impl NetherPortal {
             for axis in [HorizontalAxis::X, HorizontalAxis::Z] {
                 if let Some(portal) = Self::get_on_axis(world, &pos, axis).await {
                     if portal.was_already_valid() {
-                        return Some(PortalSearchResult {
-                            lower_corner: portal.lower_conor,
-                            axis: portal.axis,
-                            width: portal.width,
-                            height: portal.height,
-                        });
+                        let dist = target_pos.0.squared_distance_to(
+                            portal.lower_conor.0.x,
+                            portal.lower_conor.0.y,
+                            portal.lower_conor.0.z,
+                        ) as f64;
+                        let y = portal.lower_conor.0.y;
+
+                        let is_better = match &best {
+                            None => true,
+                            Some((_, best_dist, best_y)) => {
+                                dist < *best_dist || (dist == *best_dist && y < *best_y)
+                            }
+                        };
+
+                        if is_better {
+                            best = Some((
+                                PortalSearchResult {
+                                    lower_corner: portal.lower_conor,
+                                    axis: portal.axis,
+                                    width: portal.width,
+                                    height: portal.height,
+                                },
+                                dist,
+                                y,
+                            ));
+                        }
                     }
                 }
             }
         }
 
-        None
+        best.map(|(result, _, _)| result)
     }
 
     /// Find safe location for new portal. Searches top-down using heightmap.
@@ -318,14 +344,22 @@ impl NetherPortal {
     pub async fn find_safe_location(
         world: &Arc<World>,
         target_pos: BlockPos,
+        axis: HorizontalAxis,
     ) -> Option<(BlockPos, HorizontalAxis, bool)> {
         let min_y = world.min_y;
         let max_y = min_y + world.dimension.height - 1;
+        let worldborder = world.worldborder.lock().await;
 
         let top_y_limit = if world.dimension.has_ceiling {
             (min_y + world.dimension.logical_height - 1).min(max_y)
         } else {
             max_y
+        };
+
+        let direction = if axis == HorizontalAxis::X {
+            BlockDirection::East
+        } else {
+            BlockDirection::North
         };
 
         let mut ideal_pos: Option<(BlockPos, HorizontalAxis, f64)> = None;
@@ -336,7 +370,16 @@ impl NetherPortal {
                 let check_x = target_pos.0.x + offset_x;
                 let check_z = target_pos.0.z + offset_z;
 
-                // Use heightmap to start from actual surface
+                if !worldborder.contains_block(check_x, check_z) {
+                    continue;
+                }
+
+                let offset_pos = BlockPos(Vector3::new(check_x, 0, check_z))
+                    .offset_dir(direction.to_offset(), 1);
+                if !worldborder.contains_block(offset_pos.0.x, offset_pos.0.z) {
+                    continue;
+                }
+
                 let heightmap_y = world.get_motion_blocking_height(check_x, check_z).await;
                 let start_y = heightmap_y.min(top_y_limit);
 
@@ -360,20 +403,20 @@ impl NetherPortal {
                         if air_height >= 3 && bottom_y + 4 <= top_y_limit {
                             let floor_pos = BlockPos(Vector3::new(check_x, bottom_y, check_z));
 
-                            for axis in [HorizontalAxis::X, HorizontalAxis::Z] {
-                                if Self::is_valid_portal_pos(world, floor_pos, axis, 0).await {
+                            for check_axis in [HorizontalAxis::X, HorizontalAxis::Z] {
+                                if Self::is_valid_portal_pos(world, floor_pos, check_axis, 0).await {
                                     let dist = target_pos.0.squared_distance_to(floor_pos.0.x, floor_pos.0.y, floor_pos.0.z) as f64;
 
-                                    let is_ideal = Self::is_valid_portal_pos(world, floor_pos, axis, -1).await
-                                        && Self::is_valid_portal_pos(world, floor_pos, axis, 1).await;
+                                    let is_ideal = Self::is_valid_portal_pos(world, floor_pos, check_axis, -1).await
+                                        && Self::is_valid_portal_pos(world, floor_pos, check_axis, 1).await;
 
                                     if is_ideal {
                                         if ideal_pos.is_none() || dist < ideal_pos.as_ref().unwrap().2 {
-                                            ideal_pos = Some((floor_pos, axis, dist));
+                                            ideal_pos = Some((floor_pos, check_axis, dist));
                                         }
                                     } else if ideal_pos.is_none() {
                                         if acceptable_pos.is_none() || dist < acceptable_pos.as_ref().unwrap().2 {
-                                            acceptable_pos = Some((floor_pos, axis, dist));
+                                            acceptable_pos = Some((floor_pos, check_axis, dist));
                                         }
                                     }
                                 }
@@ -387,16 +430,22 @@ impl NetherPortal {
             }
         }
 
-        if let Some((pos, axis, _)) = ideal_pos {
-            return Some((pos, axis, false));
+        if let Some((pos, result_axis, _)) = ideal_pos {
+            return Some((pos, result_axis, false));
         }
-        if let Some((pos, axis, _)) = acceptable_pos {
-            return Some((pos, axis, false));
+        if let Some((pos, result_axis, _)) = acceptable_pos {
+            return Some((pos, result_axis, false));
         }
 
-        // Fallback: no valid surface found, will need to build platform
+        // Fallback: offset by -direction and clamp to world border
         let fallback_y = target_pos.0.y.clamp(70.max(min_y + 1), top_y_limit - 9);
-        Some((BlockPos(Vector3::new(target_pos.0.x, fallback_y, target_pos.0.z)), HorizontalAxis::X, true))
+        let fallback_pos = BlockPos(Vector3::new(
+            target_pos.0.x - direction.to_offset().x,
+            fallback_y,
+            target_pos.0.z - direction.to_offset().z,
+        ));
+        let clamped_pos = worldborder.clamp_block(fallback_pos.0.x, fallback_pos.0.z);
+        Some((BlockPos(Vector3::new(clamped_pos.0, fallback_y, clamped_pos.1)), axis, true))
     }
 
     fn is_valid_portal_air(state: &BlockState) -> bool {
@@ -503,7 +552,7 @@ impl NetherPortal {
                     .offset_dir(direction.to_offset(), x)
                     .offset_dir(BlockDirection::Up.to_offset(), y);
                 world
-                    .set_block_state(&pos, portal_state, BlockFlags::NOTIFY_ALL)
+                    .set_block_state(&pos, portal_state, BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE)
                     .await;
             }
         }

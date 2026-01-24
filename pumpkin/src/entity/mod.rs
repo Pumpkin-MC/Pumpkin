@@ -1335,7 +1335,7 @@ impl Entity {
                 {
                     result.get_teleport_position()
                 } else if let Some((build_pos, axis, is_fallback)) =
-                    NetherPortal::find_safe_location(&dest_world, target_pos).await
+                    NetherPortal::find_safe_location(&dest_world, target_pos, pumpkin_data::block_properties::HorizontalAxis::X).await
                 {
                     NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback).await;
 

@@ -110,4 +110,26 @@ impl Worldborder {
             .broadcast_packet_all(&CSetBorderWarningDistance::new(self.warning_blocks.into()))
             .await;
     }
+
+    pub fn contains(&self, x: f64, z: f64) -> bool {
+        let half = self.new_diameter / 2.0;
+        let min_x = self.center_x - half;
+        let max_x = self.center_x + half;
+        let min_z = self.center_z - half;
+        let max_z = self.center_z + half;
+        x >= min_x && x < max_x && z >= min_z && z < max_z
+    }
+
+    pub fn contains_block(&self, x: i32, z: i32) -> bool {
+        self.contains(x as f64, z as f64) && self.contains((x + 1) as f64, (z + 1) as f64)
+    }
+
+    pub fn clamp_block(&self, x: i32, z: i32) -> (i32, i32) {
+        let half = self.new_diameter / 2.0;
+        let min_x = (self.center_x - half).floor() as i32;
+        let max_x = (self.center_x + half).floor() as i32 - 1;
+        let min_z = (self.center_z - half).floor() as i32;
+        let max_z = (self.center_z + half).floor() as i32 - 1;
+        (x.clamp(min_x, max_x), z.clamp(min_z, max_z))
+    }
 }
