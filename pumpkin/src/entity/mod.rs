@@ -1373,21 +1373,9 @@ impl Entity {
                 // Teleport the main entity
                 caller.clone().teleport(teleport_pos, new_yaw, None, dest_world.clone()).await;
 
-                // Teleport all passengers along with the vehicle
-                let passengers = self.passengers.lock().await.clone();
-                for passenger in passengers {
-                    let passenger_entity = passenger.get_entity();
-                    let passenger_yaw = new_yaw.map(|y| {
-                        let current = passenger_entity.yaw.load();
-                        // Apply the same yaw delta to passengers
-                        current + (y - current_yaw)
-                    });
-                    passenger_entity.portal_cooldown.store(
-                        passenger_entity.default_portal_cooldown(),
-                        Ordering::Relaxed,
-                    );
-                    passenger.teleport(teleport_pos, passenger_yaw, None, dest_world.clone()).await;
-                }
+                // Teleport all passengers recursively along with the vehicle
+                let yaw_delta = new_yaw.map(|y| y - current_yaw);
+                Self::teleport_passengers_recursive(self, teleport_pos, yaw_delta, &dest_world).await;
             } else if portal_manager.ticks_in_portal == 0 {
                 should_remove = true;
             }
@@ -1395,6 +1383,37 @@ impl Entity {
         if should_remove {
             *manager_guard = None;
         }
+    }
+
+    /// Recursively teleports all passengers (and their passengers) to the destination
+    fn teleport_passengers_recursive<'a>(
+        entity: &'a Self,
+        position: Vector3<f64>,
+        yaw_delta: Option<f32>,
+        dest_world: &'a Arc<World>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let passengers = entity.passengers.lock().await.clone();
+            for passenger in passengers {
+                let passenger_entity = passenger.get_entity();
+                let passenger_yaw = yaw_delta.map(|delta| passenger_entity.yaw.load() + delta);
+                passenger_entity.portal_cooldown.store(
+                    passenger_entity.default_portal_cooldown(),
+                    Ordering::Relaxed,
+                );
+
+                // Get nested passengers before teleporting
+                let nested_passengers = passenger_entity.passengers.lock().await.clone();
+
+                passenger.teleport(position, passenger_yaw, None, dest_world.clone()).await;
+
+                // Recursively teleport nested passengers
+                for nested in nested_passengers {
+                    let nested_entity = nested.get_entity();
+                    Self::teleport_passengers_recursive(nested_entity, position, yaw_delta, dest_world).await;
+                }
+            }
+        })
     }
 
     pub async fn try_use_portal(&self, portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) {
