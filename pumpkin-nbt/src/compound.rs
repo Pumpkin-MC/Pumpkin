@@ -8,6 +8,12 @@ use crate::{END_ID, Error, Nbt, get_nbt_string};
 use std::io::{ErrorKind, Read, Seek, Write};
 use std::vec::IntoIter;
 
+/// Represents a Compound NBT tag, effectively a Key-Value map.
+///
+/// Internally, this uses a `Vec<(String, NbtTag)>` to preserve insertion order,
+/// which is often preferred in NBT serialization, though lookups are O(n).
+///
+///
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct NbtCompound {
     pub child_tags: Vec<(String, NbtTag)>,
@@ -24,20 +30,10 @@ impl NbtCompound {
         loop {
             let tag_id = match reader.get_u8_be() {
                 Ok(id) => id,
-                Err(err) => match err {
-                    Error::Incomplete(err) => match err.kind() {
-                        ErrorKind::UnexpectedEof => {
-                            break;
-                        }
-                        _ => {
-                            return Err(Error::Incomplete(err));
-                        }
-                    },
-                    _ => {
-                        return Err(err);
-                    }
-                },
+                Err(Error::Incomplete(e)) if e.kind() == ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e),
             };
+
             if tag_id == END_ID {
                 break;
             }
@@ -45,6 +41,7 @@ impl NbtCompound {
             let len = reader.get_u16_be()?;
             reader.skip_bytes(len as i64)?;
 
+            // Skip Value
             NbtTag::skip_data(reader, tag_id)?;
         }
 
@@ -59,27 +56,18 @@ impl NbtCompound {
         loop {
             let tag_id = match reader.get_u8_be() {
                 Ok(id) => id,
-                Err(err) => match err {
-                    Error::Incomplete(err) => match err.kind() {
-                        ErrorKind::UnexpectedEof => {
-                            break;
-                        }
-                        _ => {
-                            return Err(Error::Incomplete(err));
-                        }
-                    },
-                    _ => {
-                        return Err(err);
-                    }
-                },
+                Err(Error::Incomplete(e)) if e.kind() == ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e),
             };
+
             if tag_id == END_ID {
                 break;
             }
 
             let name = get_nbt_string(reader)?;
             let tag = NbtTag::deserialize_data(reader, tag_id)?;
-            compound.put(&name, tag);
+
+            compound.child_tags.push((name, tag));
         }
 
         Ok(compound)
@@ -100,9 +88,8 @@ impl NbtCompound {
     }
 
     pub fn put(&mut self, name: &str, value: impl Into<NbtTag>) {
-        let name = name.to_string();
-        if !self.child_tags.iter().any(|(key, _)| key == &name) {
-            self.child_tags.push((name, value.into()));
+        if !self.child_tags.iter().any(|(key, _)| key == name) {
+            self.child_tags.push((name.to_string(), value.into()));
         }
     }
 
@@ -292,7 +279,7 @@ impl Display for NbtCompound {
             if i > 0 {
                 f.write_str(", ")?;
             }
-            f.write_str(&format!("{key}: {value}"))?;
+            write!(f, "{}: {}", key, value)?;
         }
         f.write_str("}")
     }
@@ -302,51 +289,51 @@ impl Display for NbtTag {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             NbtTag::End => Ok(()),
-            NbtTag::Byte(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::Short(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::Int(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::Long(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::Float(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::Double(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::String(value) => f.write_fmt(format_args!("\"{value}\"")),
-            NbtTag::Compound(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::ByteArray(value) => {
-                f.write_str("[B; ")?;
-                for (i, byte) in value.iter().enumerate() {
+            NbtTag::Byte(v) => write!(f, "{v}b"),
+            NbtTag::Short(v) => write!(f, "{v}s"),
+            NbtTag::Int(v) => write!(f, "{v}"),
+            NbtTag::Long(v) => write!(f, "{v}L"),
+            NbtTag::Float(v) => write!(f, "{v}f"),
+            NbtTag::Double(v) => write!(f, "{v}d"),
+            NbtTag::String(v) => write!(f, "\"{v}\""), // TODO: Proper escaping needed for robust SNBT
+            NbtTag::Compound(v) => write!(f, "{v}"),
+            NbtTag::ByteArray(v) => {
+                f.write_str("[B;")?;
+                for (i, byte) in v.iter().enumerate() {
                     if i > 0 {
-                        f.write_str(", ")?;
+                        f.write_str(",")?
                     }
-                    f.write_fmt(format_args!("{byte}"))?;
+                    write!(f, " {}b", byte)?;
                 }
                 f.write_str("]")
             }
-            NbtTag::List(value) => {
+            NbtTag::List(v) => {
                 f.write_str("[")?;
-                for (i, tag) in value.iter().enumerate() {
+                for (i, tag) in v.iter().enumerate() {
                     if i > 0 {
-                        f.write_str(", ")?;
+                        f.write_str(", ")?
                     }
-                    f.write_fmt(format_args!("{tag}"))?;
+                    write!(f, "{}", tag)?;
                 }
                 f.write_str("]")
             }
-            NbtTag::IntArray(value) => {
-                f.write_str("[I; ")?;
-                for (i, int) in value.iter().enumerate() {
+            NbtTag::IntArray(v) => {
+                f.write_str("[I;")?;
+                for (i, int) in v.iter().enumerate() {
                     if i > 0 {
-                        f.write_str(", ")?;
+                        f.write_str(",")?
                     }
-                    f.write_fmt(format_args!("{int}"))?;
+                    write!(f, " {}", int)?;
                 }
                 f.write_str("]")
             }
-            NbtTag::LongArray(value) => {
-                f.write_str("[L; ")?;
-                for (i, long) in value.iter().enumerate() {
+            NbtTag::LongArray(v) => {
+                f.write_str("[L;")?;
+                for (i, long) in v.iter().enumerate() {
                     if i > 0 {
-                        f.write_str(", ")?;
+                        f.write_str(",")?
                     }
-                    f.write_fmt(format_args!("{long}"))?;
+                    write!(f, " {}L", long)?;
                 }
                 f.write_str("]")
             }

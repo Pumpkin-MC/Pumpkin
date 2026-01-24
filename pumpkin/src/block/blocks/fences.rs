@@ -4,9 +4,7 @@ use crate::block::OnPlaceArgs;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -19,12 +17,8 @@ use crate::world::World;
 
 pub struct FenceBlock;
 impl BlockMetadata for FenceBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "c:fences").unwrap()
+    fn ids() -> Box<[u16]> {
+        tag::Block::C_FENCES.1.into()
     }
 }
 

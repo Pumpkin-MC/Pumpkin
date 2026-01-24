@@ -9,12 +9,8 @@ use crate::block::{
 pub struct BushBlock;
 
 impl BlockMetadata for BushBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::BUSH.name, Block::FIREFLY_BUSH.name]
+    fn ids() -> Box<[u16]> {
+        [Block::BUSH.id, Block::FIREFLY_BUSH.id].into()
     }
 }
 

@@ -7,22 +7,23 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct Packets {
     version: u32,
-    serverbound: BTreeMap<String, Vec<String>>,
-    clientbound: BTreeMap<String, Vec<String>>,
+    serverbound: BTreeMap<String, BTreeMap<String, i32>>,
+    clientbound: BTreeMap<String, BTreeMap<String, i32>>,
 }
 
 pub(crate) fn build() -> TokenStream {
-    println!("cargo:rerun-if-changed=../assets/packets.json");
+    println!("cargo:rerun-if-changed=../assets/packet/1_21_11_packets.json");
 
     let packets: Packets =
-        serde_json::from_str(&fs::read_to_string("../assets/packets.json").unwrap())
+        serde_json::from_str(&fs::read_to_string("../assets/packet/1_21_11_packets.json").unwrap())
             .expect("Failed to parse packets.json");
+
     let version = packets.version;
     let serverbound_consts = parse_packets(packets.serverbound);
     let clientbound_consts = parse_packets(packets.clientbound);
 
     quote!(
-        /// The current Minecraft protocol version. This changes only when the protocol itself is modified.
+        /// The current Minecraft protocol version.
         pub const CURRENT_MC_PROTOCOL: u32 = #version;
 
         pub mod serverbound {
@@ -35,20 +36,21 @@ pub(crate) fn build() -> TokenStream {
     )
 }
 
-pub(crate) fn parse_packets(packets: BTreeMap<String, Vec<String>>) -> proc_macro2::TokenStream {
+pub(crate) fn parse_packets(phases: BTreeMap<String, BTreeMap<String, i32>>) -> TokenStream {
     let mut consts = TokenStream::new();
 
-    for packet in packets {
-        let phase = packet.0;
+    for (phase_name, packets) in phases {
+        for (packet_name, packet_id) in packets {
+            let sanitized_name = packet_name
+                .replace("/", "_")
+                .replace("-", "_")
+                .to_uppercase();
 
-        for (id, packet_name) in packet.1.iter().enumerate() {
-            let packet_id = id as i32;
-            let packet_name = packet_name.replace("/", "_");
-            let name = format!("{phase}_{packet_name}").to_uppercase();
-            let name = format_ident!("{}", name);
-            consts.extend([quote! {
-                pub const #name: i32 = #packet_id;
-            }]);
+            let const_name = format_ident!("{}_{}", phase_name.to_uppercase(), sanitized_name);
+
+            consts.extend(quote! {
+                pub const #const_name: i32 = #packet_id;
+            });
         }
     }
     consts

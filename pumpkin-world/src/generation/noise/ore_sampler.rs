@@ -4,10 +4,9 @@ use pumpkin_util::{
     random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
 
-use crate::generation::noise::router::chunk_noise_router::ChunkNoiseRouter;
-
-use super::noise::router::{
-    chunk_density_function::ChunkNoiseFunctionSampleOptions, density_function::NoisePos,
+use crate::generation::noise::router::{
+    chunk_density_function::ChunkNoiseFunctionSampleOptions, chunk_noise_router::ChunkNoiseRouter,
+    density_function::NoisePos,
 };
 
 pub struct OreVeinSampler {

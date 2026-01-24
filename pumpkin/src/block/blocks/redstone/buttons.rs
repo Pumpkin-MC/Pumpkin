@@ -5,8 +5,6 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockFace;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::get_tag_values;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;

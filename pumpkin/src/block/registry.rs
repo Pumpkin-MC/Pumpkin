@@ -46,6 +46,7 @@ use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
+use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
 use crate::block::blocks::redstone::comparator::ComparatorBlock;
@@ -68,6 +69,7 @@ use crate::block::blocks::redstone::tripwire::TripwireBlock;
 use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
 use crate::block::blocks::signs::SignBlock;
 use crate::block::blocks::slabs::SlabBlock;
+use crate::block::blocks::slime::SlimeBlock;
 use crate::block::blocks::snow::LayeredSnowBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
 use crate::block::blocks::stairs::StairBlock;
@@ -86,7 +88,6 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::fluid;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection, BlockState};
@@ -182,6 +183,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BannerBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
+    manager.register(SlimeBlock);
     manager.register(StairBlock);
     manager.register(ShortPlantBlock);
     manager.register(DryVegetationBlock);
@@ -209,6 +211,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NetherPortalBlock);
     manager.register(TallPlantBlock);
     manager.register(NoteBlock);
+    manager.register(PowderSnowBlock);
     manager.register(PumpkinBlock);
     manager.register(CommandBlock);
     manager.register(ComposterBlock);
@@ -334,22 +337,20 @@ impl BlockRegistryExt for BlockRegistry {
 
 impl BlockRegistry {
     pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {
-        let names = block.names();
+        let ids = T::ids();
         let val = Arc::new(block);
-        self.blocks.reserve(names.len());
-        for i in names {
-            self.blocks
-                .insert(Block::from_name(i.as_str()).unwrap().id, val.clone());
+        self.blocks.reserve(ids.len());
+        for i in ids {
+            self.blocks.insert(i, val.clone());
         }
     }
 
     pub fn register_fluid<T: FluidBehaviour + BlockMetadata + 'static>(&mut self, fluid: T) {
-        let names = fluid.names();
+        let ids = T::ids();
         let val = Arc::new(fluid);
-        self.fluids.reserve(names.len());
-        for i in names {
-            self.fluids
-                .insert(fluid::get_fluid(i.as_str()).unwrap().id, val.clone());
+        self.fluids.reserve(ids.len());
+        for i in ids {
+            self.fluids.insert(i, val.clone());
         }
     }
 

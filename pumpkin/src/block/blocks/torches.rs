@@ -17,17 +17,14 @@ use crate::block::{
 pub struct TorchBlock;
 
 impl BlockMetadata for TorchBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[
-            Block::TORCH.name,
-            Block::SOUL_TORCH.name,
-            Block::WALL_TORCH.name,
-            Block::SOUL_WALL_TORCH.name,
+    fn ids() -> Box<[u16]> {
+        [
+            Block::TORCH.id,
+            Block::SOUL_TORCH.id,
+            Block::WALL_TORCH.id,
+            Block::SOUL_WALL_TORCH.id,
         ]
+        .into()
     }
 }
 

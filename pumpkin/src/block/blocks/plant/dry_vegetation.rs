@@ -1,5 +1,5 @@
-use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
@@ -11,12 +11,13 @@ use crate::block::{
 pub struct DryVegetationBlock;
 
 impl BlockMetadata for DryVegetationBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &["dead_bush", "tall_dry_grass", "short_dry_grass"]
+    fn ids() -> Box<[u16]> {
+        [
+            Block::DEAD_BUSH.id,
+            Block::TALL_DRY_GRASS.id,
+            Block::SHORT_DRY_GRASS.id,
+        ]
+        .into()
     }
 }
 

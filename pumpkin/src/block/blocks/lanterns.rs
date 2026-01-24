@@ -14,12 +14,8 @@ use pumpkin_world::world::BlockFlags;
 pub struct LanternBlock;
 
 impl BlockMetadata for LanternBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::LANTERN.name, Block::SOUL_LANTERN.name]
+    fn ids() -> Box<[u16]> {
+        [Block::LANTERN.id, Block::SOUL_LANTERN.id].into()
     }
 }
 

@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 
 const DATA_FOLDER: &str = "data/";
 
-pub mod op_data;
+pub mod op;
 
 pub mod banlist_serializer;
-pub mod banned_ip_data;
-pub mod banned_player_data;
-pub mod player_server_data;
-pub mod whitelist_data;
+pub mod banned_ip;
+pub mod banned_player;
+pub mod player_server;
+pub mod whitelist;
 
 pub trait LoadJSONConfiguration {
     #[must_use]

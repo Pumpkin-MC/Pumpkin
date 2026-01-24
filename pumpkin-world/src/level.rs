@@ -24,6 +24,7 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 // use std::time::Duration;
 use std::{
     collections::HashMap,
@@ -38,7 +39,7 @@ use std::{
 use tokio::{
     select,
     sync::{
-        Notify, RwLock,
+        RwLock,
         mpsc::{self, UnboundedReceiver},
         oneshot,
     },
@@ -83,8 +84,7 @@ pub struct Level {
     tasks: TaskTracker,
     pub chunk_system_tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
-    pub shutdown_notifier: Notify,
-    pub is_shutting_down: AtomicBool,
+    pub cancel_token: CancellationToken,
 
     pub shut_down_chunk_system: AtomicBool,
     pub should_save: AtomicBool,
@@ -185,8 +185,7 @@ impl Level {
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
             chunk_system_tasks: TaskTracker::new(),
-            shutdown_notifier: Notify::new(),
-            is_shutting_down: AtomicBool::new(false),
+            cancel_token: CancellationToken::new(),
             shut_down_chunk_system: AtomicBool::new(false),
             should_save: AtomicBool::new(false),
             should_unload: AtomicBool::new(false),
@@ -219,7 +218,7 @@ impl Level {
             builder
                 .spawn(move || {
                     while let Ok(pos) = rx.recv() {
-                        if level_clone.is_shutting_down.load(Ordering::Relaxed) {
+                        if level_clone.cancel_token.is_cancelled() {
                             break;
                         }
 
@@ -259,58 +258,34 @@ impl Level {
 
     pub async fn shutdown(&self) {
         log::info!("Saving level...");
-
-        self.is_shutting_down.store(true, Ordering::Relaxed);
-        self.shutdown_notifier.notify_waiters();
-
-        self.tasks.close();
-        log::debug!("Awaiting level tasks");
-        #[cfg(feature = "tokio_taskdump")]
-        match tokio::time::timeout(std::time::Duration::from_secs(30), self.tasks.wait()).await {
-            Ok(guard) => guard,
-            Err(_) => {
-                dump().await;
-                panic!("Timeout Awaiting level tasks");
-            }
-        };
-        self.tasks.wait().await;
-        log::debug!("Done awaiting level chunk tasks");
-
+        self.cancel_token.cancel();
         self.shut_down_chunk_system.store(true, Ordering::Relaxed);
         self.level_channel.notify();
 
-        let handles: Vec<_> = {
-            let mut lock = self.thread_tracker.lock().unwrap();
-            log::info!("Shutting down {} jobs", lock.len());
-            lock.drain(..).collect()
-        };
-
-        for handle in handles {
-            log::debug!(
-                "Waiting for thread {:?} ({}) to stop",
-                handle.thread().id(),
-                handle.thread().name().unwrap_or("unknown")
-            );
-
-            if let Err(e) = handle.join() {
-                log::error!("Thread panicked during execution: {:?}", e);
-            }
-        }
-
-        log::info!("Wait chunk system tasks stop");
+        self.tasks.close();
         self.chunk_system_tasks.close();
-        #[cfg(feature = "tokio_taskdump")]
-        match tokio::time::timeout(std::time::Duration::from_secs(30), self.tasks.wait()).await {
-            Ok(guard) => guard,
-            Err(_) => {
-                dump().await;
-                panic!("Timeout Awaiting chunk_system_tasks tasks");
-            }
+
+        let handles = {
+            let mut lock = self.thread_tracker.lock().unwrap();
+            lock.drain(..).collect::<Vec<_>>()
         };
+
+        log::info!("Joining {} synchronous threads...", handles.len());
+        tokio::task::spawn_blocking(move || {
+            for handle in handles {
+                let _ = handle.join();
+            }
+        })
+        .await
+        .unwrap();
+
+        log::debug!("Awaiting remaining async tasks...");
+        self.tasks.wait().await;
         self.chunk_system_tasks.wait().await;
-        // wait for chunks currently saving in other
-        log::info!("Wait chunk saver to stop");
+
+        log::info!("Flushing savers to disk...");
         self.chunk_saver.block_and_await_ongoing_tasks().await;
+        self.entity_saver.block_and_await_ongoing_tasks().await;
 
         // save all chunks currently in memory
         // let chunks_to_write = self
@@ -323,11 +298,6 @@ impl Level {
         // TODO: I think the chunk_saver should be at the server level
         // self.chunk_saver.clear_watched_chunks().await;
         // self.write_chunks(chunks_to_write).await;
-
-        log::debug!("Done awaiting level entity tasks");
-
-        // wait for chunks currently saving in other threads
-        self.entity_saver.block_and_await_ongoing_tasks().await;
 
         // save all chunks currently in memory
         let chunks_to_write = self
@@ -622,7 +592,7 @@ impl Level {
         let level = self.clone();
 
         self.spawn_task(async move {
-            let cancel_notifier = level.shutdown_notifier.notified();
+            let cancel_notifier = level.cancel_token.cancelled();
 
             let fetch_task = async {
                 let mut to_fetch = Vec::new();

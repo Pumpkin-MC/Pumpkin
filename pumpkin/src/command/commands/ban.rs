@@ -8,7 +8,7 @@ use crate::{
     },
     data::{
         SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry,
-        banned_player_data::BANNED_PLAYER_LIST,
+        banned_player::BANNED_PLAYER_LIST,
     },
     entity::player::Player,
     net::DisconnectReason,

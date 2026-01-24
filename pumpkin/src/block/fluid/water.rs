@@ -1,20 +1,24 @@
 use std::sync::Arc;
 
 use pumpkin_data::fluid::Fluid;
-use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority};
 
 use crate::{
-    block::{BlockFuture, fluid::FluidBehaviour},
+    block::{BlockFuture, BlockMetadata, fluid::FluidBehaviour},
     entity::EntityBase,
     world::World,
 };
 
 use super::flowing::FlowingFluid;
 
-#[pumpkin_block("minecraft:flowing_water")]
 pub struct FlowingWater;
+
+impl BlockMetadata for FlowingWater {
+    fn ids() -> Box<[u16]> {
+        [Fluid::FLOWING_WATER.id].into()
+    }
+}
 
 const WATER_FLOW_SPEED: u8 = 5;
 

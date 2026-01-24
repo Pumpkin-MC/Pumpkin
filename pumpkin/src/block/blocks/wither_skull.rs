@@ -12,12 +12,8 @@ use crate::{
 pub struct WitherSkeletonSkullBlock;
 
 impl BlockMetadata for WitherSkeletonSkullBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::WITHER_SKELETON_SKULL.name]
+    fn ids() -> Box<[u16]> {
+        [Block::WITHER_SKELETON_SKULL.id].into()
     }
 }
 

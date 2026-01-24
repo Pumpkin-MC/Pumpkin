@@ -29,7 +29,7 @@ impl PacketWrite for CreativeContent<'_> {
 }
 
 #[repr(i32)]
-#[expect(unused)]
+#[allow(unused)]
 enum CreativeCategory {
     Construction = 1,
     Nature = 2,

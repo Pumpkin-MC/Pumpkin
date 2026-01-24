@@ -1,9 +1,11 @@
 use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site, proc_macro_error};
+use pumpkin_data::Block;
+use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use quote::quote;
 use syn::spanned::Spanned;
 use syn::{self, Attribute, DeriveInput, LitStr, Type, parse_quote};
-use syn::{Block, Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
+use syn::{Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
 
 #[proc_macro_derive(Event)]
 pub fn event(item: TokenStream) -> TokenStream {
@@ -79,7 +81,7 @@ pub fn cancellable(_args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_error]
 #[proc_macro]
 pub fn send_cancellable(input: TokenStream) -> TokenStream {
-    let block = parse_macro_input!(input as Block);
+    let block = parse_macro_input!(input as syn::Block);
 
     let mut event_expr = None;
     let mut after_block = None;
@@ -167,42 +169,44 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
+    let input_item = item.clone();
+
     let arg_lit = parse_macro_input!(args as LitStr);
     let arg_value = arg_lit.value();
 
-    let (namespace, id) = match arg_value.split_once(':') {
-        Some(pair) => pair,
+    let block_name = arg_value.strip_prefix("minecraft:").unwrap_or(&arg_value);
+    let block = match Block::from_name(block_name) {
+        Some(b) => b,
         None => {
-            return syn::Error::new(
-                arg_lit.span(),
-                "Expected format \"namespace:id\" (e.g. \"minecraft:stone\")",
-            )
-            .to_compile_error()
-            .into();
+            return syn::Error::new(arg_lit.span(), "Invalid block name")
+                .to_compile_error()
+                .into();
         }
     };
+    let block_id = block.id;
 
     let ast = parse_macro_input!(item as DeriveInput);
     let name = &ast.ident;
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 
-    let code = quote! {
-        #ast
+    let generated = quote! {
         impl #impl_generics crate::block::BlockMetadata for #name #ty_generics #where_clause {
-            fn namespace(&self) -> &'static str {
-                #namespace
-            }
-            fn ids(&self) -> &'static [&'static str] {
-                &[#id]
+            fn ids() -> Box<[u16]> {
+                [#block_id].into()
             }
         }
     };
 
-    code.into()
+    // Combine original item and new impl
+    let mut output = input_item;
+    output.extend(TokenStream::from(generated));
+    output
 }
 
 #[proc_macro_attribute]
 pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStream {
+    let original_item = item.clone();
+
     let arg_lit = parse_macro_input!(args as LitStr);
     let ast = parse_macro_input!(item as DeriveInput);
 
@@ -211,24 +215,29 @@ pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStre
 
     let full_tag = arg_lit.value();
 
-    // Efficient splitting
-    let namespace = match full_tag.split_once(':') {
-        Some((ns, _)) => ns,
-        None => abort!(arg_lit.span(), "Expected format 'namespace:path'"),
+    let values = match get_tag_ids(RegistryKey::Block, &full_tag) {
+        Some(v) => v,
+        None => {
+            return syn::Error::new(
+                arg_lit.span(),
+                format!("Failed to get tag IDs: {}", full_tag),
+            )
+            .to_compile_error()
+            .into();
+        }
     };
 
-    quote! {
-        #ast
+    let expanded = quote! {
         impl #impl_generics crate::block::BlockMetadata for #name #ty_generics #where_clause {
-            fn namespace(&self) -> &'static str {
-                #namespace
-            }
-            fn ids(&self) -> &'static [&'static str] {
-                get_tag_values(RegistryKey::Block, #arg_lit).unwrap()
+            fn ids() -> Box<[u16]> {
+                Box::new([ #(#values),* ])
             }
         }
-    }
-    .into()
+    };
+
+    let mut output = original_item;
+    output.extend(TokenStream::from(expanded));
+    output
 }
 
 // #[proc_macro_error]

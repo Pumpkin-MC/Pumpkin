@@ -25,9 +25,10 @@ pub async fn update_position(player: &Arc<Player>) {
     let new_chunk_center = entity.chunk_pos.load();
     let old_cylindrical = player.watched_section.load();
 
-    if old_cylindrical.center == new_chunk_center {
-        return;
-    }
+    // This does break when a new player spawns
+    // if old_cylindrical.center == new_chunk_center {
+    //     return;
+    // }
 
     let view_distance = get_view_distance(player).await;
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);

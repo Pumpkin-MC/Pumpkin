@@ -276,8 +276,8 @@ impl ResultSlot {
         let input_width = bottom_x + 1 - top_x;
         let input_height = bottom_y + 1 - top_y;
 
-        if let Some(cached_recipe) = self.recipe_cache.load() {
-            if let Some(result) = recipe_matches(
+        if let Some(cached_recipe) = self.recipe_cache.load()
+            && let Some(result) = recipe_matches(
                 cached_recipe,
                 input_height,
                 input_width,
@@ -287,9 +287,8 @@ impl ResultSlot {
                 &*self.inventory,
             )
             .await
-            {
-                return Some((result, cached_recipe));
-            }
+        {
+            return Some((result, cached_recipe));
         }
 
         for recipe in RECIPES_CRAFTING {

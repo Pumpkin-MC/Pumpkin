@@ -210,16 +210,13 @@ impl CommandBlock {
 }
 
 impl BlockMetadata for CommandBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[
-            Block::COMMAND_BLOCK.name,
-            Block::CHAIN_COMMAND_BLOCK.name,
-            Block::REPEATING_COMMAND_BLOCK.name,
+    fn ids() -> Box<[u16]> {
+        [
+            Block::COMMAND_BLOCK.id,
+            Block::CHAIN_COMMAND_BLOCK.id,
+            Block::REPEATING_COMMAND_BLOCK.id,
         ]
+        .into()
     }
 }
 

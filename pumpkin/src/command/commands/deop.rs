@@ -7,7 +7,7 @@ use crate::{
         tree::CommandTree,
         tree::builder::argument,
     },
-    data::{SaveJSONConfiguration, op_data::OPERATOR_CONFIG},
+    data::{SaveJSONConfiguration, op::OPERATOR_CONFIG},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;

@@ -22,17 +22,14 @@ pub struct WeightedPressurePlateBlock;
 type PressurePlateProps = pumpkin_data::block_properties::LightWeightedPressurePlateLikeProperties;
 
 impl BlockMetadata for WeightedPressurePlateBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
+    fn ids() -> Box<[u16]> {
         // light = Gold
         // heavy = Iron
-        &[
-            "light_weighted_pressure_plate",
-            "heavy_weighted_pressure_plate",
+        [
+            Block::LIGHT_WEIGHTED_PRESSURE_PLATE.id,
+            Block::HEAVY_WEIGHTED_PRESSURE_PLATE.id,
         ]
+        .into()
     }
 }
 

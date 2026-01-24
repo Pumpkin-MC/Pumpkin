@@ -2,7 +2,6 @@ use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
 };
 use pumpkin_data::block_properties::is_air;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;

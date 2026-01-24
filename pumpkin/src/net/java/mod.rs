@@ -1,10 +1,10 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
+use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::java::server::play::{
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
@@ -37,6 +37,7 @@ use pumpkin_protocol::{
     ser::{NetworkWriteExt, ReadingError, WritingError},
 };
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::version::MinecraftVersion;
 use tokio::{
     io::{BufReader, BufWriter},
     net::{
@@ -56,6 +57,7 @@ pub mod config;
 pub mod handshake;
 pub mod login;
 pub mod play;
+pub mod remapper;
 pub mod status;
 
 use crate::entity::player::Player;
@@ -64,6 +66,7 @@ use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
 pub struct JavaClient {
     pub id: u64,
+    pub version: AtomicCell<MinecraftVersion>,
     /// The client's game profile information.
     pub gameprofile: Mutex<Option<GameProfile>>,
     /// The client's configuration settings, Optional
@@ -72,8 +75,6 @@ pub struct JavaClient {
     pub server_address: Mutex<String>,
     /// The current connection state of the client (e.g., Handshaking, Status, Play).
     pub connection_state: AtomicCell<ConnectionState>,
-    /// Indicates if the client connection is closed.
-    pub closed: Arc<AtomicBool>,
     /// The client's IP address.
     pub address: Mutex<SocketAddr>,
     /// The client's brand or modpack information, Optional.
@@ -105,12 +106,11 @@ impl JavaClient {
             server_address: Mutex::new(String::new()),
             address: Mutex::new(address),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
-            closed: Arc::new(AtomicBool::new(false)),
             close_token: CancellationToken::new(),
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
-
+            version: AtomicCell::new(MinecraftVersion::from_protocol(CURRENT_MC_PROTOCOL)),
             network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
             brand: Mutex::new(None),
@@ -187,7 +187,7 @@ impl JavaClient {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        if self.closed.load(Ordering::Relaxed) {
+        if self.close_token.is_cancelled() {
             None
         } else {
             Some(self.tasks.spawn(task))
@@ -197,7 +197,7 @@ impl JavaClient {
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
-        Self::write_packet(packet, writer).unwrap();
+        self.write_packet(packet, writer).unwrap();
         self.enqueue_packet_data(buf.into()).await;
     }
 
@@ -210,7 +210,7 @@ impl JavaClient {
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
         if let Err(err) = self.outgoing_packet_queue_send.send(packet_data).await {
             // This is expected to fail if we are closed
-            if !self.closed.load(Ordering::Relaxed) {
+            if !self.close_token.is_cancelled() {
                 log::error!(
                     "Failed to add packet to the outgoing packet queue for client {}: {}",
                     self.id,
@@ -270,7 +270,7 @@ impl JavaClient {
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
-        Self::write_packet(packet, writer).unwrap();
+        self.write_packet(packet, writer).unwrap();
         self.send_packet_now_data(packet_buf).await;
     }
 
@@ -283,7 +283,7 @@ impl JavaClient {
             .await
         {
             // It is expected that the packet will fail if we are closed
-            if !self.closed.load(Ordering::Relaxed) {
+            if !self.close_token.is_cancelled() {
                 log::warn!("Failed to send packet to client {}: {}", self.id, err);
                 // We now need to close the connection to the client since the stream is in an
                 // unknown state
@@ -293,12 +293,13 @@ impl JavaClient {
     }
 
     pub fn write_packet<P: ClientPacket>(
+        &self,
         packet: &P,
         write: impl Write,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_var_int(&VarInt(P::PACKET_ID))?;
-        packet.write_packet_data(write)
+        packet.write_packet_data(write, &self.version.load())
     }
 
     /// Handles an incoming packet, routing it to the appropriate handler based on the current connection state.
@@ -406,14 +407,13 @@ impl JavaClient {
             .outgoing_packet_queue_recv
             .take()
             .expect("This was set in the new fn");
-        let close_interrupt = self.close_token.clone();
-        let closed = self.closed.clone();
+        let close_token = self.close_token.clone();
         let writer = self.network_writer.clone();
         let id = self.id;
         self.spawn_task(async move {
-            while !closed.load(Ordering::Relaxed) {
+            while !close_token.is_cancelled() {
                 let recv_result = tokio::select! {
-                    () =  close_interrupt.cancelled() => None,
+                    () =  close_token.cancelled() => None,
                     res = packet_receiver.recv() => res,
                 };
 
@@ -423,12 +423,11 @@ impl JavaClient {
 
                 if let Err(err) = writer.lock().await.write_packet(packet_data).await {
                     // It is expected that the packet will fail if we are closed
-                    if !closed.load(Ordering::Relaxed) {
+                    if !close_token.is_cancelled() {
                         log::warn!("Failed to send packet to client {id}: {err}",);
                         // We now need to close the connection to the client since the stream is in an
                         // unknown state
-                        close_interrupt.cancel();
-                        closed.store(true, Ordering::Relaxed);
+                        close_token.cancel();
                         break;
                     }
                 }
@@ -447,7 +446,10 @@ impl JavaClient {
     /// This function does not attempt to send any disconnect packets to the client.
     pub fn close(&self) {
         self.close_token.cancel();
-        self.closed.store(true, Ordering::Relaxed);
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.close_token.is_cancelled()
     }
 
     async fn handle_login_packet(
@@ -506,8 +508,7 @@ impl JavaClient {
                 self.handle_config_acknowledged(server).await;
             }
             SKnownPacks::PACKET_ID => {
-                self.handle_known_packs(server, SKnownPacks::read(payload)?)
-                    .await;
+                self.handle_known_packs(SKnownPacks::read(payload)?).await;
             }
             SConfigCookieResponse::PACKET_ID => {
                 self.handle_config_cookie_response(&SConfigCookieResponse::read(payload)?);

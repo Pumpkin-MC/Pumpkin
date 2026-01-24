@@ -3,7 +3,6 @@ use crate::block::{BlockBehaviour, BlockFuture, RandomTickArgs, UseWithItemArgs}
 use pumpkin_data::Block;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::flower_pot_transformations::get_potted_item;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::world::BlockFlags;
 

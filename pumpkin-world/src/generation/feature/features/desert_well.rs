@@ -5,9 +5,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::generation::chunk_noise::WATER_BLOCK;
-use crate::generation::proto_chunk::GenerationCache;
-// TODO: remove .to_state()
+use crate::generation::{noise::WATER_BLOCK, proto_chunk::GenerationCache};
 
 #[derive(Deserialize)]
 pub struct DesertWellFeature;

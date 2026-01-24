@@ -302,14 +302,13 @@ impl NbtTag {
 
     pub fn extract_bool(&self) -> Option<bool> {
         match self {
-            NbtTag::Byte(byte) => Some(*byte != 0),
+            NbtTag::Byte(byte) => Some(byte != &0),
             _ => None,
         }
     }
 
     pub fn extract_byte_array(&self) -> Option<Box<[u8]>> {
         match self {
-            // Note: Bytes are free to clone, so we can hand out an owned type.
             NbtTag::ByteArray(byte_array) => Some(byte_array.clone()),
             _ => None,
         }

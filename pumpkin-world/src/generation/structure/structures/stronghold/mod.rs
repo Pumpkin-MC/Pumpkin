@@ -12,7 +12,7 @@ use serde::Deserialize;
 use crate::{
     ProtoChunk,
     generation::{
-        positions::chunk_pos::{get_offset_x, get_offset_z},
+        section_coords,
         structure::{
             piece::StructurePieceType,
             structures::{
@@ -57,33 +57,32 @@ impl StructureGenerator for StrongholdGenerator {
         &self,
         context: StructureGeneratorContext,
     ) -> Option<StructurePosition> {
-        let mut _i = 0;
-        // The collector must be shared/mutable during generation
+        let mut retry_count: i32 = 0;
         let mut collector = StructurePiecesCollector::default();
         let mut random = context.random;
 
-        // Loop until we have a valid stronghold (Vanilla loop logic)
         loop {
             collector.clear();
-            _i += 1;
 
-            let start_x = get_offset_x(context.chunk_x, 2);
-            let start_z = get_offset_z(context.chunk_z, 2);
+            // let attempt_seed = get_carver_seed(
+            //     &mut context.random,
+            //     context.seed as u64,
+            //     context.chunk_x,
+            //     context.chunk_z,
+            // );
 
-            // Create the Start Piece (SpiralStaircase)
-            // Note: new_start must return a concrete struct that implements StructurePieceBase
+            let start_x = section_coords::section_to_block(context.chunk_x) + 2;
+            let start_z = section_coords::section_to_block(context.chunk_z) + 2;
+
             let start_piece = SpiralStaircasePiece::new_start(&mut random, start_x, start_z);
-
-            // We need to Box the start piece to treat it uniformly in the list
             let start_box: Box<dyn StructurePieceBase> = Box::new(start_piece.clone());
 
-            let mut pieces_to_process: Vec<Box<dyn StructurePieceBase>> =
-                vec![start_box.clone_box()];
+            // In Vanilla, pieces_to_process is 'start.pieces'
+            let mut pieces_to_process: Vec<Box<dyn StructurePieceBase>> = Vec::new();
 
             collector.add_piece(start_box);
 
-            // 1. Initial Fill
-            // We cast strictly to SpiralStaircasePiece here because the start piece is special
+            // Initial Fill
             start_piece.fill_openings(
                 &start_piece.piece.piece,
                 &mut random,
@@ -91,12 +90,10 @@ impl StructureGenerator for StrongholdGenerator {
                 &mut pieces_to_process,
             );
 
-            // 2. The Growth Loop
+            // Growth Loop
             while !pieces_to_process.is_empty() {
-                // Pick a random piece from the "to process" list
                 let idx = random.next_bounded_i32(pieces_to_process.len() as i32) as usize;
                 let piece = pieces_to_process.remove(idx);
-
                 piece.fill_openings(
                     &start_piece.piece.piece,
                     &mut random,
@@ -105,19 +102,29 @@ impl StructureGenerator for StrongholdGenerator {
                 );
             }
 
+            // Shift height
             collector.shift_into(context.sea_level, context.min_y, &mut random, 10);
 
             let has_portal_room = collector.pieces.iter().any(|p| {
                 p.get_structure_piece().r#type == StructurePieceType::StrongholdPortalRoom
             });
 
-            if !collector.is_empty() && has_portal_room || collector.pieces.len() >= 100 {
+            if !collector.is_empty() && has_portal_room {
                 break;
+            }
+
+            retry_count += 1;
+            if retry_count > 1000 {
+                return None;
             }
         }
 
         Some(StructurePosition {
-            start_pos: BlockPos::new(context.chunk_x, 0, context.chunk_z),
+            start_pos: BlockPos::new(
+                section_coords::section_to_block(context.chunk_x),
+                0,
+                section_coords::section_to_block(context.chunk_z),
+            ),
             collector: Arc::new(Mutex::new(collector)),
         })
     }
@@ -572,20 +579,20 @@ impl StrongholdPiece {
         chain_length: u32,
         piece_type: Option<StrongholdPieceType>,
     ) -> Option<Box<dyn StructurePieceBase>> {
-        // 1. Hard limits
+        // Vanilla limit is 50
         if chain_length > 50 {
             return None;
         }
 
-        // Get bounds from the underlying StructurePiece of the start wrapper
+        // Distance check from start (112 blocks)
         let start_box = start.bounding_box;
         if (x - start_box.min.x).abs() > 112 || (z - start_box.min.z).abs() > 112 {
             return None;
         }
 
-        if let Some(piece_type) = piece_type {
-            let piece = Self::create_piece(
-                &piece_type,
+        let next_piece = if let Some(p_type) = piece_type {
+            Self::create_piece(
+                &p_type,
                 collector,
                 random,
                 x,
@@ -593,22 +600,17 @@ impl StrongholdPiece {
                 z,
                 orientation,
                 chain_length,
-            );
-            if let Some(piece) = piece {
-                collector.add_piece(piece.clone_box());
-                return Some(piece);
-            }
-        }
+            )
+        } else {
+            Self::pick_piece(collector, random, x, y, z, orientation, chain_length)
+        };
 
-        // 2. Pick the piece
-        let picked_piece =
-            Self::pick_piece(collector, random, x, y, z, orientation, chain_length + 1);
-
-        if let Some(ref p) = picked_piece {
+        if let Some(p) = next_piece {
             collector.add_piece(p.clone_box());
+            return Some(p);
         }
 
-        picked_piece
+        None
     }
 
     fn pick_piece(

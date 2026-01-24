@@ -57,6 +57,7 @@ use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::start_game::CStartGame;
+use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::ser::serializer::Serializer;
@@ -1161,7 +1162,7 @@ impl World {
         self.dimension.min_y
     }
 
-    #[expect(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
         base_config: &BasicConfiguration,
@@ -1171,6 +1172,24 @@ impl World {
         let level_info = server.level_info.read().await;
         let weather = self.weather.lock().await;
         let runtime_id = player.entity_id() as u64;
+        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
+            let position = player.position();
+            let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
+            let pitch = player.living_entity.entity.pitch.load();
+
+            (position, yaw, pitch)
+        } else {
+            let info = &self.level_info.read().await;
+            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
+            let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
+
+            let position = Vector3::new(
+                f64::from(info.spawn_x) + 0.5,
+                f64::from(pos_y),
+                f64::from(info.spawn_z) + 0.5,
+            );
+            (position, info.spawn_yaw, info.spawn_pitch)
+        };
         // Todo make the data less spread
         let level_settings = LevelSettings {
             seed: self.level.seed.0,
@@ -1249,22 +1268,22 @@ impl World {
                 entity_id: VarLong(runtime_id as _),
                 runtime_entity_id: VarULong(runtime_id),
                 player_gamemode: player.gamemode.load(),
-                position: Vector3::new(0.0, 100.0, 0.0),
-                pitch: 0.0,
-                yaw: 0.0,
+                position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
+                pitch,
+                yaw,
                 level_settings,
                 level_id: String::new(),
-                level_name: "World".to_string(),
+                level_name: "Pumpkin world".to_string(),
                 premium_world_template_id: String::new(),
                 is_trial: false,
                 rewind_history_size: VarInt(0),
-                server_authoritative_block_breaking: false,
+                server_authoritative_block_breaking: true,
                 current_level_time: self.level_time.lock().await.world_age as _,
                 enchantment_seed: VarInt(0),
                 block_properties_size: VarUInt(0),
                 // TODO Make this unique
                 multiplayer_correlation_id: Uuid::default().to_string(),
-                enable_itemstack_net_manager: false,
+                enable_itemstack_net_manager: true,
                 // TODO Make this description better!
                 // This gets send from the client to mojang for telemetry
                 server_version: "Pumpkin Rust Server".to_string(),
@@ -1274,14 +1293,14 @@ impl World {
                 compound_end: 0,
 
                 block_registry_checksum: 0,
-                world_template_id: Uuid::default(),
+                world_template_id: Uuid::nil(),
                 // TODO The client needs extra biome data for this
                 enable_clientside_generation: false,
                 blocknetwork_ids_are_hashed: false,
-                disable_client_sounds: false,
+                server_auth_sounds: false,
             })
             .await;
-        // chunker::update_position(&player).await;
+        chunker::update_position(&player).await;
         client
             .send_game_packet(&CreativeContent {
                 groups: &[Group {
@@ -1293,29 +1312,91 @@ impl World {
             })
             .await;
 
-        client
-            .send_game_packet(&CUpdateAttributes {
-                runtime_id: VarULong(runtime_id),
-                attributes: vec![Attribute {
-                    min_value: 0.0,
-                    max_value: f32::MAX,
-                    current_value: 0.1,
-                    default_min_value: 0.0,
-                    default_max_value: f32::MAX,
-                    default_value: 0.1,
-                    name: "minecraft:movement".to_string(),
-                    modifiers_list_size: VarUInt(0),
-                }],
-                player_tick: VarULong(0),
-            })
-            .await;
-        player.send_abilities_update().await;
         {
             let mut abilities = player.abilities.lock().await;
             abilities.set_for_gamemode(player.gamemode.load());
         };
 
-        client.send_game_packet(&CPlayStatus::PlayerSpawn).await;
+        player.send_abilities_update().await;
+
+        let mut frame_set = FrameSet::default();
+
+        // https://github.com/pmmp/PocketMine-MP/blob/0b6d8f8cb2aaa05ffad0b6386bd88d73ef54b395/src/entity/AttributeFactory.php#L34
+        client
+            .write_game_packet_to_set(
+                &CUpdateAttributes {
+                    runtime_id: VarULong(runtime_id),
+                    attributes: vec![
+                        Attribute {
+                            min_value: 0.0,
+                            max_value: 3.402_823_5E38,
+                            current_value: 0.1,
+                            default_min_value: 0.0,
+                            default_max_value: 3.402_823_5E38,
+                            default_value: 0.1,
+                            name: "minecraft:movement".to_string(),
+                            modifiers_list_size: VarUInt(0),
+                        },
+                        Attribute {
+                            min_value: 0.0,
+                            max_value: 3.402_823_5E38,
+                            current_value: 0.02,
+                            default_min_value: 0.0,
+                            default_max_value: 3.402_823_5E38,
+                            default_value: 0.02,
+                            name: "minecraft:underwater_movement".to_string(),
+                            modifiers_list_size: VarUInt(0),
+                        },
+                        Attribute {
+                            min_value: 0.0,
+                            max_value: 1.0,
+                            current_value: 0.08,
+                            default_min_value: 0.0,
+                            default_max_value: 1.0,
+                            default_value: 0.08,
+                            name: "minecraft:gravity".to_string(),
+                            modifiers_list_size: VarUInt(0),
+                        },
+                        Attribute {
+                            min_value: 0.0,
+                            max_value: 400.0,
+                            current_value: 400.0,
+                            default_min_value: 0.0,
+                            default_max_value: 400.0,
+                            default_value: 400.0,
+                            name: "minecraft:air".to_string(),
+                            modifiers_list_size: VarUInt(0),
+                        },
+                        Attribute {
+                            min_value: 0.0,
+                            max_value: 20.0,
+                            current_value: 20.0,
+                            default_min_value: 0.0,
+                            default_max_value: 20.0,
+                            default_value: 20.0,
+                            name: "minecraft:health".to_string(),
+                            modifiers_list_size: VarUInt(0),
+                        },
+                        Attribute {
+                            min_value: 0.0,
+                            max_value: 20.0,
+                            current_value: 20.0,
+                            default_min_value: 0.0,
+                            default_max_value: 20.0,
+                            default_value: 20.0,
+                            name: "minecraft:player.hunger".to_string(),
+                            modifiers_list_size: VarUInt(0),
+                        },
+                    ],
+                    player_tick: VarULong(0),
+                },
+                &mut frame_set,
+            )
+            .await;
+        client
+            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
+            .await;
+        client.send_frame_set(frame_set, 0x84).await;
     }
 
     #[expect(clippy::too_many_lines)]
@@ -3040,7 +3121,6 @@ impl World {
             .await;
 
         if new_state_id != block_state_id {
-            let flags = flags & !BlockFlags::SKIP_DROPS;
             if is_air(new_state_id) {
                 self.break_block(block_pos, None, flags).await;
             } else {

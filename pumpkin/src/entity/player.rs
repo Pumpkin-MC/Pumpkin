@@ -77,7 +77,7 @@ use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
-use crate::data::op_data::OPERATOR_CONFIG;
+use crate::data::op::OPERATOR_CONFIG;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
@@ -1214,47 +1214,76 @@ impl Player {
                 .await;
             }
             ClientPlatform::Bedrock(bedrock) => {
-                let mut ability_value = 0;
-                let abilities = &self.abilities.lock().await;
+                let abilities = self.abilities.lock().await;
+                let is_op = self.permission_lvl.load() == PermissionLvl::Four;
+                let is_spectator = self.gamemode.load() == GameMode::Spectator;
 
-                if abilities.invulnerable {
-                    ability_value |= 1 << Ability::Invulnerable as u32;
-                }
+                // 1. Permission Mapping
+                let player_perm = if is_op { 2 } else { 1 }; // 1: Member, 2: Operator
+                let command_perm = u8::from(is_op); // 0: Normal, 1: Operator
 
-                if abilities.flying {
-                    ability_value |= 1 << Ability::Flying as u32;
-                }
+                // 2. Build the Ability Bitmask
+                let mut ability_value: u32 = 0;
 
-                if abilities.allow_flying {
-                    ability_value |= 1 << Ability::MayFly as u32;
-                }
+                // Helper closure to set bits using your enum
+                let mut set_ability = |ability: Ability, enabled: bool| {
+                    if enabled {
+                        ability_value |= 1 << (ability as u32);
+                    }
+                };
 
-                if abilities.creative {
-                    ability_value |= 1 << Ability::OperatorCommands as u32;
-                    ability_value |= 1 << Ability::Teleport as u32;
-                    ability_value |= 1 << Ability::Invulnerable as u32;
-                }
+                // Base Permissions
+                set_ability(Ability::MayFly, abilities.allow_flying);
+                set_ability(Ability::Flying, abilities.flying);
+                set_ability(
+                    Ability::Invulnerable,
+                    abilities.invulnerable || abilities.creative,
+                );
 
-                // Todo: Integrate this into the system
-                ability_value |= 1 << Ability::AttackMobs as u32;
-                ability_value |= 1 << Ability::AttackPlayers as u32;
-                ability_value |= 1 << Ability::Build as u32;
-                ability_value |= 1 << Ability::DoorsAndSwitches as u32;
-                ability_value |= 1 << Ability::Instabuild as u32;
-                ability_value |= 1 << Ability::Mine as u32;
+                // Operator Specifics
+                set_ability(Ability::OperatorCommands, is_op);
+                set_ability(Ability::Teleport, is_op);
 
-                let packet = CUpdateAbilities {
-                    target_player_raw_id: self.entity_id().into(),
-                    player_permission: 2,
-                    command_permission: 4,
-                    layers: vec![AbilityLayer {
+                // Interaction Permissions (Disabled for Spectators)
+                let can_interact = !is_spectator;
+                set_ability(Ability::Build, can_interact);
+                set_ability(Ability::Mine, can_interact);
+                set_ability(Ability::DoorsAndSwitches, can_interact);
+                set_ability(Ability::OpenContainers, can_interact);
+                set_ability(Ability::AttackPlayers, can_interact);
+                set_ability(Ability::AttackMobs, can_interact);
+
+                // Creative/Spectator Extras
+                set_ability(Ability::Instabuild, abilities.creative);
+                set_ability(Ability::NoClip, is_spectator);
+
+                // 3. Construct the Layers
+                let mut layers = vec![AbilityLayer {
+                    serialized_layer: 0, // LAYER_BASE
+                    // 0x3FFFF defines the first 18 bits as "provided" by this packet
+                    abilities_set: (1 << Ability::AbilityCount as u32) - 1,
+                    ability_value,
+                    fly_speed: 0.05,
+                    vertical_fly_speed: 1.0,
+                    walk_speed: 0.1,
+                }];
+
+                if is_spectator {
+                    layers.push(AbilityLayer {
                         serialized_layer: 1,
-                        abilities_set: (1 << Ability::AbilityCount as u32) - 1,
-                        ability_value,
+                        abilities_set: 1 << (Ability::Flying as u32),
+                        ability_value: 1 << (Ability::Flying as u32),
                         fly_speed: 0.05,
                         vertical_fly_speed: 1.0,
                         walk_speed: 0.1,
-                    }],
+                    });
+                }
+
+                let packet = CUpdateAbilities {
+                    target_player_raw_id: self.entity_id().into(),
+                    player_permission: player_perm,
+                    command_permission: command_perm,
+                    layers,
                 };
 
                 bedrock.send_game_packet(&packet).await;
@@ -1792,18 +1821,7 @@ impl Player {
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {
-        match &self.client {
-            ClientPlatform::Java(client) => {
-                client
-                    .enqueue_packet(&CSystemChatMessage::new(text, false))
-                    .await;
-            }
-            ClientPlatform::Bedrock(client) => {
-                client
-                    .send_game_packet(&SText::system_message(text.clone().get_text()))
-                    .await;
-            }
-        }
+        self.send_system_message_raw(text, false).await;
     }
 
     pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
@@ -2515,13 +2533,6 @@ impl EntityBase for Player {
             if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
                 return false;
             }
-            let dyn_self = self
-                .living_entity
-                .entity
-                .world
-                .get_entity_by_id(self.living_entity.entity.entity_id)
-                .await
-                .expect("Entity not found in world");
             let result = self
                 .living_entity
                 .damage_with_context(caller, amount, damage_type, position, source, cause)
@@ -2530,8 +2541,7 @@ impl EntityBase for Player {
                 let health = self.living_entity.health.load();
                 if health <= 0.0 {
                     let death_message =
-                        LivingEntity::get_death_message(&*dyn_self, damage_type, source, cause)
-                            .await;
+                        LivingEntity::get_death_message(caller, damage_type, source, cause).await;
                     self.handle_killed(death_message).await;
                 }
             }

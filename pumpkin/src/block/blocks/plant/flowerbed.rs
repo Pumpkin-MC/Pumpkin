@@ -16,12 +16,8 @@ type FlowerbedProperties = pumpkin_data::block_properties::PinkPetalsLikePropert
 pub struct FlowerbedBlock;
 
 impl BlockMetadata for FlowerbedBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &["pink_petals", "wildflowers"]
+    fn ids() -> Box<[u16]> {
+        [Block::PINK_PETALS.id, Block::WILDFLOWERS.id].into()
     }
 }
 

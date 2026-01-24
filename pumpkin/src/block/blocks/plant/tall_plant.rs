@@ -13,21 +13,18 @@ use crate::block::{
 pub struct TallPlantBlock;
 
 impl BlockMetadata for TallPlantBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[
-            "tall_grass",
-            "large_fern",
-            "pitcher_plant",
+    fn ids() -> Box<[u16]> {
+        [
+            Block::TALL_GRASS.id,
+            Block::LARGE_FERN.id,
+            Block::PITCHER_PLANT.id,
             // TallFlowerBlocks
-            "sunflower",
-            "lilac",
-            "peony",
-            "rose_bush",
+            Block::SUNFLOWER.id,
+            Block::LILAC.id,
+            Block::PEONY.id,
+            Block::ROSE_BUSH.id,
         ]
+        .into()
     }
 }
 
@@ -56,7 +53,7 @@ impl BlockBehaviour for TallPlantBlock {
             };
             let (other_block, other_state_id) =
                 args.world.get_block_and_state_id(&other_block_pos).await;
-            if self.ids().contains(&other_block.name) {
+            if Self::ids().contains(&other_block.id) {
                 let other_props =
                     TallSeagrassLikeProperties::from_state_id(other_state_id, other_block);
                 let opposite_half = match tall_plant_props.half {

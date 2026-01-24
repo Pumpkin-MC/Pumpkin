@@ -6,13 +6,12 @@ use pumpkin_data::{
     fluid::{Falling, Fluid, FluidProperties, Level},
     world::WorldEvent,
 };
-use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{
     block::{
-        BlockFuture,
+        BlockFuture, BlockMetadata,
         fluid::{FluidBehaviour, flowing::FluidFuture},
     },
     entity::EntityBase,
@@ -22,8 +21,13 @@ use crate::{
 use super::flowing::FlowingFluid;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
-#[pumpkin_block("minecraft:flowing_lava")]
 pub struct FlowingLava;
+
+impl BlockMetadata for FlowingLava {
+    fn ids() -> Box<[u16]> {
+        [Fluid::FLOWING_LAVA.id].into()
+    }
+}
 
 impl FlowingLava {
     async fn receive_neighbor_fluids(

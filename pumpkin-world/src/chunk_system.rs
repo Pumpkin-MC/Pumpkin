@@ -9,6 +9,7 @@ TODO
 use crate::block::RawBlockState;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
+use crate::generation::biome_coords;
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::dimension::Dimension;
 use std::default::Default;
@@ -791,12 +792,12 @@ impl Chunk {
             dimension.min_y,
         );
 
-        let proto_biome_height = (dimension.height / 4) as usize;
-        let biome_min_y = dimension.min_y / 4;
+        let proto_biome_height = biome_coords::from_block(proto_chunk.height());
+        let biome_min_y = biome_coords::from_block(dimension.min_y);
 
         for y_offset in 0..proto_biome_height {
-            let section_index = y_offset / 4;
-            let relative_biome_y = y_offset % 4;
+            let section_index = y_offset as usize / 4;
+            let relative_y = y_offset as usize % 4;
 
             if let Some(section) = sections.sections.get_mut(section_index) {
                 let absolute_biome_y = biome_min_y + y_offset as i32;
@@ -804,7 +805,7 @@ impl Chunk {
                 for z in 0..4 {
                     for x in 0..4 {
                         let biome = proto_chunk.get_biome(x as i32, absolute_biome_y, z as i32);
-                        section.biomes.set(x, relative_biome_y, z, biome.id);
+                        section.biomes.set(x, relative_y, z, biome.id);
                     }
                 }
             }
@@ -1988,15 +1989,11 @@ impl GenerationSchedule {
         );
         // let mut clock = Instant::now();
         loop {
-            if level.should_unload.load(Relaxed) {
-                // log::debug!("unload chunk signal");
+            if level.should_unload.swap(false, Relaxed) {
                 self.unload_chunk();
-                level.should_unload.store(false, Relaxed);
             }
-            if level.should_save.load(Relaxed) {
-                // log::debug!("save all chunk signal");
+            if level.should_save.swap(false, Relaxed) {
                 self.save_all_chunk(false);
-                level.should_save.store(false, Relaxed);
             }
             if level.shut_down_chunk_system.load(Relaxed) {
                 // log::debug!("shut down signal");

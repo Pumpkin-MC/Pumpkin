@@ -35,12 +35,8 @@ use super::get_redstone_power;
 pub struct RedstoneTorchBlock;
 
 impl BlockMetadata for RedstoneTorchBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::REDSTONE_TORCH.name, Block::REDSTONE_WALL_TORCH.name]
+    fn ids() -> Box<[u16]> {
+        [Block::REDSTONE_TORCH.id, Block::REDSTONE_WALL_TORCH.id].into()
     }
 }
 

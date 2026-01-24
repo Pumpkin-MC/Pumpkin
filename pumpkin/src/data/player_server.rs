@@ -177,7 +177,7 @@ impl ServerPlayerData {
 
 #[cfg(test)]
 mod test {
-    use crate::data::player_server_data::ServerPlayerData;
+    use crate::data::player_server::ServerPlayerData;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_world::data::player_data::PlayerDataStorage;
     use std::time::Duration;

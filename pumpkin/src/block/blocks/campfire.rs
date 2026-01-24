@@ -17,12 +17,8 @@ use crate::{
 pub struct CampfireBlock;
 
 impl BlockMetadata for CampfireBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::CAMPFIRE.name, Block::SOUL_CAMPFIRE.name]
+    fn ids() -> Box<[u16]> {
+        [Block::CAMPFIRE.id, Block::SOUL_CAMPFIRE.id].into()
     }
 }
 

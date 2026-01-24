@@ -6,8 +6,8 @@ use std::{
 
 use crate::{
     data::{
-        banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST,
-        op_data::OPERATOR_CONFIG, whitelist_data::WHITELIST_CONFIG,
+        banned_ip::BANNED_IP_LIST, banned_player::BANNED_PLAYER_LIST, op::OPERATOR_CONFIG,
+        whitelist::WHITELIST_CONFIG,
     },
     entity::player::ChatMode,
     net::{bedrock::BedrockClient, java::JavaClient},
@@ -129,8 +129,8 @@ impl ClientPlatform {
     #[must_use]
     pub fn closed(&self) -> bool {
         match self {
-            Self::Java(java) => java.closed.load(Ordering::Relaxed),
-            Self::Bedrock(bedrock) => bedrock.closed.load(Ordering::Relaxed),
+            Self::Java(java) => java.is_closed(),
+            Self::Bedrock(bedrock) => bedrock.is_closed(),
         }
     }
 

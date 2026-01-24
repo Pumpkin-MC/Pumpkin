@@ -1,5 +1,6 @@
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -87,6 +88,14 @@ impl LivingEntity {
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
     #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: u8 = 4;
+
+    const PREVENT_AREA_FALL_DAMAGE_BLOCKS: [&'static Block; 4] = [
+        &Block::COBWEB,
+        &Block::LADDER,
+        &Block::POWDER_SNOW,
+        &Block::SLIME_BLOCK,
+    ];
+    const FALL_DAMAGE_SAFE_DISTANCE: f64 = 1.3;
 
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
@@ -238,6 +247,15 @@ impl LivingEntity {
         effects.get(&effect).cloned()
     }
 
+    pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
+        let block_pos = self.entity.block_pos.load();
+        let block = self.entity.world.get_block(&block_pos).await;
+        (
+            block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING),
+            block,
+        )
+    }
+
     // Check if the entity is in water
     pub async fn is_in_water(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
@@ -248,6 +266,76 @@ impl LivingEntity {
     pub async fn is_in_powder_snow(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
         self.entity.world.get_block(&block_pos).await == &Block::POWDER_SNOW
+    }
+
+    pub async fn should_prevent_fall_damage(&self) -> bool {
+        let (prevents, block) = self.is_in_fall_damage_resetting().await;
+
+        if block == &Block::SCAFFOLDING && !self.entity.sneaking.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        if block == &Block::WATER {
+            return true;
+        }
+
+        if self.entity.entity_type == &EntityType::PLAYER {
+            if block == &Block::END_GATEWAY || block == &Block::END_PORTAL {
+                return true;
+            }
+
+            if block == &Block::NETHER_PORTAL {
+                let level_info = self.entity.world.level_info.read().await;
+
+                return level_info.game_rules.players_nether_portal_default_delay == 0;
+            }
+        }
+
+        prevents
+    }
+
+    pub async fn should_prevent_fall_damage_in_area(&self) -> bool {
+        let world = &self.entity.world;
+        let block_pos = self.entity.block_pos.load().down();
+        let entity_pos = self.entity.pos.load();
+
+        let min = BlockPos(Vector3::new(
+            block_pos.0.x - 1,
+            block_pos.0.y,
+            block_pos.0.z - 1,
+        ));
+        let max = BlockPos(Vector3::new(
+            block_pos.0.x + 1,
+            block_pos.0.y,
+            block_pos.0.z + 1,
+        ));
+        let pos_iter = BlockPos::iterate(min, max);
+
+        // FIXME: it seems the java server checks all blocks around with a raycast and check if miss or hit,
+        // then added to a collision checker to handle in the tick handler
+        for pos in pos_iter {
+            let block = world.get_block(&pos).await;
+
+            if Self::PREVENT_AREA_FALL_DAMAGE_BLOCKS.contains(&block) {
+                let block_center = Vector3::new(
+                    f64::from(pos.0.x) + 0.5,
+                    f64::from(pos.0.y) + 0.5,
+                    f64::from(pos.0.z) + 0.5,
+                );
+                let distance = entity_pos.squared_distance_to_vec(block_center);
+
+                return distance.sqrt()
+                    <= Self::FALL_DAMAGE_SAFE_DISTANCE * Self::FALL_DAMAGE_SAFE_DISTANCE;
+            }
+        }
+
+        false
+    }
+
+    pub fn is_immune_to_fall_damage(&self) -> bool {
+        self.entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_FALL_DAMAGE_IMMUNE)
     }
 
     async fn get_effective_gravity(&self, caller: &Arc<dyn EntityBase>) -> f64 {
@@ -698,8 +786,9 @@ impl LivingEntity {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance <= 0.0
                 || dont_damage
-                || self.is_in_water().await
-                || self.is_in_powder_snow().await
+                || self.should_prevent_fall_damage().await
+                || self.should_prevent_fall_damage_in_area().await
+                || self.is_immune_to_fall_damage()
             {
                 return;
             }
@@ -720,7 +809,8 @@ impl LivingEntity {
                 self.handle_fall_damage(fall_distance, 1.0).await;
             }
         } else if height_difference < 0.0 {
-            let new_fall_distance = if !self.is_in_water().await && !self.is_in_powder_snow().await
+            let new_fall_distance = if !self.should_prevent_fall_damage().await
+                && !self.should_prevent_fall_damage_in_area().await
             {
                 let distance = self.fall_distance.load();
                 distance - (height_difference as f32)
@@ -732,6 +822,10 @@ impl LivingEntity {
     }
 
     pub async fn handle_fall_damage(&self, fall_distance: f32, damage_per_distance: f32) {
+        if self.is_immune_to_fall_damage() {
+            return;
+        }
+
         // TODO: use attributes
         let safe_fall_distance = 3.0;
         let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;

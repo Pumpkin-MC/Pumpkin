@@ -6,9 +6,7 @@ use crate::{
         args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::{
-        SaveJSONConfiguration, banlist_serializer::BannedIpEntry, banned_ip_data::BANNED_IP_LIST,
-    },
+    data::{SaveJSONConfiguration, banlist_serializer::BannedIpEntry, banned_ip::BANNED_IP_LIST},
     net::DisconnectReason,
     server::Server,
 };

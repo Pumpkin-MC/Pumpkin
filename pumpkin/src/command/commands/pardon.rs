@@ -4,7 +4,7 @@ use crate::{
         args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::{SaveJSONConfiguration, banned_player_data::BANNED_PLAYER_LIST},
+    data::{SaveJSONConfiguration, banned_player::BANNED_PLAYER_LIST},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;

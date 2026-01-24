@@ -29,12 +29,8 @@ pub(crate) type PistonProps = pumpkin_data::block_properties::StickyPistonLikePr
 pub struct PistonBlock;
 
 impl BlockMetadata for PistonBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::PISTON.name, Block::STICKY_PISTON.name]
+    fn ids() -> Box<[u16]> {
+        [Block::PISTON.id, Block::STICKY_PISTON.id].into()
     }
 }
 

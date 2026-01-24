@@ -1,8 +1,9 @@
+# https://docs.docker.com/build/ci/github-actions/multi-platform/#distribute-build-across-multiple-runners
 name: deploy-docker-image
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  GITHUB_REPOSITORY: ${{ github.repository }}
 
 on:
   push:
@@ -12,52 +13,122 @@ on:
 
 jobs:
   docker-build-deploy:
-    runs-on: ubuntu-latest
-
+    if: github.repository == 'Pumpkin-MC/Pumpkin'
     permissions:
       contents: read
       packages: write
       attestations: write
       id-token: write
 
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04-arm
+            platform: linux/arm64
+          - os: ubuntu-latest
+            platform: linux/amd64
+
+    runs-on: ${{matrix.os}}
+
     steps:
-      - name: Check Repository
-        id: repo_check
+      - name: Set lowercase repository name
         run: |
-          if [ "${{ github.repository }}" != "Pumpkin-MC/Pumpkin" ]; then
-            echo "Not the target repository. Skipping deployment."
-            echo "should_deploy=false" >> $GITHUB_OUTPUT
-          else
-            echo "Target repository confirmed. Proceeding with deployment."
-            echo "should_deploy=true" >> $GITHUB_OUTPUT
-          fi
+          echo "REGISTRY_IMAGE=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
+
+      - name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
 
       - name: Checkout
-        if: steps.repo_check.outputs.should_deploy == 'true'
         uses: actions/checkout@v6
 
       - name: Login to GitHub CR
-        if: steps.repo_check.outputs.should_deploy == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}
+
+      - name: Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v6
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    if: github.repository == 'Pumpkin-MC/Pumpkin'
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    runs-on: ubuntu-latest
+    needs:
+      - docker-build-deploy
+    steps:
+      - name: Set lowercase repository name
+        run: |
+          echo "REGISTRY_IMAGE=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Digests
+        uses: actions/download-artifact@v7
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
       - name: Extract Versions
-        if: steps.repo_check.outputs.should_deploy == 'true'
         id: versions
         run: |
           VERSION=$(awk -F '"' '/^version/ {print $2}' Cargo.toml)
           echo "PUMPKIN_VERSION=$(echo $VERSION | cut -d '+' -f 1)" >> $GITHUB_ENV
           echo "MC_VERSION=$(echo $VERSION | cut -d '+' -f 2)" >> $GITHUB_ENV
 
+      - name: Login to GitHub CR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Extract Metadata
-        if: steps.repo_check.outputs.should_deploy == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}
           tags: |
             type=ref,event=branch
             type=raw,value=latest
@@ -66,15 +137,12 @@ jobs:
             type=raw,value=${{ env.PUMPKIN_VERSION }}
             type=raw,value=mc${{ env.MC_VERSION }}-${{ env.PUMPKIN_VERSION }}
 
-      - name: Docker Buildx
-        if: steps.repo_check.outputs.should_deploy == 'true'
-        uses: docker/setup-buildx-action@v3
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
 
-      - name: Build and Push
-        if: steps.repo_check.outputs.should_deploy == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}

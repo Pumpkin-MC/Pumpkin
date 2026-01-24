@@ -17,7 +17,7 @@ use crate::{
     },
     data::{
         LoadJSONConfiguration, SaveJSONConfiguration,
-        whitelist_data::{WHITELIST_CONFIG, WhitelistConfig},
+        whitelist::{WHITELIST_CONFIG, WhitelistConfig},
     },
     net::DisconnectReason,
     server::Server,

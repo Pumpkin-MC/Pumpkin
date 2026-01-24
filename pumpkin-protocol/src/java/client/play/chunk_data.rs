@@ -5,6 +5,7 @@ use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::packet;
 use pumpkin_nbt::END_ID;
 use pumpkin_util::math::position::get_local_cord;
+use pumpkin_util::version::MinecraftVersion;
 use pumpkin_world::chunk::format::LightContainer;
 use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
 use std::io::Write;
@@ -13,7 +14,11 @@ use std::io::Write;
 pub struct CChunkData<'a>(pub &'a ChunkData);
 
 impl ClientPacket for CChunkData<'_> {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut write = write;
 
         // Chunk X

@@ -13,12 +13,8 @@ type LeafLitterProperties = pumpkin_data::block_properties::LeafLitterLikeProper
 pub struct LeafLitterBlock;
 
 impl BlockMetadata for LeafLitterBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &["leaf_litter"]
+    fn ids() -> Box<[u16]> {
+        [Block::LEAF_LITTER.id].into()
     }
 }
 
