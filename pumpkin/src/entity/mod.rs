@@ -1320,6 +1320,7 @@ impl Entity {
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
                 let pos = self.pos.load();
+                let current_yaw = self.yaw.load();
                 let dimensions = self.entity_dimension.load();
                 let scale_factor_new = portal_manager.portal_world.dimension.coordinate_scale;
                 let scale_factor_current = self.world.dimension.coordinate_scale;
@@ -1329,9 +1330,10 @@ impl Entity {
 
                 let dest_world = portal_manager.portal_world.clone();
                 let source_portal = portal_manager.source_portal.clone();
+                let source_axis = source_portal.as_ref().map(|p| p.axis);
                 drop(portal_manager);
 
-                let teleport_pos = if let Some(dest_result) =
+                let (teleport_pos, new_yaw) = if let Some(dest_result) =
                     NetherPortal::search_for_portal(&dest_world, target_pos).await
                 {
                     let base_pos = source_portal.as_ref().map_or_else(
@@ -1347,7 +1349,9 @@ impl Entity {
                             dest_result.calculate_exit_position(relative_pos, &dimensions)
                         },
                     );
-                    dest_result.find_open_position(&dest_world, base_pos, &dimensions).await
+                    let final_pos = dest_result.find_open_position(&dest_world, base_pos, &dimensions).await;
+                    let yaw = dest_result.calculate_teleport_yaw(current_yaw, source_axis);
+                    (final_pos, Some(yaw))
                 } else if let Some((build_pos, axis, is_fallback)) =
                     NetherPortal::find_safe_location(&dest_world, target_pos, pumpkin_data::block_properties::HorizontalAxis::X).await
                 {
@@ -1359,12 +1363,31 @@ impl Entity {
                         height: 3,
                     };
                     let center_pos = new_portal.get_teleport_position();
-                    new_portal.find_open_position(&dest_world, center_pos, &dimensions).await
+                    let final_pos = new_portal.find_open_position(&dest_world, center_pos, &dimensions).await;
+                    let yaw = new_portal.calculate_teleport_yaw(current_yaw, source_axis);
+                    (final_pos, Some(yaw))
                 } else {
-                    target_pos.0.to_f64()
+                    (target_pos.0.to_f64(), None)
                 };
 
-                caller.clone().teleport(teleport_pos, None, None, dest_world).await;
+                // Teleport the main entity
+                caller.clone().teleport(teleport_pos, new_yaw, None, dest_world.clone()).await;
+
+                // Teleport all passengers along with the vehicle
+                let passengers = self.passengers.lock().await.clone();
+                for passenger in passengers {
+                    let passenger_entity = passenger.get_entity();
+                    let passenger_yaw = new_yaw.map(|y| {
+                        let current = passenger_entity.yaw.load();
+                        // Apply the same yaw delta to passengers
+                        current + (y - current_yaw)
+                    });
+                    passenger_entity.portal_cooldown.store(
+                        passenger_entity.default_portal_cooldown(),
+                        Ordering::Relaxed,
+                    );
+                    passenger.teleport(teleport_pos, passenger_yaw, None, dest_world.clone()).await;
+                }
             } else if portal_manager.ticks_in_portal == 0 {
                 should_remove = true;
             }
@@ -1375,6 +1398,11 @@ impl Entity {
     }
 
     pub async fn try_use_portal(&self, portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) {
+        // Passengers don't teleport independently - they wait for their vehicle
+        if self.has_vehicle().await {
+            return;
+        }
+
         if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
             self.portal_cooldown
                 .store(self.default_portal_cooldown(), Ordering::Relaxed);
