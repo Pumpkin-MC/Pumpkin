@@ -1278,6 +1278,7 @@ impl World {
                 is_trial: false,
                 rewind_history_size: VarInt(0),
                 server_authoritative_block_breaking: true,
+                server_auth_sounds: true,
                 current_level_time: self.level_time.lock().await.world_age as _,
                 enchantment_seed: VarInt(0),
                 block_properties_size: VarUInt(0),
