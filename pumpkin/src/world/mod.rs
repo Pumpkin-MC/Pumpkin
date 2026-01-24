@@ -196,6 +196,8 @@ pub struct World {
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
+    /// POI storage for fast portal lookups
+    pub portal_poi: Mutex<portal::PortalPoiStorage>,
 }
 
 impl World {
@@ -209,6 +211,10 @@ impl World {
     ) -> Self {
         // TODO
         let generation_settings = gen_settings_from_dimension(&dimension);
+
+        // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
+        let portal_poi = portal::PortalPoiStorage::new(&level.level_folder.root_folder);
+
         Self {
             level,
             level_info,
@@ -224,6 +230,7 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
+            portal_poi: Mutex::new(portal_poi),
             decrease_block_light_queue: SegQueue::new(),
             increase_block_light_queue: SegQueue::new(),
             server,
@@ -234,6 +241,12 @@ impl World {
         for (uuid, entity) in self.entities.read().await.iter() {
             self.save_entity(uuid, entity).await;
         }
+
+        // Save portal POI to disk
+        if let Err(e) = self.portal_poi.lock().await.save_all() {
+            log::error!("Failed to save portal POI: {}", e);
+        }
+
         self.level.shutdown().await;
     }
 

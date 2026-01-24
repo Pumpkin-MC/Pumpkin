@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use super::poi;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
@@ -68,12 +69,14 @@ impl NetherPortal {
         let mut props = NetherPortalLikeProperties::default(&Block::NETHER_PORTAL);
         props.axis = self.axis;
         let state = props.to_state_id(&Block::NETHER_PORTAL);
-        let blocks = BlockPos::iterate(
+        let blocks: Vec<BlockPos> = BlockPos::iterate(
             self.lower_conor,
             self.lower_conor
                 .offset_dir(BlockDirection::Up.to_offset(), self.height as i32 - 1)
                 .offset_dir(self.negative_direction.to_offset(), self.width as i32 - 1),
-        );
+        ).collect();
+
+        let mut poi_storage = world.portal_poi.lock().await;
         for pos in blocks {
             world
                 .set_block_state(
@@ -82,6 +85,7 @@ impl NetherPortal {
                     BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
                 )
                 .await;
+            poi_storage.add_portal(pos);
         }
     }
 
@@ -286,9 +290,14 @@ impl NetherPortal {
             max_y
         };
 
+        // Use POI storage for fast lookup
+        let mut poi_storage = world.portal_poi.lock().await;
+        let portal_positions = poi_storage.get_in_square(target_pos, search_radius, Some(poi::POI_TYPE_NETHER_PORTAL));
+        drop(poi_storage);
+
         let mut best: Option<(PortalSearchResult, f64, i32)> = None;
 
-        for pos in BlockPos::iterate_outwards(target_pos, search_radius, search_radius, search_radius) {
+        for pos in portal_positions {
             if pos.0.y < min_y || pos.0.y > search_max_y {
                 continue;
             }
@@ -297,6 +306,7 @@ impl NetherPortal {
                 continue;
             }
 
+            // Verify portal still exists (POI might be stale)
             if world.get_block(&pos).await != &Block::NETHER_PORTAL {
                 continue;
             }
@@ -541,11 +551,12 @@ impl NetherPortal {
             }
         }
 
-        // Fill portal interior
+        // Fill portal interior and register in POI
         let mut props = NetherPortalLikeProperties::default(&Block::NETHER_PORTAL);
         props.axis = axis;
         let portal_state = props.to_state_id(&Block::NETHER_PORTAL);
 
+        let mut poi_storage = world.portal_poi.lock().await;
         for x in 0..2 {
             for y in 0..3 {
                 let pos = lower_corner
@@ -554,6 +565,7 @@ impl NetherPortal {
                 world
                     .set_block_state(&pos, portal_state, BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE)
                     .await;
+                poi_storage.add_portal(pos);
             }
         }
     }

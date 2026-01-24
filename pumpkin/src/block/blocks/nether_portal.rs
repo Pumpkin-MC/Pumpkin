@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+    OnStateReplacedArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -78,6 +79,14 @@ impl BlockBehaviour for NetherPortalBlock {
                 .get_entity()
                 .try_use_portal(portal_delay, target_world, *args.position)
                 .await;
+        })
+    }
+
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // Remove from POI storage when portal block is replaced
+            let mut poi_storage = args.world.portal_poi.lock().await;
+            poi_storage.remove(args.position);
         })
     }
 }
