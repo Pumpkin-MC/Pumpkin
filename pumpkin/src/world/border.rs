@@ -111,6 +111,7 @@ impl Worldborder {
             .await;
     }
 
+    #[must_use]
     pub fn contains(&self, x: f64, z: f64) -> bool {
         let half = self.new_diameter / 2.0;
         let min_x = self.center_x - half;
@@ -120,10 +121,12 @@ impl Worldborder {
         x >= min_x && x < max_x && z >= min_z && z < max_z
     }
 
+    #[must_use]
     pub fn contains_block(&self, x: i32, z: i32) -> bool {
-        self.contains(x as f64, z as f64) && self.contains((x + 1) as f64, (z + 1) as f64)
+        self.contains(f64::from(x), f64::from(z)) && self.contains(f64::from(x + 1), f64::from(z + 1))
     }
 
+    #[must_use]
     pub fn clamp_block(&self, x: i32, z: i32) -> (i32, i32) {
         let half = self.new_diameter / 2.0;
         let min_x = (self.center_x - half).floor() as i32;

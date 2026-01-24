@@ -1,7 +1,7 @@
 use crate::entity::item::ItemEntity;
 use crate::net::ClientPlatform;
 use crate::world::World;
-use crate::{server::Server, world::portal::{NetherPortal, PortalManager}};
+use crate::{server::Server, world::portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo}};
 use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
@@ -1320,36 +1320,46 @@ impl Entity {
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
                 let pos = self.pos.load();
+                let dimensions = self.entity_dimension.load();
                 let scale_factor_new = portal_manager.portal_world.dimension.coordinate_scale;
                 let scale_factor_current = self.world.dimension.coordinate_scale;
 
-                // Scale coordinates: Overworld/8 = Nether, Nether*8 = Overworld
                 let scale_factor = scale_factor_current / scale_factor_new;
                 let target_pos = BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
 
                 let dest_world = portal_manager.portal_world.clone();
+                let source_portal = portal_manager.source_portal.clone();
                 drop(portal_manager);
 
-                let teleport_pos = if let Some(result) =
+                let teleport_pos = if let Some(dest_result) =
                     NetherPortal::search_for_portal(&dest_world, target_pos).await
                 {
-                    result.get_teleport_position()
+                    let base_pos = source_portal.as_ref().map_or_else(
+                        || dest_result.get_teleport_position(),
+                        |source| {
+                            let source_result = PortalSearchResult {
+                                lower_corner: source.lower_corner,
+                                axis: source.axis,
+                                width: source.width,
+                                height: source.height,
+                            };
+                            let relative_pos = source_result.entity_pos_in_portal(pos, &dimensions);
+                            dest_result.calculate_exit_position(relative_pos, &dimensions)
+                        },
+                    );
+                    dest_result.find_open_position(&dest_world, base_pos, &dimensions).await
                 } else if let Some((build_pos, axis, is_fallback)) =
                     NetherPortal::find_safe_location(&dest_world, target_pos, pumpkin_data::block_properties::HorizontalAxis::X).await
                 {
                     NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback).await;
-
-                    let x = build_pos.0.x as f64;
-                    let y = build_pos.0.y as f64;
-                    let z = build_pos.0.z as f64;
-                    match axis {
-                        pumpkin_data::block_properties::HorizontalAxis::X => {
-                            Vector3::new(x + 1.0, y, z + 0.5)
-                        }
-                        pumpkin_data::block_properties::HorizontalAxis::Z => {
-                            Vector3::new(x + 0.5, y, z + 1.0)
-                        }
-                    }
+                    let new_portal = PortalSearchResult {
+                        lower_corner: build_pos,
+                        axis,
+                        width: 2,
+                        height: 3,
+                    };
+                    let center_pos = new_portal.get_teleport_position();
+                    new_portal.find_open_position(&dest_world, center_pos, &dimensions).await
                 } else {
                     target_pos.0.to_f64()
                 };
@@ -1372,11 +1382,39 @@ impl Entity {
         }
         let mut manager = self.portal_manager.lock().await;
         if manager.is_none() {
-            *manager = Some(Mutex::new(PortalManager::new(
-                portal_delay,
-                portal_world,
-                pos,
-            )));
+            let mut new_manager = PortalManager::new(portal_delay, portal_world, pos);
+
+            if let Some(portal) = NetherPortal::get_on_axis(
+                &self.world,
+                &pos,
+                pumpkin_data::block_properties::HorizontalAxis::X,
+            )
+            .await
+                && portal.was_already_valid()
+            {
+                new_manager.set_source_portal(SourcePortalInfo {
+                    lower_corner: portal.lower_corner(),
+                    axis: portal.axis(),
+                    width: portal.width(),
+                    height: portal.height(),
+                });
+            } else if let Some(portal) = NetherPortal::get_on_axis(
+                &self.world,
+                &pos,
+                pumpkin_data::block_properties::HorizontalAxis::Z,
+            )
+            .await
+                && portal.was_already_valid()
+            {
+                new_manager.set_source_portal(SourcePortalInfo {
+                    lower_corner: portal.lower_corner(),
+                    axis: portal.axis(),
+                    width: portal.width(),
+                    height: portal.height(),
+                });
+            }
+
+            *manager = Some(Mutex::new(new_manager));
         } else if let Some(manager) = manager.as_ref() {
             let mut manager = manager.lock().await;
             manager.pos = pos;

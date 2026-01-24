@@ -243,8 +243,9 @@ impl World {
         }
 
         // Save portal POI to disk
-        if let Err(e) = self.portal_poi.lock().await.save_all() {
-            log::error!("Failed to save portal POI: {}", e);
+        let save_result = self.portal_poi.lock().await.save_all();
+        if let Err(e) = save_result {
+            log::error!("Failed to save portal POI: {e}");
         }
 
         self.level.shutdown().await;
@@ -1172,7 +1173,7 @@ impl World {
         self.dimension.min_y
     }
 
-    /// Gets the MOTION_BLOCKING heightmap value for a given XZ position.
+    /// Gets the `MOTION_BLOCKING` heightmap value for a given XZ position.
     pub async fn get_motion_blocking_height(&self, x: i32, z: i32) -> i32 {
         let chunk_pos = Vector2::new(x >> 4, z >> 4);
         let chunk = self.level.get_chunk(chunk_pos).await;

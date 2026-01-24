@@ -293,10 +293,10 @@ impl PoiStorage {
             for rz in min_rz..=max_rz {
                 let region = self.get_or_load_region(rx, rz);
                 for entry in region.get_all() {
-                    if let Some(filter_type) = poi_type {
-                        if entry.poi_type != filter_type {
-                            continue;
-                        }
+                    if let Some(filter_type) = poi_type
+                        && entry.poi_type != filter_type
+                    {
+                        continue;
                     }
 
                     let dx = (entry.x - center.0.x).abs();
