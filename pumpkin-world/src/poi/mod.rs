@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 
+use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
-use flate2::Compression;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use serde::{Deserialize, Serialize};
@@ -136,10 +136,13 @@ impl PoiRegion {
                 sections: HashMap::new(),
             });
 
-            let section = chunk.sections.entry(section_key).or_insert_with(|| PoiSectionData {
-                valid: true,
-                records: Vec::new(),
-            });
+            let section = chunk
+                .sections
+                .entry(section_key)
+                .or_insert_with(|| PoiSectionData {
+                    valid: true,
+                    records: Vec::new(),
+                });
             section.records.push(entry.clone());
         }
 
@@ -275,7 +278,12 @@ impl PoiStorage {
     }
 
     /// Get all POI positions within a square radius (for portal search)
-    pub fn get_in_square(&mut self, center: BlockPos, radius: i32, poi_type: Option<&str>) -> Vec<BlockPos> {
+    pub fn get_in_square(
+        &mut self,
+        center: BlockPos,
+        radius: i32,
+        poi_type: Option<&str>,
+    ) -> Vec<BlockPos> {
         let min_x = center.0.x - radius;
         let max_x = center.0.x + radius;
         let min_z = center.0.z - radius;

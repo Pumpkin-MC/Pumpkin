@@ -1177,7 +1177,11 @@ impl World {
     pub async fn get_motion_blocking_height(&self, x: i32, z: i32) -> i32 {
         let chunk_pos = Vector2::new(x >> 4, z >> 4);
         let chunk = self.level.get_chunk(chunk_pos).await;
-        chunk.read().await.heightmap.get(MotionBlocking, x, z, self.min_y)
+        chunk
+            .read()
+            .await
+            .heightmap
+            .get(MotionBlocking, x, z, self.min_y)
     }
 
     #[allow(clippy::too_many_lines)]

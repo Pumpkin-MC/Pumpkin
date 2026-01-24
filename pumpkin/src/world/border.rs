@@ -123,7 +123,8 @@ impl Worldborder {
 
     #[must_use]
     pub fn contains_block(&self, x: i32, z: i32) -> bool {
-        self.contains(f64::from(x), f64::from(z)) && self.contains(f64::from(x + 1), f64::from(z + 1))
+        self.contains(f64::from(x), f64::from(z))
+            && self.contains(f64::from(x + 1), f64::from(z + 1))
     }
 
     #[must_use]

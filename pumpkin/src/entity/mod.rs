@@ -1,7 +1,10 @@
 use crate::entity::item::ItemEntity;
 use crate::net::ClientPlatform;
 use crate::world::World;
-use crate::{server::Server, world::portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo}};
+use crate::{
+    server::Server,
+    world::portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo},
+};
 use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
@@ -1326,7 +1329,8 @@ impl Entity {
                 let scale_factor_current = self.world.dimension.coordinate_scale;
 
                 let scale_factor = scale_factor_current / scale_factor_new;
-                let target_pos = BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
+                let target_pos =
+                    BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
 
                 let dest_world = portal_manager.portal_world.clone();
                 let source_portal = portal_manager.source_portal.clone();
@@ -1349,13 +1353,21 @@ impl Entity {
                             dest_result.calculate_exit_position(relative_pos, &dimensions)
                         },
                     );
-                    let final_pos = dest_result.find_open_position(&dest_world, base_pos, &dimensions).await;
+                    let final_pos = dest_result
+                        .find_open_position(&dest_world, base_pos, &dimensions)
+                        .await;
                     let yaw = dest_result.calculate_teleport_yaw(current_yaw, source_axis);
                     (final_pos, Some(yaw))
                 } else if let Some((build_pos, axis, is_fallback)) =
-                    NetherPortal::find_safe_location(&dest_world, target_pos, pumpkin_data::block_properties::HorizontalAxis::X).await
+                    NetherPortal::find_safe_location(
+                        &dest_world,
+                        target_pos,
+                        pumpkin_data::block_properties::HorizontalAxis::X,
+                    )
+                    .await
                 {
-                    NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback).await;
+                    NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback)
+                        .await;
                     let new_portal = PortalSearchResult {
                         lower_corner: build_pos,
                         axis,
@@ -1363,7 +1375,9 @@ impl Entity {
                         height: 3,
                     };
                     let center_pos = new_portal.get_teleport_position();
-                    let final_pos = new_portal.find_open_position(&dest_world, center_pos, &dimensions).await;
+                    let final_pos = new_portal
+                        .find_open_position(&dest_world, center_pos, &dimensions)
+                        .await;
                     let yaw = new_portal.calculate_teleport_yaw(current_yaw, source_axis);
                     (final_pos, Some(yaw))
                 } else {
@@ -1371,11 +1385,15 @@ impl Entity {
                 };
 
                 // Teleport the main entity
-                caller.clone().teleport(teleport_pos, new_yaw, None, dest_world.clone()).await;
+                caller
+                    .clone()
+                    .teleport(teleport_pos, new_yaw, None, dest_world.clone())
+                    .await;
 
                 // Teleport all passengers recursively along with the vehicle
                 let yaw_delta = new_yaw.map(|y| y - current_yaw);
-                Self::teleport_passengers_recursive(self, teleport_pos, yaw_delta, &dest_world).await;
+                Self::teleport_passengers_recursive(self, teleport_pos, yaw_delta, &dest_world)
+                    .await;
             } else if portal_manager.ticks_in_portal == 0 {
                 should_remove = true;
             }
@@ -1405,12 +1423,20 @@ impl Entity {
                 // Get nested passengers before teleporting
                 let nested_passengers = passenger_entity.passengers.lock().await.clone();
 
-                passenger.teleport(position, passenger_yaw, None, dest_world.clone()).await;
+                passenger
+                    .teleport(position, passenger_yaw, None, dest_world.clone())
+                    .await;
 
                 // Recursively teleport nested passengers
                 for nested in nested_passengers {
                     let nested_entity = nested.get_entity();
-                    Self::teleport_passengers_recursive(nested_entity, position, yaw_delta, dest_world).await;
+                    Self::teleport_passengers_recursive(
+                        nested_entity,
+                        position,
+                        yaw_delta,
+                        dest_world,
+                    )
+                    .await;
                 }
             }
         })

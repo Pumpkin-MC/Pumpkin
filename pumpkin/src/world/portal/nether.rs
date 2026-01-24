@@ -39,7 +39,11 @@ impl PortalSearchResult {
     /// Calculates the yaw adjustment when teleporting between portals with different axes.
     /// Returns the new yaw value for the entity.
     #[must_use]
-    pub fn calculate_teleport_yaw(&self, current_yaw: f32, source_axis: Option<HorizontalAxis>) -> f32 {
+    pub fn calculate_teleport_yaw(
+        &self,
+        current_yaw: f32,
+        source_axis: Option<HorizontalAxis>,
+    ) -> f32 {
         let Some(src_axis) = source_axis else {
             return current_yaw;
         };
@@ -58,7 +62,11 @@ impl PortalSearchResult {
     }
 
     #[must_use]
-    pub fn entity_pos_in_portal(&self, entity_pos: Vector3<f64>, dimensions: &EntityDimensions) -> Vector3<f64> {
+    pub fn entity_pos_in_portal(
+        &self,
+        entity_pos: Vector3<f64>,
+        dimensions: &EntityDimensions,
+    ) -> Vector3<f64> {
         let portal_width = f64::from(self.width) - f64::from(dimensions.width);
         let portal_height = f64::from(self.height) - f64::from(dimensions.height);
         let lower = self.lower_corner.0;
@@ -94,7 +102,11 @@ impl PortalSearchResult {
     }
 
     #[must_use]
-    pub fn calculate_exit_position(&self, relative_pos: Vector3<f64>, dimensions: &EntityDimensions) -> Vector3<f64> {
+    pub fn calculate_exit_position(
+        &self,
+        relative_pos: Vector3<f64>,
+        dimensions: &EntityDimensions,
+    ) -> Vector3<f64> {
         let portal_width = f64::from(self.width) - f64::from(dimensions.width);
         let portal_height = f64::from(self.height) - f64::from(dimensions.height);
         let lower = self.lower_corner.0;
@@ -163,15 +175,36 @@ impl PortalSearchResult {
         best_pos
     }
 
-    async fn is_position_clear(&self, world: &Arc<World>, center: Vector3<f64>, dimensions: &EntityDimensions) -> bool {
+    async fn is_position_clear(
+        &self,
+        world: &Arc<World>,
+        center: Vector3<f64>,
+        dimensions: &EntityDimensions,
+    ) -> bool {
         let half_width = f64::from(dimensions.width) / 2.0;
         let height = f64::from(dimensions.height);
 
         let check_points = [
-            Vector3::new(center.x - half_width, center.y - height / 2.0, center.z - half_width),
-            Vector3::new(center.x + half_width, center.y - height / 2.0, center.z + half_width),
-            Vector3::new(center.x - half_width, center.y + height / 2.0, center.z - half_width),
-            Vector3::new(center.x + half_width, center.y + height / 2.0, center.z + half_width),
+            Vector3::new(
+                center.x - half_width,
+                center.y - height / 2.0,
+                center.z - half_width,
+            ),
+            Vector3::new(
+                center.x + half_width,
+                center.y - height / 2.0,
+                center.z + half_width,
+            ),
+            Vector3::new(
+                center.x - half_width,
+                center.y + height / 2.0,
+                center.z - half_width,
+            ),
+            Vector3::new(
+                center.x + half_width,
+                center.y + height / 2.0,
+                center.z + half_width,
+            ),
         ];
 
         for point in check_points {
@@ -244,7 +277,8 @@ impl NetherPortal {
             self.lower_conor
                 .offset_dir(BlockDirection::Up.to_offset(), self.height as i32 - 1)
                 .offset_dir(self.negative_direction.to_offset(), self.width as i32 - 1),
-        ).collect();
+        )
+        .collect();
 
         let mut poi_storage = world.portal_poi.lock().await;
         for pos in blocks {
@@ -461,7 +495,8 @@ impl NetherPortal {
         };
 
         let mut poi_storage = world.portal_poi.lock().await;
-        let portal_positions = poi_storage.get_in_square(target_pos, search_radius, Some(poi::POI_TYPE_NETHER_PORTAL));
+        let portal_positions =
+            poi_storage.get_in_square(target_pos, search_radius, Some(poi::POI_TYPE_NETHER_PORTAL));
         drop(poi_storage);
 
         let mut best: Option<(PortalSearchResult, f64, i32)> = None;
@@ -493,7 +528,8 @@ impl NetherPortal {
                     let is_better = match &best {
                         None => true,
                         Some((_, best_dist, best_y)) => {
-                            dist < *best_dist || ((dist - *best_dist).abs() < f64::EPSILON && y < *best_y)
+                            dist < *best_dist
+                                || ((dist - *best_dist).abs() < f64::EPSILON && y < *best_y)
                         }
                     };
 
@@ -516,6 +552,7 @@ impl NetherPortal {
         best.map(|(result, _, _)| result)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn find_safe_location(
         world: &Arc<World>,
         target_pos: BlockPos,
@@ -579,18 +616,31 @@ impl NetherPortal {
                             let floor_pos = BlockPos(Vector3::new(check_x, bottom_y, check_z));
 
                             for check_axis in [HorizontalAxis::X, HorizontalAxis::Z] {
-                                if Self::is_valid_portal_pos(world, floor_pos, check_axis, 0).await {
-                                    let dist = f64::from(target_pos.0.squared_distance_to(floor_pos.0.x, floor_pos.0.y, floor_pos.0.z));
+                                if Self::is_valid_portal_pos(world, floor_pos, check_axis, 0).await
+                                {
+                                    let dist = f64::from(target_pos.0.squared_distance_to(
+                                        floor_pos.0.x,
+                                        floor_pos.0.y,
+                                        floor_pos.0.z,
+                                    ));
 
-                                    let is_ideal = Self::is_valid_portal_pos(world, floor_pos, check_axis, -1).await
-                                        && Self::is_valid_portal_pos(world, floor_pos, check_axis, 1).await;
+                                    let is_ideal =
+                                        Self::is_valid_portal_pos(world, floor_pos, check_axis, -1)
+                                            .await
+                                            && Self::is_valid_portal_pos(
+                                                world, floor_pos, check_axis, 1,
+                                            )
+                                            .await;
 
                                     if is_ideal {
-                                        if ideal_pos.is_none() || dist < ideal_pos.as_ref().unwrap().2 {
+                                        if ideal_pos.is_none()
+                                            || dist < ideal_pos.as_ref().unwrap().2
+                                        {
                                             ideal_pos = Some((floor_pos, check_axis, dist));
                                         }
                                     } else if ideal_pos.is_none()
-                                        && (acceptable_pos.is_none() || dist < acceptable_pos.as_ref().unwrap().2)
+                                        && (acceptable_pos.is_none()
+                                            || dist < acceptable_pos.as_ref().unwrap().2)
                                     {
                                         acceptable_pos = Some((floor_pos, check_axis, dist));
                                     }
@@ -619,7 +669,11 @@ impl NetherPortal {
             target_pos.0.z - direction.to_offset().z,
         ));
         let clamped_pos = worldborder.clamp_block(fallback_pos.0.x, fallback_pos.0.z);
-        Some((BlockPos(Vector3::new(clamped_pos.0, fallback_y, clamped_pos.1)), axis, true))
+        Some((
+            BlockPos(Vector3::new(clamped_pos.0, fallback_y, clamped_pos.1)),
+            axis,
+            true,
+        ))
     }
 
     fn is_valid_portal_air(state: &BlockState) -> bool {
@@ -665,7 +719,12 @@ impl NetherPortal {
         true
     }
 
-    pub async fn build_portal_frame(world: &Arc<World>, lower_corner: BlockPos, axis: HorizontalAxis, is_fallback: bool) {
+    pub async fn build_portal_frame(
+        world: &Arc<World>,
+        lower_corner: BlockPos,
+        axis: HorizontalAxis,
+        is_fallback: bool,
+    ) {
         let direction = if axis == HorizontalAxis::X {
             BlockDirection::East
         } else {
@@ -689,7 +748,11 @@ impl NetherPortal {
                             .offset_dir(perpendicular.to_offset(), perp)
                             .offset_dir(BlockDirection::Up.to_offset(), height);
 
-                        let state = if height < 0 { obsidian_state } else { air_state };
+                        let state = if height < 0 {
+                            obsidian_state
+                        } else {
+                            air_state
+                        };
                         world
                             .set_block_state(&pos, state, BlockFlags::NOTIFY_ALL)
                             .await;
@@ -722,7 +785,11 @@ impl NetherPortal {
                     .offset_dir(direction.to_offset(), x)
                     .offset_dir(BlockDirection::Up.to_offset(), y);
                 world
-                    .set_block_state(&pos, portal_state, BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE)
+                    .set_block_state(
+                        &pos,
+                        portal_state,
+                        BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+                    )
                     .await;
                 poi_storage.add_portal(pos);
             }
