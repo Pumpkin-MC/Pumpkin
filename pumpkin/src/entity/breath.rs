@@ -1,10 +1,10 @@
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tag;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -97,7 +97,6 @@ impl BreathManager {
     async fn is_eye_in_water(&self, player: &Player) -> bool {
         let e = &player.living_entity.entity;
         let pos = e.pos.load();
-
         let eye_y = e.get_eye_y();
 
         let bp = BlockPos::new(
@@ -105,29 +104,31 @@ impl BreathManager {
             eye_y.floor() as i32,
             pos.z.floor() as i32,
         );
-
         let world = player.world();
+
         let (fluid, state) = world.get_fluid_and_fluid_state(&bp).await;
 
-        let is_water_fluid = fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id;
+        let mut in_water_fluid = fluid.has_tag(&tag::Fluid::MINECRAFT_WATER);
 
-        if !is_water_fluid {
-            let block_here = world.get_block(&bp).await;
-
-            let is_water_plant = block_here == &Block::SEAGRASS
-                || block_here == &Block::TALL_SEAGRASS
-                || block_here == &Block::KELP
-                || block_here == &Block::KELP_PLANT;
-
-            if !is_water_plant {
-                return false;
+        if !in_water_fluid {
+            let state_here = world.get_block_state(&bp).await;
+            if !state_here.is_solid() {
+                let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
+                let (fluid_above_x, _) = world.get_fluid_and_fluid_state(&above).await;
+                if fluid_above_x.has_tag(&tag::Fluid::MINECRAFT_WATER) {
+                    in_water_fluid = true;
+                }
             }
+        }
+
+        if !in_water_fluid {
+            return false;
         }
 
         let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
         let (fluid_above, _) = world.get_fluid_and_fluid_state(&above).await;
 
-        let surface_y = if fluid_above.id == fluid.id {
+        let surface_y = if fluid_above.has_tag(&tag::Fluid::MINECRAFT_WATER) {
             f64::from(bp.0.y as f32 + 1.0)
         } else {
             let height: f32 = if state.is_still {
