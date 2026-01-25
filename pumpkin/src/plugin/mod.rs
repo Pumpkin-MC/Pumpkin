@@ -13,7 +13,7 @@ use tokio::sync::{Notify, RwLock};
 pub mod api;
 pub mod loader;
 
-use crate::{LOGGER_IMPL, PERMISSION_MANAGER, server::Server};
+use crate::{LOGGER_IMPL, PERMISSION_MANAGER, entity::player::Player, server::Server};
 pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -168,6 +168,65 @@ pub struct PluginManager {
     plugin_states: RwLock<HashMap<String, PluginState>>,
     // Notification for plugin state changes
     state_notify: Arc<Notify>,
+}
+
+/// A trait for handling custom payload packets.
+///
+/// This trait allows plugins to handle custom payload packets sent by clients
+/// through specific channels. Implementations of this trait are responsible for
+/// parsing the raw byte data and performing the appropriate actions.
+///
+/// # Arguments
+/// - `player`: The player who sent the payload.
+/// - `server`: A reference to the server instance.
+/// - `data`: The raw byte data of the payload.
+///
+/// # Returns
+/// A `Result` indicating whether the payload was handled successfully.
+pub trait CustomPayloadHandler: Send + Sync {
+    fn handle(
+        &self,
+        player: Arc<Player>,
+        server: Arc<Server>,
+        data: &[u8],
+    ) -> Result<(), pumpkin_protocol::ser::ReadingError>;
+}
+
+/// A struct representing a typed payload handler.
+///
+/// This struct wraps a handler function and automatically deserializes the raw payload data
+/// into the specified type `T` before calling the handler function.
+///
+/// # Type Parameters
+/// - `T`: The type to deserialize the payload data into.
+/// - `H`: The type of the handler function.
+///
+/// # Fields
+/// - `handler`: The handler function to call with the deserialized data.
+/// - `_phantom`: A phantom data marker for type `T`.
+pub struct TypedPayloadHandler<T, H> {
+    pub handler: Arc<H>,
+    pub _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T, H> CustomPayloadHandler for TypedPayloadHandler<T, H>
+where
+    T: serde::de::DeserializeOwned + Send + Sync + 'static,
+    H: Fn(Arc<Player>, Arc<Server>, T) + Send + Sync + 'static,
+{
+    fn handle(
+        &self,
+        player: Arc<Player>,
+        server: Arc<Server>,
+        data: &[u8],
+    ) -> Result<(), pumpkin_protocol::ser::ReadingError> {
+        let mut reader = std::io::Cursor::new(data);
+        let mut deserializer = pumpkin_protocol::ser::deserializer::Deserializer::new(&mut reader);
+        let packet = T::deserialize(&mut deserializer)
+            .map_err(|e| pumpkin_protocol::ser::ReadingError::Message(e.to_string()))?;
+        (self.handler)(player, server, packet);
+        Ok(())
+    }
 }
 
 /// Represents a successfully loaded plugin

@@ -6,6 +6,7 @@ use crate::entity::{EntityBase, NBTStorage};
 use crate::item::registry::ItemRegistry;
 use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
+use crate::plugin::CustomPayloadHandler;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
@@ -15,6 +16,7 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
+use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_world::dimension::into_level;
 
 use crate::command::CommandSender;
@@ -33,7 +35,7 @@ use pumpkin_world::world_info::anvil::{
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 use rand::seq::{IndexedRandom, IteratorRandom, SliceRandom};
 use rsa::RsaPublicKey;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -98,6 +100,8 @@ pub struct Server {
     /// Random unique Server ID used by Bedrock Edition
     pub server_guid: u64,
     tasks: TaskTracker,
+    /// A map of custom payload handlers, indexed by channel name.
+    pub payload_handlers: Arc<RwLock<HashMap<ResourceLocation, Box<dyn CustomPayloadHandler>>>>,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<RwLock<LevelData>>,
@@ -204,6 +208,7 @@ impl Server {
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
+            payload_handlers: Arc::new(RwLock::new(HashMap::new())),
             server_guid: rand::random(),
             mojang_public_keys: Mutex::new(mojang_public_keys),
             world_info_writer: Arc::new(AnvilLevelInfo),
