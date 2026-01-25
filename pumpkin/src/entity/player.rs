@@ -448,6 +448,10 @@ impl Player {
             PlayerScreenHandler::new(&inventory, None, 0).await,
         ));
 
+        // Initialize abilities based on gamemode (like vanilla's GameMode.setAbilities())
+        let mut abilities = Abilities::default();
+        abilities.set_for_gamemode(gamemode);
+
         Self {
             living_entity,
             config: RwLock::new(config),
@@ -466,7 +470,7 @@ impl Player {
             teleport_id_count: AtomicI32::new(0),
             mining: AtomicBool::new(false),
             mining_pos: Mutex::new(BlockPos::ZERO),
-            abilities: Mutex::new(Abilities::default()),
+            abilities: Mutex::new(abilities),
             gamemode: AtomicCell::new(gamemode),
             previous_gamemode: AtomicCell::new(None),
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
