@@ -2389,8 +2389,8 @@ impl World {
         player: &Arc<Player>,
         fire_event: bool,
     ) -> Option<Arc<Player>> {
-        let player = self.players.write().await.remove(&player.gameprofile.id);
-        if let Some(player) = player {
+        let removed_player = self.players.write().await.remove(&player.gameprofile.id);
+        if let Some(ref player) = removed_player {
             let uuid = player.gameprofile.id;
             self.broadcast_packet_all(&CRemovePlayerInfo::new(&[uuid]))
                 .await;
@@ -2423,7 +2423,7 @@ impl World {
                 }
             }
         }
-        None
+        removed_player
     }
 
     /// Adds an entity to the world.
