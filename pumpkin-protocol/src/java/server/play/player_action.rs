@@ -27,8 +27,10 @@ pub enum Status {
     /// I didn't make that up
     /// Indicates that the currently held item should have its state updated such as eating food, pulling back bows, using buckets, etc. Location is always set to 0/0/0, Face is always set to -Y. Sequence is always set to 0.
     ReleaseItemInUse,
-    /// Used to swap or assign an item to the second hand. Location is always set to 0/0/0, Face is always set to -Y. Sequence is always set to 0.  
+    /// Used to swap or assign an item to the second hand. Location is always set to 0/0/0, Face is always set to -Y. Sequence is always set to 0.
     SwapItem,
+    /// Sent when a player is holding a spear and performs a jab attack.
+    SpearJab,
 }
 
 pub struct InvalidStatus;
@@ -45,6 +47,7 @@ impl TryFrom<i32> for Status {
             4 => Ok(Self::DropItem),
             5 => Ok(Self::ReleaseItemInUse),
             6 => Ok(Self::SwapItem),
+            7 => Ok(Self::SpearJab),
             _ => Err(InvalidStatus),
         }
     }

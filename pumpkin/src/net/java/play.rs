@@ -1398,6 +1398,9 @@ impl JavaClient {
                 Status::SwapItem => {
                     player.swap_item().await;
                 }
+                Status::SpearJab => {
+                    log::debug!("todo");
+                }
             },
             Err(_) => self.kick(TextComponent::text("Invalid status")).await,
         }
