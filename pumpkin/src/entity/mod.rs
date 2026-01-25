@@ -1352,6 +1352,18 @@ impl Entity {
                 .store(self.default_portal_cooldown(), Ordering::Relaxed);
             return;
         }
+
+        if portal_world.dimension == Dimension::THE_NETHER
+            && !portal_world
+                .server
+                .upgrade()
+                .unwrap()
+                .basic_config
+                .allow_nether
+        {
+            return;
+        }
+
         let mut manager = self.portal_manager.lock().await;
         if manager.is_none() {
             *manager = Some(Mutex::new(PortalManager::new(
