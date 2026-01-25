@@ -97,6 +97,9 @@ impl PortalSearchResult {
             HorizontalAxis::X => entity_pos.z - (f64::from(lower.z) + 0.5),
             HorizontalAxis::Z => entity_pos.x - (f64::from(lower.x) + 0.5),
         };
+        // Clamp perpendicular offset to keep exit position within portal bounds
+        // (prevents spawning inside solid blocks next to the portal)
+        let perp_offset = perp_offset.clamp(-0.5, 0.5);
 
         Vector3::new(axis_progress, y_progress, perp_offset)
     }
@@ -184,37 +187,26 @@ impl PortalSearchResult {
         let half_width = f64::from(dimensions.width) / 2.0;
         let height = f64::from(dimensions.height);
 
-        let check_points = [
-            Vector3::new(
-                center.x - half_width,
-                center.y - height / 2.0,
-                center.z - half_width,
-            ),
-            Vector3::new(
-                center.x + half_width,
-                center.y - height / 2.0,
-                center.z + half_width,
-            ),
-            Vector3::new(
-                center.x - half_width,
-                center.y + height / 2.0,
-                center.z - half_width,
-            ),
-            Vector3::new(
-                center.x + half_width,
-                center.y + height / 2.0,
-                center.z + half_width,
-            ),
-        ];
+        // Calculate the bounding box in block coordinates
+        let min_x = (center.x - half_width).floor() as i32;
+        let max_x = (center.x + half_width).floor() as i32;
+        let min_y = (center.y - height / 2.0).floor() as i32;
+        let max_y = (center.y + height / 2.0).floor() as i32;
+        let min_z = (center.z - half_width).floor() as i32;
+        let max_z = (center.z + half_width).floor() as i32;
 
-        for point in check_points {
-            let block_pos = BlockPos::floored(point.x, point.y, point.z);
-            let state = world.get_block_state(&block_pos).await;
-            if state.is_solid_block() {
-                return false;
+        // Check ALL blocks that overlap with the entity bounding box
+        for x in min_x..=max_x {
+            for y in min_y..=max_y {
+                for z in min_z..=max_z {
+                    let block_pos = BlockPos(Vector3::new(x, y, z));
+                    let state = world.get_block_state(&block_pos).await;
+                    if state.is_solid_block() {
+                        return false;
+                    }
+                }
             }
         }
-
         true
     }
 }
@@ -239,7 +231,7 @@ impl NetherPortal {
     pub fn is_valid(&self) -> bool {
         self.width >= Self::MIN_WIDTH
             && self.width <= Self::MAX_WIDTH
-            && self.height >= Self::MIN_WIDTH
+            && self.height >= Self::MIN_HEIGHT
             && self.height <= Self::MAX_HEIGHT
     }
 
@@ -518,11 +510,8 @@ impl NetherPortal {
                 if let Some(portal) = Self::get_on_axis(world, &pos, axis).await
                     && portal.was_already_valid()
                 {
-                    let dist = f64::from(target_pos.0.squared_distance_to(
-                        portal.lower_conor.0.x,
-                        portal.lower_conor.0.y,
-                        portal.lower_conor.0.z,
-                    ));
+                    // Use POI position for distance calculation (matches vanilla behavior)
+                    let dist = f64::from(target_pos.0.squared_distance_to(pos.0.x, pos.0.y, pos.0.z));
                     let y = portal.lower_conor.0.y;
 
                     let is_better = match &best {
@@ -571,7 +560,7 @@ impl NetherPortal {
         let direction = if axis == HorizontalAxis::X {
             BlockDirection::East
         } else {
-            BlockDirection::North
+            BlockDirection::South // Fixed: positive Z direction
         };
 
         let mut ideal_pos: Option<(BlockPos, HorizontalAxis, f64)> = None;
@@ -662,7 +651,8 @@ impl NetherPortal {
             return Some((pos, result_axis, false));
         }
 
-        let fallback_y = target_pos.0.y.clamp(70.max(min_y + 1), top_y_limit - 9);
+        // Vanilla: clamp between max(bottomY, 70) and topYLimit - 9
+        let fallback_y = target_pos.0.y.clamp(min_y.max(70), top_y_limit - 9);
         let fallback_pos = BlockPos(Vector3::new(
             target_pos.0.x - direction.to_offset().x,
             fallback_y,
@@ -689,12 +679,12 @@ impl NetherPortal {
         let direction = if axis == HorizontalAxis::X {
             BlockDirection::East
         } else {
-            BlockDirection::North
+            BlockDirection::South // Fixed: positive Z direction
         };
         let perpendicular = if axis == HorizontalAxis::X {
-            BlockDirection::North
+            BlockDirection::South // Fixed: East.rotateYClockwise()
         } else {
-            BlockDirection::East
+            BlockDirection::West // Fixed: South.rotateYClockwise()
         };
 
         for portal_dir in -1..3 {
@@ -728,19 +718,23 @@ impl NetherPortal {
         let direction = if axis == HorizontalAxis::X {
             BlockDirection::East
         } else {
-            BlockDirection::North
+            BlockDirection::South // Fixed: positive Z direction
         };
         let perpendicular = if axis == HorizontalAxis::X {
-            BlockDirection::North
+            BlockDirection::South // Fixed: East.rotateYClockwise()
         } else {
-            BlockDirection::East
+            BlockDirection::West // Fixed: South.rotateYClockwise()
         };
 
         let obsidian_state = Block::OBSIDIAN.default_state.id;
         let air_state = Block::AIR.default_state.id;
 
         if is_fallback {
-            for perp in -1..=1 {
+            // Clear area around the portal matching vanilla exactly:
+            // perpendicular: -1, 0, 1 (3 blocks)
+            // portal_dir: 0, 1 (2 blocks - portal interior only)
+            // height: -1, 0, 1, 2 (4 blocks)
+            for perp in -1..2 {
                 for portal_dir in 0..2 {
                     for height in -1..3 {
                         let pos = lower_corner

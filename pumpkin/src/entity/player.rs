@@ -137,6 +137,8 @@ pub struct ChunkManager {
     chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
+    /// The current world for chunk loading. Updated on dimension change.
+    world: Arc<World>,
 }
 
 impl ChunkManager {
@@ -146,6 +148,7 @@ impl ChunkManager {
     pub fn new(
         chunks_per_tick: usize,
         chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
+        world: Arc<World>,
     ) -> Self {
         Self {
             chunks_per_tick,
@@ -156,7 +159,13 @@ impl ChunkManager {
             chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
+            world,
         }
+    }
+
+    /// Gets the current world for chunk loading.
+    pub fn world(&self) -> &Arc<World> {
+        &self.world
     }
 
     pub fn pull_new_chunks(&mut self) {
@@ -244,16 +253,17 @@ impl ChunkManager {
         self.chunk_listener = tx;
     }
 
-    pub fn change_world(&mut self, old_level: &Arc<Level>, new_level: &Arc<Level>) {
+    pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
         let mut lock = old_level.chunk_loading.lock().unwrap();
         lock.remove_ticket(
             self.center,
             ChunkLoading::get_level_from_view_distance(self.view_distance),
         );
         drop(lock);
-        self.chunk_listener = new_level.chunk_listener.add_global_chunk_listener();
+        self.chunk_listener = new_world.level.chunk_listener.add_global_chunk_listener();
         self.chunk_sent.clear();
         self.chunk_queue.clear();
+        self.world = new_world;
     }
 
     pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
@@ -516,6 +526,7 @@ impl Player {
             chunk_manager: Mutex::new(ChunkManager::new(
                 16,
                 world.level.chunk_listener.add_global_chunk_listener(),
+                world.clone(),
             )),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
@@ -1422,7 +1433,7 @@ impl Player {
                 new_world.players.write().await.insert(uuid, player.clone());
                 self.unload_watched_chunks(&current_world).await;
 
-                self.chunk_manager.lock().await.change_world(&current_world.level, &new_world.level);
+                self.chunk_manager.lock().await.change_world(&current_world.level, new_world.clone());
 
                 let last_pos = self.living_entity.entity.last_pos.load();
                 let death_dimension = ResourceLocation::from(self.world().dimension.minecraft_name);
