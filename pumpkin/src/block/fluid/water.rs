@@ -79,6 +79,10 @@ impl FlowingFluid for FlowingWater {
         1
     }
 
+    fn get_flow_speed(&self, _world: &World) -> u8 {
+        WATER_FLOW_SPEED
+    }
+
     fn get_max_flow_distance(&self, _world: &World) -> i32 {
         4
     }

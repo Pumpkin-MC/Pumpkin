@@ -5,7 +5,7 @@ use pumpkin_data::{
     tag,
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockId, BlockStateId, world::BlockFlags};
+use pumpkin_world::{BlockId, BlockStateId, tick::TickPriority, world::BlockFlags};
 use std::sync::Arc;
 use std::{collections::HashMap, pin::Pin};
 
@@ -55,6 +55,9 @@ pub type FluidFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait FlowingFluid: Send + Sync {
     fn get_level_decrease_per_block(&self, world: &World) -> i32;
+
+    /// Get the tick delay for this fluid (how many ticks between flow updates)
+    fn get_flow_speed(&self, world: &World) -> u8;
 
     fn get_source<'a>(
         &'a self,
@@ -145,31 +148,43 @@ pub trait FlowingFluid: Send + Sync {
             let current_fluid_state =
                 FlowingFluidProperties::from_state_id(current_block_state.id, fluid);
 
+            // Only update non-source blocks (or falling source blocks)
+            let mut updated_fluid_state = current_fluid_state;
             if current_fluid_state.level != Level::L8
                 || current_fluid_state.falling == Falling::True
             {
                 let new_fluid_state = self.get_new_liquid(world, fluid, block_pos).await;
                 if let Some(new_fluid_state) = new_fluid_state {
-                    if new_fluid_state.to_state_id(fluid) != current_block_state.id {
+                    let new_state_id = new_fluid_state.to_state_id(fluid);
+                    if new_state_id != current_block_state.id {
+                        updated_fluid_state = new_fluid_state;
                         world
-                            .set_block_state(
-                                block_pos,
-                                new_fluid_state.to_state_id(fluid),
-                                BlockFlags::NOTIFY_LISTENERS,
+                            .set_block_state(block_pos, new_state_id, BlockFlags::NOTIFY_ALL)
+                            .await;
+                        // Schedule another tick to continue the flow/drain process
+                        let tick_delay = self.get_flow_speed(world);
+                        world
+                            .schedule_fluid_tick(
+                                fluid,
+                                *block_pos,
+                                tick_delay,
+                                TickPriority::Normal,
                             )
                             .await;
                     }
                 } else if self.is_waterlogged(world, block_pos).await.is_none() {
+                    // Fluid should disappear completely
                     world
                         .set_block_state(
                             block_pos,
                             Block::AIR.default_state.id,
-                            BlockFlags::NOTIFY_LISTENERS,
+                            BlockFlags::NOTIFY_ALL,
                         )
                         .await;
+                    return; // No more flow to try
                 }
             }
-            self.try_flow(world, fluid, block_pos, &current_fluid_state)
+            self.try_flow(world, fluid, block_pos, &updated_fluid_state)
                 .await;
         })
     }
