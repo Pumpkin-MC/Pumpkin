@@ -1419,7 +1419,7 @@ impl Player {
                 self.set_client_loaded(false);
                 let uuid = self.gameprofile.id;
                 let player = current_world.remove_player(self, false).await.unwrap();
-                new_world.players.write().await.insert(uuid, player);
+                new_world.players.write().await.insert(uuid, player.clone());
                 self.unload_watched_chunks(&current_world).await;
 
                 self.chunk_manager.lock().await.change_world(&current_world.level, &new_world.level);
@@ -1448,12 +1448,8 @@ impl Player {
 
                 self.send_permission_lvl_update().await;
 
-                let cooldown = self.living_entity.entity.portal_cooldown.load(Ordering::Relaxed);
-                new_player_ref.living_entity.entity.portal_cooldown.store(cooldown, Ordering::Relaxed);
-
-                // Use new_player_ref for teleport request - the new player needs to have the correct position
-                new_player_ref.clone().request_teleport(position, yaw, pitch).await;
-                new_player_ref.living_entity.entity.last_pos.store(position);
+                player.clone().request_teleport(position, yaw, pitch).await;
+                player.living_entity.entity.last_pos.store(position);
 
                 self.send_abilities_update().await;
 
@@ -1465,9 +1461,7 @@ impl Player {
 
                 self.send_health().await;
 
-                // Use new_player_ref here, not self, because self still has its world
-                // pointing to the old world. new_player_ref has the correct world.
-                new_world.send_world_info(&new_player_ref, position, yaw, pitch).await;
+                new_world.send_world_info(&player, position, yaw, pitch).await;
             }
         }}
     }
