@@ -1364,6 +1364,17 @@ impl Entity {
             return;
         }
 
+        if portal_world.dimension == Dimension::THE_END
+            && !portal_world
+                .server
+                .upgrade()
+                .unwrap()
+                .basic_config
+                .allow_end
+        {
+            return;
+        }
+
         let mut manager = self.portal_manager.lock().await;
         if manager.is_none() {
             *manager = Some(Mutex::new(PortalManager::new(

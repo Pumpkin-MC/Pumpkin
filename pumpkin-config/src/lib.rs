@@ -83,6 +83,8 @@ pub struct BasicConfiguration {
     pub op_permission_level: PermissionLvl,
     /// Whether the Nether dimension is enabled.
     pub allow_nether: bool,
+    /// Whether the End dimension is enabled.
+    pub allow_end: bool,
     /// Whether the server is in hardcore mode.
     pub hardcore: bool,
     /// Whether online mode is enabled. Requires valid Minecraft accounts.
@@ -127,6 +129,7 @@ impl Default for BasicConfiguration {
             default_difficulty: Difficulty::Normal,
             op_permission_level: PermissionLvl::Four,
             allow_nether: true,
+            allow_end: true,
             hardcore: false,
             online_mode: true,
             encryption: true,
