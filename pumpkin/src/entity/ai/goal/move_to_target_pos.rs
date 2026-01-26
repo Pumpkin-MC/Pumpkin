@@ -78,9 +78,7 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
 
                             let can_target =
                                 if let Some(move_to_target_pos) = self.move_to_target_pos.get() {
-                                    move_to_target_pos
-                                        .is_target_pos(world, block_pos_mut)
-                                        .await
+                                    move_to_target_pos.is_target_pos(world, block_pos_mut).await
                                 } else {
                                     false
                                 };

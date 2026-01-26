@@ -265,6 +265,8 @@ impl ChunkManager {
         self.chunk_sent.clear();
         self.chunk_queue.clear();
         self.world = new_world;
+        // Reset batch state so chunks can be sent immediately in the new dimension
+        self.batches_sent_since_ack = BatchState::Initial;
     }
 
     pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {

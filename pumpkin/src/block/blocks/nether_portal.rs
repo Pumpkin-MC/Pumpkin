@@ -8,7 +8,9 @@ use crate::entity::EntityBase;
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 use pumpkin_data::Block;
-use pumpkin_data::block_properties::{Axis, BlockProperties, HorizontalAxis, NetherPortalLikeProperties};
+use pumpkin_data::block_properties::{
+    Axis, BlockProperties, HorizontalAxis, NetherPortalLikeProperties,
+};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_macros::pumpkin_block;

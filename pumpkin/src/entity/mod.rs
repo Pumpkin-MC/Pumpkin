@@ -5,6 +5,7 @@ use crate::{
     server::Server,
     world::portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo},
 };
+use arc_swap::ArcSwap;
 use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
@@ -43,7 +44,6 @@ use pumpkin_util::math::{
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::version::MinecraftVersion;
-use arc_swap::ArcSwap;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
@@ -1003,8 +1003,7 @@ impl Entity {
                                 continue;
                             }
 
-                            let mut fluid_velo =
-                                world.get_fluid_velocity(pos, &fluid, &state).await;
+                            let mut fluid_velo = world.get_fluid_velocity(pos, fluid, state).await;
 
                             if fluid_height[i] < 0.4 {
                                 fluid_velo = fluid_velo * fluid_height[i];
@@ -1109,7 +1108,11 @@ impl Entity {
     ) {
         if let Some(mut supporting_block) = self.supporting_block_pos.load() {
             if offset > 1.0e-5 {
-                let (block, state) = self.world.load().get_block_and_state(&supporting_block).await;
+                let (block, state) = self
+                    .world
+                    .load()
+                    .get_block_and_state(&supporting_block)
+                    .await;
 
                 // if let Some(props) = block.properties(state.id) {
                 //     let name = props.;
@@ -1789,7 +1792,8 @@ impl Entity {
             meta.write(&mut buf, &MinecraftVersion::V_1_21_11).unwrap();
         }
         buf.put_u8(255);
-        let current_players = self.world.load().players.read().await;
+        let world = self.world.load();
+        let current_players = world.players.read().await;
         for player in current_players.values() {
             if let ClientPlatform::Java(client) = &player.client {
                 let mut buf = Vec::new();
@@ -1809,7 +1813,12 @@ impl Entity {
         let dimension = Self::get_entity_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
-        if self.world.load().is_space_empty(aabb.contract_all(1.0E-7)).await {
+        if self
+            .world
+            .load()
+            .is_space_empty(aabb.contract_all(1.0E-7))
+            .await
+        {
             self.pose.store(pose);
             let dimension = Self::get_entity_dimensions(pose);
             self.bounding_box.store(aabb);

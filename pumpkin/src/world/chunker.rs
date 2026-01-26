@@ -81,8 +81,14 @@ pub async fn update_position(player: &Arc<Player>) {
 
     // Make sure the watched section and the chunk watcher updates are async atomic. We want to
     // ensure what we unload when the player disconnects is correct.
-    world.level.mark_chunks_as_newly_watched(&loading_chunks).await;
-    world.level.mark_chunks_as_not_watched(&unloading_chunks).await;
+    world
+        .level
+        .mark_chunks_as_newly_watched(&loading_chunks)
+        .await;
+    world
+        .level
+        .mark_chunks_as_not_watched(&unloading_chunks)
+        .await;
 
     if let ClientPlatform::Java(_) = &player.client {
         for chunk in &unloading_chunks {

@@ -511,7 +511,8 @@ impl NetherPortal {
                     && portal.was_already_valid()
                 {
                     // Use POI position for distance calculation (matches vanilla behavior)
-                    let dist = f64::from(target_pos.0.squared_distance_to(pos.0.x, pos.0.y, pos.0.z));
+                    let dist =
+                        f64::from(target_pos.0.squared_distance_to(pos.0.x, pos.0.y, pos.0.z));
                     let y = portal.lower_conor.0.y;
 
                     let is_better = match &best {
