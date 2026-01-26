@@ -64,7 +64,6 @@ use pumpkin_protocol::bedrock::client::start_game::CStartGame;
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
-use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
@@ -126,7 +125,6 @@ use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{Rng, rng};
 use scoreboard::Scoreboard;
-use serde::Serialize;
 use time::LevelTime;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
@@ -1683,11 +1681,7 @@ impl World {
                         MetaDataType::Byte,
                         config.skin_parts,
                     );
-                    let mut serializer_buf = Vec::new();
-
-                    let mut serializer = Serializer::new(&mut serializer_buf);
-                    meta.serialize(&mut serializer).unwrap();
-                    buf.extend(serializer_buf);
+                    meta.write(&mut buf, &client.version.load()).unwrap();
                 };
                 drop(config);
                 // END

@@ -7,11 +7,11 @@ use pumpkin_data::{
     packet::clientbound::CONFIG_UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},
 };
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::version::MinecraftVersion;
 
-#[packet(CONFIG_UPDATE_TAGS)]
+#[java_packet(CONFIG_UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {
     pub tags: &'a [pumpkin_data::tag::RegistryKey],
 }

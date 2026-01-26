@@ -168,6 +168,23 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
+    let packet_id_expr = parse_macro_input!(args as Expr);
+    let ast = parse_macro_input!(item as DeriveInput);
+
+    let name = &ast.ident;
+    let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
+
+    quote! {
+        #ast
+        impl #impl_generics crate::packet::MultiVersionJavaPacket for #name #ty_generics #where_clause {
+            const PACKET_ID: pumpkin_data::packet::PacketId = #packet_id_expr;
+        }
+    }
+    .into()
+}
+
+#[proc_macro_attribute]
 pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     let input_item = item.clone();
 

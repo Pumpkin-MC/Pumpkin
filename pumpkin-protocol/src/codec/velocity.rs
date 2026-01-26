@@ -1,10 +1,55 @@
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::VarInt;
+use crate::{
+    VarInt,
+    ser::{NetworkWriteExt, WritingError},
+};
 use serde::{Serialize, ser::Serializer};
 
 #[derive(Clone, Copy)]
 pub struct Velocity(pub Vector3<f64>);
+
+impl Velocity {
+    pub fn write<W: std::io::Write>(&self, writer: &mut W) -> Result<(), WritingError> {
+        let velocity = self.0;
+        let d = clamp_value(velocity.x);
+        let e = clamp_value(velocity.y);
+        let f = clamp_value(velocity.z);
+        let g = abs_max(d, abs_max(e, f));
+
+        if g < MIN_VELOCITY_MAGNITUDE {
+            return writer.write_slice(&[0u8]);
+        }
+
+        let l = g.ceil() as i64;
+        let bl = l > 3;
+
+        // The header byte: bits 0-1 are scale, bit 2 is the extension flag
+        let m = if bl { (l & 3) | 4 } else { l };
+
+        // Pack the 15-bit quantized components into a 64-bit long
+        // n (x): bits 3-17 | o (y): bits 18-32 | p (z): bits 33-47
+        let n = to_long(d / l as f64) << 3;
+        let o = to_long(e / l as f64) << 18;
+        let p = to_long(f / l as f64) << 33;
+
+        let packed_data: i64 = m | n | o | p;
+
+        writer
+            .write_all(&(packed_data as u16).to_le_bytes())
+            .unwrap(); // Write low 16 bits
+        writer
+            .write_all(&((packed_data >> 16) as i32).to_be_bytes())
+            .unwrap(); // Write next 32 bits
+
+        if bl {
+            let scale_tail = VarInt((l >> 2) as i32);
+            writer.write_var_int(&scale_tail)?;
+        }
+
+        Ok(())
+    }
+}
 
 const MAX_VELOCITY_CLAMP: f64 = 1.7179869183E10;
 const MIN_VELOCITY_MAGNITUDE: f64 = 3.051944088384301E-5;
@@ -28,47 +73,7 @@ fn to_long(value: f64) -> i64 {
 impl Serialize for Velocity {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::new();
-        let velocity = self.0;
-        let d = clamp_value(velocity.x);
-        let e = clamp_value(velocity.y);
-        let f = clamp_value(velocity.z);
-        let g = abs_max(d, abs_max(e, f));
-
-        if g < MIN_VELOCITY_MAGNITUDE {
-            buf.push(0u8);
-            return serializer.serialize_bytes(&buf);
-        }
-
-        // l is the scale factor
-        let l = g.ceil() as i64;
-        // bl is true if the scale factor is > 3 and needs VarInt extension
-        let bl = l > 3;
-
-        // m is the first byte of the packed data (low 3 bits of l + 4 if bl is true)
-        let m = if bl { l & 3 | 4 } else { l };
-
-        // Quantize and shift the velocity components (15 bits each)
-        let n: i64 = to_long(d / l as f64) << 3; // X shifted 3
-        let o: i64 = to_long(e / l as f64) << 18; // Y shifted 18
-        let p: i64 = to_long(f / l as f64) << 33; // Z shifted 33
-
-        // q is the packed 48-bit value (m + X + Y + Z)
-        let q: i64 = m | n | o | p;
-
-        // 1. Write first byte (low 8 bits)
-        buf.push(q as u8);
-
-        // 2. Write second byte (bits 8-15)
-        buf.push((q >> 8) as u8);
-
-        // 3. Write remaining 4 bytes (bits 16-47) as a Big Endian i32 (Java's writeInt)
-        buf.extend_from_slice(&((q >> 16) as i32).to_be_bytes());
-
-        // 4. Write VarInt for scale factor tail if needed
-        if bl {
-            VarInt::encode(&VarInt((l >> 2) as i32), &mut buf).unwrap();
-        }
-
+        self.write(&mut buf).unwrap();
         serializer.serialize_bytes(&buf)
     }
 }

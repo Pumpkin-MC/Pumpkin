@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_CHUNK_CACHE_CENTER;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
@@ -10,7 +10,7 @@ use crate::VarInt;
 /// focal point for loading and unloading chunks. It is typically sent when
 /// a player moves across a chunk boundary.
 #[derive(Serialize)]
-#[packet(PLAY_SET_CHUNK_CACHE_CENTER)]
+#[java_packet(PLAY_SET_CHUNK_CACHE_CENTER)]
 pub struct CCenterChunk {
     /// The X coordinate of the center chunk.
     pub chunk_x: VarInt,

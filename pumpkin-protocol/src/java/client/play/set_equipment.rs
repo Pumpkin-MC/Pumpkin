@@ -5,7 +5,7 @@ use crate::{
     ser::{NetworkWriteExt, serializer::Serializer},
 };
 use pumpkin_data::packet::clientbound::PLAY_SET_EQUIPMENT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::version::MinecraftVersion;
 use serde::Serialize;
 
@@ -14,7 +14,7 @@ use crate::{
     codec::{item_stack_seralizer::ItemStackSerializer, var_int::VarInt},
 };
 
-#[packet(PLAY_SET_EQUIPMENT)]
+#[java_packet(PLAY_SET_EQUIPMENT)]
 pub struct CSetEquipment {
     pub entity_id: VarInt,
     pub equipment: Vec<(i8, ItemStackSerializer<'static>)>,

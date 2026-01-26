@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_INTERACT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
@@ -10,7 +10,7 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[packet(PLAY_INTERACT)]
+#[java_packet(PLAY_INTERACT)]
 pub struct SInteract {
     pub entity_id: VarInt,
     pub r#type: VarInt,

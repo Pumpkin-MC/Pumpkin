@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_DAMAGE_EVENT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;
 
@@ -12,7 +12,7 @@ use crate::VarInt;
 /// with specific details about the damage source to ensure the visual feedback
 /// matches the cause.
 #[derive(Serialize)]
-#[packet(PLAY_DAMAGE_EVENT)]
+#[java_packet(PLAY_DAMAGE_EVENT)]
 pub struct CDamageEvent {
     /// The Entity ID of the entity taking damage.
     pub entity_id: VarInt,

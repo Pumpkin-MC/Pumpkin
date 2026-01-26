@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_ROTATE_HEAD;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
@@ -11,7 +11,7 @@ use crate::VarInt;
 /// required to make an entity (like a player or a mob) look in a
 /// specific direction without necessarily turning its entire body.
 #[derive(Serialize, Deserialize)]
-#[packet(PLAY_ROTATE_HEAD)]
+#[java_packet(PLAY_ROTATE_HEAD)]
 pub struct CHeadRot {
     /// The Entity ID of the entity whose head is rotating.
     pub entity_id: VarInt,

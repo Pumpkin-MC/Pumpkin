@@ -1,9 +1,9 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_BORDER_CENTER;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[packet(PLAY_SET_BORDER_CENTER)]
+#[java_packet(PLAY_SET_BORDER_CENTER)]
 pub struct CSetBorderCenter {
     pub x: f64,
     pub z: f64,

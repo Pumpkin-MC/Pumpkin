@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::LOGIN_HELLO;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::{Deserialize, Serialize};
 
 /// Sent by the server to initiate the encryption handshake.
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// verification token, allowing the client to generate a shared secret
 /// for secure communication.
 #[derive(Serialize, Deserialize)]
-#[packet(LOGIN_HELLO)]
+#[java_packet(LOGIN_HELLO)]
 pub struct CEncryptionRequest<'a> {
     /// The server's ID string. In modern Minecraft, this is usually
     /// an empty string unless the server is using legacy authentication.

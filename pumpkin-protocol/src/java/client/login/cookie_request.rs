@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::LOGIN_COOKIE_REQUEST;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 use serde::Serialize;
 
@@ -8,7 +8,7 @@ use serde::Serialize;
 /// This occurs during the login phase, allowing the server to identify
 /// returning players or retrieve session data stored during a previous visit.
 #[derive(Serialize)]
-#[packet(LOGIN_COOKIE_REQUEST)]
+#[java_packet(LOGIN_COOKIE_REQUEST)]
 pub struct CLoginCookieRequest<'a> {
     /// The unique identifier of the cookie being requested.
     pub key: &'a ResourceLocation,

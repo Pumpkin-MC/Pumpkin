@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_CHANGE_DIFFICULTY;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 /// Notifies the client of a change in the world's difficulty level or lock status.
@@ -8,7 +8,7 @@ use serde::Serialize;
 /// and client-side behavior (though actual game logic like mob damage is
 /// primarily handled by the server).
 #[derive(Serialize)]
-#[packet(PLAY_CHANGE_DIFFICULTY)]
+#[java_packet(PLAY_CHANGE_DIFFICULTY)]
 pub struct CChangeDifficulty {
     /// The current difficulty level of the world.
     ///

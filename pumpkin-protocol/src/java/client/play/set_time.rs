@@ -1,9 +1,9 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_TIME;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[packet(PLAY_SET_TIME)]
+#[java_packet(PLAY_SET_TIME)]
 pub struct CUpdateTime {
     pub world_age: i64,
     pub time_of_day: i64,

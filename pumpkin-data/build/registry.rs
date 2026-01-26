@@ -86,6 +86,7 @@ pub(crate) fn build() -> TokenStream {
         impl Registry {
             pub fn get_synced(version: MinecraftVersion) -> Vec<Self> {
                 let static_regs = match version {
+                    MinecraftVersion::V_1_21_7 => REGISTRIES_1_21_9,
                     MinecraftVersion::V_1_21_9 => REGISTRIES_1_21_9,
                     _ => REGISTRIES_1_21_11,
                 };

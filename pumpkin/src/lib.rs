@@ -424,7 +424,12 @@ impl PumpkinServer {
                                     }
                                     player.remove().await;
                                     server_clone.remove_player(&player).await;
-                                }
+                                    if let Err(e) = server_clone.player_data_storage
+                                        .handle_player_leave(&player)
+                                        .await {
+                                            log::error!("Failed to save player data on disconnect: {e}");
+                                        }
+                                    }
                                 },
                             }
                         });

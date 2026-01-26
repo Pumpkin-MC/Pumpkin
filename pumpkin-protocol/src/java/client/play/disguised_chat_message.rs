@@ -1,7 +1,7 @@
 use pumpkin_data::packet::clientbound::PLAY_DISGUISED_CHAT;
 use pumpkin_util::text::TextComponent;
 
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
@@ -12,7 +12,7 @@ use crate::VarInt;
 /// this packet bypasses the player-to-player chat signing requirements while
 /// still allowing the client to format the message using the standard chat registry.
 #[derive(Serialize)]
-#[packet(PLAY_DISGUISED_CHAT)]
+#[java_packet(PLAY_DISGUISED_CHAT)]
 pub struct CDisguisedChatMessage<'a> {
     /// The raw content of the message.
     pub message: &'a TextComponent,

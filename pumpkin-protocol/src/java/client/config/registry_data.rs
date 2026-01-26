@@ -1,11 +1,11 @@
 use crate::ser::network_serialize_no_prefix;
 use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[packet(CONFIG_REGISTRY_DATA)]
+#[java_packet(CONFIG_REGISTRY_DATA)]
 pub struct CRegistryData<'a> {
     pub registry_id: &'a ResourceLocation,
     pub entries: &'a [RegistryEntry],

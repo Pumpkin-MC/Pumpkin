@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::CONFIG_SELECT_KNOWN_PACKS;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::KnownPack;
 
 #[derive(Serialize)]
-#[packet(CONFIG_SELECT_KNOWN_PACKS)]
+#[java_packet(CONFIG_SELECT_KNOWN_PACKS)]
 pub struct CKnownPacks<'a> {
     pub known_packs: &'a [KnownPack<'a>],
 }

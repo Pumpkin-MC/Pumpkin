@@ -10,7 +10,7 @@ use crate::{
 
 pub mod deserializer;
 use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
-use pumpkin_util::resource_location::ResourceLocation;
+use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
 use thiserror::Error;
 pub mod serializer;
 
@@ -246,6 +246,7 @@ pub trait NetworkWriteExt {
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
     fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError>;
+    fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError>;
 
     fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError> {
         let (first, second) = data.as_u64_pair();
@@ -359,6 +360,10 @@ impl<W: Write> NetworkWriteExt for W {
 
     fn write_string(&mut self, data: &str) -> Result<(), WritingError> {
         self.write_string_bounded(data, i16::MAX as usize)
+    }
+
+    fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError> {
+        self.write_i64_be(pos.as_long())
     }
 
     fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError> {

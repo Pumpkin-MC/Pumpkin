@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::LOGIN_LOGIN_FINISHED;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::Property;
@@ -9,7 +9,7 @@ use crate::Property;
 /// This packet provides the client with its official UUID and username as
 /// recognized by the server, along with any associated skin or cape properties.
 #[derive(Serialize)]
-#[packet(LOGIN_LOGIN_FINISHED)]
+#[java_packet(LOGIN_LOGIN_FINISHED)]
 pub struct CLoginSuccess<'a> {
     /// The unique identifier assigned to the player.
     pub uuid: &'a uuid::Uuid,

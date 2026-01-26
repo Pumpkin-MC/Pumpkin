@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_EXPLODE;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;
 
@@ -11,7 +11,7 @@ use crate::{IdOr, SoundEvent, codec::var_int::VarInt};
 /// effects of an explosion in a single call. It triggers the explosion particles,
 /// plays the sound at the source, and applies knockback to the player.
 #[derive(Serialize)]
-#[packet(PLAY_EXPLODE)]
+#[java_packet(PLAY_EXPLODE)]
 pub struct CExplosion {
     /// The center coordinates of the explosion.
     pub center: Vector3<f64>,

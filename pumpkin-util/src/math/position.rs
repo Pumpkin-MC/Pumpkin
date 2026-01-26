@@ -366,14 +366,17 @@ impl BlockPos {
     pub fn squared_distance(&self, other: Self) -> i32 {
         self.0.squared_distance_to_vec(other.0)
     }
+
+    pub fn as_long(&self) -> i64 {
+        ((self.0.x as i64 & 0x3FFFFFF) << 38)
+            | ((self.0.z as i64 & 0x3FFFFFF) << 12)
+            | (self.0.y as i64 & 0xFFF)
+    }
 }
 
 impl Serialize for BlockPos {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let long = ((self.0.x as i64 & 0x3FFFFFF) << 38)
-            | ((self.0.z as i64 & 0x3FFFFFF) << 12)
-            | (self.0.y as i64 & 0xFFF);
-        serializer.serialize_i64(long)
+        serializer.serialize_i64(self.as_long())
     }
 }
 

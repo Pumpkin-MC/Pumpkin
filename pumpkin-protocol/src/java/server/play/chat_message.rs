@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_CHAT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::version::MinecraftVersion;
 
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[packet(PLAY_CHAT)]
+#[java_packet(PLAY_CHAT)]
 pub struct SChatMessage {
     pub message: String,
     pub timestamp: i64,

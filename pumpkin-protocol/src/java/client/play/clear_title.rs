@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_CLEAR_TITLES;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 /// Removes any currently displayed Title or Subtitle from the player's screen.
@@ -7,7 +7,7 @@ use serde::Serialize;
 /// This packet is used to immediately hide titles that are currently in their
 /// "stay" or "fade-out" phases.
 #[derive(Serialize)]
-#[packet(PLAY_CLEAR_TITLES)]
+#[java_packet(PLAY_CLEAR_TITLES)]
 pub struct CClearTitle {
     /// If true, the client also resets the title timings (fade-in, stay, fade-out)
     /// to their default values (10, 70, 20 ticks).

@@ -205,6 +205,8 @@ pub(crate) fn build() -> TokenStream {
             });
             match_get_map
                 .push(quote! { MinecraftVersion::V_1_21_9 => tags_1_21_9::get_map(tag_category) });
+            match_get_map
+                .push(quote! { MinecraftVersion::V_1_21_7 => tags_1_21_9::get_map(tag_category) });
         }
     }
 

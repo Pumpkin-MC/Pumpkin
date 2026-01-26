@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_EVENT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use serde::{Deserialize, Serialize};
 
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// block breaking particles, firework explosions, or ambient sounds
 /// like doors opening and portals humming.
 #[derive(Serialize, Deserialize)]
-#[packet(PLAY_LEVEL_EVENT)]
+#[java_packet(PLAY_LEVEL_EVENT)]
 pub struct CLevelEvent {
     /// The ID of the event to trigger.
     /// Event IDs are generally divided into Sound Events (1000s) and

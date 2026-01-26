@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_INITIALIZE_BORDER;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::{VarInt, codec::var_long::VarLong};
@@ -10,7 +10,7 @@ use crate::{VarInt, codec::var_long::VarLong};
 /// It synchronizes the current position, size, and all warning parameters
 /// to ensure the client-side visual barrier matches the server's authority.
 #[derive(Serialize)]
-#[packet(PLAY_INITIALIZE_BORDER)]
+#[java_packet(PLAY_INITIALIZE_BORDER)]
 pub struct CInitializeWorldBorder {
     /// The X coordinate of the center of the world border.
     pub x: f64,

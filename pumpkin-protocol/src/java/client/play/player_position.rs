@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_POSITION;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
 /// Commonly known as the "Teleport Packet," this is sent by the server to
 /// force a change in the player's location. The client must respond with a
 /// `Teleport Confirm` packet matching the `teleport_id`.
-#[packet(PLAY_PLAYER_POSITION)]
+#[java_packet(PLAY_PLAYER_POSITION)]
 pub struct CPlayerPosition {
     /// A unique ID for this teleport. The client must echo this back
     /// to confirm the teleport was processed.

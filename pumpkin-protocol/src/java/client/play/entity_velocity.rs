@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_ENTITY_MOTION;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;
 
@@ -10,7 +10,7 @@ use crate::{VarInt, codec::velocity::Velocity};
 /// This packet informs the client of a sudden change in an entity's movement,
 /// such as knockback from an attack, explosions, or being launched by a piston.
 #[derive(Serialize)]
-#[packet(PLAY_SET_ENTITY_MOTION)]
+#[java_packet(PLAY_SET_ENTITY_MOTION)]
 pub struct CEntityVelocity {
     /// The Entity ID of the entity whose velocity is being set
     pub entity_id: VarInt,

@@ -1,12 +1,12 @@
 use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_SET_OBJECTIVE;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
 
 use crate::{ClientPacket, NumberFormat, VarInt, WritingError, ser::NetworkWriteExt};
 
-#[packet(PLAY_SET_OBJECTIVE)]
+#[java_packet(PLAY_SET_OBJECTIVE)]
 pub struct CUpdateObjectives {
     pub objective_name: String,
     pub mode: u8,

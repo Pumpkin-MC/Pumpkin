@@ -4,7 +4,7 @@ use pumpkin_util::math::{
     vector3::{self, Vector3},
 };
 
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::{Serialize, ser::SerializeTuple};
 
 use crate::codec::{var_int::VarInt, var_long::VarLong};
@@ -14,7 +14,7 @@ use crate::codec::{var_int::VarInt, var_long::VarLong};
 /// This packet is much more efficient than sending multiple individual
 /// `CBlockUpdate` packets when many changes occur in the same area
 /// (e.g., explosions, structure generation, or large-scale terraforming).
-#[packet(PLAY_SECTION_BLOCKS_UPDATE)]
+#[java_packet(PLAY_SECTION_BLOCKS_UPDATE)]
 pub struct CMultiBlockUpdate {
     /// The coordinates of the chunk section being updated.
     /// Calculated as (block_coord >> 4).

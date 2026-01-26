@@ -2,11 +2,11 @@ use crate::VarInt;
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
 
 use pumpkin_data::packet::clientbound::PLAY_SET_PLAYER_INVENTORY;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[packet(PLAY_SET_PLAYER_INVENTORY)]
+#[java_packet(PLAY_SET_PLAYER_INVENTORY)]
 pub struct CSetPlayerInventory<'a> {
     pub slot: VarInt,
     pub item: &'a ItemStackSerializer<'a>,

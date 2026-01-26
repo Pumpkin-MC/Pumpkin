@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_HURT_ANIMATION;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
@@ -10,7 +10,7 @@ use crate::VarInt;
 /// camera shake or model tilt. It is typically sent immediately after
 /// an entity's health is reduced.
 #[derive(Serialize, Deserialize)]
-#[packet(PLAY_HURT_ANIMATION)]
+#[java_packet(PLAY_HURT_ANIMATION)]
 pub struct CHurtAnimation {
     /// The Entity ID of the entity that was hurt.
     pub entity_id: VarInt,

@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_DATA;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[packet(PLAY_CONTAINER_SET_DATA)]
+#[java_packet(PLAY_CONTAINER_SET_DATA)]
 pub struct CSetContainerProperty {
     pub window_id: VarInt,
     pub property: i16,

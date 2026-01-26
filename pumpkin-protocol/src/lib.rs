@@ -21,7 +21,7 @@ use serde::{
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-use crate::packet::Packet;
+use crate::packet::{MultiVersionJavaPacket, Packet};
 
 pub mod bedrock;
 pub mod codec;
@@ -311,7 +311,7 @@ pub struct RawPacket {
     pub payload: Bytes,
 }
 
-pub trait ClientPacket: Packet {
+pub trait ClientPacket: MultiVersionJavaPacket {
     fn write_packet_data(
         &self,
         write: impl Write,
@@ -319,7 +319,7 @@ pub trait ClientPacket: Packet {
     ) -> Result<(), WritingError>;
 }
 
-pub trait ServerPacket: Packet + Sized {
+pub trait ServerPacket: MultiVersionJavaPacket + Sized {
     fn read(read: impl Read) -> Result<Self, ReadingError>;
 }
 

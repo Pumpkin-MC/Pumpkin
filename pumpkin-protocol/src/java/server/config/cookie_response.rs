@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use pumpkin_data::packet::serverbound::CONFIG_COOKIE_RESPONSE;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 
 use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
@@ -13,7 +13,7 @@ const MAX_COOKIE_LENGTH: usize = 5120;
 ///
 /// Cookies allow servers to store small amounts of data on the client side,
 /// which can be retrieved later (e.g., for session tracking or preferences)
-#[packet(CONFIG_COOKIE_RESPONSE)]
+#[java_packet(CONFIG_COOKIE_RESPONSE)]
 pub struct SConfigCookieResponse {
     /// The unique identifier for the cookie being returned
     pub key: ResourceLocation,

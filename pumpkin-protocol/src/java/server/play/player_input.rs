@@ -1,9 +1,9 @@
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_INPUT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
-#[packet(PLAY_PLAYER_INPUT)]
+#[java_packet(PLAY_PLAYER_INPUT)]
 pub struct SPlayerInput {
     // Yep, exactly how it looks like
     pub input: i8,

@@ -1,4 +1,5 @@
 use crate::entity::item::ItemEntity;
+use crate::net::ClientPlatform;
 use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use bytes::BufMut;
@@ -26,7 +27,6 @@ use pumpkin_protocol::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
         CUpdateEntityRot, Metadata,
     },
-    ser::serializer::Serializer,
 };
 use pumpkin_util::math::vector3::Axis;
 use pumpkin_util::math::{
@@ -39,6 +39,7 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_util::version::MinecraftVersion;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
@@ -1636,15 +1637,23 @@ impl Entity {
     pub async fn send_meta_data<T: Serialize>(&self, meta: &[Metadata<T>]) {
         let mut buf = Vec::new();
         for meta in meta {
-            let mut serializer_buf = Vec::new();
-            let mut serializer = Serializer::new(&mut serializer_buf);
-            meta.serialize(&mut serializer).unwrap();
-            buf.extend(serializer_buf);
+            meta.write(&mut buf, &MinecraftVersion::V_1_21_11).unwrap();
         }
         buf.put_u8(255);
-        self.world
-            .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), buf.into()))
-            .await;
+        let current_players = self.world.players.read().await;
+        for player in current_players.values() {
+            if let ClientPlatform::Java(client) = &player.client {
+                let mut buf = Vec::new();
+                for meta in meta {
+                    meta.write(&mut buf, &client.version.load()).unwrap();
+                }
+                buf.put_u8(255);
+                player
+                    .client
+                    .enqueue_packet(&CSetEntityMetadata::new(self.entity_id.into(), buf.into()))
+                    .await;
+            }
+        }
     }
 
     pub async fn set_pose(&self, pose: EntityPose) {

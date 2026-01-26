@@ -1,12 +1,12 @@
 use pumpkin_data::packet::serverbound::PLAY_SET_COMMAND_BLOCK;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use serde::Deserialize;
 
 use crate::codec::var_int::VarInt;
 
 #[derive(Deserialize)]
-#[packet(PLAY_SET_COMMAND_BLOCK)]
+#[java_packet(PLAY_SET_COMMAND_BLOCK)]
 pub struct SSetCommandBlock {
     pub pos: BlockPos,
     pub command: String,

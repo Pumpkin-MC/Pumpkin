@@ -1,7 +1,7 @@
 use pumpkin_data::packet::clientbound::PLAY_LOGIN;
 use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
 
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
@@ -13,7 +13,7 @@ use crate::VarInt;
 /// initializes the player's world view, dimension settings, and local game
 /// rules. Once received, the client begins rendering the world.
 #[derive(Serialize)]
-#[packet(PLAY_LOGIN)]
+#[java_packet(PLAY_LOGIN)]
 pub struct CLogin<'a> {
     /// The unique ID assigned to the player for the current session.
     pub entity_id: i32,

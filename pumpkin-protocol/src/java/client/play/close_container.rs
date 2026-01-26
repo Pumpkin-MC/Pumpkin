@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_CLOSE;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
@@ -10,7 +10,7 @@ use crate::VarInt;
 /// if the player moves too far away from a chest or if an NPC's trade window
 /// is invalidated.
 #[derive(Serialize)]
-#[packet(PLAY_CONTAINER_CLOSE)]
+#[java_packet(PLAY_CONTAINER_CLOSE)]
 pub struct CCloseContainer {
     /// The ID of the container window to close.
     ///

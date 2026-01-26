@@ -1,13 +1,13 @@
 use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_TELEPORT_ENTITY;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
 
 use crate::{ClientPacket, PositionFlag, VarInt, WritingError, ser::NetworkWriteExt};
 
 /// Only used when teleporting a player's vehicle, this packet is sent to the player.
-#[packet(PLAY_TELEPORT_ENTITY)]
+#[java_packet(PLAY_TELEPORT_ENTITY)]
 pub struct CTeleportEntity<'a> {
     pub entity_id: VarInt,
     pub position: Vector3<f64>,
