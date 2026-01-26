@@ -97,6 +97,8 @@ pub struct Server {
     pub tick_count: AtomicI32,
     /// Random unique Server ID used by Bedrock Edition
     pub server_guid: u64,
+    /// Player idle timeout in minutes (0 = disabled)
+    pub player_idle_timeout: AtomicI32,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
@@ -205,6 +207,7 @@ impl Server {
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
             server_guid: rand::random(),
+            player_idle_timeout: AtomicI32::new(0),
             mojang_public_keys: Mutex::new(mojang_public_keys),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info: level_info.clone(),

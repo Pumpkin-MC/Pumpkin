@@ -42,6 +42,7 @@ mod pumpkin;
 mod say;
 mod seed;
 mod setblock;
+mod setidletimeout;
 mod setworldspawn;
 mod stop;
 mod stopsound;
@@ -138,6 +139,10 @@ pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDis
         "minecraft:command.whitelist",
     );
     dispatcher.register(transfer::init_command_tree(), "minecraft:command.transfer");
+    dispatcher.register(
+        setidletimeout::init_command_tree(),
+        "minecraft:command.setidletimeout",
+    );
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
 
@@ -393,6 +398,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap();
 }
 
+#[expect(clippy::too_many_lines)]
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Three
     registry
@@ -490,6 +496,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.transfer",
             "Transfers the player to another server",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.setidletimeout",
+            "Sets the time before idle players are kicked",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();
