@@ -17,6 +17,7 @@ doctest = false
 
 [dependencies]
 # pumpkin
+arc-swap.workspace = true
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true

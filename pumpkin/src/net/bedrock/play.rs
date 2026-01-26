@@ -169,7 +169,7 @@ impl BedrockClient {
                         message, gameprofile.name.clone()
                     );
 
-                    entity.world.broadcast_editioned(&je_packet, &be_packet).await;
+                    entity.world.load().broadcast_editioned(&je_packet, &be_packet).await;
                 }
             }
         }}

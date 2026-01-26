@@ -144,6 +144,7 @@ impl LivingEntity {
             .collect();
         self.entity
             .world
+            .load()
             .broadcast_packet_except(
                 &[self.entity.entity_uuid],
                 &CSetEquipment::new(self.entity_id().into(), equipment),
@@ -156,6 +157,7 @@ impl LivingEntity {
         // TODO: Only nearby
         self.entity
             .world
+            .load()
             .broadcast_packet_all(&CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
@@ -233,6 +235,7 @@ impl LivingEntity {
         self.active_effects.lock().await.remove(&effect_type);
         self.entity
             .world
+            .load()
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
     }
@@ -249,7 +252,7 @@ impl LivingEntity {
 
     pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
         let block_pos = self.entity.block_pos.load();
-        let block = self.entity.world.get_block(&block_pos).await;
+        let block = self.entity.world.load().get_block(&block_pos).await;
         (
             block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING),
             block,
@@ -259,13 +262,13 @@ impl LivingEntity {
     // Check if the entity is in water
     pub async fn is_in_water(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
-        self.entity.world.get_block(&block_pos).await == &Block::WATER
+        self.entity.world.load().get_block(&block_pos).await == &Block::WATER
     }
 
     // Check if the entity is in powder snow
     pub async fn is_in_powder_snow(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
-        self.entity.world.get_block(&block_pos).await == &Block::POWDER_SNOW
+        self.entity.world.load().get_block(&block_pos).await == &Block::POWDER_SNOW
     }
 
     pub async fn should_prevent_fall_damage(&self) -> bool {
@@ -285,7 +288,8 @@ impl LivingEntity {
             }
 
             if block == &Block::NETHER_PORTAL {
-                let level_info = self.entity.world.level_info.read().await;
+                let world = self.entity.world.load();
+                let level_info = world.level_info.read().await;
 
                 return level_info.game_rules.players_nether_portal_default_delay == 0;
             }
@@ -295,7 +299,7 @@ impl LivingEntity {
     }
 
     pub async fn should_prevent_fall_damage_in_area(&self) -> bool {
-        let world = &self.entity.world;
+        let world = self.entity.world.load();
         let block_pos = self.entity.block_pos.load().down();
         let entity_pos = self.entity.pos.load();
 
@@ -595,6 +599,7 @@ impl LivingEntity {
             && !self
                 .entity
                 .world
+                .load()
                 .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
                 .await
         {
@@ -792,7 +797,7 @@ impl LivingEntity {
             {
                 return;
             }
-            let world = &self.entity.world;
+            let world = self.entity.world.load();
             let block = world
                 .get_block(&self.entity.get_pos_with_y_offset(0.2).await.0)
                 .await;
@@ -800,7 +805,7 @@ impl LivingEntity {
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block
                     .on_landed_upon(OnLandedUponArgs {
-                        world,
+                        world: &world,
                         fall_distance,
                         entity: caller.as_ref(),
                     })
@@ -896,7 +901,7 @@ impl LivingEntity {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) {
-        let world = &self.entity.world;
+        let world = self.entity.world.load();
         let dyn_self = world
             .get_entity_by_id(self.entity.entity_id)
             .await
@@ -952,7 +957,7 @@ impl LivingEntity {
         if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
             let pos = self.entity.block_pos.load();
             for stack in loot_table.get_loot(params) {
-                self.entity.world.drop_stack(&pos, stack).await;
+                self.entity.world.load().drop_stack(&pos, stack).await;
             }
         }
     }
@@ -985,6 +990,7 @@ impl LivingEntity {
                 self.set_health(1.0).await;
                 self.entity
                     .world
+                    .load()
                     .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
                     .await;
                 return true;
@@ -1163,7 +1169,7 @@ impl EntityBase for LivingEntity {
                 return false; // Fire resistance
             }
 
-            let world = &self.entity.world;
+            let world = self.entity.world.load();
 
             let last_damage = self.last_damage_taken.load();
             let play_sound;
@@ -1190,8 +1196,7 @@ impl EntityBase for LivingEntity {
                     .await;
             }
 
-            self.entity
-                .world
+            world
                 .broadcast_packet_all(&CDamageEvent::new(
                     self.entity.entity_id.into(),
                     damage_type.id.into(),
@@ -1202,8 +1207,7 @@ impl EntityBase for LivingEntity {
                 .await;
 
             if play_sound {
-                self.entity
-                    .world
+                world
                     .play_sound(
                         // Sound::EntityPlayerHurt,
                         Sound::EntityGenericHurt,
@@ -1296,6 +1300,7 @@ impl EntityBase for LivingEntity {
                     // Spawn Death particles
                     self.entity
                         .world
+                        .load()
                         .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
                         .await;
                     self.entity.remove().await;

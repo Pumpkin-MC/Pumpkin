@@ -423,11 +423,11 @@ impl JavaClient {
                 let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
                 let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
                 // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
-                let world = &entity.world;
+                let world = entity.world.load_full();
 
                 // TODO: Warn when player moves to quickly
                 if !self
-                    .sync_position(player, world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
+                    .sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
                     .await
                 {
                     // Send the new position to all other players.
@@ -518,7 +518,7 @@ impl JavaClient {
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
-        let world = &entity.world;
+        let world = entity.world.load_full();
         let packet =
             CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
         world
@@ -875,7 +875,7 @@ impl JavaClient {
                 );
 
                 let entity = &player.living_entity.entity;
-                let world = &entity.world;
+                let world = entity.world.load_full();
                 if server.basic_config.allow_chat_reports {
                     world.broadcast_secure_player_chat(player, &chat_message, decorated_message).await;
                 } else {
@@ -1183,7 +1183,7 @@ impl JavaClient {
 
                 // TODO: set as camera entity when spectator
 
-                let world = &player_entity.world;
+                let world = player_entity.world.load_full();
                 let player_victim = world.get_player_by_id(entity_id.0).await;
                 if entity_id.0 == player.entity_id() {
                     // This can't be triggered from a non-modded client.
@@ -1266,7 +1266,7 @@ impl JavaClient {
                     }
                     let position = player_action.position;
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world;
+                    let world = entity.world.load_full();
                     let (block, state) = world.get_block_and_state(&position).await;
 
                     let inventory = player.inventory();
@@ -1297,7 +1297,7 @@ impl JavaClient {
                             .await;
                         server
                             .block_registry
-                            .broken(world, block, player, &position, server, state)
+                            .broken(&world, block, player, &position, server, state)
                             .await;
                         self.update_sequence(player, player_action.sequence.0);
                         return;
@@ -1320,7 +1320,7 @@ impl JavaClient {
                                 .await;
                             server
                                 .block_registry
-                                .broken(world, block, player, &position, server, broken_state)
+                                .broken(&world, block, player, &position, server, broken_state)
                                 .await;
                             player.apply_tool_damage_for_block_break(broken_state).await;
                         } else {
@@ -1348,6 +1348,7 @@ impl JavaClient {
                     let entity = &player.living_entity.entity;
                     entity
                         .world
+                        .load()
                         .set_block_breaking(entity, player_action.position, -1)
                         .await;
                     self.update_sequence(player, player_action.sequence.0);
@@ -1366,7 +1367,7 @@ impl JavaClient {
 
                     // Block break & play sound
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world;
+                    let world = entity.world.load_full();
 
                     player.mining.store(false, Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
@@ -1389,7 +1390,7 @@ impl JavaClient {
 
                     server
                         .block_registry
-                        .broken(world, block, player, &location, server, state)
+                        .broken(&world, block, player, &location, server, state)
                         .await;
                     player.apply_tool_damage_for_block_break(state).await;
 
@@ -1508,7 +1509,7 @@ impl JavaClient {
         };
 
         let entity = &player.living_entity.entity;
-        let world = &entity.world;
+        let world = entity.world.load_full();
         let block = world.get_block(&position).await;
 
         let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
@@ -1522,7 +1523,7 @@ impl JavaClient {
                     &cursor_pos,
                     &face,
                     &item,
-                    world,
+                    &world,
                     block,
                     server,
                 )
@@ -1637,7 +1638,7 @@ impl JavaClient {
     }
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
-        let world = &player.living_entity.entity.world;
+        let world = player.living_entity.entity.world.load_full();
         let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
             return;
         };
@@ -1950,7 +1951,7 @@ impl JavaClient {
         }
 
         let clicked_block_pos = BlockPos(location.0);
-        let world = &entity.world;
+        let world = entity.world.load_full();
 
         let (clicked_block, clicked_block_state) =
             world.get_block_and_state(&clicked_block_pos).await;
@@ -1959,7 +1960,7 @@ impl JavaClient {
             world
                 .block_registry
                 .can_update_at(
-                    world,
+                    &world,
                     clicked_block,
                     clicked_block_state.id,
                     &clicked_block_pos,
@@ -1993,7 +1994,7 @@ impl JavaClient {
                     world
                         .block_registry
                         .can_update_at(
-                            world,
+                            &world,
                             previous_block,
                             previous_block_state.id,
                             &block_pos,
@@ -2030,8 +2031,8 @@ impl JavaClient {
             .block_registry
             .can_place_at(
                 Some(server),
-                Some(world),
-                world.as_ref(),
+                Some(&*world),
+                &*world,
                 Some(player),
                 block,
                 block.default_state,
@@ -2048,7 +2049,7 @@ impl JavaClient {
             .block_registry
             .on_place(
                 server,
-                world,
+                &world,
                 player,
                 block,
                 &final_block_pos,
@@ -2080,7 +2081,7 @@ impl JavaClient {
 
         server
             .block_registry
-            .player_placed(world, block, new_state, &final_block_pos, face, player)
+            .player_placed(&world, block, new_state, &final_block_pos, face, player)
             .await;
 
         // The block was placed successfully, so decrement their inventory

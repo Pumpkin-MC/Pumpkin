@@ -163,7 +163,7 @@ impl CommandSender {
         match self {
             // TODO: maybe return first world when console
             Self::Console | Self::Rcon(..) => None,
-            Self::Player(p) => Some(p.living_entity.entity.world.clone()),
+            Self::Player(p) => Some(p.living_entity.entity.world.load_full()),
             Self::CommandBlock(_, w) => Some(w.clone()),
         }
     }

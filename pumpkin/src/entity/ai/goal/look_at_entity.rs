@@ -92,7 +92,7 @@ impl Goal for LookAtEntityGoal {
                 }
             }
 
-            let world = &mob_entity.living_entity.entity.world;
+            let world = mob_entity.living_entity.entity.world.load();
             let mob_pos = mob_entity.living_entity.entity.pos.load();
 
             if *self.target_type == EntityType::PLAYER {

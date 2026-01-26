@@ -164,6 +164,7 @@ impl ChunkManager {
     }
 
     /// Gets the current world for chunk loading.
+    #[must_use]
     pub fn world(&self) -> &Arc<World> {
         &self.world
     }
@@ -686,11 +687,11 @@ impl Player {
 
         if victim.get_living_entity().is_some() {
             let mut knockback_strength = 1.0;
-            player_attack_sound(&pos, world, attack_type).await;
+            player_attack_sound(&pos, &world, attack_type).await;
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, world, &pos).await;
+                    combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
                 }
                 _ => {}
             }
@@ -879,7 +880,7 @@ impl Player {
             .expect("Player waking up should have it's respawn point set on the bed.");
 
         let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position).await;
-        BedBlock::set_occupied(false, world, bed, &respawn_point.position, bed_state).await;
+        BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
 
         self.living_entity
             .entity
@@ -1074,7 +1075,7 @@ impl Player {
             } else {
                 self.continue_mining(
                     *pos,
-                    world,
+                    &world,
                     state,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
@@ -1184,8 +1185,8 @@ impl Player {
         self.living_entity.entity.entity_id
     }
 
-    pub fn world(&self) -> &Arc<World> {
-        &self.living_entity.entity.world
+    pub fn world(&self) -> Arc<World> {
+        self.living_entity.entity.world.load_full()
     }
 
     pub fn position(&self) -> Vector3<f64> {
@@ -1402,7 +1403,7 @@ impl Player {
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
-        let current_world = self.living_entity.entity.world.clone();
+        let current_world = self.living_entity.entity.world.load_full();
         let yaw = yaw.unwrap_or(new_world.level_info.read().await.spawn_yaw);
         let pitch = pitch.unwrap_or(new_world.level_info.read().await.spawn_pitch);
 
@@ -1434,6 +1435,8 @@ impl Player {
                 self.unload_watched_chunks(&current_world).await;
 
                 self.chunk_manager.lock().await.change_world(&current_world.level, new_world.clone());
+                // Update the entity's world reference for correct dimension-based operations
+                self.living_entity.entity.set_world(new_world.clone());
 
                 let last_pos = self.living_entity.entity.last_pos.load();
                 let death_dimension = ResourceLocation::from(self.world().dimension.minecraft_name);
@@ -1676,6 +1679,7 @@ impl Player {
                 self.living_entity
                     .entity
                     .world
+                    .load()
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
                         PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
                         &[pumpkin_protocol::java::client::play::Player {
@@ -1792,7 +1796,7 @@ impl Player {
     pub async fn drop_item(&self, item_stack: ItemStack) {
         let item_pos = self.living_entity.entity.pos.load()
             + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
-        let entity = Entity::new(self.world().clone(), item_pos, &EntityType::ITEM);
+        let entity = Entity::new(self.world(), item_pos, &EntityType::ITEM);
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
         let yaw = f64::from(self.living_entity.entity.yaw.load()).to_radians();
@@ -2587,7 +2591,7 @@ impl EntityBase for Player {
         world: Arc<World>,
     ) -> TeleportFuture {
         Box::pin(async move {
-            if Arc::ptr_eq(&world, self.world()) {
+            if Arc::ptr_eq(&world, &self.world()) {
                 // Same world
                 let yaw = yaw.unwrap_or(self.living_entity.entity.yaw.load());
                 let pitch = pitch.unwrap_or(self.living_entity.entity.pitch.load());
@@ -2606,6 +2610,7 @@ impl EntityBase for Player {
                         self.request_teleport(position, yaw, pitch).await;
                         entity
                             .world
+                            .load()
                             .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
                                 self.living_entity.entity.entity_id.into(),
                                 position,
