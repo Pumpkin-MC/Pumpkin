@@ -793,8 +793,51 @@ impl Player {
         true
     }
 
-    pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32, f32)> {
+    /// Sets the respawn point with force=true, bypassing bed/anchor checks.
+    /// Used by /spawnpoint command.
+    pub async fn set_respawn_point_forced(
+        &self,
+        dimension: Dimension,
+        block_pos: BlockPos,
+        yaw: f32,
+        pitch: f32,
+    ) {
+        self.respawn_point.store(Some(RespawnPoint {
+            dimension,
+            position: block_pos,
+            yaw,
+            force: true,
+        }));
+
+        self.client
+            .send_packet_now(&CPlayerSpawnPosition::new(
+                block_pos,
+                yaw,
+                pitch,
+                dimension.minecraft_name.to_owned(),
+            ))
+            .await;
+    }
+
+    pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32, f32, Dimension)> {
         let respawn_point = self.respawn_point.load()?;
+
+        // Center the position in the block (add 0.5 to x/z, 0.1 to y per vanilla)
+        let position = Vector3::new(
+            f64::from(respawn_point.position.0.x) + 0.5,
+            f64::from(respawn_point.position.0.y) + 0.1,
+            f64::from(respawn_point.position.0.z) + 0.5,
+        );
+
+        // If force is set (from /spawnpoint command), always use the spawn point
+        if respawn_point.force {
+            log::debug!(
+                "Returning forced spawn point at {:?}, dimension: {:?}",
+                position,
+                respawn_point.dimension
+            );
+            return Some((position, respawn_point.yaw, 0.0, respawn_point.dimension));
+        }
 
         let block = self.world().get_block(&respawn_point.position).await;
 
@@ -802,13 +845,13 @@ impl Player {
             && block.has_tag(&tag::Block::MINECRAFT_BEDS)
         {
             // TODO: calculate respawn position
-            Some((respawn_point.position.to_f64(), respawn_point.yaw, 0.0))
+            Some((position, respawn_point.yaw, 0.0, respawn_point.dimension))
         } else if respawn_point.dimension == Dimension::THE_NETHER
             && block == &Block::RESPAWN_ANCHOR
         {
             // TODO: calculate respawn position
             // TODO: check if there is fuel for respawn
-            Some((respawn_point.position.to_f64(), respawn_point.yaw, 0.0))
+            Some((position, respawn_point.yaw, 0.0, respawn_point.dimension))
         } else {
             self.client
                 .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
@@ -1366,7 +1409,7 @@ impl Player {
         }
     }
 
-    async fn unload_watched_chunks(&self, world: &World) {
+    pub async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;

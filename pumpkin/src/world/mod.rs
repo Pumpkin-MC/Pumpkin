@@ -1860,7 +1860,8 @@ impl World {
         }
     }
 
-    pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
+    #[allow(clippy::too_many_lines)]
+    pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.entity.last_pos.load();
         let death_dimension = ResourceLocation::from(player.world().dimension.minecraft_name);
         let death_location = BlockPos(Vector3::new(
@@ -1871,21 +1872,106 @@ impl World {
 
         let data_kept = u8::from(alive);
 
-        // TODO: switch world in player entity to new world
+        let info = self.level_info.read().await;
 
+        // Get respawn position and dimension
+        let (position, yaw, pitch, respawn_dimension) =
+            if let Some(respawn) = player.get_respawn_point().await {
+                respawn
+            } else {
+                let top = self
+                    .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
+                    .await;
+
+                (
+                    Vector3::new(
+                        f64::from(info.spawn_x) + 0.5,
+                        (top + 1).into(),
+                        f64::from(info.spawn_z) + 0.5,
+                    ),
+                    info.spawn_yaw,
+                    info.spawn_pitch,
+                    self.dimension,
+                )
+            };
+
+        // Get target world (may be different from current world for cross-dimension respawn)
+        let target_world = if respawn_dimension == self.dimension {
+            None
+        } else {
+            // Cross-dimension respawn: get target world from server
+            if let Some(server) = self.server.upgrade() {
+                let worlds = server.worlds.read().await;
+                worlds
+                    .iter()
+                    .find(|w| w.dimension == respawn_dimension)
+                    .cloned()
+            } else {
+                log::warn!("Could not get server for cross-dimension respawn");
+                None
+            }
+        };
+
+        // Handle cross-dimension transfer if we found a different target world
+        let (target_world, position) = if let Some(ref new_world) = target_world {
+            log::debug!(
+                "Cross-dimension respawn: {} -> {}",
+                self.dimension.minecraft_name,
+                new_world.dimension.minecraft_name
+            );
+
+            // Remove player from current world
+            let uuid = player.gameprofile.id;
+            if let Some(p) = self.remove_player(player, false).await {
+                // Add player to target world
+                new_world.players.write().await.insert(uuid, p);
+            }
+
+            // Update chunk manager to target world
+            player
+                .chunk_manager
+                .lock()
+                .await
+                .change_world(&self.level, &new_world.level);
+
+            // Unload watched chunks from current world
+            player.unload_watched_chunks(self).await;
+
+            (new_world.as_ref(), position)
+        } else if respawn_dimension != self.dimension {
+            // Cross-dimension failed - fall back to current world's spawn
+            log::warn!(
+                "Target world {:?} not found, using world spawn in {:?}",
+                respawn_dimension,
+                self.dimension
+            );
+            let top = self
+                .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
+                .await;
+            let fallback_pos = Vector3::new(
+                f64::from(info.spawn_x) + 0.5,
+                (top + 1).into(),
+                f64::from(info.spawn_z) + 0.5,
+            );
+            (self.as_ref(), fallback_pos)
+        } else {
+            (self.as_ref(), position)
+        };
+
+        // Send respawn packet with target dimension
         player
             .client
             .enqueue_packet(&CRespawn::new(
-                (self.dimension.id).into(),
-                ResourceLocation::from(self.dimension.minecraft_name),
-                biome::hash_seed(self.level.seed.0), // seed
+                (target_world.dimension.id).into(),
+                ResourceLocation::from(target_world.dimension.minecraft_name),
+                biome::hash_seed(target_world.level.seed.0),
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,
                 false,
                 false,
                 Some((death_dimension, death_location)),
                 VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
-                self.sea_level.into(),
+                target_world.sea_level.into(),
                 data_kept,
             ))
             .await;
@@ -1899,39 +1985,26 @@ impl World {
 
         player.hunger_manager.restart();
 
-        let info = self.level_info.read().await;
-
         if !info.game_rules.keep_inventory {
             player.set_experience(0, 0.0, 0).await;
             player.inventory.clear().await;
         }
 
-        // Teleport
-        let (position, yaw, pitch) = if let Some(respawn) = player.get_respawn_point().await {
-            respawn
-        } else {
-            let top = self
-                .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
-                .await;
-
-            (
-                Vector3::new(
-                    f64::from(info.spawn_x) + 0.5,
-                    (top + 1).into(),
-                    f64::from(info.spawn_z) + 0.5,
-                ),
-                info.spawn_yaw,
-                info.spawn_pitch,
-            )
-        };
-
-        log::debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.request_teleport(position, yaw, pitch).await;
+        // Set entity position BEFORE loading chunks, so chunks load at the right location
+        // This mirrors the initial spawn flow where update_position is called before teleport
+        player.living_entity.entity.set_pos(position);
+        player.living_entity.entity.set_rotation(yaw, pitch);
         player.living_entity.entity.last_pos.store(position);
 
         // TODO: difficulty, exp bar, status effect
 
-        self.send_world_info(player, position, yaw, pitch).await;
+        // Load chunks and send world info FIRST (before teleport packet)
+        target_world
+            .send_world_info(player, position, yaw, pitch)
+            .await;
+
+        // Send teleport packet AFTER chunks are loaded (same order as initial spawn)
+        player.request_teleport(position, yaw, pitch).await;
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.

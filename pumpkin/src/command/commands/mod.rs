@@ -43,6 +43,7 @@ mod say;
 mod seed;
 mod setblock;
 mod setworldspawn;
+mod spawnpoint;
 mod stop;
 mod stopsound;
 mod summon;
@@ -124,6 +125,10 @@ pub async fn default_dispatcher(
     dispatcher.register(
         setworldspawn::init_command_tree(),
         "minecraft:command.setworldspawn",
+    );
+    dispatcher.register(
+        spawnpoint::init_command_tree(),
+        "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
     // Three
@@ -399,6 +404,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.enchant",
             "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.spawnpoint",
+            "Sets the spawn point for a player",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();

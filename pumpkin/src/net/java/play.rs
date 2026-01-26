@@ -1128,7 +1128,7 @@ impl JavaClient {
                 if player.living_entity.health.load() > 0.0 {
                     return;
                 }
-                player.world().respawn_player(player, false).await;
+                player.world().clone().respawn_player(player, false).await;
 
                 let screen_handler = player.current_screen_handler.lock().await;
                 let mut screen_handler = screen_handler.lock().await;
