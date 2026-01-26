@@ -39,6 +39,7 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod rotate;
 mod say;
 mod seed;
 mod setblock;
@@ -100,6 +101,7 @@ pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDis
     );
     dispatcher.register(weather::init_command_tree(), "minecraft:command.weather");
     dispatcher.register(particle::init_command_tree(), "minecraft:command.particle");
+    dispatcher.register(rotate::init_command_tree(), "minecraft:command.rotate");
     dispatcher.register(damage::init_command_tree(), "minecraft:command.damage");
     dispatcher.register(bossbar::init_command_tree(), "minecraft:command.bossbar");
     dispatcher.register(say::init_command_tree(), "minecraft:command.say");
@@ -318,6 +320,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.particle",
             "Creates particles in the world",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.rotate",
+            "Changes the rotation of an entity",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();

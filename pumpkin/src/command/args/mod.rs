@@ -24,6 +24,8 @@ use crate::entity::EntityBase;
 use crate::world::bossbar::{BossbarColor, BossbarDivisions};
 use crate::{entity::player::Player, server::Server};
 
+pub use entity_anchor::EntityAnchor;
+
 pub mod block;
 pub mod bool;
 pub mod bossbar_color;
@@ -34,6 +36,7 @@ mod coordinate;
 pub mod difficulty;
 pub mod entities;
 pub mod entity;
+pub mod entity_anchor;
 pub mod gamemode;
 pub mod message;
 pub mod players;
@@ -96,7 +99,8 @@ pub enum Arg<'a> {
     BlockPos(BlockPos),
     Pos3D(Vector3<f64>),
     Pos2D(Vector2<f64>),
-    Rotation(f32, f32),
+    /// (yaw, `is_yaw_relative`, pitch, `is_pitch_relative`)
+    Rotation(f32, bool, f32, bool),
     GameMode(GameMode),
     Difficulty(Difficulty),
     CommandTree(CommandTree),
@@ -117,6 +121,7 @@ pub enum Arg<'a> {
     DamageType(DamageType),
     Effect(&'static StatusEffect),
     Enchantment(&'static Enchantment),
+    EntityAnchor(EntityAnchor),
 }
 
 /// see [`crate::commands::tree::builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree::builder::NonLeafNodeBuilder::execute`]
