@@ -1230,9 +1230,9 @@ impl World {
         } else {
             let info = &self.level_info.read().await;
             let spawn_position = Vector3::new(
-                f64::from(info.spawn_x),
+                f64::from(info.spawn_x) + 0.5,
                 f64::from(info.spawn_y),
-                f64::from(info.spawn_z),
+                f64::from(info.spawn_z) + 0.5,
             );
             (spawn_position, info.spawn_yaw, info.spawn_pitch)
         };
@@ -1546,9 +1546,9 @@ impl World {
         } else {
             let info = &self.level_info.read().await;
             let spawn_position = Vector3::new(
-                f64::from(info.spawn_x),
+                f64::from(info.spawn_x) + 0.5,
                 f64::from(info.spawn_y),
-                f64::from(info.spawn_z),
+                f64::from(info.spawn_z) + 0.5,
             );
             (spawn_position, info.spawn_yaw, info.spawn_pitch)
         };
