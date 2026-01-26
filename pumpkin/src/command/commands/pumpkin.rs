@@ -16,6 +16,8 @@ const DESCRIPTION: &str = "Display information about Pumpkin.";
 struct Executor;
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+const GIT_HASH: &str = env!("GIT_HASH");
+const GIT_HASH_FULL: &str = env!("GIT_HASH_FULL");
 
 #[expect(clippy::too_many_lines)]
 impl CommandExecutor for Executor {
@@ -27,26 +29,24 @@ impl CommandExecutor for Executor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let locale = sender.get_locale().await;
+            let version_string = format!("{CARGO_PKG_VERSION} (Commit: {GIT_HASH})");
             sender
                 .send_message(
                     TextComponent::custom(
                         "pumpkin",
                         "commands.pumpkin.version",
                         locale,
-                        vec![TextComponent::text(CARGO_PKG_VERSION)],
+                        vec![TextComponent::text(version_string.clone())],
                     )
-                    .hover_event(HoverEvent::show_text(TextComponent::custom(
-                        "pumpkin",
-                        "commands.pumpkin.version.hover",
-                        locale,
-                        vec![],
-                    )))
+                    .hover_event(HoverEvent::show_text(TextComponent::text(format!(
+                        "Commit: {GIT_HASH_FULL}\nClick to copy"
+                    ))))
                     .click_event(ClickEvent::CopyToClipboard {
                         value: Cow::from(
                             get_translation_text(
                                 "pumpkin:commands.pumpkin.version",
                                 locale,
-                                vec![TextComponent::text(CARGO_PKG_VERSION).0],
+                                vec![TextComponent::text(version_string).0],
                             )
                             .replace('\n', ""),
                         ),
