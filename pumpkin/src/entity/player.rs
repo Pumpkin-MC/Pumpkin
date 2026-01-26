@@ -381,6 +381,8 @@ pub struct Player {
     pub keep_alive_id: AtomicI64,
     /// The last time we sent a keep alive packet.
     pub last_keep_alive_time: AtomicCell<Instant>,
+    /// The last time the player performed an action (for idle timeout).
+    pub last_action_time: AtomicCell<Instant>,
     /// The ping in millis.
     pub ping: AtomicU32,
     /// The amount of ticks since the player's last attack.
@@ -492,6 +494,7 @@ impl Player {
             wait_for_keep_alive: AtomicBool::new(false),
             keep_alive_id: AtomicI64::new(0),
             last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
+            last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(false),
@@ -1079,8 +1082,22 @@ impl Player {
         // Timeout/keep alive handling
         self.tick_client_load_timeout();
 
-        // TODO This should only be handled by the ClientPlatform
+        // Idle timeout handling
         let now = Instant::now();
+        let idle_timeout_minutes = server.player_idle_timeout.load(Ordering::Relaxed);
+        if idle_timeout_minutes > 0 {
+            let idle_duration = now.duration_since(self.last_action_time.load());
+            if idle_duration >= Duration::from_secs(idle_timeout_minutes as u64 * 60) {
+                self.kick(
+                    DisconnectReason::KickedForIdle,
+                    TextComponent::translate("multiplayer.disconnect.idling", []),
+                )
+                .await;
+                return;
+            }
+        }
+
+        // TODO This should only be handled by the ClientPlatform
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
             if matches!(self.client, ClientPlatform::Bedrock(_)) {
                 return;
@@ -1514,6 +1531,11 @@ impl Player {
 
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
         self.client.kick(reason, message).await;
+    }
+
+    /// Updates the last action time to now. Call this on player actions like movement, chat, etc.
+    pub fn update_last_action_time(&self) {
+        self.last_action_time.store(std::time::Instant::now());
     }
 
     pub fn can_food_heal(&self) -> bool {
@@ -2197,6 +2219,7 @@ impl Player {
     }
 
     pub async fn on_slot_click(&self, packet: SClickSlot) {
+        self.update_last_action_time();
         let screen_handler = self.current_screen_handler.lock().await;
         let mut screen_handler = screen_handler.lock().await;
         let behaviour = screen_handler.get_behaviour();
