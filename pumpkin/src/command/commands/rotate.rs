@@ -6,8 +6,8 @@ use crate::command::args::entity_anchor::{EntityAnchor, EntityAnchorArgumentCons
 use crate::command::args::position_3d::Position3DArgumentConsumer;
 use crate::command::args::rotation::RotationArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg};
-use crate::command::tree::builder::{argument, literal};
 use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
 
 const NAMES: [&str; 1] = ["rotate"];
@@ -218,7 +218,9 @@ impl CommandExecutor for RotateFacingEntityNoAnchorExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_TARGET, EntityArgumentConsumer)
-            .then(argument(ARG_ROTATION, RotationArgumentConsumer).execute(RotateToRotationExecutor))
+            .then(
+                argument(ARG_ROTATION, RotationArgumentConsumer).execute(RotateToRotationExecutor),
+            )
             .then(
                 literal("facing")
                     .then(

@@ -58,11 +58,11 @@ impl ArgumentConsumer for RotationArgumentConsumer {
             return Box::pin(async move { None });
         };
 
-        let result: Option<Arg<'a>> = parse_rotation_component(yaw_str).and_then(|(yaw, yaw_rel)| {
-            parse_rotation_component(pitch_str).map(|(pitch, pitch_rel)| {
-                Arg::Rotation(yaw, yaw_rel, pitch, pitch_rel)
-            })
-        });
+        let result: Option<Arg<'a>> =
+            parse_rotation_component(yaw_str).and_then(|(yaw, yaw_rel)| {
+                parse_rotation_component(pitch_str)
+                    .map(|(pitch, pitch_rel)| Arg::Rotation(yaw, yaw_rel, pitch, pitch_rel))
+            });
 
         Box::pin(async move { result })
     }
