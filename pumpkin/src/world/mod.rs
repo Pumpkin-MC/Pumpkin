@@ -1166,6 +1166,51 @@ impl World {
         self.dimension.min_y
     }
 
+    /// Finds a safe spawn location starting from (0, 0) and expanding outward
+    /// Returns (x, y, z) coordinates for a valid spawn location
+    pub async fn find_safe_spawn_location(&self) -> (i32, i32, i32) {
+        const MAX_SEARCH_RADIUS: i32 = 100;
+
+        // Generate spiral pattern starting from (0, 0)
+        for radius in 0..=MAX_SEARCH_RADIUS {
+            // Generate positions in a spiral around the center
+            for dx in -radius..=radius {
+                for dz in -radius..=radius {
+                    // Only check the perimeter of the square
+                    if (dx.abs() == radius || dz.abs() == radius)
+                        && let Some(pos) = self.check_spawn_safety(dx, dz).await
+                    {
+                        return pos;
+                    }
+                }
+            }
+        }
+
+        // Fallback to (0, 0) if no safe location found
+        (0, self.get_top_block(Vector2::new(0, 0)).await + 1, 0)
+    }
+
+    async fn check_spawn_safety(&self, x: i32, z: i32) -> Option<(i32, i32, i32)> {
+        let top_y = self.get_top_block(Vector2::new(x, z)).await;
+
+        // Check if there's solid ground and air above for spawning
+        if !(top_y < self.dimension.min_y || top_y >= self.dimension.height - 1) {
+            let ground_pos = BlockPos::new(x, top_y, z);
+            let spawn_pos = BlockPos::new(x, top_y + 1, z);
+            let above_pos = BlockPos::new(x, top_y + 2, z);
+
+            let ground_block = self.get_block_state(&ground_pos).await;
+            let spawn_block = self.get_block_state(&spawn_pos).await;
+            let above_block = self.get_block_state(&above_pos).await;
+
+            // Safe spawn requires: solid ground, air for player body and head
+            if ground_block.is_solid_block() && spawn_block.is_air() && above_block.is_air() {
+                return Some((x, top_y + 1, z));
+            }
+        }
+        None
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
@@ -1184,15 +1229,12 @@ impl World {
             (position, yaw, pitch)
         } else {
             let info = &self.level_info.read().await;
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
+            let spawn_position = Vector3::new(
+                f64::from(info.spawn_x),
+                f64::from(info.spawn_y),
+                f64::from(info.spawn_z),
             );
-            (position, info.spawn_yaw, info.spawn_pitch)
+            (spawn_position, info.spawn_yaw, info.spawn_pitch)
         };
         // Todo make the data less spread
         let level_settings = LevelSettings {
@@ -1503,15 +1545,12 @@ impl World {
             (position, yaw, pitch)
         } else {
             let info = &self.level_info.read().await;
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
+            let spawn_position = Vector3::new(
+                f64::from(info.spawn_x),
+                f64::from(info.spawn_y),
+                f64::from(info.spawn_z),
             );
-            (position, info.spawn_yaw, info.spawn_pitch)
+            (spawn_position, info.spawn_yaw, info.spawn_pitch)
         };
 
         let velocity = player.living_entity.entity.velocity.load();

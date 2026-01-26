@@ -290,6 +290,30 @@ impl Server {
         };
 
         log::info!("All worlds loaded successfully.");
+
+        // Find and set a safe spawn location if using default spawn
+        {
+            let level_info = server.level_info.read().await;
+            let is_default_spawn = level_info.spawn_x == 0 && level_info.spawn_z == 0;
+            drop(level_info);
+
+            if is_default_spawn {
+                log::info!("Finding safe spawn location...");
+                let overworld = {
+                    let worlds = server.worlds.read().await;
+                    worlds.first().cloned()
+                };
+                if let Some(world) = overworld {
+                    let (safe_x, safe_y, safe_z) = world.find_safe_spawn_location().await;
+                    let mut level_info_write = server.level_info.write().await;
+                    level_info_write.spawn_x = safe_x;
+                    level_info_write.spawn_z = safe_z;
+                    level_info_write.spawn_y = safe_y;
+                    log::info!("Safe spawn location set to ({safe_x}, {safe_y}, {safe_z})");
+                }
+            }
+        }
+
         server
     }
 
