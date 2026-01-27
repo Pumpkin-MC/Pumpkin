@@ -300,7 +300,10 @@ impl Server {
             log::debug!("Finding safe spawn location...");
             let overworld = {
                 let worlds = server.worlds.read().await;
-                worlds.first().cloned()
+                worlds
+                    .iter()
+                    .find(|world| world.dimension.id == 0u8)
+                    .cloned()
             };
             if let Some(world) = overworld {
                 let safe_pos = world.find_safe_spawn_location().await;
@@ -311,8 +314,8 @@ impl Server {
                 log::info!(
                     "Safe spawn location set to ({}, {}, {})",
                     safe_pos.x,
-                    safe_pos.z,
-                    safe_pos.y
+                    safe_pos.y,
+                    safe_pos.z
                 );
             }
         }
