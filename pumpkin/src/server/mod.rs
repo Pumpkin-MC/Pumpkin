@@ -314,9 +314,11 @@ impl Server {
         log::info!("All worlds loaded successfully.");
 
         // Find and set a safe spawn location if using default spawn
-        let level_info = server.level_info.read().await;
-        let is_default_spawn = { level_info.spawn_x == 0 && level_info.spawn_z == 0 };
-        drop(level_info);
+
+        let is_default_spawn = {
+            let level_info = level_info.read().await;
+            level_info.spawn_x == 0 && level_info.spawn_z == 0
+        };
 
         if is_default_spawn {
             log::debug!("Finding safe spawn location...");
