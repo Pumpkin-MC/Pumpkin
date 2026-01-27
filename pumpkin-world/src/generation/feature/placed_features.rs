@@ -357,7 +357,10 @@ impl CountOnEveryLayerPlacementModifier {
         for j in (chunk.bottom_y() as i32 + 1..=y).rev() {
             mutable_pos.0.y = j - 1;
             // stop, scan is outside of cache bounds
-            if chunk.get_chunk(mutable_pos.0.x >> 4, mutable_pos.0.z >> 4).is_none() {
+            if chunk
+                .get_chunk(mutable_pos.0.x >> 4, mutable_pos.0.z >> 4)
+                .is_none()
+            {
                 return i32::MAX;
             }
             let next_block_state = GenerationCache::get_block_state(chunk, &mutable_pos.0);
