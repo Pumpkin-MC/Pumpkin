@@ -167,8 +167,8 @@ impl ChunkData {
             z: position.y,
             // This chunk is read from disk, so it has not been modified
             dirty: false,
-            block_ticks: ChunkTickScheduler::from_vec(&chunk_data.block_ticks),
-            fluid_ticks: ChunkTickScheduler::from_vec(&chunk_data.fluid_ticks),
+            block_ticks: ChunkTickScheduler::from_iter(chunk_data.block_ticks),
+            fluid_ticks: ChunkTickScheduler::from_iter(chunk_data.fluid_ticks),
             block_entities: {
                 let mut block_entities = HashMap::new();
                 for nbt in chunk_data.block_entities {

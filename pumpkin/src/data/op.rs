@@ -1,13 +1,10 @@
-use std::{path::Path, sync::LazyLock};
+use std::path::Path;
 
 use pumpkin_config::op;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{LoadJSONConfiguration, SaveJSONConfiguration};
-
-pub static OPERATOR_CONFIG: LazyLock<tokio::sync::RwLock<OperatorConfig>> =
-    LazyLock::new(|| tokio::sync::RwLock::new(OperatorConfig::load()));
 
 #[derive(Deserialize, Serialize, Default)]
 #[serde(transparent)]

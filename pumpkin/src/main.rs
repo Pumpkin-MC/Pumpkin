@@ -41,7 +41,6 @@
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
 
-use plugin::PluginManager;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use std::{
     io::{self},
@@ -51,15 +50,12 @@ use std::{
 use tokio::signal::ctrl_c;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
-use tokio::sync::RwLock;
 
+use pumpkin::data::VanillaData;
 use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
-use pumpkin_util::{
-    permission::{PermissionManager, PermissionRegistry},
-    text::{TextComponent, color::NamedColor},
-};
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::time::Instant;
 
 // Setup some tokens to allow us to identify which event is for which socket.
@@ -75,18 +71,6 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
-
-pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
-    LazyLock::new(|| Arc::new(PluginManager::new()));
-
-pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
-
-pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLock::new(|| {
-    Arc::new(RwLock::new(PermissionManager::new(
-        PERMISSION_REGISTRY.clone(),
-    )))
-});
 
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
@@ -107,6 +91,8 @@ async fn main() {
 
     let basic_config = BasicConfiguration::load(&config_dir);
     let advanced_config = AdvancedConfiguration::load(&config_dir);
+
+    let vanilla_data = VanillaData::load();
 
     pumpkin::init_logger(&advanced_config);
 
@@ -146,7 +132,7 @@ async fn main() {
             .expect("Unable to setup signal handlers");
     });
 
-    let pumpkin_server = PumpkinServer::new(basic_config, advanced_config).await;
+    let pumpkin_server = PumpkinServer::new(basic_config, advanced_config, vanilla_data).await;
     pumpkin_server.init_plugins().await;
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());

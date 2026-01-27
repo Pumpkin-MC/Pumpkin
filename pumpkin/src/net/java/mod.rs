@@ -162,7 +162,7 @@ impl JavaClient {
     /// # Arguments
     ///
     /// * `server`: A reference to the `Server` instance.
-    pub async fn handle_login_sequence(&self, server: &Server) -> PacketHandlerResult {
+    pub async fn handle_login_sequence(&self, server: &Arc<Server>) -> PacketHandlerResult {
         while let Some(packet) = self.get_packet().await {
             match self.handle_packet(server, &packet).await {
                 Ok(result) => {
@@ -362,7 +362,7 @@ impl JavaClient {
     /// Returns a `DeserializerError` if an error occurs during packet deserialization.
     pub async fn handle_packet(
         &self,
-        server: &Server,
+        server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         match self.connection_state.load() {
@@ -507,7 +507,7 @@ impl JavaClient {
 
     async fn handle_config_packet(
         &self,
-        server: &Server,
+        server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         log::debug!("Handling config group for id {}", packet.id);
@@ -595,12 +595,16 @@ impl JavaClient {
                 // TODO
             }
             id if id == SPlayerPosition::PACKET_ID => {
-                self.handle_position(player, SPlayerPosition::read(payload)?)
+                self.handle_position(player, server, SPlayerPosition::read(payload)?)
                     .await;
             }
             id if id == SPlayerPositionRotation::PACKET_ID => {
-                self.handle_position_rotation(player, SPlayerPositionRotation::read(payload)?)
-                    .await;
+                self.handle_position_rotation(
+                    player,
+                    server,
+                    SPlayerPositionRotation::read(payload)?,
+                )
+                .await;
             }
             id if id == SPlayerRotation::PACKET_ID => {
                 self.handle_rotation(player, SPlayerRotation::read(payload)?)

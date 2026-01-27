@@ -5,10 +5,6 @@ use std::{
 };
 
 use crate::{
-    data::{
-        banned_ip::BANNED_IP_LIST, banned_player::BANNED_PLAYER_LIST, op::OPERATOR_CONFIG,
-        whitelist::WHITELIST_CONFIG,
-    },
     entity::player::ChatMode,
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
@@ -178,7 +174,7 @@ pub async fn can_not_join(
         "[year]-[month]-[day] at [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
     );
 
-    let mut banned_players = BANNED_PLAYER_LIST.write().await;
+    let mut banned_players = server.data.banned_player_list.write().await;
     if let Some(entry) = banned_players.get_entry(profile) {
         let text = TextComponent::translate(
             "multiplayer.disconnect.banned.reason",
@@ -197,8 +193,8 @@ pub async fn can_not_join(
     drop(banned_players);
 
     if server.white_list.load(Ordering::Relaxed) {
-        let ops = OPERATOR_CONFIG.read().await;
-        let whitelist = WHITELIST_CONFIG.read().await;
+        let ops = server.data.operator_config.read().await;
+        let whitelist = server.data.whitelist_config.read().await;
 
         if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
             return Some(TextComponent::translate(
@@ -208,7 +204,13 @@ pub async fn can_not_join(
         }
     }
 
-    if let Some(entry) = BANNED_IP_LIST.write().await.get_entry(&address.ip()) {
+    if let Some(entry) = server
+        .data
+        .banned_ip_list
+        .write()
+        .await
+        .get_entry(&address.ip())
+    {
         let text = TextComponent::translate(
             "multiplayer.disconnect.banned_ip.reason",
             [TextComponent::text(entry.reason.clone())],

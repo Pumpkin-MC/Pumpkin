@@ -322,7 +322,7 @@ impl LivingEntity {
                     f64::from(pos.0.y) + 0.5,
                     f64::from(pos.0.z) + 0.5,
                 );
-                let distance = entity_pos.squared_distance_to_vec(block_center);
+                let distance = entity_pos.squared_distance_to_vec(&block_center);
 
                 return distance.sqrt()
                     <= Self::FALL_DAMAGE_SAFE_DISTANCE * Self::FALL_DAMAGE_SAFE_DISTANCE;

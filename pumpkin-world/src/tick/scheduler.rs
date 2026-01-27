@@ -53,11 +53,22 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         }
         res
     }
+}
 
-    pub fn from_vec(ticks: &[ScheduledTick<&'a T>]) -> Self {
+impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
+    for ChunkTickScheduler<&'a T>
+{
+    fn from_iter<I: IntoIterator<Item = ScheduledTick<&'a T>>>(iter: I) -> Self {
         let mut scheduler = Self::default();
-        for tick in ticks {
-            scheduler.schedule_tick(tick, 0);
+        let iter = iter.into_iter();
+
+        let (lower, _) = iter.size_hint();
+        if lower > 0 {
+            scheduler.queued_ticks.reserve(lower);
+        }
+
+        for tick in iter {
+            scheduler.schedule_tick(&tick, 0);
         }
         scheduler
     }

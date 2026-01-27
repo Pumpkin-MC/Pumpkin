@@ -244,13 +244,11 @@ impl OctavePerlinNoiseSampler {
                 result
             })
             .collect();
-        let lacunarities: Vec<f64> = (0..amplitudes.len())
-            .map(|_| {
-                let result = lacunarity;
-                lacunarity *= 2.0;
-                result
-            })
-            .collect();
+        let lacunarities = (0..amplitudes.len()).map(|_| {
+            let result = lacunarity;
+            lacunarity *= 2.0;
+            result
+        });
 
         let max_value = Self::get_total_amplitude_generic(2.0, &persistences, amplitudes);
 

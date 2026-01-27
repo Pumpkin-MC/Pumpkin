@@ -88,7 +88,7 @@ impl Goal for MeleeAttackGoal {
 
             if mob
                 .get_mob_entity()
-                .is_in_position_target_range_pos(target.get_entity().block_pos.load())
+                .is_in_position_target_range_pos(&target.get_entity().block_pos.load())
             {
                 // This is sync based on the assumed Player methods
                 target

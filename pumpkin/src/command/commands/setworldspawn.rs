@@ -80,7 +80,9 @@ impl CommandExecutor for AngleWorldSpawnExecutor {
                 return Err(InvalidConsumption(Some(ARG_BLOCK_POS.into())));
             };
 
-            let Some(Arg::Rotation(pitch, yaw)) = args.get(ARG_ANGLE) else {
+            // Note: Rotation argument is (yaw, is_yaw_relative, pitch, is_pitch_relative)
+            // For setworldspawn, we use absolute values only (ignore relative flags)
+            let Some(Arg::Rotation(yaw, _, pitch, _)) = args.get(ARG_ANGLE) else {
                 return Err(InvalidConsumption(Some(ARG_ANGLE.into())));
             };
 

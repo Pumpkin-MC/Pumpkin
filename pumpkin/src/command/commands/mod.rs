@@ -3,8 +3,7 @@ use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionDefault, PermissionRegistry},
 };
-
-use crate::PERMISSION_REGISTRY;
+use tokio::sync::RwLock;
 
 use super::dispatcher::CommandDispatcher;
 
@@ -39,6 +38,7 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod rotate;
 mod say;
 mod seed;
 mod setblock;
@@ -57,10 +57,13 @@ mod whitelist;
 mod worldborder;
 
 #[must_use]
-pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDispatcher {
+pub async fn default_dispatcher(
+    registry: &RwLock<PermissionRegistry>,
+    basic_config: &BasicConfiguration,
+) -> CommandDispatcher {
     let mut dispatcher = CommandDispatcher::default();
 
-    register_permissions().await;
+    register_permissions(registry).await;
 
     // Zero
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
@@ -100,6 +103,7 @@ pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDis
     );
     dispatcher.register(weather::init_command_tree(), "minecraft:command.weather");
     dispatcher.register(particle::init_command_tree(), "minecraft:command.particle");
+    dispatcher.register(rotate::init_command_tree(), "minecraft:command.rotate");
     dispatcher.register(damage::init_command_tree(), "minecraft:command.damage");
     dispatcher.register(bossbar::init_command_tree(), "minecraft:command.bossbar");
     dispatcher.register(say::init_command_tree(), "minecraft:command.say");
@@ -144,8 +148,8 @@ pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDis
     dispatcher
 }
 
-async fn register_permissions() {
-    let mut registry = PERMISSION_REGISTRY.write().await;
+async fn register_permissions(permission_registry: &RwLock<PermissionRegistry>) {
+    let mut registry = permission_registry.write().await;
 
     // Register level 0 permissions (allowed by default)
     register_level_0_permissions(&mut registry);
@@ -318,6 +322,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.particle",
             "Creates particles in the world",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.rotate",
+            "Changes the rotation of an entity",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();

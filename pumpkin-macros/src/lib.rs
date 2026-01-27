@@ -83,6 +83,7 @@ pub fn cancellable(_args: TokenStream, input: TokenStream) -> TokenStream {
 pub fn send_cancellable(input: TokenStream) -> TokenStream {
     let block = parse_macro_input!(input as syn::Block);
 
+    let mut server_expr = None;
     let mut event_expr = None;
     let mut after_block = None;
     let mut cancelled_block = None;
@@ -107,13 +108,16 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
 
                 // If it wasn't a special block, it must be the event expression
                 if !is_special_block {
-                    if event_expr.is_some() {
+                    if server_expr.is_none() {
+                        server_expr = Some(expr);
+                    } else if event_expr.is_none() {
+                        event_expr = Some(expr);
+                    } else {
                         abort!(
                             expr.span(),
                             "Multiple event expressions found. Only one event expression allowed."
                         );
                     }
-                    event_expr = Some(expr);
                 }
             }
             // Abort on other statements (like `let x = ...`) if strictness is desired
@@ -124,9 +128,12 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
         }
     }
 
-    let event = match event_expr {
-        Some(e) => e,
-        None => abort_call_site!("Event expression must be specified"),
+    let Some(server) = server_expr else {
+        abort_call_site!("Server expression must be specified");
+    };
+
+    let Some(event) = event_expr else {
+        abort_call_site!("Event expression must be specified");
     };
 
     // Construct the if/else logic
@@ -144,7 +151,7 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
     };
 
     quote! {
-        let event = crate::PLUGIN_MANAGER.fire(#event).await;
+        let event = #server.plugin_manager.fire(#event).await;
         #logic
     }
     .into()

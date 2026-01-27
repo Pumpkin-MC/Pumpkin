@@ -1,4 +1,4 @@
-use std::num::NonZeroU8;
+use std::{num::NonZeroU8, sync::Arc};
 
 use crate::{
     entity::player::ChatMode,
@@ -192,7 +192,7 @@ impl JavaClient {
         self.send_packet_now(&CFinishConfig).await;
     }
 
-    pub async fn handle_config_acknowledged(&self, server: &Server) -> PacketHandlerResult {
+    pub async fn handle_config_acknowledged(&self, server: &Arc<Server>) -> PacketHandlerResult {
         log::debug!("Handling config acknowledgement");
         self.connection_state.store(ConnectionState::Play);
 

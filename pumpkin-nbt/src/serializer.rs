@@ -92,7 +92,7 @@ impl<W: Write> Serializer<W> {
         match &mut self.state {
             State::Named(name) | State::Array { name, .. } => {
                 self.output.write_u8_be(tag)?;
-                NbtTag::String(name.clone()).serialize_data(&mut self.output)?;
+                NbtTag::write_string(name, &mut self.output)?;
             }
             State::FirstListElement { len } => {
                 self.output.write_u8_be(tag)?;
@@ -131,7 +131,7 @@ impl<W: Write> Serializer<W> {
                     self.handled_root = true;
                     self.output.write_u8_be(tag)?;
                     if let Some(root_name) = root_name {
-                        NbtTag::String(root_name.clone()).serialize_data(&mut self.output)?;
+                        NbtTag::write_string(root_name, &mut self.output)?;
                     }
                 }
             }
@@ -246,7 +246,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         if self.state == State::MapKey {
             self.state = State::Named(v.to_string());
         } else {
-            NbtTag::String(v.to_string()).serialize_data(&mut self.output)?;
+            NbtTag::write_string(v, &mut self.output)?;
         }
 
         Ok(())

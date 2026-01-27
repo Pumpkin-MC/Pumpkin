@@ -49,8 +49,7 @@ impl Navigator {
                     let state = world
                         .get_block_state(&BlockPos(potential_pos.to_i32()))
                         .await;
-                    let shapes = state.get_block_collision_shapes();
-                    if !shapes.is_empty() {
+                    if !state.collision_shapes.is_empty() {
                         continue;
                     }
 
@@ -100,6 +99,6 @@ impl Node {
     /// Returns an `f64`; higher means more expensive.
     #[must_use]
     pub fn get_expense(&self, end: Vector3<f64>) -> f64 {
-        self.location.squared_distance_to_vec(end).sqrt()
+        self.location.squared_distance_to_vec(&end).sqrt()
     }
 }

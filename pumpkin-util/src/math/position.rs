@@ -363,8 +363,8 @@ impl BlockPos {
         x + y + z
     }
 
-    pub fn squared_distance(&self, other: Self) -> i32 {
-        self.0.squared_distance_to_vec(other.0)
+    pub fn squared_distance(&self, other: &Self) -> i32 {
+        self.0.squared_distance_to_vec(&other.0)
     }
 
     pub fn as_long(&self) -> i64 {

@@ -1,11 +1,13 @@
 use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
+use crate::data::VanillaData;
 use crate::data::player_server::ServerPlayerData;
 use crate::entity::{EntityBase, NBTStorage};
 use crate::item::registry::ItemRegistry;
 use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
+use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
@@ -15,6 +17,7 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
+use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_world::dimension::into_level;
 
 use crate::command::CommandSender;
@@ -57,6 +60,16 @@ use super::command::args::entities::{
 pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,
+
+    pub data: VanillaData,
+
+    /// Plugin manager
+    pub plugin_manager: Arc<PluginManager>,
+
+    /// Permission manager for the server.
+    pub permission_manager: Arc<RwLock<PermissionManager>>,
+    /// Permission registry for the server.
+    pub permission_registry: Arc<RwLock<PermissionRegistry>>,
 
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
@@ -113,9 +126,12 @@ impl Server {
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
+        vanilla_data: VanillaData,
     ) -> Arc<Self> {
+        let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
         // First register the default commands. After that, plugins can put in their own.
-        let command_dispatcher = RwLock::new(default_dispatcher(&basic_config).await);
+        let command_dispatcher =
+            RwLock::new(default_dispatcher(&permission_registry, &basic_config).await);
         let world_path = basic_config.get_world_path();
 
         let block_registry = super::block::registry::default_registry();
@@ -182,6 +198,12 @@ impl Server {
         let server = Self {
             basic_config,
             advanced_config,
+            data: vanilla_data,
+            plugin_manager: Arc::new(PluginManager::new()),
+            permission_manager: Arc::new(RwLock::new(PermissionManager::new(
+                permission_registry.clone(),
+            ))),
+            permission_registry,
             container_id: 0.into(),
             worlds: RwLock::new(vec![]),
             dimensions: vec![
@@ -436,6 +458,7 @@ impl Server {
         let player = Arc::new(player);
 
         send_cancellable! {{
+            self;
             PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone()).await;
@@ -515,6 +538,7 @@ impl Server {
         target_name: Option<&TextComponent>,
     ) {
         send_cancellable! {{
+            self;
             ServerBroadcastEvent::new(message.clone(), sender_name.clone());
 
             'after: {
@@ -606,9 +630,7 @@ impl Server {
         let mut players = Vec::<Arc<Player>>::new();
 
         for world in self.worlds.read().await.iter() {
-            for player in world.players.read().await.values() {
-                players.push(player.clone());
-            }
+            players.extend(world.players.read().await.values().cloned());
         }
 
         players
@@ -932,8 +954,8 @@ impl Server {
                 };
                 let mut entities = iter.collect::<Vec<_>>();
                 entities.sort_by(|a, b| {
-                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(center);
-                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(center);
+                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(&center);
+                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(&center);
                     if target_selector.get_sort() == Some(EntityFilterSort::Nearest) {
                         a_distance
                             .partial_cmp(&b_distance)

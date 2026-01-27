@@ -119,8 +119,7 @@ impl SplineRepr {
                     .into_iter()
                     .zip(values)
                     .zip(derivatives)
-                    .map(|((location, value), derivative)| (location, value, derivative))
-                    .collect::<Vec<_>>();
+                    .map(|((location, value), derivative)| (location, value, derivative));
 
                 let function_index =
                     location_function.get_index_for_component(stack, hash_to_index_map);

@@ -1,10 +1,7 @@
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandResult, CommandSender,
-        args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
-        tree::{CommandTree, builder::argument},
-    },
-    data::{banned_ip::BANNED_IP_LIST, banned_player::BANNED_PLAYER_LIST},
+use crate::command::{
+    CommandError, CommandExecutor, CommandResult, CommandSender,
+    args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+    tree::{CommandTree, builder::argument},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -20,7 +17,7 @@ impl CommandExecutor for ListExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -30,7 +27,7 @@ impl CommandExecutor for ListExecutor {
 
             match *list_type {
                 "ips" => {
-                    let lock = &BANNED_IP_LIST.read().await;
+                    let lock = &server.data.banned_ip_list.read().await;
                     let entries = lock
                         .banned_ips
                         .iter()
@@ -46,7 +43,7 @@ impl CommandExecutor for ListExecutor {
                     handle_banlist(entries, sender).await;
                 }
                 "players" => {
-                    let lock = &BANNED_PLAYER_LIST.read().await;
+                    let lock = &server.data.banned_player_list.read().await;
                     let entries = lock
                         .banned_players
                         .iter()
@@ -79,12 +76,12 @@ impl CommandExecutor for ListAllExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let mut entries = Vec::new();
-            for entry in &BANNED_PLAYER_LIST.read().await.banned_players {
+            for entry in &server.data.banned_player_list.read().await.banned_players {
                 entries.push((
                     entry.name.clone(),
                     entry.source.clone(),
@@ -92,7 +89,7 @@ impl CommandExecutor for ListAllExecutor {
                 ));
             }
 
-            for entry in &BANNED_IP_LIST.read().await.banned_ips {
+            for entry in &server.data.banned_ip_list.read().await.banned_ips {
                 entries.push((
                     entry.ip.to_string(),
                     entry.source.clone(),

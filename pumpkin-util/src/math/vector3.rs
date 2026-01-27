@@ -151,7 +151,7 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
         }
     }
 
-    pub fn squared_distance_to_vec(&self, other: Self) -> T {
+    pub fn squared_distance_to_vec(&self, other: &Self) -> T {
         self.squared_distance_to(other.x, other.y, other.z)
     }
 

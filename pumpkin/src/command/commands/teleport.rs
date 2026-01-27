@@ -188,7 +188,9 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
                     [],
                 )));
             }
-            let (yaw, pitch) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
+            // Note: Rotation returns (yaw, is_yaw_relative, pitch, is_pitch_relative)
+            // For teleport, we use absolute values only (ignore relative flags)
+            let (yaw, _, pitch, _) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
 
             // todo command context
             let world = server.worlds.read().await.first().unwrap().clone();

@@ -87,7 +87,7 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
 
                             if mob
                                 .get_mob_entity()
-                                .is_in_position_target_range_pos(block_pos_mut)
+                                .is_in_position_target_range_pos(&block_pos_mut)
                                 && can_target
                             {
                                 self.target_pos = block_pos_mut;
@@ -177,7 +177,7 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
             };
             let desired_distance = move_to_target_pos.get_desired_distance_to_target();
 
-            if block_pos.squared_distance_to_vec(mob.get_entity().pos.load())
+            if block_pos.squared_distance_to_vec(&mob.get_entity().pos.load())
                 < desired_distance * desired_distance
             {
                 self.reached = true;

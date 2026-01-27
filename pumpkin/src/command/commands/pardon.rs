@@ -4,7 +4,7 @@ use crate::{
         args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::{SaveJSONConfiguration, banned_player::BANNED_PLAYER_LIST},
+    data::SaveJSONConfiguration,
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -20,7 +20,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -29,7 +29,7 @@ impl CommandExecutor for Executor {
             };
             let target = (*target).to_string();
 
-            let mut lock = BANNED_PLAYER_LIST.write().await;
+            let mut lock = server.data.banned_player_list.write().await;
 
             if let Some(idx) = lock
                 .banned_players

@@ -135,12 +135,6 @@ impl CommandBlock {
         if command.is_empty() {
             command_entity.success_count.store(0, Ordering::Release);
         } else {
-            if command == "Searge" && command_entity.track_output.load(Ordering::Relaxed) {
-                let mut last_output = command_entity.last_output.lock().await;
-                *last_output = "#itzlipofutzli".to_string();
-                return;
-            }
-
             server
                 .command_dispatcher
                 .read()

@@ -984,7 +984,7 @@ impl Entity {
                             }
 
                             let mut fluid_velo =
-                                self.world.get_fluid_velocity(pos, &fluid, &state).await;
+                                self.world.get_fluid_velocity(pos, fluid, state).await;
 
                             if fluid_height[i] < 0.4 {
                                 fluid_velo = fluid_velo * fluid_height[i];
@@ -1006,7 +1006,7 @@ impl Entity {
         for (_, fluid) in fluids {
             self.world
                 .block_registry
-                .on_entity_collision_fluid(&fluid, caller.as_ref())
+                .on_entity_collision_fluid(fluid, caller.as_ref())
                 .await;
         }
 
@@ -1701,35 +1701,7 @@ impl Entity {
                     let (block, state) = world.get_block_and_state(&pos).await;
                     let block_outlines = state.get_block_outline_shapes();
 
-                    if let Some(outlines) = block_outlines {
-                        if outlines.is_empty() {
-                            world
-                                .block_registry
-                                .on_entity_collision(block, world, entity, &pos, state, server)
-                                .await;
-                            let fluid = world.get_fluid(&pos).await;
-                            world
-                                .block_registry
-                                .on_entity_collision_fluid(fluid, entity)
-                                .await;
-                            continue;
-                        }
-                        for outline in outlines {
-                            let outline_aabb = outline.at_pos(pos);
-                            if outline_aabb.intersects(&aabb) {
-                                world
-                                    .block_registry
-                                    .on_entity_collision(block, world, entity, &pos, state, server)
-                                    .await;
-                                let fluid = world.get_fluid(&pos).await;
-                                world
-                                    .block_registry
-                                    .on_entity_collision_fluid(fluid, entity)
-                                    .await;
-                                break;
-                            }
-                        }
-                    } else {
+                    if state.outline_shapes.is_empty() {
                         world
                             .block_registry
                             .on_entity_collision(block, world, entity, &pos, state, server)
@@ -1739,6 +1711,22 @@ impl Entity {
                             .block_registry
                             .on_entity_collision_fluid(fluid, entity)
                             .await;
+                        continue;
+                    }
+                    for outline in block_outlines {
+                        let outline_aabb = outline.at_pos(pos);
+                        if outline_aabb.intersects(&aabb) {
+                            world
+                                .block_registry
+                                .on_entity_collision(block, world, entity, &pos, state, server)
+                                .await;
+                            let fluid = world.get_fluid(&pos).await;
+                            world
+                                .block_registry
+                                .on_entity_collision_fluid(fluid, entity)
+                                .await;
+                            break;
+                        }
                     }
                 }
             }

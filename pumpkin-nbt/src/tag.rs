@@ -32,21 +32,33 @@ impl NbtTag {
         unsafe { *(self as *const Self as *const u8) }
     }
 
-    pub fn serialize<W: Write>(&self, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
+    pub fn serialize<W: Write>(self, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
         w.write_u8_be(self.get_type_id())?;
         self.serialize_data(w)?;
         Ok(())
     }
 
-    pub fn serialize_data<W: Write>(&self, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
+    pub fn write_string<W: Write>(string: &str, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
+        let java_string = cesu8::to_java_cesu8(string);
+        let len = java_string.len();
+        if len > u16::MAX as usize {
+            return Err(Error::LargeLength(len));
+        }
+
+        w.write_u16_be(len as u16)?;
+        w.write_slice(&java_string)?;
+        Ok(())
+    }
+
+    pub fn serialize_data<W: Write>(self, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
         match self {
             NbtTag::End => {}
-            NbtTag::Byte(byte) => w.write_i8_be(*byte)?,
-            NbtTag::Short(short) => w.write_i16_be(*short)?,
-            NbtTag::Int(int) => w.write_i32_be(*int)?,
-            NbtTag::Long(long) => w.write_i64_be(*long)?,
-            NbtTag::Float(float) => w.write_f32_be(*float)?,
-            NbtTag::Double(double) => w.write_f64_be(*double)?,
+            NbtTag::Byte(byte) => w.write_i8_be(byte)?,
+            NbtTag::Short(short) => w.write_i16_be(short)?,
+            NbtTag::Int(int) => w.write_i32_be(int)?,
+            NbtTag::Long(long) => w.write_i64_be(long)?,
+            NbtTag::Float(float) => w.write_f32_be(float)?,
+            NbtTag::Double(double) => w.write_f64_be(double)?,
             NbtTag::ByteArray(byte_array) => {
                 let len = byte_array.len();
                 if len > i32::MAX as usize {
@@ -54,17 +66,10 @@ impl NbtTag {
                 }
 
                 w.write_i32_be(len as i32)?;
-                w.write_slice(byte_array)?;
+                w.write_slice(&byte_array)?;
             }
             NbtTag::String(string) => {
-                let java_string = cesu8::to_java_cesu8(string);
-                let len = java_string.len();
-                if len > u16::MAX as usize {
-                    return Err(Error::LargeLength(len));
-                }
-
-                w.write_u16_be(len as u16)?;
-                w.write_slice(&java_string)?;
+                Self::write_string(&string, w)?;
             }
             NbtTag::List(list) => {
                 let len = list.len();
@@ -89,7 +94,7 @@ impl NbtTag {
 
                 w.write_i32_be(len as i32)?;
                 for int in int_array {
-                    w.write_i32_be(*int)?;
+                    w.write_i32_be(int)?;
                 }
             }
             NbtTag::LongArray(long_array) => {
@@ -101,7 +106,7 @@ impl NbtTag {
                 w.write_i32_be(len as i32)?;
 
                 for long in long_array {
-                    w.write_i64_be(*long)?;
+                    w.write_i64_be(long)?;
                 }
             }
         };
@@ -307,9 +312,9 @@ impl NbtTag {
         }
     }
 
-    pub fn extract_byte_array(&self) -> Option<Box<[u8]>> {
+    pub fn extract_byte_array(&self) -> Option<&[u8]> {
         match self {
-            NbtTag::ByteArray(byte_array) => Some(byte_array.clone()),
+            NbtTag::ByteArray(byte_array) => Some(byte_array),
             _ => None,
         }
     }

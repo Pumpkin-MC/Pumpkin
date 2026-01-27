@@ -87,12 +87,9 @@ impl ItemEntity {
     async fn try_merge(&self) {
         let bounding_box = self.entity.bounding_box.load().expand(0.5, 0.0, 0.5);
 
-        let items: Vec<_> = self
-            .entity
-            .world
-            .entities
-            .read()
-            .await
+        let entities_guard = self.entity.world.entities.read().await;
+
+        let items = entities_guard
             .values()
             .filter_map(|entity: &Arc<dyn EntityBase>| {
                 entity.clone().get_item_entity().filter(|item| {
@@ -100,8 +97,7 @@ impl ItemEntity {
                         && !item.never_despawn.load(Ordering::Relaxed)
                         && item.entity.bounding_box.load().intersects(&bounding_box)
                 })
-            })
-            .collect();
+            });
 
         for item in items {
             if item.can_merge().await {

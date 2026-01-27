@@ -73,10 +73,10 @@ impl NbtCompound {
         Ok(compound)
     }
 
-    pub fn serialize_content<W: Write>(&self, w: &mut WriteAdaptor<W>) -> Result<(), Error> {
-        for (name, tag) in &self.child_tags {
+    pub fn serialize_content<W: Write>(self, w: &mut WriteAdaptor<W>) -> Result<(), Error> {
+        for (name, tag) in self.child_tags {
             w.write_u8_be(tag.get_type_id())?;
-            NbtTag::String(name.clone()).serialize_data(w)?;
+            NbtTag::write_string(&name, w)?;
             tag.serialize_data(w)?;
         }
         w.write_u8_be(END_ID)?;

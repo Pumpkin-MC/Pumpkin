@@ -128,7 +128,7 @@ impl ClientPacket for CChunkData<'_> {
             write.write_var_int(&VarInt(block_entity.get_id() as i32))?;
 
             if let Some(nbt) = block_entity.chunk_data_nbt() {
-                write.write_nbt(&nbt.into())?;
+                write.write_nbt(nbt.into())?;
             } else {
                 write.write_u8(END_ID)?;
             }

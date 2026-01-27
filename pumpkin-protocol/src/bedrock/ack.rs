@@ -64,7 +64,7 @@ impl Ack {
 
         let mut start = self.sequences[0];
         let mut end = start;
-        for seq in self.sequences.clone() {
+        for seq in self.sequences.iter().copied() {
             if seq == end + 1 {
                 end = seq
             } else {

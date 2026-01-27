@@ -435,12 +435,7 @@ impl Level {
         };
 
         let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let chunks = self
-            .loaded_chunks
-            .iter()
-            .map(|x| x.value().clone())
-            .collect::<Vec<_>>();
-        for chunk_sync in chunks {
+        for chunk_sync in self.loaded_chunks.iter() {
             // Try to get a READ lock first.
             // Most chunks won't have pending ticks, so this is very fast.
             let chunk = chunk_sync.read().await;
@@ -595,14 +590,18 @@ impl Level {
             let cancel_notifier = level.cancel_token.cancelled();
 
             let fetch_task = async {
-                let mut to_fetch = Vec::new();
-                for pos in &chunks {
-                    if let Some(chunk) = level.loaded_entity_chunks.get(pos) {
-                        let _ = sender.send((chunk.clone(), false));
-                    } else {
-                        to_fetch.push(*pos);
-                    }
-                }
+                let to_fetch: Vec<_> = chunks
+                    .iter()
+                    .filter(|pos| {
+                        if let Some(chunk) = level.loaded_entity_chunks.get(pos) {
+                            let _ = sender.send((chunk.clone(), false));
+                            false // Don't fetch
+                        } else {
+                            true // Needs fetch
+                        }
+                    })
+                    .copied()
+                    .collect();
 
                 if !to_fetch.is_empty() {
                     let (tx, mut rx) = tokio::sync::mpsc::channel::<

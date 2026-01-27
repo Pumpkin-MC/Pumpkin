@@ -285,7 +285,7 @@ pub trait NetworkWriteExt {
         Ok(())
     }
 
-    fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError>;
+    fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError>;
 }
 
 macro_rules! write_number_be {
@@ -400,7 +400,7 @@ impl<W: Write> NetworkWriteExt for W {
         Ok(())
     }
 
-    fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError> {
+    fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
         let mut write_adaptor = WriteAdaptor::new(self);
         data.serialize(&mut write_adaptor)
             .map_err(|e| WritingError::Message(e.to_string()))?;

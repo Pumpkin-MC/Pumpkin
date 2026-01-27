@@ -1,6 +1,7 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
+use crate::data::VanillaData;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
 use crate::net::bedrock::BedrockClient;
 use crate::net::java::{JavaClient, PacketHandlerResult};
@@ -8,11 +9,9 @@ use crate::net::{ClientPlatform, DisconnectReason};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use log::{Level, LevelFilter};
-use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_macros::send_cancellable;
-use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use rustyline::Editor;
 use rustyline::history::FileHistory;
@@ -26,7 +25,7 @@ use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -42,18 +41,6 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
-
-pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
-    LazyLock::new(|| Arc::new(PluginManager::new()));
-
-pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
-
-pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLock::new(|| {
-    Arc::new(RwLock::new(PermissionManager::new(
-        PERMISSION_REGISTRY.clone(),
-    )))
-});
 
 pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter)>;
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
@@ -186,8 +173,9 @@ impl PumpkinServer {
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
+        vanilla_data: VanillaData,
     ) -> Self {
-        let server = Server::new(basic_config, advanced_config).await;
+        let server = Server::new(basic_config, advanced_config, vanilla_data).await;
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
@@ -303,15 +291,21 @@ impl PumpkinServer {
     }
 
     pub async fn init_plugins(&self) {
-        PLUGIN_MANAGER.set_self_ref(PLUGIN_MANAGER.clone()).await;
-        PLUGIN_MANAGER.set_server(self.server.clone()).await;
-        if let Err(err) = PLUGIN_MANAGER.load_plugins().await {
+        self.server
+            .plugin_manager
+            .set_self_ref(self.server.plugin_manager.clone())
+            .await;
+        self.server
+            .plugin_manager
+            .set_server(self.server.clone())
+            .await;
+        if let Err(err) = self.server.plugin_manager.load_plugins().await {
             log::error!("{err}");
         };
     }
 
     pub async fn unload_plugins(&self) {
-        if let Err(err) = PLUGIN_MANAGER.unload_all_plugins().await {
+        if let Err(err) = self.server.plugin_manager.unload_all_plugins().await {
             log::error!("Error unloading plugins: {err}");
         } else {
             log::info!("All plugins unloaded successfully");
@@ -525,6 +519,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if let Some(command) = rx.recv().await {
                 send_cancellable! {{
+                    &server;
                     ServerCommandEvent::new(command.clone());
 
                     'after: {
@@ -592,6 +587,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
 
             if let Some(line) = result {
                 send_cancellable! {{
+                    &server;
                     ServerCommandEvent::new(line.clone());
 
                     'after: {

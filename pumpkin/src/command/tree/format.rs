@@ -1,5 +1,4 @@
 use crate::command::tree::{CommandTree, Node, NodeType};
-use std::collections::VecDeque;
 use std::fmt::{Display, Formatter, Write};
 
 trait IsVisible {
@@ -52,65 +51,48 @@ fn flatten_require_nodes(nodes: &[Node], children: &[usize]) -> Vec<usize> {
 
 impl Display for CommandTree {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_char('/')?;
-        f.write_str(&self.names[0])?;
+        write!(f, "/{}", self.names[0])?;
 
-        let mut todo = VecDeque::<&[usize]>::with_capacity(self.children.len());
-        todo.push_back(&self.children);
+        let current_children = &self.children[..];
 
-        loop {
-            let Some(children) = todo.pop_front() else {
+        while !current_children.is_empty() {
+            let flattened = flatten_require_nodes(&self.nodes, current_children);
+
+            let mut visible_iter = flattened
+                .iter()
+                .copied()
+                .filter(|&i| self.nodes[i].is_visible());
+
+            let Some(first_idx) = visible_iter.next() else {
                 break;
             };
 
-            let flattened_children = flatten_require_nodes(&self.nodes, children);
-            let visible_children = flattened_children
-                .iter()
-                .copied()
-                .filter(|&i| self.nodes[i].is_visible())
-                .collect::<Vec<_>>();
-
-            if visible_children.is_empty() {
-                break;
-            }
+            let second_idx = visible_iter.next();
 
             f.write_char(' ')?;
 
-            let is_optional = flattened_children
+            let is_optional = flattened
                 .iter()
-                .map(|&i| &self.nodes[i].node_type)
-                .any(|node| matches!(node, NodeType::ExecuteLeaf { .. }));
+                .any(|&i| matches!(self.nodes[i].node_type, NodeType::ExecuteLeaf { .. }));
 
             if is_optional {
                 f.write_char('[')?;
             }
 
-            match visible_children.as_slice() {
-                [] => unreachable!(),
-                [i] => {
-                    let node = &self.nodes[*i];
+            if let Some(second_idx) = second_idx {
+                f.write_char('(')?;
+                self.nodes[first_idx].fmt(f)?;
 
-                    node.fmt(f)?;
+                write!(f, " | ")?;
+                self.nodes[second_idx].fmt(f)?;
 
-                    todo.push_back(&node.children);
+                for idx in visible_iter {
+                    write!(f, " | ")?;
+                    self.nodes[idx].fmt(f)?;
                 }
-                _ => {
-                    // todo: handle cases where one of these nodes has visible children
-                    f.write_char('(')?;
+                f.write_char(')')?;
 
-                    let mut iter = visible_children.iter().map(|&i| &self.nodes[i]);
-
-                    if let Some(node) = iter.next() {
-                        node.fmt(f)?;
-                    }
-
-                    for node in iter {
-                        f.write_str(" | ")?;
-                        node.fmt(f)?;
-                    }
-
-                    f.write_char(')')?;
-                }
+                break;
             }
 
             if is_optional {

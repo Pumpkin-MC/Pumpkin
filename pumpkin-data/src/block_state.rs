@@ -118,36 +118,41 @@ impl BlockState {
         }
     }
 
-    pub fn get_block_collision_shapes(&self) -> Vec<CollisionShape> {
+    pub fn is_waterlogged(&self) -> bool {
+        let block = Block::from_state_id(self.id);
+
+        if let Some(props) = block.properties(self.id) {
+            props
+                .to_props()
+                .iter()
+                .any(|(k, v)| k == &"waterlogged" && v == &"true")
+        } else {
+            false
+        }
+    }
+
+    pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = CollisionShape> + '_ {
         self.collision_shapes
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize])
-            .collect()
     }
 
-    pub fn get_block_outline_shapes(&self) -> Option<Vec<CollisionShape>> {
-        let mut shapes: Vec<CollisionShape> = self
+    pub fn get_block_outline_shapes(&self) -> impl Iterator<Item = CollisionShape> + '_ {
+        let base_shapes = self
             .outline_shapes
             .iter()
-            .map(|&id| COLLISION_SHAPES[id as usize])
-            .collect();
+            .map(|&id| COLLISION_SHAPES[id as usize]);
 
-        let block = Block::from_state_id(self.id);
-        if let Some(props) = block.properties(self.id) {
-            let is_waterlogged = props
-                .to_props()
-                .iter()
-                .any(|(k, v)| *k == "waterlogged" && *v == "true");
+        let water_shape = if self.is_waterlogged() {
+            Some(CollisionShape::new(
+                Vector3::new(0.0, 0.0, 0.0),
+                Vector3::new(1.0, 0.875, 1.0),
+            ))
+        } else {
+            None
+        };
 
-            if is_waterlogged {
-                shapes.push(CollisionShape::new(
-                    Vector3::new(0.0, 0.0, 0.0),
-                    Vector3::new(1.0, 0.875, 1.0),
-                ));
-            }
-        }
-
-        Some(shapes)
+        base_shapes.chain(water_shape)
     }
 }
 

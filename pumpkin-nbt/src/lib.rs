@@ -110,11 +110,11 @@ impl Nbt {
         })
     }
 
-    pub fn write(&self) -> Bytes {
+    pub fn write(self) -> Bytes {
         let mut bytes = Vec::new();
         let mut writer = WriteAdaptor::new(&mut bytes);
         writer.write_u8_be(COMPOUND_ID).unwrap();
-        NbtTag::String(self.name.to_string())
+        NbtTag::String(self.name)
             .serialize_data(&mut writer)
             .unwrap();
         self.root_tag.serialize_content(&mut writer).unwrap();
@@ -122,13 +122,13 @@ impl Nbt {
         bytes.into()
     }
 
-    pub fn write_to_writer<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
+    pub fn write_to_writer<W: Write>(self, mut writer: W) -> Result<(), io::Error> {
         writer.write_all(&self.write())?;
         Ok(())
     }
 
     /// Writes an NBT tag without a root `Compound` name.
-    pub fn write_unnamed(&self) -> Bytes {
+    pub fn write_unnamed(self) -> Bytes {
         let mut bytes = Vec::new();
         let mut writer = WriteAdaptor::new(&mut bytes);
 
@@ -138,7 +138,7 @@ impl Nbt {
         bytes.into()
     }
 
-    pub fn write_unnamed_to_writer<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
+    pub fn write_unnamed_to_writer<W: Write>(self, mut writer: W) -> Result<(), io::Error> {
         writer.write_all(&self.write_unnamed())?;
         Ok(())
     }
@@ -178,7 +178,7 @@ pub fn get_nbt_string<R: Read + Seek>(bytes: &mut NbtReadHelper<R>) -> Result<St
     let len = bytes.get_u16_be()? as usize;
     let string_bytes = bytes.read_boxed_slice(len)?;
     let string = cesu8::from_java_cesu8(&string_bytes).map_err(|_| Error::Cesu8DecodingError)?;
-    Ok(string.to_string())
+    Ok(string.into_owned())
 }
 
 // TODO: This is a bit hacky

@@ -166,11 +166,9 @@ where
         folder: &'a LevelFolder,
         chunks: &'a [Vector2<i32>],
     ) -> BoxFuture<'a, ()> {
-        let paths: Vec<_> = chunks
+        let paths = chunks
             .iter()
-            .map(|chunk| P::file_path(folder, &S::get_chunk_key(chunk)))
-            .collect();
-
+            .map(|chunk| P::file_path(folder, &S::get_chunk_key(chunk)));
         Box::pin(async move {
             let mut watchers = self.watchers.write().await;
             for path in paths {
@@ -187,10 +185,9 @@ where
         folder: &'a LevelFolder,
         chunks: &'a [Vector2<i32>],
     ) -> BoxFuture<'a, ()> {
-        let paths: Vec<_> = chunks
+        let paths = chunks
             .iter()
-            .map(|chunk| P::file_path(folder, &S::get_chunk_key(chunk)))
-            .collect();
+            .map(|chunk| P::file_path(folder, &S::get_chunk_key(chunk)));
         Box::pin(async move {
             let mut watchers = self.watchers.write().await;
 

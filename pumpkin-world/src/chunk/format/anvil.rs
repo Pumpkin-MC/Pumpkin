@@ -123,31 +123,24 @@ impl Compression {
     const CUSTOM_ID: u8 = 127;
 
     fn decompress_data(&self, compressed_data: &[u8]) -> Result<Box<[u8]>, CompressionError> {
+        let initial_capacity = compressed_data.len();
+
+        fn decode<R: std::io::Read>(mut reader: R, capacity: usize) -> std::io::Result<Box<[u8]>> {
+            let mut buf = Vec::with_capacity(capacity);
+            reader.read_to_end(&mut buf)?;
+            Ok(buf.into_boxed_slice())
+        }
+
         match self {
-            Compression::GZip => {
-                let mut decoder = GzDecoder::new(compressed_data);
-                let mut chunk_data = Vec::new();
-                decoder
-                    .read_to_end(&mut chunk_data)
-                    .map_err(CompressionError::GZipError)?;
-                Ok(chunk_data.into_boxed_slice())
-            }
-            Compression::ZLib => {
-                let mut decoder = ZlibDecoder::new(compressed_data);
-                let mut chunk_data = Vec::new();
-                decoder
-                    .read_to_end(&mut chunk_data)
-                    .map_err(CompressionError::ZlibError)?;
-                Ok(chunk_data.into_boxed_slice())
-            }
-            Compression::LZ4 => {
-                let mut decoder = lz4_java_wrc::Lz4BlockInput::new(compressed_data);
-                let mut decompressed_data = Vec::new();
-                decoder
-                    .read_to_end(&mut decompressed_data)
-                    .map_err(CompressionError::LZ4Error)?;
-                Ok(decompressed_data.into_boxed_slice())
-            }
+            Compression::GZip => decode(GzDecoder::new(compressed_data), initial_capacity)
+                .map_err(CompressionError::GZipError),
+            Compression::ZLib => decode(ZlibDecoder::new(compressed_data), initial_capacity)
+                .map_err(CompressionError::ZlibError),
+            Compression::LZ4 => decode(
+                lz4_java_wrc::Lz4BlockInput::new(compressed_data),
+                initial_capacity,
+            )
+            .map_err(CompressionError::LZ4Error),
             Compression::Custom => todo!(),
         }
     }
@@ -349,7 +342,10 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         index as usize
     }
 
-    async fn write_indices(&self, path: &Path, indices: &[usize]) -> Result<(), std::io::Error> {
+    async fn write_indices<I>(&self, path: &Path, indices: I) -> Result<(), std::io::Error>
+    where
+        I: IntoIterator<Item = usize>,
+    {
         log::trace!("Writing in place: {}", path.display());
 
         let file = tokio::fs::OpenOptions::new()
@@ -392,11 +388,11 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         }
 
         let mut chunks = indices
-            .iter()
+            .into_iter()
             .map(|index| {
                 (
                     index,
-                    self.chunks_data[*index]
+                    self.chunks_data[index]
                         .as_ref()
                         .expect("We are trying to write a chunk, but it does not exist!"),
                 )
@@ -547,10 +543,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                 Ok(())
             }
             WriteAction::All => self.write_all(path).await,
-            WriteAction::Parts(parts) => {
-                self.write_indices(path, Vec::from_iter(parts.iter().cloned()).as_slice())
-                    .await
-            }
+            WriteAction::Parts(parts) => self.write_indices(path, parts.iter().copied()).await,
         }?;
 
         // If we still are in memory after this, we don't need to write again!
