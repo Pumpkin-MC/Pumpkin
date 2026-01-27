@@ -1353,22 +1353,20 @@ impl Entity {
             return;
         }
 
-        if portal_world.dimension == Dimension::THE_NETHER
+        if (portal_world.dimension == Dimension::THE_NETHER
             && !portal_world
                 .server
                 .upgrade()
                 .unwrap()
                 .basic_config
-                .allow_nether
-        {
-            return;
-        } else if portal_world.dimension == Dimension::THE_END
-            && !portal_world
-                .server
-                .upgrade()
-                .unwrap()
-                .basic_config
-                .allow_end
+                .allow_nether)
+            || (portal_world.dimension == Dimension::THE_END
+                && !portal_world
+                    .server
+                    .upgrade()
+                    .unwrap()
+                    .basic_config
+                    .allow_end)
         {
             return;
         }
