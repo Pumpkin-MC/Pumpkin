@@ -316,8 +316,8 @@ impl CountOnEveryLayerPlacementModifier {
         chunk: &T,
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {
-        let mut positions = Vec::new(); // Using a Vec to collect results, analogous to Stream.builder()
-        let mut i = 0; // Represents the 'targetY' in findPos
+        let mut positions = Vec::new();
+        let mut i = 0;
         let mut bl;
 
         loop {
@@ -325,6 +325,9 @@ impl CountOnEveryLayerPlacementModifier {
             for _j in 0..self.count.get(random) {
                 let x = random.next_bounded_i32(16) + pos.0.x;
                 let z = random.next_bounded_i32(16) + pos.0.z;
+                if chunk.get_chunk(x >> 4, z >> 4).is_none() {
+                    continue;
+                }
                 let y = chunk.top_motion_blocking_block_height_exclusive(x, z);
 
                 let n = Self::find_pos(chunk, x, y, z, i);
@@ -344,12 +347,19 @@ impl CountOnEveryLayerPlacementModifier {
     }
 
     fn find_pos<T: GenerationCache>(chunk: &T, x: i32, y: i32, z: i32, target_y: i32) -> i32 {
+        if chunk.get_chunk(x >> 4, z >> 4).is_none() {
+            return i32::MAX;
+        }
         let mut mutable_pos = BlockPos::new(x, y, z);
         let mut found_count = 0;
         let mut current_block_state = GenerationCache::get_block_state(chunk, &mutable_pos.0);
 
         for j in (chunk.bottom_y() as i32 + 1..=y).rev() {
             mutable_pos.0.y = j - 1;
+            // stop, scan is outside of cache bounds
+            if chunk.get_chunk(mutable_pos.0.x >> 4, mutable_pos.0.z >> 4).is_none() {
+                return i32::MAX;
+            }
             let next_block_state = GenerationCache::get_block_state(chunk, &mutable_pos.0);
 
             if !Self::blocks_spawn(&next_block_state)
