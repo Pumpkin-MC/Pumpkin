@@ -312,6 +312,38 @@ impl Server {
         };
 
         log::info!("All worlds loaded successfully.");
+
+        // Find and set a safe spawn location if using default spawn
+
+        let is_default_spawn = {
+            let level_info = level_info.read().await;
+            level_info.spawn_x == 0 && level_info.spawn_z == 0
+        };
+
+        if is_default_spawn {
+            log::debug!("Finding safe spawn location...");
+            let overworld = {
+                let worlds = server.worlds.read().await;
+                worlds
+                    .iter()
+                    .find(|world| world.dimension.id == 0u8)
+                    .cloned()
+            };
+            if let Some(world) = overworld {
+                let safe_pos = world.find_safe_spawn_location().await;
+                let mut level_info_write = server.level_info.write().await;
+                level_info_write.spawn_x = safe_pos.x;
+                level_info_write.spawn_z = safe_pos.z;
+                level_info_write.spawn_y = safe_pos.y;
+                log::info!(
+                    "Safe spawn location set to ({}, {}, {})",
+                    safe_pos.x,
+                    safe_pos.y,
+                    safe_pos.z
+                );
+            }
+        }
+
         server
     }
 
