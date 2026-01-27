@@ -68,7 +68,12 @@ pub struct ChestBlock;
 
 impl BlockMetadata for ChestBlock {
     fn ids() -> Box<[u16]> {
-        tag::Block::C_CHESTS_WOODEN.1.into()
+        let wooden = tag::Block::C_CHESTS_WOODEN.1;
+        let copper = tag::Block::MINECRAFT_COPPER_CHESTS.1;
+        let mut ids = Vec::with_capacity(wooden.len() + copper.len());
+        ids.extend_from_slice(wooden);
+        ids.extend_from_slice(copper);
+        ids.into_boxed_slice()
     }
 }
 
@@ -227,7 +232,8 @@ async fn compute_chest_props(
     block_pos: &BlockPos,
     face: BlockDirection,
 ) -> (ChestType, HorizontalFacing) {
-    let chest_facing = player.get_entity().get_horizontal_facing().opposite();
+    let player_facing = player.get_entity().get_horizontal_facing();
+    let chest_facing = player_facing.opposite();
 
     if player.get_entity().pose.load() == EntityPose::Crouching {
         let Some(face) = face.to_horizontal_facing() else {

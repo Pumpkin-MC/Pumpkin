@@ -1641,14 +1641,14 @@ impl Entity {
     }
 
     pub fn get_horizontal_facing(&self) -> HorizontalFacing {
-        let adjusted_yaw = self.yaw.load().rem_euclid(360.0); // Normalize yaw to [0, 360)
-
-        match adjusted_yaw {
-            0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,
-            45.0..=135.0 => HorizontalFacing::West,
-            135.0..=225.0 => HorizontalFacing::North,
-            225.0..=315.0 => HorizontalFacing::East,
-            _ => HorizontalFacing::South, // Default case, should not occur
+        let yaw = self.yaw.load();
+        // Use vanilla's formula: floor(angle / 90.0 + 0.5) & 3
+        let quarter_turns = ((yaw / 90.0) + 0.5).floor() as i32 & 3;
+        match quarter_turns {
+            0 => HorizontalFacing::South,
+            1 => HorizontalFacing::West,
+            2 => HorizontalFacing::North,
+            _ => HorizontalFacing::East,
         }
     }
 

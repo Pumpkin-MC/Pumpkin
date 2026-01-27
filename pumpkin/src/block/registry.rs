@@ -118,6 +118,7 @@ use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::redstone::dispenser::DispenserBlock;
 use crate::block::blocks::redstone::dropper::DropperBlock;
+use crate::block::blocks::shelf::ShelfBlock;
 
 use super::BlockIsReplacing;
 use super::blocks::plant::crop::gourds::attached_stem::AttachedStemBlock;
@@ -226,6 +227,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CandleCakeBlock);
     manager.register(SkullBlock);
     manager.register(ChiseledBookshelfBlock);
+    manager.register(ShelfBlock);
     manager.register(LecternBlock);
     manager.register(StemBlock);
     manager.register(AttachedStemBlock);

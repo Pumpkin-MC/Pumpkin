@@ -43,6 +43,7 @@ pub mod plant;
 pub mod powder_snow;
 pub mod pumpkin;
 pub mod redstone;
+pub mod shelf;
 pub mod signs;
 pub mod skull_block;
 pub mod slabs;
