@@ -1887,7 +1887,12 @@ impl World {
         // Get respawn position and dimension
         let (position, yaw, pitch, respawn_dimension) =
             if let Some(respawn) = player.calculate_respawn_point().await {
-                (respawn.position, respawn.yaw, respawn.pitch, respawn.dimension)
+                (
+                    respawn.position,
+                    respawn.yaw,
+                    respawn.pitch,
+                    respawn.dimension,
+                )
             } else {
                 // No valid respawn point - send notification and use world spawn
                 player
@@ -1895,9 +1900,10 @@ impl World {
                     .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
                     .await;
 
-                let top = self
-                    .get_top_block(Vector2::new(spawn_x, spawn_z))
-                    .await;
+                // FIXME: This spawn position calculation is incorrect. Should use vanilla's
+                // proper spawn position calculation (see #1381). The y-level calculation
+                // needs to account for spawn radius and find a safe spawn position.
+                let top = self.get_top_block(Vector2::new(spawn_x, spawn_z)).await;
 
                 (
                     Vector3::new(
@@ -1961,9 +1967,9 @@ impl World {
                 respawn_dimension,
                 self.dimension
             );
-            let top = self
-                .get_top_block(Vector2::new(spawn_x, spawn_z))
-                .await;
+            // FIXME: This spawn position calculation is incorrect. Should use vanilla's
+            // proper spawn position calculation (see #1381).
+            let top = self.get_top_block(Vector2::new(spawn_x, spawn_z)).await;
             let fallback_pos = Vector3::new(
                 f64::from(spawn_x) + 0.5,
                 (top + 1).into(),
@@ -1993,9 +1999,6 @@ impl World {
             .await;
 
         player.living_entity.reset_state().await;
-
-        log::debug!("Sending player abilities to {}", player.gameprofile.name);
-        player.send_abilities_update().await;
 
         player.send_permission_lvl_update().await;
 

@@ -28,6 +28,7 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
+use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
@@ -824,10 +825,10 @@ impl Player {
     /// Returns `Some(CalculatedRespawnPoint)` if a valid respawn point exists, `None` otherwise.
     ///
     /// # Behavior
-    /// - If `force` flag is set (via `/spawnpoint` command), returns the stored position directly
-    ///   without validating bed/anchor blocks.
-    /// - For beds (Overworld): validates the bed block still exists.
-    /// - For respawn anchors (Nether): validates the anchor block still exists.
+    /// - If `force` flag is set (via `/spawnpoint` command), validates the spawn position is safe
+    ///   (both the block and block above allow mob spawn).
+    /// - For beds: validates the bed block still exists and finds a valid spawn position around it.
+    /// - For respawn anchors (Nether): validates the anchor has charges and finds a valid spawn position.
     /// - Returns `None` if the spawn block is invalid/missing (caller should send
     ///   `NoRespawnBlockAvailable` game event and use world spawn).
     ///
@@ -835,56 +836,262 @@ impl Player {
     /// This function does NOT send any packets. The caller is responsible for
     /// sending `NoRespawnBlockAvailable` if this returns `None`.
     pub async fn calculate_respawn_point(&self) -> Option<CalculatedRespawnPoint> {
-        let respawn_point = self.respawn_point.load()?;
+        type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
+        type AnchorProperties = pumpkin_data::block_properties::RespawnAnchorLikeProperties;
 
-        // Center the position in the block (add 0.5 to x/z, 0.1 to y per vanilla)
-        let position = Vector3::new(
-            f64::from(respawn_point.position.0.x) + 0.5,
-            f64::from(respawn_point.position.0.y) + 0.1,
-            f64::from(respawn_point.position.0.z) + 0.5,
+        let respawn_point = self.respawn_point.load()?;
+        let world = self.world();
+        let pos = &respawn_point.position;
+        let (block, state_id) = world.get_block_and_state_id(pos).await;
+
+        // If force is set (from /spawnpoint command), validate position is safe
+        if respawn_point.force {
+            // For forced spawn, check if both the block and block above allow mob spawn
+            let block_state = world.get_block_state(pos).await;
+            let above_state = world.get_block_state(&pos.up()).await;
+
+            // Check if blocks are passable (non-solid or air)
+            let block_safe = block_state.is_air() || !block_state.is_solid();
+            let above_safe = above_state.is_air() || !above_state.is_solid();
+
+            if block_safe && above_safe {
+                let position = Vector3::new(
+                    f64::from(pos.0.x) + 0.5,
+                    f64::from(pos.0.y) + 0.1,
+                    f64::from(pos.0.z) + 0.5,
+                );
+                log::debug!(
+                    "Returning forced spawn point at {:?}, dimension: {:?}",
+                    position,
+                    respawn_point.dimension
+                );
+                return Some(CalculatedRespawnPoint {
+                    position,
+                    yaw: respawn_point.yaw,
+                    pitch: 0.0,
+                    dimension: respawn_point.dimension,
+                });
+            }
+            return None;
+        }
+
+        // Handle bed respawn
+        if block.has_tag(&tag::Block::MINECRAFT_BEDS) {
+            let bed_props = BedProperties::from_state_id(state_id, block);
+            let facing = bed_props.facing;
+
+            // Try positions around the bed based on facing direction
+            // Vanilla tries multiple offset patterns; we use a simplified version
+            if let Some(spawn_pos) =
+                Self::find_bed_spawn_position(world, pos, facing, respawn_point.yaw).await
+            {
+                return Some(CalculatedRespawnPoint {
+                    position: spawn_pos,
+                    yaw: respawn_point.yaw,
+                    pitch: 0.0,
+                    dimension: respawn_point.dimension,
+                });
+            }
+            return None;
+        }
+
+        // Handle respawn anchor (Nether)
+        if block == &Block::RESPAWN_ANCHOR {
+            use pumpkin_data::block_properties::Integer0To4;
+
+            let anchor_props = AnchorProperties::from_state_id(state_id, block);
+            let charges = anchor_props.charges.to_index();
+
+            // Anchor needs at least 1 charge to work
+            if charges == 0 {
+                return None;
+            }
+
+            // Try positions around the anchor
+            if let Some(spawn_pos) = Self::find_anchor_spawn_position(world, pos).await {
+                // Decrement charges after successful respawn position found
+                let new_charges = charges - 1;
+                let mut new_props = anchor_props;
+                new_props.charges = Integer0To4::from_index(new_charges);
+                world
+                    .set_block_state(
+                        pos,
+                        new_props.to_state_id(block),
+                        pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+
+                return Some(CalculatedRespawnPoint {
+                    position: spawn_pos,
+                    yaw: respawn_point.yaw,
+                    pitch: 0.0,
+                    dimension: respawn_point.dimension,
+                });
+            }
+            return None;
+        }
+
+        None
+    }
+
+    /// Find a valid spawn position around a bed.
+    /// Vanilla uses a complex algorithm based on bed facing direction.
+    /// We use a simplified version that tries cardinal directions first.
+    async fn find_bed_spawn_position(
+        world: &Arc<crate::world::World>,
+        bed_pos: &BlockPos,
+        facing: HorizontalFacing,
+        _spawn_angle: f32,
+    ) -> Option<Vector3<f64>> {
+        // Get offsets based on bed facing direction (vanilla-like order)
+        let offsets = Self::get_bed_spawn_offsets(facing);
+
+        for (dx, dz) in offsets {
+            let check_pos = BlockPos(Vector3::new(
+                bed_pos.0.x + dx,
+                bed_pos.0.y,
+                bed_pos.0.z + dz,
+            ));
+
+            if let Some(pos) = Self::find_respawn_pos(world, &check_pos).await {
+                return Some(pos);
+            }
+
+            // Also try one block down (for beds on elevated platforms)
+            let check_pos_down = BlockPos(Vector3::new(
+                bed_pos.0.x + dx,
+                bed_pos.0.y - 1,
+                bed_pos.0.z + dz,
+            ));
+            if let Some(pos) = Self::find_respawn_pos(world, &check_pos_down).await {
+                return Some(pos);
+            }
+        }
+
+        // Try on the bed itself as last resort
+        if let Some(pos) = Self::find_respawn_pos(world, bed_pos).await {
+            return Some(pos);
+        }
+
+        None
+    }
+
+    /// Get spawn position offsets around a bed based on facing direction.
+    /// This is a simplified version of vanilla's getAroundBedOffsets.
+    fn get_bed_spawn_offsets(facing: HorizontalFacing) -> Vec<(i32, i32)> {
+        let (fx, fz) = match facing {
+            HorizontalFacing::North => (0, -1),
+            HorizontalFacing::South => (0, 1),
+            HorizontalFacing::West => (-1, 0),
+            HorizontalFacing::East => (1, 0),
+        };
+
+        // Clockwise rotation
+        let (rx, rz) = (-fz, fx);
+
+        vec![
+            (rx, rz),                   // Right of bed
+            (-rx, -rz),                 // Left of bed
+            (rx - fx, rz - fz),         // Right-back
+            (-rx - fx, -rz - fz),       // Left-back
+            (-fx, -fz),                 // Behind foot
+            (-fx * 2, -fz * 2),         // Further behind
+            (rx + fx, rz + fz),         // Right-front
+            (-rx + fx, -rz + fz),       // Left-front
+            (fx, fz),                   // In front
+            (rx - fx * 2, rz - fz * 2), // Far right-back
+        ]
+    }
+
+    /// Find a valid spawn position around a respawn anchor.
+    async fn find_anchor_spawn_position(
+        world: &Arc<crate::world::World>,
+        anchor_pos: &BlockPos,
+    ) -> Option<Vector3<f64>> {
+        // Vanilla VALID_HORIZONTAL_SPAWN_OFFSETS
+        let horizontal_offsets: [(i32, i32); 8] = [
+            (0, -1),
+            (-1, 0),
+            (0, 1),
+            (1, 0),
+            (-1, -1),
+            (1, -1),
+            (-1, 1),
+            (1, 1),
+        ];
+
+        // Try at same level, then one down, then one up
+        for dy in [0, -1, 1] {
+            for (dx, dz) in horizontal_offsets {
+                let check_pos = BlockPos(Vector3::new(
+                    anchor_pos.0.x + dx,
+                    anchor_pos.0.y + dy,
+                    anchor_pos.0.z + dz,
+                ));
+
+                if let Some(pos) = Self::find_respawn_pos(world, &check_pos).await {
+                    return Some(pos);
+                }
+            }
+        }
+
+        // Also try directly above the anchor
+        let above_pos = anchor_pos.up();
+        Self::find_respawn_pos(world, &above_pos).await
+    }
+
+    /// Check if a position is valid for respawning (vanilla Dismounting.findRespawnPos logic).
+    /// Returns the spawn position if valid, None otherwise.
+    async fn find_respawn_pos(
+        world: &Arc<crate::world::World>,
+        pos: &BlockPos,
+    ) -> Option<Vector3<f64>> {
+        let state = world.get_block_state(pos).await;
+        let below_state = world.get_block_state(&pos.down()).await;
+
+        // Check if block at position is invalid for spawn (e.g., inside solid block)
+        let block = world.get_block(pos).await;
+        if block.has_tag(&tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
+            return None;
+        }
+
+        // Check if block above is also invalid
+        let above_block = world.get_block(&pos.up()).await;
+        if above_block.has_tag(&tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
+            return None;
+        }
+
+        // Need solid floor below or at position
+        let has_floor = below_state.is_solid() || state.is_solid();
+        if !has_floor {
+            return None;
+        }
+
+        // Position must not be inside a solid block
+        if state.is_solid() && !state.is_air() {
+            return None;
+        }
+
+        // Create player-sized bounding box at this position
+        let x = f64::from(pos.0.x) + 0.5;
+        let y = f64::from(pos.0.y) + 0.1;
+        let z = f64::from(pos.0.z) + 0.5;
+        let spawn_pos = Vector3::new(x, y, z);
+
+        // Player dimensions: 0.6 wide, 1.8 tall
+        let half_width = 0.3;
+        let height = 1.8;
+        let player_box = BoundingBox::new(
+            Vector3::new(x - half_width, y, z - half_width),
+            Vector3::new(x + half_width, y + height, z + half_width),
         );
 
-        // If force is set (from /spawnpoint command), always use the spawn point
-        if respawn_point.force {
-            log::debug!(
-                "Returning forced spawn point at {:?}, dimension: {:?}",
-                position,
-                respawn_point.dimension
-            );
-            return Some(CalculatedRespawnPoint {
-                position,
-                yaw: respawn_point.yaw,
-                pitch: 0.0,
-                dimension: respawn_point.dimension,
-            });
+        // Check if the space is empty (no block collisions)
+        if !world.is_space_empty(player_box).await {
+            return None;
         }
 
-        let block = self.world().get_block(&respawn_point.position).await;
-
-        if respawn_point.dimension == Dimension::OVERWORLD
-            && block.has_tag(&tag::Block::MINECRAFT_BEDS)
-        {
-            // TODO: calculate respawn position around bed
-            Some(CalculatedRespawnPoint {
-                position,
-                yaw: respawn_point.yaw,
-                pitch: 0.0,
-                dimension: respawn_point.dimension,
-            })
-        } else if respawn_point.dimension == Dimension::THE_NETHER
-            && block == &Block::RESPAWN_ANCHOR
-        {
-            // TODO: calculate respawn position around anchor
-            // TODO: check if there is fuel for respawn
-            Some(CalculatedRespawnPoint {
-                position,
-                yaw: respawn_point.yaw,
-                pitch: 0.0,
-                dimension: respawn_point.dimension,
-            })
-        } else {
-            None
-        }
+        Some(spawn_pos)
     }
 
     pub async fn sleep(&self, bed_head_pos: BlockPos) {
