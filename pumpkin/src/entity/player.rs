@@ -819,7 +819,22 @@ impl Player {
             .await;
     }
 
-    pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32, f32, Dimension)> {
+    /// Calculates the player's respawn point based on stored spawn data.
+    ///
+    /// Returns `Some(CalculatedRespawnPoint)` if a valid respawn point exists, `None` otherwise.
+    ///
+    /// # Behavior
+    /// - If `force` flag is set (via `/spawnpoint` command), returns the stored position directly
+    ///   without validating bed/anchor blocks.
+    /// - For beds (Overworld): validates the bed block still exists.
+    /// - For respawn anchors (Nether): validates the anchor block still exists.
+    /// - Returns `None` if the spawn block is invalid/missing (caller should send
+    ///   `NoRespawnBlockAvailable` game event and use world spawn).
+    ///
+    /// # Note
+    /// This function does NOT send any packets. The caller is responsible for
+    /// sending `NoRespawnBlockAvailable` if this returns `None`.
+    pub async fn calculate_respawn_point(&self) -> Option<CalculatedRespawnPoint> {
         let respawn_point = self.respawn_point.load()?;
 
         // Center the position in the block (add 0.5 to x/z, 0.1 to y per vanilla)
@@ -836,7 +851,12 @@ impl Player {
                 position,
                 respawn_point.dimension
             );
-            return Some((position, respawn_point.yaw, 0.0, respawn_point.dimension));
+            return Some(CalculatedRespawnPoint {
+                position,
+                yaw: respawn_point.yaw,
+                pitch: 0.0,
+                dimension: respawn_point.dimension,
+            });
         }
 
         let block = self.world().get_block(&respawn_point.position).await;
@@ -844,19 +864,25 @@ impl Player {
         if respawn_point.dimension == Dimension::OVERWORLD
             && block.has_tag(&tag::Block::MINECRAFT_BEDS)
         {
-            // TODO: calculate respawn position
-            Some((position, respawn_point.yaw, 0.0, respawn_point.dimension))
+            // TODO: calculate respawn position around bed
+            Some(CalculatedRespawnPoint {
+                position,
+                yaw: respawn_point.yaw,
+                pitch: 0.0,
+                dimension: respawn_point.dimension,
+            })
         } else if respawn_point.dimension == Dimension::THE_NETHER
             && block == &Block::RESPAWN_ANCHOR
         {
-            // TODO: calculate respawn position
+            // TODO: calculate respawn position around anchor
             // TODO: check if there is fuel for respawn
-            Some((position, respawn_point.yaw, 0.0, respawn_point.dimension))
+            Some(CalculatedRespawnPoint {
+                position,
+                yaw: respawn_point.yaw,
+                pitch: 0.0,
+                dimension: respawn_point.dimension,
+            })
         } else {
-            self.client
-                .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
-                .await;
-
             None
         }
     }
@@ -2788,13 +2814,27 @@ impl Abilities {
     }
 }
 
-/// Represents the player's respawn point.
+/// Represents the player's stored respawn point (bed/anchor/forced).
 #[derive(Copy, Debug, Clone, PartialEq)]
 pub struct RespawnPoint {
     pub dimension: Dimension,
     pub position: BlockPos,
     pub yaw: f32,
     pub force: bool,
+}
+
+/// Calculated respawn position ready for use.
+/// Returned by `calculate_respawn_point()`.
+#[derive(Debug, Clone)]
+pub struct CalculatedRespawnPoint {
+    /// The exact position to spawn at (centered in block).
+    pub position: Vector3<f64>,
+    /// The yaw rotation.
+    pub yaw: f32,
+    /// The pitch rotation.
+    pub pitch: f32,
+    /// The dimension to spawn in.
+    pub dimension: Dimension,
 }
 
 /// Represents the player's chat mode settings.

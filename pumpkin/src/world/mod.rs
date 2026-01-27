@@ -1872,25 +1872,41 @@ impl World {
 
         let data_kept = u8::from(alive);
 
-        let info = self.level_info.read().await;
+        // Copy spawn info from level_info to avoid holding lock across await
+        let (spawn_x, spawn_z, spawn_yaw, spawn_pitch, keep_inventory) = {
+            let info = self.level_info.read().await;
+            (
+                info.spawn_x,
+                info.spawn_z,
+                info.spawn_yaw,
+                info.spawn_pitch,
+                info.game_rules.keep_inventory,
+            )
+        };
 
         // Get respawn position and dimension
         let (position, yaw, pitch, respawn_dimension) =
-            if let Some(respawn) = player.get_respawn_point().await {
-                respawn
+            if let Some(respawn) = player.calculate_respawn_point().await {
+                (respawn.position, respawn.yaw, respawn.pitch, respawn.dimension)
             } else {
+                // No valid respawn point - send notification and use world spawn
+                player
+                    .client
+                    .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
+                    .await;
+
                 let top = self
-                    .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
+                    .get_top_block(Vector2::new(spawn_x, spawn_z))
                     .await;
 
                 (
                     Vector3::new(
-                        f64::from(info.spawn_x) + 0.5,
+                        f64::from(spawn_x) + 0.5,
                         (top + 1).into(),
-                        f64::from(info.spawn_z) + 0.5,
+                        f64::from(spawn_z) + 0.5,
                     ),
-                    info.spawn_yaw,
-                    info.spawn_pitch,
+                    spawn_yaw,
+                    spawn_pitch,
                     self.dimension,
                 )
             };
@@ -1946,12 +1962,12 @@ impl World {
                 self.dimension
             );
             let top = self
-                .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
+                .get_top_block(Vector2::new(spawn_x, spawn_z))
                 .await;
             let fallback_pos = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
+                f64::from(spawn_x) + 0.5,
                 (top + 1).into(),
-                f64::from(info.spawn_z) + 0.5,
+                f64::from(spawn_z) + 0.5,
             );
             (self.as_ref(), fallback_pos)
         } else {
@@ -1985,7 +2001,7 @@ impl World {
 
         player.hunger_manager.restart();
 
-        if !info.game_rules.keep_inventory {
+        if !keep_inventory {
             player.set_experience(0, 0.0, 0).await;
             player.inventory.clear().await;
         }
