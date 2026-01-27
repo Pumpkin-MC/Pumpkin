@@ -1166,7 +1166,7 @@ impl World {
 
     /// Finds a safe spawn location starting from (0, 0) and expanding outward
     /// Returns (x, y, z) coordinates for a valid spawn location
-    pub async fn find_safe_spawn_location(&self) -> (i32, i32, i32) {
+    pub async fn find_safe_spawn_location(&self) -> Vector3<i32> {
         const MAX_SEARCH_RADIUS: i32 = 100;
 
         // Generate spiral pattern starting from (0, 0)
@@ -1185,26 +1185,27 @@ impl World {
         }
 
         // Fallback to (0, 0) if no safe location found
-        (0, self.get_top_block(Vector2::new(0, 0)).await + 1, 0)
+        Vector3::new(0, self.get_top_block(Vector2::new(0, 0)).await + 1, 0)
     }
 
-    async fn check_spawn_safety(&self, x: i32, z: i32) -> Option<(i32, i32, i32)> {
+    async fn check_spawn_safety(&self, x: i32, z: i32) -> Option<Vector3<i32>> {
         let top_y = self.get_top_block(Vector2::new(x, z)).await;
 
         // Check if there's solid ground and air above for spawning
-        if !(top_y < self.dimension.min_y || top_y >= self.dimension.height - 1) {
-            let ground_pos = BlockPos::new(x, top_y, z);
-            let spawn_pos = BlockPos::new(x, top_y + 1, z);
-            let above_pos = BlockPos::new(x, top_y + 2, z);
+        if top_y < self.dimension.min_y || top_y >= self.dimension.height - 1 {
+            return None;
+        }
+        let ground_pos = BlockPos::new(x, top_y, z);
+        let spawn_pos = BlockPos::new(x, top_y + 1, z);
+        let above_pos = BlockPos::new(x, top_y + 2, z);
 
-            let ground_block = self.get_block_state(&ground_pos).await;
-            let spawn_block = self.get_block_state(&spawn_pos).await;
-            let above_block = self.get_block_state(&above_pos).await;
+        let ground_block = self.get_block_state(&ground_pos).await;
+        let spawn_block = self.get_block_state(&spawn_pos).await;
+        let above_block = self.get_block_state(&above_pos).await;
 
-            // Safe spawn requires: solid ground, air for player body and head
-            if ground_block.is_solid_block() && spawn_block.is_air() && above_block.is_air() {
-                return Some((x, top_y + 1, z));
-            }
+        // Safe spawn requires: solid ground, air for player body and head
+        if ground_block.is_solid_block() && spawn_block.is_air() && above_block.is_air() {
+            return Some(Vector3::new(x, top_y + 1, z));
         }
         None
     }
