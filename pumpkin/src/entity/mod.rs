@@ -1362,9 +1362,7 @@ impl Entity {
                 .allow_nether
         {
             return;
-        }
-
-        if portal_world.dimension == Dimension::THE_END
+        } else if portal_world.dimension == Dimension::THE_END
             && !portal_world
                 .server
                 .upgrade()
