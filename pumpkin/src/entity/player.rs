@@ -1965,6 +1965,14 @@ impl Player {
                     self.get_entity().set_on_fire(false).await;
                 }
 
+                // Reset sneaking/crouching pose when switching to spectator mode
+                if gamemode == GameMode::Spectator {
+                    let entity = self.get_entity();
+                    if entity.sneaking.load(Ordering::Relaxed) {
+                        entity.set_sneaking(false).await;
+                    }
+                }
+
                 self.living_entity.entity.invulnerable.store(
                     matches!(gamemode, GameMode::Creative | GameMode::Spectator),
                     Ordering::Relaxed,
