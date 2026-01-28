@@ -143,11 +143,17 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
+pub static RESTART_REQUESTED: AtomicBool = AtomicBool::new(false);
 pub static STOP_INTERRUPT: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 
 pub fn stop_server() {
     SHOULD_STOP.store(true, Ordering::Relaxed);
     STOP_INTERRUPT.cancel();
+}
+
+pub fn request_restart() {
+    RESTART_REQUESTED.store(true, Ordering::Relaxed);
+    stop_server();
 }
 
 fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
