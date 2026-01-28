@@ -38,6 +38,7 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod restart;
 mod rotate;
 mod say;
 mod seed;
@@ -154,6 +155,7 @@ pub async fn default_dispatcher(
     );
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
+    dispatcher.register(restart::init_command_tree(), "minecraft:command.restart");
 
     dispatcher
 }
@@ -537,6 +539,13 @@ fn register_level_4_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.stop",
             "Stops the server",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.restart",
+            "Restarts the server",
             PermissionDefault::Op(PermissionLvl::Four),
         ))
         .unwrap();

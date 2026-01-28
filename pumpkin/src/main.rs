@@ -9,13 +9,18 @@ use std::{
     io::{self},
     sync::{Arc, LazyLock, OnceLock},
 };
+use std::process::Command;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 #[cfg(not(unix))]
 use tokio::signal::ctrl_c;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
 
 use pumpkin::data::VanillaData;
-use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
+use pumpkin::{LoggerOption, PumpkinServer, RESTART_REQUESTED, SHOULD_STOP, STOP_INTERRUPT, stop_server};
+use std::sync::atomic::Ordering;
+pub use pumpkin::request_restart;
 
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
@@ -121,6 +126,31 @@ async fn main() {
 
     pumpkin_server.start().await;
     log::info!("The server has stopped.");
+
+    if RESTART_REQUESTED.load(Ordering::Relaxed) {
+        log::warn!("Restart requested; respawning server process...");
+        let exe = match std::env::current_exe() {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Failed to get current exe for restart: {e}");
+                return;
+            }
+        };
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        #[cfg(unix)]
+        {
+            // Replace current process to keep console attached.
+            let err = Command::new(exe).args(&args).exec();
+            log::error!("Failed to exec new server process: {err}");
+        }
+        #[cfg(not(unix))]
+        {
+            match Command::new(exe).args(&args).spawn() {
+                Ok(_) => log::info!("Spawned new server process."),
+                Err(e) => log::error!("Failed to spawn new server process: {e}"),
+            }
+        }
+    }
 }
 
 fn handle_interrupt() {
