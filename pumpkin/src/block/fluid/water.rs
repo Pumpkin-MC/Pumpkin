@@ -1,13 +1,13 @@
-use std::sync::Arc;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, tick::TickPriority};
+use super::flowing_trait::FlowingFluid;
 use crate::{
     block::{BlockFuture, BlockMetadata, fluid::FluidBehaviour},
     entity::EntityBase,
     world::World,
 };
-use super::flowing_trait::FlowingFluid;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::{BlockStateId, tick::TickPriority};
+use std::sync::Arc;
 
 pub struct FlowingWater;
 

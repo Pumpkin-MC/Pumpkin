@@ -404,7 +404,7 @@ pub trait FlowingFluid: Send + Sync {
                 world
                     .schedule_fluid_tick(fluid, *pos, tick_delay, TickPriority::Normal)
                     .await;
-            } 
+            }
         }
     }
 
@@ -442,7 +442,7 @@ pub trait FlowingFluid: Send + Sync {
                     {
                         source_count += 1;
                     }
-                } 
+                }
             }
 
             // Need at least 2 source neighbors
@@ -458,7 +458,7 @@ pub trait FlowingFluid: Send + Sync {
             // Check if block below is a stable source of the same fluid
             let below_is_same_source = if self.is_same_fluid(fluid, below_state_id) {
                 let below_props = FlowingFluidProperties::from_state_id(below_state_id, fluid);
-                
+
                 below_props.level == Level::L8 && below_props.falling == Falling::False
             } else {
                 false

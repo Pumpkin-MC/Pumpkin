@@ -1,4 +1,9 @@
-use std::sync::Arc;
+use super::flowing_trait::FlowingFluid;
+use crate::{
+    block::{BlockFuture, BlockMetadata, fluid::FluidBehaviour},
+    entity::EntityBase,
+    world::World,
+};
 use pumpkin_data::{
     Block, BlockDirection,
     dimension::Dimension,
@@ -7,12 +12,7 @@ use pumpkin_data::{
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
-use super::flowing_trait::FlowingFluid;
-use crate::{
-    block::{BlockFuture, BlockMetadata, fluid::FluidBehaviour},
-    entity::EntityBase,
-    world::World,
-};
+use std::sync::Arc;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 pub struct FlowingLava;

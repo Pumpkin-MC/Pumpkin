@@ -2,7 +2,8 @@ use pumpkin_data::BlockState;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, fluid::Fluid, tag};
 
-/// Check if a specific block can be replaced by fluid based on block properties
+/// Check if a specific block can be replaced by fluid (based on block properties)
+#[must_use]
 pub fn can_be_replaced(block_state: &BlockState, block: &Block, fluid: &Fluid) -> bool {
     // Fluid Logic
     if let Some(other_fluid) = Fluid::from_state_id(block_state.id) {

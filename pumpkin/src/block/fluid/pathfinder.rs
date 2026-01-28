@@ -154,7 +154,8 @@ pub async fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized
         let dx = pos.0.x - start_pos.0.x + slope_find_distance;
         let dz = pos.0.z - start_pos.0.z + slope_find_distance;
         let grid_size = slope_find_distance * 2 + 1;
-        (dx >= 0 && dx < grid_size && dz >= 0 && dz < grid_size).then(|| (dz * grid_size + dx) as usize)
+        (dx >= 0 && dx < grid_size && dz >= 0 && dz < grid_size)
+            .then(|| (dz * grid_size + dx) as usize)
     };
 
     while queue_start < queue_end {
