@@ -4,7 +4,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, BrokenArgs, UseWithItemArgs};
 use crate::world::World;
 use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
-use pumpkin_data::registry::SyncedRegistry;
+use pumpkin_data::jukebox_song::JukeboxSong;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
     Block,
@@ -50,11 +50,11 @@ impl BlockBehaviour for JukeboxBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let world = &args.player.living_entity.entity.world;
+            let world = args.player.living_entity.entity.world.load_full();
 
             // if the jukebox already has a record, stop playing
-            if self.has_record(args.block, args.position, world).await {
-                self.stop_music(args.block, args.position, world).await;
+            if self.has_record(args.block, args.position, &world).await {
+                self.stop_music(args.block, args.position, &world).await;
                 return BlockActionResult::Success;
             }
 
@@ -73,20 +73,20 @@ impl BlockBehaviour for JukeboxBlock {
                 return BlockActionResult::Pass;
             };
 
-            let Some(jukebox_song) = SyncedRegistry::get_jukebox_song_index(song) else {
+            let Some(jukebox_song) = JukeboxSong::from_name(song) else {
                 log::error!("Jukebox playable song not registered!");
                 return BlockActionResult::Pass;
             };
 
             // TODO: Update block nbt
 
-            self.set_record(true, args.block, args.position, world)
+            self.set_record(true, args.block, args.position, &world)
                 .await;
             world
                 .sync_world_event(
                     WorldEvent::JukeboxStartsPlaying,
                     *args.position,
-                    jukebox_song as i32,
+                    jukebox_song.get_id() as i32,
                 )
                 .await;
 

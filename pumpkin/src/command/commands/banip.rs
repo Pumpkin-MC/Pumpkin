@@ -6,9 +6,7 @@ use crate::{
         args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::{
-        SaveJSONConfiguration, banlist_serializer::BannedIpEntry, banned_ip_data::BANNED_IP_LIST,
-    },
+    data::{SaveJSONConfiguration, banlist_serializer::BannedIpEntry},
     net::DisconnectReason,
     server::Server,
 };
@@ -88,7 +86,7 @@ async fn ban_ip(sender: &CommandSender, server: &Server, target: &str, reason: O
         return;
     };
 
-    let mut banned_ips = BANNED_IP_LIST.write().await;
+    let mut banned_ips = server.data.banned_ip_list.write().await;
 
     if banned_ips.get_entry(&target_ip).is_some() {
         sender

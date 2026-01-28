@@ -1,9 +1,9 @@
 use pumpkin_data::packet::serverbound::PLAY_CHAT_COMMAND;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 #[derive(serde::Deserialize, Serialize)]
-#[packet(PLAY_CHAT_COMMAND)]
+#[java_packet(PLAY_CHAT_COMMAND)]
 pub struct SChatCommand {
     pub command: String,
 }

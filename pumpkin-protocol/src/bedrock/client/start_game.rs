@@ -15,8 +15,12 @@ use uuid::Uuid;
 #[derive(PacketWrite)]
 #[packet(11)]
 pub struct CStartGame {
-    // https://mojang.github.io/bedrock-protocol-docs/html/StartGamePacket.html
+    // The unique ID is a value that remains consistent across
+    // different sessions of the same world, but most servers simply fill the runtime ID of the entity out for
+    // this field.
     pub entity_id: VarLong,
+    // The runtime ID is unique for each world session, and
+    // entities are generally identified in packets using this runtime ID.
     pub runtime_entity_id: VarULong,
     pub player_gamemode: GameMode,
     pub position: Vector3<f32>,
@@ -34,9 +38,8 @@ pub struct CStartGame {
 
     pub current_level_time: u64,
     pub enchantment_seed: VarInt,
-
     pub block_properties_size: VarUInt,
-    //pub block_properties: [GG; 2],
+
     pub multiplayer_correlation_id: String,
     pub enable_itemstack_net_manager: bool,
     pub server_version: String,
@@ -51,8 +54,7 @@ pub struct CStartGame {
 
     pub enable_clientside_generation: bool,
     pub blocknetwork_ids_are_hashed: bool,
-    // NetworkPermissions
-    pub disable_client_sounds: bool,
+    pub server_auth_sounds: bool,
 }
 
 #[derive(PacketWrite)]
@@ -115,7 +117,6 @@ pub struct LevelSettings {
     pub new_nether: bool,
     pub edu_shared_uri_button_name: String,
     pub edu_shared_uri_link_uri: String,
-
     pub override_force_experimental_gameplay_has_value: bool,
     pub chat_restriction_level: i8,
     pub disable_player_interactions: bool,

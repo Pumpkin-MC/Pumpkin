@@ -23,12 +23,8 @@ impl FallingBlock {
 }
 
 impl BlockMetadata for FallingBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::GRAVEL.name, Block::SAND.name, Block::RED_SAND.name]
+    fn ids() -> Box<[u16]> {
+        [Block::GRAVEL.id, Block::SAND.id, Block::RED_SAND.id].into()
     }
 }
 

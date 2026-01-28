@@ -51,6 +51,7 @@ pub struct Frame {
 }
 
 impl Frame {
+    #[must_use]
     pub fn new_unreliable(payload: Vec<u8>) -> Self {
         Self {
             reliability: RakReliability::Unreliable,
@@ -71,19 +72,18 @@ impl Frame {
         while let Ok(header) = u8::read(reader) {
             let mut frame = Self::default();
             let reliability_id = (header & 0xE0) >> 5;
-            let reliability = match RakReliability::from_id(reliability_id) {
-                Some(reliability) => reliability,
-                None => return Err(Error::other("Invalid reliability")),
+            let Some(reliability) = RakReliability::from_id(reliability_id) else {
+                return Err(Error::other("Invalid reliability"));
             };
             let split = (header & RAKNET_SPLIT) != 0;
             let length = u16::read_be(reader)? >> 3;
 
             if reliability.is_reliable() {
-                frame.reliable_number = u24::read(reader)?.0
+                frame.reliable_number = u24::read(reader)?.0;
             }
 
             if reliability.is_sequenced() {
-                frame.sequence_index = u24::read(reader)?.0
+                frame.sequence_index = u24::read(reader)?.0;
             }
 
             if reliability.is_ordered() {

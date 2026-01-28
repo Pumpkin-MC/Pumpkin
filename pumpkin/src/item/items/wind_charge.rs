@@ -5,7 +5,6 @@ use crate::entity::player::Player;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
-use uuid::Uuid;
 
 use crate::entity::Entity;
 use crate::entity::projectile::ThrownItemEntity;
@@ -42,13 +41,7 @@ impl ItemBehaviour for WindChargeItem {
                 )
                 .await;
 
-            let entity = Entity::new(
-                Uuid::new_v4(),
-                world.clone(),
-                position,
-                &EntityType::WIND_CHARGE,
-                false,
-            );
+            let entity = Entity::new(world.clone(), position, &EntityType::WIND_CHARGE);
 
             let wind_charge = ThrownItemEntity::new(entity, &player.living_entity.entity);
             let yaw = player.living_entity.entity.yaw.load();

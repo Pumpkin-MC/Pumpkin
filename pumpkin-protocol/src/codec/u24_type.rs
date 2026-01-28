@@ -17,6 +17,6 @@ impl PacketRead for u24 {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let mut buf = [0; 3];
         reader.read_exact(&mut buf)?;
-        Ok(u24(u32::from_le_bytes([buf[0], buf[1], buf[2], 0])))
+        Ok(Self(u32::from_le_bytes([buf[0], buf[1], buf[2], 0])))
     }
 }

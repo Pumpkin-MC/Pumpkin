@@ -65,6 +65,7 @@ impl EntityBase for TNTEntity {
                 self.entity.remove().await;
                 self.entity
                     .world
+                    .load()
                     .explode(self.entity.pos.load(), self.power)
                     .await;
             } else {

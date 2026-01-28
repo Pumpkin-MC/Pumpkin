@@ -1,10 +1,13 @@
 use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
-use crate::data::player_server_data::ServerPlayerData;
+use crate::data::VanillaData;
+use crate::data::player_server::ServerPlayerData;
 use crate::entity::{EntityBase, NBTStorage};
 use crate::item::registry::ItemRegistry;
+use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
+use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
@@ -14,7 +17,7 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::registry::Registry;
+use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_world::dimension::into_level;
 
 use crate::command::CommandSender;
@@ -39,8 +42,8 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
-use tokio::sync::{Mutex, RwLock};
-use tokio::task::JoinHandle;
+use tokio::sync::{Mutex, OnceCell, RwLock};
+use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
 mod connection_cache;
@@ -58,8 +61,18 @@ pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,
 
+    pub data: VanillaData,
+
+    /// Plugin manager
+    pub plugin_manager: Arc<PluginManager>,
+
+    /// Permission manager for the server.
+    pub permission_manager: Arc<RwLock<PermissionManager>>,
+    /// Permission registry for the server.
+    pub permission_registry: Arc<RwLock<PermissionRegistry>>,
+
     /// Handles cryptographic keys for secure communication.
-    key_store: KeyStore,
+    key_store: OnceCell<Arc<KeyStore>>,
     /// Manages server status information.
     listing: Mutex<CachedStatus>,
     /// Saves server branding information.
@@ -74,8 +87,6 @@ pub struct Server {
     pub worlds: RwLock<Vec<Arc<World>>>,
     /// All the dimensions that exist on the server.
     pub dimensions: Vec<Dimension>,
-    /// Caches game registries for efficient access.
-    pub cached_registry: Vec<Registry>,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     /// Mojang's public keys, used for chat session signing
@@ -99,6 +110,8 @@ pub struct Server {
     pub tick_count: AtomicI32,
     /// Random unique Server ID used by Bedrock Edition
     pub server_guid: u64,
+    /// Player idle timeout in minutes (0 = disabled)
+    pub player_idle_timeout: AtomicI32,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
@@ -115,9 +128,12 @@ impl Server {
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
+        vanilla_data: VanillaData,
     ) -> Arc<Self> {
+        let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
         // First register the default commands. After that, plugins can put in their own.
-        let command_dispatcher = RwLock::new(default_dispatcher(&basic_config).await);
+        let command_dispatcher =
+            RwLock::new(default_dispatcher(&permission_registry, &basic_config).await);
         let world_path = basic_config.get_world_path();
 
         let block_registry = super::block::registry::default_registry();
@@ -175,11 +191,21 @@ impl Server {
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
 
+        let mojang_public_keys = if basic_config.allow_chat_reports {
+            fetch_mojang_public_keys(&advanced_config.networking.authentication).unwrap()
+        } else {
+            Vec::new()
+        };
+
         let server = Self {
             basic_config,
             advanced_config,
-
-            cached_registry: Registry::get_synced(),
+            data: vanilla_data,
+            plugin_manager: Arc::new(PluginManager::new()),
+            permission_manager: Arc::new(RwLock::new(PermissionManager::new(
+                permission_registry.clone(),
+            ))),
+            permission_registry,
             container_id: 0.into(),
             worlds: RwLock::new(vec![]),
             dimensions: vec![
@@ -190,7 +216,7 @@ impl Server {
             command_dispatcher,
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
-            key_store: KeyStore::new(),
+            key_store: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
@@ -203,64 +229,92 @@ impl Server {
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
             server_guid: rand::random(),
-            mojang_public_keys: Mutex::new(Vec::new()),
+            player_idle_timeout: AtomicI32::new(0),
+            mojang_public_keys: Mutex::new(mojang_public_keys),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info: level_info.clone(),
             _locker: Arc::new(locker),
         };
-
         let server = Arc::new(server);
-        let weak = Arc::downgrade(&server);
-        let level_config = &server.advanced_config.world;
+        let level_config = Arc::new(server.advanced_config.world.clone());
+
+        let server_clone = server.clone();
+        tokio::spawn(async move {
+            server_clone
+                .key_store
+                .get_or_init(|| async { Arc::new(KeyStore::new()) })
+                .await;
+        });
+
+        let weak_server = Arc::downgrade(&server);
 
         log::info!("Loading Overworld: {seed}");
-        let overworld = World::load(
-            into_level(
-                Dimension::OVERWORLD,
-                level_config,
-                world_path.clone(),
-                block_registry.clone(),
-                seed,
-            ),
-            level_info.clone(),
-            Dimension::OVERWORLD,
-            block_registry.clone(),
-            weak.clone(),
-        );
-        log::info!("Loading Nether: {seed}");
-        let nether = World::load(
-            into_level(
-                Dimension::THE_NETHER,
-                level_config,
-                world_path.clone(),
-                block_registry.clone(),
-                seed,
-            ),
-            level_info.clone(),
-            Dimension::THE_NETHER,
-            block_registry.clone(),
-            weak.clone(),
-        );
-        log::info!("Loading End: {seed}");
-        let end = World::load(
-            into_level(
-                Dimension::THE_END,
-                level_config,
-                world_path,
-                block_registry.clone(),
-                seed,
-            ),
-            level_info,
-            Dimension::THE_END,
-            block_registry,
-            weak,
-        );
-        *server
-            .worlds
-            .try_write()
-            .expect("Nothing should hold a lock of worlds before server startup") =
-            // vec![overworld.into()];
-            vec![overworld.into(), nether.into(), end.into()];
+        let overworld_task = tokio::task::spawn_blocking({
+            let path = world_path.clone();
+            let registry = block_registry.clone();
+            let level_info = level_info.clone();
+            let weak = weak_server.clone();
+            let config = level_config.clone();
+            move || {
+                World::load(
+                    into_level(Dimension::OVERWORLD, &config, path, registry.clone(), seed),
+                    level_info,
+                    Dimension::OVERWORLD,
+                    registry,
+                    weak,
+                )
+            }
+        });
+
+        let nether_task = tokio::task::spawn_blocking({
+            let path = world_path.clone();
+            let registry = block_registry.clone();
+            let level_info = level_info.clone();
+            let weak = weak_server.clone();
+            let config = level_config.clone();
+            move || {
+                World::load(
+                    into_level(Dimension::THE_NETHER, &config, path, registry.clone(), seed),
+                    level_info,
+                    Dimension::THE_NETHER,
+                    registry,
+                    weak,
+                )
+            }
+        });
+
+        let end_task = tokio::task::spawn_blocking({
+            let path = world_path.clone();
+            let registry = block_registry.clone();
+            let level_info = level_info.clone();
+            let weak = weak_server.clone();
+            let config = level_config.clone();
+            move || {
+                World::load(
+                    into_level(Dimension::THE_END, &config, path, registry.clone(), seed),
+                    level_info,
+                    Dimension::THE_END,
+                    registry,
+                    weak,
+                )
+            }
+        });
+
+        let (overworld_res, nether_res, end_res) =
+            tokio::join!(overworld_task, nether_task, end_task);
+
+        let overworld = overworld_res.expect("Overworld load panicked");
+        let nether = nether_res.expect("Nether load panicked");
+        let end = end_res.expect("End load panicked");
+
+        {
+            let mut worlds = server.worlds.write().await;
+            worlds.push(overworld.into());
+            worlds.push(nether.into());
+            worlds.push(end.into());
+        };
+
+        log::info!("All worlds loaded successfully.");
         server
     }
 
@@ -377,6 +431,7 @@ impl Server {
         let player = Arc::new(player);
 
         send_cancellable! {{
+            self;
             PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone()).await;
@@ -456,6 +511,7 @@ impl Server {
         target_name: Option<&TextComponent>,
     ) {
         send_cancellable! {{
+            self;
             ServerBroadcastEvent::new(message.clone(), sender_name.clone());
 
             'after: {
@@ -547,9 +603,7 @@ impl Server {
         let mut players = Vec::<Arc<Player>>::new();
 
         for world in self.worlds.read().await.iter() {
-            for player in world.players.read().await.values() {
-                players.push(player.clone());
-            }
+            players.extend(world.players.read().await.values().cloned());
         }
 
         players
@@ -623,21 +677,29 @@ impl Server {
         &self.listing
     }
 
-    pub fn encryption_request<'a>(
+    pub async fn encryption_request<'a>(
         &'a self,
         verification_token: &'a [u8; 4],
         should_authenticate: bool,
     ) -> CEncryptionRequest<'a> {
         self.key_store
+            .get_or_init(|| async { Arc::new(KeyStore::new()) })
+            .await
             .encryption_request("", verification_token, should_authenticate)
     }
 
-    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptionError> {
-        self.key_store.decrypt(data)
+    pub async fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptionError> {
+        self.key_store
+            .get_or_init(|| async { Arc::new(KeyStore::new()) })
+            .await
+            .decrypt(data)
     }
 
-    pub fn digest_secret(&self, secret: &[u8]) -> String {
-        self.key_store.get_digest(secret)
+    pub async fn digest_secret(&self, secret: &[u8]) -> String {
+        self.key_store
+            .get_or_init(|| async { Arc::new(KeyStore::new()) })
+            .await
+            .get_digest(secret)
     }
 
     /// Main server tick method. This now handles both player/network ticking (which always runs)
@@ -667,21 +729,21 @@ impl Server {
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
-        let worlds = self.worlds.read().await.clone();
-        let mut handles = Vec::with_capacity(worlds.len());
-        for world in &worlds {
+        let worlds = self.worlds.read().await;
+        let mut set = JoinSet::new();
+
+        for world in worlds.iter() {
             let world = world.clone();
             let server = self.clone();
-            handles.push(tokio::spawn(async move {
+
+            set.spawn(async move {
                 world.tick(&server).await;
-            }));
-        }
-        for handle in handles {
-            // Wait for all world ticks to complete
-            let _ = handle.await;
+            });
         }
 
-        // Global periodic tasks
+        set.join_all().await;
+
+        // Global tasks
         if let Err(e) = self.player_data_storage.tick(self).await {
             log::error!("Error ticking player data: {e}");
         }
@@ -709,6 +771,22 @@ impl Server {
             return 0;
         }
         self.aggregated_tick_times_nanos.load(Ordering::Relaxed) / sample_size as i64
+    }
+
+    /// Returns the average Milliseconds Per Tick (MSPT).
+    pub fn get_mspt(&self) -> f64 {
+        let avg_nanos = self.get_average_tick_time_nanos();
+        // Convert nanoseconds to decimal milliseconds
+        avg_nanos as f64 / 1_000_000.0
+    }
+
+    /// Returns the Ticks Per Second (TPS).
+    pub fn get_tps(&self) -> f64 {
+        let mspt = self.get_mspt();
+        if mspt <= 0.0 {
+            return 0.0;
+        }
+        1000.0 / mspt
     }
 
     /// Returns a copy of the last 100 tick times.
@@ -849,8 +927,8 @@ impl Server {
                 };
                 let mut entities = iter.collect::<Vec<_>>();
                 entities.sort_by(|a, b| {
-                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(center);
-                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(center);
+                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(&center);
+                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(&center);
                     if target_selector.get_sort() == Some(EntityFilterSort::Nearest) {
                         a_distance
                             .partial_cmp(&b_distance)

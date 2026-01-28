@@ -20,7 +20,7 @@ pub struct CLevelChunk<'a> {
     pub chunk: &'a ChunkData,
 }
 
-impl<'a> PacketWrite for CLevelChunk<'a> {
+impl PacketWrite for CLevelChunk<'_> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarInt(self.chunk.x).write(writer)?;
         VarInt(self.chunk.z).write(writer)?;
@@ -52,12 +52,12 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
 
             match network_repr.palette {
                 NetworkPalette::Single(id) => {
-                    VarInt(id as i32).write(data_write)?;
+                    VarInt(i32::from(id)).write(data_write)?;
                 }
                 NetworkPalette::Indirect(palette) => {
                     VarInt(palette.len() as i32).write(data_write)?;
                     for id in palette {
-                        VarInt(id as i32).write(data_write)?;
+                        VarInt(i32::from(id)).write(data_write)?;
                     }
                 }
                 NetworkPalette::Direct => (),

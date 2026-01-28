@@ -41,18 +41,19 @@ pub struct ScreenProperty {
 impl ScreenProperty {
     pub fn new(value: Arc<dyn PropertyDelegate>, index: u8) -> Self {
         Self {
-            old_value: value.get_property(index as i32),
+            old_value: value.get_property(i32::from(index)),
             index,
             value,
         }
     }
 
+    #[must_use]
     pub fn get(&self) -> i32 {
-        self.value.get_property(self.index as i32)
+        self.value.get_property(i32::from(self.index))
     }
 
     pub fn set(&mut self, value: i32) {
-        self.value.set_property(self.index as i32, value);
+        self.value.set_property(i32::from(self.index), value);
     }
 
     pub fn has_changed(&mut self) -> bool {
@@ -66,7 +67,7 @@ impl ScreenProperty {
 pub type PlayerFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait InventoryPlayer: Send + Sync {
-    fn drop_item<'a>(&'a self, item: ItemStack, retain_ownership: bool) -> PlayerFuture<'a, ()>;
+    fn drop_item(&self, item: ItemStack, retain_ownership: bool) -> PlayerFuture<'_, ()>;
     fn get_inventory(&self) -> Arc<PlayerInventory>;
     fn has_infinite_materials(&self) -> bool;
 
@@ -238,10 +239,10 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn copy_shared_slots<'a>(
-        &'a mut self,
+    fn copy_shared_slots(
+        &mut self,
         other: Arc<Mutex<dyn ScreenHandler>>,
-    ) -> ScreenHandlerFuture<'a, ()> {
+    ) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let mut table: HashMap<ComparableInventory, HashMap<usize, usize>> = HashMap::new();
             let other_binding = other.lock().await;
@@ -262,19 +263,19 @@ pub trait ScreenHandler: Send + Sync {
                 let inventory = slot.get_inventory();
                 let index = slot.get_index();
 
-                if let Some(hash_map) = table.get(&ComparableInventory(inventory.clone())) {
-                    if let Some(other_index) = hash_map.get(&index) {
-                        self.get_behaviour_mut().tracked_stacks[i] =
-                            other_behaviour.tracked_stacks[*other_index].clone();
-                        self.get_behaviour_mut().previous_tracked_stacks[i] =
-                            other_behaviour.previous_tracked_stacks[*other_index].clone();
-                    }
+                if let Some(hash_map) = table.get(&ComparableInventory(inventory.clone()))
+                    && let Some(other_index) = hash_map.get(&index)
+                {
+                    self.get_behaviour_mut().tracked_stacks[i] =
+                        other_behaviour.tracked_stacks[*other_index].clone();
+                    self.get_behaviour_mut().previous_tracked_stacks[i] =
+                        other_behaviour.previous_tracked_stacks[*other_index].clone();
                 }
             }
         })
     }
 
-    fn sync_state<'a>(&'a mut self) -> ScreenHandlerFuture<'a, ()> {
+    fn sync_state(&mut self) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
             let mut previous_tracked_stacks = Vec::new();
@@ -311,20 +312,20 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn add_listener<'a>(
-        &'a mut self,
+    fn add_listener(
+        &mut self,
         listener: Arc<dyn ScreenHandlerListener>,
-    ) -> ScreenHandlerFuture<'a, ()> {
+    ) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             self.get_behaviour_mut().listeners.push(listener);
             self.send_content_updates().await;
         })
     }
 
-    fn update_sync_handler<'a>(
-        &'a mut self,
+    fn update_sync_handler(
+        &mut self,
         sync_handler: Arc<SyncHandler>,
-    ) -> ScreenHandlerFuture<'a, ()> {
+    ) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
             behaviour.sync_handler = Some(sync_handler.clone());
@@ -332,7 +333,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn update_to_client<'a>(&'a mut self) -> ScreenHandlerFuture<'a, ()> {
+    fn update_to_client(&mut self) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             for i in 0..self.get_behaviour().slots.len() {
                 let behaviour = self.get_behaviour_mut();
@@ -359,16 +360,12 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn update_tracked_properties<'a>(
-        &'a mut self,
-        idx: i32,
-        value: i32,
-    ) -> ScreenHandlerFuture<'a, ()> {
+    fn update_tracked_properties(&mut self, idx: i32, value: i32) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
             if idx <= behaviour.tracked_property_values.len() as i32 {
                 behaviour.tracked_property_values[idx as usize] = value;
-                for listener in behaviour.listeners.iter() {
+                for listener in &behaviour.listeners {
                     listener
                         .on_property_update(behaviour, idx as u8, value)
                         .await;
@@ -377,41 +374,37 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn check_property_updates<'a>(
-        &'a mut self,
-        idx: i32,
-        value: i32,
-    ) -> ScreenHandlerFuture<'a, ()> {
+    fn check_property_updates(&mut self, idx: i32, value: i32) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
-            if !behaviour.disable_sync {
-                if let Some(old_value) = behaviour.tracked_property_values.get(idx as usize) {
-                    let old_value = *old_value;
-                    if old_value != value {
-                        behaviour
-                            .tracked_property_values
-                            .insert(idx as usize, value);
-                        if let Some(ref sync_handler) = behaviour.sync_handler {
-                            sync_handler.update_property(behaviour, idx, value).await;
-                        }
+            if !behaviour.disable_sync
+                && let Some(old_value) = behaviour.tracked_property_values.get(idx as usize)
+            {
+                let old_value = *old_value;
+                if old_value != value {
+                    behaviour
+                        .tracked_property_values
+                        .insert(idx as usize, value);
+                    if let Some(ref sync_handler) = behaviour.sync_handler {
+                        sync_handler.update_property(behaviour, idx, value).await;
                     }
                 }
             }
         })
     }
 
-    fn update_tracked_slot<'a>(
-        &'a mut self,
+    fn update_tracked_slot(
+        &mut self,
         slot: usize,
         stack: ItemStack,
-    ) -> ScreenHandlerFuture<'a, ()> {
+    ) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
             let other_stack = &behaviour.tracked_stacks[slot];
             if !other_stack.are_equal(&stack) {
                 behaviour.tracked_stacks[slot] = stack.clone();
 
-                for listener in behaviour.listeners.iter() {
+                for listener in &behaviour.listeners {
                     listener
                         .on_slot_update(behaviour, slot as u8, stack.clone())
                         .await;
@@ -420,11 +413,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn check_slot_updates<'a>(
-        &'a mut self,
-        slot: usize,
-        stack: ItemStack,
-    ) -> ScreenHandlerFuture<'a, ()> {
+    fn check_slot_updates(&mut self, slot: usize, stack: ItemStack) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
             if !behaviour.disable_sync {
@@ -443,7 +432,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn check_cursor_stack_updates<'a>(&'a mut self) -> ScreenHandlerFuture<'a, ()> {
+    fn check_cursor_stack_updates(&mut self) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
             if !behaviour.disable_sync {
@@ -462,7 +451,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn send_content_updates<'a>(&'a mut self) -> ScreenHandlerFuture<'a, ()> {
+    fn send_content_updates(&mut self) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let slots_len = self.get_behaviour().slots.len();
 
@@ -492,7 +481,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
-    fn is_slot_valid<'a>(&'a self, slot: i32) -> ScreenHandlerFuture<'a, bool> {
+    fn is_slot_valid(&self, slot: i32) -> ScreenHandlerFuture<'_, bool> {
         Box::pin(async move {
             slot == -1 || slot == -999 || slot < self.get_behaviour().slots.len() as i32
         })
@@ -645,6 +634,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    #[expect(clippy::too_many_lines)]
     fn internal_on_slot_click<'a>(
         &'a mut self,
         slot_index: i32,
@@ -658,7 +648,7 @@ pub trait ScreenHandler: Send + Sync {
                 let mut cursor_stack = behavior.cursor_stack.lock().await;
                 let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
 
-                for slot in behavior.slots.iter() {
+                for slot in &behavior.slots {
                     if to_pick_up == 0 {
                         break;
                     }
@@ -727,7 +717,7 @@ pub trait ScreenHandler: Send + Sync {
 
                     let mut cursor_stack = behaviour.cursor_stack.lock().await;
                     let initial_count = cursor_stack.item_count;
-                    for slot_index in behaviour.drag_slots.iter() {
+                    for slot_index in &behaviour.drag_slots {
                         let slot = behaviour.slots[*slot_index as usize].clone();
                         let stack_lock = slot.get_stack().await;
                         let stack = stack_lock.lock().await;
@@ -1070,6 +1060,7 @@ pub struct ScreenHandlerBehaviour {
 }
 
 impl ScreenHandlerBehaviour {
+    #[must_use]
     pub fn new(sync_id: u8, window_type: Option<WindowType>) -> Self {
         Self {
             slots: Vec::new(),

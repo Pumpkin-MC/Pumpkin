@@ -21,6 +21,7 @@ use crate::block::blocks::fire::soul_fire::SoulFireBlock;
 use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
+use crate::block::blocks::hay::HayBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::mangrove_roots::MangroveRootsBlock;
@@ -45,6 +46,7 @@ use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
+use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
 use crate::block::blocks::redstone::comparator::ComparatorBlock;
@@ -67,6 +69,7 @@ use crate::block::blocks::redstone::tripwire::TripwireBlock;
 use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
 use crate::block::blocks::signs::SignBlock;
 use crate::block::blocks::slabs::SlabBlock;
+use crate::block::blocks::slime::SlimeBlock;
 use crate::block::blocks::snow::LayeredSnowBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
 use crate::block::blocks::stairs::StairBlock;
@@ -75,14 +78,16 @@ use crate::block::blocks::torches::TorchBlock;
 use crate::block::blocks::trapdoor::TrapDoorBlock;
 use crate::block::blocks::vine::VineBlock;
 use crate::block::blocks::walls::WallBlock;
+use crate::block::blocks::wither_skull::WitherSkeletonSkullBlock;
 use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
-use crate::block::{BlockBehaviour, BlockHitResult, BlockMetadata, OnEntityCollisionArgs};
+use crate::block::{
+    BlockBehaviour, BlockHitResult, BlockMetadata, OnEntityCollisionArgs, OnLandedUponArgs,
+};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::fluid;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection, BlockState};
@@ -150,6 +155,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CactusBlock);
     manager.register(CarpetBlock);
     manager.register(CarvedPumpkinBlock);
+    manager.register(WitherSkeletonSkullBlock);
     manager.register(CampfireBlock);
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
@@ -167,6 +173,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SmokerBlock);
     manager.register(GlassPaneBlock);
     manager.register(GlazedTerracottaBlock);
+    manager.register(HayBlock);
     manager.register(GrindstoneBlock);
     manager.register(IronBarsBlock);
     manager.register(JukeboxBlock);
@@ -176,6 +183,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BannerBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
+    manager.register(SlimeBlock);
     manager.register(StairBlock);
     manager.register(ShortPlantBlock);
     manager.register(DryVegetationBlock);
@@ -203,6 +211,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NetherPortalBlock);
     manager.register(TallPlantBlock);
     manager.register(NoteBlock);
+    manager.register(PowderSnowBlock);
     manager.register(PumpkinBlock);
     manager.register(CommandBlock);
     manager.register(ComposterBlock);
@@ -298,8 +307,8 @@ impl BlockActionResult {
 
 #[derive(Default)]
 pub struct BlockRegistry {
-    blocks: HashMap<&'static Block, Arc<dyn BlockBehaviour>>,
-    fluids: HashMap<&'static Fluid, Arc<dyn FluidBehaviour>>,
+    blocks: HashMap<u16, Arc<dyn BlockBehaviour>>,
+    fluids: HashMap<u16, Arc<dyn FluidBehaviour>>,
 }
 
 impl BlockRegistryExt for BlockRegistry {
@@ -320,6 +329,7 @@ impl BlockRegistryExt for BlockRegistry {
                 state,
                 block_pos,
                 None,
+                None,
             )
             .await
         })
@@ -328,22 +338,20 @@ impl BlockRegistryExt for BlockRegistry {
 
 impl BlockRegistry {
     pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {
-        let names = block.names();
+        let ids = T::ids();
         let val = Arc::new(block);
-        self.blocks.reserve(names.len());
-        for i in names {
-            self.blocks
-                .insert(Block::from_name(i.as_str()).unwrap(), val.clone());
+        self.blocks.reserve(ids.len());
+        for i in ids {
+            self.blocks.insert(i, val.clone());
         }
     }
 
     pub fn register_fluid<T: FluidBehaviour + BlockMetadata + 'static>(&mut self, fluid: T) {
-        let names = fluid.names();
+        let ids = T::ids();
         let val = Arc::new(fluid);
-        self.fluids.reserve(names.len());
-        for i in names {
-            self.fluids
-                .insert(fluid::get_fluid(i.as_str()).unwrap(), val.clone());
+        self.fluids.reserve(ids.len());
+        for i in ids {
+            self.fluids.insert(i, val.clone());
         }
     }
 
@@ -355,7 +363,7 @@ impl BlockRegistry {
         r#type: u8,
         data: u8,
     ) -> bool {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .on_synced_block_event(OnSyncedBlockEventArgs {
@@ -379,7 +387,7 @@ impl BlockRegistry {
         state: &BlockState,
         server: &Server,
     ) {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .on_entity_collision(OnEntityCollisionArgs {
@@ -395,7 +403,7 @@ impl BlockRegistry {
     }
 
     pub async fn on_entity_collision_fluid(&self, fluid: &Fluid, entity: &dyn EntityBase) {
-        let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
+        let pumpkin_fluid = self.get_pumpkin_fluid(fluid.id);
         if let Some(pumpkin_fluid) = pumpkin_fluid {
             pumpkin_fluid.on_entity_collision(entity).await;
         }
@@ -410,7 +418,7 @@ impl BlockRegistry {
         server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .normal_use(NormalUseArgs {
@@ -427,7 +435,7 @@ impl BlockRegistry {
     }
 
     pub async fn explode(&self, block: &Block, world: &Arc<World>, position: &BlockPos) {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .explode(ExplodeArgs {
@@ -450,7 +458,7 @@ impl BlockRegistry {
         server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .use_with_item(UseWithItemArgs {
@@ -476,7 +484,7 @@ impl BlockRegistry {
         server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
+        let pumpkin_fluid = self.get_pumpkin_fluid(fluid.id);
         if let Some(pumpkin_fluid) = pumpkin_fluid {
             return pumpkin_fluid
                 .use_with_item(fluid, player, position, item, server, world)
@@ -495,9 +503,10 @@ impl BlockRegistry {
         block: &Block,
         state: &BlockState,
         position: &BlockPos,
+        direction: Option<BlockDirection>,
         use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .can_place_at(CanPlaceAtArgs {
@@ -507,6 +516,7 @@ impl BlockRegistry {
                     block,
                     state,
                     position,
+                    direction,
                     player,
                     use_item_on,
                 })
@@ -526,7 +536,7 @@ impl BlockRegistry {
         use_item_on: &SUseItemOn,
         player: &Player,
     ) -> bool {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .can_update_at(CanUpdateAtArgs {
@@ -555,7 +565,7 @@ impl BlockRegistry {
         replacing: BlockIsReplacing,
         use_item_on: &SUseItemOn,
     ) -> BlockStateId {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .on_place(OnPlaceArgs {
@@ -582,7 +592,7 @@ impl BlockRegistry {
         direction: BlockDirection,
         player: &Player,
     ) {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .player_placed(PlayerPlacedArgs {
@@ -606,7 +616,7 @@ impl BlockRegistry {
         old_state_id: BlockStateId,
         notify: bool,
     ) {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .placed(PlacedArgs {
@@ -630,10 +640,29 @@ impl BlockRegistry {
         old_state_id: BlockStateId,
         notify: bool,
     ) {
-        let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
+        let pumpkin_fluid = self.get_pumpkin_fluid(fluid.id);
         if let Some(pumpkin_fluid) = pumpkin_fluid {
             pumpkin_fluid
                 .placed(world, fluid, state_id, position, old_state_id, notify)
+                .await;
+        }
+    }
+
+    pub async fn on_landed_upon(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        fall_distance: f32,
+        entity: &dyn EntityBase,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(block.id);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block
+                .on_landed_upon(OnLandedUponArgs {
+                    world,
+                    fall_distance,
+                    entity,
+                })
                 .await;
         }
     }
@@ -647,7 +676,7 @@ impl BlockRegistry {
         server: &Server,
         state: &BlockState,
     ) {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .broken(BrokenArgs {
@@ -670,7 +699,7 @@ impl BlockRegistry {
         old_state_id: BlockStateId,
         moved: bool,
     ) {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .on_state_replaced(OnStateReplacedArgs {
@@ -696,7 +725,7 @@ impl BlockRegistry {
         for direction in BlockDirection::all() {
             let neighbor_pos = position.offset(direction.to_offset());
             let neighbor_state_id = world.get_block_state_id(&neighbor_pos).await;
-            let pumpkin_block = self.get_pumpkin_block(block);
+            let pumpkin_block = self.get_pumpkin_block(block.id);
             if let Some(pumpkin_block) = pumpkin_block {
                 let new_state = pumpkin_block
                     .get_state_for_neighbor_update(GetStateForNeighborUpdateArgs {
@@ -722,7 +751,7 @@ impl BlockRegistry {
         state_id: BlockStateId,
         flags: BlockFlags,
     ) {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .prepare(PrepareArgs {
@@ -747,7 +776,7 @@ impl BlockRegistry {
         neighbor_location: &BlockPos,
         neighbor_state_id: BlockStateId,
     ) -> BlockStateId {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .get_state_for_neighbor_update(GetStateForNeighborUpdateArgs {
@@ -791,7 +820,7 @@ impl BlockRegistry {
         source_block: &Block,
         notify: bool,
     ) {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .on_neighbor_update(OnNeighborUpdateArgs {
@@ -806,13 +835,13 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_block(&self, block: &Block) -> Option<&Arc<dyn BlockBehaviour>> {
-        self.blocks.get(block)
+    pub fn get_pumpkin_block(&self, block: u16) -> Option<&Arc<dyn BlockBehaviour>> {
+        self.blocks.get(&block)
     }
 
     #[must_use]
-    pub fn get_pumpkin_fluid(&self, fluid: &Fluid) -> Option<&Arc<dyn FluidBehaviour>> {
-        self.fluids.get(fluid)
+    pub fn get_pumpkin_fluid(&self, fluid: u16) -> Option<&Arc<dyn FluidBehaviour>> {
+        self.fluids.get(&fluid)
     }
 
     pub async fn emits_redstone_power(
@@ -821,7 +850,7 @@ impl BlockRegistry {
         state: &BlockState,
         direction: BlockDirection,
     ) -> bool {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .emits_redstone_power(EmitsRedstonePowerArgs {
@@ -842,7 +871,7 @@ impl BlockRegistry {
         state: &BlockState,
         direction: BlockDirection,
     ) -> u8 {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .get_weak_redstone_power(GetRedstonePowerArgs {
@@ -865,7 +894,7 @@ impl BlockRegistry {
         state: &BlockState,
         direction: BlockDirection,
     ) -> u8 {
-        let pumpkin_block = self.get_pumpkin_block(block);
+        let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
                 .get_strong_redstone_power(GetRedstonePowerArgs {

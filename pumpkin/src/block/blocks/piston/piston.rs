@@ -6,6 +6,7 @@ use pumpkin_data::{
         BlockProperties, MovingPistonLikeProperties, PistonHeadLikeProperties, PistonType,
     },
     block_state::PistonBehavior,
+    sound::{Sound, SoundCategory},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
@@ -13,10 +14,11 @@ use pumpkin_world::{
     block::entities::{has_block_block_entity, piston::PistonBlockEntity},
     world::BlockFlags,
 };
+use rand::Rng;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs,
+        BlockBehaviour, BlockFuture, BlockMetadata, BrokenArgs, OnNeighborUpdateArgs, OnPlaceArgs,
         OnSyncedBlockEventArgs, PlacedArgs, blocks::redstone::is_emitting_redstone_power,
     },
     world::World,
@@ -29,12 +31,8 @@ pub(crate) type PistonProps = pumpkin_data::block_properties::StickyPistonLikePr
 pub struct PistonBlock;
 
 impl BlockMetadata for PistonBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::PISTON.name, Block::STICKY_PISTON.name]
+    fn ids() -> Box<[u16]> {
+        [Block::PISTON.id, Block::STICKY_PISTON.id].into()
     }
 }
 
@@ -87,6 +85,21 @@ impl BlockBehaviour for PistonBlock {
             props.extended = false;
             props.facing = args.player.living_entity.entity.get_facing().opposite();
             props.to_state_id(args.block)
+        })
+    }
+
+    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let props = PistonProps::from_state_id(args.state.id, args.block);
+            let pos = args
+                .position
+                .offset(props.facing.to_block_direction().to_offset());
+            let (block_to_check, _) = args.world.get_block_and_state_id(&pos).await;
+            if &Block::PISTON_HEAD == block_to_check || &Block::MOVING_PISTON == block_to_check {
+                args.world
+                    .break_block(&pos, None, BlockFlags::SKIP_DROPS)
+                    .await;
+            }
         })
     }
 
@@ -151,6 +164,17 @@ impl BlockBehaviour for PistonBlock {
                         pos,
                         props.to_state_id(block),
                         BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
+                    )
+                    .await;
+                // Play piston extend sound
+                let pitch = rand::rng().random_range(0.6f32..0.85);
+                world
+                    .play_sound_fine(
+                        Sound::BlockPistonExtend,
+                        SoundCategory::Blocks,
+                        &pos.to_centered_f64(),
+                        0.5,
+                        pitch,
                     )
                     .await;
                 return true;
@@ -244,6 +268,17 @@ impl BlockBehaviour for PistonBlock {
                     )
                     .await;
             }
+            // Play piston contract sound
+            let pitch = rand::rng().random_range(0.6f32..0.75);
+            world
+                .play_sound_fine(
+                    Sound::BlockPistonContract,
+                    SoundCategory::Blocks,
+                    &pos.to_centered_f64(),
+                    0.5,
+                    pitch,
+                )
+                .await;
             true
         })
     }

@@ -24,32 +24,32 @@ pub enum NormalIntProvider {
 impl ToTokens for NormalIntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
-            NormalIntProvider::Constant(constant) => {
+            Self::Constant(constant) => {
                 tokens.extend(quote! {
                     NormalIntProvider::Constant(#constant)
                 });
             }
-            NormalIntProvider::Uniform(uniform) => {
+            Self::Uniform(uniform) => {
                 tokens.extend(quote! {
                     NormalIntProvider::Uniform(#uniform)
                 });
             }
-            NormalIntProvider::BiasedToBottom(biased) => {
+            Self::BiasedToBottom(biased) => {
                 tokens.extend(quote! {
                     NormalIntProvider::BiasedToBottom(#biased)
                 });
             }
-            NormalIntProvider::Clamped(clamped) => {
+            Self::Clamped(clamped) => {
                 tokens.extend(quote! {
                     NormalIntProvider::Clamped(#clamped)
                 });
             }
-            NormalIntProvider::ClampedNormal(clamped_normal) => {
+            Self::ClampedNormal(clamped_normal) => {
                 tokens.extend(quote! {
                     NormalIntProvider::ClampedNormal(#clamped_normal)
                 });
             }
-            NormalIntProvider::WeightedList(weighted_list) => {
+            Self::WeightedList(weighted_list) => {
                 tokens.extend(quote! {
                     NormalIntProvider::WeightedList(#weighted_list)
                 });
@@ -68,12 +68,12 @@ pub enum IntProvider {
 impl ToTokens for IntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
-            IntProvider::Object(int_provider) => {
+            Self::Object(int_provider) => {
                 tokens.extend(quote! {
                     IntProvider::Object(#int_provider)
                 });
             }
-            IntProvider::Constant(i) => tokens.extend(quote! {
+            Self::Constant(i) => tokens.extend(quote! {
                 IntProvider::Constant(#i)
             }),
         }
@@ -81,9 +81,10 @@ impl ToTokens for IntProvider {
 }
 
 impl IntProvider {
+    #[must_use]
     pub fn get_min(&self) -> i32 {
         match self {
-            IntProvider::Object(int_provider) => match int_provider {
+            Self::Object(int_provider) => match int_provider {
                 NormalIntProvider::Constant(constant) => constant.get_min(),
                 NormalIntProvider::Uniform(uniform) => uniform.get_min(),
                 NormalIntProvider::BiasedToBottom(biased) => biased.get_min(),
@@ -91,13 +92,13 @@ impl IntProvider {
                 NormalIntProvider::ClampedNormal(clamped_normal) => clamped_normal.get_min(),
                 NormalIntProvider::WeightedList(weighted_list) => weighted_list.get_min(),
             },
-            IntProvider::Constant(i) => *i,
+            Self::Constant(i) => *i,
         }
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
         match self {
-            IntProvider::Object(int_provider) => match int_provider {
+            Self::Object(int_provider) => match int_provider {
                 NormalIntProvider::Constant(constant) => constant.get(random),
                 NormalIntProvider::Uniform(uniform) => uniform.get(random),
                 NormalIntProvider::BiasedToBottom(biased) => biased.get(random),
@@ -105,13 +106,14 @@ impl IntProvider {
                 NormalIntProvider::ClampedNormal(clamped_normal) => clamped_normal.get(random),
                 NormalIntProvider::WeightedList(weighted_list) => weighted_list.get(random),
             },
-            IntProvider::Constant(i) => *i,
+            Self::Constant(i) => *i,
         }
     }
 
+    #[must_use]
     pub fn get_max(&self) -> i32 {
         match self {
-            IntProvider::Object(int_provider) => match int_provider {
+            Self::Object(int_provider) => match int_provider {
                 NormalIntProvider::Constant(constant) => constant.get_max(),
                 NormalIntProvider::Uniform(uniform) => uniform.get_max(),
                 NormalIntProvider::BiasedToBottom(biased) => biased.get_max(),
@@ -119,7 +121,7 @@ impl IntProvider {
                 NormalIntProvider::ClampedNormal(clamped_normal) => clamped_normal.get_max(),
                 NormalIntProvider::WeightedList(weighted_list) => weighted_list.get_max(),
             },
-            IntProvider::Constant(i) => *i,
+            Self::Constant(i) => *i,
         }
     }
 }
@@ -139,10 +141,12 @@ impl ToTokens for ConstantIntProvider {
 }
 
 impl ConstantIntProvider {
+    #[must_use]
     pub fn new(value: i32) -> Self {
         Self { value }
     }
 
+    #[must_use]
     pub fn get_min(&self) -> i32 {
         self.value
     }
@@ -151,6 +155,7 @@ impl ConstantIntProvider {
         self.value
     }
 
+    #[must_use]
     pub fn get_max(&self) -> i32 {
         self.value
     }
@@ -173,6 +178,7 @@ impl ToTokens for BiasedToBottomIntProvider {
 }
 
 impl BiasedToBottomIntProvider {
+    #[must_use]
     pub fn new(min_inclusive: i32, max_inclusive: i32) -> Self {
         Self {
             min_inclusive,
@@ -180,6 +186,7 @@ impl BiasedToBottomIntProvider {
         }
     }
 
+    #[must_use]
     pub fn get_min(&self) -> i32 {
         self.min_inclusive
     }
@@ -187,11 +194,12 @@ impl BiasedToBottomIntProvider {
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
         // Similar to uniform but biased toward lower values
         // Uses triangular distribution with mode at min
-        let range = (self.max_inclusive - self.min_inclusive + 1) as f64;
+        let range = f64::from(self.max_inclusive - self.min_inclusive + 1);
         let triangular = random.next_triangular(0.0, range);
         self.min_inclusive + (triangular.abs() as i32).min(self.max_inclusive - self.min_inclusive)
     }
 
+    #[must_use]
     pub fn get_max(&self) -> i32 {
         self.max_inclusive
     }
@@ -220,6 +228,7 @@ impl ToTokens for ClampedIntProvider {
 }
 
 impl ClampedIntProvider {
+    #[must_use]
     pub fn new(source: IntProvider, min_inclusive: i32, max_inclusive: i32) -> Self {
         Self {
             source: Box::new(source),
@@ -228,6 +237,7 @@ impl ClampedIntProvider {
         }
     }
 
+    #[must_use]
     pub fn get_min(&self) -> i32 {
         self.min_inclusive.max(self.source.get_min())
     }
@@ -238,6 +248,7 @@ impl ClampedIntProvider {
             .clamp(self.min_inclusive, self.max_inclusive)
     }
 
+    #[must_use]
     pub fn get_max(&self) -> i32 {
         self.max_inclusive.min(self.source.get_max())
     }
@@ -269,6 +280,7 @@ impl ToTokens for ClampedNormalIntProvider {
 }
 
 impl ClampedNormalIntProvider {
+    #[must_use]
     pub fn new(mean: f32, deviation: f32, min_inclusive: i32, max_inclusive: i32) -> Self {
         Self {
             mean,
@@ -278,6 +290,7 @@ impl ClampedNormalIntProvider {
         }
     }
 
+    #[must_use]
     pub fn get_min(&self) -> i32 {
         self.min_inclusive
     }
@@ -289,6 +302,7 @@ impl ClampedNormalIntProvider {
         value.clamp(self.min_inclusive, self.max_inclusive)
     }
 
+    #[must_use]
     pub fn get_max(&self) -> i32 {
         self.max_inclusive
     }
@@ -325,10 +339,12 @@ impl ToTokens for WeightedListIntProvider {
 }
 
 impl WeightedListIntProvider {
+    #[must_use]
     pub fn new(distribution: Vec<WeightedEntry>) -> Self {
         Self { distribution }
     }
 
+    #[must_use]
     pub fn get_min(&self) -> i32 {
         self.distribution
             .iter()
@@ -365,6 +381,7 @@ impl WeightedListIntProvider {
         self.distribution.last().unwrap().data.get(random)
     }
 
+    #[must_use]
     pub fn get_max(&self) -> i32 {
         self.distribution
             .iter()
@@ -392,6 +409,7 @@ impl ToTokens for UniformIntProvider {
 }
 
 impl UniformIntProvider {
+    #[must_use]
     pub fn new(min_inclusive: i32, max_inclusive: i32) -> Self {
         Self {
             min_inclusive,
@@ -399,6 +417,7 @@ impl UniformIntProvider {
         }
     }
 
+    #[must_use]
     pub fn get_min(&self) -> i32 {
         self.min_inclusive
     }
@@ -407,6 +426,7 @@ impl UniformIntProvider {
         random.next_inbetween_i32(self.min_inclusive, self.max_inclusive)
     }
 
+    #[must_use]
     pub fn get_max(&self) -> i32 {
         self.max_inclusive
     }

@@ -101,7 +101,7 @@ impl PacketWrite for f64 {
 
 impl<T: PacketWrite, const N: usize> PacketWrite for [T; N] {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        for item in self.iter() {
+        for item in self {
             item.write(writer)?;
         }
         Ok(())
@@ -110,7 +110,7 @@ impl<T: PacketWrite, const N: usize> PacketWrite for [T; N] {
 
 impl<T: PacketWrite> PacketWrite for Vec<T> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        for item in self.iter() {
+        for item in self {
             item.write(writer)?;
         }
         Ok(())
@@ -156,13 +156,13 @@ impl PacketWrite for SocketAddr {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
             // version, addr, port
-            SocketAddr::V4(addr) => {
+            Self::V4(addr) => {
                 4u8.write(writer)?;
                 writer.write_all(&addr.ip().octets())?;
                 addr.port().write_be(writer)
             }
             // version, addr_family, port, flow_info, addr, scope_id
-            SocketAddr::V6(addr) => {
+            Self::V6(addr) => {
                 6u8.write(writer)?;
                 10u16.write(writer)?;
                 addr.port().write_be(writer)?;

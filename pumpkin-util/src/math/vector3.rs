@@ -24,14 +24,17 @@ pub enum Axis {
 }
 
 impl Axis {
+    #[must_use]
     pub fn all() -> [Self; 3] {
         [Self::Y, Self::X, Self::Z]
     }
 
+    #[must_use]
     pub fn horizontal() -> [Self; 2] {
         [Self::X, Self::Z]
     }
 
+    #[must_use]
     pub fn excluding(axis: Self) -> [Self; 2] {
         match axis {
             Self::X => [Self::Y, Self::Z],
@@ -57,55 +60,63 @@ impl<T: Copy> Vector3<T> {
             Axis::X => self.x = value,
             Axis::Y => self.y = value,
             Axis::Z => self.z = value,
-        };
+        }
     }
 }
 
 impl<T: Math + PartialOrd + Copy> Vector3<T> {
+    #[must_use]
     pub const fn new(x: T, y: T, z: T) -> Self {
-        Vector3 { x, y, z }
+        Self { x, y, z }
     }
 
+    #[must_use]
     pub fn length_squared(&self) -> T {
         self.x * self.x + self.y * self.y + self.z * self.z
     }
 
+    #[must_use]
     pub fn horizontal_length_squared(&self) -> T {
         self.x * self.x + self.z * self.z
     }
 
-    pub fn add(&self, other: &Vector3<T>) -> Self {
-        Vector3 {
+    #[must_use]
+    pub fn add(&self, other: &Self) -> Self {
+        Self {
             x: self.x + other.x,
             y: self.y + other.y,
             z: self.z + other.z,
         }
     }
 
+    #[must_use]
     pub fn add_raw(&self, x: T, y: T, z: T) -> Self {
-        Vector3 {
+        Self {
             x: self.x + x,
             y: self.y + y,
             z: self.z + z,
         }
     }
 
-    pub fn sub(&self, other: &Vector3<T>) -> Self {
-        Vector3 {
+    #[must_use]
+    pub fn sub(&self, other: &Self) -> Self {
+        Self {
             x: self.x - other.x,
             y: self.y - other.y,
             z: self.z - other.z,
         }
     }
 
+    #[must_use]
     pub fn sub_raw(&self, x: T, y: T, z: T) -> Self {
-        Vector3 {
+        Self {
             x: self.x - x,
             y: self.y - y,
             z: self.z - z,
         }
     }
 
+    #[must_use]
     pub fn multiply(self, x: T, y: T, z: T) -> Self {
         Self {
             x: self.x * x,
@@ -114,14 +125,16 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
         }
     }
 
-    pub fn lerp(&self, other: &Vector3<T>, t: T) -> Self {
-        Vector3 {
+    #[must_use]
+    pub fn lerp(&self, other: &Self, t: T) -> Self {
+        Self {
             x: self.x + (other.x - self.x) * t,
             y: self.y + (other.y - self.y) * t,
             z: self.z + (other.z - self.z) * t,
         }
     }
 
+    #[must_use]
     pub fn sign(&self) -> Vector3<i32>
     where
         T: Num + PartialOrd + Copy,
@@ -151,10 +164,12 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
         }
     }
 
-    pub fn squared_distance_to_vec(&self, other: Self) -> T {
+    #[must_use]
+    pub fn squared_distance_to_vec(&self, other: &Self) -> T {
         self.squared_distance_to(other.x, other.y, other.z)
     }
 
+    #[must_use]
     pub fn squared_distance_to(&self, x: T, y: T, z: T) -> T {
         let delta_x = self.x - x;
         let delta_y = self.y - y;
@@ -162,6 +177,7 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
         delta_x * delta_x + delta_y * delta_y + delta_z * delta_z
     }
 
+    #[must_use]
     pub fn is_within_bounds(&self, block_pos: Self, x: T, y: T, z: T) -> bool {
         let min_x = block_pos.x - x;
         let max_x = block_pos.x + x;
@@ -188,9 +204,10 @@ impl<T: Math + Copy + Float> Vector3<T> {
         self.horizontal_length_squared().sqrt()
     }
 
+    #[must_use]
     pub fn normalize(&self) -> Self {
         let length = self.length();
-        Vector3 {
+        Self {
             x: self.x / length,
             y: self.y / length,
             z: self.z / length,
@@ -223,7 +240,7 @@ impl<T: Math + Copy> Mul<T> for Vector3<T> {
 }
 
 impl<T: Math + Copy> Add for Vector3<T> {
-    type Output = Vector3<T>;
+    type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x + rhs.x,
@@ -234,7 +251,7 @@ impl<T: Math + Copy> Add for Vector3<T> {
 }
 
 impl<T: Math + Copy> Sub for Vector3<T> {
-    type Output = Vector3<T>;
+    type Output = Self;
     fn sub(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x - rhs.x,
@@ -267,14 +284,12 @@ impl<T: Math + Copy> Neg for Vector3<T> {
 */
 
 impl<T> From<(T, T, T)> for Vector3<T> {
-    #[inline(always)]
     fn from((x, y, z): (T, T, T)) -> Self {
-        Vector3 { x, y, z }
+        Self { x, y, z }
     }
 }
 
 impl<T> From<Vector3<T>> for (T, T, T) {
-    #[inline(always)]
     fn from(vector: Vector3<T>) -> Self {
         (vector.x, vector.y, vector.z)
     }
@@ -473,16 +488,18 @@ impl serde::Serialize for Vector3<i32> {
 }
 
 #[inline]
+#[must_use]
 pub const fn packed_chunk_pos(vec: &Vector3<i32>) -> i64 {
     let mut result = 0i64;
     // Need to go to i64 first to conserve sign
-    result |= (vec.x as i64 & 0x3FFFFF) << 42;
-    result |= (vec.z as i64 & 0x3FFFFF) << 20;
+    result |= (vec.x as i64 & 0x03FF_FFFF) << 42;
+    result |= (vec.z as i64 & 0x003F_FFFF) << 20;
     result |= vec.y as i64 & 0xFFFFF;
     result
 }
 
 #[inline]
+#[must_use]
 pub const fn packed_local(vec: &Vector3<i32>) -> i16 {
     let x = vec.x as i16;
     let y = vec.y as i16;

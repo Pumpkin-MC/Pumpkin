@@ -39,10 +39,11 @@ pub enum DecryptionReader<R: AsyncRead + Unpin> {
 }
 
 impl<R: AsyncRead + Unpin> DecryptionReader<R> {
+    #[must_use]
     pub fn upgrade(self, cipher: Aes128Cfb8Dec) -> Self {
         match self {
             Self::None(stream) => Self::Decrypt(Box::new(StreamDecryptor::new(cipher, stream))),
-            _ => panic!("Cannot upgrade a stream that already has a cipher!"),
+            Self::Decrypt(_) => panic!("Cannot upgrade a stream that already has a cipher!"),
         }
     }
 }
@@ -68,7 +69,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
 }
 
 /// Decoder: Client -> Server
-/// Supports ZLib decoding/decompression
+/// Supports `ZLib` decoding/decompression
 /// Supports Aes128 Encryption
 pub struct TCPNetworkDecoder<R: AsyncRead + Unpin> {
     reader: DecryptionReader<R>,
@@ -107,7 +108,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         let packet_len = packet_len.0 as u64;
 
         if !(0..=MAX_PACKET_SIZE).contains(&packet_len) {
-            Err(PacketDecodeError::OutOfBounds)?
+            Err(PacketDecodeError::OutOfBounds)?;
         }
 
         let mut bounded_reader = (&mut self.reader).take(packet_len);
@@ -118,7 +119,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             let decompressed_length = decompressed_length.0 as usize;
 
             if !(0..=MAX_PACKET_DATA_SIZE).contains(&decompressed_length) {
-                Err(PacketDecodeError::TooLong)?
+                Err(PacketDecodeError::TooLong)?;
             }
 
             if decompressed_length > 0 {
@@ -126,7 +127,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             } else {
                 // Validate that we are not less than the compression threshold
                 if raw_packet_length > threshold as u64 {
-                    Err(PacketDecodeError::NotCompressed)?
+                    Err(PacketDecodeError::NotCompressed)?;
                 }
 
                 DecompressionReader::None(bounded_reader)
@@ -219,11 +220,9 @@ mod tests {
         let packet_len = buffer.len() as i32;
         let packet_len_varint = VarInt(packet_len);
         let mut packet_length_encoded = Vec::new();
-        {
-            packet_len_varint
-                .encode(&mut packet_length_encoded)
-                .unwrap();
-        }
+        packet_len_varint
+            .encode(&mut packet_length_encoded)
+            .unwrap();
 
         // Create a new buffer for the entire packet
         let mut packet = Vec::new();
@@ -233,10 +232,8 @@ mod tests {
         // Encrypt if key and IV are provided.
         if let (Some(k), Some(v)) = (key, iv) {
             encrypt_aes128(&mut packet, k, v);
-            packet
-        } else {
-            packet
         }
+        packet
     }
 
     /// Test decoding without compression and encryption
@@ -362,9 +359,7 @@ mod tests {
         // Attempt to decode and expect a decompression error
         let result = decoder.get_raw_packet().await;
 
-        if result.is_ok() {
-            panic!("This should have errored!");
-        }
+        assert!(result.is_err(), "This should have errored!");
     }
 
     /// Test decoding with a zero-length packet
@@ -388,6 +383,7 @@ mod tests {
 
     /// Test decoding with maximum length packet
     #[tokio::test]
+    #[expect(clippy::print_stdout)]
     async fn test_decode_with_maximum_length_packet() {
         // Sample packet data: packet_id = 8, payload = "A" repeated MAX_PACKET_SIZE times
         // Sample packet data: packet_id = 8, payload = "A" repeated (MAX_PACKET_SIZE - 1) times

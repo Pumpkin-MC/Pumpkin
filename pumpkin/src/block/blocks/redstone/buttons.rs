@@ -5,8 +5,6 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockFace;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::get_tag_values;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -138,13 +136,13 @@ impl BlockBehaviour for ButtonBlock {
 
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
-            WallMountedBlock::can_place_at(
-                self,
-                args.block_accessor,
-                args.position,
-                self.get_direction(args.state.id, args.block),
-            )
-            .await
+            // Use the provided direction, or fallback to the current state's direction if missing
+            let direction = args
+                .direction
+                .unwrap_or_else(|| self.get_direction(args.state.id, args.block));
+
+            WallMountedBlock::can_place_at(self, args.block_accessor, args.position, direction)
+                .await
         })
     }
 

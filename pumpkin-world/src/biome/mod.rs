@@ -10,6 +10,7 @@ use pumpkin_data::{
 use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
 pub mod end;
 pub mod multi_noise;
+pub mod position_finder;
 
 thread_local! {
     /// A shortcut; check if last used biome is what we should use

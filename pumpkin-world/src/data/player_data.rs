@@ -138,7 +138,7 @@ impl PlayerDataStorage {
         // Create the file and write directly with GZip compression
         match File::create(&path) {
             Ok(file) => {
-                if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(&data, file) {
+                if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file) {
                     log::error!("Failed to write compressed player data for {uuid}: {e}");
                     Err(PlayerDataError::Nbt(e.to_string()))
                 } else {

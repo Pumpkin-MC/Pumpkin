@@ -1,6 +1,5 @@
 use std::{net::IpAddr, net::SocketAddr};
 
-use pumpkin_protocol::Property;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -35,30 +34,30 @@ pub async fn bungeecord_login(
     server_address: &str,
     name: String,
 ) -> Result<(IpAddr, GameProfile), BungeeCordError> {
-    let data = server_address.split('\0').take(4).collect::<Vec<_>>();
+    let mut parts = server_address.split('\0');
 
-    // The IP address of the player; only given if `ip_forward` on bungee is true.
-    let ip = match data.get(1) {
-        Some(ip) => ip
+    // Skip the first part (the actual server address/host)
+    let _host = parts.next();
+
+    let ip = match parts.next() {
+        Some(ip_str) if !ip_str.is_empty() => ip_str
             .parse()
             .map_err(|_| BungeeCordError::FailedParseAddress)?,
-        None => client_address.lock().await.ip(),
+        _ => client_address.lock().await.ip(),
     };
 
-    // The UUID of the player; only given if `ip_forward` on bungee is true.
-    let id = match data.get(2) {
-        Some(uuid) => uuid.parse().map_err(|_| BungeeCordError::FailedParseUUID)?,
-        None => offline_uuid(name.as_str()).map_err(|_| BungeeCordError::FailedMakeOfflineUUID)?,
+    let id = match parts.next() {
+        Some(uuid_str) if !uuid_str.is_empty() => uuid_str
+            .parse()
+            .map_err(|_| BungeeCordError::FailedParseUUID)?,
+        _ => offline_uuid(&name).map_err(|_| BungeeCordError::FailedMakeOfflineUUID)?,
     };
 
-    // Read properties and get textures.
-    // Properties of the player's game profile are only given if `ip_forward` and `online_mode`
-    // on bungee are both `true`.
-    let properties: Vec<Property> = match data.get(3) {
-        Some(properties) => {
-            serde_json::from_str(properties).map_err(|_| BungeeCordError::FailedParseProperties)?
+    let properties = match parts.next() {
+        Some(json_str) if !json_str.is_empty() => {
+            serde_json::from_str(json_str).map_err(|_| BungeeCordError::FailedParseProperties)?
         }
-        None => vec![],
+        _ => Vec::new(),
     };
 
     Ok((

@@ -5,8 +5,6 @@ use pumpkin_data::Block;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::EnumVariants;
 use pumpkin_data::block_properties::Integer0To15;
-use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::get_tag_values;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
@@ -160,7 +158,8 @@ impl BlockBehaviour for SignBlock {
 
             let mut item = args.item_stack.lock().await;
 
-            let Some(pumpkin_item) = args.server.item_registry.get_pumpkin_item(item.item) else {
+            let Some(pumpkin_item) = args.server.item_registry.get_pumpkin_item(item.item.id)
+            else {
                 return BlockActionResult::PassToDefaultBlockAction;
             };
 

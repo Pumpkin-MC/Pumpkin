@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use num_bigint::BigInt;
 use pkcs8::EncodePublicKey;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
@@ -15,6 +17,7 @@ pub struct KeyStore {
 impl KeyStore {
     #[must_use]
     pub fn new() -> Self {
+        let instant = Instant::now();
         log::debug!("Creating encryption keys...");
         let private_key = Self::generate_private_key();
 
@@ -23,9 +26,10 @@ impl KeyStore {
         let public_key_der = public_key
             .to_public_key_der()
             .expect("Failed to encode public key to SPKI DER")
-            .as_bytes()
-            .to_vec()
+            .into_vec()
             .into_boxed_slice();
+
+        log::debug!("Created RSA keys, took {}ms", instant.elapsed().as_millis());
 
         Self {
             private_key,

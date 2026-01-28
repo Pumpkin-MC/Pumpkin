@@ -5,7 +5,7 @@ use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
 use pumpkin_data::entity::EntityPose;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::tag::{self};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
@@ -67,12 +67,8 @@ impl ScreenHandlerFactory for ChestScreenFactory {
 pub struct ChestBlock;
 
 impl BlockMetadata for ChestBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "c:chests/wooden").unwrap()
+    fn ids() -> Box<[u16]> {
+        tag::Block::C_CHESTS_WOODEN.1.into()
     }
 }
 

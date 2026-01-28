@@ -55,7 +55,7 @@ impl ItemBehaviour for EnderEyeItem {
                 .set_block_state(&location, new_state_id, BlockFlags::empty())
                 .await;
 
-            EndPortal::get_new_portal(world, location).await;
+            EndPortal::get_new_portal(&world, location).await;
         })
     }
 

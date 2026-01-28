@@ -40,11 +40,12 @@ impl DarkOakTrunkPlacer {
         placer.set_dirt(
             chunk,
             &pos.offset(BlockDirection::South.to_offset())
-                .offset(BlockDirection::South.to_offset()),
+                .offset(BlockDirection::East.to_offset()),
             force_dirt,
             dirt_state,
         );
-        let y_height = start_pos.0.y + height as i32 - 1;
+        let start_y = start_pos.0.y;
+        let y_height = start_y + height as i32 - 1;
         let max_height = height - random.next_bounded_i32(4) as u32;
         let mut trunk_poses = Vec::new();
         let mut nodes = Vec::new();
@@ -62,7 +63,9 @@ impl DarkOakTrunkPlacer {
                 z += random_direction.to_offset().z;
                 rand -= 1;
             }
-            let pos = BlockPos::new(x, y_height, z);
+
+            let current_y = start_y + y as i32;
+            let pos = BlockPos::new(x, current_y, z);
             // TODO: support multiple chunks
             let state = GenerationCache::get_block_state(chunk, &pos.0);
             if !TreeFeature::is_air_or_leaves(state.to_state(), state.to_block()) {
@@ -129,7 +132,7 @@ impl DarkOakTrunkPlacer {
                 nodes.push(TreeNode {
                     center: BlockPos::new(start_pos.0.x + xd, y_height, start_pos.0.z + zd),
                     foliage_radius: 0,
-                    giant_trunk: true,
+                    giant_trunk: false,
                 });
             }
         }

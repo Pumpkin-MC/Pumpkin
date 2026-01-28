@@ -3,8 +3,7 @@ use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionDefault, PermissionRegistry},
 };
-
-use crate::PERMISSION_REGISTRY;
+use tokio::sync::RwLock;
 
 use super::dispatcher::CommandDispatcher;
 
@@ -39,10 +38,13 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod rotate;
 mod say;
 mod seed;
 mod setblock;
+mod setidletimeout;
 mod setworldspawn;
+mod spawnpoint;
 mod stop;
 mod stopsound;
 mod summon;
@@ -57,10 +59,13 @@ mod whitelist;
 mod worldborder;
 
 #[must_use]
-pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDispatcher {
+pub async fn default_dispatcher(
+    registry: &RwLock<PermissionRegistry>,
+    basic_config: &BasicConfiguration,
+) -> CommandDispatcher {
     let mut dispatcher = CommandDispatcher::default();
 
-    register_permissions().await;
+    register_permissions(registry).await;
 
     // Zero
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
@@ -100,6 +105,7 @@ pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDis
     );
     dispatcher.register(weather::init_command_tree(), "minecraft:command.weather");
     dispatcher.register(particle::init_command_tree(), "minecraft:command.particle");
+    dispatcher.register(rotate::init_command_tree(), "minecraft:command.rotate");
     dispatcher.register(damage::init_command_tree(), "minecraft:command.damage");
     dispatcher.register(bossbar::init_command_tree(), "minecraft:command.bossbar");
     dispatcher.register(say::init_command_tree(), "minecraft:command.say");
@@ -121,6 +127,10 @@ pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDis
         setworldspawn::init_command_tree(),
         "minecraft:command.setworldspawn",
     );
+    dispatcher.register(
+        spawnpoint::init_command_tree(),
+        "minecraft:command.spawnpoint",
+    );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
@@ -138,14 +148,18 @@ pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDis
         "minecraft:command.whitelist",
     );
     dispatcher.register(transfer::init_command_tree(), "minecraft:command.transfer");
+    dispatcher.register(
+        setidletimeout::init_command_tree(),
+        "minecraft:command.setidletimeout",
+    );
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
 
     dispatcher
 }
 
-async fn register_permissions() {
-    let mut registry = PERMISSION_REGISTRY.write().await;
+async fn register_permissions(permission_registry: &RwLock<PermissionRegistry>) {
+    let mut registry = permission_registry.write().await;
 
     // Register level 0 permissions (allowed by default)
     register_level_0_permissions(&mut registry);
@@ -323,6 +337,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap();
     registry
         .register_permission(Permission::new(
+            "minecraft:command.rotate",
+            "Changes the rotation of an entity",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
             "minecraft:command.damage",
             "Damages entities",
             PermissionDefault::Op(PermissionLvl::Two),
@@ -391,8 +412,16 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.spawnpoint",
+            "Sets the spawn point for a player",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
 }
 
+#[expect(clippy::too_many_lines)]
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Three
     registry
@@ -490,6 +519,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.transfer",
             "Transfers the player to another server",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.setidletimeout",
+            "Sets the time before idle players are kicked",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();

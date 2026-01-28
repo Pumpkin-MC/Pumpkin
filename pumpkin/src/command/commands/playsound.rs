@@ -121,7 +121,7 @@ impl CommandExecutor for Executor {
 
                 // Check if player can hear the sound based on volume and distance
                 let player_pos = target.living_entity.entity.pos.load();
-                let distance = player_pos.squared_distance_to_vec(pos);
+                let distance = player_pos.squared_distance_to_vec(&pos);
                 let max_distance: f64 = (16.0 * volume).into(); // 16 blocks is base distance at volume 1.0
 
                 if distance <= max_distance || min_volume > 0.0 {

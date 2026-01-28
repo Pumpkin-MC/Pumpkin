@@ -2,10 +2,14 @@ use std::{num::NonZeroU8, sync::Arc};
 
 use crate::{
     entity::player::ChatMode,
-    net::{ClientPlatform, PlayerConfig, can_not_join, java::JavaClient},
+    net::{
+        PlayerConfig, can_not_join,
+        java::{JavaClient, PacketHandlerResult},
+    },
     server::Server,
 };
 use core::str;
+use pumpkin_data::registry::Registry;
 use pumpkin_protocol::{
     ConnectionState,
     java::{
@@ -16,7 +20,7 @@ use pumpkin_protocol::{
         },
     },
 };
-use pumpkin_util::{Hand, text::TextComponent};
+use pumpkin_util::{Hand, text::TextComponent, version::MinecraftVersion};
 
 impl JavaClient {
     pub async fn handle_client_information_config(
@@ -149,9 +153,11 @@ impl JavaClient {
         );
     }
 
-    pub async fn handle_known_packs(&self, server: &Server, _config_acknowledged: SKnownPacks) {
+    pub async fn handle_known_packs(&self, _config_acknowledged: SKnownPacks) {
         log::debug!("Handling known packs");
-        for registry in &server.cached_registry {
+        // let mut tags_to_send = Vec::new();
+        let registry = Registry::get_synced(self.version.load());
+        for registry in registry {
             let entries: Vec<RegistryEntry> = registry
                 .registry_entries
                 .iter()
@@ -159,8 +165,14 @@ impl JavaClient {
                 .collect();
             self.send_packet_now(&CRegistryData::new(&registry.registry_id, &entries))
                 .await;
+            // if let Some(tag) = RegistryKey::from_string(&registry.registry_id.path)
+            //     && pumpkin_data::tag::get_registry_key_tags(self.version.load(), tag).is_some()
+            // {
+            //     tags_to_send.push(tag);
+            // }
         }
-        self.send_packet_now(&CUpdateTags::new(&[
+        //self.send_packet_now(&CUpdateTags::new(&tags_to_send)).await;
+        let mut tags = vec![
             pumpkin_data::tag::RegistryKey::Block,
             pumpkin_data::tag::RegistryKey::Fluid,
             pumpkin_data::tag::RegistryKey::Enchantment,
@@ -168,16 +180,19 @@ impl JavaClient {
             pumpkin_data::tag::RegistryKey::Item,
             pumpkin_data::tag::RegistryKey::EntityType,
             pumpkin_data::tag::RegistryKey::Dialog,
-            pumpkin_data::tag::RegistryKey::Timeline,
-        ]))
-        .await;
+        ];
+        if self.version.load().protocol_version() >= MinecraftVersion::V_1_21_11.protocol_version()
+        {
+            tags.push(pumpkin_data::tag::RegistryKey::Timeline);
+        }
+        self.send_packet_now(&CUpdateTags::new(&tags)).await;
 
         // We are done with configuring
         log::debug!("Finished config");
         self.send_packet_now(&CFinishConfig).await;
     }
 
-    pub async fn handle_config_acknowledged(self: &Arc<Self>, server: &Server) {
+    pub async fn handle_config_acknowledged(&self, server: &Arc<Server>) -> PacketHandlerResult {
         log::debug!("Handling config acknowledgement");
         self.connection_state.store(ConnectionState::Play);
 
@@ -187,19 +202,10 @@ impl JavaClient {
 
         if let Some(reason) = can_not_join(&profile, &address, server).await {
             self.kick(reason).await;
-            return;
+            return PacketHandlerResult::Stop;
         }
 
         let config = self.config.lock().await;
-
-        if let Some((player, world)) = server
-            .add_player(ClientPlatform::Java(self.clone()), profile, config.clone())
-            .await
-        {
-            world
-                .spawn_java_player(&server.basic_config, player.clone(), server)
-                .await;
-            *self.player.lock().await = Some(player);
-        }
+        PacketHandlerResult::ReadyToPlay(profile, config.clone().unwrap_or_default())
     }
 }

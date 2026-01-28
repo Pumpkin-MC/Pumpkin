@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_HEALTH;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[packet(PLAY_SET_HEALTH)]
+#[java_packet(PLAY_SET_HEALTH)]
 pub struct CSetHealth {
     pub health: f32,
     pub food: VarInt,
@@ -13,6 +13,7 @@ pub struct CSetHealth {
 }
 
 impl CSetHealth {
+    #[must_use]
     pub fn new(health: f32, food: VarInt, food_saturation: f32) -> Self {
         Self {
             health,

@@ -6,13 +6,12 @@ use pumpkin_data::{
     fluid::{Falling, Fluid, FluidProperties, Level},
     world::WorldEvent,
 };
-use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{
     block::{
-        BlockFuture,
+        BlockFuture, BlockMetadata,
         fluid::{FluidBehaviour, flowing::FluidFuture},
     },
     entity::EntityBase,
@@ -22,8 +21,13 @@ use crate::{
 use super::flowing::FlowingFluid;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
-#[pumpkin_block("minecraft:flowing_lava")]
 pub struct FlowingLava;
+
+impl BlockMetadata for FlowingLava {
+    fn ids() -> Box<[u16]> {
+        [Fluid::FLOWING_LAVA.id].into()
+    }
+}
 
 impl FlowingLava {
     async fn receive_neighbor_fluids(
@@ -77,7 +81,8 @@ impl FlowingLava {
     }
 }
 
-const LAVA_FLOW_SPEED: u8 = 30;
+const LAVA_FLOW_SPEED_NETHER: u8 = 10;
+const LAVA_FLOW_SPEED_SLOW: u8 = 30;
 
 impl FluidBehaviour for FlowingLava {
     fn placed<'a>(
@@ -93,8 +98,9 @@ impl FluidBehaviour for FlowingLava {
             if old_state_id != state_id
                 && self.receive_neighbor_fluids(world, fluid, block_pos).await
             {
+                let flow_speed = self.get_flow_speed(world);
                 world
-                    .schedule_fluid_tick(fluid, *block_pos, LAVA_FLOW_SPEED, TickPriority::Normal)
+                    .schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal)
                     .await;
             }
         })
@@ -121,8 +127,9 @@ impl FluidBehaviour for FlowingLava {
     ) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if self.receive_neighbor_fluids(world, fluid, block_pos).await {
+                let flow_speed = self.get_flow_speed(world);
                 world
-                    .schedule_fluid_tick(fluid, *block_pos, LAVA_FLOW_SPEED, TickPriority::Normal)
+                    .schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal)
                     .await;
             }
         })
@@ -145,6 +152,15 @@ impl FlowingFluid for FlowingLava {
             1
         } else {
             2
+        }
+    }
+
+    fn get_flow_speed(&self, world: &World) -> u8 {
+        // ultrawarm logic - lava flows faster in the Nether
+        if world.dimension == Dimension::THE_NETHER {
+            LAVA_FLOW_SPEED_NETHER
+        } else {
+            LAVA_FLOW_SPEED_SLOW
         }
     }
 

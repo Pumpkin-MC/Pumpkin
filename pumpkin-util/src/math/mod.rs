@@ -12,6 +12,7 @@ pub mod vector2;
 pub mod vector3;
 pub mod vertical_surface_type;
 
+#[must_use]
 pub fn wrap_degrees(degrees: f32) -> f32 {
     let mut var1 = degrees % 360.0;
     if var1 >= 180.0 {
@@ -25,26 +26,31 @@ pub fn wrap_degrees(degrees: f32) -> f32 {
     var1
 }
 
+#[must_use]
 pub fn clamp_angle(value: f32, mean: f32, delta: f32) -> f32 {
     let i = subtract_angles(value, mean);
     let j = i.clamp(-delta, delta);
     mean - j
 }
 
+#[must_use]
 pub fn subtract_angles(start: f32, end: f32) -> f32 {
     wrap_degrees(end - start)
 }
 
+#[must_use]
 pub fn squared_magnitude(a: f64, b: f64, c: f64) -> f64 {
     c.mul_add(c, a.mul_add(a, b * b))
 }
 
+#[must_use]
 pub fn magnitude(a: f64, b: f64, c: f64) -> f64 {
     squared_magnitude(a, b, c).sqrt()
 }
 
 /// Converts a world coordinate to the corresponding chunk-section coordinate.
 // TODO: This probably shouldn't be placed here
+#[must_use]
 pub const fn get_section_cord(coord: i32) -> i32 {
     coord >> 4
 }
@@ -55,6 +61,7 @@ const MULTIPLY_DE_BRUIJN_BIT_POSITION: [u8; 32] = [
 ];
 
 /// Maximum return value: 31
+#[must_use]
 pub const fn ceil_log2(value: u32) -> u8 {
     let value = if value.is_power_of_two() {
         value
@@ -66,10 +73,12 @@ pub const fn ceil_log2(value: u32) -> u8 {
 }
 
 /// Maximum return value: 30
+#[must_use]
 pub const fn floor_log2(value: u32) -> u8 {
     ceil_log2(value) - if value.is_power_of_two() { 0 } else { 1 }
 }
 
+#[must_use]
 pub const fn smallest_encompassing_power_of_two(value: u32) -> u32 {
     value.next_power_of_two()
 }
@@ -116,6 +125,7 @@ pub fn lerp_progress<T: Float>(value: T, start: T, end: T) -> T {
     (value - start) / (end - start)
 }
 
+#[must_use]
 pub fn clamped_lerp(start: f64, end: f64, delta: f64) -> f64 {
     if delta < 0.0 {
         start
@@ -127,10 +137,12 @@ pub fn clamped_lerp(start: f64, end: f64, delta: f64) -> f64 {
 }
 
 #[inline]
+#[must_use]
 pub fn clamped_map(value: f64, old_start: f64, old_end: f64, new_start: f64, new_end: f64) -> f64 {
     clamped_lerp(new_start, new_end, lerp_progress(value, old_start, old_end))
 }
 
+#[must_use]
 pub fn lerp2(delta_x: f64, delta_y: f64, x0y0: f64, x1y0: f64, x0y1: f64, x1y1: f64) -> f64 {
     lerp(
         delta_y,
@@ -140,6 +152,7 @@ pub fn lerp2(delta_x: f64, delta_y: f64, x0y0: f64, x1y0: f64, x0y1: f64, x1y1: 
 }
 
 #[expect(clippy::too_many_arguments)]
+#[must_use]
 pub fn lerp3(
     delta_x: f64,
     delta_y: f64,
@@ -162,10 +175,11 @@ pub fn lerp3(
 
 /// Calculates a Polynomial Rolling Hash
 /// Mojang's checksum algorithm for previous messages
+#[must_use]
 pub fn polynomial_rolling_hash(signatures: &[Box<[u8]>]) -> u8 {
     let mut i: i32 = 1;
 
-    for signature in signatures.iter() {
+    for signature in signatures {
         i = i.wrapping_mul(31).wrapping_add(java_array_hash(signature)); // Wrap to prevent multiplication overflow
     }
 
@@ -173,7 +187,7 @@ pub fn polynomial_rolling_hash(signatures: &[Box<[u8]>]) -> u8 {
     if b == 0 { 1 } else { b } // Ensure the checksum is never zero.
 }
 
-/// Arrays.hashCode() and String.hashCode() have similar but different implementations.
+/// `Arrays.hashCode()` and `String.hashCode()` have similar but different implementations.
 fn java_array_hash(data: &[u8]) -> i32 {
     let mut hash: i32 = 1;
     for &byte in data {
@@ -183,6 +197,7 @@ fn java_array_hash(data: &[u8]) -> i32 {
     hash
 }
 
+#[must_use]
 pub fn java_string_hash(string: &str) -> i32 {
     let mut result = 0i32;
     for char_encoding in string.encode_utf16() {
@@ -194,6 +209,7 @@ pub fn java_string_hash(string: &str) -> i32 {
 }
 
 #[test]
+#[expect(clippy::unicode_not_nfc)]
 fn test_java_hash() {
     let values = [
         ("", 0, 1),

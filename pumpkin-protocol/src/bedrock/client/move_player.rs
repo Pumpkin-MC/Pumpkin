@@ -11,9 +11,16 @@ pub struct CMovePlayer {
     pub position: Vector3<f32>,
     pub pitch: f32,
     pub yaw: f32,
-    pub y_head_rotation: f32,
-    pub position_mode: u8,
+    pub head_yaw: f32,
+    pub mode: u8,
     pub on_ground: bool,
     pub riding_runtime_id: VarULong,
     pub tick: VarULong,
+}
+
+impl CMovePlayer {
+    pub const MODE_NORMAL: u8 = 0;
+    pub const MODE_RESET: u8 = 1;
+    pub const MODE_TELEPORT: u8 = 2;
+    pub const MODE_PITCH: u8 = 3;
 }

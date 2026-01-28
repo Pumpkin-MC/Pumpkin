@@ -3,9 +3,7 @@ use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -17,12 +15,8 @@ use crate::world::World;
 
 pub struct GlassPaneBlock;
 impl BlockMetadata for GlassPaneBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "c:glass_panes").unwrap()
+    fn ids() -> Box<[u16]> {
+        tag::Block::C_GLASS_PANES.1.into()
     }
 }
 

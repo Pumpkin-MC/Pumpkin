@@ -46,7 +46,7 @@ impl VarLong {
             let byte = read.get_u8()?;
             val |= (i64::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarLong(val));
+                return Ok(Self(val));
             }
         }
         Err(ReadingError::TooLarge("VarLong".to_string()))
@@ -55,25 +55,25 @@ impl VarLong {
 
 impl From<i64> for VarLong {
     fn from(value: i64) -> Self {
-        VarLong(value)
+        Self(value)
     }
 }
 
 impl From<u32> for VarLong {
     fn from(value: u32) -> Self {
-        VarLong(value as i64)
+        Self(i64::from(value))
     }
 }
 
 impl From<u8> for VarLong {
     fn from(value: u8) -> Self {
-        VarLong(value as i64)
+        Self(i64::from(value))
     }
 }
 
 impl From<usize> for VarLong {
     fn from(value: usize) -> Self {
-        VarLong(value as i64)
+        Self(value as i64)
     }
 }
 
@@ -128,8 +128,8 @@ impl<'de> Deserialize<'de> for VarLong {
                 let mut val = 0;
                 for i in 0..VarLong::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
-                        val |= (i64::from(byte) & 0b01111111) << (i * 7);
-                        if byte & 0b10000000 == 0 {
+                        val |= (i64::from(byte) & 0b0111_1111) << (i * 7);
+                        if byte & 0b1000_0000 == 0 {
                             return Ok(VarLong(val));
                         }
                     } else {

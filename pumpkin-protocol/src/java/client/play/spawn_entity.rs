@@ -1,15 +1,18 @@
+use std::io::Write;
+
 use pumpkin_data::packet::clientbound::PLAY_ADD_ENTITY;
-use pumpkin_macros::packet;
-use pumpkin_util::math::vector3::Vector3;
-use serde::Serialize;
+use pumpkin_macros::java_packet;
+use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
 
-use crate::{VarInt, codec::velocity::Velocity};
+use crate::{
+    ClientPacket, VarInt,
+    codec::velocity::Velocity,
+    ser::{NetworkWriteExt, WritingError},
+};
 
-#[derive(Serialize)]
-#[packet(PLAY_ADD_ENTITY)]
+#[java_packet(PLAY_ADD_ENTITY)]
 pub struct CSpawnEntity {
     pub entity_id: VarInt,
-    #[serde(with = "uuid::serde::compact")]
     pub entity_uuid: uuid::Uuid,
     pub r#type: VarInt,
     pub position: Vector3<f64>,
@@ -22,6 +25,7 @@ pub struct CSpawnEntity {
 
 impl CSpawnEntity {
     #[expect(clippy::too_many_arguments)]
+    #[must_use]
     pub fn new(
         entity_id: VarInt,
         entity_uuid: uuid::Uuid,
@@ -44,5 +48,41 @@ impl CSpawnEntity {
             data,
             velocity: Velocity(velocity),
         }
+    }
+}
+
+impl ClientPacket for CSpawnEntity {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let mut write = write;
+
+        write.write_var_int(&self.entity_id)?;
+        write.write_uuid(&self.entity_uuid)?;
+        write.write_var_int(&self.r#type)?;
+
+        write.write_f64_be(self.position.x)?;
+        write.write_f64_be(self.position.y)?;
+        write.write_f64_be(self.position.z)?;
+
+        // Angles
+        if version >= &MinecraftVersion::V_1_21_9 {
+            self.velocity.write(&mut write)?;
+        }
+        write.write_u8(self.pitch)?;
+        write.write_u8(self.yaw)?;
+        write.write_u8(self.head_yaw)?;
+
+        write.write_var_int(&self.data)?;
+
+        if version <= &MinecraftVersion::V_1_21_7 {
+            write.write_i16_be(self.velocity.0.x as i16)?;
+            write.write_i16_be(self.velocity.0.y as i16)?;
+            write.write_i16_be(self.velocity.0.z as i16)?;
+        }
+
+        Ok(())
     }
 }

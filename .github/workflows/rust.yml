@@ -64,7 +64,13 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --verbose --release
+      - name: Build Release
+        shell: bash
+        run: |
+          if [[ "${{ runner.arch }}" == "X64" ]]; then
+            export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
+          fi
+          cargo build --verbose --release
       - name: Prepare artifacts
         shell: bash
         run: |

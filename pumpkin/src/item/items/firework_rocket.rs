@@ -14,7 +14,6 @@ use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
-use uuid::Uuid;
 
 pub struct FireworkRocketItem;
 
@@ -38,7 +37,6 @@ impl ItemBehaviour for FireworkRocketItem {
         Box::pin(async move {
             let world = player.world();
             let entity = Entity::new(
-                Uuid::new_v4(),
                 world.clone(),
                 Vector3::new(
                     f64::from(location.0.x) + f64::from(cursor_pos.x),
@@ -46,7 +44,6 @@ impl ItemBehaviour for FireworkRocketItem {
                     f64::from(location.0.z) + f64::from(cursor_pos.z),
                 ),
                 &EntityType::FIREWORK_ROCKET,
-                false,
             );
             let entity = FireworkRocketEntity::new(entity).await;
             world.spawn_entity(Arc::new(entity)).await;
@@ -62,11 +59,9 @@ impl ItemBehaviour for FireworkRocketItem {
             if player.get_entity().fall_flying.load(Ordering::Relaxed) {
                 let world = player.world();
                 let entity = Entity::new(
-                    Uuid::new_v4(),
                     world.clone(),
                     player.get_entity().pos.load(),
                     &EntityType::FIREWORK_ROCKET,
-                    false,
                 );
                 let entity = FireworkRocketEntity::new_shot(entity, player.get_entity()).await;
                 world.spawn_entity(Arc::new(entity)).await;

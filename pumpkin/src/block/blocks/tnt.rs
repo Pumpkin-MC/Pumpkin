@@ -15,7 +15,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 use rand::Rng;
-use uuid::Uuid;
 
 use super::redstone::block_receives_redstone_power;
 
@@ -24,13 +23,7 @@ pub struct TNTBlock;
 
 impl TNTBlock {
     pub async fn prime(world: &Arc<World>, location: &BlockPos) {
-        let entity = Entity::new(
-            Uuid::new_v4(),
-            world.clone(),
-            location.to_f64(),
-            &EntityType::TNT,
-            false,
-        );
+        let entity = Entity::new(world.clone(), location.to_f64(), &EntityType::TNT);
         let pos = entity.pos.load();
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
         world.spawn_entity(tnt).await;
@@ -61,7 +54,7 @@ impl BlockBehaviour for TNTBlock {
                 return BlockActionResult::Pass;
             }
             let world = args.player.world();
-            Self::prime(world, args.position).await;
+            Self::prime(&world, args.position).await;
 
             BlockActionResult::Consume
         })
@@ -85,13 +78,7 @@ impl BlockBehaviour for TNTBlock {
 
     fn explode<'a>(&'a self, args: ExplodeArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let entity = Entity::new(
-                Uuid::new_v4(),
-                args.world.clone(),
-                args.position.to_f64(),
-                &EntityType::TNT,
-                false,
-            );
+            let entity = Entity::new(args.world.clone(), args.position.to_f64(), &EntityType::TNT);
             let angle = rand::random::<f64>() * std::f64::consts::TAU;
             entity
                 .set_velocity(Vector3::new(-angle.sin() * 0.02, 0.2, -angle.cos() * 0.02))

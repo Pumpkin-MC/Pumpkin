@@ -22,15 +22,15 @@ impl Default for ServerLinksConfig {
         Self {
             enabled: true,
             bug_report: "https://github.com/Pumpkin-MC/Pumpkin/issues".to_string(),
-            support: "".to_string(),
-            status: "".to_string(),
-            feedback: "".to_string(),
-            community: "".to_string(),
-            website: "".to_string(),
-            forums: "".to_string(),
-            news: "".to_string(),
-            announcements: "".to_string(),
-            custom: Default::default(),
+            support: String::new(),
+            status: String::new(),
+            feedback: String::new(),
+            community: String::new(),
+            website: String::new(),
+            forums: String::new(),
+            news: String::new(),
+            announcements: String::new(),
+            custom: HashMap::default(),
         }
     }
 }

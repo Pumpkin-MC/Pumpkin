@@ -87,9 +87,8 @@ impl ItemEntity {
     async fn try_merge(&self) {
         let bounding_box = self.entity.bounding_box.load().expand(0.5, 0.0, 0.5);
 
-        let items: Vec<_> = self
-            .entity
-            .world
+        let world = self.entity.world.load();
+        let items: Vec<_> = world
             .entities
             .read()
             .await
@@ -241,6 +240,7 @@ impl EntityBase for ItemEntity {
             let no_clip = !self
                 .entity
                 .world
+                .load()
                 .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
                 .await;
 

@@ -10,7 +10,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
-use uuid::Uuid;
 
 #[pumpkin_block("minecraft:pumpkin")]
 pub struct PumpkinBlock;
@@ -39,11 +38,9 @@ impl crate::block::BlockBehaviour for PumpkinBlock {
                 )
                 .await;
             let entity = Entity::new(
-                Uuid::new_v4(),
                 args.world.clone(),
                 args.position.to_f64(),
                 &EntityType::ITEM,
-                false,
             );
             let item_entity =
                 Arc::new(ItemEntity::new(entity, ItemStack::new(4, &Item::PUMPKIN_SEEDS)).await);

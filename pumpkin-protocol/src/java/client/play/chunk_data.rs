@@ -2,18 +2,29 @@ use crate::WritingError;
 use crate::codec::bit_set::BitSet;
 use crate::{ClientPacket, VarInt, ser::NetworkWriteExt};
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_nbt::END_ID;
 use pumpkin_util::math::position::get_local_cord;
+use pumpkin_util::version::MinecraftVersion;
 use pumpkin_world::chunk::format::LightContainer;
 use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
 use std::io::Write;
 
-#[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
+/// Sent by the server to provide the client with the full data for a chunk.
+///
+/// This includes heightmaps, the actual block and biome data (organized into sections),
+/// block entities (like signs or chests), and the light level information for both
+/// sky and block light.
+#[java_packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
 pub struct CChunkData<'a>(pub &'a ChunkData);
 
 impl ClientPacket for CChunkData<'_> {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    #[expect(clippy::too_many_lines)]
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut write = write;
 
         // Chunk X
@@ -106,7 +117,7 @@ impl ClientPacket for CChunkData<'_> {
                 ))
             })?)?;
             write.write_slice(&blocks_and_biomes_buf)?;
-        }
+        };
 
         write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
         for block_entity in self.0.block_entities.values() {
@@ -118,7 +129,7 @@ impl ClientPacket for CChunkData<'_> {
             write.write_var_int(&VarInt(block_entity.get_id() as i32))?;
 
             if let Some(nbt) = block_entity.chunk_data_nbt() {
-                write.write_nbt(&nbt.into())?;
+                write.write_nbt(nbt.into())?;
             } else {
                 write.write_u8(END_ID)?;
             }

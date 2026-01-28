@@ -24,8 +24,8 @@ impl Default for AuthenticationConfig {
         Self {
             enabled: true,
             prevent_proxy_connections: false,
-            player_profile: Default::default(),
-            textures: Default::default(),
+            player_profile: PlayerProfileConfig::default(),
+            textures: TextureConfig::default(),
             url: None,
             prevent_proxy_connection_auth_url: None,
             services_url: None,
@@ -75,7 +75,7 @@ impl Default for TextureConfig {
             enabled: true,
             allowed_url_schemes: vec!["http".into(), "https".into()],
             allowed_url_domains: vec![".minecraft.net".into(), ".mojang.com".into()],
-            types: Default::default(),
+            types: TextureTypes::default(),
         }
     }
 }

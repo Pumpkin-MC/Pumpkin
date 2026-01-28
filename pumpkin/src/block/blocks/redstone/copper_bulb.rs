@@ -1,5 +1,6 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
+use pumpkin_data::Block;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_world::BlockStateId;
@@ -10,21 +11,18 @@ type CopperBulbLikeProperties = pumpkin_data::block_properties::CopperBulbLikePr
 pub struct CopperBulbBlock;
 
 impl BlockMetadata for CopperBulbBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[
-            "copper_bulb",
-            "exposed_copper_bulb",
-            "weathered_copper_bulb",
-            "oxidized_copper_bulb",
-            "waxed_copper_bulb",
-            "waxed_exposed_copper_bulb",
-            "waxed_weathered_copper_bulb",
-            "waxed_oxidized_copper_bulb",
+    fn ids() -> Box<[u16]> {
+        [
+            Block::COPPER_BULB.id,
+            Block::EXPOSED_COPPER_BULB.id,
+            Block::WEATHERED_COPPER_BULB.id,
+            Block::OXIDIZED_COPPER_BULB.id,
+            Block::WAXED_COPPER_BULB.id,
+            Block::WAXED_EXPOSED_COPPER_BULB.id,
+            Block::WAXED_WEATHERED_COPPER_BULB.id,
+            Block::WAXED_OXIDIZED_COPPER_BULB.id,
         ]
+        .into()
     }
 }
 

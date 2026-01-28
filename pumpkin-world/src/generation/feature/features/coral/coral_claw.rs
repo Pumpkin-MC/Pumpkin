@@ -30,10 +30,7 @@ impl CoralClawFeature {
         let direction = BlockDirection::horizontal()
             [random.next_bounded_i32(BlockDirection::horizontal().len() as i32 - 1) as usize];
         // TODO: Shuffle
-        let directions: Vec<_> = BlockDirection::horizontal()
-            .into_iter()
-            .take(i as usize)
-            .collect();
+        let directions = BlockDirection::horizontal().into_iter().take(i as usize);
         'block0: for direction2 in directions {
             let mut pos = pos;
             let j = random.next_bounded_i32(2) + 1;

@@ -8,6 +8,7 @@ pub struct CHandshake {
 }
 
 impl CHandshake {
+    #[must_use]
     pub fn new(jwt_data: String) -> Self {
         Self { jwt_data }
     }

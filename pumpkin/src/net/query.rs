@@ -13,7 +13,7 @@ use pumpkin_world::CURRENT_MC_VERSION;
 use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
-use crate::{PLUGIN_MANAGER, SHOULD_STOP, STOP_INTERRUPT, server::Server};
+use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
 pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let socket = Arc::new(
@@ -51,7 +51,7 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
 
         let recv_result = tokio::select! {
             result = socket.recv_from(&mut buf) => Some(result),
-            () = STOP_INTERRUPT.notified() => None,
+            () = STOP_INTERRUPT.cancelled() => None,
         };
 
         let Some(Ok((_, addr))) = recv_result else {
@@ -137,7 +137,8 @@ async fn handle_packet(
                             }
                         }
 
-                        let plugins = PLUGIN_MANAGER
+                        let plugins = server
+                            .plugin_manager
                             .active_plugins()
                             .await
                             .into_iter()

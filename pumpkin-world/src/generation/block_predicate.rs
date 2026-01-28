@@ -8,9 +8,6 @@ use crate::generation::proto_chunk::GenerationCache;
 use crate::{block::BlockStateCodec, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
-pub struct EmptyTODOStruct {}
-
-#[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum BlockPredicate {
     #[serde(rename = "minecraft:matching_blocks")]
@@ -37,9 +34,9 @@ pub enum BlockPredicate {
     Not(NotBlockPredicate),
     #[serde(rename = "minecraft:true")]
     AlwaysTrue,
-    /// Not used
-    #[serde(rename = "minecraft:unobstructed")]
-    Unobstructed(EmptyTODOStruct),
+    // Not used
+    // #[serde(rename = "minecraft:unobstructed")]
+    // Unobstructed(EmptyTODOStruct),
 }
 
 impl BlockPredicate {
@@ -62,7 +59,6 @@ impl BlockPredicate {
             BlockPredicate::AllOf(predicate) => predicate.test(block_registry, chunk, pos),
             BlockPredicate::Not(predicate) => predicate.test(block_registry, chunk, pos),
             BlockPredicate::AlwaysTrue => true,
-            BlockPredicate::Unobstructed(_predicate) => false,
         }
     }
 }

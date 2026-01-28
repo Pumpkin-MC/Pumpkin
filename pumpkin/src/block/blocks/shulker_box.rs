@@ -7,7 +7,7 @@ use crate::block::{
 };
 
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::tag::{self};
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -44,12 +44,8 @@ impl ScreenHandlerFactory for ShulkerBoxScreenFactory {
 pub struct ShulkerBoxBlock;
 
 impl BlockMetadata for ShulkerBoxBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:shulker_boxes").unwrap()
+    fn ids() -> Box<[u16]> {
+        tag::Block::MINECRAFT_SHULKER_BOXES.1.into()
     }
 }
 

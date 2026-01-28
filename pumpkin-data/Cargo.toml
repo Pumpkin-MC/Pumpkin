@@ -2,6 +2,7 @@
 name = "pumpkin-data"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 build = "build/build.rs"
 
 [dependencies]
@@ -28,3 +29,14 @@ quote.workspace = true
 syn.workspace = true
 
 rayon.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "has_random_ticks"
+harness = false
+
+# Generated files generate a lot of warns
+# [lints]
+# workspace = true

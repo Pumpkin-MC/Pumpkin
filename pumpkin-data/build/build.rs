@@ -11,6 +11,7 @@ use std::{
 
 mod attributes;
 mod biome;
+mod bitsets;
 mod block;
 mod chunk_status;
 mod composter_increase_chance;
@@ -28,6 +29,7 @@ mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
+mod jukebox_song;
 pub mod loot;
 mod message_type;
 mod meta_data_type;
@@ -53,7 +55,7 @@ pub const OUT_DIR: &str = "src/generated";
 
 pub fn main() {
     if let Err(e) = fs::create_dir_all(OUT_DIR) {
-        eprintln!("Failed to create output directory {}: {}", OUT_DIR, e);
+        eprintln!("Failed to create output directory {OUT_DIR}: {e}");
     }
 
     type BuilderFn = fn() -> TokenStream;
@@ -70,6 +72,7 @@ pub fn main() {
         (game_rules::build, "game_rules.rs"),
         (registry::build, "registry.rs"),
         (dimension::build, "dimension.rs"),
+        (jukebox_song::build, "jukebox_song.rs"),
         (sound_category::build, "sound_category.rs"),
         (entity_pose::build, "entity_pose.rs"),
         (scoreboard_slot::build, "scoreboard_slot.rs"),
@@ -112,6 +115,7 @@ pub fn main() {
     });
 }
 
+#[must_use]
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
     let variants = array.iter().map(|item| {
         let name = format_ident!("{}", item.to_pascal_case());

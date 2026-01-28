@@ -14,6 +14,7 @@ pub mod inventory;
 pub mod item;
 pub mod level;
 pub mod lock;
+pub mod poi;
 pub mod tick;
 pub mod world;
 pub mod world_info;
@@ -22,7 +23,9 @@ pub type BlockId = u16;
 pub type BlockStateId = u16;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.11";
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.32";
+pub const LOWEST_SUPPRORTED_PROTOCOL_VERSION: u32 = 772;
+
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.132";
 pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 898;
 
 #[macro_export]
@@ -45,7 +48,16 @@ pub use generation::{
     proto_chunk::ProtoChunk, settings::GENERATION_SETTINGS, settings::GeneratorSetting,
 };
 
-use crate::generation::{chunk_noise::CHUNK_DIM, proto_chunk::TerrainCache};
+use crate::generation::{
+    biome_coords,
+    noise::{
+        CHUNK_DIM, ChunkNoiseGenerator,
+        aquifer_sampler::{FluidLevel, FluidLevelSampler},
+    },
+    positions::chunk_pos,
+    proto_chunk::TerrainCache,
+};
+
 pub fn bench_create_and_populate_noise(
     base_router: &ProtoNoiseRouters,
     random_config: &GlobalRandomConfig,
@@ -54,16 +66,10 @@ pub fn bench_create_and_populate_noise(
     default_block: &'static BlockState,
 ) {
     use crate::biome::hash_seed;
-    use crate::generation::chunk_noise::ChunkNoiseGenerator;
     use crate::generation::noise::router::surface_height_sampler::{
         SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
     };
     use crate::generation::proto_chunk::StandardChunkFluidLevelSampler;
-    use crate::generation::{
-        aquifer_sampler::{FluidLevel, FluidLevelSampler},
-        biome_coords,
-        positions::chunk_pos,
-    };
 
     let biome_mixer_seed = hash_seed(random_config.seed);
     let mut chunk = ProtoChunk::new(0, 0, &Dimension::OVERWORLD, default_block, biome_mixer_seed);
@@ -160,7 +166,6 @@ pub fn bench_create_and_populate_noise_with_surface(
     default_block: &'static BlockState,
 ) {
     use crate::biome::hash_seed;
-    use crate::generation::chunk_noise::ChunkNoiseGenerator;
     use crate::generation::noise::router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
         surface_height_sampler::{
@@ -168,11 +173,6 @@ pub fn bench_create_and_populate_noise_with_surface(
         },
     };
     use crate::generation::proto_chunk::StandardChunkFluidLevelSampler;
-    use crate::generation::{
-        aquifer_sampler::{FluidLevel, FluidLevelSampler},
-        biome_coords,
-        positions::chunk_pos,
-    };
 
     let biome_mixer_seed = hash_seed(random_config.seed);
     let mut chunk = ProtoChunk::new(0, 0, &Dimension::OVERWORLD, default_block, biome_mixer_seed);

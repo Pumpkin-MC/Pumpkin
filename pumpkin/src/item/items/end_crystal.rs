@@ -12,7 +12,6 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
-use uuid::Uuid;
 
 pub struct EndCrystalItem;
 
@@ -41,13 +40,7 @@ impl ItemBehaviour for EndCrystalItem {
             }
 
             let location = location.up();
-            let entity = Entity::new(
-                Uuid::new_v4(),
-                world.clone(),
-                location.to_f64(),
-                &EntityType::END_CRYSTAL,
-                false,
-            );
+            let entity = Entity::new(world.clone(), location.to_f64(), &EntityType::END_CRYSTAL);
             let end_crystal = Arc::new(EndCrystalEntity::new(entity));
             world.spawn_entity(end_crystal.clone()).await;
             end_crystal.set_show_bottom(false).await;

@@ -261,7 +261,12 @@ impl JavaClient {
         true
     }
 
-    pub async fn handle_position(&self, player: &Arc<Player>, packet: SPlayerPosition) {
+    pub async fn handle_position(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        packet: SPlayerPosition,
+    ) {
         if !player.has_client_loaded() {
             return;
         }
@@ -282,6 +287,7 @@ impl JavaClient {
         );
 
         send_cancellable! {{
+            server;
             PlayerMoveEvent {
                 player: player.clone(),
                 from: player.living_entity.entity.pos.load(),
@@ -324,7 +330,7 @@ impl JavaClient {
 
                 if !player.abilities.lock().await.flying {
                     player.living_entity
-                        .update_fall_distance(
+                        .fall(
                             player.clone(),
                             height_difference,
                             packet.collision & FLAG_ON_GROUND != 0,
@@ -333,12 +339,16 @@ impl JavaClient {
                         .await;
                 }
                 chunker::update_position(player).await;
-                player.progress_motion(Vector3::new(
+                let delta = Vector3::new(
                     pos.x - last_pos.x,
                     pos.y - last_pos.y,
                     pos.z - last_pos.z,
-                ))
-                .await;
+                );
+                // Only update idle timeout if there's actual movement (vanilla threshold)
+                if delta.length_squared() > 1.0E-5 {
+                    player.update_last_action_time();
+                }
+                player.progress_motion(delta).await;
             }
 
             'cancelled: {
@@ -354,9 +364,11 @@ impl JavaClient {
         }}
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_position_rotation(
         &self,
         player: &Arc<Player>,
+        server: &Arc<Server>,
         packet: SPlayerPositionRotation,
     ) {
         if !player.has_client_loaded() {
@@ -385,6 +397,7 @@ impl JavaClient {
         );
 
         send_cancellable! {{
+            server;
             PlayerMoveEvent::new(
                 player.clone(),
                 player.living_entity.entity.pos.load(),
@@ -415,11 +428,11 @@ impl JavaClient {
                 let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
                 let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
                 // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
-                let world = &entity.world;
+                let world = entity.world.load_full();
 
                 // TODO: Warn when player moves to quickly
                 if !self
-                    .sync_position(player, world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
+                    .sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
                     .await
                 {
                     // Send the new position to all other players.
@@ -449,7 +462,7 @@ impl JavaClient {
                     .await;
                 if !player.abilities.lock().await.flying {
                     player.living_entity
-                        .update_fall_distance(
+                        .fall(
                             player.clone(),
                             height_difference,
                             (packet.collision & FLAG_ON_GROUND) != 0,
@@ -458,12 +471,16 @@ impl JavaClient {
                         .await;
                 }
                 chunker::update_position(player).await;
-                player.progress_motion(Vector3::new(
+                let delta = Vector3::new(
                     pos.x - last_pos.x,
                     pos.y - last_pos.y,
                     pos.z - last_pos.z,
-                ))
-                .await;
+                );
+                // Only update idle timeout if there's actual movement (vanilla threshold)
+                if delta.length_squared() > 1.0E-5 {
+                    player.update_last_action_time();
+                }
+                player.progress_motion(delta).await;
             }
 
             'cancelled: {
@@ -510,7 +527,7 @@ impl JavaClient {
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
-        let world = &entity.world;
+        let world = entity.world.load_full();
         let packet =
             CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
         world
@@ -528,9 +545,11 @@ impl JavaClient {
         server: &Arc<Server>,
         command: &SChatCommand,
     ) {
+        player.update_last_action_time();
         let player_clone = player.clone();
         let server_clone = server.clone();
         send_cancellable! {{
+            server;
             PlayerCommandSendEvent {
                 player: player.clone(),
                 command: command.command.clone(),
@@ -726,6 +745,7 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        player.update_last_action_time();
 
         if let Ok(action) = Action::try_from(command.action.0) {
             let entity = &player.living_entity.entity;
@@ -766,6 +786,7 @@ impl JavaClient {
     }
 
     pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {
+        player.update_last_action_time();
         let Ok(hand) = Hand::try_from(swing_arm.hand.0) else {
             self.kick(TextComponent::text("Invalid hand")).await;
             return;
@@ -807,7 +828,10 @@ impl JavaClient {
             )
         };
 
+        let server = player.world().server.upgrade().unwrap();
+
         send_cancellable! {{
+            server;
             event;
             'after: {
                 player.swing_hand(hand, false).await;
@@ -821,6 +845,7 @@ impl JavaClient {
         player: &Arc<Player>,
         chat_message: SChatMessage,
     ) {
+        player.update_last_action_time();
         let gameprofile = &player.gameprofile;
 
         if let Err(err) = self
@@ -843,6 +868,7 @@ impl JavaClient {
         }
 
         send_cancellable! {{
+            server;
             PlayerChatEvent::new(player.clone(), chat_message.message.clone(), vec![]);
 
             'after: {
@@ -855,19 +881,19 @@ impl JavaClient {
                     None => event.message.clone(),
                 };
 
-                let decorated_message = &TextComponent::chat_decorated(
-                    config.chat.format.clone(),
-                    gameprofile.name.clone(),
-                    message.clone(),
+                let decorated_message = TextComponent::chat_decorated(
+                    &config.chat.format,
+                    &gameprofile.name,
+                    &message,
                 );
 
                 let entity = &player.living_entity.entity;
-                let world = &entity.world;
+                let world = entity.world.load_full();
                 if server.basic_config.allow_chat_reports {
-                    world.broadcast_secure_player_chat(player, &chat_message, decorated_message).await;
+                    world.broadcast_secure_player_chat(player, &chat_message, &decorated_message).await;
                 } else {
                     let je_packet = CSystemChatMessage::new(
-                        decorated_message,
+                        &decorated_message,
                         false,
                     );
                     let be_packet = SText::new(
@@ -1006,15 +1032,6 @@ impl JavaClient {
             return Err(ChatError::InvalidPublicKey);
         }
 
-        // Verify signature with RSA-SHA1
-        let mojang_verifying_keys = server
-            .mojang_public_keys
-            .lock()
-            .await
-            .iter()
-            .map(|key| VerifyingKey::<Sha1>::new(key.clone()))
-            .collect::<Vec<_>>();
-
         let key_signature = RsaPkcs1v15Signature::try_from(session.key_signature.as_ref())
             .map_err(|_| ChatError::InvalidPublicKey)?;
 
@@ -1023,11 +1040,16 @@ impl JavaClient {
         signable.extend_from_slice(&session.expires_at.to_be_bytes());
         signable.extend_from_slice(&session.public_key);
 
+        let public_keys_guard = server.mojang_public_keys.lock().await;
+
+        // Verify signature with RSA-SHA1
+        let is_valid = public_keys_guard.iter().any(|key| {
+            let verifying_key = VerifyingKey::<Sha1>::new(key.clone());
+            verifying_key.verify(&signable, &key_signature).is_ok()
+        });
+
         // Verify that the signable is valid for any one of Mojang's public keys
-        if !mojang_verifying_keys
-            .iter()
-            .any(|key| key.verify(&signable, &key_signature).is_ok())
-        {
+        if !is_valid {
             return Err(ChatError::InvalidPublicKey);
         }
 
@@ -1113,13 +1135,14 @@ impl JavaClient {
     }
 
     pub async fn handle_client_status(&self, player: &Arc<Player>, client_status: SClientCommand) {
+        player.update_last_action_time();
         match client_status.action_id.0 {
             0 => {
                 // Perform respawn
                 if player.living_entity.health.load() > 0.0 {
                     return;
                 }
-                player.world().respawn_player(player, false).await;
+                player.world().clone().respawn_player(player, false).await;
 
                 let screen_handler = player.current_screen_handler.lock().await;
                 let mut screen_handler = screen_handler.lock().await;
@@ -1152,6 +1175,7 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        player.update_last_action_time();
         let entity_id = interact.entity_id;
 
         let sneaking = interact.sneaking;
@@ -1174,7 +1198,7 @@ impl JavaClient {
 
                 // TODO: set as camera entity when spectator
 
-                let world = &player_entity.world;
+                let world = player_entity.world.load_full();
                 let player_victim = world.get_player_by_id(entity_id.0).await;
                 if entity_id.0 == player.entity_id() {
                     // This can't be triggered from a non-modded client.
@@ -1244,6 +1268,7 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        player.update_last_action_time();
         match Status::try_from(player_action.status.0) {
             Ok(status) => match status {
                 Status::StartedDigging => {
@@ -1257,7 +1282,7 @@ impl JavaClient {
                     }
                     let position = player_action.position;
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world;
+                    let world = entity.world.load_full();
                     let (block, state) = world.get_block_and_state(&position).await;
 
                     let inventory = player.inventory();
@@ -1288,7 +1313,7 @@ impl JavaClient {
                             .await;
                         server
                             .block_registry
-                            .broken(world, block, player, &position, server, state)
+                            .broken(&world, block, player, &position, server, state)
                             .await;
                         self.update_sequence(player, player_action.sequence.0);
                         return;
@@ -1311,8 +1336,9 @@ impl JavaClient {
                                 .await;
                             server
                                 .block_registry
-                                .broken(world, block, player, &position, server, broken_state)
+                                .broken(&world, block, player, &position, server, broken_state)
                                 .await;
+                            player.apply_tool_damage_for_block_break(broken_state).await;
                         } else {
                             player.mining.store(true, Ordering::Relaxed);
                             *player.mining_pos.lock().await = position;
@@ -1338,6 +1364,7 @@ impl JavaClient {
                     let entity = &player.living_entity.entity;
                     entity
                         .world
+                        .load()
                         .set_block_breaking(entity, player_action.position, -1)
                         .await;
                     self.update_sequence(player, player_action.sequence.0);
@@ -1356,7 +1383,7 @@ impl JavaClient {
 
                     // Block break & play sound
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world;
+                    let world = entity.world.load_full();
 
                     player.mining.store(false, Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
@@ -1365,7 +1392,7 @@ impl JavaClient {
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
 
-                    world
+                    let new_state = world
                         .break_block(
                             &location,
                             Some(player.clone()),
@@ -1376,11 +1403,13 @@ impl JavaClient {
                             },
                         )
                         .await;
-
-                    server
-                        .block_registry
-                        .broken(world, block, player, &location, server, state)
-                        .await;
+                    if new_state.is_some() {
+                        server
+                            .block_registry
+                            .broken(&world, block, player, &location, server, state)
+                            .await;
+                        player.apply_tool_damage_for_block_break(state).await;
+                    }
 
                     self.update_sequence(player, player_action.sequence.0);
                 }
@@ -1396,6 +1425,9 @@ impl JavaClient {
                 Status::SwapItem => {
                     player.swap_item().await;
                 }
+                Status::SpearJab => {
+                    log::debug!("todo");
+                }
             },
             Err(_) => self.kick(TextComponent::text("Invalid status")).await,
         }
@@ -1405,6 +1437,12 @@ impl JavaClient {
         if player.wait_for_keep_alive.load(Ordering::Relaxed)
             && keep_alive.keep_alive_id == player.keep_alive_id.load(Ordering::Relaxed)
         {
+            let ping = player.last_keep_alive_time.load().elapsed();
+            // Vanilla logic
+            player.ping.store(
+                (player.ping.load(Ordering::Relaxed) * 3 + ping.as_millis() as u32) / 4,
+                Ordering::Relaxed,
+            );
             player.wait_for_keep_alive.store(false, Ordering::Relaxed);
         } else {
             self.kick(TextComponent::text(
@@ -1453,6 +1491,7 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return Ok(());
         }
+        player.update_last_action_time();
         self.update_sequence(player, use_item_on.sequence.0);
 
         let position = use_item_on.position;
@@ -1488,7 +1527,7 @@ impl JavaClient {
         };
 
         let entity = &player.living_entity.entity;
-        let world = &entity.world;
+        let world = entity.world.load_full();
         let block = world.get_block(&position).await;
 
         let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
@@ -1502,7 +1541,7 @@ impl JavaClient {
                     &cursor_pos,
                     &face,
                     &item,
-                    world,
+                    &world,
                     block,
                     server,
                 )
@@ -1516,6 +1555,12 @@ impl JavaClient {
                 return Ok(());
             }
         }
+        let slot_index = if matches!(hand, Hand::Left) {
+            inventory.get_selected_slot() as usize
+        } else {
+            PlayerInventory::OFF_HAND_SLOT
+        };
+
         let mut stack = item.lock().await;
 
         if stack.is_empty() {
@@ -1523,6 +1568,8 @@ impl JavaClient {
             // If the hand is empty we stop here
             return Ok(());
         }
+
+        let before = stack.clone();
 
         server
             .item_registry
@@ -1545,6 +1592,12 @@ impl JavaClient {
             if player.gamemode.load() != GameMode::Creative {
                 stack.decrement(1);
             }
+        }
+
+        let after = stack.clone();
+        drop(stack);
+        if !after.are_equal(&before) {
+            player.sync_hand_slot(slot_index, after).await;
         }
 
         Ok(())
@@ -1603,7 +1656,7 @@ impl JavaClient {
     }
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
-        let world = &player.living_entity.entity.world;
+        let world = player.living_entity.entity.world.load_full();
         let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
             return;
         };
@@ -1639,6 +1692,7 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        player.update_last_action_time();
 
         let inventory = player.inventory();
         let Ok(hand) = Hand::try_from(use_item.hand.0) else {
@@ -1723,17 +1777,22 @@ impl JavaClient {
         }
         drop(held);
 
+        let item_for_use = {
+            let held = item_in_hand.lock().await;
+            held.item
+        };
+
         send_cancellable! {{
+            server;
             event;
             'after: {
-                let held = item_in_hand.lock().await;
-                let item = held.item;
-                server.item_registry.on_use(item, player).await;
+                server.item_registry.on_use(item_for_use, player).await;
             }
         }}
     }
 
     pub async fn handle_set_held_item(&self, player: &Player, held: SSetHeldItem) {
+        player.update_last_action_time();
         let slot = held.slot;
         if !(0..=8).contains(&slot) {
             self.kick(TextComponent::text("Invalid held slot")).await;
@@ -1765,7 +1824,6 @@ impl JavaClient {
 
             let is_armor_equipped = player_screen_handler
                 .get_slot(packet.slot as usize)
-                .await
                 .get_stack()
                 .await
                 .lock()
@@ -1796,7 +1854,6 @@ impl JavaClient {
 
             player_screen_handler
                 .get_slot(packet.slot as usize)
-                .await
                 .set_stack(item_stack.clone())
                 .await;
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
@@ -1915,7 +1972,7 @@ impl JavaClient {
         }
 
         let clicked_block_pos = BlockPos(location.0);
-        let world = &entity.world;
+        let world = entity.world.load_full();
 
         let (clicked_block, clicked_block_state) =
             world.get_block_and_state(&clicked_block_pos).await;
@@ -1924,7 +1981,7 @@ impl JavaClient {
             world
                 .block_registry
                 .can_update_at(
-                    world,
+                    &world,
                     clicked_block,
                     clicked_block_state.id,
                     &clicked_block_pos,
@@ -1958,7 +2015,7 @@ impl JavaClient {
                     world
                         .block_registry
                         .can_update_at(
-                            world,
+                            &world,
                             previous_block,
                             previous_block_state.id,
                             &block_pos,
@@ -1995,12 +2052,13 @@ impl JavaClient {
             .block_registry
             .can_place_at(
                 Some(server),
-                Some(world),
-                world.as_ref(),
+                Some(&*world),
+                &*world,
                 Some(player),
                 block,
                 block.default_state,
                 &final_block_pos,
+                Some(final_face),
                 Some(&use_item_on),
             )
             .await
@@ -2012,7 +2070,7 @@ impl JavaClient {
             .block_registry
             .on_place(
                 server,
-                world,
+                &world,
                 player,
                 block,
                 &final_block_pos,
@@ -2023,10 +2081,10 @@ impl JavaClient {
             .await;
 
         // Check if there is a player in the way of the block being placed
-        let shapes = BlockState::from_id(new_state).get_block_collision_shapes();
+        let state = BlockState::from_id(new_state);
         for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
-            for shape in &shapes {
+            for shape in state.get_block_collision_shapes() {
                 if shape.at_pos(final_block_pos).intersects(&player_box) {
                     return Ok(false);
                 }
@@ -2044,7 +2102,7 @@ impl JavaClient {
 
         server
             .block_registry
-            .player_placed(world, block, new_state, &final_block_pos, face, player)
+            .player_placed(&world, block, new_state, &final_block_pos, face, player)
             .await;
 
         // The block was placed successfully, so decrement their inventory

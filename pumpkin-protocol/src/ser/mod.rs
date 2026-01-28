@@ -10,7 +10,7 @@ use crate::{
 
 pub mod deserializer;
 use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
-use pumpkin_util::resource_location::ResourceLocation;
+use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
 use thiserror::Error;
 pub mod serializer;
 
@@ -173,7 +173,7 @@ impl<R: Read> NetworkReadExt for R {
 
     fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError> {
         let resource_location = self.get_string_bounded(ResourceLocation::MAX_SIZE.get())?;
-        match resource_location.split_once(":") {
+        match resource_location.split_once(':') {
             Some((namespace, path)) => Ok(ResourceLocation {
                 namespace: namespace.to_string(),
                 path: path.to_string(),
@@ -246,6 +246,7 @@ pub trait NetworkWriteExt {
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
     fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError>;
+    fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError>;
 
     fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError> {
         let (first, second) = data.as_u64_pair();
@@ -284,7 +285,7 @@ pub trait NetworkWriteExt {
         Ok(())
     }
 
-    fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError>;
+    fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError>;
 }
 
 macro_rules! write_number_be {
@@ -361,6 +362,10 @@ impl<W: Write> NetworkWriteExt for W {
         self.write_string_bounded(data, i16::MAX as usize)
     }
 
+    fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError> {
+        self.write_i64_be(pos.as_long())
+    }
+
     fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError> {
         self.write_string_bounded(&data.to_string(), ResourceLocation::MAX_SIZE.get())
     }
@@ -395,7 +400,7 @@ impl<W: Write> NetworkWriteExt for W {
         Ok(())
     }
 
-    fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError> {
+    fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
         let mut write_adaptor = WriteAdaptor::new(self);
         data.serialize(&mut write_adaptor)
             .map_err(|e| WritingError::Message(e.to_string()))?;
@@ -555,7 +560,12 @@ mod test {
     fn test_unit_reserialize() {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct UnitStruct;
-
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct StructWithUnit {
+            a: i32,
+            b: UnitStruct,
+            c: i32,
+        }
         let original = UnitStruct;
         let mut bytes = Vec::new();
         let mut ser = serializer::Serializer::new(&mut bytes);
@@ -566,13 +576,6 @@ mod test {
         let deserialized: UnitStruct =
             UnitStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
         assert_eq!(original, deserialized);
-
-        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
-        struct StructWithUnit {
-            a: i32,
-            b: UnitStruct,
-            c: i32,
-        }
 
         let original_with_unit = StructWithUnit {
             a: 1,

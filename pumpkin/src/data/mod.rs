@@ -1,16 +1,36 @@
 use std::{env, fs, path::Path};
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
 const DATA_FOLDER: &str = "data/";
 
-pub mod op_data;
+pub mod op;
 
 pub mod banlist_serializer;
-pub mod banned_ip_data;
-pub mod banned_player_data;
-pub mod player_server_data;
-pub mod whitelist_data;
+pub mod banned_ip;
+pub mod banned_player;
+pub mod player_server;
+pub mod whitelist;
+
+pub struct VanillaData {
+    pub banned_ip_list: RwLock<banned_ip::BannedIpList>,
+    pub banned_player_list: RwLock<banned_player::BannedPlayerList>,
+    pub operator_config: RwLock<op::OperatorConfig>,
+    pub whitelist_config: RwLock<whitelist::WhitelistConfig>,
+}
+
+impl VanillaData {
+    #[must_use]
+    pub fn load() -> Self {
+        Self {
+            banned_ip_list: RwLock::new(banned_ip::BannedIpList::load()),
+            banned_player_list: RwLock::new(banned_player::BannedPlayerList::load()),
+            operator_config: RwLock::new(op::OperatorConfig::load()),
+            whitelist_config: RwLock::new(whitelist::WhitelistConfig::load()),
+        }
+    }
+}
 
 pub trait LoadJSONConfiguration {
     #[must_use]

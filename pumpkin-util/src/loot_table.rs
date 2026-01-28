@@ -141,7 +141,7 @@ pub enum LootNumberProviderTypesProvider {
 impl ToTokens for LootNumberProviderTypesProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
-            LootNumberProviderTypesProvider::Uniform(uniform) => {
+            Self::Uniform(uniform) => {
                 tokens.extend(quote! {
                     LootNumberProviderTypesProvider::Uniform(#uniform)
                 });
@@ -183,12 +183,12 @@ pub enum LootNumberProviderTypes {
 impl ToTokens for LootNumberProviderTypes {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
-            LootNumberProviderTypes::Object(provider) => {
+            Self::Object(provider) => {
                 tokens.extend(quote! {
                     LootNumberProviderTypes::Object(#provider)
                 });
             }
-            LootNumberProviderTypes::Constant(i) => tokens.extend(quote! {
+            Self::Constant(i) => tokens.extend(quote! {
                 LootNumberProviderTypes::Constant(#i)
             }),
         }
@@ -198,10 +198,10 @@ impl ToTokens for LootNumberProviderTypes {
 impl LootNumberProviderTypes {
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
         match self {
-            LootNumberProviderTypes::Object(int_provider) => match int_provider {
+            Self::Object(int_provider) => match int_provider {
                 LootNumberProviderTypesProvider::Uniform(uniform) => uniform.get(random),
             },
-            LootNumberProviderTypes::Constant(i) => *i,
+            Self::Constant(i) => *i,
         }
     }
 }

@@ -13,7 +13,7 @@ pub(crate) fn build() -> TokenStream {
     let variants: Vec<TokenStream> = chunk_status
         .into_iter()
         .map(|status| {
-            let full_name = format!("minecraft:{}", status);
+            let full_name = format!("minecraft:{status}");
             let name = format_ident!("{}", status.to_pascal_case());
 
             quote! {

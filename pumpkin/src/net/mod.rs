@@ -5,10 +5,6 @@ use std::{
 };
 
 use crate::{
-    data::{
-        banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST,
-        op_data::OPERATOR_CONFIG, whitelist_data::WHITELIST_CONFIG,
-    },
     entity::player::ChatMode,
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
@@ -86,15 +82,10 @@ impl Default for PlayerConfig {
     }
 }
 
-pub enum PacketHandlerState {
-    PacketReady,
-    Stop,
-}
-
 /// This is just a Wrapper for both Java & Bedrock connections
-#[derive(Clone)]
+#[expect(clippy::large_enum_variant)]
 pub enum ClientPlatform {
-    Java(Arc<JavaClient>),
+    Java(JavaClient),
     Bedrock(Arc<BedrockClient>),
 }
 
@@ -119,7 +110,7 @@ impl ClientPlatform {
     /// This function should only be used where you know that the client is java!
     #[inline]
     #[must_use]
-    pub fn java(&self) -> &Arc<JavaClient> {
+    pub fn java(&self) -> &JavaClient {
         if let Self::Java(client) = self {
             return client;
         }
@@ -129,8 +120,8 @@ impl ClientPlatform {
     #[must_use]
     pub fn closed(&self) -> bool {
         match self {
-            Self::Java(java) => java.closed.load(Ordering::Relaxed),
-            Self::Bedrock(bedrock) => bedrock.closed.load(Ordering::Relaxed),
+            Self::Java(java) => java.is_closed(),
+            Self::Bedrock(bedrock) => bedrock.is_closed(),
         }
     }
 
@@ -183,7 +174,7 @@ pub async fn can_not_join(
         "[year]-[month]-[day] at [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
     );
 
-    let mut banned_players = BANNED_PLAYER_LIST.write().await;
+    let mut banned_players = server.data.banned_player_list.write().await;
     if let Some(entry) = banned_players.get_entry(profile) {
         let text = TextComponent::translate(
             "multiplayer.disconnect.banned.reason",
@@ -202,8 +193,8 @@ pub async fn can_not_join(
     drop(banned_players);
 
     if server.white_list.load(Ordering::Relaxed) {
-        let ops = OPERATOR_CONFIG.read().await;
-        let whitelist = WHITELIST_CONFIG.read().await;
+        let ops = server.data.operator_config.read().await;
+        let whitelist = server.data.whitelist_config.read().await;
 
         if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
             return Some(TextComponent::translate(
@@ -213,7 +204,13 @@ pub async fn can_not_join(
         }
     }
 
-    if let Some(entry) = BANNED_IP_LIST.write().await.get_entry(&address.ip()) {
+    if let Some(entry) = server
+        .data
+        .banned_ip_list
+        .write()
+        .await
+        .get_entry(&address.ip())
+    {
         let text = TextComponent::translate(
             "multiplayer.disconnect.banned_ip.reason",
             [TextComponent::text(entry.reason.clone())],

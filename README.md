@@ -5,7 +5,6 @@
 ![CI](https://github.com/Pumpkin-MC/Pumpkin/actions/workflows/rust.yml/badge.svg)
 [![Discord](https://img.shields.io/discord/1268592337445978193.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/wT8XjrjKkf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Current version)](https://img.shields.io/badge/current_version-1.21.11-blue)
 
 </div>
 
@@ -13,7 +12,7 @@
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
 <div align="center">
 
-![chunk loading](/assets/pumpkin_chunk_loading.GIF)
+![chunk loading](/assets/pumpkin_chunk_loading.webp)
 
 </div>
 
@@ -35,12 +34,6 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - Networking
   - [x] Encryption
   - [x] Packet Compression
-- Player Configuration
-  - [x] Registries (biome types, paintings, dimensions)
-  - [x] Server Brand
-  - [x] Server Links
-  - [x] Set Resource Pack
-  - [x] Cookies
 - World
   - [x] World Joining
   - [x] Player Tab-list
@@ -53,7 +46,6 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Entity Spawning
   - [x] Item drops (W.I.P)
   - [x] Bossbar
-  - [x] TNT
   - [x] Chunk Loading (Vanilla, Linear)
   - [x] Chunk Generation
   - [x] Chunk Saving (Vanilla, Linear)
@@ -64,7 +56,6 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [ ] Structure Generation
 - Player
   - [x] Skins
-  - [x] Client brand
   - [x] Teleport
   - [x] Movement
   - [x] Animation

@@ -71,15 +71,12 @@ impl LinearChunkHeader {
         }
     }
 
-    fn to_bytes(self) -> Box<[u8]> {
-        let mut bytes = Vec::with_capacity(LinearChunkHeader::CHUNK_HEADER_SIZE);
+    pub fn to_bytes(self) -> [u8; LinearChunkHeader::CHUNK_HEADER_SIZE] {
+        let mut bytes = [0u8; LinearChunkHeader::CHUNK_HEADER_SIZE];
+        bytes[0..4].copy_from_slice(&self.size.to_be_bytes());
+        bytes[4..8].copy_from_slice(&self.timestamp.to_be_bytes());
 
-        bytes.put_u32(self.size);
-        bytes.put_u32(self.timestamp);
-
-        // This should be a clear code error if the size of the header is not the expected
-        // so we can unwrap the conversion safely or panic the entire program if not
-        bytes.into_boxed_slice()
+        bytes
     }
 }
 

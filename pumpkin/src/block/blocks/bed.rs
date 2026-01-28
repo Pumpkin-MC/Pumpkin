@@ -5,7 +5,6 @@ use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
@@ -15,6 +14,7 @@ use pumpkin_world::block::entities::bed::BedBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
+use crate::block::OnLandedUponArgs;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
@@ -86,6 +86,16 @@ impl BlockBehaviour for BedBlock {
         })
     }
 
+    fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(living) = args.entity.get_living_entity() {
+                living
+                    .handle_fall_damage(args.fall_distance * 0.5, 1.0)
+                    .await;
+            }
+        })
+    }
+
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut bed_props = BedProperties::default(args.block);
@@ -130,16 +140,17 @@ impl BlockBehaviour for BedBlock {
                 args.position.offset(bed_props.facing.to_offset())
             };
 
+            let is_creative = args.player.gamemode.load() == GameMode::Creative;
+            let flags = if bed_props.part == BedPart::Foot && !is_creative {
+                // Breaking foot in survival -> allow head to drop
+                BlockFlags::NOTIFY_NEIGHBORS
+            } else {
+                // Breaking head OR creative mode -> skip drops
+                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+            };
+
             args.world
-                .break_block(
-                    &other_half_pos,
-                    Some(args.player.clone()),
-                    if args.player.gamemode.load() == GameMode::Creative {
-                        BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
-                    } else {
-                        BlockFlags::NOTIFY_NEIGHBORS
-                    },
-                )
+                .break_block(&other_half_pos, Some(args.player.clone()), flags)
                 .await;
         })
     }
@@ -147,6 +158,15 @@ impl BlockBehaviour for BedBlock {
     fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if args.moved {
+                return;
+            }
+
+            // If the block is being replaced with air (i.e., broken), the `broken` callback
+            // will handle breaking the other half with the correct drop flags. Only handle it here
+            // if the block is being replaced with something else (e.g., piston movement).
+            let new_state_id = args.world.get_block_state_id(args.position).await;
+            let new_block = Block::from_state_id(new_state_id);
+            if new_block == &Block::AIR {
                 return;
             }
 
@@ -163,10 +183,10 @@ impl BlockBehaviour for BedBlock {
                 let other_props = BedProperties::from_state_id(other_state.id, other_block);
                 if other_props.part != bed_props.part {
                     args.world
-                        .set_block_state(
+                        .break_block(
                             &other_half_pos,
-                            Block::AIR.default_state.id,
-                            BlockFlags::NOTIFY_ALL,
+                            None,
+                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS,
                         )
                         .await;
                 }

@@ -13,8 +13,9 @@ pub struct BlockBox {
 }
 
 impl BlockBox {
+    #[must_use]
     pub fn new(min_x: i32, min_y: i32, min_z: i32, max_x: i32, max_y: i32, max_z: i32) -> Self {
-        BlockBox {
+        Self {
             min: Vector3 {
                 x: min_x,
                 y: min_y,
@@ -27,6 +28,7 @@ impl BlockBox {
             },
         }
     }
+    #[must_use]
     pub fn create_box(
         x: i32,
         y: i32,
@@ -44,6 +46,7 @@ impl BlockBox {
     }
 
     #[expect(clippy::too_many_arguments)]
+    #[must_use]
     pub fn rotated(
         x: i32,
         y: i32,
@@ -57,7 +60,7 @@ impl BlockBox {
         facing: &BlockDirection,
     ) -> Self {
         match facing {
-            BlockDirection::North => BlockBox::new(
+            BlockDirection::North => Self::new(
                 x + offset_x,
                 y + offset_y,
                 z - size_z + 1 + offset_z,
@@ -65,7 +68,7 @@ impl BlockBox {
                 y + size_y - 1 + offset_y,
                 z + offset_z,
             ),
-            BlockDirection::West => BlockBox::new(
+            BlockDirection::West => Self::new(
                 x - size_z + 1 + offset_z,
                 y + offset_y,
                 z + offset_x,
@@ -73,7 +76,7 @@ impl BlockBox {
                 y + size_y - 1 + offset_y,
                 z + size_x - 1 + offset_x,
             ),
-            BlockDirection::East => BlockBox::new(
+            BlockDirection::East => Self::new(
                 x + offset_z,
                 y + offset_y,
                 z + offset_x,
@@ -82,7 +85,7 @@ impl BlockBox {
                 z + size_x - 1 + offset_x,
             ),
             // Default / South
-            _ => BlockBox::new(
+            _ => Self::new(
                 x + offset_x,
                 y + offset_y,
                 z + offset_z,
@@ -93,6 +96,7 @@ impl BlockBox {
         }
     }
 
+    #[must_use]
     pub fn from_pos(pos: BlockPos) -> Self {
         Self {
             min: pos.0,
@@ -100,6 +104,7 @@ impl BlockBox {
         }
     }
 
+    #[must_use]
     pub fn expand(&self, x: i32, y: i32, z: i32) -> Self {
         Self {
             min: Vector3::new(self.min.x - x, self.min.y - y, self.min.z - z),
@@ -116,10 +121,12 @@ impl BlockBox {
         self.max.z += dz;
     }
 
+    #[must_use]
     pub fn contains_pos(&self, pos: &Vector3<i32>) -> bool {
         self.contains(pos.x, pos.y, pos.z)
     }
 
+    #[must_use]
     pub fn contains(&self, x: i32, y: i32, z: i32) -> bool {
         x >= self.min.x
             && x <= self.max.x
@@ -129,6 +136,7 @@ impl BlockBox {
             && z <= self.max.z
     }
 
+    #[must_use]
     pub fn intersects(&self, other: &Self) -> bool {
         self.min.x < other.max.x
             && self.max.x > other.min.x
@@ -136,6 +144,7 @@ impl BlockBox {
             && self.max.y > other.min.y
     }
 
+    #[must_use]
     pub fn intersects_xz(&self, other: &Self) -> bool {
         self.max.x >= other.min.x
             && self.min.x <= other.max.x
@@ -143,15 +152,17 @@ impl BlockBox {
             && self.min.z <= other.max.z
     }
 
+    #[must_use]
     pub fn intersects_raw_xz(&self, min_x: i32, min_z: i32, max_x: i32, max_z: i32) -> bool {
         self.max.x >= min_x && self.min.x <= max_x && self.max.z >= min_z && self.min.z <= max_z
     }
 
+    #[must_use]
     pub fn get_block_count_y(&self) -> i32 {
         self.max.y - self.min.y + 1
     }
 
-    pub fn encompass(&mut self, other: &BlockBox) {
+    pub fn encompass(&mut self, other: &Self) {
         self.min.x = self.min.x.min(other.min.x);
         self.min.y = self.min.y.min(other.min.y);
         self.min.z = self.min.z.min(other.min.z);
@@ -161,9 +172,9 @@ impl BlockBox {
     }
 
     /// Static helper to find the box covering a collection of boxes
-    pub fn encompass_all<I>(boxes: I) -> Option<BlockBox>
+    pub fn encompass_all<I>(boxes: I) -> Option<Self>
     where
-        I: IntoIterator<Item = BlockBox>,
+        I: IntoIterator<Item = Self>,
     {
         let mut iter = boxes.into_iter();
         let mut result = iter.next()?; // Return None if empty

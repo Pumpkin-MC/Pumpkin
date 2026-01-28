@@ -2,6 +2,14 @@ use std::{ffi::CString, io::Cursor};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+const PADDING_START: [u8; 11] = [
+    0x73, 0x70, 0x6C, 0x69, 0x74, 0x6E, 0x75, 0x6D, 0x00, 0x80, 0x00,
+];
+
+const PADDING_END: [u8; 11] = [
+    0x00, 0x01, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x5F, 0x00, 0x00,
+];
+
 pub enum PacketType {
     // There could be other types, but they are not documented.
     // Besides, these types are enough to get the server status.
@@ -188,9 +196,6 @@ impl CFullStatus {
         // Padding (11 bytes, meaningless)
         // This is the padding used by vanilla.
         // Although meaningless, it seems in testing some query checkers depend on these bytes?
-        const PADDING_START: [u8; 11] = [
-            0x73, 0x70, 0x6C, 0x69, 0x74, 0x6E, 0x75, 0x6D, 0x00, 0x80, 0x00,
-        ];
         buf.extend_from_slice(PADDING_START.as_slice());
 
         // Key-value pairs
@@ -221,9 +226,7 @@ impl CFullStatus {
         }
 
         // Padding (10 bytes, meaningless), with one extra 0x00 for the extra required null terminator after the key-value section
-        const PADDING_END: [u8; 11] = [
-            0x00, 0x01, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x5F, 0x00, 0x00,
-        ];
+
         buf.extend_from_slice(PADDING_END.as_slice());
 
         // Players
@@ -261,7 +264,7 @@ async fn test_handshake_response() {
         challenge_token: 9513307,
     };
 
-    assert_eq!(bytes, packet.encode().await)
+    assert_eq!(bytes, packet.encode().await);
 }
 
 #[tokio::test]

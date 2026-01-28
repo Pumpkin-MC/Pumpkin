@@ -1,8 +1,10 @@
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use std::mem;
@@ -16,6 +18,7 @@ use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
+use crate::block::OnLandedUponArgs;
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
@@ -31,7 +34,7 @@ use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{CHurtAnimation, CTakeItemEntity};
+use pumpkin_protocol::java::client::play::{CHurtAnimation, CSetPlayerInventory, CTakeItemEntity};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{CDamageEvent, CSetEquipment, Metadata},
@@ -86,6 +89,14 @@ impl LivingEntity {
     #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: u8 = 4;
 
+    const PREVENT_AREA_FALL_DAMAGE_BLOCKS: [&'static Block; 4] = [
+        &Block::COBWEB,
+        &Block::LADDER,
+        &Block::POWDER_SNOW,
+        &Block::SLIME_BLOCK,
+    ];
+    const FALL_DAMAGE_SAFE_DISTANCE: f64 = 1.3;
+
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -133,6 +144,7 @@ impl LivingEntity {
             .collect();
         self.entity
             .world
+            .load()
             .broadcast_packet_except(
                 &[self.entity.entity_uuid],
                 &CSetEquipment::new(self.entity_id().into(), equipment),
@@ -145,6 +157,7 @@ impl LivingEntity {
         // TODO: Only nearby
         self.entity
             .world
+            .load()
             .broadcast_packet_all(&CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
@@ -222,6 +235,7 @@ impl LivingEntity {
         self.active_effects.lock().await.remove(&effect_type);
         self.entity
             .world
+            .load()
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
     }
@@ -236,16 +250,96 @@ impl LivingEntity {
         effects.get(&effect).cloned()
     }
 
+    pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
+        let block_pos = self.entity.block_pos.load();
+        let block = self.entity.world.load().get_block(&block_pos).await;
+        (
+            block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING),
+            block,
+        )
+    }
+
     // Check if the entity is in water
     pub async fn is_in_water(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
-        self.entity.world.get_block(&block_pos).await == &Block::WATER
+        self.entity.world.load().get_block(&block_pos).await == &Block::WATER
     }
 
     // Check if the entity is in powder snow
     pub async fn is_in_powder_snow(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
-        self.entity.world.get_block(&block_pos).await == &Block::POWDER_SNOW
+        self.entity.world.load().get_block(&block_pos).await == &Block::POWDER_SNOW
+    }
+
+    pub async fn should_prevent_fall_damage(&self) -> bool {
+        let (prevents, block) = self.is_in_fall_damage_resetting().await;
+
+        if block == &Block::SCAFFOLDING && !self.entity.sneaking.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        if block == &Block::WATER {
+            return true;
+        }
+
+        if self.entity.entity_type == &EntityType::PLAYER {
+            if block == &Block::END_GATEWAY || block == &Block::END_PORTAL {
+                return true;
+            }
+
+            if block == &Block::NETHER_PORTAL {
+                let world = self.entity.world.load();
+                let level_info = world.level_info.read().await;
+
+                return level_info.game_rules.players_nether_portal_default_delay == 0;
+            }
+        }
+
+        prevents
+    }
+
+    pub async fn should_prevent_fall_damage_in_area(&self) -> bool {
+        let world = self.entity.world.load();
+        let block_pos = self.entity.block_pos.load().down();
+        let entity_pos = self.entity.pos.load();
+
+        let min = BlockPos(Vector3::new(
+            block_pos.0.x - 1,
+            block_pos.0.y,
+            block_pos.0.z - 1,
+        ));
+        let max = BlockPos(Vector3::new(
+            block_pos.0.x + 1,
+            block_pos.0.y,
+            block_pos.0.z + 1,
+        ));
+        let pos_iter = BlockPos::iterate(min, max);
+
+        // FIXME: it seems the java server checks all blocks around with a raycast and check if miss or hit,
+        // then added to a collision checker to handle in the tick handler
+        for pos in pos_iter {
+            let block = world.get_block(&pos).await;
+
+            if Self::PREVENT_AREA_FALL_DAMAGE_BLOCKS.contains(&block) {
+                let block_center = Vector3::new(
+                    f64::from(pos.0.x) + 0.5,
+                    f64::from(pos.0.y) + 0.5,
+                    f64::from(pos.0.z) + 0.5,
+                );
+                let distance = entity_pos.squared_distance_to_vec(&block_center);
+
+                return distance.sqrt()
+                    <= Self::FALL_DAMAGE_SAFE_DISTANCE * Self::FALL_DAMAGE_SAFE_DISTANCE;
+            }
+        }
+
+        false
+    }
+
+    pub fn is_immune_to_fall_damage(&self) -> bool {
+        self.entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_FALL_DAMAGE_IMMUNE)
     }
 
     async fn get_effective_gravity(&self, caller: &Arc<dyn EntityBase>) -> f64 {
@@ -505,6 +599,7 @@ impl LivingEntity {
             && !self
                 .entity
                 .world
+                .load()
                 .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
                 .await
         {
@@ -685,7 +780,7 @@ impl LivingEntity {
         strength
     }
 
-    pub async fn update_fall_distance(
+    pub async fn fall(
         &self,
         caller: Arc<dyn EntityBase>,
         height_difference: f64,
@@ -696,36 +791,58 @@ impl LivingEntity {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance <= 0.0
                 || dont_damage
-                || self.is_in_water().await
-                || self.is_in_powder_snow().await
+                || self.should_prevent_fall_damage().await
+                || self.should_prevent_fall_damage_in_area().await
+                || self.is_immune_to_fall_damage()
             {
                 return;
             }
-
-            let safe_fall_distance = 3.0;
-            let mut damage = fall_distance - safe_fall_distance;
-            damage = damage.ceil();
-
-            // TODO: Play block fall sound
-            if damage > 0.0 {
-                let check_damage = self.damage(&*caller, damage, DamageType::FALL).await; // Fall
-                if check_damage {
-                    self.entity
-                        .play_sound(Self::get_fall_sound(fall_distance as i32))
-                        .await;
-                }
+            let world = self.entity.world.load();
+            let block = world
+                .get_block(&self.entity.get_pos_with_y_offset(0.2).await.0)
+                .await;
+            let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
+            if let Some(pumpkin_block) = pumpkin_block {
+                pumpkin_block
+                    .on_landed_upon(OnLandedUponArgs {
+                        world: &world,
+                        fall_distance,
+                        entity: caller.as_ref(),
+                    })
+                    .await;
+            } else {
+                self.handle_fall_damage(fall_distance, 1.0).await;
             }
         } else if height_difference < 0.0 {
-            let new_fall_distance = if !self.is_in_water().await && !self.is_in_powder_snow().await
+            let new_fall_distance = if !self.should_prevent_fall_damage().await
+                && !self.should_prevent_fall_damage_in_area().await
             {
                 let distance = self.fall_distance.load();
                 distance - (height_difference as f32)
             } else {
                 0f32
             };
-
-            // Reset fall distance if is in water or powder_snow
             self.fall_distance.store(new_fall_distance);
+        }
+    }
+
+    pub async fn handle_fall_damage(&self, fall_distance: f32, damage_per_distance: f32) {
+        if self.is_immune_to_fall_damage() {
+            return;
+        }
+
+        // TODO: use attributes
+        let safe_fall_distance = 3.0;
+        let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
+
+        let damage = (unsafe_fall_distance * damage_per_distance).floor();
+        if damage > 0.0 {
+            let check_damage = self.damage(self, damage, DamageType::FALL).await; // Fall
+            if check_damage {
+                self.entity
+                    .play_sound(Self::get_fall_sound(fall_distance as i32))
+                    .await;
+            }
         }
     }
 
@@ -784,7 +901,7 @@ impl LivingEntity {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) {
-        let world = &self.entity.world;
+        let world = self.entity.world.load();
         let dyn_self = world
             .get_entity_by_id(self.entity.entity_id)
             .await
@@ -840,7 +957,7 @@ impl LivingEntity {
         if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
             let pos = self.entity.block_pos.load();
             for stack in loot_table.get_loot(params) {
-                self.entity.world.drop_stack(&pos, stack).await;
+                self.entity.world.load().drop_stack(&pos, stack).await;
             }
         }
     }
@@ -873,6 +990,7 @@ impl LivingEntity {
                 self.set_health(1.0).await;
                 self.entity
                     .world
+                    .load()
                     .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
                     .await;
                 return true;
@@ -880,6 +998,45 @@ impl LivingEntity {
         }
 
         false
+    }
+
+    async fn damage_armor_items(&self, caller: &dyn EntityBase, damage_amount: f32) {
+        let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
+        let mut equipment_updates = Vec::new();
+
+        for (slot_index, slot) in self.equipment_slots.iter() {
+            if !slot.is_armor_slot() {
+                continue;
+            }
+
+            let equipment = self.entity_equipment.lock().await.get(slot);
+            let updated_stack = {
+                let mut stack = equipment.lock().await;
+                if stack.is_empty() {
+                    None
+                } else if stack.damage_item_with_context(armor_damage, true) {
+                    Some(stack.clone())
+                } else {
+                    None
+                }
+            };
+
+            if let Some(updated_stack) = updated_stack {
+                equipment_updates.push((slot.clone(), updated_stack.clone()));
+                if let Some(player) = caller.get_player() {
+                    player
+                        .enqueue_slot_set_packet(&CSetPlayerInventory::new(
+                            (*slot_index as i32).into(),
+                            &ItemStackSerializer::from(updated_stack),
+                        ))
+                        .await;
+                }
+            }
+        }
+
+        if !equipment_updates.is_empty() {
+            self.send_equipment_changes(&equipment_updates).await;
+        }
     }
 
     pub async fn held_item(&self, caller: &dyn EntityBase) -> Arc<Mutex<ItemStack>> {
@@ -1012,7 +1169,7 @@ impl EntityBase for LivingEntity {
                 return false; // Fire resistance
             }
 
-            let world = &self.entity.world;
+            let world = self.entity.world.load();
 
             let last_damage = self.last_damage_taken.load();
             let play_sound;
@@ -1039,8 +1196,7 @@ impl EntityBase for LivingEntity {
                     .await;
             }
 
-            self.entity
-                .world
+            world
                 .broadcast_packet_all(&CDamageEvent::new(
                     self.entity.entity_id.into(),
                     damage_type.id.into(),
@@ -1051,8 +1207,7 @@ impl EntityBase for LivingEntity {
                 .await;
 
             if play_sound {
-                self.entity
-                    .world
+                world
                     .play_sound(
                         // Sound::EntityPlayerHurt,
                         Sound::EntityGenericHurt,
@@ -1071,6 +1226,10 @@ impl EntityBase for LivingEntity {
 
             if new_health <= 0.0 && !self.try_use_death_protector(caller).await {
                 self.on_death(damage_type, source, cause).await;
+            }
+
+            if damage_amount > 0.0 {
+                self.damage_armor_items(caller, damage_amount).await;
             }
 
             true
@@ -1100,8 +1259,8 @@ impl EntityBase for LivingEntity {
             self.tick_movement(server, caller.clone()).await;
             // TODO
             if caller.get_player().is_none() {
-                self.entity.send_pos_rot().await;
-                self.entity.send_velocity().await;
+                // self.entity.send_pos_rot().await;
+                // self.entity.send_velocity().await;
             }
             self.tick_effects().await;
             // Current active item
@@ -1137,10 +1296,11 @@ impl EntityBase for LivingEntity {
             }
             if self.health.load() <= 0.0 {
                 let time = self.death_time.fetch_add(1, Relaxed);
-                if time == 20 {
+                if time >= 20 && self.entity.is_alive() {
                     // Spawn Death particles
                     self.entity
                         .world
+                        .load()
                         .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
                         .await;
                     self.entity.remove().await;

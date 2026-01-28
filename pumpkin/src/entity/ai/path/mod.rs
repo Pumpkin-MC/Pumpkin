@@ -35,7 +35,7 @@ impl Navigator {
             let mut best_move = Vector3::new(0.0, 0.0, 0.0);
             let mut lowest_cost = f64::MAX;
 
-            let world = &entity.entity.world;
+            let world = entity.entity.world.load();
 
             for x in -1..=1 {
                 for z in -1..=1 {
@@ -49,8 +49,7 @@ impl Navigator {
                     let state = world
                         .get_block_state(&BlockPos(potential_pos.to_i32()))
                         .await;
-                    let shapes = state.get_block_collision_shapes();
-                    if !shapes.is_empty() {
+                    if !state.collision_shapes.is_empty() {
                         continue;
                     }
 
@@ -75,7 +74,7 @@ impl Navigator {
 
             // Now let's move
             entity.entity.set_pos(goal.current_progress);
-            entity.entity.send_pos().await;
+            //entity.entity.send_pos().await;
         }
     }
 
@@ -100,6 +99,6 @@ impl Node {
     /// Returns an `f64`; higher means more expensive.
     #[must_use]
     pub fn get_expense(&self, end: Vector3<f64>) -> f64 {
-        self.location.squared_distance_to_vec(end).sqrt()
+        self.location.squared_distance_to_vec(&end).sqrt()
     }
 }

@@ -142,30 +142,31 @@ impl ConcentricRingsStructurePlacement {
     pub fn is_start_chunk(
         &self,
         _calculator: &StructurePlacementCalculator,
-        chunk_x: i32,
-        chunk_z: i32,
-        salt: u32,
+        _chunk_x: i32,
+        _chunk_z: i32,
+        _salt: u32,
     ) -> bool {
         // TODO: this is entirely wrong, but the original logic is too complex for now
-        let x = (chunk_x << 4) as f64;
-        let z = (chunk_z << 4) as f64;
-        let distance_sq = x * x + z * z;
-        let distance = distance_sq.sqrt();
+        // let x = (chunk_x << 4) as f64;
+        // let z = (chunk_z << 4) as f64;
+        // let distance_sq = x * x + z * z;
+        // let distance = distance_sq.sqrt();
 
-        let ring_width = 1000.0;
-        let ring_gap = 2000.0;
+        // let ring_width = 1000.0;
+        // let ring_gap = 2000.0;
 
-        let in_ring = (distance % (ring_width + ring_gap)) < ring_width;
+        // let in_ring = (distance % (ring_width + ring_gap)) < ring_width;
 
-        if !in_ring {
-            return false;
-        }
+        // if !in_ring {
+        //     return false;
+        // }
 
-        let seed = (chunk_x as i64).wrapping_mul(341873128712)
-            ^ (chunk_z as i64).wrapping_mul(132897987541)
-            ^ (salt as i64);
+        // let seed = (chunk_x as i64).wrapping_mul(341873128712)
+        //     ^ (chunk_z as i64).wrapping_mul(132897987541)
+        //     ^ (salt as i64);
 
-        (seed.abs() % 400) == 0
+        // (seed.abs() % 400) == 0
+        rand::random_bool(1.0 / 100.0)
     }
 }
 

@@ -27,14 +27,7 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use tokio::sync::Mutex;
 
 pub trait BlockMetadata {
-    fn namespace(&self) -> &'static str;
-    fn ids(&self) -> &'static [&'static str];
-    fn names(&self) -> Vec<String> {
-        self.ids()
-            .iter()
-            .map(|f| format!("{}:{}", self.namespace(), f))
-            .collect()
-    }
+    fn ids() -> Box<[u16]>;
 }
 
 pub type BlockFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -97,6 +90,14 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn player_placed<'a>(&'a self, _args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
+    }
+
+    fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(living) = args.entity.get_living_entity() {
+                living.handle_fall_damage(args.fall_distance, 1.0).await;
+            }
+        })
     }
 
     fn broken<'a>(&'a self, _args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
@@ -232,6 +233,7 @@ pub struct CanPlaceAtArgs<'a> {
     pub block: &'a Block,
     pub state: &'a BlockState,
     pub position: &'a BlockPos,
+    pub direction: Option<BlockDirection>,
     pub player: Option<&'a Player>,
     pub use_item_on: Option<&'a SUseItemOn>,
 }
@@ -262,6 +264,12 @@ pub struct PlayerPlacedArgs<'a> {
     pub position: &'a BlockPos,
     pub direction: BlockDirection,
     pub player: &'a Player,
+}
+
+pub struct OnLandedUponArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub fall_distance: f32,
+    pub entity: &'a dyn EntityBase,
 }
 
 pub struct BrokenArgs<'a> {

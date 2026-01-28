@@ -66,20 +66,18 @@ pub(crate) fn build() -> TokenStream {
         });
 
         let data = &entry.components;
-        let death_message_type = match &data.death_message_type {
-            Some(msg) => {
-                let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
-                quote! { DeathMessageType::#msg_ident }
-            }
-            None => quote! { DeathMessageType::Default },
+        let death_message_type = if let Some(msg) = &data.death_message_type {
+            let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
+            quote! { DeathMessageType::#msg_ident }
+        } else {
+            quote! { DeathMessageType::Default }
         };
 
-        let effects = match &data.effects {
-            Some(msg) => {
-                let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
-                quote! { Some(DamageEffects::#msg_ident) }
-            }
-            None => quote! { None },
+        let effects = if let Some(msg) = &data.effects {
+            let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
+            quote! { Some(DamageEffects::#msg_ident) }
+        } else {
+            quote! { None }
         };
 
         let exhaustion = data.exhaustion;

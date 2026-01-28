@@ -2,7 +2,7 @@ use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    DamageImpl, DataComponentImpl, EnchantmentsImpl, MaxStackSizeImpl, get,
+    DamageImpl, DataComponentImpl, EnchantmentsImpl, MaxStackSizeImpl, UnbreakableImpl, get,
 };
 use serde::de;
 use serde::de::SeqAccess;
@@ -71,11 +71,20 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
                     "EnchantmentsImpl Enchantment VarInt Incorrect!",
                 ))?,
                 level,
-            ))
+            ));
         }
         Ok(Self {
             enchantment: Cow::from(enc),
         })
+    }
+}
+
+impl DataComponentCodec<Self> for UnbreakableImpl {
+    fn serialize<T: SerializeStruct>(&self, _seq: &mut T) -> Result<(), T::Error> {
+        Ok(())
+    }
+    fn deserialize<'a, A: SeqAccess<'a>>(_seq: &mut A) -> Result<Self, A::Error> {
+        Ok(Self)
     }
 }
 
@@ -87,6 +96,7 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::MaxStackSize => Ok(MaxStackSizeImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Enchantments => Ok(EnchantmentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Damage => Ok(DamageImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Unbreakable => Ok(UnbreakableImpl::deserialize(seq)?.to_dyn()),
         _ => todo!("{} not yet implemented", id.to_name()),
     }
 }
@@ -99,6 +109,7 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::MaxStackSize => get::<MaxStackSizeImpl>(value).serialize(seq),
         DataComponent::Enchantments => get::<EnchantmentsImpl>(value).serialize(seq),
         DataComponent::Damage => get::<DamageImpl>(value).serialize(seq),
+        DataComponent::Unbreakable => get::<UnbreakableImpl>(value).serialize(seq),
         _ => todo!("{} not yet implemented", id.to_name()),
     }
 }

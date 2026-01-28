@@ -2,7 +2,11 @@
 
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
-use crate::data_component::DataComponent::*;
+use crate::data_component::DataComponent::{
+    AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DeathProtection,
+    Enchantments, Equippable, Food, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, Tool,
+    Unbreakable,
+};
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
 use crate::{AttributeModifierSlot, Block, Enchantment};
@@ -38,11 +42,13 @@ pub trait DataComponentImpl: Send + Sync {
     fn as_any(&self) -> &dyn Any;
     fn as_mut_any(&mut self) -> &mut dyn Any;
 }
+#[must_use]
 pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataComponentImpl>> {
     match id {
         MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
+        Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -115,10 +121,10 @@ impl MaxStackSizeImpl {
 }
 impl DataComponentImpl for MaxStackSizeImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::Int(self.size as i32)
+        NbtTag::Int(i32::from(self.size))
     }
     fn get_hash(&self) -> i32 {
-        get_i32_hash(self.size as i32) as i32
+        get_i32_hash(i32::from(self.size)) as i32
     }
 
     default_impl!(MaxStackSize);
@@ -150,6 +156,20 @@ impl DataComponentImpl for DamageImpl {
 }
 #[derive(Clone, Hash, PartialEq)]
 pub struct UnbreakableImpl;
+impl UnbreakableImpl {
+    fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
+impl DataComponentImpl for UnbreakableImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
+    fn get_hash(&self) -> i32 {
+        0
+    }
+    default_impl!(Unbreakable);
+}
 #[derive(Clone, Hash, PartialEq)]
 pub struct CustomNameImpl {
     // TODO make TextComponent const
@@ -181,7 +201,7 @@ impl EnchantmentsImpl {
         let data = &data.extract_compound()?.child_tags;
         let mut enc = Vec::with_capacity(data.len());
         for (name, level) in data {
-            enc.push((Enchantment::from_name(name.as_str())?, level.extract_int()?))
+            enc.push((Enchantment::from_name(name.as_str())?, level.extract_int()?));
         }
         Some(Self {
             enchantment: Cow::from(enc),
@@ -264,7 +284,7 @@ impl Hash for Modifier {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.r#type.hash(state);
         self.id.hash(state);
-        unsafe { (*(&self.amount as *const f64 as *const u64)).hash(state) };
+        unsafe { (*(&raw const self.amount).cast::<u64>()).hash(state) };
         self.operation.hash(state);
         self.slot.hash(state);
     }
@@ -300,7 +320,7 @@ impl DataComponentImpl for FoodImpl {
 impl Hash for FoodImpl {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.nutrition.hash(state);
-        unsafe { (*(&self.saturation as *const f32 as *const u32)).hash(state) };
+        unsafe { (*(&raw const self.saturation).cast::<u32>()).hash(state) };
         self.can_always_eat.hash(state);
     }
 }
@@ -311,6 +331,7 @@ pub struct ConsumableImpl {
 }
 
 impl ConsumableImpl {
+    #[must_use]
     pub fn consume_ticks(&self) -> i32 {
         (self.consume_seconds * 20.0) as i32
     }
@@ -321,7 +342,7 @@ impl DataComponentImpl for ConsumableImpl {
 }
 impl Hash for ConsumableImpl {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        unsafe { (*(&self.consume_seconds as *const f32 as *const u32)).hash(state) };
+        unsafe { (*(&raw const self.consume_seconds).cast::<u32>()).hash(state) };
     }
 }
 #[derive(Clone, Debug, Hash, PartialEq)]
@@ -348,7 +369,7 @@ impl Hash for ToolRule {
         self.blocks.hash(state);
         if let Some(val) = self.speed {
             true.hash(state);
-            unsafe { (*(&val as *const f32 as *const u32)).hash(state) };
+            unsafe { (*(&raw const val).cast::<u32>()).hash(state) };
         } else {
             false.hash(state);
         }
@@ -368,7 +389,7 @@ impl DataComponentImpl for ToolImpl {
 impl Hash for ToolImpl {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.rules.hash(state);
-        unsafe { (*(&self.default_mining_speed as *const f32 as *const u32)).hash(state) };
+        unsafe { (*(&raw const self.default_mining_speed).cast::<u32>()).hash(state) };
         self.damage_per_block.hash(state);
         self.can_destroy_blocks_in_creative.hash(state);
     }
@@ -464,6 +485,7 @@ impl EquipmentSlot {
         name: Cow::Borrowed("saddle"),
     });
 
+    #[must_use]
     pub fn get_entity_slot_id(&self) -> i32 {
         match self {
             Self::MainHand(data) => data.entity_id,
@@ -477,6 +499,7 @@ impl EquipmentSlot {
         }
     }
 
+    #[must_use]
     pub fn get_from_name(name: &str) -> Option<Self> {
         match name {
             "mainhand" => Some(Self::MAIN_HAND),
@@ -491,10 +514,12 @@ impl EquipmentSlot {
         }
     }
 
+    #[must_use]
     pub fn get_offset_entity_slot_id(&self, offset: i32) -> i32 {
         self.get_entity_slot_id() + offset
     }
 
+    #[must_use]
     pub fn slot_type(&self) -> EquipmentType {
         match self {
             Self::MainHand(data) => data.slot_type,
@@ -508,6 +533,7 @@ impl EquipmentSlot {
         }
     }
 
+    #[must_use]
     pub fn is_armor_slot(&self) -> bool {
         matches!(
             self.slot_type(),
@@ -515,6 +541,7 @@ impl EquipmentSlot {
         )
     }
 
+    #[must_use]
     pub const fn discriminant(&self) -> i8 {
         match self {
             Self::MainHand(_) => 0,
@@ -538,12 +565,12 @@ pub enum EntityTypeOrTag {
 impl Hash for EntityTypeOrTag {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            EntityTypeOrTag::Tag(tag) => {
+            Self::Tag(tag) => {
                 for x in tag.0 {
                     x.hash(state);
                 }
             }
-            EntityTypeOrTag::Single(entity_type) => {
+            Self::Single(entity_type) => {
                 entity_type.id.hash(state);
             }
         }

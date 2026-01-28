@@ -6,7 +6,7 @@ use crate::{
         args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::{SaveJSONConfiguration, banned_ip_data::BANNED_IP_LIST},
+    data::SaveJSONConfiguration,
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -22,7 +22,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -37,7 +37,7 @@ impl CommandExecutor for Executor {
                 return Ok(());
             };
 
-            let mut lock = BANNED_IP_LIST.write().await;
+            let mut lock = server.data.banned_ip_list.write().await;
 
             if let Some(idx) = lock.banned_ips.iter().position(|entry| entry.ip == ip) {
                 lock.banned_ips.remove(idx);

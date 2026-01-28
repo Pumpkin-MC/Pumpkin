@@ -21,6 +21,7 @@ impl Default for EnderChestInventory {
 impl EnderChestInventory {
     pub const INVENTORY_SIZE: usize = 27;
 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
@@ -51,7 +52,7 @@ impl Inventory for EnderChestInventory {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -110,7 +111,7 @@ impl Inventory for EnderChestInventory {
 impl Clearable for EnderChestInventory {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for item in self.items.iter() {
+            for item in &self.items {
                 *item.lock().await = ItemStack::EMPTY.clone();
             }
         })

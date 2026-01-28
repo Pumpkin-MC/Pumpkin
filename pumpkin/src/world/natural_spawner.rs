@@ -474,7 +474,7 @@ pub fn get_nearest_player(pos: &Vector3<f64>, player_positions: &[Vector3<f64>])
     let mut min_dst_sq = f64::MAX;
 
     for player_pos in player_positions {
-        let cur_dst_sq = player_pos.squared_distance_to_vec(*pos);
+        let cur_dst_sq = player_pos.squared_distance_to_vec(pos);
         if cur_dst_sq < min_dst_sq {
             min_dst_sq = cur_dst_sq;
         }

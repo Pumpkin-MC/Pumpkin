@@ -3,19 +3,35 @@ use pumpkin_util::math::vector3::Vector3;
 use crate::block_properties::{COLLISION_SHAPES, Instrument};
 use crate::{Block, BlockDirection, CollisionShape};
 
+/// Represents a specific state of a block, including its properties and physical behaviors.
+///
+/// A single `Block` (like a Hopper) can have multiple `BlockState`s (e.g., pointing North,
+/// South, or being powered). This struct is optimized for high-speed lookups during
+/// physics and lighting calculations.
 #[derive(Debug)]
 pub struct BlockState {
+    /// The global palette ID used for network serialization and chunk storage.
     pub id: u16,
+    /// Bit-flags representing boolean or enum properties (e.g., `waterlogged`, `lit`, `facing`).
     pub state_flags: u16,
+    /// Cached flags for each of the 6 sides to speed up ambient occlusion and face culling.
     pub side_flags: u8,
+    /// The note block instrument produced when this block is placed underneath one.
     pub instrument: Instrument,
+    /// The light level emitted by this block, ranging from 0 to 15.
     pub luminance: u8,
+    /// Defines how the block reacts to being pushed or pulled by a piston.
     pub piston_behavior: PistonBehavior,
+    /// Overrides the base block hardness for this specific state if necessary.
     pub hardness: f32,
+    /// Indices into a global voxel-shape registry for physical entity collisions.
     pub collision_shapes: &'static [u16],
+    /// Indices into a global voxel-shape registry for the selection highlight box.
     pub outline_shapes: &'static [u16],
+    /// How much light is subtracted as it passes through this block (0 for transparent, 15 for opaque).
     pub opacity: u8,
-    /// u16::MAX is used as None
+    /// The ID of the block entity associated with this state.
+    /// Set to `u16::MAX` if the block does not hold NBT data.
     pub block_entity_type: u16,
 }
 
@@ -36,35 +52,43 @@ pub enum PistonBehavior {
 }
 
 impl BlockState {
+    #[must_use]
     pub const fn is_air(&self) -> bool {
         self.state_flags & IS_AIR != 0
     }
 
+    #[must_use]
     pub const fn burnable(&self) -> bool {
         self.state_flags & BURNABLE != 0
     }
 
+    #[must_use]
     pub const fn tool_required(&self) -> bool {
         self.state_flags & TOOL_REQUIRED != 0
     }
 
+    #[must_use]
     pub const fn sided_transparency(&self) -> bool {
         self.state_flags & SIDED_TRANSPARENCY != 0
     }
 
+    #[must_use]
     pub const fn replaceable(&self) -> bool {
         self.state_flags & REPLACEABLE != 0
     }
 
+    #[must_use]
     pub const fn is_liquid(&self) -> bool {
         self.state_flags & IS_LIQUID != 0
     }
 
     /// Returns the legacy value for whether a block is solid.
+    #[must_use]
     pub const fn is_solid(&self) -> bool {
         self.state_flags & IS_SOLID != 0
     }
 
+    #[must_use]
     pub const fn is_full_cube(&self) -> bool {
         self.state_flags & IS_FULL_CUBE != 0
     }
@@ -72,15 +96,18 @@ impl BlockState {
     /// Returns whether the block is solid.
     /// Solid blocks conduct redstone and block redstone wire.
     /// Non-solid blocks don't allow redstone wire on top to propagate their signal downwards in java.
+    #[must_use]
     pub const fn is_solid_block(&self) -> bool {
         self.state_flags & IS_SOLID_BLOCK != 0
     }
 
+    #[must_use]
     pub const fn has_random_ticks(&self) -> bool {
         self.state_flags & HAS_RANDOM_TICKS != 0
     }
 
-    ///isSideSolidFullSquare() in Java!
+    ///`isSideSolidFullSquare()` in Java!
+    #[must_use]
     pub const fn is_side_solid(&self, side: BlockDirection) -> bool {
         match side {
             BlockDirection::Down => self.side_flags & DOWN_SIDE_SOLID != 0,
@@ -94,6 +121,7 @@ impl BlockState {
 
     ///isSideSolid(..., Direction.UP, SideShapeType.CENTER) in Java!
     ///Only valid for UP and DOWN sides
+    #[must_use]
     pub const fn is_center_solid(&self, side: BlockDirection) -> bool {
         match side {
             BlockDirection::Down => self.side_flags & DOWN_CENTER_SOLID != 0,
@@ -102,36 +130,35 @@ impl BlockState {
         }
     }
 
-    pub fn get_block_collision_shapes(&self) -> Vec<CollisionShape> {
+    #[must_use]
+    pub fn is_waterlogged(&self) -> bool {
+        let block = Block::from_state_id(self.id);
+
+        block.properties(self.id).is_some_and(|props| {
+            props
+                .to_props()
+                .iter()
+                .any(|(k, v)| k == &"waterlogged" && v == &"true")
+        })
+    }
+
+    pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = CollisionShape> + '_ {
         self.collision_shapes
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize])
-            .collect()
     }
 
-    pub fn get_block_outline_shapes(&self) -> Option<Vec<CollisionShape>> {
-        let mut shapes: Vec<CollisionShape> = self
+    pub fn get_block_outline_shapes(&self) -> impl Iterator<Item = CollisionShape> + '_ {
+        let base_shapes = self
             .outline_shapes
             .iter()
-            .map(|&id| COLLISION_SHAPES[id as usize])
-            .collect();
+            .map(|&id| COLLISION_SHAPES[id as usize]);
 
-        let block = Block::from_state_id(self.id);
-        if let Some(props) = block.properties(self.id) {
-            let is_waterlogged = props
-                .to_props()
-                .iter()
-                .any(|(k, v)| *k == "waterlogged" && *v == "true");
+        let water_shape = self.is_waterlogged().then(|| {
+            CollisionShape::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0))
+        });
 
-            if is_waterlogged {
-                shapes.push(CollisionShape::new(
-                    Vector3::new(0.0, 0.0, 0.0),
-                    Vector3::new(1.0, 0.875, 1.0),
-                ));
-            }
-        }
-
-        Some(shapes)
+        base_shapes.chain(water_shape)
     }
 }
 

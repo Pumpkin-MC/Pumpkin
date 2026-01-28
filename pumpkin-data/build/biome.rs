@@ -111,7 +111,7 @@ enum BiomeTree {
     Branch {
         parameters: [ParameterRange; 7],
         #[serde(rename = "subTree")]
-        nodes: Box<[BiomeTree]>,
+        nodes: Box<[Self]>,
     },
 }
 
@@ -126,7 +126,7 @@ impl BiomeTree {
                         .unwrap()
                         .to_shouty_snake_case()
                 );
-                let parameters = parameters.map(|range| range.into_token_stream());
+                let parameters = parameters.map(ParameterRange::into_token_stream);
                 quote! {
                     BiomeTree::Leaf {
                         parameters: [#(#parameters),*],
@@ -137,9 +137,9 @@ impl BiomeTree {
             Self::Branch { parameters, nodes } => {
                 let nodes = nodes
                     .into_iter()
-                    .map(|node| node.into_token_stream())
+                    .map(Self::into_token_stream)
                     .collect::<Vec<_>>();
-                let parameters = parameters.map(|range| range.into_token_stream());
+                let parameters = parameters.map(ParameterRange::into_token_stream);
                 quote! {
                     BiomeTree::Branch {
                         parameters: [#(#parameters),*],
@@ -172,7 +172,7 @@ pub(crate) fn build() -> TokenStream {
     let mut name_to_type = TokenStream::new();
     let mut id_to_type = TokenStream::new();
 
-    for (name, biome) in biomes.into_iter() {
+    for (name, biome) in biomes {
         // let full_name = format!("minecraft:{name}");
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let has_precipitation = biome.has_precipitation;
@@ -190,44 +190,44 @@ pub(crate) fn build() -> TokenStream {
             .spawners
             .monster
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
         let ambient: Vec<_> = biome
             .spawners
             .ambient
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
         let axolotls: Vec<_> = biome
             .spawners
             .axolotls
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
         let creature: Vec<_> = biome
             .spawners
             .creature
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
-        let misc: Vec<_> = biome.spawners.misc.iter().map(|s| s.to_tokens()).collect();
+        let misc: Vec<_> = biome.spawners.misc.iter().map(Spawner::to_tokens).collect();
         let underground_water_creature: Vec<_> = biome
             .spawners
             .underground_water_creature
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
         let water_ambient: Vec<_> = biome
             .spawners
             .water_ambient
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
         let water_creature: Vec<_> = biome
             .spawners
             .water_creature
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
 
         let spawners = quote! {
@@ -411,7 +411,7 @@ pub(crate) fn build() -> TokenStream {
         }
 
         impl ParameterRange {
-            fn calc_distance(&self, noise: i64) -> i64 {
+            pub fn calc_distance(&self, noise: i64) -> i64 {
                 if noise > self.max {
                     noise - self.max
                 } else if noise < self.min {
@@ -436,70 +436,71 @@ pub(crate) fn build() -> TokenStream {
 
 
         impl BiomeTree {
-            pub fn get(
+           pub fn get(
                 &'static self,
                 point_list: &[i64; 7],
                 previous_result_node: &mut Option<&'static BiomeTree>,
             ) -> &'static Biome {
-                let result_node = self.get_resulting_node(point_list, *previous_result_node);
-                match result_node {
+                // Initialize best distance from the previous result for spatial coherence
+                let mut best_dist = previous_result_node
+                    .map(|node| node.get_squared_distance(point_list))
+                    .unwrap_or(i64::MAX);
+
+                let mut best_node = previous_result_node.unwrap_or(self);
+
+                self.search(point_list, &mut best_dist, &mut best_node);
+
+                match best_node {
                     BiomeTree::Leaf { biome, .. } => {
-                        *previous_result_node = Some(result_node);
+                        *previous_result_node = Some(best_node);
                         biome
                     }
-                    _ => unreachable!(),
+                    // Should not happen with valid tree data
+                    _ => unreachable!("Biome search failed to find a leaf"),
                 }
             }
 
-            fn get_resulting_node(
+            fn search(
                 &'static self,
-                point_list: &[i64; 7],
-                previous_result_node: Option<&'static BiomeTree>,
-            ) -> &'static BiomeTree {
+                point: &[i64; 7],
+                best_dist: &mut i64,
+                best_node: &mut &'static BiomeTree,
+            ) {
+                let dist = self.get_squared_distance(point);
+
+                // PRUNING: If this branch/leaf is further than our best, skip it and all children
+                if dist >= *best_dist {
+                    return;
+                }
+
                 match self {
-                    Self::Leaf { .. } => self,
+                    Self::Leaf { .. } => {
+                        *best_dist = dist;
+                        *best_node = self;
+                    }
                     Self::Branch { nodes, .. } => {
-                        let mut distance = previous_result_node
-                            .map(|node| node.get_squared_distance(point_list))
-                            .unwrap_or(i64::MAX);
-                        let mut best_node = previous_result_node;
-
                         for node in *nodes {
-                            let node_distance = node.get_squared_distance(point_list);
-                            if distance > node_distance {
-                                let node2 = node.get_resulting_node(point_list, best_node);
-                                let node2_distance = if node == node2 {
-                                    node_distance
-                                } else {
-                                    node2.get_squared_distance(point_list)
-                                };
-
-                                if distance > node2_distance {
-                                    distance = node2_distance;
-                                    best_node = Some(node2);
-                                }
-                            }
+                            node.search(point, best_dist, best_node);
                         }
-
-                        best_node.expect("This should be populated after traversing the tree")
                     }
                 }
             }
 
-            fn get_squared_distance(&self, point_list: &[i64; 7]) -> i64 {
-                let parameters = match self {
+            #[inline(always)]
+            fn get_squared_distance(&self, p: &[i64; 7]) -> i64 {
+                let params = match self {
                     Self::Leaf { parameters, .. } => parameters,
                     Self::Branch { parameters, .. } => parameters,
                 };
 
-                parameters
-                    .iter()
-                    .zip(point_list)
-                    .map(|(bound, value)| {
-                        let distance = bound.calc_distance(*value);
-                        distance * distance
-                    })
-                    .sum()
+                // Fully unrolled for 7 dimensions to maximize throughput
+                params[0].calc_distance(p[0]) +
+                params[1].calc_distance(p[1]) +
+                params[2].calc_distance(p[2]) +
+                params[3].calc_distance(p[3]) +
+                params[4].calc_distance(p[4]) +
+                params[5].calc_distance(p[5]) +
+                params[6].calc_distance(p[6])
             }
         }
 

@@ -1,7 +1,7 @@
 use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
 };
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::block_properties::is_air;
 use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -108,8 +108,5 @@ impl BlockBehaviour for PaleMossCarpetBlock {
 }
 
 async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    !block_accessor
-        .get_block_state(&block_pos.down())
-        .await
-        .is_air()
+    !is_air(block_accessor.get_block_state_id(&block_pos.down()).await)
 }

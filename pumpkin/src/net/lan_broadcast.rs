@@ -7,8 +7,10 @@ use tokio::{select, time};
 
 use crate::{SHOULD_STOP, STOP_INTERRUPT};
 
-// https://www.wikiwand.com/en/articles/Multicast_address
-
+/// The standard Minecraft multicast address used for LAN discovery
+///
+/// Bedrock and Java editions use this specific multicast group to "shout"
+/// server presence to clients on the same local network
 const BROADCAST_ADDRESS: SocketAddr =
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(224, 0, 2, 60)), 4445);
 
@@ -18,6 +20,7 @@ pub struct LANBroadcast {
 }
 
 impl LANBroadcast {
+    /// Creates a new LAN broadcast instance from the provided configuration
     #[must_use]
     pub fn new(config: &LANBroadcastConfig, basic_config: &BasicConfiguration) -> Self {
         let port = config.port.unwrap_or(0);
@@ -36,6 +39,17 @@ impl LANBroadcast {
         Self { port, motd }
     }
 
+    /// Starts the UDP broadcast loop. This should be spawned in a separate task
+    ///
+    /// The loop sends a packet every 1.5 seconds containing the MOTD and the
+    /// port the actual game server is listening on.
+    ///
+    /// # Arguments
+    /// * `bound_addr` - The address where the actual Minecraft server is running
+    ///   The port from this address is what clients will use to connect
+    ///
+    /// # Panics
+    /// Panics if the UDP socket cannot be bound or if broadcast permissions are denied
     pub async fn start(self, bound_addr: SocketAddr) {
         let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.port))
             .await
@@ -56,7 +70,7 @@ impl LANBroadcast {
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let t1 = interval.tick();
-            let t2 = STOP_INTERRUPT.notified();
+            let t2 = STOP_INTERRUPT.cancelled();
 
             let should_continue = select! {
                 _ = t1 => true,

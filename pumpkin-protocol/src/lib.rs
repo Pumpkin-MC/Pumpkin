@@ -11,6 +11,7 @@ use codec::var_int::VarInt;
 use pumpkin_util::{
     resource_location::ResourceLocation,
     text::{TextComponent, style::Style},
+    version::MinecraftVersion,
 };
 use ser::{ReadingError, WritingError};
 use serde::{
@@ -20,7 +21,7 @@ use serde::{
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-use crate::packet::Packet;
+use crate::packet::{MultiVersionJavaPacket, Packet};
 
 pub mod bedrock;
 pub mod codec;
@@ -31,8 +32,8 @@ pub mod query;
 pub mod ser;
 pub mod serial;
 
-pub const MAX_PACKET_SIZE: u64 = 2097152;
-pub const MAX_PACKET_DATA_SIZE: usize = 8388608;
+pub const MAX_PACKET_SIZE: u64 = 2_097_152;
+pub const MAX_PACKET_DATA_SIZE: usize = 8_388_608;
 
 pub type FixedBitSet = Box<[u8]>;
 
@@ -157,8 +158,8 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for IdOr<T> {
 impl<T: Serialize> Serialize for IdOr<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            IdOr::Id(id) => VarInt::from(*id + 1).serialize(serializer),
-            IdOr::Value(value) => {
+            Self::Id(id) => VarInt::from(*id + 1).serialize(serializer),
+            Self::Value(value) => {
                 #[derive(Serialize)]
                 struct NetworkRepr<T: Serialize> {
                     zero_id: VarInt,
@@ -211,7 +212,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for StreamDecryptor<R> {
         // Read the raw data
         let internal_poll = read.poll_read(cx, buf);
 
-        if matches!(internal_poll, Poll::Ready(Ok(_))) {
+        if matches!(internal_poll, Poll::Ready(Ok(()))) {
             // Decrypt the raw data in-place, note that our block size is 1 byte, so this is always safe
             for block in buf.filled_mut()[original_fill..].chunks_mut(Aes128Cfb8Dec::block_size()) {
                 cipher.decrypt_block_mut(block.into());
@@ -274,10 +275,9 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
                     if total_written == 0 {
                         //If we didn't write anything, return pending
                         return Poll::Pending;
-                    } else {
-                        // Otherwise, we actually did write something
-                        return Poll::Ready(Ok(total_written));
                     }
+                    // Otherwise, we actually did write something
+                    return Poll::Ready(Ok(total_written));
                 }
                 Poll::Ready(result) => {
                     ref_self.last_unwritten_encrypted_byte = None;
@@ -310,11 +310,15 @@ pub struct RawPacket {
     pub payload: Bytes,
 }
 
-pub trait ClientPacket: Packet {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError>;
+pub trait ClientPacket: MultiVersionJavaPacket {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError>;
 }
 
-pub trait ServerPacket: Packet + Sized {
+pub trait ServerPacket: MultiVersionJavaPacket + Sized {
     fn read(read: impl Read) -> Result<Self, ReadingError>;
 }
 
@@ -445,19 +449,20 @@ pub enum PositionFlag {
 impl PositionFlag {
     fn get_mask(&self) -> i32 {
         match self {
-            PositionFlag::X => 1 << 0,
-            PositionFlag::Y => 1 << 1,
-            PositionFlag::Z => 1 << 2,
-            PositionFlag::YRot => 1 << 3,
-            PositionFlag::XRot => 1 << 4,
-            PositionFlag::DeltaX => 1 << 5,
-            PositionFlag::DeltaY => 1 << 6,
-            PositionFlag::DeltaZ => 1 << 7,
-            PositionFlag::RotateDelta => 1 << 8,
+            Self::X => 1 << 0,
+            Self::Y => 1 << 1,
+            Self::Z => 1 << 2,
+            Self::YRot => 1 << 3,
+            Self::XRot => 1 << 4,
+            Self::DeltaX => 1 << 5,
+            Self::DeltaY => 1 << 6,
+            Self::DeltaZ => 1 << 7,
+            Self::RotateDelta => 1 << 8,
         }
     }
 
-    pub fn get_bitfield(flags: &[PositionFlag]) -> i32 {
+    #[must_use]
+    pub fn get_bitfield(flags: &[Self]) -> i32 {
         flags.iter().fold(0, |acc, flag| acc | flag.get_mask())
     }
 }
@@ -470,8 +475,8 @@ pub enum Label {
 impl Serialize for Label {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            Label::BuiltIn(link_type) => link_type.serialize(serializer),
-            Label::TextComponent(component) => component.serialize(serializer),
+            Self::BuiltIn(link_type) => link_type.serialize(serializer),
+            Self::TextComponent(component) => component.serialize(serializer),
         }
     }
 }
@@ -484,6 +489,7 @@ pub struct Link<'a> {
 }
 
 impl<'a> Link<'a> {
+    #[must_use]
     pub fn new(label: Label, url: &'a String) -> Self {
         Self {
             is_built_in: match label {

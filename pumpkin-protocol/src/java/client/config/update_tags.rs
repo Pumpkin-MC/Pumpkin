@@ -7,29 +7,35 @@ use pumpkin_data::{
     packet::clientbound::CONFIG_UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},
 };
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
+use pumpkin_util::version::MinecraftVersion;
 
-#[packet(CONFIG_UPDATE_TAGS)]
+#[java_packet(CONFIG_UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {
     pub tags: &'a [pumpkin_data::tag::RegistryKey],
 }
 
 impl<'a> CUpdateTags<'a> {
+    #[must_use]
     pub fn new(tags: &'a [RegistryKey]) -> Self {
         Self { tags }
     }
 }
 
 impl ClientPacket for CUpdateTags<'_> {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list(self.tags, |p, registry_key| {
             p.write_resource_location(&ResourceLocation::vanilla(
                 registry_key.identifier_string(),
             ))?;
 
-            let values = get_registry_key_tags(registry_key);
+            let values = get_registry_key_tags(*version, *registry_key).unwrap();
             p.write_var_int(&values.len().try_into().map_err(|_| {
                 WritingError::Message(format!("{} isn't representable as a VarInt", values.len()))
             })?)?;

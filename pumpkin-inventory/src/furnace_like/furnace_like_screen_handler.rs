@@ -26,12 +26,6 @@ impl FurnaceLikeScreenHandler {
         furnace_block_entity: Arc<dyn BlockEntity>,
         window_type: WindowType,
     ) -> Self {
-        let furnace_like_property_delegate = furnace_block_entity.to_property_delegate().unwrap();
-        let mut handler = Self {
-            inventory,
-            behaviour: ScreenHandlerBehaviour::new(sync_id, Some(window_type)),
-        };
-
         struct FurnaceLikeScreenListener;
         impl ScreenHandlerListener for FurnaceLikeScreenListener {
             fn on_property_update<'a>(
@@ -43,12 +37,17 @@ impl FurnaceLikeScreenHandler {
                 Box::pin(async move {
                     if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
                         sync_handler
-                            .update_property(screen_handler, property as i32, value)
+                            .update_property(screen_handler, i32::from(property), value)
                             .await;
                     }
                 })
             }
         }
+        let furnace_like_property_delegate = furnace_block_entity.to_property_delegate().unwrap();
+        let mut handler = Self {
+            inventory,
+            behaviour: ScreenHandlerBehaviour::new(sync_id, Some(window_type)),
+        };
 
         // 0: Fire icon (fuel left) counting from fuel burn time down to 0 (in-game ticks)
         // 1: Maximum fuel burn time fuel burn time or 0 (in-game ticks)

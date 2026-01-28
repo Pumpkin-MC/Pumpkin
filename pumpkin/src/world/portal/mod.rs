@@ -1,11 +1,35 @@
 use std::sync::Arc;
 
+use pumpkin_data::block_properties::HorizontalAxis;
 use pumpkin_util::math::position::BlockPos;
 
 use super::World;
 
 pub mod end;
 pub mod nether;
+pub mod poi;
+
+pub use nether::{NetherPortal, PortalSearchResult};
+pub use poi::PortalPoiStorage;
+
+#[derive(Clone)]
+pub struct SourcePortalInfo {
+    pub lower_corner: BlockPos,
+    pub axis: HorizontalAxis,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl From<&PortalSearchResult> for SourcePortalInfo {
+    fn from(result: &PortalSearchResult) -> Self {
+        Self {
+            lower_corner: result.lower_corner,
+            axis: result.axis,
+            width: result.width,
+            height: result.height,
+        }
+    }
+}
 
 pub struct PortalManager {
     pub portal_delay: u32,
@@ -13,6 +37,7 @@ pub struct PortalManager {
     pub pos: BlockPos,
     pub ticks_in_portal: u32,
     pub in_portal: bool,
+    pub source_portal: Option<SourcePortalInfo>,
 }
 
 impl PortalManager {
@@ -23,7 +48,12 @@ impl PortalManager {
             pos,
             ticks_in_portal: 0,
             in_portal: true,
+            source_portal: None,
         }
+    }
+
+    pub fn set_source_portal(&mut self, info: SourcePortalInfo) {
+        self.source_portal = Some(info);
     }
 
     pub fn tick(&mut self) -> bool {

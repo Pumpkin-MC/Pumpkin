@@ -1,6 +1,5 @@
-use pumpkin_data::Block;
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::{Block, tag};
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
@@ -14,12 +13,8 @@ use crate::block::RandomTickArgs;
 pub struct FlowerBlock;
 
 impl BlockMetadata for FlowerBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "c:flowers/small").unwrap()
+    fn ids() -> Box<[u16]> {
+        tag::Block::C_FLOWERS_SMALL.1.into()
     }
 }
 
