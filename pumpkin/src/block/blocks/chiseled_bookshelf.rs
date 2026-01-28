@@ -1,5 +1,7 @@
 use std::sync::{Arc, atomic::Ordering};
 
+use pumpkin_macros::pumpkin_block;
+
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs,
@@ -23,15 +25,8 @@ use pumpkin_world::{
 };
 use tokio::sync::Mutex;
 
-use crate::block::BlockMetadata;
-
+#[pumpkin_block("minecraft:chiseled_bookshelf")]
 pub struct ChiseledBookshelfBlock;
-
-impl BlockMetadata for ChiseledBookshelfBlock {
-    fn ids() -> Box<[u16]> {
-        [pumpkin_data::Block::CHISELED_BOOKSHELF.id].into()
-    }
-}
 
 impl BlockBehaviour for ChiseledBookshelfBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {

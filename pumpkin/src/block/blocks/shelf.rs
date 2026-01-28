@@ -1,19 +1,12 @@
-use pumpkin_data::{
-    block_properties::{AcaciaShelfLikeProperties, BlockProperties},
-    tag,
-};
+use pumpkin_data::block_properties::{AcaciaShelfLikeProperties, BlockProperties};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::BlockStateId;
 
-use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnPlaceArgs};
+use crate::block::{BlockBehaviour, BlockFuture, OnPlaceArgs};
 use crate::entity::EntityBase;
 
+#[pumpkin_block_from_tag("minecraft:wooden_shelves")]
 pub struct ShelfBlock;
-
-impl BlockMetadata for ShelfBlock {
-    fn ids() -> Box<[u16]> {
-        tag::Block::MINECRAFT_WOODEN_SHELVES.1.into()
-    }
-}
 
 impl BlockBehaviour for ShelfBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
