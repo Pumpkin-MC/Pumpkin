@@ -1,10 +1,10 @@
 use pumpkin_world::inventory::Inventory;
 
 // RecipeMatcher.java
-pub struct RecipeMatcher {}
+pub struct RecipeMatcher;
 
 // RecipeFinder.java
-pub struct RecipeFinder {}
+pub struct RecipeFinder;
 
 // AbstractRecipeScreenHandle.java
 pub trait RecipeFinderScreenHandler {}

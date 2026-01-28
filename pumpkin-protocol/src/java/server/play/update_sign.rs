@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_SIGN_UPDATE;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[packet(PLAY_SIGN_UPDATE)]
+#[java_packet(PLAY_SIGN_UPDATE)]
 pub struct SUpdateSign {
     pub location: BlockPos,
     pub is_front_text: bool,

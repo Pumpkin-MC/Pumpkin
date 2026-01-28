@@ -15,10 +15,7 @@ use crate::{
             builder::{argument, literal},
         },
     },
-    data::{
-        LoadJSONConfiguration, SaveJSONConfiguration,
-        whitelist::{WHITELIST_CONFIG, WhitelistConfig},
-    },
+    data::{LoadJSONConfiguration, SaveJSONConfiguration, whitelist::WhitelistConfig},
     net::DisconnectReason,
     server::Server,
 };
@@ -28,7 +25,7 @@ const DESCRIPTION: &str = "Manage server whitelists.";
 const ARG_TARGETS: &str = "targets";
 
 async fn kick_non_whitelisted_players(server: &Server) {
-    let whitelist = WHITELIST_CONFIG.read().await;
+    let whitelist = server.data.whitelist_config.read().await;
     if server.basic_config.enforce_whitelist && server.white_list.load(Ordering::Relaxed) {
         for player in server.get_all_players().await {
             if whitelist.is_whitelisted(&player.gameprofile) {
@@ -107,11 +104,11 @@ impl CommandExecutor for ListExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let whitelist = &WHITELIST_CONFIG.read().await.whitelist;
+            let whitelist = &server.data.whitelist_config.read().await.whitelist;
             if whitelist.is_empty() {
                 sender
                     .send_message(TextComponent::translate("commands.whitelist.none", []))
@@ -150,7 +147,7 @@ impl CommandExecutor for ReloadExecutor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            *WHITELIST_CONFIG.write().await = WhitelistConfig::load();
+            *server.data.whitelist_config.write().await = WhitelistConfig::load();
             kick_non_whitelisted_players(server).await;
             sender
                 .send_message(TextComponent::translate("commands.whitelist.reloaded", &[]))
@@ -166,7 +163,7 @@ impl CommandExecutor for AddExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -174,7 +171,7 @@ impl CommandExecutor for AddExecutor {
                 return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
-            let mut whitelist = WHITELIST_CONFIG.write().await;
+            let mut whitelist = server.data.whitelist_config.write().await;
             for player in targets {
                 let profile = &player.gameprofile;
                 if whitelist.is_whitelisted(profile) {
@@ -217,7 +214,7 @@ impl CommandExecutor for RemoveExecutor {
                 return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
-            let mut whitelist = WHITELIST_CONFIG.write().await;
+            let mut whitelist = server.data.whitelist_config.write().await;
             for player in targets {
                 let i = whitelist
                     .whitelist

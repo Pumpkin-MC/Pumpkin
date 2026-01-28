@@ -2,7 +2,7 @@ use std::io::Write;
 
 use bitflags::bitflags;
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_UPDATE;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::version::MinecraftVersion;
 
 use crate::{ClientPacket, Property, WritingError, ser::NetworkWriteExt};
@@ -40,9 +40,9 @@ bitflags! {
 /// This packet replaces the legacy "Player Info" packet with a more efficient
 /// bitmask-driven approach. Instead of sending full data every time, the
 /// server only sends the fields specified in the `actions` bitmask.
-#[packet(PLAY_PLAYER_INFO_UPDATE)]
+#[java_packet(PLAY_PLAYER_INFO_UPDATE)]
 pub struct CPlayerInfoUpdate<'a> {
-    /// The bitmask (PlayerInfoFlags) determining which data follows.
+    /// The bitmask (`PlayerInfoFlags`) determining which data follows.
     pub actions: u8,
     /// The list of players being updated. Each player entry contains
     /// data fields in the order they appear in the bitmask.
@@ -55,6 +55,7 @@ pub struct Player<'a> {
 }
 
 impl<'a> CPlayerInfoUpdate<'a> {
+    #[must_use]
     pub fn new(actions: u8, players: &'a [Player<'a>]) -> Self {
         Self { actions, players }
     }

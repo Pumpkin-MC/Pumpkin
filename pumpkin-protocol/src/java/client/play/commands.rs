@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_COMMANDS;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::version::MinecraftVersion;
 
 use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
@@ -11,7 +11,7 @@ use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
 /// Minecraft uses the "Brigadier" command system. This packet informs the client
 /// which commands exist, their arguments, and how they branch, allowing the
 /// client to highlight syntax errors in red before the command is even sent.
-#[packet(PLAY_COMMANDS)]
+#[java_packet(PLAY_COMMANDS)]
 pub struct CCommands<'a> {
     /// A flat list of all nodes in the command graph.
     /// Nodes reference each other by their index in this array.
@@ -22,6 +22,7 @@ pub struct CCommands<'a> {
 }
 
 impl<'a> CCommands<'a> {
+    #[must_use]
     pub fn new(nodes: Box<[ProtoNode<'a>]>, root_node_index: VarInt) -> Self {
         Self {
             nodes,
@@ -79,7 +80,7 @@ impl ProtoNode<'_> {
             } => {
                 let mut n = 1;
                 if is_executable {
-                    n |= Self::FLAG_IS_EXECUTABLE
+                    n |= Self::FLAG_IS_EXECUTABLE;
                 }
                 n
             }
@@ -91,10 +92,10 @@ impl ProtoNode<'_> {
             } => {
                 let mut n = 2;
                 if override_suggestion_type.is_some() {
-                    n |= Self::FLAG_HAS_SUGGESTION_TYPE
+                    n |= Self::FLAG_HAS_SUGGESTION_TYPE;
                 }
                 if is_executable {
-                    n |= Self::FLAG_IS_EXECUTABLE
+                    n |= Self::FLAG_IS_EXECUTABLE;
                 }
                 n
             }
@@ -219,10 +220,11 @@ impl ArgumentType<'_> {
 
     pub const SCORE_HOLDER_FLAG_ALLOW_MULTIPLE: u8 = 1;
 
+    #[expect(clippy::match_same_arms)]
     pub fn write_to_buffer(&self, write: &mut impl Write) -> Result<(), WritingError> {
         // Safety: Since Self is repr(u32), it is guaranteed to hold the discriminant in the first 4 bytes
         // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
-        let id = unsafe { *(self as *const Self as *const i32) };
+        let id = unsafe { *std::ptr::from_ref::<Self>(self).cast::<i32>() };
         write.write_var_int(&(id).into())?;
         match self {
             Self::Float { min, max } => Self::write_number_arg(*min, *max, write),
@@ -255,10 +257,10 @@ impl ArgumentType<'_> {
     ) -> Result<(), WritingError> {
         let mut flags: u8 = 0;
         if min.is_some() {
-            flags |= 1
+            flags |= 1;
         }
         if max.is_some() {
-            flags |= 2
+            flags |= 2;
         }
 
         write.write_u8(flags)?;
@@ -329,7 +331,7 @@ pub enum SuggestionProviders {
 }
 
 impl SuggestionProviders {
-    fn resource_location(&self) -> &'static str {
+    fn resource_location(self) -> &'static str {
         match self {
             Self::AskServer => "minecraft:ask_server",
             Self::AllRecipes => "minecraft:all_recipes",

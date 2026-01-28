@@ -55,7 +55,7 @@ pub const OUT_DIR: &str = "src/generated";
 
 pub fn main() {
     if let Err(e) = fs::create_dir_all(OUT_DIR) {
-        eprintln!("Failed to create output directory {}: {}", OUT_DIR, e);
+        eprintln!("Failed to create output directory {OUT_DIR}: {e}");
     }
 
     type BuilderFn = fn() -> TokenStream;
@@ -115,6 +115,7 @@ pub fn main() {
     });
 }
 
+#[must_use]
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
     let variants = array.iter().map(|item| {
         let name = format_ident!("{}", item.to_pascal_case());

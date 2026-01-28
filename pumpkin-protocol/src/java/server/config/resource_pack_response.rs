@@ -1,5 +1,5 @@
 use pumpkin_data::packet::serverbound::CONFIG_RESOURCE_PACK;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
@@ -21,16 +21,17 @@ pub enum ResourcePackResponseResult {
 /// This allows the server to know if the player is using the required textures
 /// or if the download failed.
 #[derive(serde::Deserialize, Serialize)]
-#[packet(CONFIG_RESOURCE_PACK)]
+#[java_packet(CONFIG_RESOURCE_PACK)]
 pub struct SConfigResourcePack {
     /// The unique identifier of the resource pack this response refers to.
     #[serde(with = "uuid::serde::compact")]
     pub uuid: uuid::Uuid,
-    /// The status code of the operation, mapped to [ResourcePackResponseResult].
+    /// The status code of the operation, mapped to [`ResourcePackResponseResult`].
     result: VarInt,
 }
 
 impl SConfigResourcePack {
+    #[must_use]
     pub fn response_result(&self) -> ResourcePackResponseResult {
         match self.result.0 {
             0 => ResourcePackResponseResult::DownloadSuccess,

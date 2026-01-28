@@ -20,8 +20,9 @@ pub struct NbtCompound {
 }
 
 impl NbtCompound {
-    pub fn new() -> NbtCompound {
-        NbtCompound {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
             child_tags: Vec::new(),
         }
     }
@@ -39,7 +40,7 @@ impl NbtCompound {
             }
 
             let len = reader.get_u16_be()?;
-            reader.skip_bytes(len as i64)?;
+            reader.skip_bytes(i64::from(len))?;
 
             // Skip Value
             NbtTag::skip_data(reader, tag_id)?;
@@ -50,8 +51,8 @@ impl NbtCompound {
 
     pub fn deserialize_content<R: Read + Seek>(
         reader: &mut NbtReadHelper<R>,
-    ) -> Result<NbtCompound, Error> {
-        let mut compound = NbtCompound::new();
+    ) -> Result<Self, Error> {
+        let mut compound = Self::new();
 
         loop {
             let tag_id = match reader.get_u8_be() {
@@ -73,16 +74,17 @@ impl NbtCompound {
         Ok(compound)
     }
 
-    pub fn serialize_content<W: Write>(&self, w: &mut WriteAdaptor<W>) -> Result<(), Error> {
-        for (name, tag) in &self.child_tags {
+    pub fn serialize_content<W: Write>(self, w: &mut WriteAdaptor<W>) -> Result<(), Error> {
+        for (name, tag) in self.child_tags {
             w.write_u8_be(tag.get_type_id())?;
-            NbtTag::String(name.clone()).serialize_data(w)?;
+            NbtTag::write_string(&name, w)?;
             tag.serialize_data(w)?;
         }
         w.write_u8_be(END_ID)?;
         Ok(())
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.child_tags.is_empty()
     }
@@ -106,7 +108,7 @@ impl NbtCompound {
     }
 
     pub fn put_bool(&mut self, name: &str, value: bool) {
-        self.put(name, NbtTag::Byte(if value { 1 } else { 0 }));
+        self.put(name, NbtTag::Byte(i8::from(value)));
     }
 
     pub fn put_short(&mut self, name: &str, value: i16) {
@@ -128,15 +130,17 @@ impl NbtCompound {
         self.put(name, NbtTag::Double(value));
     }
 
-    pub fn put_component(&mut self, name: &str, value: NbtCompound) {
+    pub fn put_component(&mut self, name: &str, value: Self) {
         self.put(name, NbtTag::Compound(value));
     }
 
+    #[must_use]
     pub fn get_byte(&self, name: &str) -> Option<i8> {
-        self.get(name).and_then(|tag| tag.extract_byte())
+        self.get(name).and_then(super::tag::NbtTag::extract_byte)
     }
 
     #[inline]
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<&NbtTag> {
         self.child_tags
             .iter()
@@ -144,46 +148,57 @@ impl NbtCompound {
             .map(|r| &r.1)
     }
 
+    #[must_use]
     pub fn get_short(&self, name: &str) -> Option<i16> {
-        self.get(name).and_then(|tag| tag.extract_short())
+        self.get(name).and_then(super::tag::NbtTag::extract_short)
     }
 
+    #[must_use]
     pub fn get_int(&self, name: &str) -> Option<i32> {
-        self.get(name).and_then(|tag| tag.extract_int())
+        self.get(name).and_then(super::tag::NbtTag::extract_int)
     }
 
+    #[must_use]
     pub fn get_long(&self, name: &str) -> Option<i64> {
-        self.get(name).and_then(|tag| tag.extract_long())
+        self.get(name).and_then(super::tag::NbtTag::extract_long)
     }
 
+    #[must_use]
     pub fn get_float(&self, name: &str) -> Option<f32> {
-        self.get(name).and_then(|tag| tag.extract_float())
+        self.get(name).and_then(super::tag::NbtTag::extract_float)
     }
 
+    #[must_use]
     pub fn get_double(&self, name: &str) -> Option<f64> {
-        self.get(name).and_then(|tag| tag.extract_double())
+        self.get(name).and_then(super::tag::NbtTag::extract_double)
     }
 
+    #[must_use]
     pub fn get_bool(&self, name: &str) -> Option<bool> {
-        self.get(name).and_then(|tag| tag.extract_bool())
+        self.get(name).and_then(super::tag::NbtTag::extract_bool)
     }
 
+    #[must_use]
     pub fn get_string(&self, name: &str) -> Option<&str> {
         self.get(name).and_then(|tag| tag.extract_string())
     }
 
+    #[must_use]
     pub fn get_list(&self, name: &str) -> Option<&[NbtTag]> {
         self.get(name).and_then(|tag| tag.extract_list())
     }
 
-    pub fn get_compound(&self, name: &str) -> Option<&NbtCompound> {
+    #[must_use]
+    pub fn get_compound(&self, name: &str) -> Option<&Self> {
         self.get(name).and_then(|tag| tag.extract_compound())
     }
 
+    #[must_use]
     pub fn get_int_array(&self, name: &str) -> Option<&[i32]> {
         self.get(name).and_then(|tag| tag.extract_int_array())
     }
 
+    #[must_use]
     pub fn get_long_array(&self, name: &str) -> Option<&[i64]> {
         self.get(name).and_then(|tag| tag.extract_long_array())
     }
@@ -197,7 +212,7 @@ impl From<Nbt> for NbtCompound {
 
 impl FromIterator<(String, NbtTag)> for NbtCompound {
     fn from_iter<T: IntoIterator<Item = (String, NbtTag)>>(iter: T) -> Self {
-        let mut compound = NbtCompound::new();
+        let mut compound = Self::new();
         for (key, value) in iter {
             compound.put(&key, value);
         }
@@ -216,13 +231,13 @@ impl IntoIterator for NbtCompound {
 
 impl Extend<(String, NbtTag)> for NbtCompound {
     fn extend<T: IntoIterator<Item = (String, NbtTag)>>(&mut self, iter: T) {
-        self.child_tags.extend(iter)
+        self.child_tags.extend(iter);
     }
 }
 
 // Rust's AsRef is currently not reflexive so we need to implement it manually
-impl AsRef<NbtCompound> for NbtCompound {
-    fn as_ref(&self) -> &NbtCompound {
+impl AsRef<Self> for NbtCompound {
+    fn as_ref(&self) -> &Self {
         self
     }
 }
@@ -267,11 +282,11 @@ impl<'de> Deserialize<'de> for NbtCompound {
 
 impl From<NbtCompound> for NbtTag {
     fn from(value: NbtCompound) -> Self {
-        NbtTag::Compound(value)
+        Self::Compound(value)
     }
 }
 
-/// SNBT display implementation for NbtCompound
+/// SNBT display implementation for `NbtCompound`
 impl Display for NbtCompound {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("{")?;
@@ -279,7 +294,7 @@ impl Display for NbtCompound {
             if i > 0 {
                 f.write_str(", ")?;
             }
-            write!(f, "{}: {}", key, value)?;
+            write!(f, "{key}: {value}")?;
         }
         f.write_str("}")
     }
@@ -288,52 +303,52 @@ impl Display for NbtCompound {
 impl Display for NbtTag {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            NbtTag::End => Ok(()),
-            NbtTag::Byte(v) => write!(f, "{v}b"),
-            NbtTag::Short(v) => write!(f, "{v}s"),
-            NbtTag::Int(v) => write!(f, "{v}"),
-            NbtTag::Long(v) => write!(f, "{v}L"),
-            NbtTag::Float(v) => write!(f, "{v}f"),
-            NbtTag::Double(v) => write!(f, "{v}d"),
-            NbtTag::String(v) => write!(f, "\"{v}\""), // TODO: Proper escaping needed for robust SNBT
-            NbtTag::Compound(v) => write!(f, "{v}"),
-            NbtTag::ByteArray(v) => {
+            Self::End => Ok(()),
+            Self::Byte(v) => write!(f, "{v}b"),
+            Self::Short(v) => write!(f, "{v}s"),
+            Self::Int(v) => write!(f, "{v}"),
+            Self::Long(v) => write!(f, "{v}L"),
+            Self::Float(v) => write!(f, "{v}f"),
+            Self::Double(v) => write!(f, "{v}d"),
+            Self::String(v) => write!(f, "\"{v}\""), // TODO: Proper escaping needed for robust SNBT
+            Self::Compound(v) => write!(f, "{v}"),
+            Self::ByteArray(v) => {
                 f.write_str("[B;")?;
                 for (i, byte) in v.iter().enumerate() {
                     if i > 0 {
-                        f.write_str(",")?
+                        f.write_str(",")?;
                     }
-                    write!(f, " {}b", byte)?;
+                    write!(f, " {byte}b")?;
                 }
                 f.write_str("]")
             }
-            NbtTag::List(v) => {
+            Self::List(v) => {
                 f.write_str("[")?;
                 for (i, tag) in v.iter().enumerate() {
                     if i > 0 {
-                        f.write_str(", ")?
+                        f.write_str(", ")?;
                     }
-                    write!(f, "{}", tag)?;
+                    write!(f, "{tag}")?;
                 }
                 f.write_str("]")
             }
-            NbtTag::IntArray(v) => {
+            Self::IntArray(v) => {
                 f.write_str("[I;")?;
                 for (i, int) in v.iter().enumerate() {
                     if i > 0 {
-                        f.write_str(",")?
+                        f.write_str(",")?;
                     }
-                    write!(f, " {}", int)?;
+                    write!(f, " {int}")?;
                 }
                 f.write_str("]")
             }
-            NbtTag::LongArray(v) => {
+            Self::LongArray(v) => {
                 f.write_str("[L;")?;
                 for (i, long) in v.iter().enumerate() {
                     if i > 0 {
-                        f.write_str(",")?
+                        f.write_str(",")?;
                     }
-                    write!(f, " {}L", long)?;
+                    write!(f, " {long}L")?;
                 }
                 f.write_str("]")
             }

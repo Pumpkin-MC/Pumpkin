@@ -12,6 +12,50 @@ members = [
     "pumpkin-data",
 ]
 
+
+[workspace.lints.clippy]
+# Groups
+all = { level = "deny", priority = -1 }
+# nursery = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
+
+if_then_some_else_none = "deny"
+empty_enum_variants_with_brackets = "deny"
+empty_structs_with_brackets = "deny"
+separated_literal_suffix = "deny"
+semicolon_outside_block = "deny"
+non_zero_suggestions = "deny"
+string_lit_chars_any = "deny"
+use_self = "deny"
+useless_let_if_seq = "deny"
+branches_sharing_code = "deny"
+equatable_if_let = "deny"
+option_if_let_else = "deny"
+needless_pass_by_ref_mut = "deny"
+needless_collect = "deny"
+redundant_clone = "deny"
+set_contains_or_insert = "deny"
+significant_drop_in_scrutinee = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+# Expected/Allowed 
+cargo_common_metadata = "allow"
+cast_precision_loss = "allow"
+multiple_crate_versions = "allow"
+single_call_fn = "allow"
+unreadable_literal = "allow"
+cast_lossless = "allow"
+cast_sign_loss = "allow"
+float_cmp = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+missing_panics_doc = "allow"
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
+struct_excessive_bools = "allow"
+
 [workspace.package]
 version = "0.1.0-dev+1.21.11"
 edition = "2024"
@@ -108,6 +152,7 @@ take_mut = "0.2.2"
 temp-dir = "0.1.16"
 thread_local = "1.1.9"
 time = "0.3"
+arc-swap = "1.8"
 tokio-util = "0.7.18"
 toml = "0.9"
 ureq = "3.1.4"

@@ -1,7 +1,7 @@
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_EVENT;
 use pumpkin_util::math::position::BlockPos;
 
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 /// Sent by the server to trigger a specific sound or particle effect at a world location.
@@ -9,7 +9,7 @@ use serde::Serialize;
 /// This is used for a wide variety of effects, from breaking blocks and firework
 /// explosions to splashing water or record playing.
 #[derive(Serialize)]
-#[packet(PLAY_LEVEL_EVENT)]
+#[java_packet(PLAY_LEVEL_EVENT)]
 pub struct CWorldEvent {
     /// The ID of the event to trigger (e.g., 1000 for a bow shoot, 2001 for block break).
     /// Refer to the latest protocol registry for the full list of sound/particle IDs.
@@ -27,6 +27,7 @@ pub struct CWorldEvent {
 }
 
 impl CWorldEvent {
+    #[must_use]
     pub fn new(event: i32, location: BlockPos, data: i32, disable_relative_volume: bool) -> Self {
         Self {
             event,

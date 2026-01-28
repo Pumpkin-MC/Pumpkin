@@ -1,7 +1,7 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_SCORE;
 use pumpkin_util::text::TextComponent;
 
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::{NumberFormat, VarInt};
@@ -11,7 +11,7 @@ use crate::{NumberFormat, VarInt};
 /// This packet is the primary way to manage scoreboard data. In the latest protocol,
 /// it also supports optional custom formatting for how the numeric score is displayed.
 #[derive(Serialize)]
-#[packet(PLAY_SET_SCORE)]
+#[java_packet(PLAY_SET_SCORE)]
 pub struct CUpdateScore {
     /// The name of the entity whose score is being updated (e.g., a player's username
     /// or a non-player entry like "Kills").
@@ -29,6 +29,7 @@ pub struct CUpdateScore {
 }
 
 impl CUpdateScore {
+    #[must_use]
     pub fn new(
         entity_name: String,
         objective_name: String,

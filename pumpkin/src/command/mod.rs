@@ -131,12 +131,12 @@ impl CommandSender {
     }
 
     /// Check if the sender has a specific permission
-    pub async fn has_permission(&self, node: &str) -> bool {
+    pub async fn has_permission(&self, server: &Server, node: &str) -> bool {
         match self {
             Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
-            Self::Player(p) => p.has_permission(node).await,
+            Self::Player(p) => p.has_permission(server, node).await,
             Self::CommandBlock(..) => {
-                let perm_reg = crate::PERMISSION_REGISTRY.read().await;
+                let perm_reg = server.permission_registry.read().await;
                 let Some(p) = perm_reg.get_permission(node) else {
                     return false;
                 };
@@ -163,7 +163,7 @@ impl CommandSender {
         match self {
             // TODO: maybe return first world when console
             Self::Console | Self::Rcon(..) => None,
-            Self::Player(p) => Some(p.living_entity.entity.world.clone()),
+            Self::Player(p) => Some(p.living_entity.entity.world.load_full()),
             Self::CommandBlock(_, w) => Some(w.clone()),
         }
     }

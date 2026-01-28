@@ -1,12 +1,12 @@
 use pumpkin_data::packet::clientbound::PLAY_MOVE_ENTITY_POS_ROT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[packet(PLAY_MOVE_ENTITY_POS_ROT)]
+#[java_packet(PLAY_MOVE_ENTITY_POS_ROT)]
 pub struct CUpdateEntityPosRot {
     pub entity_id: VarInt,
     pub delta: Vector3<i16>,
@@ -16,6 +16,7 @@ pub struct CUpdateEntityPosRot {
 }
 
 impl CUpdateEntityPosRot {
+    #[must_use]
     pub fn new(
         entity_id: VarInt,
         delta: Vector3<i16>,

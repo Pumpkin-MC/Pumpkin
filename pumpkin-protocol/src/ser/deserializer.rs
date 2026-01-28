@@ -85,12 +85,14 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
 
     fn deserialize_char<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let u32_val = self.inner.get_u32_be()?;
-        match char::from_u32(u32_val) {
-            Some(c) => visitor.visit_char(c),
-            None => Err(ReadingError::Message(format!(
-                "Invalid char value: {u32_val}"
-            ))),
-        }
+        char::from_u32(u32_val).map_or_else(
+            || {
+                Err(ReadingError::Message(format!(
+                    "Invalid char value: {u32_val}"
+                )))
+            },
+            |c| visitor.visit_char(c),
+        )
     }
 
     fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
@@ -200,12 +202,10 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
     }
 
     fn deserialize_map<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let len = self.inner.get_var_int()?.0 as usize;
         struct Access<'a, R: Read> {
             deserializer: &'a mut Deserializer<R>,
             len: usize,
         }
-
         impl<'de, R: Read> MapAccess<'de> for Access<'_, R> {
             type Error = ReadingError;
 
@@ -227,6 +227,7 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
                 seed.deserialize(&mut *self.deserializer)
             }
         }
+        let len = self.inner.get_var_int()?.0 as usize;
 
         visitor.visit_map(Access {
             deserializer: self,
@@ -272,10 +273,10 @@ impl<'de, R: Read> EnumAccess<'de> for &mut Deserializer<R> {
         self,
         seed: V,
     ) -> Result<(V::Value, Self::Variant), Self::Error> {
-        let variant_index_i32 = self.inner.get_var_int()?.0;
-        let variant_index_u32: u32 = variant_index_i32.try_into().map_err(|_| {
+        let variant_index = self.inner.get_var_int()?.0;
+        let variant_index_u32: u32 = variant_index.try_into().map_err(|_| {
             ReadingError::Message(format!(
-                "Invalid variant index {variant_index_i32} for enum, cannot convert to u32"
+                "Invalid variant index {variant_index} for enum, cannot convert to u32"
             ))
         })?;
         let val = seed.deserialize(variant_index_u32.into_deserializer())?;

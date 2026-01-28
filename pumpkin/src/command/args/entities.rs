@@ -193,32 +193,36 @@ impl FromStr for TargetSelector {
 
     fn from_str(arg: &str) -> Result<Self, Self::Err> {
         if arg.starts_with('@') {
-            let body: Vec<_> = arg.splitn(2, '[').collect();
-            let r#type = match body[0] {
+            let (type_str, arguments) = arg
+                .find('[')
+                .map_or((arg, None), |idx| (&arg[..idx], Some(&arg[idx + 1..])));
+
+            let selector_type = match type_str {
                 "@a" => EntitySelectorType::AllPlayers,
                 "@e" => EntitySelectorType::AllEntities,
                 "@s" => EntitySelectorType::Source,
                 "@p" => EntitySelectorType::NearestPlayer,
                 "@r" => EntitySelectorType::RandomPlayer,
                 "@n" => EntitySelectorType::NearestEntity,
-                _ => return Err(format!("Invalid target selector type {}", body[0])),
+                _ => return Err(format!("Invalid target selector type {type_str}")),
             };
-            let mut selector = Self::new(r#type);
-            if body.len() < 2 {
-                // No conditions specified, return the selector with default conditions
-                return Ok(selector);
+
+            let mut selector = Self::new(selector_type);
+
+            if let Some(args_content) = arguments {
+                let trimmed_args = args_content
+                    .strip_suffix(']')
+                    .ok_or_else(|| "Target selector must end with ]".to_string())?;
+
+                for s in trimmed_args
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                {
+                    selector.conditions.push(EntityFilter::from_str(s)?);
+                }
             }
-            // parse conditions
-            if body[1].as_bytes()[body[1].len() - 1] != b']' {
-                return Err("Target selector must end with ]".to_string());
-            }
-            let conditions: Vec<_> = body[1][..body[1].len() - 1]
-                .split(',')
-                .map(str::trim)
-                .collect();
-            for s in conditions {
-                selector.conditions.push(EntityFilter::from_str(s)?);
-            }
+
             Ok(selector)
         } else if let Ok(uuid) = Uuid::parse_str(arg) {
             Ok(Self::new(EntitySelectorType::Uuid(uuid)))

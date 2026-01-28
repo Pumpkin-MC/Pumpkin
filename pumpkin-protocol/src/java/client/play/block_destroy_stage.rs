@@ -1,7 +1,7 @@
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_DESTRUCTION;
 use pumpkin_util::math::position::BlockPos;
 
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
@@ -11,7 +11,7 @@ use crate::VarInt;
 /// This packet controls the overlay of cracks that appear on a block when
 /// it is being mined. It is often used to show other players' mining progress.
 #[derive(Serialize)]
-#[packet(PLAY_BLOCK_DESTRUCTION)]
+#[java_packet(PLAY_BLOCK_DESTRUCTION)]
 pub struct CSetBlockDestroyStage {
     /// A unique ID for this destruction instance. Usually the miner's Entity ID.
     /// If multiple entities mine the same block, they must use different IDs.
@@ -24,6 +24,7 @@ pub struct CSetBlockDestroyStage {
 }
 
 impl CSetBlockDestroyStage {
+    #[must_use]
     pub fn new(entity_id: VarInt, location: BlockPos, destroy_stage: i8) -> Self {
         Self {
             entity_id,

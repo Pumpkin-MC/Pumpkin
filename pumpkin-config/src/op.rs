@@ -11,6 +11,7 @@ pub struct Op {
 }
 
 impl Op {
+    #[must_use]
     pub fn new(
         uuid: Uuid,
         name: String,

@@ -136,6 +136,7 @@ impl BedrockClient {
         let gameprofile = &player.gameprofile;
 
         send_cancellable! {{
+            server;
             PlayerChatEvent::new(player.clone(), packet.message, vec![]);
 
             'after: {
@@ -148,10 +149,10 @@ impl BedrockClient {
                     None => event.message.clone(),
                 };
 
-                let decorated_message = &TextComponent::chat_decorated(
-                    config.chat.format.clone(),
-                    gameprofile.name.clone(),
-                    message.clone(),
+                let decorated_message = TextComponent::chat_decorated(
+                    &config.chat.format,
+                    &gameprofile.name,
+                    &message,
                 );
 
                 let entity = &player.living_entity.entity;
@@ -160,7 +161,7 @@ impl BedrockClient {
                     //world.broadcast_secure_player_chat(player, &message, decorated_message).await;
                 } else {
                     let je_packet = CSystemChatMessage::new(
-                        decorated_message,
+                        &decorated_message,
                         false,
                     );
 
@@ -168,7 +169,7 @@ impl BedrockClient {
                         message, gameprofile.name.clone()
                     );
 
-                    entity.world.broadcast_editioned(&je_packet, &be_packet).await;
+                    entity.world.load().broadcast_editioned(&je_packet, &be_packet).await;
                 }
             }
         }}
@@ -183,6 +184,7 @@ impl BedrockClient {
         let player_clone = player.clone();
         let server_clone: Arc<Server> = server.clone();
         send_cancellable! {{
+            server;
             PlayerCommandSendEvent {
                 player: player.clone(),
                 command: command.command.clone(),

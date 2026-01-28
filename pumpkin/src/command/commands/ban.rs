@@ -6,10 +6,7 @@ use crate::{
         args::{Arg, ConsumedArgs, message::MsgArgConsumer, players::PlayersArgumentConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::{
-        SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry,
-        banned_player::BANNED_PLAYER_LIST,
-    },
+    data::{SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry},
     entity::player::Player,
     net::DisconnectReason,
 };
@@ -28,7 +25,7 @@ impl CommandExecutor for NoReasonExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -36,7 +33,7 @@ impl CommandExecutor for NoReasonExecutor {
                 return Err(InvalidConsumption(Some(ARG_TARGET.into())));
             };
 
-            ban_player(sender, &targets[0], None).await;
+            ban_player(sender, server, &targets[0], None).await;
             Ok(())
         })
     }
@@ -48,7 +45,7 @@ impl CommandExecutor for ReasonExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -60,14 +57,19 @@ impl CommandExecutor for ReasonExecutor {
                 return Err(InvalidConsumption(Some(ARG_REASON.into())));
             };
 
-            ban_player(sender, &targets[0], Some(reason.clone())).await;
+            ban_player(sender, server, &targets[0], Some(reason.clone())).await;
             Ok(())
         })
     }
 }
 
-async fn ban_player(sender: &CommandSender, player: &Player, reason: Option<String>) {
-    let mut banned_players = BANNED_PLAYER_LIST.write().await;
+async fn ban_player(
+    sender: &CommandSender,
+    server: &crate::server::Server,
+    player: &Player,
+    reason: Option<String>,
+) {
+    let mut banned_players = server.data.banned_player_list.write().await;
 
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
     let profile = &player.gameprofile;

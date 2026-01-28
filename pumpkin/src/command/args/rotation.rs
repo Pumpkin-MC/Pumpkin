@@ -9,7 +9,29 @@ use crate::server::Server;
 use super::super::args::ArgumentConsumer;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 
-/// yaw and pitch
+/// Parses a rotation value that may be relative (prefixed with ~).
+/// Returns (value, `is_relative`).
+fn parse_rotation_component(s: &str) -> Option<(f32, bool)> {
+    if let Some(rest) = s.strip_prefix('~') {
+        // Relative rotation
+        let value = if rest.is_empty() {
+            0.0
+        } else {
+            rest.parse::<f32>().ok()?
+        };
+        Some((value, true))
+    } else {
+        // Absolute rotation
+        let mut value = s.parse::<f32>().ok()?;
+        value %= 360.0;
+        if value >= 180.0 {
+            value -= 360.0;
+        }
+        Some((value, false))
+    }
+}
+
+/// yaw and pitch with optional relative prefix (~)
 pub struct RotationArgumentConsumer;
 
 impl GetClientSideArgParser for RotationArgumentConsumer {
@@ -36,20 +58,11 @@ impl ArgumentConsumer for RotationArgumentConsumer {
             return Box::pin(async move { None });
         };
 
-        let result: Option<Arg<'a>> = yaw_str.parse::<f32>().ok().and_then(|mut yaw| {
-            pitch_str.parse::<f32>().ok().map(|mut pitch| {
-                yaw %= 360.0;
-                if yaw >= 180.0 {
-                    yaw -= 360.0;
-                }
-                pitch %= 360.0;
-                if pitch >= 180.0 {
-                    pitch -= 360.0;
-                }
-
-                Arg::Rotation(yaw, pitch)
-            })
-        });
+        let result: Option<Arg<'a>> =
+            parse_rotation_component(yaw_str).and_then(|(yaw, yaw_rel)| {
+                parse_rotation_component(pitch_str)
+                    .map(|(pitch, pitch_rel)| Arg::Rotation(yaw, yaw_rel, pitch, pitch_rel))
+            });
 
         Box::pin(async move { result })
     }
@@ -62,11 +75,14 @@ impl DefaultNameArgConsumer for RotationArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for RotationArgumentConsumer {
-    type Data = (f32, f32);
+    /// (yaw, `is_yaw_relative`, pitch, `is_pitch_relative`)
+    type Data = (f32, bool, f32, bool);
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::Rotation(yaw, pitch)) => Ok((*yaw, *pitch)),
+            Some(Arg::Rotation(yaw, yaw_rel, pitch, pitch_rel)) => {
+                Ok((*yaw, *yaw_rel, *pitch, *pitch_rel))
+            }
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
     }

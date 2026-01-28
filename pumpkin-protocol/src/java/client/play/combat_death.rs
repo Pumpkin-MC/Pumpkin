@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_COMBAT_KILL;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::text::TextComponent;
 use serde::Serialize;
 
@@ -10,7 +10,7 @@ use crate::VarInt;
 /// This packet is responsible for triggering the death screen on the client
 /// and displaying the death message in the chat for the deceased player.
 #[derive(Serialize)]
-#[packet(PLAY_PLAYER_COMBAT_KILL)]
+#[java_packet(PLAY_PLAYER_COMBAT_KILL)]
 pub struct CCombatDeath<'a> {
     /// The Entity ID of the player who died.
     pub player_id: VarInt,
@@ -19,6 +19,7 @@ pub struct CCombatDeath<'a> {
 }
 
 impl<'a> CCombatDeath<'a> {
+    #[must_use]
     pub fn new(player_id: VarInt, message: &'a TextComponent) -> Self {
         Self { player_id, message }
     }

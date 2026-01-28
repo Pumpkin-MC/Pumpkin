@@ -17,6 +17,7 @@ doctest = false
 
 [dependencies]
 # pumpkin
+arc-swap.workspace = true
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true
@@ -94,3 +95,6 @@ tempfile.workspace = true
 [features]
 console-subscriber = ["dep:console-subscriber"]
 tokio_taskdump = ["pumpkin-world/tokio_taskdump"]
+
+[lints]
+workspace = true

@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::{Deserialize, Serialize};
 
 /// Sent by the server in response to a `SStatusRequest`.
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// This packet provides the client with the information required to display the
 /// server in the multiplayer menu, including the MOTD, player count, and icon
 #[derive(Serialize, Deserialize)]
-#[packet(STATUS_STATUS_RESPONSE)]
+#[java_packet(STATUS_STATUS_RESPONSE)]
 pub struct CStatusResponse {
     /// A JSON-encoded string containing the server's status data.
     ///
@@ -16,6 +16,7 @@ pub struct CStatusResponse {
     pub json_response: String,
 }
 impl CStatusResponse {
+    #[must_use]
     pub fn new(json_response: String) -> Self {
         Self { json_response }
     }

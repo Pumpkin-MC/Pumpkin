@@ -115,7 +115,7 @@ pub(crate) fn build() -> TokenStream {
     let versions = vec![latest_version_key, legacy_version_key];
 
     for version in versions {
-        let file_path = format!("../assets/tags/{}_tags.json", version);
+        let file_path = format!("../assets/tags/{version}_tags.json");
         if !Path::new(&file_path).exists() {
             continue;
         }
@@ -144,13 +144,13 @@ pub(crate) fn build() -> TokenStream {
                 let ids: Vec<u16> = values
                     .iter()
                     .filter_map(|v| match key.as_str() {
-                        "worldgen/biome" => biomes.get(v).map(|b| b.id as u16),
+                        "worldgen/biome" => biomes.get(v).map(|b| u16::from(b.id)),
                         "fluid" => fluid_id_map.get(v).copied(),
                         "item" => items.get(v).map(|i| i.id),
                         "block" => block_id_map.get(v).copied(),
                         "enchantment" => enchantments
-                            .get(&format!("minecraft:{}", v))
-                            .map(|e| e.id as u16),
+                            .get(&format!("minecraft:{v}"))
+                            .map(|e| u16::from(e.id)),
                         "entity_type" => entities.get(v).map(|e| e.id),
                         _ => None,
                     })
@@ -205,6 +205,8 @@ pub(crate) fn build() -> TokenStream {
             });
             match_get_map
                 .push(quote! { MinecraftVersion::V_1_21_9 => tags_1_21_9::get_map(tag_category) });
+            match_get_map
+                .push(quote! { MinecraftVersion::V_1_21_7 => tags_1_21_9::get_map(tag_category) });
         }
     }
 

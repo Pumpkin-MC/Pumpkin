@@ -13,34 +13,38 @@ pub struct Vector2<T> {
 
 impl<T: Math + Copy> Vector2<T> {
     pub const fn new(x: T, y: T) -> Self {
-        Vector2 { x, y }
+        Self { x, y }
     }
 
     pub fn length_squared(&self) -> T {
         self.x * self.x + self.y * self.y
     }
 
-    pub fn add(&self, other: &Vector2<T>) -> Self {
-        Vector2 {
+    #[must_use]
+    pub fn add(&self, other: &Self) -> Self {
+        Self {
             x: self.x + other.x,
             y: self.y + other.y,
         }
     }
 
+    #[must_use]
     pub fn add_raw(&self, x: T, y: T) -> Self {
-        Vector2 {
+        Self {
             x: self.x + x,
             y: self.y + y,
         }
     }
 
-    pub fn sub(&self, other: &Vector2<T>) -> Self {
-        Vector2 {
+    #[must_use]
+    pub fn sub(&self, other: &Self) -> Self {
+        Self {
             x: self.x - other.x,
             y: self.y - other.y,
         }
     }
 
+    #[must_use]
     pub fn multiply(self, x: T, y: T) -> Self {
         Self {
             x: self.x * x,
@@ -53,9 +57,11 @@ impl<T: Math + Copy + Float> Vector2<T> {
     pub fn length(&self) -> T {
         self.length_squared().sqrt()
     }
+
+    #[must_use]
     pub fn normalize(&self) -> Self {
         let length = self.length();
-        Vector2 {
+        Self {
             x: self.x / length,
             y: self.y / length,
         }
@@ -74,7 +80,7 @@ impl<T: Math + Copy> Mul<T> for Vector2<T> {
 }
 
 impl<T: Math + Copy> Add for Vector2<T> {
-    type Output = Vector2<T>;
+    type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x + rhs.x,
@@ -87,7 +93,7 @@ impl<T: Math + Copy> Neg for Vector2<T> {
     type Output = Self;
 
     fn neg(self) -> Self {
-        Vector2 {
+        Self {
             x: -self.x,
             y: -self.y,
         }
@@ -96,7 +102,7 @@ impl<T: Math + Copy> Neg for Vector2<T> {
 
 impl<T> From<(T, T)> for Vector2<T> {
     fn from((x, z): (T, T)) -> Self {
-        Vector2 { x, y: z }
+        Self { x, y: z }
     }
 }
 
@@ -124,13 +130,14 @@ impl Math for i32 {}
 impl Math for i64 {}
 impl Math for i8 {}
 
+#[must_use]
 pub const fn to_chunk_pos(vec: &Vector2<i32>) -> Vector2<i32> {
     Vector2::new(vec.x >> 4, vec.y >> 4)
 }
 
 impl serde::Serialize for Vector2<f32> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut buf = Vec::with_capacity(size_of::<Vector2<f32>>());
+        let mut buf = Vec::with_capacity(size_of::<Self>());
         buf.put_f32(self.x);
         buf.put_f32(self.y);
         serializer.serialize_bytes(&buf)

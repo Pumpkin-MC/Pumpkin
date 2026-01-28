@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_ABILITIES;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 /// Updates the player's movement and interaction abilities.
@@ -8,7 +8,7 @@ use serde::Serialize;
 /// and sets the movement speeds. While the client applies these visuals,
 /// the server must still validate these states to prevent cheating.
 #[derive(Serialize)]
-#[packet(PLAY_PLAYER_ABILITIES)]
+#[java_packet(PLAY_PLAYER_ABILITIES)]
 pub struct CPlayerAbilities {
     /// A bitmask of player states.
     /// Bit 0 (0x01): Invulnerable (Creative mode)
@@ -25,6 +25,7 @@ pub struct CPlayerAbilities {
 }
 
 impl CPlayerAbilities {
+    #[must_use]
     pub fn new(flags: i8, flying_speed: f32, field_of_view: f32) -> Self {
         Self {
             flags,

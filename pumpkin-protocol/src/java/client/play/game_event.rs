@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_GAME_EVENT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::{Deserialize, Serialize};
 
 /// Updates the game state or triggers specific environmental changes.
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// context-specific transitions, such as changing the weather,
 /// altering the player's gamemode, or displaying the credits.
 #[derive(Serialize, Deserialize)]
-#[packet(PLAY_GAME_EVENT)]
+#[java_packet(PLAY_GAME_EVENT)]
 pub struct CGameEvent {
     /// The ID of the event type.
     pub event: u8,
@@ -18,6 +18,7 @@ pub struct CGameEvent {
 
 /// You need to implement all the random stuff somewhere, right?
 impl CGameEvent {
+    #[must_use]
     pub fn new(event: GameEvent, value: f32) -> Self {
         Self {
             event: event as u8,

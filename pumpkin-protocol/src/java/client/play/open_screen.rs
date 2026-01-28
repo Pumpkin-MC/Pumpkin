@@ -1,7 +1,7 @@
 use pumpkin_data::packet::clientbound::PLAY_OPEN_SCREEN;
 use pumpkin_util::text::TextComponent;
 
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
@@ -13,7 +13,7 @@ use crate::VarInt;
 /// `sync_id` which must be used in all subsequent "Set Slot" or "Click Slot"
 /// packets to ensure the server and client are talking about the same window.
 #[derive(Serialize)]
-#[packet(PLAY_OPEN_SCREEN)]
+#[java_packet(PLAY_OPEN_SCREEN)]
 pub struct COpenScreen<'a> {
     /// A unique identifier for the current window session.
     /// Typically increments by 1 for every new window opened.
@@ -27,6 +27,7 @@ pub struct COpenScreen<'a> {
 }
 
 impl<'a> COpenScreen<'a> {
+    #[must_use]
     pub fn new(window_id: VarInt, window_type: VarInt, window_title: &'a TextComponent) -> Self {
         Self {
             sync_id: window_id,

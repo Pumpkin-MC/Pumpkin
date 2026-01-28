@@ -71,11 +71,12 @@ macro_rules! include_json_static {
 
 /// The minimum number of bits required to represent this number
 #[inline]
+#[must_use]
 pub fn encompassing_bits(count: usize) -> u8 {
     if count == 1 {
         1
     } else {
-        count.ilog2() as u8 + if count.is_power_of_two() { 0 } else { 1 }
+        count.ilog2() as u8 + u8::from(!count.is_power_of_two())
     }
 }
 
@@ -97,11 +98,12 @@ pub enum BlockDirection {
 }
 
 impl BlockDirection {
+    #[must_use]
     pub fn get_axis(&self) -> Axis {
         match self {
-            BlockDirection::Up | BlockDirection::Down => Axis::Y,
-            BlockDirection::North | BlockDirection::South => Axis::Z,
-            BlockDirection::East | BlockDirection::West => Axis::X,
+            Self::Up | Self::Down => Axis::Y,
+            Self::North | Self::South => Axis::Z,
+            Self::East | Self::West => Axis::X,
         }
     }
 }
@@ -123,10 +125,12 @@ impl<'a, T> MutableSplitSlice<'a, T> {
         (value, Self { start, end })
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.start.len() + self.end.len() + 1
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         false
     }
@@ -186,6 +190,7 @@ pub enum Hand {
 }
 
 impl Hand {
+    #[must_use]
     pub fn all() -> [Self; 2] {
         [Self::Right, Self::Left]
     }

@@ -13,6 +13,6 @@ pub struct CInventoryContent {
     pub slots: Vec<NetworkItemStackDescriptor>,
     pub container_name: u8,
     pub dynamic_id: Option<u32>,
-    /// Use NetworkItemDescriptor if none
+    /// Use `NetworkItemDescriptor` if none
     pub storage_item: NetworkItemStackDescriptor,
 }

@@ -71,7 +71,7 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
                     "EnchantmentsImpl Enchantment VarInt Incorrect!",
                 ))?,
                 level,
-            ))
+            ));
         }
         Ok(Self {
             enchantment: Cow::from(enc),

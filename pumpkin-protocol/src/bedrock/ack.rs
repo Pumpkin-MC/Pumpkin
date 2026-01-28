@@ -15,6 +15,7 @@ pub struct Ack {
 }
 
 impl Ack {
+    #[must_use]
     pub fn new(sequences: Vec<u32>) -> Self {
         Self { sequences }
     }
@@ -64,15 +65,13 @@ impl Ack {
 
         let mut start = self.sequences[0];
         let mut end = start;
-        for seq in self.sequences.clone() {
-            if seq == end + 1 {
-                end = seq
-            } else {
+        for seq in self.sequences.iter().copied() {
+            if seq != end + 1 {
                 Self::write_range(start, end, &mut buf)?;
                 count += 1;
                 start = seq;
-                end = seq;
             }
+            end = seq;
         }
         Self::write_range(start, end, &mut buf)?;
         count += 1;

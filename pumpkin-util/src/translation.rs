@@ -11,7 +11,7 @@ use std::{
 /// - Open a public translation system, maybe a Crowdin like Minecraft?
 /// - Add support for translations on commands descriptions
 /// - Integrate custom translations with the plugins API
-/// - Try to optimize code of 'to_translated'
+/// - Try to optimize code of '`to_translated`'
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../assets/en_us.json");
@@ -27,9 +27,11 @@ pub struct SubstitutionRange {
     pub end: usize,
 }
 impl SubstitutionRange {
+    #[must_use]
     pub fn len(&self) -> usize {
         (self.end - self.start) + 1
     }
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.start == self.end
     }
@@ -60,21 +62,23 @@ pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale:
 pub fn get_translation(key: &str, locale: Locale) -> String {
     let translations = TRANSLATIONS.lock().unwrap();
     let key = key.to_lowercase();
-    match translations[locale as usize].get(&key) {
-        Some(translation) => translation.clone(),
-        None => match translations[Locale::EnUs as usize].get(&key) {
-            Some(translation) => translation.clone(),
-            None => key,
+    translations[locale as usize].get(&key).map_or_else(
+        || {
+            translations[Locale::EnUs as usize]
+                .get(&key)
+                .map_or(key, std::clone::Clone::clone)
         },
-    }
+        std::clone::Clone::clone,
+    )
 }
 
+#[must_use]
 pub fn reorder_substitutions(
     translation: &str,
     with: Vec<TextComponentBase>,
 ) -> (Vec<TextComponentBase>, Vec<SubstitutionRange>) {
     let indices: Vec<usize> = translation
-        .match_indices("%")
+        .match_indices('%')
         .filter(|(i, _)| *i == 0 || translation.as_bytes()[i - 1] != b'\\')
         .map(|(i, _)| i)
         .collect();
@@ -357,145 +361,146 @@ pub enum Locale {
 }
 
 impl Locale {
+    #[must_use]
     pub const fn last() -> Self {
-        Locale::ZlmArab
+        Self::ZlmArab
     }
 }
 
 impl FromStr for Locale {
     type Err = ();
 
+    #[expect(clippy::too_many_lines)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "af_za" => Ok(Locale::AfZa),       // Afrikaans (Suid-Afrika)
-            "ar_sa" => Ok(Locale::ArSa),       // Arabic
-            "ast_es" => Ok(Locale::AstEs),     // Asturian
-            "az_az" => Ok(Locale::AzAz),       // Azerbaijani
-            "ba_ru" => Ok(Locale::BaRu),       // Bashkir
-            "bar" => Ok(Locale::Bar),          // Bavarian
-            "be_by" => Ok(Locale::BeBy),       // Belarusian
-            "bg_bg" => Ok(Locale::BgBg),       // Bulgarian
-            "br_fr" => Ok(Locale::BrFr),       // Breton
-            "brb" => Ok(Locale::Brb),          // Brabantian
-            "bs_ba" => Ok(Locale::BsBa),       // Bosnian
-            "ca_es" => Ok(Locale::CaEs),       // Catalan
-            "cs_cz" => Ok(Locale::CsCz),       // Czech
-            "cy_gb" => Ok(Locale::CyGb),       // Welsh
-            "da_dk" => Ok(Locale::DaDk),       // Danish
-            "de_at" => Ok(Locale::DeAt),       // Austrian German
-            "de_ch" => Ok(Locale::DeCh),       // Swiss German
-            "de_de" => Ok(Locale::DeDe),       // German
-            "el_gr" => Ok(Locale::ElGr),       // Greek
-            "en_au" => Ok(Locale::EnAu),       // Australian English
-            "en_ca" => Ok(Locale::EnCa),       // Canadian English
-            "en_gb" => Ok(Locale::EnGb),       // British English
-            "en_nz" => Ok(Locale::EnNz),       // New Zealand English
-            "en_pt" => Ok(Locale::EnPt),       // Pirate English
-            "en_ud" => Ok(Locale::EnUd),       // Upside down British English
-            "en_us" => Ok(Locale::EnUs),       // American English
-            "enp" => Ok(Locale::Enp),          // Modern English minus borrowed words
-            "enws" => Ok(Locale::Enws),        // Early Modern English
-            "eo_uy" => Ok(Locale::EoUy),       // Esperanto
-            "es_ar" => Ok(Locale::EsAr),       // Argentinian Spanish
-            "es_cl" => Ok(Locale::EsCl),       // Chilean Spanish
-            "es_ec" => Ok(Locale::EsEc),       // Ecuadorian Spanish
-            "es_es" => Ok(Locale::EsEs),       // European Spanish
-            "es_mx" => Ok(Locale::EsMx),       // Mexican Spanish
-            "es_uy" => Ok(Locale::EsUy),       // Uruguayan Spanish
-            "es_ve" => Ok(Locale::EsVe),       // Venezuelan Spanish
-            "esan" => Ok(Locale::Esan),        // Andalusian
-            "et_ee" => Ok(Locale::EtEe),       // Estonian
-            "eu_es" => Ok(Locale::EuEs),       // Basque
-            "fa_ir" => Ok(Locale::FaIr),       // Persian
-            "fi_fi" => Ok(Locale::FiFi),       // Finnish
-            "fil_ph" => Ok(Locale::FilPh),     // Filipino
-            "fo_fo" => Ok(Locale::FoFo),       // Faroese
-            "fr_ca" => Ok(Locale::FrCa),       // Canadian French
-            "fr_fr" => Ok(Locale::FrFr),       // European French
-            "fra_de" => Ok(Locale::FraDe),     // East Franconian
-            "fur_it" => Ok(Locale::FurIt),     // Friulian
-            "fy_nl" => Ok(Locale::FyNl),       // Frisian
-            "ga_ie" => Ok(Locale::GaIe),       // Irish
-            "gd_gb" => Ok(Locale::GdGb),       // Scottish Gaelic
-            "gl_es" => Ok(Locale::GlEs),       // Galician
-            "haw_us" => Ok(Locale::HawUs),     // Hawaiian
-            "he_il" => Ok(Locale::HeIl),       // Hebrew
-            "hi_in" => Ok(Locale::HiIn),       // Hindi
-            "hr_hr" => Ok(Locale::HrHr),       // Croatian
-            "hu_hu" => Ok(Locale::HuHu),       // Hungarian
-            "hy_am" => Ok(Locale::HyAm),       // Armenian
-            "id_id" => Ok(Locale::IdId),       // Indonesian
-            "ig_ng" => Ok(Locale::IgNg),       // Igbo
-            "io_en" => Ok(Locale::IoEn),       // Ido
-            "is_is" => Ok(Locale::IsIs),       // Icelandic
-            "isv" => Ok(Locale::Isv),          // Interslavic
-            "it_it" => Ok(Locale::ItIt),       // Italian
-            "ja_jp" => Ok(Locale::JaJp),       // Japanese
-            "jbo_en" => Ok(Locale::JboEn),     // Lojban
-            "ka_ge" => Ok(Locale::KaGe),       // Georgian
-            "kk_kz" => Ok(Locale::KkKz),       // Kazakh
-            "kn_in" => Ok(Locale::KnIn),       // Kannada
-            "ko_kr" => Ok(Locale::KoKr),       // Korean
-            "ksh" => Ok(Locale::Ksh),          // Kölsch/Ripuarian
-            "kw_gb" => Ok(Locale::KwGb),       // Cornish
-            "la_la" => Ok(Locale::LaLa),       // Latin
-            "lb_lu" => Ok(Locale::LbLu),       // Luxembourgish
-            "li_li" => Ok(Locale::LiLi),       // Limburgish
-            "lmo" => Ok(Locale::Lmo),          // Lombard
-            "lo_la" => Ok(Locale::LoLa),       // Lao
-            "lol_us" => Ok(Locale::LolUs),     // LOLCAT
-            "lt_lt" => Ok(Locale::LtLt),       // Lithuanian
-            "lv_lv" => Ok(Locale::LvLv),       // Latvian
-            "lzh" => Ok(Locale::Lzh),          // Classical Chinese
-            "mk_mk" => Ok(Locale::MkMk),       // Macedonian
-            "mn_mn" => Ok(Locale::MnMn),       // Mongolian
-            "ms_my" => Ok(Locale::MsMy),       // Malay
-            "mt_mt" => Ok(Locale::MtMt),       // Maltese
-            "nah" => Ok(Locale::Nah),          // Nahuatl
-            "nds_de" => Ok(Locale::NdsDe),     // Low German
-            "nl_be" => Ok(Locale::NlBe),       // Dutch, Flemish
-            "nl_nl" => Ok(Locale::NlNl),       // Dutch
-            "nn_no" => Ok(Locale::NnNo),       // Norwegian Nynorsk
-            "no_no" => Ok(Locale::NoNo),       // Norwegian Bokmål
-            "oc_fr" => Ok(Locale::OcFr),       // Occitan
-            "ovd" => Ok(Locale::Ovd),          // Elfdalian
-            "pl_pl" => Ok(Locale::PlPl),       // Polish
-            "pt_br" => Ok(Locale::PtBr),       // Brazilian Portuguese
-            "pt_pt" => Ok(Locale::PtPt),       // European Portuguese
-            "qya_aa" => Ok(Locale::QyaAa),     // Quenya (Form of Elvish from LOTR)
-            "ro_ro" => Ok(Locale::RoRo),       // Romanian
-            "rpr" => Ok(Locale::Rpr),          // Russian (Pre-revolutionary)
-            "ru_ru" => Ok(Locale::RuRu),       // Russian
-            "ry_ua" => Ok(Locale::RyUa),       // Rusyn
-            "sah_sah" => Ok(Locale::SahSah),   // Yakut
-            "se_no" => Ok(Locale::SeNo),       // Northern Sami
-            "sk_sk" => Ok(Locale::SkSk),       // Slovak
-            "sl_si" => Ok(Locale::SlSi),       // Slovenian
-            "so_so" => Ok(Locale::SoSo),       // Somali
-            "sq_al" => Ok(Locale::SqAl),       // Albanian
-            "sr_cs" => Ok(Locale::SrCs),       // Serbian (Latin)
-            "sr_sp" => Ok(Locale::SrSp),       // Serbian (Cyrillic)
-            "sv_se" => Ok(Locale::SvSe),       // Swedish
-            "sxu" => Ok(Locale::Sxu),          // Upper Saxon German
-            "szl" => Ok(Locale::Szl),          // Silesian
-            "ta_in" => Ok(Locale::TaIn),       // Tamil
-            "th_th" => Ok(Locale::ThTh),       // Thai
-            "tl_ph" => Ok(Locale::TlPh),       // Tagalog
-            "tlh_aa" => Ok(Locale::TlhAa),     // Klingon
-            "tok" => Ok(Locale::Tok),          // Toki Pona
-            "tr_tr" => Ok(Locale::TrTr),       // Turkish
-            "tt_ru" => Ok(Locale::TtRu),       // Tatar
-            "uk_ua" => Ok(Locale::UkUa),       // Ukrainian
-            "val_es" => Ok(Locale::ValEs),     // Valencian
-            "vec_it" => Ok(Locale::VecIt),     // Venetian
-            "vi_vn" => Ok(Locale::ViVn),       // Vietnamese
-            "yi_de" => Ok(Locale::YiDe),       // Yiddish
-            "yo_ng" => Ok(Locale::YoNg),       // Yoruba
-            "zh_cn" => Ok(Locale::ZhCn),       // Chinese Simplified (China; Mandarin)
-            "zh_hk" => Ok(Locale::ZhHk),       // Chinese Traditional (Hong Kong; Mix)
-            "zh_tw" => Ok(Locale::ZhTw),       // Chinese Traditional (Taiwan; Mandarin)
-            "zlm_arab" => Ok(Locale::ZlmArab), // Malay (Jawi)
-            _ => Ok(Locale::EnUs),             // Default to English (US) if not found
+            "af_za" => Ok(Self::AfZa),       // Afrikaans (Suid-Afrika)
+            "ar_sa" => Ok(Self::ArSa),       // Arabic
+            "ast_es" => Ok(Self::AstEs),     // Asturian
+            "az_az" => Ok(Self::AzAz),       // Azerbaijani
+            "ba_ru" => Ok(Self::BaRu),       // Bashkir
+            "bar" => Ok(Self::Bar),          // Bavarian
+            "be_by" => Ok(Self::BeBy),       // Belarusian
+            "bg_bg" => Ok(Self::BgBg),       // Bulgarian
+            "br_fr" => Ok(Self::BrFr),       // Breton
+            "brb" => Ok(Self::Brb),          // Brabantian
+            "bs_ba" => Ok(Self::BsBa),       // Bosnian
+            "ca_es" => Ok(Self::CaEs),       // Catalan
+            "cs_cz" => Ok(Self::CsCz),       // Czech
+            "cy_gb" => Ok(Self::CyGb),       // Welsh
+            "da_dk" => Ok(Self::DaDk),       // Danish
+            "de_at" => Ok(Self::DeAt),       // Austrian German
+            "de_ch" => Ok(Self::DeCh),       // Swiss German
+            "de_de" => Ok(Self::DeDe),       // German
+            "el_gr" => Ok(Self::ElGr),       // Greek
+            "en_au" => Ok(Self::EnAu),       // Australian English
+            "en_ca" => Ok(Self::EnCa),       // Canadian English
+            "en_gb" => Ok(Self::EnGb),       // British English
+            "en_nz" => Ok(Self::EnNz),       // New Zealand English
+            "en_pt" => Ok(Self::EnPt),       // Pirate English
+            "en_ud" => Ok(Self::EnUd),       // Upside down British English
+            "enp" => Ok(Self::Enp),          // Modern English minus borrowed words
+            "enws" => Ok(Self::Enws),        // Early Modern English
+            "eo_uy" => Ok(Self::EoUy),       // Esperanto
+            "es_ar" => Ok(Self::EsAr),       // Argentinian Spanish
+            "es_cl" => Ok(Self::EsCl),       // Chilean Spanish
+            "es_ec" => Ok(Self::EsEc),       // Ecuadorian Spanish
+            "es_es" => Ok(Self::EsEs),       // European Spanish
+            "es_mx" => Ok(Self::EsMx),       // Mexican Spanish
+            "es_uy" => Ok(Self::EsUy),       // Uruguayan Spanish
+            "es_ve" => Ok(Self::EsVe),       // Venezuelan Spanish
+            "esan" => Ok(Self::Esan),        // Andalusian
+            "et_ee" => Ok(Self::EtEe),       // Estonian
+            "eu_es" => Ok(Self::EuEs),       // Basque
+            "fa_ir" => Ok(Self::FaIr),       // Persian
+            "fi_fi" => Ok(Self::FiFi),       // Finnish
+            "fil_ph" => Ok(Self::FilPh),     // Filipino
+            "fo_fo" => Ok(Self::FoFo),       // Faroese
+            "fr_ca" => Ok(Self::FrCa),       // Canadian French
+            "fr_fr" => Ok(Self::FrFr),       // European French
+            "fra_de" => Ok(Self::FraDe),     // East Franconian
+            "fur_it" => Ok(Self::FurIt),     // Friulian
+            "fy_nl" => Ok(Self::FyNl),       // Frisian
+            "ga_ie" => Ok(Self::GaIe),       // Irish
+            "gd_gb" => Ok(Self::GdGb),       // Scottish Gaelic
+            "gl_es" => Ok(Self::GlEs),       // Galician
+            "haw_us" => Ok(Self::HawUs),     // Hawaiian
+            "he_il" => Ok(Self::HeIl),       // Hebrew
+            "hi_in" => Ok(Self::HiIn),       // Hindi
+            "hr_hr" => Ok(Self::HrHr),       // Croatian
+            "hu_hu" => Ok(Self::HuHu),       // Hungarian
+            "hy_am" => Ok(Self::HyAm),       // Armenian
+            "id_id" => Ok(Self::IdId),       // Indonesian
+            "ig_ng" => Ok(Self::IgNg),       // Igbo
+            "io_en" => Ok(Self::IoEn),       // Ido
+            "is_is" => Ok(Self::IsIs),       // Icelandic
+            "isv" => Ok(Self::Isv),          // Interslavic
+            "it_it" => Ok(Self::ItIt),       // Italian
+            "ja_jp" => Ok(Self::JaJp),       // Japanese
+            "jbo_en" => Ok(Self::JboEn),     // Lojban
+            "ka_ge" => Ok(Self::KaGe),       // Georgian
+            "kk_kz" => Ok(Self::KkKz),       // Kazakh
+            "kn_in" => Ok(Self::KnIn),       // Kannada
+            "ko_kr" => Ok(Self::KoKr),       // Korean
+            "ksh" => Ok(Self::Ksh),          // Kölsch/Ripuarian
+            "kw_gb" => Ok(Self::KwGb),       // Cornish
+            "la_la" => Ok(Self::LaLa),       // Latin
+            "lb_lu" => Ok(Self::LbLu),       // Luxembourgish
+            "li_li" => Ok(Self::LiLi),       // Limburgish
+            "lmo" => Ok(Self::Lmo),          // Lombard
+            "lo_la" => Ok(Self::LoLa),       // Lao
+            "lol_us" => Ok(Self::LolUs),     // LOLCAT
+            "lt_lt" => Ok(Self::LtLt),       // Lithuanian
+            "lv_lv" => Ok(Self::LvLv),       // Latvian
+            "lzh" => Ok(Self::Lzh),          // Classical Chinese
+            "mk_mk" => Ok(Self::MkMk),       // Macedonian
+            "mn_mn" => Ok(Self::MnMn),       // Mongolian
+            "ms_my" => Ok(Self::MsMy),       // Malay
+            "mt_mt" => Ok(Self::MtMt),       // Maltese
+            "nah" => Ok(Self::Nah),          // Nahuatl
+            "nds_de" => Ok(Self::NdsDe),     // Low German
+            "nl_be" => Ok(Self::NlBe),       // Dutch, Flemish
+            "nl_nl" => Ok(Self::NlNl),       // Dutch
+            "nn_no" => Ok(Self::NnNo),       // Norwegian Nynorsk
+            "no_no" => Ok(Self::NoNo),       // Norwegian Bokmål
+            "oc_fr" => Ok(Self::OcFr),       // Occitan
+            "ovd" => Ok(Self::Ovd),          // Elfdalian
+            "pl_pl" => Ok(Self::PlPl),       // Polish
+            "pt_br" => Ok(Self::PtBr),       // Brazilian Portuguese
+            "pt_pt" => Ok(Self::PtPt),       // European Portuguese
+            "qya_aa" => Ok(Self::QyaAa),     // Quenya (Form of Elvish from LOTR)
+            "ro_ro" => Ok(Self::RoRo),       // Romanian
+            "rpr" => Ok(Self::Rpr),          // Russian (Pre-revolutionary)
+            "ru_ru" => Ok(Self::RuRu),       // Russian
+            "ry_ua" => Ok(Self::RyUa),       // Rusyn
+            "sah_sah" => Ok(Self::SahSah),   // Yakut
+            "se_no" => Ok(Self::SeNo),       // Northern Sami
+            "sk_sk" => Ok(Self::SkSk),       // Slovak
+            "sl_si" => Ok(Self::SlSi),       // Slovenian
+            "so_so" => Ok(Self::SoSo),       // Somali
+            "sq_al" => Ok(Self::SqAl),       // Albanian
+            "sr_cs" => Ok(Self::SrCs),       // Serbian (Latin)
+            "sr_sp" => Ok(Self::SrSp),       // Serbian (Cyrillic)
+            "sv_se" => Ok(Self::SvSe),       // Swedish
+            "sxu" => Ok(Self::Sxu),          // Upper Saxon German
+            "szl" => Ok(Self::Szl),          // Silesian
+            "ta_in" => Ok(Self::TaIn),       // Tamil
+            "th_th" => Ok(Self::ThTh),       // Thai
+            "tl_ph" => Ok(Self::TlPh),       // Tagalog
+            "tlh_aa" => Ok(Self::TlhAa),     // Klingon
+            "tok" => Ok(Self::Tok),          // Toki Pona
+            "tr_tr" => Ok(Self::TrTr),       // Turkish
+            "tt_ru" => Ok(Self::TtRu),       // Tatar
+            "uk_ua" => Ok(Self::UkUa),       // Ukrainian
+            "val_es" => Ok(Self::ValEs),     // Valencian
+            "vec_it" => Ok(Self::VecIt),     // Venetian
+            "vi_vn" => Ok(Self::ViVn),       // Vietnamese
+            "yi_de" => Ok(Self::YiDe),       // Yiddish
+            "yo_ng" => Ok(Self::YoNg),       // Yoruba
+            "zh_cn" => Ok(Self::ZhCn),       // Chinese Simplified (China; Mandarin)
+            "zh_hk" => Ok(Self::ZhHk),       // Chinese Traditional (Hong Kong; Mix)
+            "zh_tw" => Ok(Self::ZhTw),       // Chinese Traditional (Taiwan; Mandarin)
+            "zlm_arab" => Ok(Self::ZlmArab), // Malay (Jawi)
+            _ => Ok(Self::EnUs),             // Default to English (US) if not found
         }
     }
 }

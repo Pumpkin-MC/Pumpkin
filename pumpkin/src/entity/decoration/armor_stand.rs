@@ -194,6 +194,7 @@ impl ArmorStandEntity {
         let armor_stand_item = ItemStack::new(1, &Item::ARMOR_STAND);
         entity
             .world
+            .load()
             .drop_stack(&entity.block_pos.load(), armor_stand_item)
             .await;
 
@@ -201,7 +202,7 @@ impl ArmorStandEntity {
     }
 
     async fn on_break(&self, entity: &Entity) {
-        let world = &entity.world;
+        let world = entity.world.load();
         world
             .play_sound(
                 Sound::EntityArmorStandBreak,
@@ -310,7 +311,7 @@ impl EntityBase for ArmorStandEntity {
                 return false;
             }
 
-            let world = &entity.world;
+            let world = entity.world.load();
 
             let mob_griefing_gamerule = {
                 let game_rules = &world.level_info.read().await.game_rules;

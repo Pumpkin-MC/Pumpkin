@@ -13,6 +13,7 @@ pub enum GameMode {
 }
 
 impl GameMode {
+    #[must_use]
     pub fn to_str(&self) -> &'static str {
         match self {
             Self::Survival => "Survival",

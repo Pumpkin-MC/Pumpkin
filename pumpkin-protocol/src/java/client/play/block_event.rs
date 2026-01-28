@@ -1,7 +1,7 @@
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_EVENT;
 use pumpkin_util::math::position::BlockPos;
 
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
@@ -11,7 +11,7 @@ use crate::VarInt;
 /// This is used for simple block interactions that don't necessarily change
 /// NBT data, such as chests opening/closing, pistons extending, or note blocks playing.
 #[derive(Serialize)]
-#[packet(PLAY_BLOCK_EVENT)]
+#[java_packet(PLAY_BLOCK_EVENT)]
 pub struct CBlockEvent {
     /// The coordinates where the event occurs.
     pub location: BlockPos,
@@ -25,6 +25,7 @@ pub struct CBlockEvent {
 }
 
 impl CBlockEvent {
+    #[must_use]
     pub fn new(
         location: BlockPos,
         action_id: u8,

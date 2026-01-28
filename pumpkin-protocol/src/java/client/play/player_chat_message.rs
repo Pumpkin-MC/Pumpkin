@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
 ///
 /// This packet is the backbone of the modern secure chat system. It includes
 /// tracking indices, digital signatures, and context for reporting.
-#[packet(PLAY_PLAYER_CHAT)]
+#[java_packet(PLAY_PLAYER_CHAT)]
 pub struct CPlayerChatMessage {
     /// Incremental index for messages sent TO this specific client.
     /// Starts at 0 on login; client disconnects if the sequence is broken.
@@ -41,7 +41,7 @@ pub struct CPlayerChatMessage {
     /// Indicates if the message should be hidden or partially masked
     /// by the client's profanity filter.
     pub filter_type: FilterType,
-    /// ID of the chat type registry entry (e.g., "chat", "say_command").
+    /// ID of the chat type registry entry (e.g., "chat", "`say_command`").
     /// Usually `(index + 1)`.
     pub chat_type: VarInt,
     /// The display name of the sender.
@@ -52,6 +52,7 @@ pub struct CPlayerChatMessage {
 
 impl CPlayerChatMessage {
     #[expect(clippy::too_many_arguments)]
+    #[must_use]
     pub fn new(
         global_index: VarInt,
         sender: uuid::Uuid,

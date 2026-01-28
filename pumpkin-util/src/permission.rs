@@ -28,6 +28,7 @@ pub struct Permission {
 }
 
 impl Permission {
+    #[must_use]
     pub fn new(node: &str, description: &str, default: PermissionDefault) -> Self {
         Self {
             node: node.to_string(),
@@ -52,6 +53,7 @@ pub struct PermissionRegistry {
 }
 
 impl PermissionRegistry {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             permissions: HashMap::new(),
@@ -71,11 +73,13 @@ impl PermissionRegistry {
     }
 
     /// Get a registered permission by node
+    #[must_use]
     pub fn get_permission(&self, node: &str) -> Option<&Permission> {
         self.permissions.get(node)
     }
 
     /// Check if a permission is registered
+    #[must_use]
     pub fn has_permission(&self, node: &str) -> bool {
         self.permissions.contains_key(node)
     }
@@ -89,6 +93,7 @@ pub struct PermissionAttachment {
 }
 
 impl PermissionAttachment {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             permissions: HashMap::new(),
@@ -106,11 +111,13 @@ impl PermissionAttachment {
     }
 
     /// Check if a permission is directly set
+    #[must_use]
     pub fn has_permission_set(&self, node: &str) -> Option<bool> {
         self.permissions.get(node).copied()
     }
 
     /// Get all directly set permissions
+    #[must_use]
     pub fn get_permissions(&self) -> &HashMap<String, bool> {
         &self.permissions
     }
@@ -206,16 +213,12 @@ impl PermissionManager {
         }
 
         // Fall back to default permission value
-        if let Some(permission) = reg.get_permission(permission_node) {
-            match permission.default {
+        reg.get_permission(permission_node)
+            .is_some_and(|permission| match permission.default {
                 PermissionDefault::Allow => true,
                 PermissionDefault::Deny => false,
                 PermissionDefault::Op(required_level) => player_op_level >= required_level,
-            }
-        } else {
-            // If permission isn't registered, default to deny
-            false
-        }
+            })
     }
 }
 
@@ -263,10 +266,10 @@ impl<'de> Deserialize<'de> for PermissionLvl {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = u8::deserialize(deserializer)?;
         match value {
-            0 => Ok(PermissionLvl::Zero),
-            2 => Ok(PermissionLvl::Two),
-            3 => Ok(PermissionLvl::Three),
-            4 => Ok(PermissionLvl::Four),
+            0 => Ok(Self::Zero),
+            2 => Ok(Self::Two),
+            3 => Ok(Self::Three),
+            4 => Ok(Self::Four),
             _ => Err(serde::de::Error::custom(format!(
                 "Invalid value for OpLevel: {value}"
             ))),

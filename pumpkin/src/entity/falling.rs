@@ -68,6 +68,7 @@ impl EntityBase for FallingEntity {
                 entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
                 entity
                     .world
+                    .load()
                     .set_block_state(
                         &self.entity.block_pos.load(),
                         self.block_state_id,

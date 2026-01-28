@@ -48,6 +48,7 @@ fn is_symmetrical_horizontally(pattern: &'static [&'static str]) -> bool {
     true
 }
 
+#[expect(clippy::too_many_lines)]
 async fn recipe_matches<'a>(
     recipe: &'static CraftingRecipeTypes,
     input_height: usize,
@@ -146,7 +147,7 @@ async fn recipe_matches<'a>(
             }
 
             // TODO: Apply components
-            if matched { Some(result) } else { None }
+            matched.then_some(result)
         }
         CraftingRecipeTypes::CraftingShapeless {
             ingredients,
@@ -234,7 +235,7 @@ async fn recipe_matches<'a>(
 }
 
 impl ResultSlot {
-    fn stat_crafted(&self, _crafted_amount: u8, _player: &dyn InventoryPlayer) {}
+    //fn stat_crafted(&self, _crafted_amount: u8, _player: &dyn InventoryPlayer) {}
 
     pub fn new(inventory: Arc<dyn RecipeInputInventory>) -> Self {
         Self {
@@ -315,8 +316,7 @@ impl ResultSlot {
         let result = self
             .match_recipe()
             .await
-            .map(|x| ItemStack::from(x.0))
-            .unwrap_or(ItemStack::EMPTY.clone());
+            .map_or(ItemStack::EMPTY.clone(), |x| ItemStack::from(x.0));
         *self.result.lock().await = result.clone();
         result
     }
@@ -348,8 +348,8 @@ impl Slot for ResultSlot {
 
     fn on_take_item<'a>(
         &'a self,
-        player: &'a dyn InventoryPlayer,
-        stack: &'a ItemStack,
+        _player: &'a dyn InventoryPlayer,
+        _stack: &'a ItemStack,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             for i in 0..self.inventory.size() {
@@ -360,7 +360,8 @@ impl Slot for ResultSlot {
                     stack.item_count -= 1;
                 }
             }
-            self.stat_crafted(stack.item_count, player);
+            // TODO
+            //self.stat_crafted(stack.item_count, player);
             self.mark_dirty().await;
         })
     }
@@ -489,7 +490,7 @@ impl CraftingTableScreenHandler {
         let crafting_inventory: Arc<dyn RecipeInputInventory> =
             Arc::new(CraftingInventory::new(3, 3));
 
-        let mut crafting_table_handler = CraftingTableScreenHandler {
+        let mut crafting_table_handler = Self {
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(WindowType::Crafting)),
             crafting_inventory: crafting_inventory.clone(),
         };

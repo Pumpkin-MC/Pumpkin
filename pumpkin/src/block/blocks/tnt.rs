@@ -54,7 +54,7 @@ impl BlockBehaviour for TNTBlock {
                 return BlockActionResult::Pass;
             }
             let world = args.player.world();
-            Self::prime(world, args.position).await;
+            Self::prime(&world, args.position).await;
 
             BlockActionResult::Consume
         })

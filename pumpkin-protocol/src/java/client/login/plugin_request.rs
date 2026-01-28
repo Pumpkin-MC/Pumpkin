@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::LOGIN_CUSTOM_QUERY;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::{VarInt, ser::network_serialize_no_prefix};
@@ -9,7 +9,7 @@ use crate::{VarInt, ser::network_serialize_no_prefix};
 /// This is used by server software (like proxies or anti-cheats) to request
 /// information from a client-side mod before the player officially joins.
 #[derive(Serialize)]
-#[packet(LOGIN_CUSTOM_QUERY)]
+#[java_packet(LOGIN_CUSTOM_QUERY)]
 pub struct CLoginPluginRequest<'a> {
     /// A unique ID for this request. The client must include this same ID
     /// in its response so the server can match them up.
@@ -23,6 +23,7 @@ pub struct CLoginPluginRequest<'a> {
 }
 
 impl<'a> CLoginPluginRequest<'a> {
+    #[must_use]
     pub fn new(message_id: VarInt, channel: &'a str, data: &'a [u8]) -> Self {
         Self {
             message_id,

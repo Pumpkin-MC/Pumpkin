@@ -46,7 +46,7 @@ impl Goal for MeleeAttackGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             let time = {
-                let world = &mob.get_entity().world;
+                let world = mob.get_entity().world.load();
                 // Assuming world.level_time is the AsyncLevelTimeLock
                 let level_time = world.level_time.lock().await;
                 level_time.world_age
@@ -88,7 +88,7 @@ impl Goal for MeleeAttackGoal {
 
             if mob
                 .get_mob_entity()
-                .is_in_position_target_range_pos(target.get_entity().block_pos.load())
+                .is_in_position_target_range_pos(&target.get_entity().block_pos.load())
             {
                 // This is sync based on the assumed Player methods
                 target

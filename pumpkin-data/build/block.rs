@@ -418,11 +418,11 @@ pub enum PistonBehavior {
 impl PistonBehavior {
     fn to_tokens(&self) -> TokenStream {
         match self {
-            PistonBehavior::Normal => quote! { PistonBehavior::Normal },
-            PistonBehavior::Destroy => quote! { PistonBehavior::Destroy },
-            PistonBehavior::Block => quote! { PistonBehavior::Block },
-            PistonBehavior::Ignore => quote! { PistonBehavior::Ignore },
-            PistonBehavior::PushOnly => quote! { PistonBehavior::PushOnly },
+            Self::Normal => quote! { PistonBehavior::Normal },
+            Self::Destroy => quote! { PistonBehavior::Destroy },
+            Self::Block => quote! { PistonBehavior::Block },
+            Self::Ignore => quote! { PistonBehavior::Ignore },
+            Self::PushOnly => quote! { PistonBehavior::PushOnly },
         }
     }
 }
@@ -447,20 +447,17 @@ impl BlockState {
         let instrument = format_ident!("{}", self.instrument.to_upper_camel_case());
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
         let hardness = self.hardness;
-        let opacity = match self.opacity {
-            Some(opacity) => {
-                let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
-                quote! { #opacity }
-            }
-            None => quote! { 0 },
+        let opacity = if let Some(opacity) = self.opacity {
+            let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
+            quote! { #opacity }
+        } else {
+            quote! { 0 }
         };
-        let block_entity_type = match self.block_entity_type {
-            Some(block_entity_type) => {
-                let block_entity_type =
-                    LitInt::new(&block_entity_type.to_string(), Span::call_site());
-                quote! { #block_entity_type }
-            }
-            None => quote! { u16::MAX },
+        let block_entity_type = if let Some(block_entity_type) = self.block_entity_type {
+            let block_entity_type = LitInt::new(&block_entity_type.to_string(), Span::call_site());
+            quote! { #block_entity_type }
+        } else {
+            quote! { u16::MAX }
         };
 
         let collision_shapes = self
@@ -522,21 +519,19 @@ impl ToTokens for Block {
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
         let jump_velocity_multiplier = &self.jump_velocity_multiplier;
-        let experience = match &self.experience {
-            Some(exp) => {
-                let exp_tokens = exp.to_token_stream();
-                quote! { Some(#exp_tokens) }
-            }
-            None => quote! { None },
+        let experience = if let Some(exp) = &self.experience {
+            let exp_tokens = exp.to_token_stream();
+            quote! { Some(#exp_tokens) }
+        } else {
+            quote! { None }
         };
         // Generate state tokens
-        let states = self.states.iter().map(|state| state.to_tokens());
-        let loot_table = match &self.loot_table {
-            Some(table) => {
-                let table_tokens = table.to_token_stream();
-                quote! { Some(#table_tokens) }
-            }
-            None => quote! { None },
+        let states = self.states.iter().map(BlockState::to_tokens);
+        let loot_table = if let Some(table) = &self.loot_table {
+            let table_tokens = table.to_token_stream();
+            quote! { Some(#table_tokens) }
+        } else {
+            quote! { None }
         };
 
         let default_state_ref: &BlockState = self
@@ -547,12 +542,11 @@ impl ToTokens for Block {
         let mut default_state = default_state_ref.clone();
         default_state.id = default_state_ref.id;
         let default_state = default_state.to_tokens();
-        let flammable = match &self.flammable {
-            Some(flammable) => {
-                let flammable_tokens = flammable.to_token_stream();
-                quote! { Some(#flammable_tokens) }
-            }
-            None => quote! { None },
+        let flammable = if let Some(flammable) = &self.flammable {
+            let flammable_tokens = flammable.to_token_stream();
+            quote! { Some(#flammable_tokens) }
+        } else {
+            quote! { None }
         };
         tokens.extend(quote! {
             Block {
@@ -800,10 +794,12 @@ pub(crate) fn build() -> TokenStream {
                     .find(|(_, be_props)| {
                         java_props_for_this_state
                             .iter()
-                            .all(|(k, v)| be_props.get(k).map(|be_v| be_v == v).unwrap_or(false))
+                            .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
                     })
-                    .map(|(id, _)| *id)
-                    .unwrap_or_else(|| be_variants.first().map(|(id, _)| *id).unwrap_or(1));
+                    .map_or_else(
+                        || be_variants.first().map_or(1, |(id, _)| *id),
+                        |(id, _)| *id,
+                    );
             }
 
             block_state_to_bedrock.push((state.id, matched_be_id));
@@ -861,12 +857,16 @@ pub(crate) fn build() -> TokenStream {
     let shapes = blocks_assets
         .shapes
         .iter()
-        .map(|shape| shape.to_token_stream());
+        .map(quote::ToTokens::to_token_stream);
 
     let air_state_ids = quote! { #(#air_states)|* };
 
-    let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
-    let properties = property_enums.values().map(|prop| prop.to_token_stream());
+    let block_props = block_properties
+        .iter()
+        .map(quote::ToTokens::to_token_stream);
+    let properties = property_enums
+        .values()
+        .map(quote::ToTokens::to_token_stream);
 
     let block_entity_types = blocks_assets
         .block_entity_types
@@ -1181,11 +1181,7 @@ fn get_be_data_from_nbt<R: Read>(
 
     let read_byte_safe = |reader: &mut R| -> Option<u8> {
         let mut buf = [0; 1];
-        if reader.read_exact(&mut buf).is_ok() {
-            Some(buf[0])
-        } else {
-            None
-        }
+        reader.read_exact(&mut buf).is_ok().then(|| buf[0])
     };
 
     while let Some(tag_id) = read_byte_safe(reader) {
@@ -1234,7 +1230,7 @@ fn get_be_data_from_nbt<R: Read>(
                         }
                         3 => read_varint(reader).to_string(),
                         8 => read_nbt_string(reader),
-                        _ => panic!("Unknown property type {} for key {}", prop_type, prop_key),
+                        _ => panic!("Unknown property type {prop_type} for key {prop_key}"),
                     };
 
                     properties.insert(prop_key, prop_val);
@@ -1242,7 +1238,7 @@ fn get_be_data_from_nbt<R: Read>(
                 "version" => {
                     read_varint(reader);
                 }
-                _ => panic!("Unexpected root field: {}", field_name),
+                _ => panic!("Unexpected root field: {field_name}"),
             }
         }
 

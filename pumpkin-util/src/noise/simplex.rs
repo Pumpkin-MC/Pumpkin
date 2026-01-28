@@ -66,7 +66,7 @@ impl SimplexNoiseSampler {
 
     #[inline]
     fn map(&self, input: i32) -> i32 {
-        self.permutation[(input & 0xFF) as usize] as i32
+        i32::from(self.permutation[(input & 0xFF) as usize])
     }
 
     fn grad(gradient_index: usize, x: f64, y: f64, z: f64, distance: f64) -> f64 {
@@ -79,22 +79,24 @@ impl SimplexNoiseSampler {
         }
     }
 
+    #[must_use]
+    #[expect(clippy::many_single_char_names)]
     pub fn sample_2d(&self, x: f64, y: f64) -> f64 {
         let d = (x + y) * Self::SKEW_FACTOR_2D;
         let i = (x + d).floor() as i32;
         let j = (y + d).floor() as i32;
 
-        let e = (i.wrapping_add(j)) as f64 * Self::UNSKEW_FACTOR_2D;
-        let f = i as f64 - e;
-        let g = j as f64 - e;
+        let e = f64::from(i.wrapping_add(j)) * Self::UNSKEW_FACTOR_2D;
+        let f = f64::from(i) - e;
+        let g = f64::from(j) - e;
 
         let h = x - f;
         let k = y - g;
 
         let (l, m) = if h > k { (1, 0) } else { (0, 1) };
 
-        let n = h - l as f64 + Self::UNSKEW_FACTOR_2D;
-        let o = k - m as f64 + Self::UNSKEW_FACTOR_2D;
+        let n = h - f64::from(l) + Self::UNSKEW_FACTOR_2D;
+        let o = k - f64::from(m) + Self::UNSKEW_FACTOR_2D;
         let p = 2.0 * Self::UNSKEW_FACTOR_2D + (h - 1.0);
         let q = 2.0 * Self::UNSKEW_FACTOR_2D + (k - 1.0);
 
@@ -112,6 +114,8 @@ impl SimplexNoiseSampler {
         70.0 * (w + z + aa)
     }
 
+    #[must_use]
+    #[expect(clippy::many_single_char_names)]
     pub fn sample_3d(&self, x: f64, y: f64, z: f64) -> f64 {
         let e = (x + y + z) * 0.3333333333333333;
 
@@ -119,10 +123,10 @@ impl SimplexNoiseSampler {
         let j = (y + e).floor() as i32;
         let k = (z + e).floor() as i32;
 
-        let g = (i.wrapping_add(j).wrapping_add(k)) as f64 * 0.16666666666666666;
-        let h = i as f64 - g;
-        let l = j as f64 - g;
-        let m = k as f64 - g;
+        let g = f64::from(i.wrapping_add(j).wrapping_add(k)) * 0.16666666666666666;
+        let h = f64::from(i) - g;
+        let l = f64::from(j) - g;
+        let m = f64::from(k) - g;
 
         let n = x - h;
         let o = y - l;
@@ -144,13 +148,13 @@ impl SimplexNoiseSampler {
             (0, 1, 0, 1, 1, 0)
         };
 
-        let w = n - q as f64 + 0.16666666666666666;
-        let aa = o - r as f64 + 0.16666666666666666;
-        let ab = p - s as f64 + 0.16666666666666666;
+        let w = n - f64::from(q) + 0.16666666666666666;
+        let aa = o - f64::from(r) + 0.16666666666666666;
+        let ab = p - f64::from(s) + 0.16666666666666666;
 
-        let ac = n - t as f64 + 0.3333333333333333;
-        let ad = o - u as f64 + 0.3333333333333333;
-        let ae = p - v as f64 + 0.3333333333333333;
+        let ac = n - f64::from(t) + 0.3333333333333333;
+        let ad = o - f64::from(u) + 0.3333333333333333;
+        let ae = p - f64::from(v) + 0.3333333333333333;
 
         let af = n - 1.0 + 0.5;
         let ag = o - 1.0 + 0.5;
@@ -202,6 +206,7 @@ pub struct OctaveSimplexNoiseSampler {
 }
 
 impl OctaveSimplexNoiseSampler {
+    #[expect(clippy::many_single_char_names)]
     pub fn new(random: &mut impl RandomImpl, octaves: &[i32]) -> Self {
         let mut octaves = Vec::from_iter(octaves);
         octaves.sort();
@@ -228,10 +233,10 @@ impl OctaveSimplexNoiseSampler {
 
         if j > 0 {
             let sample = sampler.sample_3d(sampler.x_origin, sampler.y_origin, sampler.z_origin);
-            let n = (sample * 9.223372E18f32 as f64) as i64;
+            let n = (sample * f64::from(9.223372E18f32)) as i64;
             let mut random = LegacyRand::from_seed(n as u64);
 
-            for o in (0..=(l - 1)).rev() {
+            for o in (0..l).rev() {
                 if o < k && octaves.contains(&&(l - o)) {
                     let sampler = SimplexNoiseSampler::new(&mut random);
                     samplers[o as usize] = Some(sampler);
@@ -252,12 +257,14 @@ impl OctaveSimplexNoiseSampler {
         }
     }
 
+    #[must_use]
+    #[expect(clippy::many_single_char_names)]
     pub fn sample(&self, x: f64, y: f64, use_origin: bool) -> f64 {
         let mut d = 0.0;
         let mut e = self.lacunarity;
         let mut f = self.persistence;
 
-        for sampler in self.octave_samplers.iter() {
+        for sampler in &self.octave_samplers {
             if let Some(sampler) = sampler {
                 d += sampler.sample_2d(
                     x * e + if use_origin { sampler.x_origin } else { 0.0 },
@@ -445,6 +452,7 @@ mod simplex_noise_sampler_test {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines)]
     fn test_sample_2d() {
         let data1 = [
             ((-50000, 0), -0.013008608535752102),
@@ -556,6 +564,7 @@ mod simplex_noise_sampler_test {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines)]
     fn test_sample_3d() {
         let data = [
             (

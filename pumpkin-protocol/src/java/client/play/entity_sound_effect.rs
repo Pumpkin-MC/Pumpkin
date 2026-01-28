@@ -1,5 +1,5 @@
 use pumpkin_data::{packet::clientbound::PLAY_SOUND_ENTITY, sound::SoundCategory};
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::{IdOr, SoundEvent, VarInt};
@@ -10,9 +10,9 @@ use crate::{IdOr, SoundEvent, VarInt};
 /// through the world. The client handles the panning and attenuation
 /// (volume drop-off) based on the distance between the player and the entity.
 #[derive(Serialize)]
-#[packet(PLAY_SOUND_ENTITY)]
+#[java_packet(PLAY_SOUND_ENTITY)]
 pub struct CEntitySoundEffect {
-    /// The sound to play. Can be a hardcoded ID or a custom SoundEvent
+    /// The sound to play. Can be a hardcoded ID or a custom `SoundEvent`
     /// (Resource Location).
     pub sound_event: IdOr<SoundEvent>,
     /// The category of the sound (e.g., Master, Music, Weather, Players).
@@ -30,6 +30,7 @@ pub struct CEntitySoundEffect {
 }
 
 impl CEntitySoundEffect {
+    #[must_use]
     pub fn new(
         sound_event: IdOr<SoundEvent>,
         sound_category: SoundCategory,

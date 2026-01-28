@@ -136,7 +136,7 @@ impl CommandExecutor for BaseHelpExecutor {
             let mut commands: Vec<&CommandTree> = futures::stream::iter(commands.iter())
                 .filter(|tree| async {
                     if let Some(perm) = dispatcher.permissions.get(&tree.names[0]) {
-                        return sender.has_permission(perm.as_str()).await;
+                        return sender.has_permission(server, perm.as_str()).await;
                     }
                     false
                 })

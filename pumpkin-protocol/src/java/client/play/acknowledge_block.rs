@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_CHANGED_ACK;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
@@ -9,7 +9,7 @@ use crate::VarInt;
 /// This packet is critical for preventing "ghost blocks" and synchronization issues.
 /// It tells the client that the server has processed all actions up to a specific point.
 #[derive(Serialize, Deserialize)]
-#[packet(PLAY_BLOCK_CHANGED_ACK)]
+#[java_packet(PLAY_BLOCK_CHANGED_ACK)]
 pub struct CAcknowledgeBlockChange {
     /// The ID of the last sequence processed by the server.
     ///
@@ -20,6 +20,7 @@ pub struct CAcknowledgeBlockChange {
 }
 
 impl CAcknowledgeBlockChange {
+    #[must_use]
     pub fn new(sequence_id: VarInt) -> Self {
         Self { sequence_id }
     }

@@ -62,6 +62,7 @@ macro_rules! population_seed_fn {
 
 // TODO: Write unit test for this
 #[inline]
+#[must_use]
 pub fn get_decorator_seed(population_seed: u64, index: u64, step: u64) -> u64 {
     population_seed
         .wrapping_add(index)
@@ -69,14 +70,15 @@ pub fn get_decorator_seed(population_seed: u64, index: u64, step: u64) -> u64 {
 }
 
 #[inline]
+#[must_use]
 pub fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: u32) -> u64 {
-    let x_part = (region_x as i64).wrapping_mul(341873128712) as u64;
-    let z_part = (region_z as i64).wrapping_mul(132897987541) as u64;
+    let x_part = i64::from(region_x).wrapping_mul(341873128712) as u64;
+    let z_part = i64::from(region_z).wrapping_mul(132897987541) as u64;
 
     world_seed
         .wrapping_add(x_part)
         .wrapping_add(z_part)
-        .wrapping_add(salt as i64 as u64)
+        .wrapping_add(i64::from(salt) as u64)
 }
 #[inline]
 pub fn get_carver_seed(
@@ -91,6 +93,7 @@ pub fn get_carver_seed(
 }
 
 #[enum_dispatch]
+#[expect(clippy::return_self_not_must_use)]
 pub trait RandomImpl {
     fn split(&mut self) -> Self;
 
@@ -138,8 +141,11 @@ pub trait RandomDeriverImpl {
     fn split_pos(&self, x: i32, y: i32, z: i32) -> RandomGenerator;
 }
 
+#[must_use]
 pub fn hash_block_pos(x: i32, y: i32, z: i32) -> i64 {
-    let l = (x.wrapping_mul(3129871) as i64) ^ ((z as i64).wrapping_mul(116129781i64)) ^ (y as i64);
+    let l = i64::from(x.wrapping_mul(3129871))
+        ^ (i64::from(z).wrapping_mul(116129781i64))
+        ^ i64::from(y);
     let l = l
         .wrapping_mul(l)
         .wrapping_mul(42317861i64)
@@ -157,7 +163,7 @@ mod tests {
     #[test]
     fn region_seed() {
         let seed = get_region_seed(12345612, 1, 1, 14357620);
-        assert_eq!(seed, 474797819485)
+        assert_eq!(seed, 474797819485);
     }
 
     #[test]

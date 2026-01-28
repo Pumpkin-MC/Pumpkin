@@ -2,12 +2,15 @@ use std::sync::Arc;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+    OnStateReplacedArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 use pumpkin_data::Block;
-use pumpkin_data::block_properties::{Axis, BlockProperties, NetherPortalLikeProperties};
+use pumpkin_data::block_properties::{
+    Axis, BlockProperties, HorizontalAxis, NetherPortalLikeProperties,
+};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_macros::pumpkin_block;
@@ -43,12 +46,19 @@ impl BlockBehaviour for NetherPortalBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            let axis = args.direction.to_axis();
-            let is_horizontal = axis == Axis::X && axis == Axis::Z;
+            let direction_axis = args.direction.to_axis();
             let state_axis =
                 NetherPortalLikeProperties::from_state_id(args.state_id, &Block::NETHER_PORTAL)
                     .axis;
-            if is_horizontal
+            // Convert HorizontalAxis to Axis for comparison
+            let state_axis_full: Axis = match state_axis {
+                HorizontalAxis::X => Axis::X,
+                HorizontalAxis::Z => Axis::Z,
+            };
+            // Vanilla logic: keep portal if direction is horizontal AND different from portal axis
+            let is_horizontal_and_different =
+                args.direction.is_horizontal() && direction_axis != state_axis_full;
+            if is_horizontal_and_different
                 || args.neighbor_state_id == args.state_id
                 || NetherPortal::get_on_axis(args.world, args.position, state_axis)
                     .await
@@ -78,6 +88,14 @@ impl BlockBehaviour for NetherPortalBlock {
                 .get_entity()
                 .try_use_portal(portal_delay, target_world, *args.position)
                 .await;
+        })
+    }
+
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // Remove from POI storage when portal block is replaced
+            let mut poi_storage = args.world.portal_poi.lock().await;
+            poi_storage.remove(args.position);
         })
     }
 }

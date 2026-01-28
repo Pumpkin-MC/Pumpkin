@@ -49,7 +49,11 @@ impl EntityBase for EndCrystalEntity {
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             if damage_type != DamageType::EXPLOSION {
-                self.entity.world.explode(self.entity.pos.load(), 6.0).await;
+                self.entity
+                    .world
+                    .load()
+                    .explode(self.entity.pos.load(), 6.0)
+                    .await;
             }
 
             // TODO

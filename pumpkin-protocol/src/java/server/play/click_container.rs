@@ -1,12 +1,12 @@
 use crate::VarInt;
 use crate::codec::item_stack_seralizer::OptionalItemStackHash;
 use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::de::SeqAccess;
 use serde::{Deserialize, de};
 
 #[derive(Debug)]
-#[packet(PLAY_CONTAINER_CLICK)]
+#[java_packet(PLAY_CONTAINER_CLICK)]
 pub struct SClickSlot {
     pub sync_id: VarInt,
     pub revision: VarInt,

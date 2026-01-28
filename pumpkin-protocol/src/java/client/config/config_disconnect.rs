@@ -1,14 +1,15 @@
 use pumpkin_data::packet::clientbound::CONFIG_DISCONNECT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Deserialize;
 
 #[derive(serde::Serialize, Deserialize)]
-#[packet(CONFIG_DISCONNECT)]
+#[java_packet(CONFIG_DISCONNECT)]
 pub struct CConfigDisconnect<'a> {
     pub reason: &'a str,
 }
 
 impl<'a> CConfigDisconnect<'a> {
+    #[must_use]
     pub fn new(reason: &'a str) -> Self {
         Self { reason }
     }

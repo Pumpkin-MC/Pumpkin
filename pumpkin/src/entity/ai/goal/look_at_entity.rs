@@ -92,7 +92,7 @@ impl Goal for LookAtEntityGoal {
                 }
             }
 
-            let world = &mob_entity.living_entity.entity.world;
+            let world = mob_entity.living_entity.entity.world.load();
             let mob_pos = mob_entity.living_entity.entity.pos.load();
 
             if *self.target_type == EntityType::PLAYER {
@@ -119,7 +119,7 @@ impl Goal for LookAtEntityGoal {
                 }
                 let mob_pos = mob_entity.living_entity.entity.pos.load();
                 let target_pos = target.get_entity().pos.load();
-                if mob_pos.squared_distance_to_vec(target_pos) as f32 > (self.range * self.range) {
+                if mob_pos.squared_distance_to_vec(&target_pos) as f32 > (self.range * self.range) {
                     return false;
                 }
                 return self.look_time > 0;

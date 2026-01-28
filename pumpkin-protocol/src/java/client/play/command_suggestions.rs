@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_COMMAND_SUGGESTIONS;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::text::TextComponent;
 use serde::Serialize;
 
@@ -11,7 +11,7 @@ use crate::VarInt;
 /// appearing as a scrollable list of options while the player is typing
 /// in the chat bar.
 #[derive(Serialize)]
-#[packet(PLAY_COMMAND_SUGGESTIONS)]
+#[java_packet(PLAY_COMMAND_SUGGESTIONS)]
 pub struct CCommandSuggestions {
     /// The unique ID of the request this response is for.
     /// This must match the ID sent by the client in the request packet.
@@ -28,6 +28,7 @@ pub struct CCommandSuggestions {
 }
 
 impl CCommandSuggestions {
+    #[must_use]
     pub fn new(
         id: VarInt,
         start: VarInt,
@@ -50,6 +51,7 @@ pub struct CommandSuggestion {
 }
 
 impl CommandSuggestion {
+    #[must_use]
     pub fn new(suggestion: String, tooltip: Option<TextComponent>) -> Self {
         Self {
             suggestion,

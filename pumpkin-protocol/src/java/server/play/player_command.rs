@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_COMMAND;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 
 use crate::{
     ServerPacket,
@@ -9,7 +9,7 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[packet(PLAY_PLAYER_COMMAND)]
+#[java_packet(PLAY_PLAYER_COMMAND)]
 pub struct SPlayerCommand {
     pub entity_id: VarInt,
     pub action: VarInt,

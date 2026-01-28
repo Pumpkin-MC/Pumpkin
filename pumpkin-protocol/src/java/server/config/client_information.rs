@@ -1,14 +1,14 @@
 use pumpkin_data::packet::serverbound::CONFIG_CLIENT_INFORMATION;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 /// Sent by the client to inform the server about its local settings
 #[derive(serde::Deserialize, Serialize)]
-#[packet(CONFIG_CLIENT_INFORMATION)]
+#[java_packet(CONFIG_CLIENT_INFORMATION)]
 pub struct SClientInformationConfig {
-    /// The language code used by the client (e.g., "en_us")
+    /// The language code used by the client (e.g., "`en_us`")
     pub locale: String,
     /// The maximum number of chunks the client renders
     pub view_distance: i8,

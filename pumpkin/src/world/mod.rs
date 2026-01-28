@@ -15,8 +15,8 @@ pub mod time;
 
 use crate::block::RandomTickArgs;
 use crate::world::loot::LootContextParameters;
+use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
-    PLUGIN_MANAGER,
     block::{
         self,
         registry::BlockRegistry,
@@ -32,7 +32,6 @@ use crate::{
     },
     server::Server,
 };
-use crate::{block::BlockEvent, entity::item::ItemEntity};
 use border::Worldborder;
 use bytes::BufMut;
 use crossbeam::queue::SegQueue;
@@ -64,7 +63,6 @@ use pumpkin_protocol::bedrock::client::start_game::CStartGame;
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
-use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
@@ -126,7 +124,6 @@ use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{Rng, rng};
 use scoreboard::Scoreboard;
-use serde::Serialize;
 use time::LevelTime;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
@@ -199,6 +196,8 @@ pub struct World {
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
+    /// POI storage for fast portal lookups
+    pub portal_poi: Mutex<portal::PortalPoiStorage>,
 }
 
 impl World {
@@ -212,6 +211,10 @@ impl World {
     ) -> Self {
         // TODO
         let generation_settings = gen_settings_from_dimension(&dimension);
+
+        // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
+        let portal_poi = portal::PortalPoiStorage::new(&level.level_folder.root_folder);
+
         Self {
             level,
             level_info,
@@ -227,6 +230,7 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
+            portal_poi: Mutex::new(portal_poi),
             decrease_block_light_queue: SegQueue::new(),
             increase_block_light_queue: SegQueue::new(),
             server,
@@ -237,6 +241,13 @@ impl World {
         for (uuid, entity) in self.entities.read().await.iter() {
             self.save_entity(uuid, entity).await;
         }
+
+        // Save portal POI to disk
+        let save_result = self.portal_poi.lock().await.save_all();
+        if let Err(e) = save_result {
+            log::error!("Failed to save portal POI: {e}");
+        }
+
         self.level.shutdown().await;
     }
 
@@ -648,7 +659,7 @@ impl World {
                 ))
                 .await;
             } else {
-                self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section.clone()))
+                self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section))
                     .await;
             }
         }
@@ -802,7 +813,7 @@ impl World {
         }
     }
 
-    pub async fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<Fluid> {
+    pub async fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<&Fluid> {
         let mut collisions = Vec::new();
 
         let min = bounding_box.min_block_pos();
@@ -857,14 +868,10 @@ impl World {
     }
 
     // FlowableFluid.getVelocity()
-
     pub async fn get_fluid_velocity(
         &self,
-
         pos0: BlockPos,
-
         fluid0: &Fluid,
-
         state0: &FluidState,
     ) -> Vector3<f64> {
         let mut velo = Vector3::default();
@@ -903,9 +910,7 @@ impl World {
                 }
 
                 //let state = fluid.get_state(block_state_id);
-                let state = fluid.states[0].clone();
-
-                amplitude = f64::from(state0.height - state.height);
+                amplitude = f64::from(state0.height - fluid.states[0].height);
             }
 
             if amplitude == 0.0 {
@@ -993,7 +998,7 @@ impl World {
         }
 
         let mut inside = false;
-        'shapes: for shape in state.get_block_outline_shapes().unwrap() {
+        'shapes: for shape in state.get_block_outline_shapes() {
             let outline_shape = shape.at_pos(pos);
 
             if outline_shape.intersects(bounding_box) {
@@ -1015,30 +1020,32 @@ impl World {
         pos: BlockPos,
         state: &BlockState,
         use_collision_shape: bool,
-        mut using_collision_shape: F,
+        mut on_collision: F,
     ) -> bool
     where
         F: FnMut(&BoundingBox),
     {
-        let mut collided = false;
-
-        if !state.is_air() && state.is_solid() && !state.collision_shapes.is_empty() {
-            for shape in state.get_block_collision_shapes() {
-                let collision_shape = shape.at_pos(pos);
-
-                if collision_shape.intersects(bounding_box) {
-                    collided = true;
-
-                    if !use_collision_shape {
-                        break;
-                    }
-
-                    using_collision_shape(&collision_shape.to_bounding_box());
-                }
-            }
+        if state.is_air() || !state.is_solid() {
+            return false;
         }
 
-        collided
+        let mut shapes = state
+            .get_block_collision_shapes()
+            .map(|shape| shape.at_pos(pos));
+
+        if use_collision_shape {
+            let mut collided = false;
+            for collision_shape in shapes {
+                if collision_shape.intersects(bounding_box) {
+                    collided = true;
+                    // Convert to BB and trigger the callback
+                    on_collision(&collision_shape.to_bounding_box());
+                }
+            }
+            collided
+        } else {
+            shapes.any(|s| s.intersects(bounding_box))
+        }
     }
 
     // For adjusting movement
@@ -1164,6 +1171,17 @@ impl World {
             return y;
         }
         self.dimension.min_y
+    }
+
+    /// Gets the `MOTION_BLOCKING` heightmap value for a given XZ position.
+    pub async fn get_motion_blocking_height(&self, x: i32, z: i32) -> i32 {
+        let chunk_pos = Vector2::new(x >> 4, z >> 4);
+        let chunk = self.level.get_chunk(chunk_pos).await;
+        chunk
+            .read()
+            .await
+            .heightmap
+            .get(MotionBlocking, x, z, self.min_y)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1487,7 +1505,8 @@ impl World {
         player.send_difficulty_update().await;
         {
             let command_dispatcher = server.command_dispatcher.read().await;
-            client_suggestions::send_c_commands_packet(player, &command_dispatcher).await;
+
+            client_suggestions::send_c_commands_packet(player, server, &command_dispatcher).await;
         };
 
         // Spawn in initial chunks
@@ -1644,11 +1663,7 @@ impl World {
                         MetaDataType::Byte,
                         config.skin_parts,
                     );
-                    let mut serializer_buf = Vec::new();
-
-                    let mut serializer = Serializer::new(&mut serializer_buf);
-                    meta.serialize(&mut serializer).unwrap();
-                    buf.extend(serializer_buf);
+                    meta.write(&mut buf, &client.version.load()).unwrap();
                 };
                 drop(config);
                 // END
@@ -1835,6 +1850,7 @@ impl World {
             ),
         )
         .await;
+
         player.send_client_information().await;
 
         chunker::update_position(player).await;
@@ -1853,7 +1869,7 @@ impl World {
         };
         let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
         for player in self.players.read().await.values() {
-            if player.position().squared_distance_to_vec(position) > 4096.0 {
+            if player.position().squared_distance_to_vec(&position) > 4096.0 {
                 continue;
             }
             player
@@ -1870,7 +1886,8 @@ impl World {
         }
     }
 
-    pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
+    #[allow(clippy::too_many_lines)]
+    pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.entity.last_pos.load();
         let death_dimension = ResourceLocation::from(player.world().dimension.minecraft_name);
         let death_location = BlockPos(Vector3::new(
@@ -1881,67 +1898,158 @@ impl World {
 
         let data_kept = u8::from(alive);
 
-        // TODO: switch world in player entity to new world
+        // Copy spawn info from level_info to avoid holding lock across await
+        let (spawn_x, spawn_z, spawn_yaw, spawn_pitch, keep_inventory) = {
+            let info = self.level_info.read().await;
+            (
+                info.spawn_x,
+                info.spawn_z,
+                info.spawn_yaw,
+                info.spawn_pitch,
+                info.game_rules.keep_inventory,
+            )
+        };
 
+        // Get respawn position and dimension
+        let (position, yaw, pitch, respawn_dimension) =
+            if let Some(respawn) = player.calculate_respawn_point().await {
+                (
+                    respawn.position,
+                    respawn.yaw,
+                    respawn.pitch,
+                    respawn.dimension,
+                )
+            } else {
+                // No valid respawn point - send notification and use world spawn
+                player
+                    .client
+                    .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
+                    .await;
+
+                // FIXME: This spawn position calculation is incorrect. Should use vanilla's
+                // proper spawn position calculation (see #1381). The y-level calculation
+                // needs to account for spawn radius and find a safe spawn position.
+                let top = self.get_top_block(Vector2::new(spawn_x, spawn_z)).await;
+
+                (
+                    Vector3::new(
+                        f64::from(spawn_x) + 0.5,
+                        (top + 1).into(),
+                        f64::from(spawn_z) + 0.5,
+                    ),
+                    spawn_yaw,
+                    spawn_pitch,
+                    self.dimension,
+                )
+            };
+
+        // Get target world (may be different from current world for cross-dimension respawn)
+        let target_world = if respawn_dimension == self.dimension {
+            None
+        } else {
+            // Cross-dimension respawn: get target world from server
+            if let Some(server) = self.server.upgrade() {
+                let worlds = server.worlds.read().await;
+                worlds
+                    .iter()
+                    .find(|w| w.dimension == respawn_dimension)
+                    .cloned()
+            } else {
+                log::warn!("Could not get server for cross-dimension respawn");
+                None
+            }
+        };
+
+        // Handle cross-dimension transfer if we found a different target world
+        let (target_world, position) = if let Some(ref new_world) = target_world {
+            log::debug!(
+                "Cross-dimension respawn: {} -> {}",
+                self.dimension.minecraft_name,
+                new_world.dimension.minecraft_name
+            );
+
+            // Remove player from current world
+            let uuid = player.gameprofile.id;
+            if let Some(p) = self.remove_player(player, false).await {
+                // Add player to target world
+                new_world.players.write().await.insert(uuid, p);
+            }
+
+            // Update chunk manager to target world
+            player
+                .chunk_manager
+                .lock()
+                .await
+                .change_world(&self.level, new_world.clone());
+
+            // Unload watched chunks from current world
+            player.unload_watched_chunks(self).await;
+
+            (new_world.as_ref(), position)
+        } else if respawn_dimension != self.dimension {
+            // Cross-dimension failed - fall back to current world's spawn
+            log::warn!(
+                "Target world {:?} not found, using world spawn in {:?}",
+                respawn_dimension,
+                self.dimension
+            );
+            // FIXME: This spawn position calculation is incorrect. Should use vanilla's
+            // proper spawn position calculation (see #1381).
+            let top = self.get_top_block(Vector2::new(spawn_x, spawn_z)).await;
+            let fallback_pos = Vector3::new(
+                f64::from(spawn_x) + 0.5,
+                (top + 1).into(),
+                f64::from(spawn_z) + 0.5,
+            );
+            (self.as_ref(), fallback_pos)
+        } else {
+            (self.as_ref(), position)
+        };
+
+        // Send respawn packet with target dimension
         player
             .client
             .enqueue_packet(&CRespawn::new(
-                (self.dimension.id).into(),
-                ResourceLocation::from(self.dimension.minecraft_name),
-                biome::hash_seed(self.level.seed.0), // seed
+                (target_world.dimension.id).into(),
+                ResourceLocation::from(target_world.dimension.minecraft_name),
+                biome::hash_seed(target_world.level.seed.0),
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,
                 false,
                 false,
                 Some((death_dimension, death_location)),
                 VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
-                self.sea_level.into(),
+                target_world.sea_level.into(),
                 data_kept,
             ))
             .await;
 
         player.living_entity.reset_state().await;
 
-        log::debug!("Sending player abilities to {}", player.gameprofile.name);
-        player.send_abilities_update().await;
-
         player.send_permission_lvl_update().await;
 
         player.hunger_manager.restart();
 
-        let info = self.level_info.read().await;
-
-        if !info.game_rules.keep_inventory {
+        if !keep_inventory {
             player.set_experience(0, 0.0, 0).await;
             player.inventory.clear().await;
         }
 
-        // Teleport
-        let (position, yaw, pitch) = if let Some(respawn) = player.get_respawn_point().await {
-            respawn
-        } else {
-            let top = self
-                .get_top_block(Vector2::new(info.spawn_x, info.spawn_z))
-                .await;
-
-            (
-                Vector3::new(
-                    f64::from(info.spawn_x) + 0.5,
-                    (top + 1).into(),
-                    f64::from(info.spawn_z) + 0.5,
-                ),
-                info.spawn_yaw,
-                info.spawn_pitch,
-            )
-        };
-
-        log::debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.request_teleport(position, yaw, pitch).await;
+        // Set entity position BEFORE loading chunks, so chunks load at the right location
+        // This mirrors the initial spawn flow where update_position is called before teleport
+        player.living_entity.entity.set_pos(position);
+        player.living_entity.entity.set_rotation(yaw, pitch);
         player.living_entity.entity.last_pos.store(position);
 
         // TODO: difficulty, exp bar, status effect
 
-        self.send_world_info(player, position, yaw, pitch).await;
+        // Load chunks and send world info FIRST (before teleport packet)
+        target_world
+            .send_world_info(player, position, yaw, pitch)
+            .await;
+
+        // Send teleport packet AFTER chunks are loaded (same order as initial spawn)
+        player.request_teleport(position, yaw, pitch).await;
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.
@@ -2220,7 +2328,7 @@ impl World {
             .iter()
             .filter_map(|(id, player)| {
                 let player_pos = player.living_entity.entity.pos.load();
-                (player_pos.squared_distance_to_vec(pos) <= radius_squared)
+                (player_pos.squared_distance_to_vec(&pos) <= radius_squared)
                     .then(|| (*id, player.clone()))
             })
             .collect()
@@ -2239,7 +2347,7 @@ impl World {
             .iter()
             .filter_map(|(id, entity)| {
                 let entity_pos = entity.get_entity().pos.load();
-                (entity_pos.squared_distance_to_vec(pos) <= radius_squared)
+                (entity_pos.squared_distance_to_vec(&pos) <= radius_squared)
                     .then(|| (*id, entity.clone()))
             })
             .collect()
@@ -2254,13 +2362,13 @@ impl World {
                     .entity
                     .pos
                     .load()
-                    .squared_distance_to_vec(pos)
+                    .squared_distance_to_vec(&pos)
                     .partial_cmp(
                         &b.1.living_entity
                             .entity
                             .pos
                             .load()
-                            .squared_distance_to_vec(pos),
+                            .squared_distance_to_vec(&pos),
                     )
                     .unwrap()
             })
@@ -2307,8 +2415,8 @@ impl World {
                 a.1.get_entity()
                     .pos
                     .load()
-                    .squared_distance_to_vec(pos)
-                    .partial_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(pos))
+                    .squared_distance_to_vec(&pos)
+                    .partial_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(&pos))
                     .unwrap()
             })
             .map(|p| p.1.clone())
@@ -2327,6 +2435,7 @@ impl World {
     pub async fn add_player(&self, uuid: uuid::Uuid, player: Arc<Player>) -> Result<(), String> {
         self.players.write().await.insert(uuid, player.clone());
 
+        let server = self.server.upgrade().unwrap();
         let current_players = self.players.clone();
         player.clone().spawn_task(async move {
             let msg_comp = TextComponent::translate(
@@ -2336,7 +2445,7 @@ impl World {
             .color_named(NamedColor::Yellow);
             let event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
-            let event = PLUGIN_MANAGER.fire(event).await;
+            let event = server.plugin_manager.fire(event).await;
 
             if !event.cancelled {
                 for player in current_players.read().await.values() {
@@ -2372,8 +2481,8 @@ impl World {
         player: &Arc<Player>,
         fire_event: bool,
     ) -> Option<Arc<Player>> {
-        let player = self.players.write().await.remove(&player.gameprofile.id);
-        if let Some(player) = player {
+        let removed_player = self.players.write().await.remove(&player.gameprofile.id);
+        if let Some(ref player) = removed_player {
             let uuid = player.gameprofile.id;
             self.broadcast_packet_all(&CRemovePlayerInfo::new(&[uuid]))
                 .await;
@@ -2388,7 +2497,13 @@ impl World {
                 .color_named(NamedColor::Yellow);
                 let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
-                let event = PLUGIN_MANAGER.fire(event).await;
+                let event = self
+                    .server
+                    .upgrade()
+                    .unwrap()
+                    .plugin_manager
+                    .fire(event)
+                    .await;
 
                 if !event.cancelled {
                     let players = self.players.read().await;
@@ -2400,7 +2515,7 @@ impl World {
                 }
             }
         }
-        None
+        removed_player
     }
 
     /// Adds an entity to the world.
@@ -2792,16 +2907,23 @@ impl World {
         self.level.is_fluid_tick_scheduled(block_pos, fluid).await
     }
 
+    // Return new state
     pub async fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
         cause: Option<Arc<Player>>,
         flags: BlockFlags,
-    ) {
+    ) -> Option<u16> {
         let (broken_block, broken_block_state) = self.get_block_and_state_id(position).await;
         let event = BlockBreakEvent::new(cause.clone(), broken_block, *position, 0, false);
 
-        let event = PLUGIN_MANAGER.fire::<BlockBreakEvent>(event).await;
+        let event = self
+            .server
+            .upgrade()
+            .unwrap()
+            .plugin_manager
+            .fire::<BlockBreakEvent>(event)
+            .await;
 
         if !event.cancelled {
             let new_state_id = if broken_block
@@ -2848,7 +2970,9 @@ impl World {
                 };
                 block::drop_loot(self, broken_block, position, true, params).await;
             }
+            return Some(new_state_id);
         }
+        None
     }
 
     pub async fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
@@ -2993,7 +3117,10 @@ impl World {
         (block, fluid)
     }
 
-    pub async fn get_fluid_and_fluid_state(&self, position: &BlockPos) -> (Fluid, FluidState) {
+    pub async fn get_fluid_and_fluid_state(
+        &self,
+        position: &BlockPos,
+    ) -> (&'static Fluid, &'static FluidState) {
         let id = self.get_block_state_id(position).await;
 
         let Some(fluid) = Fluid::from_state_id(id) else {
@@ -3002,9 +3129,8 @@ impl World {
                 for (name, value) in properties.to_props() {
                     if name == "waterlogged" {
                         if value == "true" {
-                            let fluid = Fluid::FLOWING_WATER;
-                            let state = fluid.states[0].clone();
-                            return (fluid, state);
+                            let state = &Fluid::FLOWING_WATER.states[0];
+                            return (&Fluid::FLOWING_WATER, state);
                         }
 
                         break;
@@ -3012,16 +3138,14 @@ impl World {
                 }
             }
 
-            let fluid = Fluid::EMPTY;
-            let state = fluid.states[0].clone();
-
-            return (fluid, state);
+            let state = &Fluid::EMPTY.states[0];
+            return (&Fluid::EMPTY, state);
         };
 
         //let state = fluid.get_state(id);
-        let state = fluid.states[0].clone();
+        let state = &fluid.states[0];
 
-        (fluid.clone(), state)
+        (fluid, state)
     }
 
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
@@ -3270,15 +3394,13 @@ impl World {
     ) -> (bool, Option<BlockDirection>) {
         let state = self.get_block_state(block_pos).await;
 
-        let Some(bounding_boxes) = state.get_block_outline_shapes() else {
-            return (false, None);
-        };
+        let bounding_boxes = state.get_block_outline_shapes();
 
-        if bounding_boxes.is_empty() {
+        if state.outline_shapes.is_empty() {
             return (true, None);
         }
 
-        for shape in &bounding_boxes {
+        for shape in bounding_boxes {
             let world_min = shape.min.add(&block_pos.0.to_f64());
             let world_max = shape.max.add(&block_pos.0.to_f64());
 

@@ -1,7 +1,7 @@
 use pumpkin_data::{
     packet::clientbound::PLAY_SET_DISPLAY_OBJECTIVE, scoreboard::ScoreboardDisplaySlot,
 };
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
@@ -12,7 +12,7 @@ use crate::VarInt;
 /// an objective is created and populated with scores, this packet "maps"
 /// that objective to a visual location like the sidebar or the player list.
 #[derive(Serialize)]
-#[packet(PLAY_SET_DISPLAY_OBJECTIVE)]
+#[java_packet(PLAY_SET_DISPLAY_OBJECTIVE)]
 pub struct CDisplayObjective {
     /// The display slot/position for the objective.
     pub position: VarInt,
@@ -22,6 +22,7 @@ pub struct CDisplayObjective {
 }
 
 impl CDisplayObjective {
+    #[must_use]
     pub fn new(position: ScoreboardDisplaySlot, score_name: String) -> Self {
         Self {
             position: VarInt(position as i32),

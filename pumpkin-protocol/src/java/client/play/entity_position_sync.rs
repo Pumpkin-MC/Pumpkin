@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_ENTITY_POSITION_SYNC;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;
 
@@ -13,7 +13,7 @@ use crate::VarInt;
 ///
 /// Note: This packet must NOT be used for the player receiving the packet or
 /// any entity the player is currently riding.
-#[packet(PLAY_ENTITY_POSITION_SYNC)]
+#[java_packet(PLAY_ENTITY_POSITION_SYNC)]
 #[derive(Serialize)]
 pub struct CEntityPositionSync {
     /// The Entity ID of the entity being moved.
@@ -32,6 +32,7 @@ pub struct CEntityPositionSync {
 }
 
 impl CEntityPositionSync {
+    #[must_use]
     pub fn new(
         entity_id: VarInt,
         position: Vector3<f64>,

@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_PARTICLES;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;
 
@@ -12,7 +12,7 @@ use crate::{VarInt, ser::network_serialize_no_prefix};
 /// carry extra data for complex particles like redstone dust (color) or
 /// block/item breaking (textures).
 #[derive(Serialize)]
-#[packet(PLAY_LEVEL_PARTICLES)]
+#[java_packet(PLAY_LEVEL_PARTICLES)]
 pub struct CParticle<'a> {
     /// If true, the particle renders even if the client's "Particles"
     /// setting is set to "Minimal".
@@ -38,6 +38,7 @@ pub struct CParticle<'a> {
 
 impl<'a> CParticle<'a> {
     #[expect(clippy::too_many_arguments)]
+    #[must_use]
     pub fn new(
         force_spawn: bool,
         important: bool,

@@ -13,6 +13,7 @@ pub struct CNetworkSettings {
 }
 
 impl CNetworkSettings {
+    #[must_use]
     pub fn new(
         compression_threshold: u16,
         compression_method: u16,

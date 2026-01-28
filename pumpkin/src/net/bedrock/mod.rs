@@ -223,17 +223,13 @@ impl BedrockClient {
         packet.write_packet(&mut packet_payload)?;
 
         // TODO
-        self.network_writer
-            .lock()
-            .await
-            .write_game_packet(
-                P::PACKET_ID as u16,
-                SubClient::Main,
-                SubClient::Main,
-                packet_payload.into(),
-                write,
-            )
-            .await
+        self.network_writer.lock().await.write_game_packet(
+            P::PACKET_ID as u16,
+            SubClient::Main,
+            SubClient::Main,
+            &packet_payload,
+            write,
+        )
     }
 
     pub async fn send_offline_packet<P: BClientPacket>(
@@ -581,7 +577,6 @@ impl BedrockClient {
                     .lock()
                     .await
                     .get_game_packet(payload)
-                    .await
                     .map_err(|e| Error::other(e.to_string()))?;
 
                 self.handle_game_packet(server, game_packet).await?;

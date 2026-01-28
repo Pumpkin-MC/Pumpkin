@@ -26,8 +26,7 @@ impl KeyStore {
         let public_key_der = public_key
             .to_public_key_der()
             .expect("Failed to encode public key to SPKI DER")
-            .as_bytes()
-            .to_vec()
+            .into_vec()
             .into_boxed_slice();
 
         log::debug!("Created RSA keys, took {}ms", instant.elapsed().as_millis());

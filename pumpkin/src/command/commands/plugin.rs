@@ -5,15 +5,12 @@ use pumpkin_util::{
     text::{TextComponent, color::NamedColor, hover::HoverEvent},
 };
 
-use crate::{
-    PLUGIN_MANAGER,
-    command::{
-        CommandExecutor, CommandResult, CommandSender,
-        args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
-        tree::{
-            CommandTree,
-            builder::{argument, literal, require},
-        },
+use crate::command::{
+    CommandExecutor, CommandResult, CommandSender,
+    args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+    tree::{
+        CommandTree,
+        builder::{argument, literal, require},
     },
 };
 
@@ -31,11 +28,11 @@ impl CommandExecutor for ListExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let plugins = PLUGIN_MANAGER.active_plugins().await;
+            let plugins = server.plugin_manager.active_plugins().await;
 
             let message_text = if plugins.is_empty() {
                 "There are no loaded plugins.".to_string()
@@ -46,7 +43,7 @@ impl CommandExecutor for ListExecutor {
             };
             let mut message = TextComponent::text(message_text);
 
-            for (i, metadata) in plugins.clone().into_iter().enumerate() {
+            for (i, metadata) in plugins.iter().enumerate() {
                 let fmt = if i == plugins.len() - 1 {
                     metadata.name.to_string()
                 } else {
@@ -76,7 +73,7 @@ impl CommandExecutor for LoadExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -84,7 +81,7 @@ impl CommandExecutor for LoadExecutor {
                 return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
             };
 
-            if PLUGIN_MANAGER.is_plugin_active(plugin_name).await {
+            if server.plugin_manager.is_plugin_active(plugin_name).await {
                 sender
                     .send_message(
                         TextComponent::text(format!("Plugin {plugin_name} is already loaded"))
@@ -94,7 +91,10 @@ impl CommandExecutor for LoadExecutor {
                 return Ok(());
             }
 
-            let result = PLUGIN_MANAGER.try_load_plugin(Path::new(plugin_name)).await;
+            let result = server
+                .plugin_manager
+                .try_load_plugin(Path::new(plugin_name))
+                .await;
 
             match result {
                 Ok(()) => {
@@ -130,7 +130,7 @@ impl CommandExecutor for UnloadExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -138,7 +138,7 @@ impl CommandExecutor for UnloadExecutor {
                 return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
             };
 
-            if !PLUGIN_MANAGER.is_plugin_active(plugin_name).await {
+            if !server.plugin_manager.is_plugin_active(plugin_name).await {
                 sender
                     .send_message(
                         TextComponent::text(format!("Plugin {plugin_name} is not loaded"))
@@ -148,7 +148,7 @@ impl CommandExecutor for UnloadExecutor {
                 return Ok(());
             }
 
-            let result = PLUGIN_MANAGER.unload_plugin(plugin_name).await;
+            let result = server.plugin_manager.unload_plugin(plugin_name).await;
 
             match result {
                 Ok(()) => {

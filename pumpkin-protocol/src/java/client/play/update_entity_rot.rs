@@ -1,11 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_MOVE_ENTITY_ROT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 use crate::VarInt;
 
 #[derive(Serialize)]
-#[packet(PLAY_MOVE_ENTITY_ROT)]
+#[java_packet(PLAY_MOVE_ENTITY_ROT)]
 pub struct CUpdateEntityRot {
     pub entity_id: VarInt,
     pub yaw: u8,
@@ -14,6 +14,7 @@ pub struct CUpdateEntityRot {
 }
 
 impl CUpdateEntityRot {
+    #[must_use]
     pub fn new(entity_id: VarInt, yaw: u8, pitch: u8, on_ground: bool) -> Self {
         Self {
             entity_id,

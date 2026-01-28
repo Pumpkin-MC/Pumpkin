@@ -1,4 +1,4 @@
-use std::{path::Path, sync::LazyLock};
+use std::path::Path;
 
 use pumpkin_config::whitelist::WhitelistEntry;
 use serde::{Deserialize, Serialize};
@@ -6,9 +6,6 @@ use serde::{Deserialize, Serialize};
 use crate::net::GameProfile;
 
 use super::{LoadJSONConfiguration, SaveJSONConfiguration};
-
-pub static WHITELIST_CONFIG: LazyLock<tokio::sync::RwLock<WhitelistConfig>> =
-    LazyLock::new(|| tokio::sync::RwLock::new(WhitelistConfig::load()));
 
 #[derive(Deserialize, Serialize, Default)]
 #[serde(transparent)]

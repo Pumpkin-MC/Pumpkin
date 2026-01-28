@@ -17,7 +17,7 @@ pub fn gen_u16_bitset(name: &str, ids: &[u16]) -> Bitset {
     let mut bitset = vec![0u64; words];
     for &id in ids {
         let index = (id as usize) >> 6;
-        let bit = (id as u32) & 63;
+        let bit = u32::from(id) & 63;
         bitset[index] |= 1u64 << bit;
     }
     let name_uppercase = name.to_uppercase();

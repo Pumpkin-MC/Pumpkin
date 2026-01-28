@@ -36,7 +36,7 @@ impl Goal for CreeperIgniteGoal {
                     .get_entity()
                     .pos
                     .load()
-                    .squared_distance_to_vec(target.get_entity().pos.load());
+                    .squared_distance_to_vec(&target.get_entity().pos.load());
                 return dist_sq < 9.0;
             }
 
@@ -72,7 +72,7 @@ impl Goal for CreeperIgniteGoal {
                 .get_entity()
                 .pos
                 .load()
-                .squared_distance_to_vec(target.get_entity().pos.load());
+                .squared_distance_to_vec(&target.get_entity().pos.load());
 
             if dist_sq > 49.0 {
                 self.creeper.set_fuse_speed(-1).await;

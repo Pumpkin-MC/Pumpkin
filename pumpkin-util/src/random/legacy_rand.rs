@@ -13,16 +13,17 @@ pub struct LegacyRand {
 impl LegacyRand {
     population_seed_fn!();
 
+    #[must_use]
     pub fn from_seed(seed: u64) -> Self {
-        LegacyRand {
-            seed: (seed ^ 0x5DEECE66D) & 0xFFFFFFFFFFFF,
+        Self {
+            seed: (seed ^ 0x0005_DEEC_E66D) & 0xFFFF_FFFF_FFFF,
             internal_next_gaussian: None,
         }
     }
 
     fn next_random(&mut self) -> i64 {
         let l = self.seed as i64;
-        let m = l.wrapping_mul(0x5DEECE66D).wrapping_add(11) & 0xFFFFFFFFFFFF;
+        let m = l.wrapping_mul(0x0005_DEEC_E66D).wrapping_add(11) & 0xFFFFFFFFFFFF;
         self.seed = m as u64;
         m
     }
@@ -44,7 +45,7 @@ impl GaussianGenerator for LegacyRand {
 
 impl RandomImpl for LegacyRand {
     fn split(&mut self) -> Self {
-        LegacyRand::from_seed(self.next_i64() as u64)
+        Self::from_seed(self.next_i64() as u64)
     }
 
     fn next_i32(&mut self) -> i32 {
@@ -54,7 +55,7 @@ impl RandomImpl for LegacyRand {
     fn next_i64(&mut self) -> i64 {
         let i = self.next_i32();
         let j = self.next_i32();
-        ((i as i64) << 32).wrapping_add(j as i64)
+        (i64::from(i) << 32).wrapping_add(i64::from(j))
     }
 
     fn next_f32(&mut self) -> f32 {
@@ -64,8 +65,8 @@ impl RandomImpl for LegacyRand {
     fn next_f64(&mut self) -> f64 {
         let i = self.next(26);
         let j = self.next(27);
-        let l = ((i as i64) << 27).wrapping_add(j as i64);
-        l as f64 * 1.110223E-16f32 as f64
+        let l = (i64::from(i) << 27).wrapping_add(i64::from(j));
+        l as f64 * f64::from(1.110223E-16f32)
     }
 
     fn next_bool(&mut self) -> bool {
@@ -82,7 +83,7 @@ impl RandomImpl for LegacyRand {
 
     fn next_bounded_i32(&mut self, bound: i32) -> i32 {
         if (bound & bound.wrapping_sub(1)) == 0 {
-            ((bound as i64).wrapping_mul(self.next(31) as i64) >> 31) as i32
+            (i64::from(bound).wrapping_mul(i64::from(self.next(31))) >> 31) as i32
         } else {
             loop {
                 let i = self.next(31);
@@ -102,7 +103,7 @@ pub struct LegacySplitter {
 
 impl LegacySplitter {
     fn new(seed: u64) -> Self {
-        LegacySplitter { seed }
+        Self { seed }
     }
 }
 
@@ -318,15 +319,14 @@ mod test {
 
         let mut original_rand = LegacyRand::from_seed(0);
         {
-            let splitter = match original_rand.next_splitter() {
-                RandomDeriver::Legacy(splitter) => splitter,
-                _ => unreachable!(),
+            let RandomDeriver::Legacy(splitter) = original_rand.next_splitter() else {
+                unreachable!()
             };
             assert_eq!(splitter.seed, (-4962768465676381896i64) as u64);
 
             let mut rand = splitter.split_string("minecraft:offset");
             assert_eq!(rand.next_i32(), 103436829);
-        }
+        };
 
         let mut original_rand = LegacyRand::from_seed(0);
         let mut new_rand = original_rand.split();
@@ -341,7 +341,7 @@ mod test {
 
             let mut rand3 = splitter.split_pos(1, 11, -111);
             assert_eq!(rand3.next_i32(), -1213890343);
-        }
+        };
 
         assert_eq!(original_rand.next_i32(), 1033096058);
         assert_eq!(new_rand.next_i32(), -888301832);
