@@ -1965,11 +1965,14 @@ impl Player {
                     self.get_entity().set_on_fire(false).await;
                 }
 
-                // Stop elytra flight when switching to spectator mode
+                // Stop elytra flight and reset sneaking when switching to spectator mode
                 if gamemode == GameMode::Spectator {
                     let entity = self.get_entity();
                     if entity.fall_flying.load(Ordering::Relaxed) {
                         entity.set_fall_flying(false).await;
+                    }
+                    if entity.sneaking.load(Ordering::Relaxed) {
+                        entity.set_sneaking(false).await;
                     }
                 }
 
