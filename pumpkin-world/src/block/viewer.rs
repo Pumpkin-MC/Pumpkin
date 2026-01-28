@@ -39,6 +39,11 @@ impl ViewerCountTracker {
         self.current.fetch_sub(1, Ordering::Relaxed);
     }
 
+    /// Returns the current number of players viewing this container
+    pub fn get_viewer_count(&self) -> u16 {
+        self.current.load(Ordering::Relaxed)
+    }
+
     pub async fn update_viewer_count<T>(
         &self,
         entity: &T,
