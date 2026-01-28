@@ -224,6 +224,18 @@ impl BlockBehaviour for DoorBlock {
             let other_pos = args.position.offset(other_half.to_offset());
             let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_pos).await;
 
+            // Check if destroyed and notify (water)
+            if other_block.id != args.block.id {
+                args.world
+                    .set_block_state(
+                        args.position,
+                        Block::AIR.default_state.id,
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+                return;
+            }
+
             let powered = block_receives_redstone_power(args.world, args.position).await
                 || block_receives_redstone_power(args.world, &other_pos).await;
 

@@ -1,9 +1,17 @@
-pub mod flowing;
+pub mod flowing_trait;
 pub mod lava;
+pub mod pathfinder;
+pub mod physics;
 pub mod water;
 
-use std::sync::Arc;
+// Re-export for backward compatibility
+pub mod flowing {
+    pub use super::flowing_trait::*;
+    pub use super::pathfinder::*;
+    pub use super::physics::*;
+}
 
+use std::sync::Arc;
 use crate::block::BlockFuture;
 use crate::entity::{EntityBase, player::Player};
 use pumpkin_data::BlockDirection;
@@ -11,9 +19,7 @@ use pumpkin_data::{fluid::Fluid, item::Item};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-
 use crate::{server::Server, world::World};
-
 use super::{BlockIsReplacing, registry::BlockActionResult};
 
 pub trait FluidBehaviour: Send + Sync {

@@ -1,16 +1,13 @@
 use std::sync::Arc;
-
-use pumpkin_data::fluid::Fluid;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority};
-
 use crate::{
     block::{BlockFuture, BlockMetadata, fluid::FluidBehaviour},
     entity::EntityBase,
     world::World,
 };
-
-use super::flowing::FlowingFluid;
+use super::flowing_trait::FlowingFluid;
+use pumpkin_data::fluid::Fluid;
 
 pub struct FlowingWater;
 
@@ -60,10 +57,13 @@ impl FluidBehaviour for FlowingWater {
         block_pos: &'a BlockPos,
         _notify: bool,
     ) -> BlockFuture<'a, ()> {
-        Box::pin(async {
-            world
-                .schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal)
-                .await;
+        Box::pin(async move {
+            // Avoid rescheduling a fluid tick if one is already queued.
+            if !world.is_fluid_tick_scheduled(block_pos, fluid).await {
+                world
+                    .schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal)
+                    .await;
+            }
         })
     }
 
@@ -84,11 +84,11 @@ impl FlowingFluid for FlowingWater {
     }
 
     fn get_max_flow_distance(&self, _world: &World) -> i32 {
-        4
+        5
     }
 
     fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
-        //TODO add game rule check for water conversion
+        // TODO: add game rule check for water conversion
         true
     }
 }
