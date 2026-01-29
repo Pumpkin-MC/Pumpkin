@@ -123,5 +123,7 @@ impl EntityBase for WindChargeEntity {
         self
     }
 
-    fn is_projectile(&self) -> bool { true }
+    fn is_projectile(&self) -> bool {
+        true
+    }
 }

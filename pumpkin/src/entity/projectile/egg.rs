@@ -1,23 +1,22 @@
 use std::sync::Arc;
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity, r#type::from_type},
+    entity::{
+        Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity,
+        r#type::from_type,
+    },
     server::Server,
 };
-use pumpkin_protocol::java::client::play::Metadata;
-use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_data::entity::{EntityStatus, EntityType};
+use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
-use pumpkin_world::item::ItemStack;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
-use crate::entity::projectile::ProjectileHit;
-use pumpkin_data::entity::{
-    EntityType, EntityStatus,
-};
-use pumpkin_data::particle::Particle;
-use uuid::Uuid;
-use pumpkin_data::item::Item;
+use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 pub struct EggEntity {
     pub thrown: ThrownItemEntity,
@@ -28,21 +27,33 @@ impl EggEntity {
     pub async fn new(entity: Entity) -> Self {
         // Default velocity slightly upward for thrown egg
         entity.set_velocity(Vector3::new(0.0, 0.1, 0.0)).await;
-        let thrown = ThrownItemEntity { entity, owner_id: None, collides_with_projectiles: false };
+        let thrown = ThrownItemEntity {
+            entity,
+            owner_id: None,
+            collides_with_projectiles: false,
+        };
 
-        Self { thrown, item_stack: Mutex::new(ItemStack::new(1, &Item::EGG)) }
+        Self {
+            thrown,
+            item_stack: Mutex::new(ItemStack::new(1, &Item::EGG)),
+        }
     }
 
     pub async fn new_shot(entity: Entity, _shooter: &Entity) -> Self {
-        // Create using owner-aware constructor so spawn position is at shooter eye
-        let mut thrown = ThrownItemEntity::new(entity, _shooter);
+        let thrown = ThrownItemEntity::new(entity, _shooter);
         // Default slight upward velocity
-        thrown.entity.set_velocity(Vector3::new(0.0, 0.1, 0.0)).await;
+        thrown
+            .entity
+            .set_velocity(Vector3::new(0.0, 0.1, 0.0))
+            .await;
 
-        Self { thrown, item_stack: Mutex::new(ItemStack::new(1, &Item::EGG)) }
+        Self {
+            thrown,
+            item_stack: Mutex::new(ItemStack::new(1, &Item::EGG)),
+        }
     }
 
-    /// Set the item stack shown by this thrown egg (clients use tracked item index for render)
+    /// Set the item stack shown by this thrown egg
     pub async fn set_item_stack(&self, item_stack: ItemStack) {
         let mut lock = self.item_stack.lock().await;
         *lock = item_stack.clone();
@@ -58,17 +69,21 @@ impl EntityBase for EggEntity {
             let stack = self.item_stack.lock().await;
 
             // Sync the item stack so the client renders the correct color/variant
-            entity.send_meta_data(&[
-                Metadata::new(
+            entity
+                .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_ITEM,
                     MetaDataType::ItemStack,
                     &ItemStackSerializer::from(stack.clone()),
-                )
-            ]).await;
+                )])
+                .await;
         })
     }
 
-    fn tick<'a>(&'a self, caller: Arc<dyn EntityBase>, server: &'a Server) -> EntityBaseFuture<'a, ()> {
+    fn tick<'a>(
+        &'a self,
+        caller: Arc<dyn EntityBase>,
+        server: &'a Server,
+    ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move { self.thrown.process_tick(caller, server).await })
     }
 
@@ -84,9 +99,14 @@ impl EntityBase for EggEntity {
         self
     }
 
-    fn is_projectile(&self) -> bool { true }
+    fn is_projectile(&self) -> bool {
+        true
+    }
 
-    fn on_hit<'a>(&'a self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'a, ()> {
+    fn on_hit<'a>(
+        &'a self,
+        hit: crate::entity::projectile::ProjectileHit,
+    ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let world = self.get_entity().world.load();
             let hit_pos = hit.hit_pos();
@@ -94,27 +114,35 @@ impl EntityBase for EggEntity {
 
             // Chicken spawn position offset slightly from hit position
             let spawn_pos = hit_pos.add(&normal.multiply(0.5, 0.5, 0.5));
-            
+
             // Play egg break particles
-            world.send_entity_status(
-                self.get_entity(), 
-                EntityStatus::PlayDeathSoundOrAddProjectileHitParticles
-            ).await;
+            world
+                .send_entity_status(
+                    self.get_entity(),
+                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
+                )
+                .await;
 
             // Decide spawn count per probabilities:
             // r == 0 -> spawn 4 (1/256)
             // r in 1..31 -> spawn 1 (31/256)
             // else -> 0
             let r: u8 = rand::random(); // 0..=255
-            let to_spawn = if r == 0 { 4 } else if r < 32 { 1 } else { 0 };
+            let to_spawn = if r == 0 {
+                4
+            } else if r < 32 {
+                1
+            } else {
+                0
+            };
 
             // Spawn chickens in a separate task to prevent stack overflow
             if to_spawn > 0 {
                 let world_clone = world.clone();
                 let spawn_pos_clone = spawn_pos;
-                
-                // Read the stack we stored in set_item_stack
-                let stack = self.item_stack.lock().await;
+
+                // Read the stack stored in set_item_stack
+                //let stack = self.item_stack.lock().await;
 
                 // TODO: Map the item ID to the chicken variant
                 // let variant = match stack.item.id {
@@ -126,18 +154,19 @@ impl EntityBase for EggEntity {
                 tokio::spawn(async move {
                     for _ in 0..to_spawn {
                         let mob = from_type(
-                            &EntityType::CHICKEN, 
-                            spawn_pos_clone, 
-                            &world_clone, 
-                            Uuid::new_v4()
-                        ).await;
-                        
+                            &EntityType::CHICKEN,
+                            spawn_pos_clone,
+                            &world_clone,
+                            Uuid::new_v4(),
+                        )
+                        .await;
+
                         let yaw = rand::random::<f32>() * 360.0;
                         let new_entity = mob.get_entity();
                         new_entity.set_rotation(yaw, 0.0);
                         new_entity.set_age(-24000);
                         //new_entity.set_variant(variant);
-                        
+
                         world_clone.spawn_entity(mob).await;
                     }
                 });

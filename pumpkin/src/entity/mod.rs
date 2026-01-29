@@ -16,7 +16,6 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
-use pumpkin_data::tracked_data::TrackedId;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
@@ -49,7 +48,6 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
 use std::pin::Pin;
-use std::sync::atomic::AtomicI8;
 use std::sync::{
     Arc,
     atomic::{
@@ -110,18 +108,18 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();
-            
+
             // If the internal age is negative, it's a baby
             let is_baby = entity.age.load(Ordering::Relaxed) < 0;
 
             if is_baby {
-                entity.send_meta_data(&[
-                    Metadata::new(
+                entity
+                    .send_meta_data(&[Metadata::new(
                         TrackedData::DATA_BABY,
                         MetaDataType::Boolean,
                         true,
-                    )
-                ]).await;
+                    )])
+                    .await;
             }
         })
     }
@@ -207,7 +205,10 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         Box::pin(async {})
     }
 
-    fn on_hit<'a>(&'a self, _hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'a, ()> {
+    fn on_hit<'a>(
+        &'a self,
+        _hit: crate::entity::projectile::ProjectileHit,
+    ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
     }
 

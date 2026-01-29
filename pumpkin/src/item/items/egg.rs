@@ -41,14 +41,15 @@ impl ItemBehaviour for EggItem {
             let item_stack: ItemStack = player.inventory.held_item().lock().await.clone();
 
             let entity = Entity::new(world.clone(), position, &EntityType::EGG);
-            let mut egg = EggEntity::new_shot(entity, &player.living_entity.entity).await;
+            let egg = EggEntity::new_shot(entity, &player.living_entity.entity).await;
 
             // Propagate the item stack so clients show correct variant
             egg.set_item_stack(item_stack.clone()).await;
 
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();
-            egg.thrown.set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
+            egg.thrown
+                .set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
             world.spawn_entity(Arc::new(egg)).await;
         })
     }
