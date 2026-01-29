@@ -424,7 +424,7 @@ async fn try_oxidize_copper_chest(
     current_block: &Block,
     chest_props: ChestLikeProperties,
 ) {
-    use rand::Rng;
+    use rand::RngExt;
 
     // Base chance per random tick: ~5.69%
     const BASE_DEGRADATION_CHANCE: f32 = 0.056_888_89;
