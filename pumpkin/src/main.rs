@@ -1,4 +1,5 @@
 // Don't warn on event sending macros
+#![recursion_limit = "512"]
 #![expect(unused_labels)]
 
 #[cfg(target_os = "wasi")]
