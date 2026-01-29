@@ -30,8 +30,8 @@ impl SnowballEntity {
         Self { thrown }
     }
 
-    pub async fn new_shot(entity: Entity, _shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, _shooter);
+    pub async fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+        let thrown = ThrownItemEntity::new(entity, shooter);
         thrown
             .entity
             .set_velocity(Vector3::new(0.0, 0.1, 0.0))
@@ -52,7 +52,7 @@ impl EntityBase for SnowballEntity {
     }
 
     fn get_entity(&self) -> &Entity {
-        &self.thrown.get_entity()
+        self.thrown.get_entity()
     }
 
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
@@ -67,10 +67,7 @@ impl EntityBase for SnowballEntity {
         true
     }
 
-    fn on_hit<'a>(
-        &'a self,
-        hit: crate::entity::projectile::ProjectileHit,
-    ) -> EntityBaseFuture<'a, ()> {
+    fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let world = self.get_entity().world.load();
 

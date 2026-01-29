@@ -112,7 +112,7 @@ impl ThrownItemEntity {
 
         // Send updated velocity to clients
         let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-        let _ = world.broadcast_packet_all(&packet).await;
+        world.broadcast_packet_all(&packet).await;
 
         // Calculate search box for collisions
         let search_box = BoundingBox::new(
@@ -135,23 +135,23 @@ impl ThrownItemEntity {
         // Block collisions
         let (block_cols, block_positions) = world.get_block_collisions(search_box).await;
         for (idx, bb) in block_cols.iter().enumerate() {
-            if let Some(t) = calculate_ray_intersection(&start_pos, &delta, bb) {
-                if t < closest_t {
-                    closest_t = t;
-                    // Map back to block pos
-                    let mut curr = 0;
-                    for (len, pos) in &block_positions {
-                        curr += len;
-                        if idx < curr {
-                            let hit_pos = start_pos.add(&delta.multiply(t, t, t));
-                            hit = Some(ProjectileHit::Block {
-                                pos: *pos,
-                                face: get_hit_face(hit_pos, *pos),
-                                hit_pos,
-                                normal: delta.normalize().multiply(-1.0, -1.0, -1.0),
-                            });
-                            break;
-                        }
+            if let Some(t) = calculate_ray_intersection(&start_pos, &delta, bb)
+                && t < closest_t
+            {
+                closest_t = t;
+                // Map back to block pos
+                let mut curr = 0;
+                for (len, pos) in &block_positions {
+                    curr += len;
+                    if idx < curr {
+                        let hit_pos = start_pos.add(&delta.multiply(t, t, t));
+                        hit = Some(ProjectileHit::Block {
+                            pos: *pos,
+                            face: get_hit_face(hit_pos, *pos),
+                            hit_pos,
+                            normal: delta.normalize().multiply(-1.0, -1.0, -1.0),
+                        });
+                        break;
                     }
                 }
             }
@@ -165,16 +165,16 @@ impl ThrownItemEntity {
             }
 
             let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
-            if let Some(t) = calculate_ray_intersection(&start_pos, &delta, &ebb) {
-                if t < closest_t {
-                    closest_t = t;
-                    let hit_pos = start_pos.add(&delta.multiply(t, t, t));
-                    hit = Some(ProjectileHit::Entity {
-                        entity: cand.clone(),
-                        hit_pos,
-                        normal: delta.normalize().multiply(-1.0, -1.0, -1.0),
-                    });
-                }
+            if let Some(t) = calculate_ray_intersection(&start_pos, &delta, &ebb)
+                && t < closest_t
+            {
+                closest_t = t;
+                let hit_pos = start_pos.add(&delta.multiply(t, t, t));
+                hit = Some(ProjectileHit::Entity {
+                    entity: cand.clone(),
+                    hit_pos,
+                    normal: delta.normalize().multiply(-1.0, -1.0, -1.0),
+                });
             }
         }
 
@@ -211,20 +211,21 @@ impl ThrownItemEntity {
         false
     }
 
-    fn get_entity(&self) -> &Entity {
+    const fn get_entity(&self) -> &Entity {
         &self.entity
     }
 
-    #[allow(dead_code)]
-    fn get_living_entity(&self) -> Option<&LivingEntity> {
+    #[allow(dead_code, clippy::unused_self)]
+    const fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
 
-    #[allow(dead_code)]
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+    #[allow(dead_code, clippy::unused_self)]
+    const fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
-    fn get_gravity(&self) -> f64 {
+    #[allow(clippy::unused_self)]
+    const fn get_gravity(&self) -> f64 {
         0.03
     }
 }
@@ -256,11 +257,7 @@ fn calculate_ray_intersection(
         }
     }
 
-    if t_max >= t_min && t_min >= 0.0 && t_min <= 1.0 {
-        Some(t_min)
-    } else {
-        None
-    }
+    (0.0..=1.0).contains(&t_min).then_some(t_min)
 }
 
 /// Get the face of the block that was hit
@@ -299,21 +296,24 @@ pub enum ProjectileHit {
 
 impl ProjectileHit {
     /// Returns the exact impact coordinates regardless of what was hit.
-    pub fn hit_pos(&self) -> Vector3<f64> {
+    #[must_use]
+    pub const fn hit_pos(&self) -> Vector3<f64> {
         match self {
             Self::Block { hit_pos, .. } | Self::Entity { hit_pos, .. } => *hit_pos,
         }
     }
 
     /// Returns the surface normal of the impact.
-    pub fn normal(&self) -> Vector3<f64> {
+    #[must_use]
+    pub const fn normal(&self) -> Vector3<f64> {
         match self {
             Self::Block { normal, .. } | Self::Entity { normal, .. } => *normal,
         }
     }
 
     /// Safely returns the face hit if it was a block, otherwise None.
-    pub fn face(&self) -> Option<BlockDirection> {
+    #[must_use]
+    pub const fn face(&self) -> Option<BlockDirection> {
         match self {
             Self::Block { face, .. } => Some(*face),
             Self::Entity { .. } => None,

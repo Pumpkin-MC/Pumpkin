@@ -204,10 +204,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         Box::pin(async {})
     }
 
-    fn on_hit<'a>(
-        &'a self,
-        _hit: crate::entity::projectile::ProjectileHit,
-    ) -> EntityBaseFuture<'a, ()> {
+    fn on_hit(&self, _hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {})
     }
 

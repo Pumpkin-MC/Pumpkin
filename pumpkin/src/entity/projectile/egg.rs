@@ -41,8 +41,8 @@ impl EggEntity {
         }
     }
 
-    pub async fn new_shot(entity: Entity, _shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, _shooter);
+    pub async fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+        let thrown = ThrownItemEntity::new(entity, shooter);
         // Default slight upward velocity
         thrown
             .entity
@@ -90,7 +90,7 @@ impl EntityBase for EggEntity {
     }
 
     fn get_entity(&self) -> &Entity {
-        &self.thrown.get_entity()
+        self.thrown.get_entity()
     }
 
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
@@ -105,10 +105,7 @@ impl EntityBase for EggEntity {
         true
     }
 
-    fn on_hit<'a>(
-        &'a self,
-        hit: crate::entity::projectile::ProjectileHit,
-    ) -> EntityBaseFuture<'a, ()> {
+    fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let world = self.get_entity().world.load();
             let hit_pos = hit.hit_pos();
@@ -130,13 +127,7 @@ impl EntityBase for EggEntity {
             // r in 1..31 -> spawn 1 (31/256)
             // else -> 0
             let r: u8 = rand::random(); // 0..=255
-            let to_spawn = if r == 0 {
-                4
-            } else if r < 32 {
-                1
-            } else {
-                0
-            };
+            let to_spawn = if r == 0 { 4usize } else { usize::from(r < 32) };
 
             // Spawn chickens in a separate task to prevent stack overflow
             if to_spawn > 0 {
