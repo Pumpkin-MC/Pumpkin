@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
@@ -23,6 +24,7 @@ impl SnowballEntity {
             entity,
             owner_id: None,
             collides_with_projectiles: false,
+            has_hit: AtomicBool::new(false),
         };
 
         Self { thrown }

@@ -9,6 +9,7 @@ use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
+use std::sync::atomic::AtomicBool;
 use std::sync::{
     Arc,
     atomic::{AtomicU32, Ordering},
@@ -37,6 +38,7 @@ impl FireworkRocketEntity {
                 entity,
                 owner_id: None,
                 collides_with_projectiles: false,
+                has_hit: AtomicBool::new(false),
             },
             shooter_id: None,
             life: 0.into(),

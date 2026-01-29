@@ -4,7 +4,10 @@ use pumpkin_data::BlockDirection;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use std::{sync::Arc, sync::atomic::Ordering};
+use std::{
+    sync::Arc,
+    sync::atomic::{AtomicBool, Ordering},
+};
 pub mod egg;
 pub mod firework_rocket;
 pub mod snowball;
@@ -14,6 +17,7 @@ pub struct ThrownItemEntity {
     pub entity: Entity,
     pub owner_id: Option<i32>,
     pub collides_with_projectiles: bool,
+    pub has_hit: AtomicBool,
 }
 
 impl ThrownItemEntity {
@@ -25,6 +29,7 @@ impl ThrownItemEntity {
             entity,
             owner_id: Some(owner.entity_id),
             collides_with_projectiles: false,
+            has_hit: AtomicBool::new(false),
         }
     }
 
@@ -175,6 +180,11 @@ impl ThrownItemEntity {
 
         // Handle hit or continue
         if let Some(h) = hit {
+            // Ensure hit is only processed once per projectile
+            if self.has_hit.swap(true, Ordering::SeqCst) {
+                return;
+            }
+
             // Just trigger hit effects and remove
             caller.on_hit(h).await;
             entity.remove().await;

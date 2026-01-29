@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use crate::{
     entity::{
@@ -31,6 +32,7 @@ impl EggEntity {
             entity,
             owner_id: None,
             collides_with_projectiles: false,
+            has_hit: AtomicBool::new(false),
         };
 
         Self {
