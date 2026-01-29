@@ -210,7 +210,7 @@ pub trait Slot: Send + Sync {
                 self.on_take_item(player, stack).await;
             }
 
-            stack.unwrap_or(ItemStack::EMPTY.clone())
+            stack.unwrap_or_else(|| ItemStack::EMPTY.clone())
         })
     }
 

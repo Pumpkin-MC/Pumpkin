@@ -30,7 +30,7 @@ pub struct NbtReadHelper<R: Read + Seek> {
 }
 
 impl<R: Read + Seek> NbtReadHelper<R> {
-    pub fn new(r: R) -> Self {
+    pub const fn new(r: R) -> Self {
         Self { reader: r }
     }
 }
@@ -87,7 +87,7 @@ pub struct Deserializer<R: Read + Seek> {
 }
 
 impl<R: Read + Seek> Deserializer<R> {
-    pub fn new(input: R, is_named: bool) -> Self {
+    pub const fn new(input: R, is_named: bool) -> Self {
         Self {
             input: NbtReadHelper { reader: input },
             tag_to_deserialize_stack: None,

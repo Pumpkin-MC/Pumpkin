@@ -211,9 +211,7 @@ impl PumpkinServer {
             });
         }
 
-        let mut tcp_listener = None;
-
-        if server.basic_config.java_edition {
+        let tcp_listener = if server.basic_config.java_edition {
             let address = server.basic_config.java_edition_address;
             // Setup the TCP server socket.
             let listener = match TcpListener::bind(address).await {
@@ -266,8 +264,10 @@ impl PumpkinServer {
                 server.spawn_task(lan_broadcast.start(addr));
             }
 
-            tcp_listener = Some(listener);
-        }
+            Some(listener)
+        } else {
+            None
+        };
 
         // Ticker
         {
@@ -288,7 +288,7 @@ impl PumpkinServer {
         };
 
         Self {
-            server: server.clone(),
+            server,
             tcp_listener,
             udp_socket,
         }
@@ -546,8 +546,7 @@ fn setup_stdin_console(server: Arc<Server>) {
                     ServerCommandEvent::new(command.clone());
 
                     'after: {
-                        let dispatcher = &server.command_dispatcher.read().await;
-                        dispatcher
+                        server.command_dispatcher.read().await
                             .handle_command(&command::CommandSender::Console, &server, command.as_str())
                             .await;
                     };
@@ -635,9 +634,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     ServerCommandEvent::new(line.clone());
 
                     'after: {
-                        let dispatcher = server.command_dispatcher.read().await;
-
-                        dispatcher
+                        server.command_dispatcher.read().await
                             .handle_command(&command::CommandSender::Console, &server, &line)
                             .await;
                     }

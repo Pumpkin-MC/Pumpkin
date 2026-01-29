@@ -33,7 +33,7 @@ pub struct CPlayerPosition {
 
 impl CPlayerPosition {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         teleport_id: VarInt,
         position: Vector3<f64>,
         delta: Vector3<f64>,

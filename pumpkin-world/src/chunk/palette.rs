@@ -74,7 +74,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         let mut counts: Vec<u16> = Vec::new();
 
         // Iterate over the flattened cube to populate the palette and counts
-        for val in cube.as_flattened().as_flattened().iter() {
+        for val in cube.as_flattened().as_flattened() {
             if let Some(index) = palette.iter().position(|v| v == val) {
                 // Value already exists, increment its count
                 counts[index] += 1;
@@ -137,6 +137,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         }
     }
 
+    #[must_use]
     pub fn from_palette_and_packed_data(
         palette: Vec<V>,
         packed_data: &[i64],
@@ -280,6 +281,7 @@ impl<V: Default + Hash + Eq + Copy, const DIM: usize> Default for PalettedContai
 }
 
 impl BiomePalette {
+    #[must_use]
     pub fn convert_network(&self) -> NetworkSerialization<u8> {
         match self {
             Self::Homogeneous(registry_id) => NetworkSerialization {
@@ -326,6 +328,7 @@ impl BiomePalette {
         }
     }
 
+    #[must_use]
     pub fn from_disk_nbt(nbt: ChunkSectionBiomes) -> Self {
         let palette = nbt
             .palette
@@ -340,6 +343,7 @@ impl BiomePalette {
         )
     }
 
+    #[must_use]
     pub fn to_disk_nbt(&self) -> ChunkSectionBiomes {
         #[expect(clippy::unnecessary_min_or_max)]
         let bits_per_entry = self.bits_per_entry().max(BIOME_DISK_MIN_BITS);
@@ -361,6 +365,7 @@ impl BiomePalette {
 }
 
 impl BlockPalette {
+    #[must_use]
     pub fn convert_network(&self) -> NetworkSerialization<u16> {
         match self {
             Self::Homogeneous(registry_id) => NetworkSerialization {
@@ -408,6 +413,7 @@ impl BlockPalette {
         }
     }
 
+    #[must_use]
     pub fn convert_be_network(&self) -> BeNetworkSerialization<u16> {
         match self {
             Self::Homogeneous(registry_id) => BeNetworkSerialization {
@@ -474,6 +480,7 @@ impl BlockPalette {
     }
 
     /// Check if the entire chunk is filled with only air
+    #[must_use]
     pub fn has_only_air(&self) -> bool {
         match self {
             Self::Homogeneous(id) => is_air(*id),
@@ -481,30 +488,26 @@ impl BlockPalette {
         }
     }
 
+    #[must_use]
     pub fn non_air_block_count(&self) -> u16 {
         match self {
             Self::Homogeneous(registry_id) => {
-                if !is_air(*registry_id) {
-                    Self::VOLUME as u16
-                } else {
+                if is_air(*registry_id) {
                     0
+                } else {
+                    Self::VOLUME as u16
                 }
             }
             Self::Heterogeneous(data) => data
                 .palette
                 .iter()
                 .zip(data.counts.iter())
-                .filter_map(|(registry_id, count)| {
-                    if !is_air(*registry_id) {
-                        Some(*count)
-                    } else {
-                        None
-                    }
-                })
+                .filter_map(|(registry_id, count)| (!is_air(*registry_id)).then_some(*count))
                 .sum(),
         }
     }
 
+    #[must_use]
     pub fn from_disk_nbt(nbt: ChunkSectionBlockStates) -> Self {
         let palette = nbt
             .palette
@@ -553,7 +556,7 @@ impl BlockPalette {
 /// Represents the different types of data encoding used in Minecraft's bit-packed chunk sections.
 ///
 /// Minecraft uses a "Palette" system to compress chunk data. Instead of sending a full
-/// 15-bit BlockState ID for every block, it sends a smaller index (e.g., 4 bits) that
+/// 15-bit `BlockState` ID for every block, it sends a smaller index (e.g., 4 bits) that
 /// points to a value in these palettes.
 pub enum NetworkPalette<V> {
     /// **Single Value Palette (Bits per entry: 0)**

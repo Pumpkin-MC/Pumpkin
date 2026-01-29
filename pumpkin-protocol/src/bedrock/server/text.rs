@@ -55,7 +55,7 @@ impl SText {
         }
     }
 
-    fn get_dummy_strings(category: u8) -> &'static [&'static str] {
+    const fn get_dummy_strings(category: u8) -> &'static [&'static str] {
         match category {
             0 => &[
                 "raw",
@@ -71,7 +71,7 @@ impl SText {
         }
     }
 
-    fn get_category(&self) -> u8 {
+    const fn get_category(&self) -> u8 {
         match self.r#type {
             TextPacketType::Raw
             | TextPacketType::Tip
@@ -205,7 +205,7 @@ impl PacketWrite for SText {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TextPacketType {
     Raw = 0,

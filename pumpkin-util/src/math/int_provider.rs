@@ -142,21 +142,21 @@ impl ToTokens for ConstantIntProvider {
 
 impl ConstantIntProvider {
     #[must_use]
-    pub fn new(value: i32) -> Self {
+    pub const fn new(value: i32) -> Self {
         Self { value }
     }
 
     #[must_use]
-    pub fn get_min(&self) -> i32 {
+    pub const fn get_min(&self) -> i32 {
         self.value
     }
 
-    pub fn get(&self, _random: &mut impl RandomImpl) -> i32 {
+    pub const fn get(&self, _random: &mut impl RandomImpl) -> i32 {
         self.value
     }
 
     #[must_use]
-    pub fn get_max(&self) -> i32 {
+    pub const fn get_max(&self) -> i32 {
         self.value
     }
 }
@@ -179,7 +179,7 @@ impl ToTokens for BiasedToBottomIntProvider {
 
 impl BiasedToBottomIntProvider {
     #[must_use]
-    pub fn new(min_inclusive: i32, max_inclusive: i32) -> Self {
+    pub const fn new(min_inclusive: i32, max_inclusive: i32) -> Self {
         Self {
             min_inclusive,
             max_inclusive,
@@ -187,7 +187,7 @@ impl BiasedToBottomIntProvider {
     }
 
     #[must_use]
-    pub fn get_min(&self) -> i32 {
+    pub const fn get_min(&self) -> i32 {
         self.min_inclusive
     }
 
@@ -200,7 +200,7 @@ impl BiasedToBottomIntProvider {
     }
 
     #[must_use]
-    pub fn get_max(&self) -> i32 {
+    pub const fn get_max(&self) -> i32 {
         self.max_inclusive
     }
 }
@@ -281,7 +281,7 @@ impl ToTokens for ClampedNormalIntProvider {
 
 impl ClampedNormalIntProvider {
     #[must_use]
-    pub fn new(mean: f32, deviation: f32, min_inclusive: i32, max_inclusive: i32) -> Self {
+    pub const fn new(mean: f32, deviation: f32, min_inclusive: i32, max_inclusive: i32) -> Self {
         Self {
             mean,
             deviation,
@@ -291,19 +291,19 @@ impl ClampedNormalIntProvider {
     }
 
     #[must_use]
-    pub fn get_min(&self) -> i32 {
+    pub const fn get_min(&self) -> i32 {
         self.min_inclusive
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
         // Generate normal distribution value and clamp to range
         let gaussian = random.next_gaussian() as f32;
-        let value = (self.mean + gaussian * self.deviation).round() as i32;
+        let value = gaussian.mul_add(self.deviation, self.mean).round() as i32;
         value.clamp(self.min_inclusive, self.max_inclusive)
     }
 
     #[must_use]
-    pub fn get_max(&self) -> i32 {
+    pub const fn get_max(&self) -> i32 {
         self.max_inclusive
     }
 }
@@ -340,7 +340,7 @@ impl ToTokens for WeightedListIntProvider {
 
 impl WeightedListIntProvider {
     #[must_use]
-    pub fn new(distribution: Vec<WeightedEntry>) -> Self {
+    pub const fn new(distribution: Vec<WeightedEntry>) -> Self {
         Self { distribution }
     }
 
@@ -410,7 +410,7 @@ impl ToTokens for UniformIntProvider {
 
 impl UniformIntProvider {
     #[must_use]
-    pub fn new(min_inclusive: i32, max_inclusive: i32) -> Self {
+    pub const fn new(min_inclusive: i32, max_inclusive: i32) -> Self {
         Self {
             min_inclusive,
             max_inclusive,
@@ -418,7 +418,7 @@ impl UniformIntProvider {
     }
 
     #[must_use]
-    pub fn get_min(&self) -> i32 {
+    pub const fn get_min(&self) -> i32 {
         self.min_inclusive
     }
 
@@ -427,7 +427,7 @@ impl UniformIntProvider {
     }
 
     #[must_use]
-    pub fn get_max(&self) -> i32 {
+    pub const fn get_max(&self) -> i32 {
         self.max_inclusive
     }
 }
@@ -438,7 +438,7 @@ mod tests {
     use crate::random::{RandomGenerator, get_seed};
 
     #[test]
-    fn test_constant_int_provider() {
+    fn constant_int_provider() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -451,7 +451,7 @@ mod tests {
     }
 
     #[test]
-    fn test_uniform_int_provider() {
+    fn uniform_int_provider() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -471,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn test_biased_to_bottom_int_provider() {
+    fn biased_to_bottom_int_provider() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -491,7 +491,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clamped_normal_int_provider() {
+    fn clamped_normal_int_provider() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -511,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clamped_int_provider() {
+    fn clamped_int_provider() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -533,7 +533,7 @@ mod tests {
     }
 
     #[test]
-    fn test_weighted_list_int_provider() {
+    fn weighted_list_int_provider() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -569,7 +569,7 @@ mod tests {
     }
 
     #[test]
-    fn test_int_provider_enum_constant() {
+    fn int_provider_enum_constant() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -581,7 +581,7 @@ mod tests {
     }
 
     #[test]
-    fn test_int_provider_enum_object() {
+    fn int_provider_enum_object() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );

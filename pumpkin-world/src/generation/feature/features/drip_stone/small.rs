@@ -31,7 +31,7 @@ impl SmallDripstoneFeature {
     }
 
     fn get_direction<T: GenerationCache>(
-        chunk: &mut T,
+        chunk: &T,
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) -> Option<BlockDirection> {

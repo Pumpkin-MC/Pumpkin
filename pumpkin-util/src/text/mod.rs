@@ -402,12 +402,12 @@ impl TextComponent {
 
             // LERP logic
             color::RGBColor::new(
-                (f32::from(start.red) + (f32::from(end.red) - f32::from(start.red)) * local_t)
+                (f32::from(end.red) - f32::from(start.red)).mul_add(local_t, f32::from(start.red))
                     as u8,
-                (f32::from(start.green) + (f32::from(end.green) - f32::from(start.green)) * local_t)
-                    as u8,
-                (f32::from(start.blue) + (f32::from(end.blue) - f32::from(start.blue)) * local_t)
-                    as u8,
+                (f32::from(end.green) - f32::from(start.green))
+                    .mul_add(local_t, f32::from(start.green)) as u8,
+                (f32::from(end.blue) - f32::from(start.blue))
+                    .mul_add(local_t, f32::from(start.blue)) as u8,
             )
         })
     }
@@ -563,7 +563,7 @@ mod test {
     use crate::text::{TextComponent, color::NamedColor};
 
     #[test]
-    fn test_serialize_text_component() {
+    fn serialize_text_component() {
         let msg_comp = TextComponent::translate(
             "multiplayer.player.joined",
             [TextComponent::text("NAME".to_string())],

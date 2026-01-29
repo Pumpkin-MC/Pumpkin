@@ -17,7 +17,7 @@ pub struct CUpdateEntityPosRot {
 
 impl CUpdateEntityPosRot {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         entity_id: VarInt,
         delta: Vector3<i16>,
         yaw: u8,

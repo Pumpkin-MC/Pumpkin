@@ -69,6 +69,7 @@ impl SimplexNoiseSampler {
         i32::from(self.permutation[(input & 0xFF) as usize])
     }
 
+    #[expect(clippy::suboptimal_flops)]
     fn grad(gradient_index: usize, x: f64, y: f64, z: f64, distance: f64) -> f64 {
         let d = distance - x * x - y * y - z * z;
         if d < 0f64 {
@@ -81,6 +82,7 @@ impl SimplexNoiseSampler {
 
     #[must_use]
     #[expect(clippy::many_single_char_names)]
+    #[expect(clippy::suboptimal_flops)]
     pub fn sample_2d(&self, x: f64, y: f64) -> f64 {
         let d = (x + y) * Self::SKEW_FACTOR_2D;
         let i = (x + d).floor() as i32;
@@ -259,6 +261,7 @@ impl OctaveSimplexNoiseSampler {
 
     #[must_use]
     #[expect(clippy::many_single_char_names)]
+    #[expect(clippy::suboptimal_flops)]
     pub fn sample(&self, x: f64, y: f64, use_origin: bool) -> f64 {
         let mut d = 0.0;
         let mut e = self.lacunarity;
@@ -288,7 +291,7 @@ mod octave_simplex_noise_sampler_test {
     };
 
     #[test]
-    fn test_new() {
+    fn new() {
         let mut rand = Xoroshiro::from_seed(450);
         assert_eq!(rand.next_i32(), 1394613419);
         let sampler = OctaveSimplexNoiseSampler::new(&mut rand, &[-1, 1, 0]);
@@ -316,7 +319,7 @@ mod octave_simplex_noise_sampler_test {
     }
 
     #[test]
-    fn test_sample() {
+    fn sample() {
         let mut rand = Xoroshiro::from_seed(450);
         assert_eq!(rand.next_i32(), 1394613419);
         let sampler = OctaveSimplexNoiseSampler::new(&mut rand, &[-1, 1, 0]);
@@ -424,7 +427,7 @@ mod simplex_noise_sampler_test {
     };
 
     #[test]
-    fn test_create() {
+    fn create() {
         let mut rand = Xoroshiro::from_seed(111);
         assert_eq!(rand.next_i32(), -1467508761);
         let sampler = SimplexNoiseSampler::new(&mut rand);
@@ -453,7 +456,7 @@ mod simplex_noise_sampler_test {
 
     #[test]
     #[expect(clippy::too_many_lines)]
-    fn test_sample_2d() {
+    fn sample_2d() {
         let data1 = [
             ((-50000, 0), -0.013008608535752102),
             ((-49999, 1000), 0.0),
@@ -565,7 +568,7 @@ mod simplex_noise_sampler_test {
 
     #[test]
     #[expect(clippy::too_many_lines)]
-    fn test_sample_3d() {
+    fn sample_3d() {
         let data = [
             (
                 (

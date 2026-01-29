@@ -15,7 +15,7 @@ use pumpkin_world::{
     item::ItemStack,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::Rng;
+use rand::RngExt;
 
 use crate::{
     block::{

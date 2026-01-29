@@ -74,7 +74,7 @@ pub enum MinecraftVersion {
 
 impl MinecraftVersion {
     #[must_use]
-    pub fn protocol_version(&self) -> i32 {
+    pub const fn protocol_version(&self) -> i32 {
         match self {
             Self::V_1_7_2 => 4,
             Self::V_1_7_6 => 5,
@@ -130,7 +130,7 @@ impl MinecraftVersion {
     }
 
     #[must_use]
-    pub fn from_protocol(protocol: u32) -> Self {
+    pub const fn from_protocol(protocol: u32) -> Self {
         match protocol {
             4 => Self::V_1_7_2,
             5 => Self::V_1_7_6,

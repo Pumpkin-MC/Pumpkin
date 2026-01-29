@@ -63,12 +63,12 @@ impl std::fmt::Display for GetBlockError {
 pub type WorldFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait SimpleWorld: BlockAccessor + Send + Sync {
-    fn set_block_state<'a>(
+    fn set_block_state(
         self: Arc<Self>,
-        position: &'a BlockPos,
+        position: &BlockPos,
         block_state_id: BlockStateId,
         flags: BlockFlags,
-    ) -> WorldFuture<'a, BlockStateId>;
+    ) -> WorldFuture<'_, BlockStateId>;
 
     fn update_neighbor<'a>(
         self: Arc<Self>,
@@ -76,13 +76,13 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
         source_block: &'a pumpkin_data::Block,
     ) -> WorldFuture<'a, ()>;
 
-    fn update_neighbors<'a>(
+    fn update_neighbors(
         self: Arc<Self>,
-        block_pos: &'a BlockPos,
+        block_pos: &BlockPos,
         except: Option<BlockDirection>,
-    ) -> WorldFuture<'a, ()>;
+    ) -> WorldFuture<'_, ()>;
 
-    fn is_space_empty<'a>(&'a self, bounding_box: BoundingBox) -> WorldFuture<'a, bool>;
+    fn is_space_empty(&self, bounding_box: BoundingBox) -> WorldFuture<'_, bool>;
 
     fn spawn_from_type(
         self: Arc<Self>,
@@ -90,19 +90,14 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
         position: Vector3<f64>,
     ) -> WorldFuture<'static, ()>;
 
-    fn add_synced_block_event<'a>(
-        &'a self,
-        pos: BlockPos,
-        r#type: u8,
-        data: u8,
-    ) -> WorldFuture<'a, ()>;
+    fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) -> WorldFuture<'_, ()>;
 
-    fn sync_world_event<'a>(
-        &'a self,
+    fn sync_world_event(
+        &self,
         world_event: WorldEvent,
         position: BlockPos,
         data: i32,
-    ) -> WorldFuture<'a, ()>;
+    ) -> WorldFuture<'_, ()>;
 
     fn remove_block_entity<'a>(&'a self, block_pos: &'a BlockPos) -> WorldFuture<'a, ()>;
 
@@ -111,7 +106,7 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
         block_pos: &'a BlockPos,
     ) -> WorldFuture<'a, Option<Arc<dyn BlockEntity>>>;
 
-    fn get_world_age<'a>(&'a self) -> WorldFuture<'a, i64>;
+    fn get_world_age(&self) -> WorldFuture<'_, i64>;
 
     fn play_sound<'a>(
         &'a self,

@@ -63,7 +63,7 @@ macro_rules! population_seed_fn {
 // TODO: Write unit test for this
 #[inline]
 #[must_use]
-pub fn get_decorator_seed(population_seed: u64, index: u64, step: u64) -> u64 {
+pub const fn get_decorator_seed(population_seed: u64, index: u64, step: u64) -> u64 {
     population_seed
         .wrapping_add(index)
         .wrapping_add(10_000u64.wrapping_mul(step))
@@ -117,6 +117,7 @@ pub trait RandomImpl {
 
     fn next_gaussian(&mut self) -> f64;
 
+    #[allow(clippy::suboptimal_flops)]
     fn next_triangular(&mut self, mode: f64, deviation: f64) -> f64 {
         mode + deviation * (self.next_f64() - self.next_f64())
     }

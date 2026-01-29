@@ -130,7 +130,7 @@ impl StructureGenerator for StrongholdGenerator {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum EntranceType {
     Opening = 0,
     WoodDoor = 1,
@@ -141,10 +141,10 @@ pub enum EntranceType {
 impl EntranceType {
     pub fn get_random(random: &mut impl RandomImpl) -> Self {
         match random.next_bounded_i32(5) {
-            2 => EntranceType::WoodDoor,
-            3 => EntranceType::Grates,
-            4 => EntranceType::IronDoor,
-            _ => EntranceType::Opening,
+            2 => Self::WoodDoor,
+            3 => Self::Grates,
+            4 => Self::IronDoor,
+            _ => Self::Opening,
         }
     }
 }
@@ -183,7 +183,8 @@ pub enum StrongholdPieceType {
     PortalRoom,
 }
 impl StrongholdPieceType {
-    pub fn as_structure_type(&self) -> StructurePieceType {
+    #[must_use]
+    pub const fn as_structure_type(&self) -> StructurePieceType {
         match self {
             Self::Corridor => StructurePieceType::StrongholdCorridor,
             Self::PrisonHall => StructurePieceType::StrongholdPrisonHall,
@@ -208,7 +209,7 @@ pub struct PieceWeight {
 }
 
 impl PieceWeight {
-    fn new(piece_type: StrongholdPieceType, weight: i32, limit: i32) -> Self {
+    const fn new(piece_type: StrongholdPieceType, weight: i32, limit: i32) -> Self {
         Self {
             piece_type,
             weight,
@@ -216,7 +217,7 @@ impl PieceWeight {
         }
     }
 
-    fn can_generate(&self, _chain_length: u32) -> bool {
+    const fn can_generate(&self, _chain_length: u32) -> bool {
         self.limit == 0 //|| self.generated_count < self.limit
     }
 }
@@ -297,13 +298,14 @@ pub struct StrongholdPiece {
 }
 
 impl StrongholdPiece {
-    pub fn new(r#type: StructurePieceType, chain_length: u32, bbox: BlockBox) -> Self {
+    #[must_use]
+    pub const fn new(r#type: StructurePieceType, chain_length: u32, bbox: BlockBox) -> Self {
         Self {
             piece: StructurePiece::new(r#type, bbox, chain_length),
             entry_door: EntranceType::Opening,
         }
     }
-    fn is_in_bounds(bb: &BlockBox) -> bool {
+    const fn is_in_bounds(bb: &BlockBox) -> bool {
         bb.min.y > 10
     }
 
@@ -435,7 +437,7 @@ impl StrongholdPiece {
         pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
         piece: Option<StrongholdPieceType>,
     ) {
-        if let Some(facing) = &self.piece.facing {
+        if let Some(facing) = self.piece.facing {
             let bounding_box = self.piece.bounding_box;
             let (nx, ny, nz) = match facing {
                 BlockDirection::North => (
@@ -514,7 +516,7 @@ impl StrongholdPiece {
                 nx,
                 ny,
                 nz,
-                &next_facing,
+                next_facing,
                 self.piece.chain_length,
                 None, // Dynamic piece selection
             ) {
@@ -558,7 +560,7 @@ impl StrongholdPiece {
                 nx,
                 ny,
                 nz,
-                &next_facing,
+                next_facing,
                 self.piece.chain_length,
                 None,
             ) {
@@ -575,7 +577,7 @@ impl StrongholdPiece {
         x: i32,
         y: i32,
         z: i32,
-        orientation: &BlockDirection,
+        orientation: BlockDirection,
         chain_length: u32,
         piece_type: Option<StrongholdPieceType>,
     ) -> Option<Box<dyn StructurePieceBase>> {
@@ -592,7 +594,7 @@ impl StrongholdPiece {
 
         let next_piece = if let Some(p_type) = piece_type {
             Self::create_piece(
-                &p_type,
+                p_type,
                 collector,
                 random,
                 x,
@@ -619,7 +621,7 @@ impl StrongholdPiece {
         x: i32,
         y: i32,
         z: i32,
-        orientation: &BlockDirection,
+        orientation: BlockDirection,
         chain_length: u32,
     ) -> Option<Box<dyn StructurePieceBase>> {
         let mut attempt = 0;
@@ -627,7 +629,7 @@ impl StrongholdPiece {
             attempt += 1;
             let mut j = random.next_bounded_i32(TOTAL_WEIGHT);
 
-            for piece_data in POSSIBLE_PIECES.iter() {
+            for piece_data in POSSIBLE_PIECES {
                 j -= piece_data.weight;
                 if j >= 0 {
                     continue;
@@ -648,7 +650,7 @@ impl StrongholdPiece {
                 }
 
                 let piece = Self::create_piece(
-                    &piece_data.piece_type,
+                    piece_data.piece_type,
                     collector,
                     random,
                     x,
@@ -665,11 +667,11 @@ impl StrongholdPiece {
         }
 
         // Fallback: Small Corridor
-        if let Some(bbox) = SmallCorridorPiece::create_box(collector, x, y, z, orientation) {
+        if let Some(bbox) = SmallCorridorPiece::create_box(collector, x, y, z, &orientation) {
             return Some(Box::new(SmallCorridorPiece::new(
                 chain_length,
                 bbox,
-                *orientation,
+                orientation,
             )));
         }
 
@@ -678,48 +680,48 @@ impl StrongholdPiece {
 
     #[expect(clippy::too_many_arguments)]
     fn create_piece(
-        piece_type: &StrongholdPieceType,
+        piece_type: StrongholdPieceType,
         collector: &mut StructurePiecesCollector,
         random: &mut impl RandomImpl,
         x: i32,
         y: i32,
         z: i32,
-        orientation: &BlockDirection,
+        orientation: BlockDirection,
         chain_length: u32,
     ) -> Option<Box<dyn StructurePieceBase>> {
         match piece_type {
             StrongholdPieceType::FiveWayCrossing => {
-                FiveWayCrossingPiece::create(collector, random, x, y, z, *orientation, chain_length)
+                FiveWayCrossingPiece::create(collector, random, x, y, z, orientation, chain_length)
             }
             StrongholdPieceType::Corridor => {
-                CorridorPiece::create(collector, random, x, y, z, *orientation, chain_length)
+                CorridorPiece::create(collector, random, x, y, z, orientation, chain_length)
             }
             StrongholdPieceType::SquareRoom => {
-                SquareRoomPiece::create(collector, random, x, y, z, *orientation, chain_length)
+                SquareRoomPiece::create(collector, random, x, y, z, orientation, chain_length)
             }
             StrongholdPieceType::PortalRoom => {
-                PortalRoomPiece::create(collector, random, x, y, z, *orientation, chain_length)
+                PortalRoomPiece::create(collector, random, x, y, z, orientation, chain_length)
             }
             StrongholdPieceType::SpiralStaircase => {
-                SpiralStaircasePiece::create(collector, random, x, y, z, *orientation, chain_length)
+                SpiralStaircasePiece::create(collector, random, x, y, z, orientation, chain_length)
             }
             StrongholdPieceType::PrisonHall => {
-                PrisonHallPiece::create(collector, random, x, y, z, *orientation, chain_length)
+                PrisonHallPiece::create(collector, random, x, y, z, orientation, chain_length)
             }
             StrongholdPieceType::LeftTurn => {
-                LeftTurnPiece::create(collector, random, x, y, z, *orientation, chain_length)
+                LeftTurnPiece::create(collector, random, x, y, z, orientation, chain_length)
             }
             StrongholdPieceType::RightTurn => {
-                RightTurnPiece::create(collector, random, x, y, z, *orientation, chain_length)
+                RightTurnPiece::create(collector, random, x, y, z, orientation, chain_length)
             }
             StrongholdPieceType::Stairs => {
-                StairsPiece::create(collector, random, x, y, z, *orientation, chain_length)
+                StairsPiece::create(collector, random, x, y, z, orientation, chain_length)
             }
             StrongholdPieceType::ChestCorridor => {
-                ChestCorridorPiece::create(collector, random, x, y, z, *orientation, chain_length)
+                ChestCorridorPiece::create(collector, random, x, y, z, orientation, chain_length)
             }
             StrongholdPieceType::Library => {
-                LibraryPiece::create(collector, random, x, y, z, *orientation, chain_length)
+                LibraryPiece::create(collector, random, x, y, z, orientation, chain_length)
             }
         }
     }

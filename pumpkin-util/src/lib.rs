@@ -25,7 +25,7 @@ pub mod world_seed;
 
 pub mod jwt;
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum HeightMap {
     WorldSurfaceWg,
@@ -99,7 +99,7 @@ pub enum BlockDirection {
 
 impl BlockDirection {
     #[must_use]
-    pub fn get_axis(&self) -> Axis {
+    pub const fn get_axis(&self) -> Axis {
         match self {
             Self::Up | Self::Down => Axis::Y,
             Self::North | Self::South => Axis::Z,
@@ -116,7 +116,7 @@ pub struct MutableSplitSlice<'a, T> {
 }
 
 impl<'a, T> MutableSplitSlice<'a, T> {
-    pub fn extract_ith(base: &'a mut [T], index: usize) -> (&'a mut T, Self) {
+    pub const fn extract_ith(base: &'a mut [T], index: usize) -> (&'a mut T, Self) {
         let (start, end_inclusive) = base.split_at_mut(index);
         let (value, end) = end_inclusive
             .split_first_mut()
@@ -126,12 +126,12 @@ impl<'a, T> MutableSplitSlice<'a, T> {
     }
 
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.start.len() + self.end.len() + 1
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         false
     }
 }
@@ -191,7 +191,7 @@ pub enum Hand {
 
 impl Hand {
     #[must_use]
-    pub fn all() -> [Self; 2] {
+    pub const fn all() -> [Self; 2] {
         [Self::Right, Self::Left]
     }
 }

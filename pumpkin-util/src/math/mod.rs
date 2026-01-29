@@ -210,7 +210,7 @@ pub fn java_string_hash(string: &str) -> i32 {
 
 #[test]
 #[expect(clippy::unicode_not_nfc)]
-fn test_java_hash() {
+fn java_hash() {
     let values = [
         ("", 0, 1),
         ("1", 49, 80),

@@ -27,7 +27,7 @@ const ARG_LOCATION: &str = "location";
 const ARG_ENTITY: &str = "entity";
 const ARG_CAUSE: &str = "cause";
 
-fn amount_consumer() -> BoundedNumArgumentConsumer<f32> {
+const fn amount_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new().name(ARG_AMOUNT).min(0.0)
 }
 

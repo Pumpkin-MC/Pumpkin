@@ -13,7 +13,7 @@ pub struct CRegistryData<'a> {
 
 impl<'a> CRegistryData<'a> {
     #[must_use]
-    pub fn new(registry_id: &'a ResourceLocation, entries: &'a [RegistryEntry]) -> Self {
+    pub const fn new(registry_id: &'a ResourceLocation, entries: &'a [RegistryEntry]) -> Self {
         Self {
             registry_id,
             entries,
@@ -31,7 +31,7 @@ pub struct RegistryEntry {
 // TODO: No unwraps
 impl RegistryEntry {
     #[must_use]
-    pub fn new(entry_id: ResourceLocation, data: Option<Box<[u8]>>) -> Self {
+    pub const fn new(entry_id: ResourceLocation, data: Option<Box<[u8]>>) -> Self {
         Self { entry_id, data }
     }
 

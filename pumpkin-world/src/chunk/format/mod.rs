@@ -105,7 +105,7 @@ impl ChunkData {
                         block_sum,
                         sky,
                         sky_sum,
-                    )
+                    );
                 }
             }
         }
@@ -160,7 +160,7 @@ impl ChunkData {
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
         let section = ChunkSections::new(sub_chunks.into_boxed_slice(), min_y);
 
-        Ok(ChunkData {
+        Ok(Self {
             section,
             heightmap: chunk_data.heightmaps,
             x: position.x,
@@ -291,28 +291,27 @@ impl ChunkEntityData {
         }
         let mut map = HashMap::new();
         for entity_nbt in chunk_entity_data.entities {
-            let uuid = match entity_nbt.get_int_array("UUID") {
-                Some(uuid) => Uuid::from_u128(
+            let uuid = if let Some(uuid) = entity_nbt.get_int_array("UUID") {
+                Uuid::from_u128(
                     (uuid[0] as u128) << 96
                         | (uuid[1] as u128) << 64
                         | (uuid[2] as u128) << 32
                         | (uuid[3] as u128),
-                ),
-                None => {
-                    log::debug!(
-                        "Entity in chunk {},{} is missing UUID: {:?}",
-                        position.x,
-                        position.y,
-                        entity_nbt
-                    );
-                    continue;
-                }
+                )
+            } else {
+                log::debug!(
+                    "Entity in chunk {},{} is missing UUID: {:?}",
+                    position.x,
+                    position.y,
+                    entity_nbt
+                );
+                continue;
             };
 
             map.insert(uuid, entity_nbt);
         }
 
-        Ok(ChunkEntityData {
+        Ok(Self {
             x: position.x,
             z: position.y,
             data: map,
@@ -386,11 +385,13 @@ impl LightContainer {
     pub const DIM: usize = 16;
     pub const ARRAY_SIZE: usize = Self::DIM * Self::DIM * Self::DIM / 2;
 
+    #[must_use]
     pub fn new_empty(default: u8) -> Self {
         assert!(default <= 15, "Default value must be between 0 and 15");
         Self::Empty(default)
     }
 
+    #[must_use]
     pub fn new(data: Box<[u8]>) -> Self {
         assert!(
             data.len() == Self::ARRAY_SIZE,
@@ -400,20 +401,23 @@ impl LightContainer {
         Self::Full(data)
     }
 
+    #[must_use]
     pub fn new_filled(default: u8) -> Self {
         assert!(default <= 15, "Default value must be between 0 and 15");
         let value = default << 4 | default;
         Self::Full([value; Self::ARRAY_SIZE].into())
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         matches!(self, Self::Empty(_))
     }
 
-    fn index(x: usize, y: usize, z: usize) -> usize {
+    const fn index(x: usize, y: usize, z: usize) -> usize {
         y * 16 * 16 + z * 16 + x
     }
 
+    #[must_use]
     pub fn get(&self, x: usize, y: usize, z: usize) -> u8 {
         match self {
             Self::Full(data) => {

@@ -71,12 +71,12 @@ fn clamp_value(value: f64) -> f64 {
     value.clamp(-MAX_VELOCITY_CLAMP, MAX_VELOCITY_CLAMP)
 }
 
-fn abs_max(a: f64, b: f64) -> f64 {
+const fn abs_max(a: f64, b: f64) -> f64 {
     a.abs().max(b.abs())
 }
 
 fn to_long(value: f64) -> i64 {
-    (((value * 0.5 + 0.5) * MAX_15_BIT_VALUE).round() as i64).clamp(0, 32766)
+    ((value.mul_add(0.5, 0.5) * MAX_15_BIT_VALUE).round() as i64).clamp(0, 32766)
 }
 
 impl Serialize for Velocity {

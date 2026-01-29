@@ -118,7 +118,7 @@ impl PermissionAttachment {
 
     /// Get all directly set permissions
     #[must_use]
-    pub fn get_permissions(&self) -> &HashMap<String, bool> {
+    pub const fn get_permissions(&self) -> &HashMap<String, bool> {
         &self.permissions
     }
 }

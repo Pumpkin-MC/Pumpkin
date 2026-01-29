@@ -14,7 +14,7 @@
 // use tokio::{runtime::Runtime, sync::RwLock};
 //
 // #[ignore]
-// async fn test_reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
+// async fn reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
 //     // let level = level.clone();
 //     // let mut receiver = level.receive_chunks(positions);
 //     //
@@ -25,7 +25,7 @@
 // }
 //
 // /*
-// async fn test_reads_parallel(level: &Arc<Level>, positions: Vec<Vector2<i32>>, threads: usize) {
+// async fn reads_parallel(level: &Arc<Level>, positions: Vec<Vector2<i32>>, threads: usize) {
 //     let mut tasks = JoinSet::new();
 //
 //     // we write non overlapping chunks to avoid conflicts or level cache
@@ -43,12 +43,12 @@
 // }
 // */
 //
-// async fn test_writes(level: &Arc<Level>, chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>) {
+// async fn writes(level: &Arc<Level>, chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>) {
 //     level.write_chunks(chunks).await;
 // }
 //
 // /*
-// async fn test_writes_parallel(
+// async fn writes_parallel(
 //     level: &Arc<Level>,
 //     chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>,
 //     threads: usize,

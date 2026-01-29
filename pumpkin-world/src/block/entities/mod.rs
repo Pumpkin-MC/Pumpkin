@@ -78,12 +78,12 @@ pub trait BlockEntity: Send + Sync {
         pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
             .iter()
             .position(|block_entity_name| {
-                *block_entity_name == self.resource_location().split(":").last().unwrap()
+                *block_entity_name == self.resource_location().split(':').next_back().unwrap()
             })
             .unwrap() as u32
     }
 
-    /// Obtain NBT data for sending to the client in [ChunkData](crate::chunk::ChunkData)
+    /// Obtain NBT data for sending to the client in [`ChunkData`](crate::chunk::ChunkData)
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         None
     }
@@ -117,6 +117,7 @@ pub trait BlockEntity: Send + Sync {
     }
 }
 
+#[must_use]
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
     let x = nbt.get_int("x").unwrap();
     let y = nbt.get_int("y").unwrap();
@@ -124,6 +125,7 @@ pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
     T::from_nbt(nbt, BlockPos::new(x, y, z))
 }
 
+#[must_use]
 pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> {
     Some(match nbt.get_string("id").unwrap() {
         ChestBlockEntity::ID => Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt)),
@@ -161,6 +163,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
     })
 }
 
+#[must_use]
 pub fn has_block_block_entity(block: &Block) -> bool {
     BLOCK_ENTITY_TYPES.contains(&block.name)
 }

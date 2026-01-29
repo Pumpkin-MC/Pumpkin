@@ -35,7 +35,8 @@ impl MobSpawnerBlockEntity {
     pub const DEFAULT_SPAWN_COUNT: i32 = 4;
     pub const DEFAULT_SPAWN_RANGE: i32 = 4;
 
-    pub fn new(position: BlockPos) -> Self {
+    #[must_use]
+    pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
             delay: AtomicI32::new(Self::DEFAULT_DELAY),
@@ -61,7 +62,7 @@ impl MobSpawnerBlockEntity {
             },
             Ordering::Relaxed,
         );
-        world.add_synced_block_event(self.position, 1, 0).await
+        world.add_synced_block_event(self.position, 1, 0).await;
     }
 
     pub fn set_entity_type(&self, entity_type: &'static EntityType) {

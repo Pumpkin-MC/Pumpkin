@@ -22,7 +22,7 @@ pub struct CLoginSuccess<'a> {
 
 impl<'a> CLoginSuccess<'a> {
     #[must_use]
-    pub fn new(uuid: &'a uuid::Uuid, username: &'a str, properties: &'a [Property]) -> Self {
+    pub const fn new(uuid: &'a uuid::Uuid, username: &'a str, properties: &'a [Property]) -> Self {
         Self {
             uuid,
             username,

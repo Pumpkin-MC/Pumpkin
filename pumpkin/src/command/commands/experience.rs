@@ -18,7 +18,7 @@ const DESCRIPTION: &str = "Add, set or query player experience.";
 const ARG_TARGETS: &str = "targets";
 const ARG_AMOUNT: &str = "amount";
 
-fn xp_amount() -> BoundedNumArgumentConsumer<i32> {
+const fn xp_amount() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name(ARG_AMOUNT)
         .min(0)

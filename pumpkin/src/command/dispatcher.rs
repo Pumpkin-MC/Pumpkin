@@ -360,7 +360,7 @@ impl CommandDispatcher {
         raw_args: &mut RawArgs<'a>,
         input: &'a str,
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        let mut parsed_args: ConsumedArgs = HashMap::new();
+        //let mut parsed_args: ConsumedArgs = HashMap::new();
 
         for node in path.iter().map(|&i| &tree.nodes[i]) {
             match &node.node_type {
@@ -372,10 +372,10 @@ impl CommandDispatcher {
                         return Ok(None);
                     }
                 }
-                NodeType::Argument { consumer, name } => {
+                NodeType::Argument { consumer, name: _ } => {
                     match consumer.consume(src, server, raw_args).await {
-                        Some(consumed) => {
-                            parsed_args.insert(name, consumed);
+                        Some(_consumed) => {
+                            //parsed_args.insert(name, consumed);
                         }
                         None => {
                             return if raw_args.is_empty() {
@@ -444,7 +444,7 @@ mod test {
 
     use crate::command::{commands::default_dispatcher, tree::CommandTree};
     #[tokio::test]
-    async fn test_dynamic_command() {
+    async fn dynamic_command() {
         let config = BasicConfiguration::default();
         let registry = RwLock::new(PermissionRegistry::new());
         let mut dispatcher = default_dispatcher(&registry, &config).await;

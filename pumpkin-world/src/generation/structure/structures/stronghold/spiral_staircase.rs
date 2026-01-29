@@ -98,7 +98,8 @@ impl SpiralStaircasePiece {
         }))
     }
 
-    pub fn has_portal_room(&self) -> bool {
+    #[must_use]
+    pub const fn has_portal_room(&self) -> bool {
         self.portal_room_exists
     }
 }
@@ -129,11 +130,8 @@ impl StructurePieceBase for SpiralStaircasePiece {
             1,
             1,
             pieces_to_process,
-            if self.is_structure_start {
-                Some(StrongholdPieceType::FiveWayCrossing)
-            } else {
-                None
-            },
+            self.is_structure_start
+                .then_some(StrongholdPieceType::FiveWayCrossing),
         );
     }
 

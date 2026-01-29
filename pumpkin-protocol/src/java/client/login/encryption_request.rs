@@ -25,7 +25,7 @@ pub struct CEncryptionRequest<'a> {
 
 impl<'a> CEncryptionRequest<'a> {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         server_id: &'a str,
         public_key: &'a [u8],
         verify_token: &'a [u8],

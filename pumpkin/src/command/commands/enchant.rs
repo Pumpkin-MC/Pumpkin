@@ -146,7 +146,7 @@ impl CommandExecutor for Executor {
     }
 }
 
-fn enchantment_level_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn enchantment_level_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("level")
         .min(0)

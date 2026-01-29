@@ -43,12 +43,12 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
 
     let data_version = info.data.data_version;
 
-    if !(MINIMUM_SUPPORTED_WORLD_DATA_VERSION..=MAXIMUM_SUPPORTED_WORLD_DATA_VERSION)
+    if (MINIMUM_SUPPORTED_WORLD_DATA_VERSION..=MAXIMUM_SUPPORTED_WORLD_DATA_VERSION)
         .contains(&data_version)
     {
-        Err(WorldInfoError::UnsupportedDataVersion(data_version))
-    } else {
         Ok(())
+    } else {
+        Err(WorldInfoError::UnsupportedDataVersion(data_version))
     }
 }
 
@@ -70,11 +70,11 @@ fn check_file_level_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
 
     let level_version = info.data.version;
 
-    if !(MINIMUM_SUPPORTED_LEVEL_VERSION..=MAXIMUM_SUPPORTED_LEVEL_VERSION).contains(&level_version)
+    if (MINIMUM_SUPPORTED_LEVEL_VERSION..=MAXIMUM_SUPPORTED_LEVEL_VERSION).contains(&level_version)
     {
-        Err(WorldInfoError::UnsupportedLevelVersion(level_version))
-    } else {
         Ok(())
+    } else {
+        Err(WorldInfoError::UnsupportedLevelVersion(level_version))
     }
 }
 
@@ -159,7 +159,7 @@ mod test {
     use super::{AnvilLevelInfo, LEVEL_DAT_FILE_NAME, LevelDat, WorldInfoReader, WorldInfoWriter};
 
     #[test]
-    fn test_preserve_level_dat_seed() {
+    fn preserve_level_dat_seed() {
         let seed = 1337;
 
         let data = LevelData::default(Seed(1337));
@@ -249,7 +249,7 @@ mod test {
     });
 
     #[test]
-    fn test_deserialize_level_dat() {
+    fn deserialize_level_dat() {
         let raw_compressed_nbt = fs::read("assets/level_1_21_4.dat").unwrap();
         assert!(!raw_compressed_nbt.is_empty());
 
@@ -262,7 +262,7 @@ mod test {
     }
 
     #[test]
-    fn test_serialize_level_dat() {
+    fn serialize_level_dat() {
         let mut serialized = Vec::new();
         to_bytes(&*LEVEL_DAT, &mut serialized).expect("Failed to encode to bytes");
 

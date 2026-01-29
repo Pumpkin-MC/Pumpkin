@@ -47,18 +47,18 @@ impl BlockPredicate {
         pos: &BlockPos,
     ) -> bool {
         match self {
-            BlockPredicate::MatchingBlocks(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::MatchingBlockTag(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::MatchingFluids(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::HasSturdyFace(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::Solid(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::Replaceable(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::WouldSurvive(predicate) => predicate.test(block_registry, chunk, pos),
-            BlockPredicate::InsideWorldBounds(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::AnyOf(predicate) => predicate.test(block_registry, chunk, pos),
-            BlockPredicate::AllOf(predicate) => predicate.test(block_registry, chunk, pos),
-            BlockPredicate::Not(predicate) => predicate.test(block_registry, chunk, pos),
-            BlockPredicate::AlwaysTrue => true,
+            Self::MatchingBlocks(predicate) => predicate.test(chunk, pos),
+            Self::MatchingBlockTag(predicate) => predicate.test(chunk, pos),
+            Self::MatchingFluids(predicate) => predicate.test(chunk, pos),
+            Self::HasSturdyFace(predicate) => predicate.test(chunk, pos),
+            Self::Solid(predicate) => predicate.test(chunk, pos),
+            Self::Replaceable(predicate) => predicate.test(chunk, pos),
+            Self::WouldSurvive(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::InsideWorldBounds(predicate) => predicate.test(chunk, pos),
+            Self::AnyOf(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::AllOf(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::Not(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::AlwaysTrue => true,
         }
     }
 }

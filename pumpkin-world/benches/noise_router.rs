@@ -26,7 +26,7 @@ fn bench_noise_router_creation(c: &mut Criterion) {
                 black_box(&builder_options),
             );
             black_box(router);
-        })
+        });
     });
 }
 

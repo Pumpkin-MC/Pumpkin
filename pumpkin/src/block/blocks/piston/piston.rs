@@ -14,7 +14,7 @@ use pumpkin_world::{
     block::entities::{has_block_block_entity, piston::PistonBlockEntity},
     world::BlockFlags,
 };
-use rand::Rng;
+use rand::RngExt;
 
 use crate::{
     block::{

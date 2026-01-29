@@ -28,12 +28,12 @@ impl MaterialRule {
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         match self {
-            MaterialRule::Badlands(badlands) => badlands.try_apply(context),
-            MaterialRule::Block(block) => Some(block.try_apply()),
-            MaterialRule::Sequence(sequence) => {
+            Self::Badlands(_badlands) => Some(BadLandsMaterialRule::try_apply(context)),
+            Self::Block(block) => Some(block.try_apply()),
+            Self::Sequence(sequence) => {
                 sequence.try_apply(chunk, context, surface_height_estimate_sampler)
             }
-            MaterialRule::Condition(condition) => {
+            Self::Condition(condition) => {
                 condition.try_apply(chunk, context, surface_height_estimate_sampler)
             }
         }
@@ -44,12 +44,12 @@ impl MaterialRule {
 pub struct BadLandsMaterialRule;
 
 impl BadLandsMaterialRule {
-    pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<&'static BlockState> {
-        Some(context.terrain_builder.get_terracotta_block(
+    pub fn try_apply(context: &mut MaterialRuleContext) -> &'static BlockState {
+        context.terrain_builder.get_terracotta_block(
             context.block_pos_x,
             context.block_pos_y,
             context.block_pos_z,
-        ))
+        )
     }
 }
 

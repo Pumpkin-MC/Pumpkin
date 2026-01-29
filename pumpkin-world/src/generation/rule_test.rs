@@ -12,7 +12,7 @@ pub enum RuleTest {
 pub struct AlwaysTrueRuleTest;
 
 impl AlwaysTrueRuleTest {
-    pub fn test(&self, _block: &'static Block) -> bool {
+    pub const fn test() -> bool {
         true
     }
 }

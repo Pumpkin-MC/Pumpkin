@@ -26,7 +26,7 @@ impl CommandExecutor for Executor {
                     player.living_entity.entity.world.load().level.seed.0
                 }
                 // TODO: Maybe ask player for world, or get the current world
-                _ => match server.worlds.read().await.first() {
+                _ => match server.worlds.load().first() {
                     Some(world) => world.level.seed.0,
                     None => {
                         return Err(CommandError::CommandFailed(TextComponent::text(

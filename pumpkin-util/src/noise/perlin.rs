@@ -87,6 +87,7 @@ impl PerlinNoiseSampler {
     }
 
     #[inline]
+    #[expect(clippy::suboptimal_flops)]
     fn perlin_fade(value: f64) -> f64 {
         value * value * value * (value * (value * 6.0 - 15.0) + 10.0)
     }
@@ -151,7 +152,7 @@ pub struct OctavePerlinNoiseSampler {
 
 impl OctavePerlinNoiseSampler {
     #[must_use]
-    pub fn max_value(&self) -> f64 {
+    pub const fn max_value(&self) -> f64 {
         self.max_value
     }
 
@@ -171,6 +172,7 @@ impl OctavePerlinNoiseSampler {
 
     #[inline]
     #[must_use]
+    #[expect(clippy::suboptimal_flops)]
     pub fn maintain_precision(value: f64) -> f64 {
         value - (value / 3.355_443_2E7 + 0.5).floor() * 3.355_443_2E7
     }
@@ -315,7 +317,7 @@ mod tests {
     };
 
     #[test]
-    fn test_create_xoroshiro() {
+    fn create_xoroshiro() {
         let mut rand = Xoroshiro::from_seed(513513513);
         assert_eq!(rand.next_i32(), 404174895);
 
@@ -344,7 +346,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_legacy() {
+    fn create_legacy() {
         let mut rand = LegacyRand::from_seed(513513513);
         assert_eq!(rand.next_i32(), -1302745855);
 
@@ -368,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create() {
+    fn create() {
         let mut rand = Xoroshiro::from_seed(111);
         assert_eq!(rand.next_i32(), -1467508761);
 
@@ -398,7 +400,7 @@ mod tests {
 
     #[test]
     #[expect(clippy::too_many_lines)]
-    fn test_no_y() {
+    fn no_y() {
         let mut rand = Xoroshiro::from_seed(111);
         assert_eq!(rand.next_i32(), -1467508761);
         let sampler = PerlinNoiseSampler::new(&mut rand);
@@ -568,7 +570,7 @@ mod tests {
     }
 
     #[test]
-    fn test_no_y_chunk() {
+    fn no_y_chunk() {
         let expected_data: Vec<(i32, i32, i32, f64)> =
             read_data_from_file!("../../assets/perlin2_7_4.json");
 
@@ -597,7 +599,7 @@ mod tests {
 
     #[test]
     #[expect(clippy::too_many_lines)]
-    fn test_no_fade() {
+    fn no_fade() {
         let mut rand = Xoroshiro::from_seed(111);
         assert_eq!(rand.next_i32(), -1467508761);
         let sampler = PerlinNoiseSampler::new(&mut rand);
@@ -811,7 +813,7 @@ mod tests {
     }
 
     #[test]
-    fn test_no_fade_chunk() {
+    fn no_fade_chunk() {
         let expected_data: Vec<(i32, i32, i32, f64)> =
             read_data_from_file!("../../assets/perlin_7_4.json");
 
@@ -845,7 +847,7 @@ mod tests {
     }
 
     #[test]
-    fn test_map() {
+    fn map() {
         let expected_data: Vec<i32> = read_data_from_file!("../../assets/perlin_map.json");
         let mut expected_iter = expected_data.iter();
 

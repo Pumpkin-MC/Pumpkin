@@ -35,6 +35,7 @@ impl BlastingFurnaceBlockEntity {
     pub const INVENTORY_SIZE: usize = 3;
     pub const ID: &'static str = "minecraft:blast_furnace";
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,

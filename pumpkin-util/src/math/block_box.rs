@@ -14,7 +14,14 @@ pub struct BlockBox {
 
 impl BlockBox {
     #[must_use]
-    pub fn new(min_x: i32, min_y: i32, min_z: i32, max_x: i32, max_y: i32, max_z: i32) -> Self {
+    pub const fn new(
+        min_x: i32,
+        min_y: i32,
+        min_z: i32,
+        max_x: i32,
+        max_y: i32,
+        max_z: i32,
+    ) -> Self {
         Self {
             min: Vector3 {
                 x: min_x,
@@ -47,7 +54,7 @@ impl BlockBox {
 
     #[expect(clippy::too_many_arguments)]
     #[must_use]
-    pub fn rotated(
+    pub const fn rotated(
         x: i32,
         y: i32,
         z: i32,
@@ -97,7 +104,7 @@ impl BlockBox {
     }
 
     #[must_use]
-    pub fn from_pos(pos: BlockPos) -> Self {
+    pub const fn from_pos(pos: BlockPos) -> Self {
         Self {
             min: pos.0,
             max: pos.0,
@@ -105,14 +112,14 @@ impl BlockBox {
     }
 
     #[must_use]
-    pub fn expand(&self, x: i32, y: i32, z: i32) -> Self {
+    pub const fn expand(&self, x: i32, y: i32, z: i32) -> Self {
         Self {
             min: Vector3::new(self.min.x - x, self.min.y - y, self.min.z - z),
             max: Vector3::new(self.max.x + x, self.max.y + y, self.max.z + z),
         }
     }
 
-    pub fn move_pos(&mut self, dx: i32, dy: i32, dz: i32) {
+    pub const fn move_pos(&mut self, dx: i32, dy: i32, dz: i32) {
         self.min.x += dx;
         self.min.y += dy;
         self.min.z += dz;
@@ -122,12 +129,12 @@ impl BlockBox {
     }
 
     #[must_use]
-    pub fn contains_pos(&self, pos: &Vector3<i32>) -> bool {
+    pub const fn contains_pos(&self, pos: &Vector3<i32>) -> bool {
         self.contains(pos.x, pos.y, pos.z)
     }
 
     #[must_use]
-    pub fn contains(&self, x: i32, y: i32, z: i32) -> bool {
+    pub const fn contains(&self, x: i32, y: i32, z: i32) -> bool {
         x >= self.min.x
             && x <= self.max.x
             && y >= self.min.y
@@ -137,7 +144,7 @@ impl BlockBox {
     }
 
     #[must_use]
-    pub fn intersects(&self, other: &Self) -> bool {
+    pub const fn intersects(&self, other: &Self) -> bool {
         self.min.x < other.max.x
             && self.max.x > other.min.x
             && self.min.y < other.max.y
@@ -145,7 +152,7 @@ impl BlockBox {
     }
 
     #[must_use]
-    pub fn intersects_xz(&self, other: &Self) -> bool {
+    pub const fn intersects_xz(&self, other: &Self) -> bool {
         self.max.x >= other.min.x
             && self.min.x <= other.max.x
             && self.max.z >= other.min.z
@@ -153,12 +160,12 @@ impl BlockBox {
     }
 
     #[must_use]
-    pub fn intersects_raw_xz(&self, min_x: i32, min_z: i32, max_x: i32, max_z: i32) -> bool {
+    pub const fn intersects_raw_xz(&self, min_x: i32, min_z: i32, max_x: i32, max_z: i32) -> bool {
         self.max.x >= min_x && self.min.x <= max_x && self.max.z >= min_z && self.min.z <= max_z
     }
 
     #[must_use]
-    pub fn get_block_count_y(&self) -> i32 {
+    pub const fn get_block_count_y(&self) -> i32 {
         self.max.y - self.min.y + 1
     }
 

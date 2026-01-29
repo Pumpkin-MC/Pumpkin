@@ -16,7 +16,7 @@ pub struct WriteAdaptor<W: Write> {
 }
 
 impl<W: Write> WriteAdaptor<W> {
-    pub fn new(w: W) -> Self {
+    pub const fn new(w: W) -> Self {
         Self { writer: w }
     }
 }
@@ -57,7 +57,7 @@ pub struct Serializer<W: Write> {
 }
 
 impl<W: Write> Serializer<W> {
-    pub fn new(output: W, name: Option<String>) -> Self {
+    pub const fn new(output: W, name: Option<String>) -> Self {
         Self {
             output: WriteAdaptor::new(output),
             state: State::Root(name),

@@ -90,16 +90,16 @@ impl Default for UDPNetworkDecoder {
 
 impl UDPNetworkDecoder {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { compression: None }
     }
 
-    pub fn set_compression(&mut self, threshold: CompressionThreshold) {
+    pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
-    pub fn set_encryption(&mut self, _key: &[u8; 16]) {
+    pub const fn set_encryption(&mut self, _key: &[u8; 16]) {
         // if matches!(self.reader, DecryptionReader::Decrypt(_)) {
         //     panic!("Cannot upgrade a stream that already has a cipher!");
         // }

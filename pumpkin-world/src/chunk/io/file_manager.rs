@@ -7,7 +7,6 @@ use std::{
 
 use futures::future::join_all;
 use log::{error, trace};
-use num_traits::Zero;
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
     io::AsyncReadExt,
@@ -25,12 +24,12 @@ use crate::{
 
 use super::{ChunkSerializer, FileIO, LoadedData};
 
-/// A simple implementation of the ChunkSerializer trait
+/// A simple implementation of the `ChunkSerializer` trait
 /// that load and save the data from a file in the disk
 /// using parallelism and a cache for the files with ongoing IO operations.
 ///
 /// It also avoid IO operations that could produce dataraces thanks to the
-/// custom *DashMap*-like implementation.
+/// custom *`DashMap`*-like implementation.
 pub struct ChunkFileManager<S: ChunkSerializer<WriteBackend = PathBuf>> {
     // Dashmap has rw-locks on shards, but we want per-serializer.
     //
@@ -65,7 +64,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
 
     /// We can only remove this entry from the map if we are the only ones with a reference to it
     /// IMPORTANT: This must be called within the write lock of the parent map
-    async fn can_remove(&self) -> bool {
+    fn can_remove(&self) -> bool {
         match self.internal.get() {
             Some(arc) => {
                 // A strong count of 1 means it's only in the map
@@ -349,7 +348,7 @@ where
                         .read()
                         .await
                         .get(&path)
-                        .is_some_and(|count| !count.is_zero());
+                        .is_some_and(|count| count != &0);
 
                     if !is_watched {
                         // With the modification done, we can drop the write lock but keep the read lock
@@ -373,12 +372,12 @@ where
                             .read()
                             .await
                             .get(&path)
-                            .is_none_or(|count| count.is_zero())
+                            .is_none_or(|count| count == &0)
                         {
                             let mut locks = self.file_locks.write().await;
 
                             let can_remove = if let Some(loader) = locks.get(&path) {
-                                loader.can_remove().await
+                                loader.can_remove()
                             } else {
                                 true
                             };
@@ -416,13 +415,14 @@ where
             let serializer_cache = self.file_locks.read().await;
 
             // Acquire a write lock on all entries to verify they are complete
-            let tasks = serializer_cache
+            let _tasks = serializer_cache
                 .values()
-                .map(|serializer| serializer.can_remove());
+                .map(ChunkSerializerLazyLoader::can_remove);
 
             // We need to wait to ensure that all the locks are acquired
             // so there is no **operation** ongoing
-            let _ = join_all(tasks).await;
+            // TODO
+            // let _ = join_all(tasks);
         })
     }
 }

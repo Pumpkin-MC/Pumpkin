@@ -25,6 +25,7 @@ pub struct CommandBlockEntity {
 
 impl CommandBlockEntity {
     pub const ID: &'static str = "minecraft:command_block";
+    #[must_use]
     pub fn new(position: BlockPos, track_output: bool, is_chain: bool) -> Self {
         Self {
             position,

@@ -14,7 +14,8 @@ pub struct OreVeinSampler {
 }
 
 impl OreVeinSampler {
-    pub fn new(random_deriver: RandomDeriver) -> Self {
+    #[must_use]
+    pub const fn new(random_deriver: RandomDeriver) -> Self {
         Self { random_deriver }
     }
 
@@ -82,7 +83,7 @@ pub struct VeinType {
 pub mod vein_type {
     use pumpkin_data::Block;
 
-    use super::*;
+    use super::VeinType;
     pub const COPPER: VeinType = VeinType {
         ore: Block::COPPER_ORE,
         raw_ore: Block::RAW_COPPER_BLOCK,

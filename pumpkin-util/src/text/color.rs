@@ -103,7 +103,7 @@ pub struct RGBColor {
 
 impl RGBColor {
     #[must_use]
-    pub fn new(red: u8, green: u8, blue: u8) -> Self {
+    pub const fn new(red: u8, green: u8, blue: u8) -> Self {
         Self { red, green, blue }
     }
 }
@@ -127,7 +127,7 @@ pub struct ARGBColor {
 
 impl ARGBColor {
     #[must_use]
-    pub fn new(alpha: u8, red: u8, green: u8, blue: u8) -> Self {
+    pub const fn new(alpha: u8, red: u8, green: u8, blue: u8) -> Self {
         Self {
             alpha,
             red,
@@ -167,7 +167,7 @@ pub enum NamedColor {
 
 impl NamedColor {
     #[must_use]
-    pub fn to_rgb(&self) -> RGBColor {
+    pub const fn to_rgb(&self) -> RGBColor {
         match self {
             Self::Black => RGBColor::new(0, 0, 0),
             Self::DarkBlue => RGBColor::new(0, 0, 170),

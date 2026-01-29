@@ -8,7 +8,7 @@ pub struct WindowProperty<T: WindowPropertyTrait> {
 }
 
 impl<T: WindowPropertyTrait> WindowProperty<T> {
-    pub fn new(window_property: T, value: i16) -> Self {
+    pub const fn new(window_property: T, value: i16) -> Self {
         Self {
             window_property,
             value,

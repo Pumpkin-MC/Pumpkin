@@ -56,7 +56,7 @@ pub struct MaterialRuleContext<'a> {
 
 impl<'a> MaterialRuleContext<'a> {
     #[expect(clippy::too_many_arguments)]
-    pub fn new(
+    pub const fn new(
         min_y: i8,
         height: u16,
         noise_builder: DoublePerlinNoiseBuilder<'a>,
@@ -114,7 +114,7 @@ impl<'a> MaterialRuleContext<'a> {
         self.run_depth = self.sample_run_depth();
     }
 
-    pub fn init_vertical(
+    pub const fn init_vertical(
         &mut self,
         stone_depth_above: i32,
         stone_depth_below: i32,
@@ -132,7 +132,7 @@ impl<'a> MaterialRuleContext<'a> {
             self.last_unique_horizontal_pos_value = self.unique_horizontal_pos_value;
             self.secondary_depth =
                 self.secondary_noise
-                    .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64)
+                    .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
         }
         self.secondary_depth
     }
@@ -167,6 +167,7 @@ pub enum MaterialCondition {
 }
 
 impl MaterialCondition {
+    #[expect(clippy::similar_names)]
     pub fn test(
         &self,
         chunk: &mut ProtoChunk,
@@ -174,14 +175,12 @@ impl MaterialCondition {
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> bool {
         match self {
-            MaterialCondition::Biome(biome) => biome.test(context),
-            MaterialCondition::NoiseThreshold(noise_threshold) => noise_threshold.test(context),
-            MaterialCondition::VerticalGradient(vertical_gradient) => {
-                vertical_gradient.test(context)
-            }
-            MaterialCondition::YAbove(above_y) => above_y.test(context),
-            MaterialCondition::Water(water) => water.test(context),
-            MaterialCondition::Temperature => {
+            Self::Biome(biome) => biome.test(context),
+            Self::NoiseThreshold(noise_threshold) => noise_threshold.test(context),
+            Self::VerticalGradient(vertical_gradient) => vertical_gradient.test(context),
+            Self::YAbove(above_y) => above_y.test(context),
+            Self::Water(water) => water.test(context),
+            Self::Temperature => {
                 let temperature = context.biome.weather.compute_temperature(
                     context.block_pos_x as f64,
                     context.block_pos_y,
@@ -190,7 +189,7 @@ impl MaterialCondition {
                 );
                 temperature < 0.15f32
             }
-            MaterialCondition::Steep => {
+            Self::Steep => {
                 let local_x = context.block_pos_x & 15;
                 let local_z = context.block_pos_z & 15;
 
@@ -212,14 +211,12 @@ impl MaterialCondition {
                     sub_height >= add_height + 4
                 }
             }
-            MaterialCondition::Not(not) => {
-                not.test(chunk, context, surface_height_estimate_sampler)
+            Self::Not(not) => not.test(chunk, context, surface_height_estimate_sampler),
+            Self::Hole(_hole) => HoleMaterialCondition::test(context),
+            Self::AbovePreliminarySurface(_above) => {
+                SurfaceMaterialCondition::test(context, surface_height_estimate_sampler)
             }
-            MaterialCondition::Hole(hole) => hole.test(context),
-            MaterialCondition::AbovePreliminarySurface(above) => {
-                above.test(context, surface_height_estimate_sampler)
-            }
-            MaterialCondition::StoneDepth(stone_depth) => stone_depth.test(context),
+            Self::StoneDepth(stone_depth) => stone_depth.test(context),
         }
     }
 }
@@ -228,7 +225,7 @@ impl MaterialCondition {
 pub struct HoleMaterialCondition;
 
 impl HoleMaterialCondition {
-    pub fn test(&self, context: &MaterialRuleContext) -> bool {
+    pub const fn test(context: &MaterialRuleContext) -> bool {
         context.run_depth <= 0
     }
 }
@@ -241,7 +238,7 @@ pub struct AboveYMaterialCondition {
 }
 
 impl AboveYMaterialCondition {
-    pub fn test(&self, context: &MaterialRuleContext) -> bool {
+    pub const fn test(&self, context: &MaterialRuleContext) -> bool {
         context.block_pos_y
             + if self.add_stone_depth {
                 context.stone_depth_above
@@ -276,7 +273,6 @@ pub struct SurfaceMaterialCondition;
 
 impl SurfaceMaterialCondition {
     pub fn test(
-        &self,
         context: &mut MaterialRuleContext,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> bool {
@@ -398,7 +394,7 @@ pub struct WaterMaterialCondition {
 }
 
 impl WaterMaterialCondition {
-    pub fn test(&self, context: &MaterialRuleContext) -> bool {
+    pub const fn test(&self, context: &MaterialRuleContext) -> bool {
         context.fluid_height == i32::MIN
             || context.block_pos_y
                 + (if self.add_stone_depth {

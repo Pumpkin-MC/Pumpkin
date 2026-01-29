@@ -80,7 +80,7 @@ impl BlockEntity for BarrelBlockEntity {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.viewers
-                .update_viewer_count::<BarrelBlockEntity>(self, world, &self.position)
+                .update_viewer_count::<Self>(self, world, &self.position)
                 .await;
         })
     }
@@ -126,6 +126,7 @@ impl BarrelBlockEntity {
     pub const INVENTORY_SIZE: usize = 27;
     pub const ID: &'static str = "minecraft:barrel";
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -181,7 +182,7 @@ impl Inventory for BarrelBlockEntity {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -238,7 +239,7 @@ impl Inventory for BarrelBlockEntity {
 impl Clearable for BarrelBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })

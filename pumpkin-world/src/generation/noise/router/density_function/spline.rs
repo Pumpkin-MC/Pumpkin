@@ -45,7 +45,7 @@ pub struct SplinePoint {
 }
 
 impl SplinePoint {
-    pub fn new(location: f32, value: SplineValue, derivative: f32) -> Self {
+    pub const fn new(location: f32, value: SplineValue, derivative: f32) -> Self {
         Self {
             location,
             value,
@@ -74,7 +74,7 @@ pub struct Spline {
 }
 
 impl Spline {
-    pub fn new(input_index: usize, points: Box<[SplinePoint]>) -> Self {
+    pub const fn new(input_index: usize, points: Box<[SplinePoint]>) -> Self {
         Self {
             input_index,
             points,

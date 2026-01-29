@@ -11,7 +11,7 @@ pub struct CCookieRequest<'a> {
 
 impl<'a> CCookieRequest<'a> {
     #[must_use]
-    pub fn new(key: &'a ResourceLocation) -> Self {
+    pub const fn new(key: &'a ResourceLocation) -> Self {
         Self { key }
     }
 }

@@ -37,9 +37,9 @@ impl ItemEntity {
     pub async fn new(entity: Entity, item_stack: ItemStack) -> Self {
         entity
             .set_velocity(Vector3::new(
-                rand::random::<f64>() * 0.2 - 0.1,
+                rand::random::<f64>().mul_add(0.2, -0.1),
                 0.2,
-                rand::random::<f64>() * 0.2 - 0.1,
+                rand::random::<f64>().mul_add(0.2, -0.1),
             ))
             .await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
@@ -88,19 +88,14 @@ impl ItemEntity {
         let bounding_box = self.entity.bounding_box.load().expand(0.5, 0.0, 0.5);
 
         let world = self.entity.world.load();
-        let items: Vec<_> = world
-            .entities
-            .read()
-            .await
-            .values()
-            .filter_map(|entity: &Arc<dyn EntityBase>| {
-                entity.clone().get_item_entity().filter(|item| {
-                    item.entity.entity_id != self.entity.entity_id
-                        && !item.never_despawn.load(Ordering::Relaxed)
-                        && item.entity.bounding_box.load().intersects(&bounding_box)
-                })
+        let entities = world.entities.load();
+        let items = entities.iter().filter_map(|entity: &Arc<dyn EntityBase>| {
+            entity.clone().get_item_entity().filter(|item| {
+                item.entity.entity_id != self.entity.entity_id
+                    && !item.never_despawn.load(Ordering::Relaxed)
+                    && item.entity.bounding_box.load().intersects(&bounding_box)
             })
-            .collect();
+        });
 
         for item in items {
             if item.can_merge().await {

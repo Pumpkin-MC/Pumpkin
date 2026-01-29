@@ -1,6 +1,6 @@
 use super::World;
 use pumpkin_protocol::java::client::play::{CGameEvent, GameEvent};
-use rand::Rng;
+use rand::RngExt;
 
 // Weather timing constants
 const RAIN_DELAY_MIN: i32 = 12_000;
@@ -37,7 +37,7 @@ impl Default for Weather {
 
 impl Weather {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             clear_weather_time: 0,
             raining: false,
