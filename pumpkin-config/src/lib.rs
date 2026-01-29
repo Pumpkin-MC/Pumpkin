@@ -113,6 +113,12 @@ pub struct BasicConfiguration {
     pub white_list: bool,
     /// Whether to enforce the whitelist
     pub enforce_whitelist: bool,
+    /// Delay in milliseconds before restarting the server process.
+    pub restart_delay_ms: u64,
+    /// Message shown to players when the server stops.
+    pub server_stop_message: String,
+    /// Message shown to players when the server restarts.
+    pub server_restart_message: String,
 }
 
 impl Default for BasicConfiguration {
@@ -144,6 +150,9 @@ impl Default for BasicConfiguration {
             allow_chat_reports: false,
             white_list: false,
             enforce_whitelist: false,
+            restart_delay_ms: 200,
+            server_stop_message: "Server stopped".to_string(),
+            server_restart_message: "Server restarting".to_string(),
         }
     }
 }

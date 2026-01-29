@@ -9,7 +9,7 @@ use std::{
     io::{self},
     sync::{Arc, LazyLock, OnceLock},
 };
-use std::process::Command;
+use std::process::{Command, Stdio};
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 #[cfg(not(unix))]
@@ -24,7 +24,7 @@ pub use pumpkin::request_restart;
 
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 // Setup some tokens to allow us to identify which event is for which socket.
 
@@ -123,9 +123,19 @@ async fn main() {
             String::new()
         }
     );
+    if std::env::var_os("PUMPKIN_RESTARTED").is_some() {
+        log::info!(
+            "{}",
+            TextComponent::text("Server restarted. Press Enter once before using the console.")
+                .color_named(NamedColor::Green)
+                .to_pretty_console()
+        );
+    }
+    let restart_delay_ms = basic_config.restart_delay_ms;
 
     pumpkin_server.start().await;
     log::info!("The server has stopped.");
+    drop(pumpkin_server);
 
     if RESTART_REQUESTED.load(Ordering::Relaxed) {
         log::warn!("Restart requested; respawning server process...");
@@ -139,14 +149,31 @@ async fn main() {
         let args: Vec<String> = std::env::args().skip(1).collect();
         #[cfg(unix)]
         {
+            std::thread::sleep(Duration::from_millis(restart_delay_ms));
             // Replace current process to keep console attached.
-            let err = Command::new(exe).args(&args).exec();
+            let err = Command::new(exe)
+                .args(&args)
+                .env("PUMPKIN_RESTARTED", "1")
+                .exec();
             log::error!("Failed to exec new server process: {err}");
         }
         #[cfg(not(unix))]
         {
-            match Command::new(exe).args(&args).spawn() {
-                Ok(_) => log::info!("Spawned new server process."),
+            std::thread::sleep(Duration::from_millis(restart_delay_ms));
+            match Command::new(exe)
+                .args(&args)
+                .env("PUMPKIN_RESTARTED", "1")
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn()
+            {
+                Ok(mut child) => {
+                    log::info!("Spawned new server process.");
+                    // Keep the console attached to the child so PowerShell doesn't take over stdin.
+                    let _ = child.wait();
+                    std::process::exit(0);
+                }
                 Err(e) => log::error!("Failed to spawn new server process: {e}"),
             }
         }

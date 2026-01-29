@@ -341,7 +341,11 @@ impl PumpkinServer {
             log::error!("Error saving all players during shutdown: {e}");
         }
 
-        let kick_message = TextComponent::text("Server stopped");
+        let kick_message = if RESTART_REQUESTED.load(Ordering::Relaxed) {
+            TextComponent::text(self.server.basic_config.server_restart_message.clone())
+        } else {
+            TextComponent::text(self.server.basic_config.server_stop_message.clone())
+        };
         for player in self.server.get_all_players().await {
             player
                 .kick(DisconnectReason::Shutdown, kick_message.clone())
@@ -502,6 +506,9 @@ impl PumpkinServer {
 fn setup_stdin_console(server: Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     let rt = tokio::runtime::Handle::current();
+    let warmup = std::env::var_os("PUMPKIN_RESTARTED").is_some();
+    let tx_thread = tx.clone();
+    let rt_thread = rt.clone();
     std::thread::spawn(move || {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let mut line = String::new();
@@ -516,13 +523,24 @@ fn setup_stdin_console(server: Arc<Server>) {
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 log::warn!("Console command was not terminated with a newline");
             }
-            rt.block_on(tx.send(line.trim().to_string()))
+            rt_thread.block_on(tx_thread.send(line.trim().to_string()))
                 .expect("Failed to send command to server");
         }
     });
+    if warmup {
+        let _ = tx.try_send(String::new());
+    }
     tokio::spawn(async move {
+        let mut warmup_pending = warmup;
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if let Some(command) = rx.recv().await {
+                if command.trim().is_empty() {
+                    if warmup_pending {
+                        log::info!("Console ready.");
+                        warmup_pending = false;
+                    }
+                    continue;
+                }
                 send_cancellable! {{
                     &server;
                     ServerCommandEvent::new(command.clone());
@@ -541,6 +559,14 @@ fn setup_stdin_console(server: Arc<Server>) {
 
 fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let warmup = std::env::var_os("PUMPKIN_RESTARTED").is_some();
+
+    if warmup {
+        // Nudge the cursor to a clean line before rustyline draws the prompt.
+        use std::io::Write;
+        let _ = std::io::stdout().write_all(b"\n");
+        let _ = std::io::stdout().flush();
+    }
 
     if let Some(helper) = rl.helper_mut() {
         if let Ok(mut server_lock) = helper.server.write() {
@@ -549,13 +575,14 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
         let _ = helper.rt.set(tokio::runtime::Handle::current());
     }
 
+    let tx_thread = tx.clone();
     std::thread::spawn(move || {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let readline = rl.readline("$ ");
             match readline {
                 Ok(line) => {
                     let _ = rl.add_history_entry(line.clone());
-                    if tx.blocking_send(line).is_err() {
+                    if tx_thread.blocking_send(line).is_err() {
                         break;
                     }
                 }
@@ -580,7 +607,12 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
         }
     });
 
+    if warmup {
+        let _ = tx.try_send(String::new());
+    }
+
     server.clone().spawn_task(async move {
+        let mut warmup_pending = warmup;
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let t1 = rx.recv();
             let t2 = STOP_INTERRUPT.cancelled();
@@ -591,6 +623,13 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
             };
 
             if let Some(line) = result {
+                if line.trim().is_empty() {
+                    if warmup_pending {
+                        log::info!("Console ready.");
+                        warmup_pending = false;
+                    }
+                    continue;
+                }
                 send_cancellable! {{
                     &server;
                     ServerCommandEvent::new(line.clone());
