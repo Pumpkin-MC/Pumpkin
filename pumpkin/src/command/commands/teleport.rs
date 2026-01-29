@@ -1,3 +1,4 @@
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
@@ -65,9 +66,9 @@ impl CommandExecutor for EntitiesToEntityExecutor {
 
             let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
             let pos = destination.get_entity().pos.load();
-            if !World::is_valid(pos) {
+            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    "commands.teleport.invalidPosition",
                     [],
                 )));
             }
@@ -100,9 +101,9 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
             let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(pos) {
+            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    "commands.teleport.invalidPosition",
                     [],
                 )));
             }
@@ -142,9 +143,9 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
             let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(pos) {
+            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    "commands.teleport.invalidPosition",
                     [],
                 )));
             }
@@ -182,9 +183,9 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
             let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(pos) {
+            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    "commands.teleport.invalidPosition",
                     [],
                 )));
             }
@@ -219,9 +220,9 @@ impl CommandExecutor for EntitiesToPosExecutor {
             let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(pos) {
+            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    "commands.teleport.invalidPosition",
                     [],
                 )));
             }
@@ -265,9 +266,9 @@ impl CommandExecutor for SelfToEntityExecutor {
                 CommandSender::Player(player) => {
                     let yaw = player.living_entity.entity.yaw.load();
                     let pitch = player.living_entity.entity.pitch.load();
-                    if !World::is_valid(pos) {
+                    if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                         return Err(CommandError::CommandFailed(TextComponent::translate(
-                            "argument.pos.outofbounds",
+                            "commands.teleport.invalidPosition",
                             [],
                         )));
                     }
@@ -302,9 +303,9 @@ impl CommandExecutor for SelfToPosExecutor {
                     let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
                     let yaw = player.living_entity.entity.yaw.load();
                     let pitch = player.living_entity.entity.pitch.load();
-                    if !World::is_valid(pos) {
+                    if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                         return Err(CommandError::CommandFailed(TextComponent::translate(
-                            "argument.pos.outofbounds",
+                            "commands.teleport.invalidPosition",
                             [],
                         )));
                     }
