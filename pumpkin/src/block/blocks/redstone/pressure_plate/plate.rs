@@ -102,8 +102,8 @@ impl PressurePlate for PressurePlateBlock {
     async fn calculate_redstone_output(&self, world: &World, _block: &Block, pos: &BlockPos) -> u8 {
         // TODO: this is bad use real box
         let aabb = BoundingBox::from_block(pos);
-        if !world.get_entities_at_box(&aabb).await.is_empty()
-            || !world.get_players_at_box(&aabb).await.is_empty()
+        if !world.get_entities_at_box(&aabb).is_empty()
+            || !world.get_players_at_box(&aabb).is_empty()
         {
             return 15;
         }

@@ -17,7 +17,7 @@ pub struct COpenConnectionReply1 {
 
 impl COpenConnectionReply1 {
     #[must_use]
-    pub fn new(server_guid: u64, has_server_security: bool, mtu: u16) -> Self {
+    pub const fn new(server_guid: u64, has_server_security: bool, mtu: u16) -> Self {
         Self {
             magic: RAKNET_MAGIC,
             server_guid,
@@ -40,7 +40,12 @@ pub struct COpenConnectionReply2 {
 
 impl COpenConnectionReply2 {
     #[must_use]
-    pub fn new(server_guid: u64, client_address: SocketAddr, mtu: u16, security: bool) -> Self {
+    pub const fn new(
+        server_guid: u64,
+        client_address: SocketAddr,
+        mtu: u16,
+        security: bool,
+    ) -> Self {
         Self {
             magic: RAKNET_MAGIC,
             server_guid,

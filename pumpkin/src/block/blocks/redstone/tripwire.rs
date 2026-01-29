@@ -140,8 +140,8 @@ impl BlockBehaviour for TripwireBlock {
 
             let aabb = BoundingBox::from_block(args.position);
             // TODO entity.canAvoidTraps()
-            if args.world.get_entities_at_box(&aabb).await.is_empty()
-                && args.world.get_players_at_box(&aabb).await.is_empty()
+            if args.world.get_entities_at_box(&aabb).is_empty()
+                && args.world.get_players_at_box(&aabb).is_empty()
             {
                 props.powered = false;
                 let state_id = props.to_state_id(args.block);

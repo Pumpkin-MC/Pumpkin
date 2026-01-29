@@ -20,7 +20,7 @@ pub struct CTeleportEntity<'a> {
 
 impl<'a> CTeleportEntity<'a> {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         entity_id: VarInt,
         position: Vector3<f64>,
         delta: Vector3<f64>,

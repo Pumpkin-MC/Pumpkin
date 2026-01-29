@@ -87,14 +87,17 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
 }
 
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
-    pub fn new(writer: W) -> Self {
+    pub const fn new(writer: W) -> Self {
         Self {
             writer: EncryptionWriter::None(writer),
             compression: None,
         }
     }
 
-    pub fn set_compression(&mut self, compression_info: (CompressionThreshold, CompressionLevel)) {
+    pub const fn set_compression(
+        &mut self,
+        compression_info: (CompressionThreshold, CompressionLevel),
+    ) {
         self.compression = Some(compression_info);
     }
 
@@ -354,7 +357,7 @@ mod tests {
 
     /// Test encoding without compression and encryption
     #[tokio::test]
-    async fn test_encode_without_compression_and_encryption() {
+    async fn encode_without_compression_and_encryption() {
         // Create a CStatusResponse packet
         let packet =
             CStatusResponse::new(String::from("{\"description\": \"A Minecraft Server\"}"));
@@ -389,7 +392,7 @@ mod tests {
 
     /// Test encoding with compression
     #[tokio::test]
-    async fn test_encode_with_compression() {
+    async fn encode_with_compression() {
         // Create a CStatusResponse packet
         let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".to_string());
 
@@ -438,7 +441,7 @@ mod tests {
 
     /// Test encoding with encryption
     #[tokio::test]
-    async fn test_encode_with_encryption() {
+    async fn encode_with_encryption() {
         // Create a CStatusResponse packet
         let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".to_string());
 
@@ -476,7 +479,7 @@ mod tests {
 
     /// Test encoding with both compression and encryption
     #[tokio::test]
-    async fn test_encode_with_compression_and_encryption() {
+    async fn encode_with_compression_and_encryption() {
         // Create a CStatusResponse packet
         let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".to_string());
 
@@ -532,7 +535,7 @@ mod tests {
 
     /// Test encoding with zero-length payload
     #[tokio::test]
-    async fn test_encode_with_zero_length_payload() {
+    async fn encode_with_zero_length_payload() {
         // Create a CStatusResponse packet with empty payload
         let packet = CStatusResponse::new(String::new());
 
@@ -570,7 +573,7 @@ mod tests {
 
     /// Test encoding with maximum length payload
     #[tokio::test]
-    async fn test_encode_with_maximum_string_length() {
+    async fn encode_with_maximum_string_length() {
         // Maximum allowed string length is 32767 bytes
         let max_string_length = 32767;
         let payload_str = "A".repeat(max_string_length);
@@ -613,7 +616,7 @@ mod tests {
     /// Test encoding a packet that exceeds `MAX_PACKET_SIZE` as usize
     #[tokio::test]
     #[should_panic(expected = "TooLong")]
-    async fn test_encode_packet_exceeding_maximum_size() {
+    async fn encode_packet_exceeding_maximum_size() {
         // Create a custom packet with data exceeding MAX_PACKET_SIZE as usize
         let data_size = MAX_PACKET_SIZE as usize + 1; // Exceed by 1 byte
         let packet = MaxSizePacket::new(data_size);
@@ -625,7 +628,7 @@ mod tests {
 
     /// Test encoding with a small payload that should not be compressed
     #[tokio::test]
-    async fn test_encode_small_payload_no_compression() {
+    async fn encode_small_payload_no_compression() {
         // Create a CStatusResponse packet with small payload
         let packet = CStatusResponse::new(String::from("Hi"));
 

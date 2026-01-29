@@ -77,7 +77,7 @@ pub struct Nbt {
 
 impl Nbt {
     #[must_use]
-    pub fn new(name: String, tag: NbtCompound) -> Self {
+    pub const fn new(name: String, tag: NbtCompound) -> Self {
         Self {
             name,
             root_tag: tag,
@@ -231,7 +231,7 @@ mod test {
     }
 
     #[test]
-    fn test_simple_ser_de_unnamed() {
+    fn simple_ser_de_unnamed() {
         let test = Test {
             byte: 123,
             short: 1342,
@@ -260,7 +260,7 @@ mod test {
     }
 
     #[test]
-    fn test_simple_ser_de_array() {
+    fn simple_ser_de_array() {
         let test = TestArray {
             byte_array: vec![0, 3, 2],
             int_array: vec![13, 1321, 2],
@@ -275,7 +275,7 @@ mod test {
     }
 
     #[test]
-    fn test_simple_ser_de_named() {
+    fn simple_ser_de_named() {
         let name = String::from("Test");
         let test = Test {
             byte: 123,
@@ -294,7 +294,7 @@ mod test {
     }
 
     #[test]
-    fn test_simple_ser_de_array_named() {
+    fn simple_ser_de_array_named() {
         let name = String::from("Test");
         let test = TestArray {
             byte_array: vec![0, 3, 2],
@@ -329,7 +329,7 @@ mod test {
     }
 
     #[test]
-    fn test_list() {
+    fn list() {
         let test1 = Test {
             byte: 123,
             short: 1342,
@@ -369,7 +369,7 @@ mod test {
     }
 
     #[test]
-    fn test_list_named() {
+    fn list_named() {
         let test1 = Test {
             byte: 123,
             short: 1342,
@@ -407,7 +407,7 @@ mod test {
     }
 
     #[test]
-    fn test_nbt_arrays() {
+    fn nbt_arrays() {
         #[derive(Serialize)]
         struct Tagged {
             #[serde(serialize_with = "nbt_long_array")]
@@ -489,7 +489,7 @@ mod test {
     }
 
     #[test]
-    fn test_tuple_fail() {
+    fn tuple_fail() {
         #[derive(Serialize)]
         struct BadData {
             x: (i32, i64),
@@ -506,7 +506,7 @@ mod test {
     }
 
     #[test]
-    fn test_tuple_ok() {
+    fn tuple_ok() {
         #[derive(Serialize, Deserialize, PartialEq, Debug)]
         struct GoodData {
             x: (i32, i32),

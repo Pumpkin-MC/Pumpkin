@@ -116,7 +116,7 @@ mod tests {
     use std::io::Cursor;
 
     #[test]
-    fn test_gzip_read_write_compound() {
+    fn gzip_read_write_compound() {
         // Create a test compound
         let mut compound = NbtCompound::new();
         compound.put_byte("byte_value", 123);
@@ -163,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gzip_convenience_methods() {
+    fn gzip_convenience_methods() {
         // Create a test compound
         let mut compound = NbtCompound::new();
         compound.put_int("test_value", 12345);
@@ -180,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gzip_empty_compound() {
+    fn gzip_empty_compound() {
         let compound = NbtCompound::new();
         let mut buffer = Vec::new();
         write_gzip_compound_tag(compound, &mut buffer).expect("Failed to compress empty compound");
@@ -191,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gzip_large_compound() {
+    fn gzip_large_compound() {
         let mut compound = NbtCompound::new();
 
         // Add 1000 integer entries
@@ -229,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gzip_serialize_deserialize() {
+    fn gzip_serialize_deserialize() {
         let test_struct = TestStruct {
             string_field: "test string".to_string(),
             int_field: 12345,
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     #[expect(clippy::print_stdout)]
-    fn test_gzip_compression_ratio() {
+    fn gzip_compression_ratio() {
         let mut compound = NbtCompound::new();
 
         // Create a compound with repetitive data (should compress well)
@@ -287,7 +287,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gzip_invalid_data() {
+    fn gzip_invalid_data() {
         // Try to read from invalid data
         let invalid_data = vec![1, 2, 3, 4, 5]; // Not valid GZip data
         let result = read_gzip_compound_tag(Cursor::new(invalid_data));
@@ -296,7 +296,7 @@ mod tests {
 
     #[test]
     #[expect(clippy::struct_field_names)]
-    fn test_roundtrip_with_arrays() {
+    fn roundtrip_with_arrays() {
         #[derive(Serialize, Deserialize, Debug, PartialEq)]
         struct ArrayTest {
             byte_array: Vec<u8>,
@@ -319,7 +319,7 @@ mod tests {
     }
 
     #[test]
-    fn test_roundtrip_with_map() {
+    fn roundtrip_with_map() {
         #[derive(Serialize, Deserialize, Debug, PartialEq)]
         struct MapTest {
             string_map: HashMap<String, String>,
@@ -348,7 +348,7 @@ mod tests {
     }
 
     #[test]
-    fn test_direct_file_io() {
+    fn direct_file_io() {
         use tempfile::tempdir;
 
         let temp_dir = tempdir().expect("Failed to create temporary directory");

@@ -88,6 +88,7 @@ impl ChiseledBookshelfBlockEntity {
     pub const INVENTORY_SIZE: usize = 6;
     pub const ID: &'static str = "minecraft:chiseled_bookshelf";
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -136,7 +137,7 @@ impl Inventory for ChiseledBookshelfBlockEntity {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -181,7 +182,7 @@ impl Inventory for ChiseledBookshelfBlockEntity {
 impl Clearable for ChiseledBookshelfBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })

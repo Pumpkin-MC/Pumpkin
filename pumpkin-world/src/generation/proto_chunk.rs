@@ -76,6 +76,7 @@ pub struct StandardChunkFluidLevelSampler {
 }
 
 impl StandardChunkFluidLevelSampler {
+    #[must_use]
     pub fn new(top_fluid: FluidLevel, bottom_fluid: FluidLevel) -> Self {
         let bottom_y = top_fluid
             .max_y_exclusive()
@@ -102,9 +103,9 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 ///
 /// 1. empty: The chunk is not yet loaded or generated.
 ///
-/// 2. structures_starts: This step calculates the starting points for structure pieces. For structures that are the starting in this chunk, the position of all pieces are generated and stored.
+/// 2. `structures_starts`: This step calculates the starting points for structure pieces. For structures that are the starting in this chunk, the position of all pieces are generated and stored.
 ///
-/// 3. structures_references: A reference to nearby chunks that have a structures' starting point are stored.
+/// 3. `structures_references`: A reference to nearby chunks that have a structures' starting point are stored.
 ///
 /// 4. biomes: Biomes are determined and stored. No terrain is generated at this stage.
 ///
@@ -116,7 +117,7 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 ///
 /// 8. features: Features and structure pieces are placed and heightmaps are generated.
 ///
-/// 9. initialize_light: The lighting engine is initialized and light sources are identified.
+/// 9. `initialize_light`: The lighting engine is initialized and light sources are identified.
 ///
 /// 10. light: The lighting engine calculates the light level for blocks.
 ///
@@ -155,6 +156,7 @@ pub struct TerrainCache {
 }
 
 impl TerrainCache {
+    #[must_use]
     pub fn from_random(random_config: &GlobalRandomConfig) -> Self {
         let random = &random_config.base_random_deriver;
         let noise_builder = DoublePerlinNoiseBuilder::new(random_config);
@@ -170,6 +172,7 @@ impl TerrainCache {
 }
 
 impl ProtoChunk {
+    #[must_use]
     pub fn new(
         x: i32,
         z: i32,
@@ -204,13 +207,14 @@ impl ProtoChunk {
         }
     }
 
+    #[must_use]
     pub fn from_chunk_data(
         chunk_data: &ChunkData,
         dimension: &Dimension,
         default_block: &'static BlockState,
         biome_mixer_seed: i64,
     ) -> Self {
-        let mut proto_chunk = ProtoChunk::new(
+        let mut proto_chunk = Self::new(
             chunk_data.x,
             chunk_data.z,
             dimension,
@@ -293,15 +297,18 @@ impl ProtoChunk {
         proto_chunk
     }
     #[inline]
-    pub fn stage_id(&self) -> u8 {
+    #[must_use]
+    pub const fn stage_id(&self) -> u8 {
         self.stage as u8
     }
 
-    pub fn height(&self) -> u16 {
+    #[must_use]
+    pub const fn height(&self) -> u16 {
         self.height
     }
 
-    pub fn bottom_y(&self) -> i8 {
+    #[must_use]
+    pub const fn bottom_y(&self) -> i8 {
         self.bottom_y
     }
 
@@ -346,6 +353,7 @@ impl ProtoChunk {
         }
     }
 
+    #[must_use]
     pub fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
             HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
@@ -359,6 +367,7 @@ impl ProtoChunk {
         }
     }
 
+    #[must_use]
     pub fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
@@ -366,6 +375,7 @@ impl ProtoChunk {
         self.flat_surface_height_map[index] as i32 + 1
     }
 
+    #[must_use]
     pub fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
@@ -373,6 +383,7 @@ impl ProtoChunk {
         self.flat_ocean_floor_height_map[index] as i32 + 1
     }
 
+    #[must_use]
     pub fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
@@ -380,6 +391,7 @@ impl ProtoChunk {
         self.flat_motion_blocking_height_map[index] as i32 + 1
     }
 
+    #[must_use]
     pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
@@ -388,7 +400,7 @@ impl ProtoChunk {
     }
 
     #[inline]
-    fn local_position_to_height_map_index(x: i32, z: i32) -> usize {
+    const fn local_position_to_height_map_index(x: i32, z: i32) -> usize {
         x as usize * CHUNK_DIM as usize + z as usize
     }
 
@@ -400,13 +412,14 @@ impl ProtoChunk {
             assert!(y < self.height() as i32);
             assert!(y >= 0);
             assert!((0..=15).contains(&z));
-        }
+        };
         self.height() as usize * CHUNK_DIM as usize * x as usize
             + CHUNK_DIM as usize * y as usize
             + z as usize
     }
 
     #[inline]
+    #[must_use]
     pub fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
         #[cfg(debug_assertions)]
         {
@@ -419,7 +432,7 @@ impl ProtoChunk {
                 y
             );
             assert!((0..=3).contains(&z));
-        }
+        };
 
         biome_coords::from_block(self.height() as usize)
             * biome_coords::from_block(CHUNK_DIM as usize)
@@ -429,17 +442,20 @@ impl ProtoChunk {
     }
 
     #[inline]
+    #[must_use]
     pub fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
         is_air(self.get_block_state(local_pos).0)
     }
 
     #[inline]
+    #[must_use]
     pub fn get_block_state_raw(&self, x: i32, y: i32, z: i32) -> u16 {
         let index = self.local_pos_to_block_index(x, y, z);
         self.flat_block_map[index]
     }
 
     #[inline]
+    #[must_use]
     pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> RawBlockState {
         let local_y = local_pos.y - self.bottom_y() as i32;
         if local_y < 0 || local_y >= self.height() as i32 {
@@ -479,11 +495,13 @@ impl ProtoChunk {
     }
 
     #[inline]
+    #[must_use]
     pub fn get_biome(&self, x: i32, y: i32, z: i32) -> &'static Biome {
         Biome::from_id(self.get_biome_id(x, y, z)).unwrap()
     }
 
     #[inline]
+    #[must_use]
     pub fn get_biome_id(&self, x: i32, y: i32, z: i32) -> u8 {
         let index = self.local_biome_pos_to_biome_index(
             x & biome_coords::from_block(15),
@@ -651,6 +669,7 @@ impl ProtoChunk {
         }
     }
 
+    #[expect(clippy::similar_names)]
     pub fn populate_noise(
         &mut self,
         noise_sampler: &mut ChunkNoiseGenerator,
@@ -724,6 +743,7 @@ impl ProtoChunk {
         }
     }
 
+    #[must_use]
     pub fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
         // TODO: See if we can cache this value
         let seed_biome_pos = biome::get_biome_blend(
@@ -811,7 +831,7 @@ impl ProtoChunk {
                         let shift = min_y << 4;
                         min = shift as i32;
 
-                        for search_y in (min_y as i32 - 1..=y - 1).rev() {
+                        for search_y in ((min_y as i32 - 1)..y).rev() {
                             if search_y < min_y as i32 {
                                 min = search_y + 1;
                                 break;
@@ -889,7 +909,7 @@ impl ProtoChunk {
         let (center_x, center_z, min_y, height, biomes_in_chunk) = {
             let chunk = cache.get_center_chunk();
             let mut unique_biomes = Vec::with_capacity(4); // Usually few biomes per chunk
-            for &biome_id in chunk.flat_biome_map.iter() {
+            for &biome_id in &chunk.flat_biome_map {
                 if !unique_biomes.contains(&biome_id) {
                     unique_biomes.push(biome_id);
                 }
@@ -1115,19 +1135,19 @@ impl ProtoChunk {
         center_chunk.stage = StagedChunkEnum::StructureReferences;
     }
 
-    fn start_cell_x(&self, horizontal_cell_block_count: i32) -> i32 {
+    const fn start_cell_x(&self, horizontal_cell_block_count: i32) -> i32 {
         self.start_block_x() / horizontal_cell_block_count
     }
 
-    fn start_cell_z(&self, horizontal_cell_block_count: i32) -> i32 {
+    const fn start_cell_z(&self, horizontal_cell_block_count: i32) -> i32 {
         self.start_block_z() / horizontal_cell_block_count
     }
 
-    fn start_block_x(&self) -> i32 {
+    const fn start_block_x(&self) -> i32 {
         start_block_x(self.x)
     }
 
-    fn start_block_z(&self) -> i32 {
+    const fn start_block_z(&self) -> i32 {
         start_block_z(self.z)
     }
 }

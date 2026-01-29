@@ -22,7 +22,7 @@ use pumpkin_world::{
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 
 #[pumpkin_block("minecraft:cake")]
 pub struct CakeBlock;

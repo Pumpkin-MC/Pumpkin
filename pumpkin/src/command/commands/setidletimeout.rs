@@ -15,7 +15,7 @@ const DESCRIPTION: &str = "Sets the time before idle players are kicked from the
 
 const ARG_MINUTES: &str = "minutes";
 
-fn minutes_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn minutes_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name(ARG_MINUTES)
 }
 

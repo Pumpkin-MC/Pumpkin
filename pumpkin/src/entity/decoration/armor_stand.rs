@@ -314,7 +314,7 @@ impl EntityBase for ArmorStandEntity {
             let world = entity.world.load();
 
             let mob_griefing_gamerule = {
-                let game_rules = &world.level_info.read().await.game_rules;
+                let game_rules = &world.level_info.load().game_rules;
                 game_rules.mob_griefing
             };
 

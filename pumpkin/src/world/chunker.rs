@@ -11,10 +11,9 @@ use crate::{
     net::ClientPlatform,
 };
 
-pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
+pub fn get_view_distance(player: &Player) -> NonZeroU8 {
     let server = player.world().server.upgrade().unwrap();
-
-    player.config.read().await.view_distance.clamp(
+    player.config.load().view_distance.clamp(
         NonZeroU8::new(2).unwrap(),
         server.basic_config.view_distance,
     )
@@ -30,7 +29,7 @@ pub async fn update_position(player: &Arc<Player>) {
     //     return;
     // }
 
-    let view_distance = get_view_distance(player).await;
+    let view_distance = get_view_distance(player);
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical == new_cylindrical {
@@ -73,11 +72,22 @@ pub async fn update_position(player: &Arc<Player>) {
             new_chunk_center,
             view_distance.into(),
             &world.level,
+            &loading_chunks,
+            &unloading_chunks,
         );
         world
     };
 
     player.watched_section.store(new_cylindrical);
+
+    if let ClientPlatform::Java(_) = &player.client {
+        for chunk in &unloading_chunks {
+            player
+                .client
+                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
+                .await;
+        }
+    }
 
     // Make sure the watched section and the chunk watcher updates are async atomic. We want to
     // ensure what we unload when the player disconnects is correct.
@@ -89,15 +99,6 @@ pub async fn update_position(player: &Arc<Player>) {
         .level
         .mark_chunks_as_not_watched(&unloading_chunks)
         .await;
-
-    if let ClientPlatform::Java(_) = &player.client {
-        for chunk in &unloading_chunks {
-            player
-                .client
-                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
-                .await;
-        }
-    }
 
     if !loading_chunks.is_empty() {
         world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);

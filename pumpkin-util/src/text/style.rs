@@ -47,48 +47,48 @@ pub struct Style {
 
 impl Style {
     #[must_use]
-    pub fn color(mut self, color: Color) -> Self {
+    pub const fn color(mut self, color: Color) -> Self {
         self.color = Some(color);
         self
     }
 
     #[must_use]
-    pub fn color_named(mut self, color: color::NamedColor) -> Self {
+    pub const fn color_named(mut self, color: color::NamedColor) -> Self {
         self.color = Some(Color::Named(color));
         self
     }
 
     /// Makes the text bold
     #[must_use]
-    pub fn bold(mut self) -> Self {
+    pub const fn bold(mut self) -> Self {
         self.bold = Some(true);
         self
     }
 
     /// Makes the text italic
     #[must_use]
-    pub fn italic(mut self) -> Self {
+    pub const fn italic(mut self) -> Self {
         self.italic = Some(true);
         self
     }
 
     /// Makes the text underlined
     #[must_use]
-    pub fn underlined(mut self) -> Self {
+    pub const fn underlined(mut self) -> Self {
         self.underlined = Some(true);
         self
     }
 
     /// Makes the text strikethrough
     #[must_use]
-    pub fn strikethrough(mut self) -> Self {
+    pub const fn strikethrough(mut self) -> Self {
         self.strikethrough = Some(true);
         self
     }
 
     /// Makes the text obfuscated
     #[must_use]
-    pub fn obfuscated(mut self) -> Self {
+    pub const fn obfuscated(mut self) -> Self {
         self.obfuscated = Some(true);
         self
     }
@@ -124,7 +124,7 @@ impl Style {
 
     /// Overrides the shadow properties of text.
     #[must_use]
-    pub fn shadow_color(mut self, color: ARGBColor) -> Self {
+    pub const fn shadow_color(mut self, color: ARGBColor) -> Self {
         self.shadow_color = Some(color);
         self
     }

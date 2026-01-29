@@ -63,11 +63,11 @@ impl TargetPredicate {
         instance
     }
 
-    pub fn ignore_visibility(&mut self) {
+    pub const fn ignore_visibility(&mut self) {
         self.respects_visibility = false;
     }
 
-    pub fn ignore_distance_scaling(&mut self) {
+    pub const fn ignore_distance_scaling(&mut self) {
         self.use_distance_scaling_factor = false;
     }
 

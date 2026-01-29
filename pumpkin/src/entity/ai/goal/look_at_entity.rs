@@ -5,7 +5,7 @@ use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::{EntityBase, player::Player};
 use pumpkin_data::entity::EntityType;
-use rand::Rng;
+use rand::RngExt;
 use std::sync::{Arc, Weak};
 
 #[expect(dead_code)]
@@ -98,12 +98,10 @@ impl Goal for LookAtEntityGoal {
             if *self.target_type == EntityType::PLAYER {
                 self.target = world
                     .get_closest_player(mob_pos, self.range.into())
-                    .await
                     .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
             } else {
-                self.target = world
-                    .get_closest_entity(mob_pos, self.range.into(), Some(&[self.target_type]))
-                    .await;
+                self.target =
+                    world.get_closest_entity(mob_pos, self.range.into(), Some(&[self.target_type]));
             }
 
             self.target.is_some()

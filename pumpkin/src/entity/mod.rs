@@ -46,7 +46,6 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::version::MinecraftVersion;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::f32::consts::PI;
 use std::pin::Pin;
 use std::sync::{
     Arc,
@@ -292,7 +291,7 @@ pub enum RemovalReason {
 
 impl RemovalReason {
     #[must_use]
-    pub fn should_destroy(&self) -> bool {
+    pub const fn should_destroy(&self) -> bool {
         match self {
             Self::Killed | Self::Discarded => true,
             Self::UnloadedToChunk | Self::UnloadedWithPlayer | Self::ChangedDimension => false,
@@ -300,7 +299,7 @@ impl RemovalReason {
     }
 
     #[must_use]
-    pub fn should_save(&self) -> bool {
+    pub const fn should_save(&self) -> bool {
         match self {
             Self::Killed | Self::Discarded | Self::UnloadedWithPlayer | Self::ChangedDimension => {
                 false
@@ -522,7 +521,7 @@ impl Entity {
     }
 
     #[must_use]
-    pub fn get_entity_dimensions(pose: EntityPose) -> EntityDimensions {
+    pub const fn get_entity_dimensions(pose: EntityPose) -> EntityDimensions {
         match pose {
             EntityPose::Sleeping => EntityDimensions::new(0.2, 0.2, 0.2),
             EntityPose::FallFlying | EntityPose::Swimming | EntityPose::SpinAttack => {
@@ -592,8 +591,8 @@ impl Entity {
         let position = self.pos.load();
         let delta = target.sub(&position);
         let root = delta.x.hypot(delta.z);
-        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / PI);
-        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / PI) - 90.0);
+        let pitch = wrap_degrees((-delta.y.atan2(root) as f32).to_degrees());
+        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32).to_degrees() - 90.0);
         self.pitch.store(pitch);
         self.yaw.store(yaw);
     }
@@ -1223,9 +1222,9 @@ impl Entity {
         let cos = yaw.cos();
 
         Vector3::new(
-            input.x * cos - input.z * sin,
+            input.x.mul_add(cos, -(input.z * sin)),
             input.y,
-            input.z * cos + input.x * sin,
+            input.z.mul_add(cos, input.x * sin),
         )
     }
 
@@ -1353,7 +1352,7 @@ impl Entity {
             }
         }
 
-        let amplitude = rand::random::<f64>() * 0.2 + 0.1;
+        let amplitude = rand::random::<f64>().mul_add(0.2, 0.1);
 
         let axis = direction.to_axis().into();
 
@@ -1847,8 +1846,7 @@ impl Entity {
         }
         buf.put_u8(255);
         let world = self.world.load();
-        let current_players = world.players.read().await;
-        for player in current_players.values() {
+        for player in world.players.load().iter() {
             if let ClientPlatform::Java(client) = &player.client {
                 let mut buf = Vec::new();
                 for meta in meta {

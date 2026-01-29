@@ -115,7 +115,9 @@ impl PortalSearchResult {
         let lower = self.lower_corner.0;
 
         let axis_offset = if portal_width > 0.0 {
-            relative_pos.x * portal_width + f64::from(dimensions.width) / 2.0
+            relative_pos
+                .x
+                .mul_add(portal_width, f64::from(dimensions.width) / 2.0)
         } else {
             f64::from(self.width) / 2.0
         };
@@ -228,7 +230,7 @@ impl NetherPortal {
     const FRAME_BLOCK: Block = Block::OBSIDIAN;
 
     #[must_use]
-    pub fn is_valid(&self) -> bool {
+    pub const fn is_valid(&self) -> bool {
         self.width >= Self::MIN_WIDTH
             && self.width <= Self::MAX_WIDTH
             && self.height >= Self::MIN_HEIGHT
@@ -236,27 +238,27 @@ impl NetherPortal {
     }
 
     #[must_use]
-    pub fn was_already_valid(&self) -> bool {
+    pub const fn was_already_valid(&self) -> bool {
         self.is_valid() && self.found_portal_blocks == self.width * self.height
     }
 
     #[must_use]
-    pub fn lower_corner(&self) -> BlockPos {
+    pub const fn lower_corner(&self) -> BlockPos {
         self.lower_conor
     }
 
     #[must_use]
-    pub fn axis(&self) -> HorizontalAxis {
+    pub const fn axis(&self) -> HorizontalAxis {
         self.axis
     }
 
     #[must_use]
-    pub fn width(&self) -> u32 {
+    pub const fn width(&self) -> u32 {
         self.width
     }
 
     #[must_use]
-    pub fn height(&self) -> u32 {
+    pub const fn height(&self) -> u32 {
         self.height
     }
 
@@ -264,13 +266,12 @@ impl NetherPortal {
         let mut props = NetherPortalLikeProperties::default(&Block::NETHER_PORTAL);
         props.axis = self.axis;
         let state = props.to_state_id(&Block::NETHER_PORTAL);
-        let blocks: Vec<BlockPos> = BlockPos::iterate(
+        let blocks = BlockPos::iterate(
             self.lower_conor,
             self.lower_conor
                 .offset_dir(BlockDirection::Up.to_offset(), self.height as i32 - 1)
                 .offset_dir(self.negative_direction.to_offset(), self.width as i32 - 1),
-        )
-        .collect();
+        );
 
         let mut poi_storage = world.portal_poi.lock().await;
         for pos in blocks {
@@ -667,7 +668,7 @@ impl NetherPortal {
         ))
     }
 
-    fn is_valid_portal_air(state: &BlockState) -> bool {
+    const fn is_valid_portal_air(state: &BlockState) -> bool {
         state.replaceable() && !state.is_liquid()
     }
 

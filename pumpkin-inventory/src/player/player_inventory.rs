@@ -73,7 +73,7 @@ impl PlayerInventory {
     }
 
     #[must_use]
-    pub fn is_valid_hotbar_index(slot: usize) -> bool {
+    pub const fn is_valid_hotbar_index(slot: usize) -> bool {
         slot < Self::HOTBAR_SIZE
     }
 

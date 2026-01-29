@@ -82,7 +82,7 @@ impl CommandExecutor for Executor {
                 .map(|c| c.login.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            let locale = sender.get_locale().await;
+            let locale = sender.get_locale();
             let version_string = format!(
                 "{} (Commit: {}) - {} Contributors",
                 CARGO_PKG_VERSION,

@@ -35,7 +35,7 @@ pub struct CExplosion {
 
 impl CExplosion {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         center: Vector3<f64>,
         radius: f32,
         block_count: i32,

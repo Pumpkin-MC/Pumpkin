@@ -31,7 +31,8 @@ pub struct UnblendedNoisePos {
 }
 
 impl UnblendedNoisePos {
-    pub fn new(x: i32, y: i32, z: i32) -> Self {
+    #[must_use]
+    pub const fn new(x: i32, y: i32, z: i32) -> Self {
         Self { x, y, z }
     }
 }
@@ -87,6 +88,7 @@ pub struct Wrapper {
 }
 
 impl Wrapper {
+    #[must_use]
     pub const fn new(
         input_index: usize,
         wrapper_type: WrapperType,
@@ -122,7 +124,8 @@ pub struct PassThrough {
 }
 
 impl PassThrough {
-    pub fn new(input_index: usize, min_value: f64, max_value: f64) -> Self {
+    #[must_use]
+    pub const fn new(input_index: usize, min_value: f64, max_value: f64) -> Self {
         Self {
             input_index,
             min_value,
@@ -130,7 +133,8 @@ impl PassThrough {
         }
     }
 
-    pub fn input_index(&self) -> usize {
+    #[must_use]
+    pub const fn input_index(&self) -> usize {
         self.input_index
     }
 }

@@ -23,7 +23,7 @@ pub struct CCommands<'a> {
 
 impl<'a> CCommands<'a> {
     #[must_use]
-    pub fn new(nodes: Box<[ProtoNode<'a>]>, root_node_index: VarInt) -> Self {
+    pub const fn new(nodes: Box<[ProtoNode<'a>]>, root_node_index: VarInt) -> Self {
         Self {
             nodes,
             root_node_index,
@@ -331,7 +331,7 @@ pub enum SuggestionProviders {
 }
 
 impl SuggestionProviders {
-    fn resource_location(self) -> &'static str {
+    const fn resource_location(self) -> &'static str {
         match self {
             Self::AskServer => "minecraft:ask_server",
             Self::AllRecipes => "minecraft:all_recipes",

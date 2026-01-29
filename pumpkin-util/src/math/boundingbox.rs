@@ -24,7 +24,7 @@ impl BoundingPlane {
     }
 
     // Projecting a 3D box into 2D
-    pub fn from_box(bounding_box: &BoundingBox, excluded: Axis) -> Self {
+    pub const fn from_box(bounding_box: &BoundingBox, excluded: Axis) -> Self {
         let [axis1, axis2] = Axis::excluding(excluded);
 
         Self {
@@ -83,12 +83,12 @@ impl BoundingBox {
     }
 
     #[must_use]
-    pub fn new(min: Vector3<f64>, max: Vector3<f64>) -> Self {
+    pub const fn new(min: Vector3<f64>, max: Vector3<f64>) -> Self {
         Self { min, max }
     }
 
     #[must_use]
-    pub fn new_array(min: [f64; 3], max: [f64; 3]) -> Self {
+    pub const fn new_array(min: [f64; 3], max: [f64; 3]) -> Self {
         Self {
             min: Vector3::new(min[0], min[1], min[2]),
             max: Vector3::new(max[0], max[1], max[2]),
@@ -113,7 +113,7 @@ impl BoundingBox {
     }
 
     #[must_use]
-    pub fn get_side(&self, max: bool) -> Vector3<f64> {
+    pub const fn get_side(&self, max: bool) -> Vector3<f64> {
         if max { self.max } else { self.min }
     }
 
@@ -251,7 +251,7 @@ pub struct EntityDimensions {
 
 impl EntityDimensions {
     #[must_use]
-    pub fn new(width: f32, height: f32, eye_height: f32) -> Self {
+    pub const fn new(width: f32, height: f32, eye_height: f32) -> Self {
         Self {
             width,
             height,

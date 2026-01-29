@@ -52,7 +52,7 @@ pub struct Frame {
 
 impl Frame {
     #[must_use]
-    pub fn new_unreliable(payload: Vec<u8>) -> Self {
+    pub const fn new_unreliable(payload: Vec<u8>) -> Self {
         Self {
             reliability: RakReliability::Unreliable,
             payload,

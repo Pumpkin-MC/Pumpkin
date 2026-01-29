@@ -24,25 +24,25 @@ const DESCRIPTION: &str = "Worldborder command.";
 
 const NOTHING_CHANGED_EXCEPTION: &str = "commands.worldborder.set.failed.nochange";
 
-fn distance_consumer() -> BoundedNumArgumentConsumer<f64> {
+const fn distance_consumer() -> BoundedNumArgumentConsumer<f64> {
     BoundedNumArgumentConsumer::new().min(0.0).name("distance")
 }
 
-fn time_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn time_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name("time")
 }
 
-fn damage_per_block_consumer() -> BoundedNumArgumentConsumer<f32> {
+const fn damage_per_block_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new()
         .min(0.0)
         .name("damage_per_block")
 }
 
-fn damage_buffer_consumer() -> BoundedNumArgumentConsumer<f32> {
+const fn damage_buffer_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new().min(0.0).name("buffer")
 }
 
-fn warning_distance_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn warning_distance_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name("distance")
 }
 
@@ -57,7 +57,7 @@ impl CommandExecutor for GetExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
@@ -86,7 +86,7 @@ impl CommandExecutor for SetExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
@@ -139,7 +139,7 @@ impl CommandExecutor for SetTimeExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
@@ -225,7 +225,7 @@ impl CommandExecutor for AddExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
@@ -280,7 +280,7 @@ impl CommandExecutor for AddTimeExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
@@ -368,7 +368,7 @@ impl CommandExecutor for CenterExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
@@ -402,7 +402,7 @@ impl CommandExecutor for DamageAmountExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
@@ -456,7 +456,7 @@ impl CommandExecutor for DamageBufferExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
@@ -509,7 +509,7 @@ impl CommandExecutor for WarningDistanceExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
@@ -564,7 +564,7 @@ impl CommandExecutor for WarningTimeExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");

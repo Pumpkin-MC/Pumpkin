@@ -310,7 +310,7 @@ impl BlockBehaviour for BedBlock {
             }
 
             // Make sure there are no monsters nearby
-            for entity in args.world.entities.read().await.values() {
+            for entity in args.world.entities.load().iter() {
                 if !entity_prevents_sleep(entity.get_entity()) {
                     continue;
                 }

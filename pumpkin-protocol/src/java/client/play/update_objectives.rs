@@ -17,7 +17,7 @@ pub struct CUpdateObjectives {
 
 impl CUpdateObjectives {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         objective_name: String,
         mode: Mode,
         display_name: TextComponent,

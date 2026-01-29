@@ -27,7 +27,7 @@ const ARG_TARGETS: &str = "targets";
 async fn kick_non_whitelisted_players(server: &Server) {
     let whitelist = server.data.whitelist_config.read().await;
     if server.basic_config.enforce_whitelist && server.white_list.load(Ordering::Relaxed) {
-        for player in server.get_all_players().await {
+        for player in server.get_all_players() {
             if whitelist.is_whitelisted(&player.gameprofile) {
                 continue;
             }

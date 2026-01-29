@@ -20,7 +20,7 @@ pub struct CEntityStatus {
 
 impl CEntityStatus {
     #[must_use]
-    pub fn new(entity_id: i32, entity_status: i8) -> Self {
+    pub const fn new(entity_id: i32, entity_status: i8) -> Self {
         Self {
             entity_id,
             entity_status,

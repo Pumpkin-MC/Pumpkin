@@ -23,7 +23,7 @@ impl CommandExecutor for Executor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let players: Vec<Arc<Player>> = server.get_all_players().await;
+            let players: Vec<Arc<Player>> = server.get_all_players();
             sender
                 .send_message(TextComponent::translate(
                     "commands.list.players",

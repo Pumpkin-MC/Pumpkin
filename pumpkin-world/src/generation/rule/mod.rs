@@ -33,12 +33,12 @@ pub enum RuleTest {
 impl RuleTest {
     pub fn test(&self, state: &BlockState, random: &mut RandomGenerator) -> bool {
         match self {
-            RuleTest::AlwaysTrue => true,
-            RuleTest::BlockMatch(rule) => rule.test(state),
-            RuleTest::BlockStateMatch(rule) => rule.test(state),
-            RuleTest::TagMatch(rule) => rule.test(state),
-            RuleTest::RandomBlockMatch(rule) => rule.test(state, random),
-            RuleTest::RandomBlockStateMatch(rule) => rule.test(state, random),
+            Self::AlwaysTrue => true,
+            Self::BlockMatch(rule) => rule.test(state),
+            Self::BlockStateMatch(rule) => rule.test(state),
+            Self::TagMatch(rule) => rule.test(state),
+            Self::RandomBlockMatch(rule) => rule.test(state, random),
+            Self::RandomBlockStateMatch(rule) => rule.test(state, random),
         }
     }
 }

@@ -23,7 +23,7 @@ pub struct Noise {
 }
 
 impl Noise {
-    pub fn new(sampler: DoublePerlinNoiseSampler, data: &'static NoiseData) -> Self {
+    pub const fn new(sampler: DoublePerlinNoiseSampler, data: &'static NoiseData) -> Self {
         Self { sampler, data }
     }
 }
@@ -60,7 +60,7 @@ pub struct ShiftA {
 }
 
 impl ShiftA {
-    pub fn new(sampler: DoublePerlinNoiseSampler) -> Self {
+    pub const fn new(sampler: DoublePerlinNoiseSampler) -> Self {
         Self { sampler }
     }
 }
@@ -88,7 +88,7 @@ pub struct ShiftB {
 }
 
 impl ShiftB {
-    pub fn new(sampler: DoublePerlinNoiseSampler) -> Self {
+    pub const fn new(sampler: DoublePerlinNoiseSampler) -> Self {
         Self { sampler }
     }
 }
@@ -163,7 +163,7 @@ impl StaticChunkNoiseFunctionComponentImpl for ShiftedNoise {
 }
 
 impl ShiftedNoise {
-    pub fn new(
+    pub const fn new(
         input_x_index: usize,
         input_y_index: usize,
         input_z_index: usize,
@@ -269,11 +269,13 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for InterpolatedNoiseSampl
             })
             .sum();
 
-        let q = (n / 10f64 + 1f64) / 2f64;
+        let q = f64::midpoint(n / 10f64, 1f64);
         let bl2 = q >= 1f64;
         let bl3 = q <= 0f64;
 
-        let l = if !bl2 {
+        let l = if bl2 {
+            0.0
+        } else {
             self.lower_noise
                 .samplers
                 .iter()
@@ -293,11 +295,11 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for InterpolatedNoiseSampl
                     ) / fraction
                 })
                 .sum()
-        } else {
-            0.0
         };
 
-        let m = if !bl3 {
+        let m = if bl3 {
+            0.0
+        } else {
             self.upper_noise
                 .samplers
                 .iter()
@@ -317,8 +319,6 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for InterpolatedNoiseSampl
                     ) / fraction
                 })
                 .sum()
-        } else {
-            0.0
         };
 
         clamped_lerp(l / 512f64, m / 512f64, q) / 128f64

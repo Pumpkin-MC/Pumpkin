@@ -17,6 +17,7 @@ pub struct StructurePlacement {
 }
 
 impl StructurePlacement {
+    #[must_use]
     pub fn should_generate(
         &self,
         calculator: &StructurePlacementCalculator,
@@ -53,6 +54,7 @@ pub enum FrequencyReductionMethod {
 }
 
 impl FrequencyReductionMethod {
+    #[must_use]
     pub fn should_generate(
         &self,
         seed: i64,
@@ -62,12 +64,12 @@ impl FrequencyReductionMethod {
         frequency: f32,
     ) -> bool {
         match self {
-            FrequencyReductionMethod::Default => {
+            Self::Default => {
                 let region_seed = get_region_seed(seed as u64, chunk_x, chunk_z, salt);
                 let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(region_seed));
                 random.next_f32() < frequency
             }
-            FrequencyReductionMethod::LegacyType1 => {
+            Self::LegacyType1 => {
                 let x = chunk_x >> 4;
                 let z = chunk_z >> 4;
                 let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(
@@ -76,12 +78,12 @@ impl FrequencyReductionMethod {
                 random.next_i32(); // yeah mojang just does that and does not use the value
                 random.next_bounded_i32((1.0 / frequency) as i32) == 0
             }
-            FrequencyReductionMethod::LegacyType2 => {
+            Self::LegacyType2 => {
                 let region_seed = get_region_seed(seed as u64, chunk_x, chunk_z, 10387320);
                 let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(region_seed));
                 random.next_f32() < frequency
             }
-            FrequencyReductionMethod::LegacyType3 => {
+            Self::LegacyType3 => {
                 let mut random: RandomGenerator =
                     RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed as u64));
                 let carver_seed = get_carver_seed(&mut random, seed as u64, chunk_x, chunk_z);
@@ -104,6 +106,7 @@ pub enum StructurePlacementType {
 }
 
 impl StructurePlacementType {
+    #[must_use]
     pub fn is_start_chunk(
         &self,
         calculator: &StructurePlacementCalculator,
@@ -112,11 +115,11 @@ impl StructurePlacementType {
         salt: u32,
     ) -> bool {
         match self {
-            StructurePlacementType::RandomSpread(placement) => {
+            Self::RandomSpread(placement) => {
                 placement.is_start_chunk(calculator, chunk_x, chunk_z, salt)
             }
             // This is needed for Stronghold, since it is placed in rings
-            StructurePlacementType::ConcentricRings(placement) => {
+            Self::ConcentricRings(placement) => {
                 placement.is_start_chunk(calculator, chunk_x, chunk_z, salt)
             }
         }
@@ -139,6 +142,7 @@ pub struct ConcentricRingsStructurePlacement {
 }
 
 impl ConcentricRingsStructurePlacement {
+    #[must_use]
     pub fn is_start_chunk(
         &self,
         _calculator: &StructurePlacementCalculator,
@@ -180,10 +184,11 @@ pub enum SpreadType {
 impl SpreadType {
     pub fn get(&self, random: &mut RandomGenerator, bound: i32) -> i32 {
         match self {
-            SpreadType::Linear => random.next_bounded_i32(bound),
-            SpreadType::Triangular => {
-                (random.next_bounded_i32(bound) + random.next_bounded_i32(bound)) / 2
-            }
+            Self::Linear => random.next_bounded_i32(bound),
+            Self::Triangular => i32::midpoint(
+                random.next_bounded_i32(bound),
+                random.next_bounded_i32(bound),
+            ),
         }
     }
 }
@@ -201,6 +206,7 @@ impl RandomSpreadStructurePlacement {
         (x * self.spacing + rand_x, z * self.spacing + rand_z)
     }
 
+    #[must_use]
     pub fn is_start_chunk(
         &self,
         calculator: &StructurePlacementCalculator,
@@ -218,7 +224,8 @@ pub struct StructurePlacementCalculator {
 }
 
 impl StructurePlacementCalculator {
-    pub fn new(seed: i64) -> Self {
+    #[must_use]
+    pub const fn new(seed: i64) -> Self {
         Self { seed }
     }
 }
@@ -232,14 +239,14 @@ mod tests {
     use crate::generation::structure::placement::RandomSpreadStructurePlacement;
 
     #[test]
-    fn test_get_start_chunk_random() {
+    fn get_start_chunk_random() {
         let region_seed = get_region_seed(123, 1, 1, 14357620);
         let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(region_seed));
-        assert_eq!(random.next_bounded_i32(32 - 8), 8)
+        assert_eq!(random.next_bounded_i32(32 - 8), 8);
     }
 
     #[test]
-    fn test_get_start_chunk() {
+    fn get_start_chunk() {
         let random = RandomSpreadStructurePlacement {
             spacing: 32,
             separation: 8,

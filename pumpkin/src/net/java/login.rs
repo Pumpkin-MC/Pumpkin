@@ -31,7 +31,7 @@ impl JavaClient {
         // If `max_players` is set to zero, then there is no max player count enforced.
         // TODO: If client is an operator or has otherwise suitable elevated permissions, allow the client to bypass this requirement.
         let max_players = server.basic_config.max_players;
-        if max_players > 0 && server.get_player_count().await >= max_players as usize {
+        if max_players > 0 && server.get_player_count() >= max_players as usize {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.server_full",
                 [],
@@ -150,7 +150,7 @@ impl JavaClient {
         }
 
         // Don't allow duplicate UUIDs
-        if let Some(online_player) = &server.get_player_by_uuid(profile.id).await {
+        if let Some(online_player) = &server.get_player_by_uuid(profile.id) {
             log::debug!(
                 "Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (username '{}')",
                 &self.address.lock().await,
@@ -167,7 +167,7 @@ impl JavaClient {
         }
 
         // Don't allow a duplicate username
-        if let Some(online_player) = &server.get_player_by_name(&profile.name).await {
+        if let Some(online_player) = &server.get_player_by_name(&profile.name) {
             log::debug!(
                 "A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', username '{}')",
                 &self.address.lock().await,

@@ -28,7 +28,7 @@ impl CommandExecutor for QueryExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let key = TextComponent::text(self.0.to_string());
-            let level_info = server.level_info.read().await;
+            let level_info = server.level_info.load();
             let value = TextComponent::text(level_info.game_rules.get(&self.0).to_string());
             drop(level_info);
 
@@ -46,6 +46,7 @@ impl CommandExecutor for QueryExecutor {
 struct SetExecutor(GameRule);
 
 impl CommandExecutor for SetExecutor {
+    #[expect(unused)]
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
@@ -54,29 +55,37 @@ impl CommandExecutor for SetExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let key = TextComponent::text(self.0.to_string());
-            let mut level_info = server.level_info.write().await;
-            let raw_value = level_info.game_rules.get_mut(&self.0);
+            let current_info = server.level_info.load();
 
-            let value = TextComponent::text(match raw_value {
+            let mut new_info = (**current_info).clone();
+
+            let mut output_value = String::new();
+
+            let raw_value = new_info.game_rules.get_mut(&self.0);
+
+            match raw_value {
                 GameRuleValue::Int(value) => {
                     let arg_value = BoundedNumArgumentConsumer::<i64>::find_arg(args, ARG_NAME)??;
                     *value = arg_value;
-                    arg_value.to_string()
+                    output_value = arg_value.to_string();
                 }
                 GameRuleValue::Bool(value) => {
                     let arg_value = BoolArgConsumer::find_arg(args, ARG_NAME)?;
                     *value = arg_value;
-                    arg_value.to_string()
+                    output_value = arg_value.to_string();
                 }
-            });
-            drop(level_info);
+            }
 
+            server.level_info.store(std::sync::Arc::new(new_info));
+
+            let value_component = TextComponent::text(output_value);
             sender
                 .send_message(TextComponent::translate(
                     "commands.gamerule.set",
-                    [key, value],
+                    [key, value_component],
                 ))
                 .await;
+
             Ok(())
         })
     }

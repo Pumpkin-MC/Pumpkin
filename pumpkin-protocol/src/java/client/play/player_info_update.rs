@@ -56,7 +56,7 @@ pub struct Player<'a> {
 
 impl<'a> CPlayerInfoUpdate<'a> {
     #[must_use]
-    pub fn new(actions: u8, players: &'a [Player<'a>]) -> Self {
+    pub const fn new(actions: u8, players: &'a [Player<'a>]) -> Self {
         Self { actions, players }
     }
 }

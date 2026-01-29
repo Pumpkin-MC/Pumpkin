@@ -28,11 +28,11 @@ pub struct SubstitutionRange {
 }
 impl SubstitutionRange {
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         (self.end - self.start) + 1
     }
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.start == self.end
     }
 }

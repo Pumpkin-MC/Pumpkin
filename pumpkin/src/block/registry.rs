@@ -282,7 +282,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 }
 
 // ActionResult.java
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum BlockActionResult {
     /// Action was successful | Same as SUCCESS in vanilla
     Success,
@@ -300,7 +300,7 @@ pub enum BlockActionResult {
 
 impl BlockActionResult {
     #[must_use]
-    pub fn consumes_action(&self) -> bool {
+    pub const fn consumes_action(&self) -> bool {
         matches!(self, Self::Consume | Self::Success | Self::SuccessServer)
     }
 }

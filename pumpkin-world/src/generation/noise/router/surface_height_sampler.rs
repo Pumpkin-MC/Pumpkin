@@ -30,7 +30,8 @@ pub struct SurfaceHeightSamplerBuilderOptions {
 }
 
 impl SurfaceHeightSamplerBuilderOptions {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         start_biome_x: i32,
         start_biome_z: i32,
         horizontal_biome_end: usize,
@@ -107,6 +108,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
         result
     }
 
+    #[must_use]
     pub fn generate(
         base: &'a ProtoSurfaceEstimator,
         build_options: &SurfaceHeightSamplerBuilderOptions,
@@ -116,7 +118,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
         // (Should we traverse the functions and update the indices?)
         let mut component_stack =
             Vec::<ChunkNoiseFunctionComponent>::with_capacity(base.full_component_stack.len());
-        for base_component in base.full_component_stack.iter() {
+        for base_component in &base.full_component_stack {
             let chunk_component = match base_component {
                 ProtoNoiseFunctionComponent::Dependent(dependent) => {
                     ChunkNoiseFunctionComponent::Dependent(dependent)

@@ -15,13 +15,9 @@ impl BlockBehaviour for EndPortalBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let world = if args.world.dimension == Dimension::THE_END {
-                args.server
-                    .get_world_from_dimension(&Dimension::OVERWORLD)
-                    .await
+                args.server.get_world_from_dimension(&Dimension::OVERWORLD)
             } else {
-                args.server
-                    .get_world_from_dimension(&Dimension::THE_END)
-                    .await
+                args.server.get_world_from_dimension(&Dimension::THE_END)
             };
             args.entity
                 .get_entity()

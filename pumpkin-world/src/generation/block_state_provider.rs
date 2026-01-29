@@ -37,13 +37,13 @@ pub enum BlockStateProvider {
 impl BlockStateProvider {
     pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> &'static BlockState {
         match self {
-            BlockStateProvider::NoiseThreshold(provider) => provider.get(random, pos),
-            BlockStateProvider::NoiseProvider(provider) => provider.get(pos),
-            BlockStateProvider::Simple(provider) => provider.get(pos),
-            BlockStateProvider::Weighted(provider) => provider.get(random),
-            BlockStateProvider::DualNoise(provider) => provider.get(pos),
-            BlockStateProvider::Pillar(provider) => provider.get(pos),
-            BlockStateProvider::RandomizedInt(provider) => provider.get(random, pos),
+            Self::NoiseThreshold(provider) => provider.get(random, pos),
+            Self::NoiseProvider(provider) => provider.get(pos),
+            Self::Simple(provider) => provider.get(pos),
+            Self::Weighted(provider) => provider.get(random),
+            Self::DualNoise(provider) => provider.get(pos),
+            Self::Pillar(provider) => provider.get(pos),
+            Self::RandomizedInt(provider) => provider.get(random, pos),
         }
     }
 }
@@ -190,7 +190,7 @@ impl NoiseBlockStateProvider {
         states: &'a [BlockStateCodec],
         value: f64,
     ) -> &'a BlockStateCodec {
-        let val = ((1.0 + value) / 2.0).clamp(0.0, 0.9999);
+        let val = f64::midpoint(1.0, value).clamp(0.0, 0.9999);
         &states[(val * states.len() as f64) as usize]
     }
 }

@@ -30,7 +30,7 @@ pub struct CustomBossbar {
 impl CustomBossbar {
     #[deny(clippy::new_without_default)]
     #[must_use]
-    pub fn new(namespace: String, bossbar_data: Bossbar) -> Self {
+    pub const fn new(namespace: String, bossbar_data: Bossbar) -> Self {
         Self {
             namespace,
             bossbar_data,
@@ -112,7 +112,7 @@ impl CustomBossbars {
         if let Some(bossbar) = bossbar {
             self.custom_bossbars.remove(&resource_location);
 
-            let players: Vec<Arc<Player>> = server.get_all_players().await;
+            let players: Vec<Arc<Player>> = server.get_all_players();
 
             let online_players = players
                 .iter()
@@ -168,7 +168,7 @@ impl CustomBossbars {
                 return Ok(());
             }
 
-            let players: Vec<Arc<Player>> = server.get_all_players().await;
+            let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
                 .filter(|player| bossbar.player.contains(&player.gameprofile.id));
@@ -203,7 +203,7 @@ impl CustomBossbars {
 
             bossbar.visible = new_visibility;
 
-            let players: Vec<Arc<Player>> = server.get_all_players().await;
+            let players: Vec<Arc<Player>> = server.get_all_players();
             let online_players = players
                 .iter()
                 .filter(|player| bossbar.player.contains(&player.gameprofile.id));
@@ -241,7 +241,7 @@ impl CustomBossbars {
                 return Ok(());
             }
 
-            let players: Vec<Arc<Player>> = server.get_all_players().await;
+            let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
                 .filter(|player| bossbar.player.contains(&player.gameprofile.id));
@@ -279,7 +279,7 @@ impl CustomBossbars {
                 return Ok(());
             }
 
-            let players: Vec<Arc<Player>> = server.get_all_players().await;
+            let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
                 .filter(|player| bossbar.player.contains(&player.gameprofile.id));
@@ -318,7 +318,7 @@ impl CustomBossbars {
                 return Ok(());
             }
 
-            let players: Vec<Arc<Player>> = server.get_all_players().await;
+            let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
                 .filter(|player| bossbar.player.contains(&player.gameprofile.id));
@@ -367,7 +367,7 @@ impl CustomBossbars {
 
             if bossbar.visible {
                 for uuid in removed_players {
-                    let Some(player) = server.get_player_by_uuid(uuid).await else {
+                    let Some(player) = server.get_player_by_uuid(uuid) else {
                         continue;
                     };
 
@@ -382,7 +382,7 @@ impl CustomBossbars {
             }
 
             for uuid in added_players {
-                let Some(player) = server.get_player_by_uuid(uuid).await else {
+                let Some(player) = server.get_player_by_uuid(uuid) else {
                     continue;
                 };
 

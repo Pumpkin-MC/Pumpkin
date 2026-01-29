@@ -30,6 +30,7 @@ use pumpkin_util::{
     world_seed::Seed,
 };
 
+#[must_use]
 pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<VanillaGenerator> {
     // TODO decide which WorldGenerator to pick based on config.
     Box::new(VanillaGenerator::new(seed, dimension))
@@ -43,6 +44,7 @@ pub struct GlobalRandomConfig {
 }
 
 impl GlobalRandomConfig {
+    #[must_use]
     pub fn new(seed: u64, legacy: bool) -> Self {
         let random_deriver = if legacy {
             LegacyRand::from_seed(seed).next_splitter()
@@ -62,7 +64,8 @@ impl GlobalRandomConfig {
         }
     }
 
-    pub fn seed(&self) -> u64 {
+    #[must_use]
+    pub const fn seed(&self) -> u64 {
         self.seed
     }
 }
@@ -75,6 +78,7 @@ pub mod section_coords {
         coord >> 4
     }
 
+    #[must_use]
     pub fn get_offset_pos(chunk_coord: i32, offset: i32) -> i32 {
         section_to_block(chunk_coord) + offset
     }
@@ -109,7 +113,7 @@ pub mod biome_coords {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum Direction {
     North,
     NorthEast,

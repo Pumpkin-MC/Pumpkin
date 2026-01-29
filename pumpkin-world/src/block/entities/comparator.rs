@@ -15,7 +15,8 @@ pub struct ComparatorBlockEntity {
 
 impl ComparatorBlockEntity {
     pub const ID: &'static str = "minecraft:comparator";
-    pub fn new(position: BlockPos) -> Self {
+    #[must_use]
+    pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
             output_signal: AtomicU8::new(0),

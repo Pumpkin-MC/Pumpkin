@@ -142,7 +142,7 @@ fn scale_mix(l: i64) -> f64 {
 }
 
 #[inline]
-fn salt_mix(seed: i64, salt: i64) -> i64 {
+const fn salt_mix(seed: i64, salt: i64) -> i64 {
     let mixed_seed = seed.wrapping_mul(
         seed.wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407),
@@ -162,32 +162,32 @@ mod test {
     use super::salt_mix;
 
     #[test]
-    fn test_mix_seed() {
+    fn mix_seed() {
         let seed = salt_mix(12345678, 12345678);
         assert_eq!(seed, 2937271135939595220);
     }
 
     #[test]
-    fn test_permutation() {
+    fn permutation() {
         let seed = hash_seed(0);
         let score = score_permutation(seed, 123, 456, 456, 0.25, 0.5, 0.75);
         assert_eq!(score, 1.276986312866211);
     }
 
     #[test]
-    fn test_biome_blend() {
+    fn biome_blend() {
         let biome_pos = get_biome_blend(-64, 384, 1234567890, 123, 123, 123);
         assert_eq!(biome_pos, Vector3::new(31, 30, 30));
     }
 
     #[test]
-    fn test_scale() {
+    fn scale() {
         let seed = scale_mix(12345678);
         assert_eq!(seed, -0.45);
     }
 
     #[test]
-    fn test_chunk_wide_blend() {
+    fn chunk_wide_blend() {
         let data: Vec<(i32, i32, i32, i32, i32, i32)> =
             read_data_from_file!("../../assets/biome_mixer.json");
 

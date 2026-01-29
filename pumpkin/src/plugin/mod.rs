@@ -147,7 +147,7 @@ where
 type HandlerMap = HashMap<&'static str, Vec<Box<dyn DynEventHandler>>>;
 
 /// Plugin loading state
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PluginState {
     Loading,
     Loaded,

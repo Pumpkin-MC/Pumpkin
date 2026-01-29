@@ -24,12 +24,7 @@ impl LargeOakFoliagePlacer {
         foliage_provider: &BlockState,
     ) {
         for y in (offset - foliage_height..=offset).rev() {
-            let radius = radius
-                + if y == offset || y == offset - foliage_height {
-                    0
-                } else {
-                    1
-                };
+            let radius = radius + i32::from(!(y == offset || y == offset - foliage_height));
             FoliagePlacer::generate_square(
                 self,
                 chunk,
@@ -43,7 +38,7 @@ impl LargeOakFoliagePlacer {
         }
     }
 
-    pub fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {
+    pub const fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {
         self.height
     }
 }

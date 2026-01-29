@@ -29,7 +29,7 @@ impl PlayerCommandSendEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerCommandSendEvent`.
-    pub fn new(player: Arc<Player>, command: String) -> Self {
+    pub const fn new(player: Arc<Player>, command: String) -> Self {
         Self {
             player,
             command,

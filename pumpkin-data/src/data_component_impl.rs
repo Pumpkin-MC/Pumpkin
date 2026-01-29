@@ -228,7 +228,7 @@ fn get_i32_hash(val: i32) -> u32 {
 }
 
 #[test]
-fn test_hash() {
+fn hash() {
     assert_eq!(get_str_hash("minecraft:sharpness"), 2734053906u32);
     assert_eq!(get_i32_hash(3), 3795317917u32);
     assert_eq!(

@@ -289,7 +289,7 @@ impl LivingEntity {
 
             if block == &Block::NETHER_PORTAL {
                 let world = self.entity.world.load();
-                let level_info = world.level_info.read().await;
+                let level_info = world.level_info.load();
 
                 return level_info.game_rules.players_nether_portal_default_delay == 0;
             }
@@ -491,7 +491,7 @@ impl LivingEntity {
         let levitation = self.get_effect(&StatusEffect::LEVITATION).await;
 
         if let Some(lev) = levitation {
-            velo.y += (0.05 * f64::from(lev.amplifier + 1) - velo.y) * 0.2;
+            velo.y += 0.05f64.mul_add(f64::from(lev.amplifier + 1), -velo.y) * 0.2;
         } else {
             velo.y -= self.get_effective_gravity(&caller).await;
 
@@ -846,7 +846,7 @@ impl LivingEntity {
         }
     }
 
-    fn get_fall_sound(distance: i32) -> Sound {
+    const fn get_fall_sound(distance: i32) -> Sound {
         if distance > 4 {
             Sound::EntityGenericBigFall
         } else {
@@ -904,7 +904,6 @@ impl LivingEntity {
         let world = self.entity.world.load();
         let dyn_self = world
             .get_entity_by_id(self.entity.entity_id)
-            .await
             .expect("Entity not found in world");
         if self
             .dead
@@ -938,14 +937,13 @@ impl LivingEntity {
                 world.drop_stack(&block_pos, item).await;
             }
 
-            let show_death_messages =
-                { world.level_info.read().await.game_rules.show_death_messages };
+            let show_death_messages = { world.level_info.load().game_rules.show_death_messages };
             if self.entity.entity_type == &EntityType::PLAYER && show_death_messages {
                 //TODO: KillCredit
                 let death_message =
                     Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
                 if let Some(server) = world.server.upgrade() {
-                    for player in server.get_all_players().await {
+                    for player in server.get_all_players() {
                         player.send_system_message(&death_message).await;
                     }
                 }

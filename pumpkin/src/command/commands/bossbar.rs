@@ -458,10 +458,11 @@ impl CommandExecutor for SetExecuter {
                         }
                     }
 
-                    let player_names: Vec<String> = targets
+                    let player_names = targets
                         .iter()
-                        .map(|player| player.gameprofile.name.clone())
-                        .collect();
+                        .map(|p| p.gameprofile.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ");
 
                     sender
                         .send_message(TextComponent::translate(
@@ -472,7 +473,7 @@ impl CommandExecutor for SetExecuter {
                                     namespace.to_string(),
                                 ),
                                 TextComponent::text(count.to_string()),
-                                TextComponent::text(player_names.join(", ").clone()),
+                                TextComponent::text(player_names),
                             ],
                         ))
                         .await;
@@ -584,11 +585,11 @@ impl CommandExecutor for SetExecuter {
     }
 }
 
-fn max_value_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn max_value_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name("max")
 }
 
-fn value_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn value_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name("value")
 }
 

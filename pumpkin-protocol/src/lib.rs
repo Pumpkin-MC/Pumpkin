@@ -50,7 +50,7 @@ pub type CompressionThreshold = usize;
 /// increase CPU usage.
 pub type CompressionLevel = u32;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ConnectionState {
     HandShake,
     Status,
@@ -143,7 +143,7 @@ impl<'de, T: Deserialize<'de>> Visitor<'de> for IdOrVisitor<T> {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum IdOr<T> {
     Id(u16),
     Value(T),
@@ -155,6 +155,7 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for IdOr<T> {
     }
 }
 
+#[expect(clippy::trait_duplication_in_bounds)]
 impl<T: Serialize> Serialize for IdOr<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
@@ -189,7 +190,7 @@ pub struct StreamDecryptor<R: AsyncRead + Unpin> {
 }
 
 impl<R: AsyncRead + Unpin> StreamDecryptor<R> {
-    pub fn new(cipher: Aes128Cfb8Dec, stream: R) -> Self {
+    pub const fn new(cipher: Aes128Cfb8Dec, stream: R) -> Self {
         Self {
             cipher,
             read: stream,
@@ -447,7 +448,7 @@ pub enum PositionFlag {
 }
 
 impl PositionFlag {
-    fn get_mask(&self) -> i32 {
+    const fn get_mask(&self) -> i32 {
         match self {
             Self::X => 1 << 0,
             Self::Y => 1 << 1,
@@ -490,7 +491,7 @@ pub struct Link<'a> {
 
 impl<'a> Link<'a> {
     #[must_use]
-    pub fn new(label: Label, url: &'a String) -> Self {
+    pub const fn new(label: Label, url: &'a String) -> Self {
         Self {
             is_built_in: match label {
                 Label::BuiltIn(_) => true,
@@ -534,7 +535,7 @@ mod test {
     };
 
     #[test]
-    fn test_serde_id_or_id() {
+    fn serde_id_or_id() {
         let mut buf = Vec::new();
 
         let id = IdOr::<SoundEvent>::Id(0);
@@ -547,7 +548,7 @@ mod test {
     }
 
     #[test]
-    fn test_serde_id_or_value() {
+    fn serde_id_or_value() {
         let mut buf = Vec::new();
         let event = SoundEvent {
             sound_name: ResourceLocation::vanilla("test"),

@@ -63,10 +63,9 @@ impl ArgumentConsumer for PlayersArgumentConsumer {
             let players = match s {
                 "@r" => server
                     .get_random_player()
-                    .await
                     .map_or_else(|| Some(vec![]), |p| Some(vec![p])),
-                "@a" | "@e" => Some(server.get_all_players().await),
-                name => server.get_player_by_name(name).await.map(|p| vec![p]),
+                "@a" | "@e" => Some(server.get_all_players()),
+                name => server.get_player_by_name(name).map(|p| vec![p]),
             };
 
             players.map(Arg::Players)

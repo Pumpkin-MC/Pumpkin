@@ -145,7 +145,7 @@ pub enum DropType {
 }
 
 impl DropType {
-    fn from_i8(value: i8) -> Result<Self, InventoryError> {
+    const fn from_i8(value: i8) -> Result<Self, InventoryError> {
         Ok(match value {
             0 => Self::SingleItem,
             1 => Self::FullStack,
@@ -154,13 +154,13 @@ impl DropType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MouseDragType {
     Left,
     Right,
     Middle,
 }
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum MouseDragState {
     Start(MouseDragType),
     AddSlot(usize),

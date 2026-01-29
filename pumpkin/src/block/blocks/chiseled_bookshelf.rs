@@ -240,7 +240,7 @@ impl ChiseledBookshelfBlock {
         }
     }
 
-    fn is_slot_used(properties: ChiseledBookshelfLikeProperties, slot: i8) -> bool {
+    const fn is_slot_used(properties: ChiseledBookshelfLikeProperties, slot: i8) -> bool {
         match slot {
             0 => properties.slot_0_occupied,
             1 => properties.slot_1_occupied,

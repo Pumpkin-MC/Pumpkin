@@ -111,7 +111,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
             //todo
             let world = match sender {
                 CommandSender::Rcon(_) | CommandSender::Console => {
-                    server.worlds.read().await.first().unwrap().clone()
+                    server.worlds.load().first().unwrap().clone()
                 }
                 CommandSender::Player(player) => player.world().clone(),
                 CommandSender::CommandBlock(_, w) => w.clone(),
@@ -193,7 +193,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
             let (yaw, _, pitch, _) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
 
             // todo command context
-            let world = server.worlds.read().await.first().unwrap().clone();
+            let world = server.worlds.load().first().unwrap().clone();
             for target in targets {
                 target
                     .clone()
@@ -228,7 +228,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
             // todo command context
             let world = match sender {
                 CommandSender::Rcon(_) | CommandSender::Console => {
-                    server.worlds.read().await.first().unwrap().clone()
+                    server.worlds.load().first().unwrap().clone()
                 }
                 CommandSender::Player(player) => player.world().clone(),
                 CommandSender::CommandBlock(_, w) => w.clone(),

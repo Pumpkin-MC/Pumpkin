@@ -20,7 +20,7 @@ pub struct LootPool {
     pub functions: Option<&'static [LootFunction]>,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ItemEntry {
     pub name: &'static str,
 }
@@ -42,7 +42,7 @@ pub enum LootPoolEntryTypes {
     Group,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum LootCondition {
     Inverted,
     AnyOf,
@@ -124,7 +124,7 @@ pub struct LootPoolEntry {
     pub functions: Option<&'static [LootFunction]>,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum LootTableType {
     Empty,
     Entity,
@@ -169,7 +169,7 @@ impl ToTokens for UniformLootNumberProvider {
 
 impl UniformLootNumberProvider {
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        random.next_f32() * (self.max - self.min) + self.min
+        random.next_f32().mul_add(self.max - self.min, self.min)
     }
 }
 
