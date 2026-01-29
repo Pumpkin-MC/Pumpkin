@@ -16,6 +16,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data::TrackedId;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
@@ -48,6 +49,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
 use std::pin::Pin;
+use std::sync::atomic::AtomicI8;
 use std::sync::{
     Arc,
     atomic::{
@@ -106,7 +108,22 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async {})
+        Box::pin(async move {
+            let entity = self.get_entity();
+            
+            // If the internal age is negative, it's a baby
+            let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+
+            if is_baby {
+                entity.send_meta_data(&[
+                    Metadata::new(
+                        TrackedData::DATA_BABY,
+                        MetaDataType::Boolean,
+                        true,
+                    )
+                ]).await;
+            }
+        })
     }
 
     // This method takes ownership of Arc<Self>, so the lifetime bounds are different.
@@ -188,6 +205,16 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     /// Called when a player collides with a entity
     fn on_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
+    }
+
+    fn on_hit<'a>(&'a self, _hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    /// Returns true if this entity is a projectile (egg, snowball, etc.).
+    /// Default is false.
+    fn is_projectile(&self) -> bool {
+        false
     }
 
     fn get_entity(&self) -> &Entity;
@@ -352,6 +379,7 @@ pub struct Entity {
     pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
     /// The vehicle that entity is in
     pub vehicle: Mutex<Option<Arc<dyn EntityBase>>>,
+    /// The age of the entity in ticks. Negative values indicate a baby.
     pub age: AtomicI32,
 
     pub first_loaded_chunk_position: AtomicCell<Option<Vector3<i32>>>,
@@ -466,6 +494,12 @@ impl Entity {
     /// Called when the entity changes dimensions (e.g., through a nether portal).
     pub fn set_world(&self, world: Arc<World>) {
         self.world.store(world);
+    }
+
+    /// Sets the entity's age in ticks.
+    /// Negative values indicate that the entity is a baby.
+    pub fn set_age(&self, age: i32) {
+        self.age.store(age, Relaxed);
     }
 
     /// Sets a custom name for the entity, typically used with nametags

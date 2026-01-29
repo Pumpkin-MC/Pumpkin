@@ -15,6 +15,7 @@ use crate::{
     server::Server,
     world::World,
 };
+use tokio::sync::Mutex;
 
 pub struct FireworkRocketEntity {
     entity: ThrownItemEntity,
@@ -35,7 +36,7 @@ impl FireworkRocketEntity {
             ))
             .await;
         Self {
-            entity: ThrownItemEntity { entity },
+            entity: ThrownItemEntity { entity, owner_id: None, collides_with_projectiles: false },
             shooter_id: None,
             life: 0.into(),
             // TODO
@@ -45,11 +46,26 @@ impl FireworkRocketEntity {
     }
 
     pub async fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let mut entity = Self::new(entity).await;
-        entity.shooter_id = Some(shooter.entity_id);
+        // Build a new rocket with owner-aware thrown entity (set spawn at shooter eye)
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
 
-        entity
-            .entity
+        // set some random initial velocity like `new` would
+        // we need to set on the inner entity after constructing ThrownItemEntity
+        let mut thrown = ThrownItemEntity::new(entity, shooter);
+        thrown.entity.set_velocity(Vector3::new(
+            random.next_triangular(0.0, 0.002_297),
+            0.05,
+            random.next_triangular(0.0, 0.002_297),
+        )).await;
+
+        let mut rocket = Self {
+            entity: thrown,
+            shooter_id: Some(shooter.entity_id),
+            life: 0.into(),
+            life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32).into(),
+        };
+
+        rocket.entity
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_SHOOTER_ENTITY_ID,
@@ -57,7 +73,8 @@ impl FireworkRocketEntity {
                 OptionalInt(Some(shooter.entity_id)),
             )])
             .await;
-        entity
+
+        rocket
     }
 
     pub async fn explode_and_remove(&self, world: &World) {
@@ -80,7 +97,7 @@ impl EntityBase for FireworkRocketEntity {
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.tick(caller, server).await;
+            self.entity.process_tick(caller, server).await;
 
             let entity = self.get_entity();
             let world = entity.world.load();
@@ -127,4 +144,6 @@ impl EntityBase for FireworkRocketEntity {
     fn as_nbt_storage(&self) -> &dyn crate::entity::NBTStorage {
         self
     }
+
+    fn is_projectile(&self) -> bool { true }
 }
