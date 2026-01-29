@@ -4,8 +4,8 @@ use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DeathProtection,
-    Enchantments, Equippable, Food, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, Tool,
-    Unbreakable,
+    Enchantments, Equippable, Food, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize,
+    PotionContents, Tool, Unbreakable,
 };
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
@@ -629,8 +629,61 @@ pub struct MapPostProcessingImpl;
 pub struct ChargedProjectilesImpl;
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct BundleContentsImpl;
+/// Status effect instance for potion contents
 #[derive(Clone, Debug, Hash, PartialEq)]
-pub struct PotionContentsImpl;
+pub struct StatusEffectInstance {
+    pub effect_id: i32,
+    pub amplifier: i32,
+    pub duration: i32,
+    pub ambient: bool,
+    pub show_particles: bool,
+    pub show_icon: bool,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct PotionContentsImpl {
+    pub potion_id: Option<i32>,
+    pub custom_color: Option<i32>,
+    pub custom_effects: Vec<StatusEffectInstance>,
+    pub custom_name: Option<String>,
+}
+
+impl DataComponentImpl for PotionContentsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+
+        if let Some(potion_id) = self.potion_id {
+            compound.put_int("potion", potion_id);
+        }
+
+        if let Some(color) = self.custom_color {
+            compound.put_int("custom_color", color);
+        }
+
+        if !self.custom_effects.is_empty() {
+            let mut effects_list = Vec::new();
+            for effect in &self.custom_effects {
+                let mut effect_compound = NbtCompound::new();
+                effect_compound.put_int("id", effect.effect_id);
+                effect_compound.put_int("amplifier", effect.amplifier);
+                effect_compound.put_int("duration", effect.duration);
+                effect_compound.put_byte("ambient", effect.ambient as i8);
+                effect_compound.put_byte("show_particles", effect.show_particles as i8);
+                effect_compound.put_byte("show_icon", effect.show_icon as i8);
+                effects_list.push(NbtTag::Compound(effect_compound));
+            }
+            compound.put("custom_effects", NbtTag::List(effects_list));
+        }
+
+        if let Some(name) = &self.custom_name {
+            compound.put_string("custom_name", name.clone());
+        }
+
+        NbtTag::Compound(compound)
+    }
+
+    default_impl!(PotionContents);
+}
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct PotionDurationScaleImpl;
 #[derive(Clone, Debug, Hash, PartialEq)]
