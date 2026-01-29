@@ -19,7 +19,7 @@ enum PresetTime {
 }
 
 impl PresetTime {
-    fn to_ticks(self) -> i32 {
+    const fn to_ticks(self) -> i32 {
         match self {
             Self::Day => 1000,
             Self::Noon => 6000,
@@ -54,7 +54,7 @@ impl CommandExecutor for QueryExecutor {
         Box::pin(async move {
             let mode = self.0;
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
@@ -116,7 +116,7 @@ impl CommandExecutor for ChangeExecutor {
 
             let mode = self.0;
             // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.read().await;
+            let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");

@@ -16,7 +16,7 @@ pub struct Constant {
 }
 
 impl Constant {
-    pub fn new(value: f64) -> Self {
+    pub const fn new(value: f64) -> Self {
         Self { value }
     }
 }
@@ -80,7 +80,7 @@ impl StaticChunkNoiseFunctionComponentImpl for Linear {
 }
 
 impl Linear {
-    pub fn new(
+    pub const fn new(
         input_index: usize,
         min_value: f64,
         max_value: f64,
@@ -255,7 +255,7 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
 }
 
 impl Binary {
-    pub fn new(
+    pub const fn new(
         input1_index: usize,
         input2_index: usize,
         min_value: f64,
@@ -320,14 +320,14 @@ impl StaticChunkNoiseFunctionComponentImpl for Unary {
             mapper,
             sample_options,
         );
-        array.iter_mut().for_each(|value| {
+        for value in array.iter_mut() {
             *value = self.data.apply_density(*value);
-        });
+        }
     }
 }
 
 impl Unary {
-    pub fn new(
+    pub const fn new(
         input_index: usize,
         min_value: f64,
         max_value: f64,
@@ -349,7 +349,7 @@ pub struct Clamp {
 }
 
 impl Clamp {
-    pub fn new(input_index: usize, data: &'static ClampData) -> Self {
+    pub const fn new(input_index: usize, data: &'static ClampData) -> Self {
         Self { input_index, data }
     }
 }

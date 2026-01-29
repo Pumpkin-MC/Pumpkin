@@ -32,7 +32,7 @@ impl CommandExecutor for DefaultGamemodeExecutor {
             };
 
             if server.basic_config.force_gamemode {
-                for player in server.get_all_players().await {
+                for player in server.get_all_players() {
                     player.set_gamemode(gamemode).await;
                 }
             }

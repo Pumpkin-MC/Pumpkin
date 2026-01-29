@@ -36,7 +36,7 @@ impl HungerManager {
         let mut exhaustion = self.exhaustion.load();
         let mut timer = self.tick_timer.load();
 
-        let difficulty = player.world().level_info.read().await.difficulty;
+        let difficulty = player.world().level_info.load().difficulty;
         let health = player.living_entity.health.load();
         let can_heal = player.can_food_heal();
 

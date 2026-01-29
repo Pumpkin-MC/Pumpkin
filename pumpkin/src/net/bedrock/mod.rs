@@ -414,7 +414,7 @@ impl BedrockClient {
         Ok(())
     }
 
-    fn handle_ack(_ack: &Ack) {}
+    const fn handle_ack(_ack: &Ack) {}
 
     async fn handle_frame_set(self: &Arc<Self>, server: &Arc<Server>, frame_set: FrameSet) {
         // TODO: Send all ACKs in short intervals in batches

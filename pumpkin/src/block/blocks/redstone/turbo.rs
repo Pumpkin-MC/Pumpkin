@@ -79,7 +79,7 @@ impl RedstoneWireTurbo {
         &self.nodes[node_id.index]
     }
 
-    fn compute_all_neighbors(pos: BlockPos) -> [BlockPos; 24] {
+    const fn compute_all_neighbors(pos: BlockPos) -> [BlockPos; 24] {
         let Vector3 { x, y, z } = pos.0;
         [
             BlockPos::new(x - 1, y, z),

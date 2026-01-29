@@ -37,7 +37,7 @@ impl OreFeature {
     ) -> bool {
         let f = random.next_f32() * f32::consts::PI;
         let g = self.size as f32 / 8.0f32;
-        let i = ((self.size as f32 / 16.0f32 * 2.0 + 1.0) / 2.0).ceil() as i32;
+        let i = f32::midpoint(self.size as f32 / 16.0f32 * 2.0, 1.0).ceil() as i32;
 
         let d = pos.0.x as f64 + f.sin() as f64 * g as f64;
         let e = pos.0.x as f64 - f.sin() as f64 * g as f64;
@@ -94,7 +94,7 @@ impl OreFeature {
             let e = lerp(f as f64, start_y, end_y);
             let g = lerp(f as f64, start_z, end_z);
             let h = random.next_f64() * j as f64 / 16.0;
-            let l = (((f32::consts::PI * f).sin() + 1.0) * h as f32 + 1.0) / 2.0;
+            let l = f32::midpoint(((f32::consts::PI * f).sin() + 1.0) * h as f32, 1.0);
 
             ds[k as usize * 4] = d;
             ds[k as usize * 4 + 1] = e;
@@ -192,7 +192,7 @@ impl OreFeature {
                                 block_state.to_state(),
                                 random,
                                 target,
-                                &mut mutable_pos,
+                                &mutable_pos,
                             ) {
                                 chunk.set_block_state(&pos_vec, target.state.get_state());
                                 placed_blocks_count += 1;
@@ -208,11 +208,11 @@ impl OreFeature {
 
     fn should_place<T: GenerationCache>(
         &self,
-        chunk: &mut T,
+        chunk: &T,
         state: &'static BlockState,
         random: &mut RandomGenerator,
         target: &OreTarget,
-        pos: &mut BlockPos,
+        pos: &BlockPos,
     ) -> bool {
         if !target.target.test(state, random) {
             return false;
@@ -233,7 +233,7 @@ impl OreFeature {
         random.next_f32() >= chance
     }
 
-    fn is_exposed_to_air<T: GenerationCache>(chunk: &mut T, pos: &BlockPos) -> bool {
+    fn is_exposed_to_air<T: GenerationCache>(chunk: &T, pos: &BlockPos) -> bool {
         for dir in BlockDirection::all() {
             if GenerationCache::get_block_state(chunk, &pos.offset(dir.to_offset()).0)
                 .to_state()

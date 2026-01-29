@@ -22,7 +22,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
-use rand::{Rng, SeedableRng, rngs::SmallRng};
+use rand::{RngExt, SeedableRng, rngs::SmallRng};
 use std::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 // use std::time::Duration;
@@ -196,53 +196,65 @@ impl Level {
             chunk_listener: listener.clone(),
         });
 
-        let num_threads = num_cpus::get().saturating_sub(2).max(1);
+        // TODO
+        let total_cores = num_cpus::get().saturating_sub(2).max(1);
+        let threads_per_dimension = (total_cores / 2).max(1);
+        let entity_threads = (threads_per_dimension / 2).max(1);
 
         GenerationSchedule::create(
-            4,
-            num_threads,
+            2,
+            threads_per_dimension,
             level_ref.clone(),
             level_channel,
             listener,
             level_ref.thread_tracker.lock().unwrap().as_mut(),
         );
 
-        for thread_id in 0..(num_threads / 2).max(1) {
+        let mut tracker_lock = level_ref.thread_tracker.lock().unwrap();
+
+        for thread_id in 0..entity_threads {
             let level_clone = level_ref.clone();
             let pending_clone = pending_entity_generations.clone();
             let rx = gen_entity_request_rx.clone();
 
-            let builder =
-                thread::Builder::new().name(format!("Entity Chunk Generation Thread {thread_id}"));
-
-            builder
+            let handle = thread::Builder::new()
+                .name(format!("Entity Chunk Generation Thread {thread_id}"))
                 .spawn(move || {
-                    while let Ok(pos) = rx.recv() {
+                    loop {
                         if level_clone.cancel_token.is_cancelled() {
                             break;
                         }
 
-                        let chunk = ChunkEntityData {
-                            x: pos.x,
-                            z: pos.y,
-                            data: HashMap::new(),
-                            dirty: true,
-                        };
-                        let arc_chunk = Arc::new(RwLock::new(chunk));
+                        match rx.recv_timeout(std::time::Duration::from_millis(500)) {
+                            Ok(pos) => {
+                                let arc_chunk = Arc::new(RwLock::new(ChunkEntityData {
+                                    x: pos.x,
+                                    z: pos.y,
+                                    data: HashMap::new(),
+                                    dirty: true,
+                                }));
 
-                        level_clone
-                            .loaded_entity_chunks
-                            .insert(pos, arc_chunk.clone());
+                                level_clone
+                                    .loaded_entity_chunks
+                                    .insert(pos, arc_chunk.clone());
 
-                        if let Some((_, waiters)) = pending_clone.remove(&pos) {
-                            for tx in waiters {
-                                let _ = tx.send(arc_chunk.clone());
+                                if let Some((_, waiters)) = pending_clone.remove(&pos) {
+                                    for tx in waiters {
+                                        let _ = tx.send(arc_chunk.clone());
+                                    }
+                                }
                             }
+                            Err(crossbeam::channel::RecvTimeoutError::Timeout) => continue,
+                            Err(crossbeam::channel::RecvTimeoutError::Disconnected) => break,
                         }
                     }
                 })
-                .unwrap();
+                .expect("Failed to spawn Entity Generation Thread");
+
+            tracker_lock.push(handle);
         }
+
+        drop(tracker_lock);
         level_ref
     }
 
@@ -334,13 +346,7 @@ impl Level {
         for chunk in chunks {
             self.chunk_watchers
                 .entry(*chunk)
-                .and_modify(|value| {
-                    if let Some(new_value) = value.checked_add(1) {
-                        *value = new_value;
-                    } else {
-                        log::error!("Watching overflow on chunk {:?}", chunk);
-                    }
-                })
+                .and_modify(|count| *count = count.saturating_add(1))
                 .or_insert(1);
         }
 
@@ -358,17 +364,21 @@ impl Level {
         let mut chunks_to_clean = Vec::new();
 
         for chunk in chunks {
-            if let Some(mut count) = self.chunk_watchers.get_mut(chunk) {
-                let value = count.value_mut();
-                *value = value.saturating_sub(1);
+            let mut should_remove = false;
 
-                if *value == 0 {
-                    drop(count);
-                    self.chunk_watchers.remove(chunk);
-                    chunks_to_clean.push(*chunk);
+            if let Some(mut count) = self.chunk_watchers.get_mut(chunk) {
+                *count = count.saturating_sub(1);
+                if *count == 0 {
+                    should_remove = true;
                 }
             }
+
+            if should_remove {
+                self.chunk_watchers.remove(chunk);
+                chunks_to_clean.push(*chunk);
+            }
         }
+
         self.entity_saver
             .unwatch_chunks(&self.level_folder, chunks)
             .await;
@@ -381,7 +391,7 @@ impl Level {
         !self.mark_chunks_as_not_watched(&[chunk]).await.is_empty()
     }
 
-    pub async fn clean_entity_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
+    pub fn clean_entity_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
         // Care needs to be take here because of interweaving case:
         // 1) Remove chunk from cache
         // 2) Another player wants same chunk
@@ -430,7 +440,7 @@ impl Level {
         let mut ticks = TickData {
             block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
-            random_ticks: Vec::with_capacity(self.loaded_chunks.len() * 3 * 16 * 16),
+            random_ticks: Vec::with_capacity(self.loaded_chunks.len() * 3),
             block_entities: Vec::new(),
         };
 
@@ -476,16 +486,12 @@ impl Level {
                         section_data
                             .into_iter()
                             .filter_map(|(random_pos, block_state_id)| {
-                                if has_random_ticks(block_state_id) {
-                                    Some(ScheduledTick {
-                                        position: random_pos,
-                                        delay: 0,
-                                        priority: TickPriority::Normal,
-                                        value: (),
-                                    })
-                                } else {
-                                    None
-                                }
+                                has_random_ticks(block_state_id).then_some(ScheduledTick {
+                                    position: random_pos,
+                                    delay: 0,
+                                    priority: TickPriority::Normal,
+                                    value: (),
+                                })
                             }),
                     );
             }
@@ -510,8 +516,8 @@ impl Level {
         ticks
     }
 
-    pub async fn clean_entity_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
-        self.clean_entity_chunks(&[*chunk]).await;
+    pub fn clean_entity_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
+        self.clean_entity_chunks(&[*chunk]);
     }
 
     pub fn is_chunk_watched(&self, chunk: &Vector2<i32>) -> bool {
@@ -552,7 +558,7 @@ impl Level {
             let mut lock = self.chunk_loading.lock().unwrap();
             lock.add_ticket(pos, 31);
             lock.send_change();
-        }
+        };
 
         if let Some(chunk) = self.loaded_chunks.get(&pos) {
             chunk.clone()
@@ -573,9 +579,8 @@ impl Level {
 
         match rx.recv().await {
             Some(LoadedData::Loaded(chunk)) => Ok((chunk, false)),
-            Some(LoadedData::Missing(_)) => Err(ChunkReadingError::ChunkNotExist),
             Some(LoadedData::Error((_, err))) => Err(err),
-            None => Err(ChunkReadingError::ChunkNotExist),
+            _ => Err(ChunkReadingError::ChunkNotExist),
         }
     }
 
@@ -593,12 +598,10 @@ impl Level {
                 let to_fetch: Vec<_> = chunks
                     .iter()
                     .filter(|pos| {
-                        if let Some(chunk) = level.loaded_entity_chunks.get(pos) {
+                        level.loaded_entity_chunks.get(pos).is_none_or(|chunk| {
                             let _ = sender.send((chunk.clone(), false));
                             false // Don't fetch
-                        } else {
-                            true // Needs fetch
-                        }
+                        })
                     })
                     .copied()
                     .collect();
@@ -661,24 +664,21 @@ impl Level {
             return chunk.clone();
         }
 
-        match self.load_single_entity_chunk(pos).await {
-            Ok((chunk, _)) => {
-                self.loaded_entity_chunks.insert(pos, chunk.clone());
-                chunk
-            }
-            Err(_) => {
-                let (tx, rx) = oneshot::channel();
-                match self.pending_entity_generations.entry(pos) {
-                    dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                        entry.get_mut().push(tx);
-                    }
-                    dashmap::mapref::entry::Entry::Vacant(entry) => {
-                        entry.insert(vec![tx]);
-                        let _ = self.gen_entity_request_tx.send(pos);
-                    }
+        if let Ok((chunk, _)) = self.load_single_entity_chunk(pos).await {
+            self.loaded_entity_chunks.insert(pos, chunk.clone());
+            chunk
+        } else {
+            let (tx, rx) = oneshot::channel();
+            match self.pending_entity_generations.entry(pos) {
+                dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+                    entry.get_mut().push(tx);
                 }
-                rx.await.expect("Entity generation worker dropped")
+                dashmap::mapref::entry::Entry::Vacant(entry) => {
+                    entry.insert(vec![tx]);
+                    let _ = self.gen_entity_request_tx.send(pos);
+                }
             }
+            rx.await.expect("Entity generation worker dropped")
         }
     }
 
@@ -794,7 +794,7 @@ impl Level {
                 delay,
                 position: block_pos,
                 priority,
-                value: unsafe { &*(block as *const Block) },
+                value: unsafe { &*std::ptr::from_ref::<Block>(block) },
             },
             tick_order,
         );
@@ -815,7 +815,7 @@ impl Level {
                 delay,
                 position: block_pos,
                 priority,
-                value: unsafe { &*(fluid as *const Fluid) },
+                value: unsafe { &*std::ptr::from_ref::<Fluid>(fluid) },
             },
             tick_order,
         );

@@ -24,7 +24,7 @@ pub struct CLoginPluginRequest<'a> {
 
 impl<'a> CLoginPluginRequest<'a> {
     #[must_use]
-    pub fn new(message_id: VarInt, channel: &'a str, data: &'a [u8]) -> Self {
+    pub const fn new(message_id: VarInt, channel: &'a str, data: &'a [u8]) -> Self {
         Self {
             message_id,
             channel,

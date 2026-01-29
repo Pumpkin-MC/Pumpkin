@@ -23,7 +23,8 @@ impl Default for ViewerCountTracker {
 }
 
 impl ViewerCountTracker {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             old: AtomicU16::new(0),
             current: AtomicU16::new(0),

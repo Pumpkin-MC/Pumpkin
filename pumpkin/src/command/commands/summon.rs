@@ -34,13 +34,13 @@ impl CommandExecutor for Executor {
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
             let (world, pos) = match sender {
                 CommandSender::Console | CommandSender::Rcon(_) => {
-                    let guard = server.worlds.read().await;
+                    let guard = server.worlds.load();
                     let world = guard
                         .first()
                         .cloned()
                         .ok_or(CommandError::InvalidRequirement)?;
                     let pos = {
-                        let info = &world.level_info.read().await;
+                        let info = &world.level_info.load();
                         // default position for spawning a player, in this case for mob
                         pos.unwrap_or(Vector3::new(
                             f64::from(info.spawn_x) + 0.5,

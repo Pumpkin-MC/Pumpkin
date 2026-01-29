@@ -30,7 +30,7 @@ impl CommandExecutor for DifficultyExecutor {
             let translation_key = format!("options.difficulty.{difficulty_string}");
 
             {
-                let level_info = server.level_info.read().await;
+                let level_info = server.level_info.load();
 
                 if level_info.difficulty == difficulty {
                     sender

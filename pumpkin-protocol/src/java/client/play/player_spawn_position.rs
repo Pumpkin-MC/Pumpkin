@@ -28,7 +28,7 @@ pub struct CPlayerSpawnPosition {
 
 impl CPlayerSpawnPosition {
     #[must_use]
-    pub fn new(location: BlockPos, yaw: f32, pitch: f32, dimension_name: String) -> Self {
+    pub const fn new(location: BlockPos, yaw: f32, pitch: f32, dimension_name: String) -> Self {
         Self {
             dimension_name,
             location,

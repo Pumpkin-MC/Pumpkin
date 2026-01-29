@@ -77,14 +77,14 @@ pub struct TCPNetworkDecoder<R: AsyncRead + Unpin> {
 }
 
 impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
-    pub fn new(reader: R) -> Self {
+    pub const fn new(reader: R) -> Self {
         Self {
             reader: DecryptionReader::None(reader),
             compression: None,
         }
     }
 
-    pub fn set_compression(&mut self, threshold: CompressionThreshold) {
+    pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
     }
 
@@ -238,7 +238,7 @@ mod tests {
 
     /// Test decoding without compression and encryption
     #[tokio::test]
-    async fn test_decode_without_compression_and_encryption() {
+    async fn decode_without_compression_and_encryption() {
         // Sample packet data: packet_id = 1, payload = "Hello"
         let packet_id = 1;
         let payload = b"Hello";
@@ -258,7 +258,7 @@ mod tests {
 
     /// Test decoding with compression
     #[tokio::test]
-    async fn test_decode_with_compression() {
+    async fn decode_with_compression() {
         // Sample packet data: packet_id = 2, payload = "Hello, compressed world!"
         let packet_id = 2;
         let payload = b"Hello, compressed world!";
@@ -280,7 +280,7 @@ mod tests {
 
     /// Test decoding with encryption
     #[tokio::test]
-    async fn test_decode_with_encryption() {
+    async fn decode_with_encryption() {
         // Sample packet data: packet_id = 3, payload = "Hello, encrypted world!"
         let packet_id = 3;
         let payload = b"Hello, encrypted world!";
@@ -304,7 +304,7 @@ mod tests {
 
     /// Test decoding with both compression and encryption
     #[tokio::test]
-    async fn test_decode_with_compression_and_encryption() {
+    async fn decode_with_compression_and_encryption() {
         // Sample packet data: packet_id = 4, payload = "Hello, compressed and encrypted world!"
         let packet_id = 4;
         let payload = b"Hello, compressed and encrypted world!";
@@ -330,7 +330,7 @@ mod tests {
 
     /// Test decoding with invalid compressed data
     #[tokio::test]
-    async fn test_decode_with_invalid_compressed_data() {
+    async fn decode_with_invalid_compressed_data() {
         // Sample packet data: packet_id = 5, payload_len = 10, but compressed data is invalid
         let data_len = 10; // Expected decompressed size
         let invalid_compressed_data = vec![0xFF, 0xFF, 0xFF]; // Invalid Zlib data
@@ -364,7 +364,7 @@ mod tests {
 
     /// Test decoding with a zero-length packet
     #[tokio::test]
-    async fn test_decode_with_zero_length_packet() {
+    async fn decode_with_zero_length_packet() {
         // Sample packet data: packet_id = 7, payload = "" (empty)
         let packet_id = 7;
         let payload = b"";
@@ -384,7 +384,7 @@ mod tests {
     /// Test decoding with maximum length packet
     #[tokio::test]
     #[expect(clippy::print_stdout)]
-    async fn test_decode_with_maximum_length_packet() {
+    async fn decode_with_maximum_length_packet() {
         // Sample packet data: packet_id = 8, payload = "A" repeated MAX_PACKET_SIZE times
         // Sample packet data: packet_id = 8, payload = "A" repeated (MAX_PACKET_SIZE - 1) times
         let packet_id = 8;

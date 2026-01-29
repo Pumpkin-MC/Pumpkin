@@ -46,7 +46,7 @@ type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 /// or with different optimizations
 ///
 /// The `R` type is the type of the data that will be loaded/saved
-/// like ChunkData or EntityData
+/// like `ChunkData` or `EntityData`
 pub trait FileIO
 where
     Self: Send + Sync,
@@ -94,7 +94,7 @@ where
 /// Trait to serialize and deserialize the chunk data to and from bytes.
 ///
 /// The `Data` type is the type of the data that will be updated or serialized/deserialized
-/// like ChunkData or EntityData
+/// like `ChunkData` or `EntityData`
 pub trait ChunkSerializer: Send + Sync + Default {
     type Data: Send + Sync + Sized + Dirtiable;
     type WriteBackend;

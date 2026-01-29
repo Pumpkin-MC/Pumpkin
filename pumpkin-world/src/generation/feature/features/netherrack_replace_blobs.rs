@@ -56,7 +56,7 @@ impl ReplaceBlobsFeature {
 
     fn move_down_to_target<T: GenerationCache>(
         mut pos: BlockPos,
-        chunk: &mut T,
+        chunk: &T,
         target: &'static Block,
     ) -> Option<BlockPos> {
         while pos.0.y > chunk.bottom_y() as i32 + 1 {

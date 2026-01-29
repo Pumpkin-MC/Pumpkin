@@ -12,7 +12,7 @@ pub struct CSubtitle<'a> {
 
 impl<'a> CSubtitle<'a> {
     #[must_use]
-    pub fn new(subtitle: &'a TextComponent) -> Self {
+    pub const fn new(subtitle: &'a TextComponent) -> Self {
         Self { subtitle }
     }
 }

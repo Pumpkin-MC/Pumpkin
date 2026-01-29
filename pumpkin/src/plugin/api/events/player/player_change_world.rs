@@ -44,7 +44,7 @@ impl PlayerChangeWorldEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerChangeWorldEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         previous_world: Arc<World>,
         new_world: Arc<World>,

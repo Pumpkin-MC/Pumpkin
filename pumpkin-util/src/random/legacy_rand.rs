@@ -14,21 +14,21 @@ impl LegacyRand {
     population_seed_fn!();
 
     #[must_use]
-    pub fn from_seed(seed: u64) -> Self {
+    pub const fn from_seed(seed: u64) -> Self {
         Self {
             seed: (seed ^ 0x0005_DEEC_E66D) & 0xFFFF_FFFF_FFFF,
             internal_next_gaussian: None,
         }
     }
 
-    fn next_random(&mut self) -> i64 {
+    const fn next_random(&mut self) -> i64 {
         let l = self.seed as i64;
         let m = l.wrapping_mul(0x0005_DEEC_E66D).wrapping_add(11) & 0xFFFFFFFFFFFF;
         self.seed = m as u64;
         m
     }
 
-    fn next(&mut self, bits: u64) -> i32 {
+    const fn next(&mut self, bits: u64) -> i32 {
         (self.next_random() >> (48 - bits)) as i32
     }
 }
@@ -102,7 +102,7 @@ pub struct LegacySplitter {
 }
 
 impl LegacySplitter {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self { seed }
     }
 }
@@ -132,7 +132,7 @@ mod test {
     use super::LegacyRand;
 
     #[test]
-    fn test_next_i32() {
+    fn next_i32() {
         let mut rand = LegacyRand::from_seed(0);
 
         let values = [
@@ -154,7 +154,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_bounded_i32() {
+    fn next_bounded_i32() {
         let mut rand = LegacyRand::from_seed(0);
 
         let values = [0, 13, 4, 2, 5, 8, 11, 6, 9, 14];
@@ -176,7 +176,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_inbetween_i32() {
+    fn next_inbetween_i32() {
         let mut rand = LegacyRand::from_seed(0);
 
         let values = [1, 5, 2, 12, 12, 6, 12, 10, 4, 3];
@@ -187,7 +187,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_inbetween_exclusive_i32() {
+    fn next_inbetween_exclusive_i32() {
         let mut rand = LegacyRand::from_seed(0);
 
         let values = [1, 7, 9, 6, 7, 3, 3, 7, 3, 1];
@@ -198,7 +198,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_f64() {
+    fn next_f64() {
         let mut rand = LegacyRand::from_seed(0);
 
         let values = [
@@ -220,7 +220,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_f32() {
+    fn next_f32() {
         let mut rand = LegacyRand::from_seed(0);
 
         let values: [f32; 10] = [
@@ -234,7 +234,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_i64() {
+    fn next_i64() {
         let mut rand = LegacyRand::from_seed(0);
 
         let values: [i64; 10] = [
@@ -256,7 +256,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_bool() {
+    fn next_bool() {
         let mut rand = LegacyRand::from_seed(0);
 
         let values = [
@@ -269,7 +269,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_gaussian() {
+    fn next_gaussian() {
         let mut rand = LegacyRand::from_seed(0);
 
         let values = [
@@ -291,7 +291,7 @@ mod test {
     }
 
     #[test]
-    fn test_next_triangular() {
+    fn next_triangular() {
         let mut rand = LegacyRand::from_seed(0);
 
         let values = [
@@ -313,7 +313,7 @@ mod test {
     }
 
     #[test]
-    fn test_split() {
+    fn split() {
         let mut original_rand = LegacyRand::from_seed(0);
         assert_eq!(original_rand.next_i64(), -4962768465676381896i64);
 

@@ -42,14 +42,7 @@ impl BreathManager {
             return;
         }
 
-        if !player
-            .world()
-            .level_info
-            .read()
-            .await
-            .game_rules
-            .drowning_damage
-        {
+        if !player.world().level_info.load().game_rules.drowning_damage {
             return;
         }
 

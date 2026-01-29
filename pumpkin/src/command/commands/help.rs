@@ -19,7 +19,7 @@ const ARG_COMMAND: &str = "command";
 
 const COMMANDS_PER_PAGE: i32 = 7;
 
-fn page_number_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn page_number_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().name("page").min(1)
 }
 

@@ -267,7 +267,7 @@ impl NbtTag {
     }
 
     #[must_use]
-    pub fn extract_byte(&self) -> Option<i8> {
+    pub const fn extract_byte(&self) -> Option<i8> {
         match self {
             Self::Byte(byte) => Some(*byte),
             _ => None,
@@ -275,7 +275,7 @@ impl NbtTag {
     }
 
     #[must_use]
-    pub fn extract_short(&self) -> Option<i16> {
+    pub const fn extract_short(&self) -> Option<i16> {
         match self {
             Self::Short(short) => Some(*short),
             _ => None,
@@ -283,7 +283,7 @@ impl NbtTag {
     }
 
     #[must_use]
-    pub fn extract_int(&self) -> Option<i32> {
+    pub const fn extract_int(&self) -> Option<i32> {
         match self {
             Self::Int(int) => Some(*int),
             _ => None,
@@ -291,7 +291,7 @@ impl NbtTag {
     }
 
     #[must_use]
-    pub fn extract_long(&self) -> Option<i64> {
+    pub const fn extract_long(&self) -> Option<i64> {
         match self {
             Self::Long(long) => Some(*long),
             _ => None,
@@ -299,7 +299,7 @@ impl NbtTag {
     }
 
     #[must_use]
-    pub fn extract_float(&self) -> Option<f32> {
+    pub const fn extract_float(&self) -> Option<f32> {
         match self {
             Self::Float(float) => Some(*float),
             _ => None,
@@ -307,7 +307,7 @@ impl NbtTag {
     }
 
     #[must_use]
-    pub fn extract_double(&self) -> Option<f64> {
+    pub const fn extract_double(&self) -> Option<f64> {
         match self {
             Self::Double(double) => Some(*double),
             _ => None,
@@ -347,7 +347,7 @@ impl NbtTag {
     }
 
     #[must_use]
-    pub fn extract_compound(&self) -> Option<&NbtCompound> {
+    pub const fn extract_compound(&self) -> Option<&NbtCompound> {
         match self {
             Self::Compound(compound) => Some(compound),
             _ => None,

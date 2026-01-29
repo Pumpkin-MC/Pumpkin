@@ -15,14 +15,14 @@ impl Xoroshiro {
     population_seed_fn!();
 
     #[must_use]
-    pub fn from_seed(seed: u64) -> Self {
+    pub const fn from_seed(seed: u64) -> Self {
         let (lo, hi) = Self::mix_u64(seed);
         let lo = mix_stafford_13(lo);
         let hi = mix_stafford_13(hi);
         Self::new(lo, hi)
     }
 
-    fn new(lo: u64, hi: u64) -> Self {
+    const fn new(lo: u64, hi: u64) -> Self {
         let (lo, hi) = if (lo | hi) == 0 {
             (0x9E3779B97F4A7C15, 0x6A09E667F3BCC909)
         } else {
@@ -35,23 +35,23 @@ impl Xoroshiro {
         }
     }
 
-    fn mix_u64(seed: u64) -> (u64, u64) {
+    const fn mix_u64(seed: u64) -> (u64, u64) {
         let l = seed ^ 0x6A09E667F3BCC909;
         let m = l.wrapping_add(0x9E3779B97F4A7C15);
         (l, m)
     }
 
     #[must_use]
-    pub fn from_seed_unmixed(seed: u64) -> Self {
+    pub const fn from_seed_unmixed(seed: u64) -> Self {
         let (lo, hi) = Self::mix_u64(seed);
         Self::new(lo, hi)
     }
 
-    fn next(&mut self, bits: u64) -> u64 {
+    const fn next(&mut self, bits: u64) -> u64 {
         self.next_random() >> (64 - bits)
     }
 
-    fn next_random(&mut self) -> u64 {
+    const fn next_random(&mut self) -> u64 {
         let l = self.lo;
         let m = self.hi;
         let n = (l.wrapping_add(m)).rotate_left(17).wrapping_add(l);
@@ -72,7 +72,7 @@ impl GaussianGenerator for Xoroshiro {
     }
 }
 
-fn mix_stafford_13(z: u64) -> u64 {
+const fn mix_stafford_13(z: u64) -> u64 {
     let z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
     let z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
     z ^ (z >> 31)
@@ -168,7 +168,7 @@ mod tests {
     // Values checked against results from the equivalent Java source
 
     #[test]
-    fn test_mix_stafford_13() {
+    fn mix_stafford_13_test() {
         let values: [(u64, i64); 31] = [
             (0, 0),
             (1, 6238072747940578789),
@@ -208,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_i32() {
+    fn next_i32() {
         let values = [
             -160476802,
             781697906,
@@ -229,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_bounded_i32() {
+    fn next_bounded_i32() {
         let mut xoroshiro = Xoroshiro::from_seed(0);
 
         let values = [9, 1, 1, 3, 8, 9, 0, 3, 6, 3];
@@ -247,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_between_i32() {
+    fn next_between_i32() {
         let mut xoroshiro = Xoroshiro::from_seed(0);
 
         let values = [99, 59, 57, 65, 94, 100, 54, 66, 83, 68];
@@ -257,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_inbetween_exclusive() {
+    fn next_inbetween_exclusive() {
         let mut xoroshiro = Xoroshiro::from_seed(0);
 
         let values = [98, 59, 57, 65, 94, 99, 53, 66, 82, 68];
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_f64() {
+    fn next_f64() {
         let mut xoroshiro = Xoroshiro::from_seed(0);
 
         let values: [f64; 10] = [
@@ -288,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_f32() {
+    fn next_f32() {
         let mut xoroshiro = Xoroshiro::from_seed(0);
 
         let values: [f32; 10] = [
@@ -309,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_i64() {
+    fn next_i64() {
         let mut xoroshiro = Xoroshiro::from_seed(0);
 
         let values: [i64; 10] = [
@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_bool() {
+    fn next_bool() {
         let mut xoroshiro = Xoroshiro::from_seed(0);
 
         let values: [bool; 10] = [
@@ -342,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_gaussian() {
+    fn next_gaussian() {
         let mut xoroshiro = Xoroshiro::from_seed(0);
 
         let values: [f64; 10] = [
@@ -363,7 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_triangular() {
+    fn next_triangular() {
         let mut xoroshiro = Xoroshiro::from_seed(0);
 
         let values: [f64; 10] = [
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn test_split() {
+    fn split() {
         let mut xoroshiro = Xoroshiro::from_seed(0);
 
         let mut new_generator = xoroshiro.split();
@@ -408,7 +408,7 @@ mod tests {
     }
 
     #[test]
-    fn test_intersection() {
+    fn intersection() {
         let mut xoroshiro = Xoroshiro::new(0, 0);
         assert_eq!(xoroshiro.next_i64(), 6807859099481836695);
     }

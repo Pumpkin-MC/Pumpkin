@@ -13,7 +13,8 @@ impl DoublePerlinNoiseSampler {
         0.1f64 * (1f64 + 1f64 / (octaves + 1) as f64)
     }
 
-    pub fn max_value(&self) -> f64 {
+    #[must_use]
+    pub const fn max_value(&self) -> f64 {
         self.max_value
     }
 
@@ -49,6 +50,7 @@ impl DoublePerlinNoiseSampler {
         }
     }
 
+    #[must_use]
     pub fn sample(&self, x: f64, y: f64, z: f64) -> f64 {
         let d = x * 1.0181268882175227f64;
         let e = y * 1.0181268882175227f64;
@@ -159,7 +161,7 @@ mod double_perlin_noise_sampler_test {
         ];
 
         for ((x, y, z), sample) in values {
-            assert_eq!(sampler.sample(x, y, z), sample)
+            assert_eq!(sampler.sample(x, y, z), sample);
         }
     }
 
@@ -258,7 +260,7 @@ mod double_perlin_noise_sampler_test {
         ];
 
         for ((x, y, z), sample) in values {
-            assert_eq!(sampler.sample(x, y, z), sample)
+            assert_eq!(sampler.sample(x, y, z), sample);
         }
     }
 }
@@ -270,7 +272,7 @@ mod octave_perline_noise_sampler_test {
     use super::OctavePerlinNoiseSampler;
 
     #[test]
-    fn test_sample() {
+    fn sample() {
         let mut rand = Xoroshiro::from_seed(513513513);
         assert_eq!(rand.next_i32(), 404174895);
 
@@ -373,7 +375,7 @@ mod perlin_noise_sampler_test {
     use pumpkin_util::noise::perlin::OctavePerlinNoiseSampler;
 
     #[test]
-    fn test_precision() {
+    fn precision() {
         let values = [
             2.5E-4,
             1.25E-4,
@@ -418,7 +420,7 @@ mod perlin_noise_sampler_test {
     }
 
     #[test]
-    fn test_calculate_amplitudes() {
+    fn calculate_amplitudes() {
         let (first, amplitudes) =
             OctavePerlinNoiseSampler::calculate_amplitudes(&(-15..=0).collect::<Vec<i32>>());
 

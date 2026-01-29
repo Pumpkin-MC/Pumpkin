@@ -216,7 +216,7 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
         match self {
             Self::Independent(independent) => independent.fill(array, mapper),
             Self::Dependent(dependent) => {
-                dependent.fill(component_stack, array, mapper, sample_options)
+                dependent.fill(component_stack, array, mapper, sample_options);
             }
             Self::Chunk(chunk) => chunk.fill(component_stack, array, mapper, sample_options),
             Self::PassThrough(pass_through) => ChunkNoiseFunctionComponent::fill_from_stack(
@@ -328,6 +328,7 @@ impl ChunkNoiseRouter<'_> {
 }
 
 impl<'a> ChunkNoiseRouter<'a> {
+    #[must_use]
     pub fn generate(
         base: &'a ProtoNoiseRouter,
         build_options: &ChunkNoiseFunctionBuilderOptions,

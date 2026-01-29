@@ -68,7 +68,7 @@ impl ToTokens for FloatProvider {
 
 impl FloatProvider {
     #[must_use]
-    pub fn get_min(&self) -> f32 {
+    pub const fn get_min(&self) -> f32 {
         match self {
             Self::Object(inv_provider) => match inv_provider {
                 NormalFloatProvider::Constant(constant) => constant.get_min(),
@@ -93,7 +93,7 @@ impl FloatProvider {
     }
 
     #[must_use]
-    pub fn get_max(&self) -> f32 {
+    pub const fn get_max(&self) -> f32 {
         match self {
             Self::Object(inv_provider) => match inv_provider {
                 NormalFloatProvider::Constant(constant) => constant.get_max(),
@@ -122,21 +122,21 @@ impl ToTokens for ConstantFloatProvider {
 
 impl ConstantFloatProvider {
     #[must_use]
-    pub fn new(value: f32) -> Self {
+    pub const fn new(value: f32) -> Self {
         Self { value }
     }
 
     #[must_use]
-    pub fn get_min(&self) -> f32 {
+    pub const fn get_min(&self) -> f32 {
         self.value
     }
 
-    pub fn get(&self, _random: &mut impl RandomImpl) -> f32 {
+    pub const fn get(&self, _random: &mut impl RandomImpl) -> f32 {
         self.value
     }
 
     #[must_use]
-    pub fn get_max(&self) -> f32 {
+    pub const fn get_max(&self) -> f32 {
         self.value
     }
 }
@@ -159,7 +159,7 @@ impl ToTokens for UniformFloatProvider {
 
 impl UniformFloatProvider {
     #[must_use]
-    pub fn new(min_inclusive: f32, max_exclusive: f32) -> Self {
+    pub const fn new(min_inclusive: f32, max_exclusive: f32) -> Self {
         Self {
             min_inclusive,
             max_exclusive,
@@ -167,18 +167,18 @@ impl UniformFloatProvider {
     }
 
     #[must_use]
-    pub fn get_min(&self) -> f32 {
+    pub const fn get_min(&self) -> f32 {
         self.min_inclusive
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
         // Use the random range in [min_inclusive, max_exclusive)
         let range = self.max_exclusive - self.min_inclusive;
-        self.min_inclusive + random.next_f32() * range
+        random.next_f32().mul_add(range, self.min_inclusive)
     }
 
     #[must_use]
-    pub fn get_max(&self) -> f32 {
+    pub const fn get_max(&self) -> f32 {
         self.max_exclusive
     }
 }
@@ -210,7 +210,7 @@ impl ToTokens for ClampedNormalFloatProvider {
 
 impl ClampedNormalFloatProvider {
     #[must_use]
-    pub fn new(mean: f32, deviation: f32, min: f32, max: f32) -> Self {
+    pub const fn new(mean: f32, deviation: f32, min: f32, max: f32) -> Self {
         Self {
             mean,
             deviation,
@@ -220,21 +220,21 @@ impl ClampedNormalFloatProvider {
     }
 
     #[must_use]
-    pub fn get_min(&self) -> f32 {
+    pub const fn get_min(&self) -> f32 {
         self.min
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
         // Generate normal distribution value
         let gaussian = random.next_gaussian() as f32;
-        let value = self.mean + gaussian * self.deviation;
+        let value = gaussian.mul_add(self.deviation, self.mean);
 
         // Clamp to min/max range
         value.clamp(self.min, self.max)
     }
 
     #[must_use]
-    pub fn get_max(&self) -> f32 {
+    pub const fn get_max(&self) -> f32 {
         self.max
     }
 }
@@ -263,12 +263,12 @@ impl ToTokens for TrapezoidFloatProvider {
 
 impl TrapezoidFloatProvider {
     #[must_use]
-    pub fn new(min: f32, max: f32, plateau: f32) -> Self {
+    pub const fn new(min: f32, max: f32, plateau: f32) -> Self {
         Self { min, max, plateau }
     }
 
     #[must_use]
-    pub fn get_min(&self) -> f32 {
+    pub const fn get_min(&self) -> f32 {
         self.min
     }
 
@@ -280,25 +280,26 @@ impl TrapezoidFloatProvider {
 
         let random_value = random.next_f32();
 
-        if random_value < 0.5 - self.plateau * 0.5 {
+        if random_value < self.plateau.mul_add(-0.5, 0.5) {
             // Left ramp: quadratic distribution biased toward plateau
-            let scaled = random_value / (0.5 - self.plateau * 0.5);
+            let scaled = random_value / self.plateau.mul_add(-0.5, 0.5);
             let sqrt_scaled = scaled.sqrt();
             self.min + ramp_range * sqrt_scaled
-        } else if random_value > 0.5 + self.plateau * 0.5 {
+        } else if random_value > self.plateau.mul_add(0.5, 0.5) {
             // Right ramp: quadratic distribution biased toward plateau
-            let scaled = (random_value - (0.5 + self.plateau * 0.5)) / (0.5 - self.plateau * 0.5);
+            let scaled =
+                (random_value - self.plateau.mul_add(0.5, 0.5)) / self.plateau.mul_add(-0.5, 0.5);
             let sqrt_scaled = (1.0 - scaled).sqrt();
             self.max - ramp_range * sqrt_scaled
         } else {
             // Plateau: uniform distribution
-            let plateau_pos = (random_value - (0.5 - self.plateau * 0.5)) / self.plateau;
+            let plateau_pos = (random_value - self.plateau.mul_add(-0.5, 0.5)) / self.plateau;
             self.min + ramp_range + plateau_pos * plateau_range
         }
     }
 
     #[must_use]
-    pub fn get_max(&self) -> f32 {
+    pub const fn get_max(&self) -> f32 {
         self.max
     }
 }
@@ -309,7 +310,7 @@ mod tests {
     use crate::random::{RandomGenerator, get_seed};
 
     #[test]
-    fn test_constant_float_provider() {
+    fn constant_float_provider() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -322,7 +323,7 @@ mod tests {
     }
 
     #[test]
-    fn test_uniform_float_provider() {
+    fn uniform_float_provider() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -342,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clamped_normal_float_provider() {
+    fn clamped_normal_float_provider() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -362,7 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn test_trapezoid_float_provider() {
+    fn trapezoid_float_provider() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -382,7 +383,7 @@ mod tests {
     }
 
     #[test]
-    fn test_float_provider_enum_constant() {
+    fn float_provider_enum_constant() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
@@ -394,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn test_float_provider_enum_object() {
+    fn float_provider_enum_object() {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );

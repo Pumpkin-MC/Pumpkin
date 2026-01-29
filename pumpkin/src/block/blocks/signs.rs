@@ -100,9 +100,7 @@ impl BlockBehaviour for SignBlock {
                 &args.player.gameprofile.id,
                 args.world,
                 args.position,
-            )
-            .await
-            {
+            ) {
                 return BlockActionResult::Pass;
             }
 
@@ -142,9 +140,7 @@ impl BlockBehaviour for SignBlock {
                 &args.player.gameprofile.id,
                 args.world,
                 args.position,
-            )
-            .await
-            {
+            ) {
                 // I don't think that makes sense, since it will also just return in normal_use, but vanilla does it like this
                 return BlockActionResult::PassToDefaultBlockAction;
             }
@@ -223,7 +219,7 @@ fn get_yaw_from_rotation_16(rotation: Integer0To15) -> f32 {
     f32::from(index) * 22.5
 }
 
-async fn try_claim_sign(
+fn try_claim_sign(
     currently_editing: &mut Option<Uuid>,
     uuid: &Uuid,
     world: &World,
@@ -231,7 +227,7 @@ async fn try_claim_sign(
 ) -> bool {
     if let Some(editing_player_id) = *currently_editing
         && editing_player_id != *uuid
-        && let Some(editing_player) = world.get_player_by_uuid(editing_player_id).await
+        && let Some(editing_player) = world.get_player_by_uuid(editing_player_id)
         && editing_player.can_interact_with_block_at(position, 4.0)
     {
         return false;

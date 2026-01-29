@@ -16,7 +16,7 @@ pub struct Ack {
 
 impl Ack {
     #[must_use]
-    pub fn new(sequences: Vec<u32>) -> Self {
+    pub const fn new(sequences: Vec<u32>) -> Self {
         Self { sequences }
     }
 

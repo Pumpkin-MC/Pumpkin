@@ -10,7 +10,7 @@ pub struct CSetBorderSize {
 
 impl CSetBorderSize {
     #[must_use]
-    pub fn new(diameter: f64) -> Self {
+    pub const fn new(diameter: f64) -> Self {
         Self { diameter }
     }
 }

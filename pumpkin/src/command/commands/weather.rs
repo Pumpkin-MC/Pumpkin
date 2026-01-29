@@ -33,7 +33,7 @@ impl CommandExecutor for Executor {
         Box::pin(async move {
             let duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).unwrap_or(6000);
             let world = {
-                let guard = server.worlds.read().await;
+                let guard = server.worlds.load();
 
                 guard
                     .first()

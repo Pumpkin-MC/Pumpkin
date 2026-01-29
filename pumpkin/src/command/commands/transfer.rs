@@ -20,7 +20,7 @@ const ARG_HOSTNAME: &str = "hostname";
 
 const ARG_PLAYERS: &str = "players";
 
-fn port_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn port_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("port")
         .min(1)

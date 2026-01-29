@@ -12,7 +12,7 @@ pub struct Serializer<W: Write> {
 }
 
 impl<W: Write> Serializer<W> {
-    pub fn new(w: W) -> Self {
+    pub const fn new(w: W) -> Self {
         Self { write: w }
     }
 }

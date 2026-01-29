@@ -53,6 +53,7 @@ bytes.workspace = true
 rand.workspace = true
 
 num-bigint.workspace = true
+dashmap.workspace = true
 
 # Console line reading
 rustyline.workspace = true

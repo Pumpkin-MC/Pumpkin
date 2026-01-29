@@ -116,7 +116,7 @@ pub enum Number {
 
 impl Number {
     #[must_use]
-    pub fn qualifier(&self) -> &'static str {
+    pub const fn qualifier(&self) -> &'static str {
         match self {
             Self::F64(_) | Self::F32(_) => "Float",
             Self::I32(_) | Self::I64(_) => "Integer",

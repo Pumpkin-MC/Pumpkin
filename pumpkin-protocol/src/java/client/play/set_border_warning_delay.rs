@@ -12,7 +12,7 @@ pub struct CSetBorderWarningDelay {
 
 impl CSetBorderWarningDelay {
     #[must_use]
-    pub fn new(warning_time: VarInt) -> Self {
+    pub const fn new(warning_time: VarInt) -> Self {
         Self { warning_time }
     }
 }

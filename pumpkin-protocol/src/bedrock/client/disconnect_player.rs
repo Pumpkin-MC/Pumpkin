@@ -14,7 +14,7 @@ pub struct CDisconnectPlayer {
 
 impl CDisconnectPlayer {
     #[must_use]
-    pub fn new(reason: i32, message: String) -> Self {
+    pub const fn new(reason: i32, message: String) -> Self {
         Self {
             reason: VarInt(reason),
             skip_message: message.is_empty(),

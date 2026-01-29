@@ -30,7 +30,7 @@ pub struct CUpdateScore {
 
 impl CUpdateScore {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         entity_name: String,
         objective_name: String,
         value: VarInt,

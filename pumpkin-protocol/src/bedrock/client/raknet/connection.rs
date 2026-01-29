@@ -13,7 +13,7 @@ pub struct CConnectedPong {
 impl CConnectedPong {
     #[must_use]
     #[expect(clippy::similar_names)]
-    pub fn new(ping: u64, pong: u64) -> Self {
+    pub const fn new(ping: u64, pong: u64) -> Self {
         Self { ping, pong }
     }
 }
@@ -30,7 +30,7 @@ pub struct CConnectionRequestAccepted {
 
 impl CConnectionRequestAccepted {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         client_address: SocketAddr,
         system_index: u16,
         system_addresses: [SocketAddr; 10],

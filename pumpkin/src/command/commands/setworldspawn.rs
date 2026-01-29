@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::command::CommandResult;
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::{
@@ -113,15 +115,17 @@ async fn setworldspawn(
         return Ok(());
     }
 
-    let mut level_info_guard = server.level_info.write().await;
-    level_info_guard.spawn_x = block_pos.0.x;
-    level_info_guard.spawn_y = block_pos.0.y;
-    level_info_guard.spawn_z = block_pos.0.z;
+    let current_info = server.level_info.load();
 
-    level_info_guard.spawn_yaw = yaw;
-    level_info_guard.spawn_pitch = pitch;
+    let mut new_info = (**current_info).clone();
 
-    drop(level_info_guard);
+    new_info.spawn_x = block_pos.0.x;
+    new_info.spawn_y = block_pos.0.y;
+    new_info.spawn_z = block_pos.0.z;
+    new_info.spawn_yaw = yaw;
+    new_info.spawn_pitch = pitch;
+
+    server.level_info.store(Arc::new(new_info));
 
     sender
         .send_message(TextComponent::translate(

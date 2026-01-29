@@ -72,7 +72,7 @@ impl ItemBehaviour for ArmorStandItem {
             );
 
             if world.is_space_empty(bounding_box).await
-                && world.get_entities_at_box(&bounding_box).await.is_empty()
+                && world.get_entities_at_box(&bounding_box).is_empty()
             {
                 let (player_yaw, _) = player.rotation();
                 let rotation = ((wrap_degrees(player_yaw - 180.0) + 22.5) / 45.0).floor() * 45.0;

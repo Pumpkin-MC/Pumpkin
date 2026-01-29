@@ -17,7 +17,7 @@ pub struct CResourcePacksInfo {
 impl CResourcePacksInfo {
     #[must_use]
     #[expect(clippy::fn_params_excessive_bools)]
-    pub fn new(
+    pub const fn new(
         resource_pack_required: bool,
         has_addon_packs: bool,
         has_scripts: bool,

@@ -13,7 +13,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 
 pub struct ShovelItem;
 

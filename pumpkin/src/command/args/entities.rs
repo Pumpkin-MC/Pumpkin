@@ -43,7 +43,7 @@ pub enum ComparableValueCondition<T> {
     Between(T, T),
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EntityFilterSort {
     Arbitrary,
     Nearest,
@@ -272,7 +272,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
         Box::pin(async move {
             // todo: command context
             // This is the required asynchronous operation.
-            let entities = server.select_entities(&entity_selector, Some(sender)).await;
+            let entities = server.select_entities(&entity_selector, Some(sender));
 
             Some(Arg::Entities(entities))
         })

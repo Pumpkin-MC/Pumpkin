@@ -85,3 +85,6 @@ harness = false
 
 [features]
 tokio_taskdump = []
+
+# [lints]
+# workspace = true

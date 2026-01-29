@@ -53,7 +53,7 @@ impl RawQueryPacket {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct SHandshake {
     pub session_id: i32,
 }
@@ -66,7 +66,7 @@ impl SHandshake {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct SStatusRequest {
     pub session_id: i32,
     pub challenge_token: i32,
@@ -242,7 +242,7 @@ impl CFullStatus {
 
 // All test bytes/packets are from protocol documentation
 #[tokio::test]
-async fn test_handshake_request() {
+async fn handshake_request() {
     let bytes = vec![0xFE, 0xFD, 0x09, 0x00, 0x00, 0x00, 0x01];
     let mut raw_packet = RawQueryPacket::decode(bytes).await.unwrap();
     let packet = SHandshake::decode(&mut raw_packet).await.unwrap();
@@ -254,7 +254,7 @@ async fn test_handshake_request() {
 }
 
 #[tokio::test]
-async fn test_handshake_response() {
+async fn handshake_response() {
     let bytes = vec![
         0x09, 0x00, 0x00, 0x00, 0x01, 0x39, 0x35, 0x31, 0x33, 0x33, 0x30, 0x37, 0x00,
     ];
@@ -268,7 +268,7 @@ async fn test_handshake_response() {
 }
 
 #[tokio::test]
-async fn test_basic_stat_request() {
+async fn basic_stat_request() {
     let bytes = vec![
         0xFE, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x91, 0x29, 0x5B,
     ];
@@ -285,7 +285,7 @@ async fn test_basic_stat_request() {
 }
 
 #[tokio::test]
-async fn test_basic_stat_response() {
+async fn basic_stat_response() {
     let bytes = vec![
         0x00, 0x00, 0x00, 0x00, 0x01, 0x41, 0x20, 0x4D, 0x69, 0x6E, 0x65, 0x63, 0x72, 0x61, 0x66,
         0x74, 0x20, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x00, 0x53, 0x4D, 0x50, 0x00, 0x77, 0x6F,
@@ -307,7 +307,7 @@ async fn test_basic_stat_response() {
 }
 
 #[tokio::test]
-async fn test_full_stat_request() {
+async fn full_stat_request() {
     let bytes = vec![
         0xFE, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x91, 0x29, 0x5B, 0x00, 0x00, 0x00, 0x00,
     ];
@@ -323,7 +323,7 @@ async fn test_full_stat_request() {
     assert_eq!(packet, actual_packet);
 }
 #[tokio::test]
-async fn test_full_stat_response() {
+async fn full_stat_response() {
     let bytes = vec![
         0x00, 0x00, 0x00, 0x00, 0x01, 0x73, 0x70, 0x6C, 0x69, 0x74, 0x6E, 0x75, 0x6D, 0x00, 0x80,
         0x00, 0x68, 0x6F, 0x73, 0x74, 0x6E, 0x61, 0x6D, 0x65, 0x00, 0x41, 0x20, 0x4D, 0x69, 0x6E,

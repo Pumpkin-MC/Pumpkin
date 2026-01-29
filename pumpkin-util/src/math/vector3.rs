@@ -25,17 +25,17 @@ pub enum Axis {
 
 impl Axis {
     #[must_use]
-    pub fn all() -> [Self; 3] {
+    pub const fn all() -> [Self; 3] {
         [Self::Y, Self::X, Self::Z]
     }
 
     #[must_use]
-    pub fn horizontal() -> [Self; 2] {
+    pub const fn horizontal() -> [Self; 2] {
         [Self::X, Self::Z]
     }
 
     #[must_use]
-    pub fn excluding(axis: Self) -> [Self; 2] {
+    pub const fn excluding(axis: Self) -> [Self; 2] {
         match axis {
             Self::X => [Self::Y, Self::Z],
 
@@ -47,7 +47,7 @@ impl Axis {
 }
 
 impl<T: Copy> Vector3<T> {
-    pub fn get_axis(&self, a: Axis) -> T {
+    pub const fn get_axis(&self, a: Axis) -> T {
         match a {
             Axis::X => self.x,
             Axis::Y => self.y,
@@ -55,7 +55,7 @@ impl<T: Copy> Vector3<T> {
         }
     }
 
-    pub fn set_axis(&mut self, a: Axis, value: T) {
+    pub const fn set_axis(&mut self, a: Axis, value: T) {
         match a {
             Axis::X => self.x = value,
             Axis::Y => self.y = value,

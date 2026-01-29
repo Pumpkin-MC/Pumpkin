@@ -90,7 +90,7 @@ impl DarkOakFoliagePlacer {
         }
     }
 
-    pub fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {
+    pub const fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {
         4
     }
 }

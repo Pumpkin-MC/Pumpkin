@@ -62,7 +62,8 @@ pub struct ChainedBlockStateSampler {
 }
 
 impl ChainedBlockStateSampler {
-    pub fn new(samplers: Box<[BlockStateSampler]>) -> Self {
+    #[must_use]
+    pub const fn new(samplers: Box<[BlockStateSampler]>) -> Self {
         Self { samplers }
     }
 
@@ -73,7 +74,7 @@ impl ChainedBlockStateSampler {
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
-        for sampler in self.samplers.iter_mut() {
+        for sampler in &mut self.samplers {
             if let Some(state) = sampler.sample(router, pos, sample_options, height_estimator) {
                 return Some(state);
             }
@@ -163,6 +164,7 @@ pub struct ChunkNoiseGenerator<'a> {
 
 impl<'a> ChunkNoiseGenerator<'a> {
     #[expect(clippy::too_many_arguments)]
+    #[must_use]
     pub fn new(
         noise_router_base: &'a ProtoNoiseRouter,
         random_config: &GlobalRandomConfig,
@@ -397,23 +399,27 @@ impl<'a> ChunkNoiseGenerator<'a> {
     }
 
     #[inline]
+    #[must_use]
     pub fn horizontal_cell_block_count(&self) -> u8 {
         self.generation_shape.horizontal_cell_block_count()
     }
 
     #[inline]
+    #[must_use]
     pub fn vertical_cell_block_count(&self) -> u8 {
         self.generation_shape.vertical_cell_block_count()
     }
 
-    /// Aka bottom_y
+    /// Aka `bottom_y`
     #[inline]
-    pub fn min_y(&self) -> i8 {
+    #[must_use]
+    pub const fn min_y(&self) -> i8 {
         self.generation_shape.min_y
     }
 
     #[inline]
-    pub fn height(&self) -> u16 {
+    #[must_use]
+    pub const fn height(&self) -> u16 {
         self.generation_shape.height
     }
 }

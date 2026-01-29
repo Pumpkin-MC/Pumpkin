@@ -57,16 +57,19 @@ pub struct GenerationShapeConfig {
 
 impl GenerationShapeConfig {
     #[inline]
+    #[must_use]
     pub fn vertical_cell_block_count(&self) -> u8 {
         to_block(self.size_vertical)
     }
 
     #[inline]
+    #[must_use]
     pub fn horizontal_cell_block_count(&self) -> u8 {
         to_block(self.size_horizontal)
     }
 
-    pub fn max_y(&self) -> u16 {
+    #[must_use]
+    pub const fn max_y(&self) -> u16 {
         if self.min_y >= 0 {
             self.height + self.min_y as u16
         } else {

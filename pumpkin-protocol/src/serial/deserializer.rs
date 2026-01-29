@@ -139,6 +139,7 @@ impl PacketRead for String {
 }
 
 impl PacketRead for Vec<u8> {
+    #[expect(clippy::read_zero_byte_vec)]
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         #[expect(clippy::uninit_vec)]
         {

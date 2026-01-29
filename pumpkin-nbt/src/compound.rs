@@ -21,7 +21,7 @@ pub struct NbtCompound {
 
 impl NbtCompound {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             child_tags: Vec::new(),
         }
@@ -85,7 +85,7 @@ impl NbtCompound {
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.child_tags.is_empty()
     }
 

@@ -26,7 +26,7 @@ pub struct CBlockEvent {
 
 impl CBlockEvent {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         location: BlockPos,
         action_id: u8,
         action_parameter: u8,

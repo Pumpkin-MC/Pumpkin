@@ -47,7 +47,7 @@ impl RandomPatchFeature {
             ) {
                 continue;
             }
-            is_some = true
+            is_some = true;
         }
         is_some
     }

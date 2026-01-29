@@ -43,7 +43,7 @@ impl CommandExecutor for Executor {
             let mode = self.0;
             let world = match sender {
                 CommandSender::Console | CommandSender::Rcon(_) => {
-                    let guard = server.worlds.read().await;
+                    let guard = server.worlds.load();
 
                     guard
                         .first()

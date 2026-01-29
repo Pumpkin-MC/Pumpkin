@@ -20,7 +20,7 @@ const DESCRIPTION: &str = "Give items to player(s).";
 
 const ARG_ITEM: &str = "item";
 
-fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("count")
         .min(1)

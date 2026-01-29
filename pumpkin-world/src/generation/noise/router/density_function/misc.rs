@@ -92,7 +92,7 @@ pub struct WeirdScaled {
 }
 
 impl WeirdScaled {
-    pub fn new(
+    pub const fn new(
         input_index: usize,
         sampler: DoublePerlinNoiseSampler,
         data: &WeirdScaledData,
@@ -177,7 +177,7 @@ pub struct ClampedYGradient {
 }
 
 impl ClampedYGradient {
-    pub fn new(data: &'static ClampedYGradientData) -> Self {
+    pub const fn new(data: &'static ClampedYGradientData) -> Self {
         Self { data }
     }
 }
@@ -217,7 +217,7 @@ pub struct RangeChoice {
 }
 
 impl RangeChoice {
-    pub fn new(
+    pub const fn new(
         input_index: usize,
         when_in_index: usize,
         when_out_index: usize,
@@ -229,9 +229,9 @@ impl RangeChoice {
             input_index,
             when_in_index,
             when_out_index,
+            data,
             min_value,
             max_value,
-            data,
         }
     }
 }

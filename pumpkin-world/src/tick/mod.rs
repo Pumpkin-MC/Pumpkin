@@ -24,30 +24,35 @@ pub enum TickPriority {
 }
 
 impl TickPriority {
-    pub fn values() -> [TickPriority; 7] {
+    #[must_use]
+    pub const fn values() -> [Self; 7] {
         [
-            TickPriority::ExtremelyHigh,
-            TickPriority::VeryHigh,
-            TickPriority::High,
-            TickPriority::Normal,
-            TickPriority::Low,
-            TickPriority::VeryLow,
-            TickPriority::ExtremelyLow,
+            Self::ExtremelyHigh,
+            Self::VeryHigh,
+            Self::High,
+            Self::Normal,
+            Self::Low,
+            Self::VeryLow,
+            Self::ExtremelyLow,
         ]
     }
 }
 
-impl From<i32> for TickPriority {
-    fn from(value: i32) -> Self {
+#[derive(Debug)]
+pub struct TickPriorityNotFound;
+
+impl TryFrom<i32> for TickPriority {
+    type Error = TickPriorityNotFound;
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            -3 => TickPriority::ExtremelyHigh,
-            -2 => TickPriority::VeryHigh,
-            -1 => TickPriority::High,
-            0 => TickPriority::Normal,
-            1 => TickPriority::Low,
-            2 => TickPriority::VeryLow,
-            3 => TickPriority::ExtremelyLow,
-            _ => panic!("Invalid tick priority: {value}"),
+            -3 => Ok(Self::ExtremelyHigh),
+            -2 => Ok(Self::VeryHigh),
+            -1 => Ok(Self::High),
+            0 => Ok(Self::Normal),
+            1 => Ok(Self::Low),
+            2 => Ok(Self::VeryLow),
+            3 => Ok(Self::ExtremelyLow),
+            _ => Err(TickPriorityNotFound),
         }
     }
 }
@@ -70,7 +75,7 @@ pub struct OrderedTick<T> {
 }
 
 impl<T> OrderedTick<T> {
-    pub fn new(position: BlockPos, value: T) -> Self {
+    pub const fn new(position: BlockPos, value: T) -> Self {
         Self {
             priority: TickPriority::Normal,
             sub_tick_order: 0,
@@ -134,13 +139,13 @@ where
             let y = nbt.get_int("y").unwrap();
             let z = nbt.get_int("z").unwrap();
             let delay = nbt.get_int("t").unwrap() as u8;
-            let priority = TickPriority::from(nbt.get_int("p").unwrap());
+            let priority = TickPriority::try_from(nbt.get_int("p").unwrap()).unwrap();
             let value = T::from_resource_location(
                 &ResourceLocation::from_str(nbt.get_string("i").unwrap()).unwrap(),
             )
             .unwrap();
 
-            ScheduledTick {
+            Self {
                 delay,
                 priority,
                 position: BlockPos::new(x, y, z),

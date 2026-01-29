@@ -62,12 +62,14 @@ pub struct DoublePerlinNoiseBuilder<'a> {
 }
 
 impl<'a> DoublePerlinNoiseBuilder<'a> {
-    pub fn new(rand: &'a GlobalRandomConfig) -> Self {
+    #[must_use]
+    pub const fn new(rand: &'a GlobalRandomConfig) -> Self {
         Self {
             random_config: rand,
         }
     }
 
+    #[must_use]
     pub fn get_noise_sampler_for_id(&self, id: &str) -> DoublePerlinNoiseSampler {
         let parameters = DoublePerlinNoiseParameters::id_to_parameters(id)
             .unwrap_or_else(|| panic!("Unknown noise id: {id}"));
@@ -136,6 +138,7 @@ fn build_spline_recursive(spline_repr: &SplineRepr) -> SplineValue {
 }
 
 impl ProtoNoiseRouters {
+    #[must_use]
     pub fn generate_proto_stack(
         base_stack: &[BaseNoiseFunctionComponent],
         random_config: &GlobalRandomConfig,
@@ -424,6 +427,7 @@ impl ProtoNoiseRouters {
         stack.into()
     }
 
+    #[must_use]
     pub fn generate(base: &BaseNoiseRouters, random_config: &GlobalRandomConfig) -> Self {
         let noise_stack =
             Self::generate_proto_stack(base.noise.full_component_stack, random_config);

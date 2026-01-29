@@ -21,7 +21,7 @@ impl ToTokens for Experience {
 
 /// Get the number of points in a level.
 #[must_use]
-pub fn points_in_level(level: i32) -> i32 {
+pub const fn points_in_level(level: i32) -> i32 {
     match level {
         0..=15 => 2 * level + 7,
         16..=30 => 5 * level - 38,
@@ -34,8 +34,12 @@ pub fn points_in_level(level: i32) -> i32 {
 pub fn points_to_level(level: i32) -> i32 {
     match level {
         0..=16 => level * level + 6 * level,
-        17..=31 => (2.5 * f64::from(level * level) - (40.5 * f64::from(level)) + 360.0) as i32,
-        _ => ((4.5 * f64::from(level * level)) - (162.5 * f64::from(level)) + 2220.0) as i32,
+        17..=31 => {
+            (2.5f64.mul_add(f64::from(level * level), -(40.5 * f64::from(level))) + 360.0) as i32
+        }
+        _ => {
+            (4.5f64.mul_add(f64::from(level * level), -(162.5 * f64::from(level))) + 2220.0) as i32
+        }
     }
 }
 

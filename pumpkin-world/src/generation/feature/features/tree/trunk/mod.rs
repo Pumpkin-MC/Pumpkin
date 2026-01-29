@@ -156,8 +156,8 @@ impl TrunkType {
                 dirt_state,
                 trunk_state,
             ),
-            TrunkType::Forking(_) => (vec![], vec![]), // TODO
-            TrunkType::Giant(_) => GiantTrunkPlacer::generate(
+            Self::Forking(_) => (vec![], vec![]), // TODO
+            Self::Giant(_) => GiantTrunkPlacer::generate(
                 placer,
                 height,
                 start_pos,
@@ -167,7 +167,7 @@ impl TrunkType {
                 dirt_state,
                 trunk_state,
             ),
-            TrunkType::MegaJungle(_) => MegaJungleTrunkPlacer::generate(
+            Self::MegaJungle(_) => MegaJungleTrunkPlacer::generate(
                 placer,
                 height,
                 start_pos,
@@ -177,7 +177,7 @@ impl TrunkType {
                 dirt_state,
                 trunk_state,
             ),
-            TrunkType::DarkOak(_) => DarkOakTrunkPlacer::generate(
+            Self::DarkOak(_) => DarkOakTrunkPlacer::generate(
                 placer,
                 height,
                 start_pos,
@@ -187,7 +187,7 @@ impl TrunkType {
                 dirt_state,
                 trunk_state,
             ),
-            TrunkType::Fancy(_) => FancyTrunkPlacer::generate(
+            Self::Fancy(_) => FancyTrunkPlacer::generate(
                 placer,
                 height,
                 start_pos,
@@ -197,7 +197,7 @@ impl TrunkType {
                 dirt_state,
                 trunk_state,
             ),
-            TrunkType::Bending(bending) => bending.generate(
+            Self::Bending(bending) => bending.generate(
                 placer,
                 height,
                 start_pos,
@@ -207,8 +207,8 @@ impl TrunkType {
                 dirt_state,
                 trunk_state,
             ),
-            TrunkType::UpwardsBranching(_) => (vec![], vec![]), // TODO
-            TrunkType::Cherry(_) => (vec![], vec![]),           // TODO
+            Self::UpwardsBranching(_) => (vec![], vec![]), // TODO
+            Self::Cherry(_) => (vec![], vec![]),           // TODO
         }
     }
 }

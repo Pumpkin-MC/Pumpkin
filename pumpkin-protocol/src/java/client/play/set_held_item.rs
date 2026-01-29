@@ -10,7 +10,7 @@ pub struct CSetSelectedSlot {
 
 impl CSetSelectedSlot {
     #[must_use]
-    pub fn new(slot: i8) -> Self {
+    pub const fn new(slot: i8) -> Self {
         Self { slot }
     }
 }

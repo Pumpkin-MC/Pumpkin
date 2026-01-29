@@ -4,7 +4,6 @@ use pumpkin_util::{HeightMap, include_json_static};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter;
-use std::ops::Deref;
 use std::sync::LazyLock;
 
 use pumpkin_util::biome::FOLIAGE_NOISE;
@@ -162,41 +161,31 @@ impl PlacementModifier {
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {
         match self {
-            PlacementModifier::BlockPredicateFilter(modifier) => {
+            Self::BlockPredicateFilter(modifier) => {
                 modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
-            PlacementModifier::RarityFilter(modifier) => {
+            Self::RarityFilter(modifier) => {
                 modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
-            PlacementModifier::SurfaceRelativeThresholdFilter(modifier) => {
+            Self::SurfaceRelativeThresholdFilter(modifier) => {
                 modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
-            PlacementModifier::SurfaceWaterDepthFilter(modifier) => {
+            Self::SurfaceWaterDepthFilter(modifier) => {
                 modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
-            PlacementModifier::Biome(modifier) => {
+            Self::Biome(modifier) => {
                 modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
-            PlacementModifier::Count(modifier) => modifier.get_positions(random, pos),
-            PlacementModifier::NoiseBasedCount(modifier) => {
-                Box::new(modifier.get_positions(random, pos))
-            }
-            PlacementModifier::NoiseThresholdCount(modifier) => modifier.get_positions(random, pos),
-            PlacementModifier::CountOnEveryLayer(modifier) => {
-                modifier.get_positions(random, chunk, pos)
-            }
-            PlacementModifier::EnvironmentScan(modifier) => {
-                modifier.get_positions(chunk, block_registry, pos)
-            }
-            PlacementModifier::Heightmap(modifier) => {
-                modifier.get_positions(chunk, min_y, height, random, pos)
-            }
-            PlacementModifier::HeightRange(modifier) => {
-                modifier.get_positions(min_y, height, random, pos)
-            }
-            PlacementModifier::InSquare(_) => SquarePlacementModifier::get_positions(random, pos),
-            PlacementModifier::RandomOffset(modifier) => modifier.get_positions(random, pos),
-            PlacementModifier::FixedPlacement => Box::new(iter::empty()),
+            Self::Count(modifier) => modifier.get_positions(random, pos),
+            Self::NoiseBasedCount(modifier) => Box::new(modifier.get_positions(random, pos)),
+            Self::NoiseThresholdCount(modifier) => modifier.get_positions(random, pos),
+            Self::CountOnEveryLayer(modifier) => modifier.get_positions(random, chunk, pos),
+            Self::EnvironmentScan(modifier) => modifier.get_positions(chunk, block_registry, pos),
+            Self::Heightmap(modifier) => modifier.get_positions(chunk, min_y, height, random, pos),
+            Self::HeightRange(modifier) => modifier.get_positions(min_y, height, random, pos),
+            Self::InSquare(_) => SquarePlacementModifier::get_positions(random, pos),
+            Self::RandomOffset(modifier) => modifier.get_positions(random, pos),
+            Self::FixedPlacement => Box::new(iter::empty()),
         }
     }
 }
@@ -493,7 +482,7 @@ impl ConditionalPlacementModifier for BiomePlacementModifier {
         let biome = chunk.get_biome_for_terrain_gen(pos.0.x, pos.0.y, pos.0.z);
 
         for feature in biome.features {
-            if feature.contains(&name.deref()) {
+            if feature.contains(&&*name) {
                 return true;
             }
         }
