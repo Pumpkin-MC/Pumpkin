@@ -113,7 +113,7 @@ impl EntityBase for FireworkRocketEntity {
 
             if let Some(shooter_id) = self.shooter_id {
                 // Check if the player who fired this rocket still exists in the world
-                if let Some(shooter) = world.get_entity_by_id(shooter_id).await {
+                if let Some(shooter) = world.get_entity_by_id(shooter_id) {
                     let shooter = shooter.get_entity();
 
                     // Logic for boosting Elytra flight

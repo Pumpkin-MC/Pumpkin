@@ -15,12 +15,12 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 pub struct EggEntity {
     pub thrown: ThrownItemEntity,
-    pub item_stack: Mutex<ItemStack>,
+    pub item_stack: RwLock<ItemStack>,
 }
 
 impl EggEntity {
@@ -35,7 +35,7 @@ impl EggEntity {
 
         Self {
             thrown,
-            item_stack: Mutex::new(ItemStack::new(1, &Item::EGG)),
+            item_stack: RwLock::new(ItemStack::new(1, &Item::EGG)),
         }
     }
 
@@ -49,14 +49,14 @@ impl EggEntity {
 
         Self {
             thrown,
-            item_stack: Mutex::new(ItemStack::new(1, &Item::EGG)),
+            item_stack: RwLock::new(ItemStack::new(1, &Item::EGG)),
         }
     }
 
     /// Set the item stack shown by this thrown egg
     pub async fn set_item_stack(&self, item_stack: ItemStack) {
-        let mut lock = self.item_stack.lock().await;
-        *lock = item_stack.clone();
+        let mut write = self.item_stack.write().await;
+        *write = item_stack;
     }
 }
 
@@ -66,7 +66,7 @@ impl EntityBase for EggEntity {
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();
-            let stack = self.item_stack.lock().await;
+            let stack = self.item_stack.read().await;
 
             // Sync the item stack so the client renders the correct color/variant
             entity
