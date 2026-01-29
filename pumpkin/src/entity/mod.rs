@@ -208,12 +208,6 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         Box::pin(async {})
     }
 
-    /// Returns true if this entity is a projectile (egg, snowball, etc.).
-    /// Default is false.
-    fn is_projectile(&self) -> bool {
-        false
-    }
-
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
 

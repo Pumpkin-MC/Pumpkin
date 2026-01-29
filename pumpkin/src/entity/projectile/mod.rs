@@ -1,6 +1,7 @@
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::entity::EntityType;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
@@ -12,6 +13,14 @@ pub mod egg;
 pub mod firework_rocket;
 pub mod snowball;
 pub mod wind_charge;
+
+#[must_use]
+pub fn is_projectile(entity_type: &EntityType) -> bool {
+    *entity_type == EntityType::EGG
+        || *entity_type == EntityType::SNOWBALL
+        || *entity_type == EntityType::FIREWORK_ROCKET
+        || *entity_type == EntityType::WIND_CHARGE
+}
 
 pub struct ThrownItemEntity {
     pub entity: Entity,
@@ -204,7 +213,7 @@ impl ThrownItemEntity {
         }
 
         // Projectile vs projectile logic
-        if !self.collides_with_projectiles && other.is_projectile() {
+        if !self.collides_with_projectiles && is_projectile(other_ent.entity_type) {
             return true;
         }
 

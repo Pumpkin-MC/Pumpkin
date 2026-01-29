@@ -159,8 +159,4 @@ impl EntityBase for FireworkRocketEntity {
     fn as_nbt_storage(&self) -> &dyn crate::entity::NBTStorage {
         self
     }
-
-    fn is_projectile(&self) -> bool {
-        true
-    }
 }

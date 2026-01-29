@@ -63,10 +63,6 @@ impl EntityBase for SnowballEntity {
         self
     }
 
-    fn is_projectile(&self) -> bool {
-        true
-    }
-
     fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let world = self.get_entity().world.load();
