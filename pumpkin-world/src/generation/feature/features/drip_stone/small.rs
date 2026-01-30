@@ -31,14 +31,15 @@ impl SmallDripstoneFeature {
     }
 
     fn get_direction<T: GenerationCache>(
-        chunk: &mut T,
+        chunk: &T,
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) -> Option<BlockDirection> {
         let up =
-            super::can_replace(GenerationCache::get_block_state(chunk, &pos.up().0).to_block());
-        let down: bool =
-            super::can_replace(GenerationCache::get_block_state(chunk, &pos.down().0).to_block());
+            super::can_replace(GenerationCache::get_block_state(chunk, &pos.up().0).to_block_id());
+        let down: bool = super::can_replace(
+            GenerationCache::get_block_state(chunk, &pos.down().0).to_block_id(),
+        );
         if up && down {
             return if random.next_bool() {
                 Some(BlockDirection::Down)

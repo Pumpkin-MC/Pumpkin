@@ -28,7 +28,7 @@ impl PlayerLeaveEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerLeaveEvent`.
-    pub fn new(player: Arc<Player>, leave_message: TextComponent) -> Self {
+    pub const fn new(player: Arc<Player>, leave_message: TextComponent) -> Self {
         Self {
             player,
             leave_message,

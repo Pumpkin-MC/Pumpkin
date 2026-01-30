@@ -17,7 +17,8 @@ pub struct CResourcePackStackPacket {
 }
 
 impl CResourcePackStackPacket {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         resource_pack_required: bool,
         texture_pack_list_size: VarUInt,
         game_version: String,

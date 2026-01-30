@@ -51,7 +51,7 @@ impl BlockEntity for EnderChestBlockEntity {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.viewers
-                .update_viewer_count::<EnderChestBlockEntity>(self, world, &self.position)
+                .update_viewer_count::<Self>(self, world, &self.position)
                 .await;
         })
     }
@@ -92,7 +92,7 @@ impl ViewerCountListener for EnderChestBlockEntity {
         Box::pin(async move {
             world
                 .add_synced_block_event(*position, Self::LID_ANIMATION_EVENT_TYPE, new as u8)
-                .await
+                .await;
         })
     }
 }
@@ -101,6 +101,7 @@ impl EnderChestBlockEntity {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:ender_chest";
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -108,6 +109,7 @@ impl EnderChestBlockEntity {
         }
     }
 
+    #[must_use]
     pub fn get_tracker(&self) -> Arc<ViewerCountTracker> {
         self.viewers.clone()
     }

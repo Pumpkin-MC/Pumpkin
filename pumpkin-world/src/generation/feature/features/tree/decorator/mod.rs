@@ -57,19 +57,19 @@ impl TreeDecorator {
         log_positions: &[BlockPos],
     ) {
         match self {
-            TreeDecorator::TrunkVine(decorator) => decorator.generate(chunk, random, log_positions),
-            TreeDecorator::LeaveVine(_decorator) => {}
-            TreeDecorator::PaleMoss(_decorator) => {}
-            TreeDecorator::CreakingHeart(_decorator) => {}
-            TreeDecorator::Cocoa(_decorator) => {}
-            TreeDecorator::Beehive(_decorator) => {}
-            TreeDecorator::AlterGround(_decorator) => {}
-            TreeDecorator::PlaceOnGround(decorator) => {
-                decorator.generate(chunk, random, root_positions, log_positions)
+            Self::TrunkVine(decorator) => decorator.generate(chunk, random, log_positions),
+            Self::LeaveVine(_decorator) => {}
+            Self::PaleMoss(_decorator) => {}
+            Self::CreakingHeart(_decorator) => {}
+            Self::Cocoa(_decorator) => {}
+            Self::Beehive(_decorator) => {}
+            Self::AlterGround(_decorator) => {}
+            Self::PlaceOnGround(decorator) => {
+                decorator.generate(chunk, random, root_positions, log_positions);
             }
-            TreeDecorator::AttachedToLeaves(_decorator) => {}
-            TreeDecorator::AttachedToLogs(decorator) => {
-                decorator.generate(chunk, random, log_positions)
+            Self::AttachedToLeaves(_decorator) => {}
+            Self::AttachedToLogs(decorator) => {
+                decorator.generate(chunk, random, log_positions);
             }
         }
     }

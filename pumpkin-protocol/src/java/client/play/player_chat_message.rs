@@ -41,7 +41,7 @@ pub struct CPlayerChatMessage {
     /// Indicates if the message should be hidden or partially masked
     /// by the client's profanity filter.
     pub filter_type: FilterType,
-    /// ID of the chat type registry entry (e.g., "chat", "say_command").
+    /// ID of the chat type registry entry (e.g., "chat", "`say_command`").
     /// Usually `(index + 1)`.
     pub chat_type: VarInt,
     /// The display name of the sender.
@@ -52,7 +52,8 @@ pub struct CPlayerChatMessage {
 
 impl CPlayerChatMessage {
     #[expect(clippy::too_many_arguments)]
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         global_index: VarInt,
         sender: uuid::Uuid,
         index: VarInt,

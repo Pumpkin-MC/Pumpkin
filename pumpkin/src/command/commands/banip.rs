@@ -23,8 +23,7 @@ async fn parse_ip(target: &str, server: &Server) -> Option<IpAddr> {
     Some(match IpAddr::from_str(target) {
         Ok(ip) => ip,
         Err(_) => server
-            .get_player_by_name(target)
-            .await?
+            .get_player_by_name(target)?
             .client
             .address()
             .await

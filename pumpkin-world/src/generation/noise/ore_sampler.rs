@@ -1,26 +1,24 @@
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{
     math::clamped_map,
-    random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
+    random::{RandomDeriverImpl, RandomImpl},
 };
 
-use crate::generation::noise::router::{
-    chunk_density_function::ChunkNoiseFunctionSampleOptions, chunk_noise_router::ChunkNoiseRouter,
-    density_function::NoisePos,
+use crate::{
+    GlobalRandomConfig,
+    generation::noise::router::{
+        chunk_density_function::ChunkNoiseFunctionSampleOptions,
+        chunk_noise_router::ChunkNoiseRouter, density_function::NoisePos,
+    },
 };
 
-pub struct OreVeinSampler {
-    random_deriver: RandomDeriver,
-}
+pub struct OreVeinSampler;
 
 impl OreVeinSampler {
-    pub fn new(random_deriver: RandomDeriver) -> Self {
-        Self { random_deriver }
-    }
-
     pub fn sample(
         &self,
         router: &mut ChunkNoiseRouter,
+        random_config: &GlobalRandomConfig,
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> Option<&'static BlockState> {
@@ -39,7 +37,10 @@ impl OreVeinSampler {
             let mapped_diff = clamped_map(closest_to_bound as f64, 0f64, 20f64, -0.2f64, 0f64);
             let abs_sample = vein_toggle.abs();
             if abs_sample + mapped_diff >= 0.4f32 as f64 {
-                let mut random = self.random_deriver.split_pos(pos.x(), block_y, pos.z());
+                let mut random =
+                    random_config
+                        .ore_random_deriver
+                        .split_pos(pos.x(), block_y, pos.z());
 
                 let vein_ridged_sample = router.vein_ridged(pos, sample_options);
                 if random.next_f32() <= 0.7f32 && vein_ridged_sample < 0f64 {
@@ -82,7 +83,7 @@ pub struct VeinType {
 pub mod vein_type {
     use pumpkin_data::Block;
 
-    use super::*;
+    use super::VeinType;
     pub const COPPER: VeinType = VeinType {
         ore: Block::COPPER_ORE,
         raw_ore: Block::RAW_COPPER_BLOCK,

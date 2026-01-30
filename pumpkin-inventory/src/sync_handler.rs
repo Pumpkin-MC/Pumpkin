@@ -25,6 +25,7 @@ impl Default for SyncHandler {
 }
 
 impl SyncHandler {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             player: Mutex::new(None),
@@ -128,7 +129,7 @@ pub struct TrackedStack {
 }
 
 impl TrackedStack {
-    pub const EMPTY: TrackedStack = TrackedStack {
+    pub const EMPTY: Self = Self {
         received_stack: None,
         received_hash: None,
     };

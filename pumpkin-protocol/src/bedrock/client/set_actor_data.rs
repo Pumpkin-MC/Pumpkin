@@ -71,7 +71,8 @@ pub enum MetadataValue {
 }
 
 impl MetadataValue {
-    pub fn type_id(&self) -> u32 {
+    #[must_use]
+    pub const fn type_id(&self) -> u32 {
         match self {
             Self::Byte(_) => 0,
             Self::Short(_) => 1,

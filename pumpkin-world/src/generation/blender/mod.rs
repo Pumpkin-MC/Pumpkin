@@ -8,7 +8,7 @@ pub struct BlendResult {
 }
 
 impl BlendResult {
-    pub fn new(alpha: f64, offset: f64) -> Self {
+    pub const fn new(alpha: f64, offset: f64) -> Self {
         Self { alpha, offset }
     }
 }

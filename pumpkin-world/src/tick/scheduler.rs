@@ -40,6 +40,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         self.queued_ticks.contains(&(pos, value))
     }
 
+    #[must_use]
     pub fn to_vec(&self) -> Vec<ScheduledTick<&'a T>> {
         let mut res = Vec::new();
         for i in 0..MAX_TICK_DELAY {

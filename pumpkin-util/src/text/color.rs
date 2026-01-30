@@ -16,6 +16,8 @@ pub enum Color {
     Named(NamedColor),
 }
 
+#[must_use]
+#[expect(clippy::many_single_char_names)]
 pub fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (u8, u8, u8) {
     let c = v * s;
     let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
@@ -40,7 +42,7 @@ impl<'de> Deserialize<'de> for Color {
         let s = String::deserialize(deserializer)?;
 
         if s == "reset" {
-            Ok(Color::Reset)
+            Ok(Self::Reset)
         } else if let Some(hex) = s.strip_prefix('#') {
             if s.len() != 7 {
                 return Err(serde::de::Error::custom(
@@ -55,20 +57,21 @@ impl<'de> Deserialize<'de> for Color {
             let b = u8::from_str_radix(&hex[4..6], 16)
                 .map_err(|_| serde::de::Error::custom("Invalid blue component in hex color"))?;
 
-            Ok(Color::Rgb(RGBColor::new(r, g, b)))
+            Ok(Self::Rgb(RGBColor::new(r, g, b)))
         } else {
-            Ok(Color::Named(NamedColor::try_from(s.as_str()).map_err(
-                |_| serde::de::Error::custom("Invalid named color"),
+            Ok(Self::Named(NamedColor::try_from(s.as_str()).map_err(
+                |()| serde::de::Error::custom("Invalid named color"),
             )?))
         }
     }
 }
 
 impl Color {
+    #[must_use]
     pub fn console_color(&self, text: &str) -> ColoredString {
         match self {
-            Color::Reset => text.clear(),
-            Color::Named(color) => match color {
+            Self::Reset => text.clear(),
+            Self::Named(color) => match color {
                 NamedColor::Black => text.black(),
                 NamedColor::DarkBlue => text.blue(),
                 NamedColor::DarkGreen => text.green(),
@@ -76,18 +79,17 @@ impl Color {
                 NamedColor::DarkRed => text.red(),
                 NamedColor::DarkPurple => text.purple(),
                 NamedColor::Gold => text.yellow(),
-                NamedColor::Gray => text.bright_black(),
-                NamedColor::DarkGray => text.bright_black(), // ?
+                NamedColor::Gray | NamedColor::DarkGray => text.bright_black(), // ?
                 NamedColor::Blue => text.bright_blue(),
                 NamedColor::Green => text.bright_green(),
-                NamedColor::Aqua => text.cyan(),
-                NamedColor::Red => text.red(),
+                NamedColor::Aqua => text.bright_cyan(),
+                NamedColor::Red => text.bright_red(),
                 NamedColor::LightPurple => text.bright_purple(),
                 NamedColor::Yellow => text.bright_yellow(),
                 NamedColor::White => text.white(),
             },
             // TODO: Check if terminal supports true color
-            Color::Rgb(color) => text.truecolor(color.red, color.green, color.blue),
+            Self::Rgb(color) => text.truecolor(color.red, color.green, color.blue),
         }
     }
 }
@@ -100,8 +102,9 @@ pub struct RGBColor {
 }
 
 impl RGBColor {
-    pub fn new(red: u8, green: u8, blue: u8) -> Self {
-        RGBColor { red, green, blue }
+    #[must_use]
+    pub const fn new(red: u8, green: u8, blue: u8) -> Self {
+        Self { red, green, blue }
     }
 }
 
@@ -123,8 +126,9 @@ pub struct ARGBColor {
 }
 
 impl ARGBColor {
-    pub fn new(alpha: u8, red: u8, green: u8, blue: u8) -> Self {
-        ARGBColor {
+    #[must_use]
+    pub const fn new(alpha: u8, red: u8, green: u8, blue: u8) -> Self {
+        Self {
             alpha,
             red,
             green,
@@ -162,24 +166,25 @@ pub enum NamedColor {
 }
 
 impl NamedColor {
-    pub fn to_rgb(&self) -> RGBColor {
+    #[must_use]
+    pub const fn to_rgb(&self) -> RGBColor {
         match self {
-            NamedColor::Black => RGBColor::new(0, 0, 0),
-            NamedColor::DarkBlue => RGBColor::new(0, 0, 170),
-            NamedColor::DarkGreen => RGBColor::new(0, 170, 0),
-            NamedColor::DarkAqua => RGBColor::new(0, 170, 170),
-            NamedColor::DarkRed => RGBColor::new(170, 0, 0),
-            NamedColor::DarkPurple => RGBColor::new(170, 0, 170),
-            NamedColor::Gold => RGBColor::new(255, 170, 0),
-            NamedColor::Gray => RGBColor::new(170, 170, 170),
-            NamedColor::DarkGray => RGBColor::new(85, 85, 85),
-            NamedColor::Blue => RGBColor::new(85, 85, 255),
-            NamedColor::Green => RGBColor::new(85, 255, 85),
-            NamedColor::Aqua => RGBColor::new(85, 255, 255),
-            NamedColor::Red => RGBColor::new(255, 85, 85),
-            NamedColor::LightPurple => RGBColor::new(255, 85, 255),
-            NamedColor::Yellow => RGBColor::new(255, 255, 85),
-            NamedColor::White => RGBColor::new(255, 255, 255),
+            Self::Black => RGBColor::new(0, 0, 0),
+            Self::DarkBlue => RGBColor::new(0, 0, 170),
+            Self::DarkGreen => RGBColor::new(0, 170, 0),
+            Self::DarkAqua => RGBColor::new(0, 170, 170),
+            Self::DarkRed => RGBColor::new(170, 0, 0),
+            Self::DarkPurple => RGBColor::new(170, 0, 170),
+            Self::Gold => RGBColor::new(255, 170, 0),
+            Self::Gray => RGBColor::new(170, 170, 170),
+            Self::DarkGray => RGBColor::new(85, 85, 85),
+            Self::Blue => RGBColor::new(85, 85, 255),
+            Self::Green => RGBColor::new(85, 255, 85),
+            Self::Aqua => RGBColor::new(85, 255, 255),
+            Self::Red => RGBColor::new(255, 85, 85),
+            Self::LightPurple => RGBColor::new(255, 85, 255),
+            Self::Yellow => RGBColor::new(255, 255, 85),
+            Self::White => RGBColor::new(255, 255, 255),
         }
     }
 }
@@ -189,22 +194,22 @@ impl TryFrom<&str> for NamedColor {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "black" => Ok(NamedColor::Black),
-            "dark_blue" => Ok(NamedColor::DarkBlue),
-            "dark_green" => Ok(NamedColor::DarkGreen),
-            "dark_aqua" => Ok(NamedColor::DarkAqua),
-            "dark_red" => Ok(NamedColor::DarkRed),
-            "dark_purple" => Ok(NamedColor::DarkPurple),
-            "gold" => Ok(NamedColor::Gold),
-            "gray" => Ok(NamedColor::Gray),
-            "dark_gray" => Ok(NamedColor::DarkGray),
-            "blue" => Ok(NamedColor::Blue),
-            "green" => Ok(NamedColor::Green),
-            "aqua" => Ok(NamedColor::Aqua),
-            "red" => Ok(NamedColor::Red),
-            "light_purple" => Ok(NamedColor::LightPurple),
-            "yellow" => Ok(NamedColor::Yellow),
-            "white" => Ok(NamedColor::White),
+            "black" => Ok(Self::Black),
+            "dark_blue" => Ok(Self::DarkBlue),
+            "dark_green" => Ok(Self::DarkGreen),
+            "dark_aqua" => Ok(Self::DarkAqua),
+            "dark_red" => Ok(Self::DarkRed),
+            "dark_purple" => Ok(Self::DarkPurple),
+            "gold" => Ok(Self::Gold),
+            "gray" => Ok(Self::Gray),
+            "dark_gray" => Ok(Self::DarkGray),
+            "blue" => Ok(Self::Blue),
+            "green" => Ok(Self::Green),
+            "aqua" => Ok(Self::Aqua),
+            "red" => Ok(Self::Red),
+            "light_purple" => Ok(Self::LightPurple),
+            "yellow" => Ok(Self::Yellow),
+            "white" => Ok(Self::White),
             _ => Err(()),
         }
     }

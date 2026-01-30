@@ -127,7 +127,7 @@ impl CommandBlock {
         block_entity: Arc<dyn BlockEntity>,
         command: &str,
     ) {
-        let command_blocks_work = { world.level_info.read().await.game_rules.command_blocks_work };
+        let command_blocks_work = { world.level_info.load().game_rules.command_blocks_work };
         if !command_blocks_work {
             return;
         }
@@ -158,8 +158,7 @@ impl CommandBlock {
         let mut pos = start;
 
         while i > 0 {
-            let command_blocks_work =
-                { world.level_info.read().await.game_rules.command_blocks_work };
+            let command_blocks_work = { world.level_info.load().game_rules.command_blocks_work };
             if !command_blocks_work {
                 return;
             }
@@ -238,14 +237,8 @@ impl BlockBehaviour for CommandBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let command_blocks_work = {
-                args.world
-                    .level_info
-                    .read()
-                    .await
-                    .game_rules
-                    .command_blocks_work
-            };
+            let command_blocks_work =
+                { args.world.level_info.load().game_rules.command_blocks_work };
             if !command_blocks_work {
                 return;
             }
@@ -272,14 +265,8 @@ impl BlockBehaviour for CommandBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let command_blocks_work = {
-                args.world
-                    .level_info
-                    .read()
-                    .await
-                    .game_rules
-                    .command_blocks_work
-            };
+            let command_blocks_work =
+                { args.world.level_info.load().game_rules.command_blocks_work };
             if !command_blocks_work {
                 return;
             }
@@ -342,7 +329,7 @@ impl BlockBehaviour for CommandBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let send_command_feedback = {
-                let game_rules = &args.world.level_info.read().await.game_rules;
+                let game_rules = &args.world.level_info.load().game_rules;
                 game_rules.send_command_feedback
             };
 

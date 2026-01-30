@@ -14,11 +14,11 @@ pub struct NavigatorGoal {
 }
 
 impl Navigator {
-    pub fn set_progress(&mut self, goal: NavigatorGoal) {
+    pub const fn set_progress(&mut self, goal: NavigatorGoal) {
         self.current_goal = Some(goal);
     }
 
-    pub fn cancel(&mut self) {
+    pub const fn cancel(&mut self) {
         self.current_goal = None;
     }
 
@@ -35,7 +35,7 @@ impl Navigator {
             let mut best_move = Vector3::new(0.0, 0.0, 0.0);
             let mut lowest_cost = f64::MAX;
 
-            let world = &entity.entity.world;
+            let world = entity.entity.world.load();
 
             for x in -1..=1 {
                 for z in -1..=1 {
@@ -79,7 +79,7 @@ impl Navigator {
     }
 
     #[must_use]
-    pub fn is_idle(&self) -> bool {
+    pub const fn is_idle(&self) -> bool {
         // TODO: implement
         false
     }
@@ -91,7 +91,7 @@ pub struct Node {
 
 impl Node {
     #[must_use]
-    pub fn new(location: Vector3<f64>) -> Self {
+    pub const fn new(location: Vector3<f64>) -> Self {
         Self { location }
     }
     /// How expensive is it to go to a location?

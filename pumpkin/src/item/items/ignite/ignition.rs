@@ -27,7 +27,7 @@ impl Ignition {
         if world.get_fluid(&location).await.name != Fluid::EMPTY.name {
             return false;
         }
-        let fire_block = FireBlockBase::get_fire_type(world, &pos).await;
+        let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
 
         let state_id = world.get_block_state_id(&location).await;
 
@@ -37,9 +37,9 @@ impl Ignition {
         }
 
         let state_id = FireBlock
-            .get_state_for_position(world, &fire_block, &pos)
+            .get_state_for_position(&world, &fire_block, &pos)
             .await;
-        if FireBlockBase::can_place_at(world, &pos).await {
+        if FireBlockBase::can_place_at(&world, &pos).await {
             ignite_logic(world.clone(), pos, state_id).await;
             return true;
         }

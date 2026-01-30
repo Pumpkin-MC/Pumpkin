@@ -139,7 +139,8 @@ pub struct SmallCorridorPiece {
 }
 
 impl SmallCorridorPiece {
-    pub fn new(chain_length: u32, bbox: BlockBox, orientation: BlockDirection) -> Self {
+    #[must_use]
+    pub const fn new(chain_length: u32, bbox: BlockBox, orientation: BlockDirection) -> Self {
         let length = match orientation {
             BlockDirection::North | BlockDirection::South => bbox.max.z - bbox.min.z + 1,
             _ => bbox.max.x - bbox.min.x + 1,

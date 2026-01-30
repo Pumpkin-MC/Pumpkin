@@ -7,7 +7,7 @@ use pumpkin_util::resource_location::ResourceLocation;
 use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
 
 /// The maximum allowed size for a plugin message payload (1 MiB).
-const MAX_PAYLOAD_SIZE: usize = 1048576;
+const MAX_PAYLOAD_SIZE: usize = 1_048_576;
 
 /// A packet used for custom communication between the client and server.
 ///

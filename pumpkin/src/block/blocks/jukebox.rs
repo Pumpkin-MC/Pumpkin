@@ -50,11 +50,11 @@ impl BlockBehaviour for JukeboxBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let world = &args.player.living_entity.entity.world;
+            let world = args.player.living_entity.entity.world.load_full();
 
             // if the jukebox already has a record, stop playing
-            if self.has_record(args.block, args.position, world).await {
-                self.stop_music(args.block, args.position, world).await;
+            if self.has_record(args.block, args.position, &world).await {
+                self.stop_music(args.block, args.position, &world).await;
                 return BlockActionResult::Success;
             }
 
@@ -80,7 +80,7 @@ impl BlockBehaviour for JukeboxBlock {
 
             // TODO: Update block nbt
 
-            self.set_record(true, args.block, args.position, world)
+            self.set_record(true, args.block, args.position, &world)
                 .await;
             world
                 .sync_world_event(

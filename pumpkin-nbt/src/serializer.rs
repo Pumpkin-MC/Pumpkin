@@ -16,7 +16,7 @@ pub struct WriteAdaptor<W: Write> {
 }
 
 impl<W: Write> WriteAdaptor<W> {
-    pub fn new(w: W) -> Self {
+    pub const fn new(w: W) -> Self {
         Self { writer: w }
     }
 }
@@ -57,7 +57,7 @@ pub struct Serializer<W: Write> {
 }
 
 impl<W: Write> Serializer<W> {
-    pub fn new(output: W, name: Option<String>) -> Self {
+    pub const fn new(output: W, name: Option<String>) -> Self {
         Self {
             output: WriteAdaptor::new(output),
             state: State::Root(name),
@@ -122,20 +122,19 @@ impl<W: Write> Serializer<W> {
                     return Err(Error::SerdeError(
                         "Invalid state: already handled root component!".to_string(),
                     ));
-                } else {
-                    if tag != COMPOUND_ID {
-                        return Err(Error::SerdeError(format!(
-                            "Invalid state: root is not a `Compound`! ({tag})"
-                        )));
-                    }
-                    self.handled_root = true;
-                    self.output.write_u8_be(tag)?;
-                    if let Some(root_name) = root_name {
-                        NbtTag::write_string(root_name, &mut self.output)?;
-                    }
+                }
+                if tag != COMPOUND_ID {
+                    return Err(Error::SerdeError(format!(
+                        "Invalid state: root is not a `Compound`! ({tag})"
+                    )));
+                }
+                self.handled_root = true;
+                self.output.write_u8_be(tag)?;
+                if let Some(root_name) = root_name {
+                    NbtTag::write_string(root_name, &mut self.output)?;
                 }
             }
-        };
+        }
         Ok(())
     }
 }
@@ -171,7 +170,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     type SerializeStructVariant = Impossible<(), Error>;
 
     fn serialize_bool(self, v: bool) -> Result<()> {
-        self.serialize_i8(v as i8)?;
+        self.serialize_i8(i8::from(v))?;
         Ok(())
     }
 
@@ -200,15 +199,14 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     }
 
     fn serialize_u8(self, v: u8) -> Result<()> {
-        match self.state {
-            State::Named(_) => Err(Error::UnsupportedType(
+        if let State::Named(_) = self.state {
+            Err(Error::UnsupportedType(
                 "u8; NBT only supports signed values".to_string(),
-            )),
-            _ => {
-                self.parse_state(BYTE_ID)?;
-                self.output.write_u8_be(v)?;
-                Ok(())
-            }
+            ))
+        } else {
+            self.parse_state(BYTE_ID)?;
+            self.output.write_u8_be(v)?;
+            Ok(())
         }
     }
 
@@ -336,35 +334,32 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
             return Err(Error::LargeLength(len));
         }
 
-        match &mut self.state {
-            State::Array { array_type, .. } => {
-                let (id, expected_tag) = match *array_type {
-                    NBT_BYTE_ARRAY_TAG => (BYTE_ARRAY_ID, BYTE_ID),
-                    NBT_INT_ARRAY_TAG => (INT_ARRAY_ID, INT_ID),
-                    NBT_LONG_ARRAY_TAG => (LONG_ARRAY_ID, LONG_ID),
-                    _ => {
-                        return Err(Error::SerdeError(
-                            "Array supports only `byte`, `int`, and `long`".to_string(),
-                        ));
-                    }
-                };
-
-                self.parse_state(id)?;
-                self.output.write_i32_be(len as i32)?;
-
-                // We can mark anything as an NBT array list, so mark as needed to be checked.
-                self.expected_list_tag = expected_tag;
-                self.state = State::CheckedListElement;
-            }
-            _ => {
-                self.parse_state(LIST_ID)?;
-                self.state = State::FirstListElement { len: len as i32 };
-                if len == 0 {
-                    // If we have no elements, the `FirstListElement` state will never be invoked, so
-                    // write the (unknown) list type and length here.
-                    self.output.write_u8_be(END_ID)?;
-                    self.output.write_i32_be(0)?;
+        if let State::Array { array_type, .. } = &mut self.state {
+            let (id, expected_tag) = match *array_type {
+                NBT_BYTE_ARRAY_TAG => (BYTE_ARRAY_ID, BYTE_ID),
+                NBT_INT_ARRAY_TAG => (INT_ARRAY_ID, INT_ID),
+                NBT_LONG_ARRAY_TAG => (LONG_ARRAY_ID, LONG_ID),
+                _ => {
+                    return Err(Error::SerdeError(
+                        "Array supports only `byte`, `int`, and `long`".to_string(),
+                    ));
                 }
+            };
+
+            self.parse_state(id)?;
+            self.output.write_i32_be(len as i32)?;
+
+            // We can mark anything as an NBT array list, so mark as needed to be checked.
+            self.expected_list_tag = expected_tag;
+            self.state = State::CheckedListElement;
+        } else {
+            self.parse_state(LIST_ID)?;
+            self.state = State::FirstListElement { len: len as i32 };
+            if len == 0 {
+                // If we have no elements, the `FirstListElement` state will never be invoked, so
+                // write the (unknown) list type and length here.
+                self.output.write_u8_be(END_ID)?;
+                self.output.write_i32_be(0)?;
             }
         }
 

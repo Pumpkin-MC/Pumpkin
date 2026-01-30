@@ -243,7 +243,7 @@ impl ItemBehaviour for FilledBucketItem {
                         SoundCategory::Blocks,
                         &player.position(),
                         0.5,
-                        2.6 + (rand::random::<f32>() - rand::random::<f32>()) * 0.8,
+                        (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.8, 2.6),
                     )
                     .await;
                 return;

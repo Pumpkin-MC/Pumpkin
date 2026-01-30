@@ -42,7 +42,7 @@ bitflags! {
 /// server only sends the fields specified in the `actions` bitmask.
 #[java_packet(PLAY_PLAYER_INFO_UPDATE)]
 pub struct CPlayerInfoUpdate<'a> {
-    /// The bitmask (PlayerInfoFlags) determining which data follows.
+    /// The bitmask (`PlayerInfoFlags`) determining which data follows.
     pub actions: u8,
     /// The list of players being updated. Each player entry contains
     /// data fields in the order they appear in the bitmask.
@@ -55,7 +55,8 @@ pub struct Player<'a> {
 }
 
 impl<'a> CPlayerInfoUpdate<'a> {
-    pub fn new(actions: u8, players: &'a [Player<'a>]) -> Self {
+    #[must_use]
+    pub const fn new(actions: u8, players: &'a [Player<'a>]) -> Self {
         Self { actions, players }
     }
 }

@@ -392,7 +392,7 @@ pub async fn calc_block_breaking(
     player.get_mining_speed(block).await / hardness / i
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum BlockIsReplacing {
     Itself(BlockStateId),
     Water(Integer0To15),

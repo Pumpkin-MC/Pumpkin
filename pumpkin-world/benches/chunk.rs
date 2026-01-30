@@ -24,7 +24,7 @@ fn bench_terrain_gen(c: &mut Criterion) {
                 surface_config,
                 &terrain_cache,
                 default_block,
-            )
+            );
         });
     });
 
@@ -36,7 +36,7 @@ fn bench_terrain_gen(c: &mut Criterion) {
                 surface_config,
                 &terrain_cache,
                 default_block,
-            )
+            );
         });
     });
 
@@ -48,7 +48,7 @@ fn bench_terrain_gen(c: &mut Criterion) {
                 surface_config,
                 &terrain_cache,
                 default_block,
-            )
+            );
         });
     });
 }

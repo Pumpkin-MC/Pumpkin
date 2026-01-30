@@ -25,7 +25,7 @@ pub mod world_seed;
 
 pub mod jwt;
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum HeightMap {
     WorldSurfaceWg,
@@ -71,11 +71,12 @@ macro_rules! include_json_static {
 
 /// The minimum number of bits required to represent this number
 #[inline]
+#[must_use]
 pub fn encompassing_bits(count: usize) -> u8 {
     if count == 1 {
         1
     } else {
-        count.ilog2() as u8 + if count.is_power_of_two() { 0 } else { 1 }
+        count.ilog2() as u8 + u8::from(!count.is_power_of_two())
     }
 }
 
@@ -97,11 +98,12 @@ pub enum BlockDirection {
 }
 
 impl BlockDirection {
-    pub fn get_axis(&self) -> Axis {
+    #[must_use]
+    pub const fn get_axis(&self) -> Axis {
         match self {
-            BlockDirection::Up | BlockDirection::Down => Axis::Y,
-            BlockDirection::North | BlockDirection::South => Axis::Z,
-            BlockDirection::East | BlockDirection::West => Axis::X,
+            Self::Up | Self::Down => Axis::Y,
+            Self::North | Self::South => Axis::Z,
+            Self::East | Self::West => Axis::X,
         }
     }
 }
@@ -114,7 +116,7 @@ pub struct MutableSplitSlice<'a, T> {
 }
 
 impl<'a, T> MutableSplitSlice<'a, T> {
-    pub fn extract_ith(base: &'a mut [T], index: usize) -> (&'a mut T, Self) {
+    pub const fn extract_ith(base: &'a mut [T], index: usize) -> (&'a mut T, Self) {
         let (start, end_inclusive) = base.split_at_mut(index);
         let (value, end) = end_inclusive
             .split_first_mut()
@@ -123,11 +125,13 @@ impl<'a, T> MutableSplitSlice<'a, T> {
         (value, Self { start, end })
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.start.len() + self.end.len() + 1
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         false
     }
 }
@@ -186,7 +190,8 @@ pub enum Hand {
 }
 
 impl Hand {
-    pub fn all() -> [Self; 2] {
+    #[must_use]
+    pub const fn all() -> [Self; 2] {
         [Self::Right, Self::Left]
     }
 }

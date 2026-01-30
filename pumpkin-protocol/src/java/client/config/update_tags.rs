@@ -17,7 +17,8 @@ pub struct CUpdateTags<'a> {
 }
 
 impl<'a> CUpdateTags<'a> {
-    pub fn new(tags: &'a [RegistryKey]) -> Self {
+    #[must_use]
+    pub const fn new(tags: &'a [RegistryKey]) -> Self {
         Self { tags }
     }
 }

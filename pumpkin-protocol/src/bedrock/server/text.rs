@@ -19,6 +19,7 @@ pub struct SText {
 }
 
 impl SText {
+    #[must_use]
     pub fn new(message: String, source_name: String) -> Self {
         Self {
             needs_translation: false,
@@ -36,6 +37,7 @@ impl SText {
         }
     }
 
+    #[must_use]
     pub fn system_message(message: String) -> Self {
         Self {
             needs_translation: false,
@@ -53,7 +55,7 @@ impl SText {
         }
     }
 
-    fn get_dummy_strings(category: u8) -> &'static [&'static str] {
+    const fn get_dummy_strings(category: u8) -> &'static [&'static str] {
         match category {
             0 => &[
                 "raw",
@@ -69,7 +71,7 @@ impl SText {
         }
     }
 
-    fn get_category(&self) -> u8 {
+    const fn get_category(&self) -> u8 {
         match self.r#type {
             TextPacketType::Raw
             | TextPacketType::Tip
@@ -97,10 +99,7 @@ impl PacketRead for SText {
             if actual != expected {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
-                    format!(
-                        "Dummy string mismatch: expected {}, got {}",
-                        expected, actual
-                    ),
+                    format!("Dummy string mismatch: expected {expected}, got {actual}"),
                 ));
             }
         }
@@ -206,7 +205,7 @@ impl PacketWrite for SText {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TextPacketType {
     Raw = 0,

@@ -51,7 +51,7 @@ pub enum SplineRepr {
         #[serde(rename(deserialize = "locationFunction"))]
         location_function: Box<DensityFunctionRepr>,
         locations: Box<[HashableF32]>,
-        values: Box<[SplineRepr]>,
+        values: Box<[Self]>,
         derivatives: Box<[HashableF32]>,
     },
     #[serde(rename(deserialize = "fixed"))]
@@ -65,7 +65,7 @@ impl SplineRepr {
         map: &mut HashMap<u64, usize>,
     ) -> &'static noise_router::SplineRepr {
         let value = match self {
-            SplineRepr::Standard {
+            Self::Standard {
                 location_function,
                 locations,
                 values,
@@ -90,7 +90,7 @@ impl SplineRepr {
                     points: Box::leak(points),
                 }
             }
-            SplineRepr::Fixed { value } => noise_router::SplineRepr::Fixed { value: value.0 },
+            Self::Fixed { value } => noise_router::SplineRepr::Fixed { value: value.0 },
         };
 
         Box::leak(Box::new(value))
@@ -110,7 +110,7 @@ pub enum BinaryOperation {
 }
 
 impl BinaryOperation {
-    fn as_base_component(&self) -> noise_router::BinaryOperation {
+    fn as_base_component(self) -> noise_router::BinaryOperation {
         match self {
             Self::Add => noise_router::BinaryOperation::Add,
             Self::Mul => noise_router::BinaryOperation::Mul,
@@ -129,7 +129,7 @@ pub enum LinearOperation {
 }
 
 impl LinearOperation {
-    fn as_base_component(&self) -> noise_router::LinearOperation {
+    fn as_base_component(self) -> noise_router::LinearOperation {
         match self {
             Self::Add => noise_router::LinearOperation::Add,
             Self::Mul => noise_router::LinearOperation::Mul,
@@ -154,7 +154,7 @@ pub enum UnaryOperation {
 }
 
 impl UnaryOperation {
-    fn as_base_component(&self) -> noise_router::UnaryOperation {
+    fn as_base_component(self) -> noise_router::UnaryOperation {
         match self {
             Self::Abs => noise_router::UnaryOperation::Abs,
             Self::Square => noise_router::UnaryOperation::Square,
@@ -175,7 +175,7 @@ pub enum WeirdScaledMapper {
 }
 
 impl WeirdScaledMapper {
-    fn as_base_component(&self) -> noise_router::WeirdScaledMapper {
+    fn as_base_component(self) -> noise_router::WeirdScaledMapper {
         match self {
             Self::Caves => noise_router::WeirdScaledMapper::Caves,
             Self::Tunnels => noise_router::WeirdScaledMapper::Tunnels,
@@ -194,7 +194,7 @@ pub enum WrapperType {
 }
 
 impl WrapperType {
-    fn as_base_component(&self) -> noise_router::WrapperType {
+    fn as_base_component(self) -> noise_router::WrapperType {
         match self {
             Self::Interpolated => noise_router::WrapperType::Interpolated,
             Self::CacheFlat => noise_router::WrapperType::CacheFlat,
@@ -445,7 +445,7 @@ pub enum DensityFunctionRepr {
     BlendAlpha,
     BlendOffset,
     BlendDensity {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
     },
     EndIslands,
     Noise {
@@ -462,11 +462,11 @@ pub enum DensityFunctionRepr {
     },
     ShiftedNoise {
         #[serde(rename(deserialize = "shiftX"))]
-        shift_x: Box<DensityFunctionRepr>,
+        shift_x: Box<Self>,
         #[serde(rename(deserialize = "shiftY"))]
-        shift_y: Box<DensityFunctionRepr>,
+        shift_y: Box<Self>,
         #[serde(rename(deserialize = "shiftZ"))]
-        shift_z: Box<DensityFunctionRepr>,
+        shift_z: Box<Self>,
         #[serde(flatten)]
         data: ShiftedNoiseData,
     },
@@ -476,7 +476,7 @@ pub enum DensityFunctionRepr {
     },
     #[serde(rename(deserialize = "WeirdScaledSampler"))]
     WeirdScaled {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(flatten)]
         data: WeirdScaledData,
     },
@@ -484,7 +484,7 @@ pub enum DensityFunctionRepr {
     #[serde(rename(deserialize = "Wrapping"))]
     Wrapper {
         #[serde(rename(deserialize = "wrapped"))]
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(rename(deserialize = "type"))]
         wrapper: WrapperType,
     },
@@ -499,34 +499,34 @@ pub enum DensityFunctionRepr {
     },
     #[serde(rename(deserialize = "BinaryOperation"))]
     Binary {
-        argument1: Box<DensityFunctionRepr>,
-        argument2: Box<DensityFunctionRepr>,
+        argument1: Box<Self>,
+        argument2: Box<Self>,
         #[serde(flatten)]
         data: BinaryData,
     },
     #[serde(rename(deserialize = "LinearOperation"))]
     Linear {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(flatten)]
         data: LinearData,
     },
     #[serde(rename(deserialize = "UnaryOperation"))]
     Unary {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(flatten)]
         data: UnaryData,
     },
     Clamp {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(flatten)]
         data: ClampData,
     },
     RangeChoice {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(rename(deserialize = "whenInRange"))]
-        when_in_range: Box<DensityFunctionRepr>,
+        when_in_range: Box<Self>,
         #[serde(rename(deserialize = "whenOutOfRange"))]
-        when_out_range: Box<DensityFunctionRepr>,
+        when_out_range: Box<Self>,
         #[serde(flatten)]
         data: RangeChoiceData,
     },
@@ -538,6 +538,7 @@ pub enum DensityFunctionRepr {
 }
 
 impl DensityFunctionRepr {
+    #[expect(clippy::too_many_lines)]
     fn as_base_component(
         &self,
         stack: &mut Vec<BaseNoiseFunctionComponent>,
@@ -673,7 +674,6 @@ impl DensityFunctionRepr {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
         let hash = hasher.finish();
-
         if let Some(index) = hash_to_index_map.get(&hash) {
             *index
         } else {

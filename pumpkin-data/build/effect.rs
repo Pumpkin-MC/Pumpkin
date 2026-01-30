@@ -51,9 +51,9 @@ impl Modifiers {
 impl MobEffectCategory {
     pub fn to_tokens(&self) -> TokenStream {
         match self {
-            MobEffectCategory::BENEFICIAL => quote! { MobEffectCategory::Beneficial },
-            MobEffectCategory::HARMFUL => quote! { MobEffectCategory::Harmful },
-            MobEffectCategory::NEUTRAL => quote! { MobEffectCategory::Neutral },
+            Self::BENEFICIAL => quote! { MobEffectCategory::Beneficial },
+            Self::HARMFUL => quote! { MobEffectCategory::Harmful },
+            Self::NEUTRAL => quote! { MobEffectCategory::Neutral },
         }
     }
 }
@@ -69,14 +69,14 @@ pub(crate) fn build() -> TokenStream {
     let mut name_to_type = TokenStream::new();
     let mut minecraft_name_to_type = TokenStream::new();
 
-    for (name, effect) in effects.into_iter() {
+    for (name, effect) in effects {
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let id = effect.id;
         let color = effect.color;
         let translation_key = effect.translation_key;
         let category = effect.category.to_tokens();
         let slots = effect.attribute_modifiers;
-        let slots = slots.into_iter().map(|slot| slot.get_tokens());
+        let slots = slots.into_iter().map(Modifiers::get_tokens);
 
         let minecraft_name = "minecraft:".to_string() + &name;
         variants.extend([quote! {

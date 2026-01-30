@@ -13,6 +13,7 @@ pub struct SPlayerAction {
     pub sequence: VarInt,
 }
 
+#[expect(clippy::doc_markdown)]
 pub enum Status {
     /// Sent when the player starts digging a block. If the block was insta-mined or the player is in creative mode, the client will not send `Status` = `FinishedDigging``, and will assume the server completed the destruction. To detect this, it is necessary to calculate the block destruction speed server-side.
     StartedDigging = 0,

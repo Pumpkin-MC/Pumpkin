@@ -17,16 +17,16 @@ pub struct LootTableStruct {
 impl ToTokens for LootTableStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let loot_table_type = self.r#type.to_token_stream();
-        let random_sequence = match &self.random_sequence {
-            Some(seq) => quote! { Some(#seq) },
-            None => quote! { None },
+        let random_sequence = if let Some(seq) = &self.random_sequence {
+            quote! { Some(#seq) }
+        } else {
+            quote! { None }
         };
-        let pools = match &self.pools {
-            Some(pools) => {
-                let pool_tokens: Vec<_> = pools.iter().map(|pool| pool.to_token_stream()).collect();
-                quote! { Some(&[#(#pool_tokens),*]) }
-            }
-            None => quote! { None },
+        let pools = if let Some(pools) = &self.pools {
+            let pool_tokens: Vec<_> = pools.iter().map(quote::ToTokens::to_token_stream).collect();
+            quote! { Some(&[#(#pool_tokens),*]) }
+        } else {
+            quote! { None }
         };
 
         tokens.extend(quote! {
@@ -53,23 +53,21 @@ impl ToTokens for LootPoolStruct {
         let entries_tokens: Vec<_> = self
             .entries
             .iter()
-            .map(|entry| entry.to_token_stream())
+            .map(quote::ToTokens::to_token_stream)
             .collect();
         let rolls = &self.rolls;
         let bonus_rolls = &self.bonus_rolls;
-        let conditions_tokens = match &self.conditions {
-            Some(conds) => {
-                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
-                quote! { Some(&[#(#cond_tokens),*]) }
-            }
-            None => quote! { None },
+        let conditions_tokens = if let Some(conds) = &self.conditions {
+            let cond_tokens: Vec<_> = conds.iter().map(quote::ToTokens::to_token_stream).collect();
+            quote! { Some(&[#(#cond_tokens),*]) }
+        } else {
+            quote! { None }
         };
-        let functions_tokens = match &self.functions {
-            Some(fns) => {
-                let cond_tokens: Vec<_> = fns.iter().map(|c| c.to_token_stream()).collect();
-                quote! { Some(&[#(#cond_tokens),*]) }
-            }
-            None => quote! { None },
+        let functions_tokens = if let Some(fns) = &self.functions {
+            let cond_tokens: Vec<_> = fns.iter().map(quote::ToTokens::to_token_stream).collect();
+            quote! { Some(&[#(#cond_tokens),*]) }
+        } else {
+            quote! { None }
         };
 
         tokens.extend(quote! {
@@ -108,7 +106,7 @@ pub struct AlternativeEntryStruct {
 
 impl ToTokens for AlternativeEntryStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let children = self.children.iter().map(|entry| entry.to_token_stream());
+        let children = self.children.iter().map(quote::ToTokens::to_token_stream);
 
         tokens.extend(quote! {
             AlternativeEntry {
@@ -142,28 +140,28 @@ pub enum LootPoolEntryTypesStruct {
 impl ToTokens for LootPoolEntryTypesStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
-            LootPoolEntryTypesStruct::Empty => {
+            Self::Empty => {
                 tokens.extend(quote! { LootPoolEntryTypes::Empty });
             }
-            LootPoolEntryTypesStruct::Item(item) => {
+            Self::Item(item) => {
                 tokens.extend(quote! { LootPoolEntryTypes::Item(#item) });
             }
-            LootPoolEntryTypesStruct::LootTable => {
+            Self::LootTable => {
                 tokens.extend(quote! { LootPoolEntryTypes::LootTable });
             }
-            LootPoolEntryTypesStruct::Dynamic => {
+            Self::Dynamic => {
                 tokens.extend(quote! { LootPoolEntryTypes::Dynamic });
             }
-            LootPoolEntryTypesStruct::Tag => {
+            Self::Tag => {
                 tokens.extend(quote! { LootPoolEntryTypes::Tag });
             }
-            LootPoolEntryTypesStruct::Alternatives(alt) => {
+            Self::Alternatives(alt) => {
                 tokens.extend(quote! { LootPoolEntryTypes::Alternatives(#alt) });
             }
-            LootPoolEntryTypesStruct::Sequence => {
+            Self::Sequence => {
                 tokens.extend(quote! { LootPoolEntryTypes::Sequence });
             }
-            LootPoolEntryTypesStruct::Group => {
+            Self::Group => {
                 tokens.extend(quote! { LootPoolEntryTypes::Group });
             }
         }
@@ -219,35 +217,35 @@ pub enum LootConditionStruct {
 impl ToTokens for LootConditionStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = match self {
-            LootConditionStruct::Inverted => quote! { LootCondition::Inverted },
-            LootConditionStruct::AnyOf => quote! { LootCondition::AnyOf },
-            LootConditionStruct::AllOf => quote! { LootCondition::AllOf },
-            LootConditionStruct::RandomChance => quote! { LootCondition::RandomChance },
-            LootConditionStruct::RandomChanceWithEnchantedBonus => {
+            Self::Inverted => quote! { LootCondition::Inverted },
+            Self::AnyOf => quote! { LootCondition::AnyOf },
+            Self::AllOf => quote! { LootCondition::AllOf },
+            Self::RandomChance => quote! { LootCondition::RandomChance },
+            Self::RandomChanceWithEnchantedBonus => {
                 quote! { LootCondition::RandomChanceWithEnchantedBonus }
             }
-            LootConditionStruct::EntityProperties => quote! { LootCondition::EntityProperties },
-            LootConditionStruct::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
-            LootConditionStruct::EntityScores => quote! { LootCondition::EntityScores },
-            LootConditionStruct::BlockStateProperty { block, properties } => {
+            Self::EntityProperties => quote! { LootCondition::EntityProperties },
+            Self::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
+            Self::EntityScores => quote! { LootCondition::EntityScores },
+            Self::BlockStateProperty { block, properties } => {
                 let properties: Vec<_> = properties
                     .iter()
                     .map(|(k, v)| quote! { (#k, #v) })
                     .collect();
                 quote! { LootCondition::BlockStateProperty { block: #block, properties: &[#(#properties),*] } }
             }
-            LootConditionStruct::MatchTool => quote! { LootCondition::MatchTool },
-            LootConditionStruct::TableBonus => quote! { LootCondition::TableBonus },
-            LootConditionStruct::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
-            LootConditionStruct::DamageSourceProperties => {
+            Self::MatchTool => quote! { LootCondition::MatchTool },
+            Self::TableBonus => quote! { LootCondition::TableBonus },
+            Self::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
+            Self::DamageSourceProperties => {
                 quote! { LootCondition::DamageSourceProperties }
             }
-            LootConditionStruct::LocationCheck => quote! { LootCondition::LocationCheck },
-            LootConditionStruct::WeatherCheck => quote! { LootCondition::WeatherCheck },
-            LootConditionStruct::Reference => quote! { LootCondition::Reference },
-            LootConditionStruct::TimeCheck => quote! { LootCondition::TimeCheck },
-            LootConditionStruct::ValueCheck => quote! { LootCondition::ValueCheck },
-            LootConditionStruct::EnchantmentActiveCheck => {
+            Self::LocationCheck => quote! { LootCondition::LocationCheck },
+            Self::WeatherCheck => quote! { LootCondition::WeatherCheck },
+            Self::Reference => quote! { LootCondition::Reference },
+            Self::TimeCheck => quote! { LootCondition::TimeCheck },
+            Self::ValueCheck => quote! { LootCondition::ValueCheck },
+            Self::EnchantmentActiveCheck => {
                 quote! { LootCondition::EnchantmentActiveCheck }
             }
         };
@@ -267,12 +265,11 @@ impl ToTokens for LootFunctionStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let functions_tokens = &self.content.to_token_stream();
 
-        let conditions_tokens = match &self.conditions {
-            Some(conds) => {
-                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
-                quote! { Some(&[#(#cond_tokens),*]) }
-            }
-            None => quote! { None },
+        let conditions_tokens = if let Some(conds) = &self.conditions {
+            let cond_tokens: Vec<_> = conds.iter().map(quote::ToTokens::to_token_stream).collect();
+            quote! { Some(&[#(#cond_tokens),*]) }
+        } else {
+            quote! { None }
         };
 
         tokens.extend(quote! {
@@ -325,45 +322,46 @@ pub enum LootFunctionTypesStruct {
 impl ToTokens for LootFunctionTypesStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = match self {
-            LootFunctionTypesStruct::SetCount { count, add } => {
+            Self::SetCount { count, add } => {
                 let count = count.to_token_stream();
                 let add = add.unwrap_or(false);
                 quote! { LootFunctionTypes::SetCount { count: #count, add: #add } }
             }
-            LootFunctionTypesStruct::SetOminousBottleAmplifier => {
+            Self::SetOminousBottleAmplifier => {
                 quote! { LootFunctionTypes::SetOminousBottleAmplifier }
             }
-            LootFunctionTypesStruct::FurnaceSmelt => {
+            Self::FurnaceSmelt => {
                 quote! { LootFunctionTypes::FurnaceSmelt }
             }
-            LootFunctionTypesStruct::SetPotion => {
+            Self::SetPotion => {
                 quote! { LootFunctionTypes::SetPotion }
             }
-            LootFunctionTypesStruct::EnchantedCountIncrease => {
+            Self::EnchantedCountIncrease => {
                 quote! { LootFunctionTypes::EnchantedCountIncrease }
             }
-            LootFunctionTypesStruct::LimitCount { limit } => {
-                let min = match limit.min {
-                    Some(min) => quote! { Some(#min) },
-                    None => quote! { None },
+            Self::LimitCount { limit } => {
+                let min = if let Some(min) = limit.min {
+                    quote! { Some(#min) }
+                } else {
+                    quote! { None }
                 };
-                let max = match limit.max {
-                    Some(max) => quote! { Some(#max) },
-                    None => quote! { None },
+                let max = if let Some(max) = limit.max {
+                    quote! { Some(#max) }
+                } else {
+                    quote! { None }
                 };
                 quote! { LootFunctionTypes::LimitCount { min: #min, max: #max } }
             }
-            LootFunctionTypesStruct::ApplyBonus {
+            Self::ApplyBonus {
                 enchantment,
                 formula,
                 parameters,
             } => {
-                let parameters = match parameters {
-                    Some(params) => {
-                        let params = params.to_token_stream();
-                        quote! { Some(#params) }
-                    }
-                    None => quote! { None },
+                let parameters = if let Some(params) = parameters {
+                    let params = params.to_token_stream();
+                    quote! { Some(#params) }
+                } else {
+                    quote! { None }
                 };
 
                 quote! {
@@ -374,7 +372,7 @@ impl ToTokens for LootFunctionTypesStruct {
                     }
                 }
             }
-            LootFunctionTypesStruct::CopyComponents { source, include } => {
+            Self::CopyComponents { source, include } => {
                 quote! {
                     LootFunctionTypes::CopyComponents {
                         source: #source,
@@ -382,7 +380,7 @@ impl ToTokens for LootFunctionTypesStruct {
                     }
                 }
             }
-            LootFunctionTypesStruct::CopyState { block, properties } => {
+            Self::CopyState { block, properties } => {
                 quote! {
                     LootFunctionTypes::CopyState {
                         block: #block,
@@ -390,7 +388,7 @@ impl ToTokens for LootFunctionTypesStruct {
                     }
                 }
             }
-            LootFunctionTypesStruct::ExplosionDecay => {
+            Self::ExplosionDecay => {
                 quote! { LootFunctionTypes::ExplosionDecay }
             }
         };
@@ -473,19 +471,17 @@ pub struct LootPoolEntryStruct {
 impl ToTokens for LootPoolEntryStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let content = &self.content;
-        let conditions_tokens = match &self.conditions {
-            Some(conds) => {
-                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
-                quote! { Some(&[#(#cond_tokens),*]) }
-            }
-            None => quote! { None },
+        let conditions_tokens = if let Some(conds) = &self.conditions {
+            let cond_tokens: Vec<_> = conds.iter().map(quote::ToTokens::to_token_stream).collect();
+            quote! { Some(&[#(#cond_tokens),*]) }
+        } else {
+            quote! { None }
         };
-        let functions_tokens = match &self.functions {
-            Some(fns) => {
-                let cond_tokens: Vec<_> = fns.iter().map(|c| c.to_token_stream()).collect();
-                quote! { Some(&[#(#cond_tokens),*]) }
-            }
-            None => quote! { None },
+        let functions_tokens = if let Some(fns) = &self.functions {
+            let cond_tokens: Vec<_> = fns.iter().map(quote::ToTokens::to_token_stream).collect();
+            quote! { Some(&[#(#cond_tokens),*]) }
+        } else {
+            quote! { None }
         };
 
         tokens.extend(quote! {
@@ -518,10 +514,10 @@ pub enum LootTableTypeStruct {
 impl ToTokens for LootTableTypeStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = match self {
-            LootTableTypeStruct::Empty => quote! { LootTableType::Empty },
-            LootTableTypeStruct::Entity => quote! { LootTableType::Entity },
-            LootTableTypeStruct::Block => quote! { LootTableType::Block },
-            LootTableTypeStruct::Chest => quote! { LootTableType::Chest },
+            Self::Empty => quote! { LootTableType::Empty },
+            Self::Entity => quote! { LootTableType::Entity },
+            Self::Block => quote! { LootTableType::Block },
+            Self::Chest => quote! { LootTableType::Chest },
         };
 
         tokens.extend(name);

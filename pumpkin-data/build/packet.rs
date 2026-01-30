@@ -92,14 +92,14 @@ fn generate_mapped_consts(latest: &Packets, v7: &Packets, is_serverbound: bool) 
 
     for (phase, packets) in latest_phases {
         for (name, id_11) in packets {
-            let sanitized = name.replace("/", "_").replace("-", "_").to_uppercase();
+            let sanitized = name.replace(['/', '-'], "_").to_uppercase();
             let const_name = format_ident!("{}_{}", phase.to_uppercase(), sanitized);
 
             // Check if the packet exists in 1.21.7 to get the alternate ID
             let id_7 = v7_phases
                 .get(phase)
                 .and_then(|p| p.get(name))
-                .cloned()
+                .copied()
                 .unwrap_or(-1);
 
             // Since serverbound/clientbound are modules, we reference the PacketId in the parent scope

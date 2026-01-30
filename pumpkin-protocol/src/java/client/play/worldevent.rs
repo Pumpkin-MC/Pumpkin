@@ -27,7 +27,13 @@ pub struct CWorldEvent {
 }
 
 impl CWorldEvent {
-    pub fn new(event: i32, location: BlockPos, data: i32, disable_relative_volume: bool) -> Self {
+    #[must_use]
+    pub const fn new(
+        event: i32,
+        location: BlockPos,
+        data: i32,
+        disable_relative_volume: bool,
+    ) -> Self {
         Self {
             event,
             location,

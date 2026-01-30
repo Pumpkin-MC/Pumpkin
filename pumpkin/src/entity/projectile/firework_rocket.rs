@@ -83,11 +83,11 @@ impl EntityBase for FireworkRocketEntity {
             self.entity.tick(caller, server).await;
 
             let entity = self.get_entity();
-            let world = &entity.world;
+            let world = entity.world.load();
             let mut velocity = entity.velocity.load();
 
             if let Some(shooter_id) = self.shooter_id {
-                if let Some(shooter) = world.get_entity_by_id(shooter_id).await {
+                if let Some(shooter) = world.get_entity_by_id(shooter_id) {
                     let shooter = shooter.get_entity();
                     if shooter.fall_flying.load(Ordering::Relaxed) {
                         let rotation = shooter.rotation().to_f64();
@@ -111,7 +111,7 @@ impl EntityBase for FireworkRocketEntity {
 
             let current_life = self.life.fetch_add(1, Ordering::Relaxed);
             if current_life > self.life_time.load(Ordering::Relaxed) {
-                self.explode_and_remove(world).await;
+                self.explode_and_remove(&world).await;
             }
         })
     }

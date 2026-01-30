@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 pub struct ParseDifficultyError;
 
-#[derive(Serialize, Deserialize, FromPrimitive, ToPrimitive, PartialEq, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, FromPrimitive, ToPrimitive, PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Difficulty {
     Peaceful = 0,
     Easy = 1,

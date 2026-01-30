@@ -1,7 +1,7 @@
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
 use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockState, tag::Taggable};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 use trunk::TrunkPlacer;
@@ -51,16 +51,19 @@ impl TreeFeature {
         true
     }
 
-    pub fn can_replace_or_log(state: &BlockState, block: &Block) -> bool {
-        Self::can_replace(state, block) || block.has_tag(&tag::Block::MINECRAFT_LOGS)
+    pub fn can_replace_or_log(state: &BlockState, block: u16) -> bool {
+        Self::can_replace(state, block) || tag::Block::MINECRAFT_LOGS.1.contains(&block)
     }
 
-    pub fn is_air_or_leaves(state: &BlockState, block: &Block) -> bool {
-        state.is_air() || block.has_tag(&tag::Block::MINECRAFT_LEAVES)
+    pub fn is_air_or_leaves(state: &BlockState, block: u16) -> bool {
+        state.is_air() || tag::Block::MINECRAFT_LEAVES.1.contains(&block)
     }
 
-    pub fn can_replace(state: &BlockState, block: &Block) -> bool {
-        state.is_air() || block.has_tag(&tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
+    pub fn can_replace(state: &BlockState, block: u16) -> bool {
+        state.is_air()
+            || tag::Block::MINECRAFT_REPLACEABLE_BY_TREES
+                .1
+                .contains(&block)
     }
 
     fn generate_main<T: GenerationCache>(
@@ -119,9 +122,9 @@ impl TreeFeature {
                 for z in -j..=j {
                     let pos = BlockPos(init_pos.0.add_raw(x, y as i32, z));
                     let rstate = GenerationCache::get_block_state(chunk, &pos.0);
-                    let block = rstate.to_block();
+                    let block = rstate.to_block_id();
                     if Self::can_replace_or_log(rstate.to_state(), block)
-                        && (self.ignore_vines || block != &Block::VINE)
+                        && (self.ignore_vines || block != Block::VINE)
                     {
                         continue;
                     }

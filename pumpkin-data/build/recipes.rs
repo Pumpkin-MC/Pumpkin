@@ -50,9 +50,10 @@ impl ToTokens for CookingRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = match &self.group {
-            Some(group) => quote! { Some(#group) },
-            None => quote! { None },
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
         };
         let ingredient = self.ingredient.to_token_stream();
         let cookingtime = self.cookingtime.to_token_stream();
@@ -88,9 +89,10 @@ impl ToTokens for CraftingShapedRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = match &self.group {
-            Some(group) => quote! { Some(#group) },
-            None => quote! { None },
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
         };
         let show_notification = self.show_notification.unwrap_or(true);
         let key = self
@@ -104,7 +106,7 @@ impl ToTokens for CraftingShapedRecipeStruct {
         let pattern = self
             .pattern
             .iter()
-            .map(|c| c.to_token_stream())
+            .map(quote::ToTokens::to_token_stream)
             .collect::<Vec<_>>();
         let result = self.result.to_token_stream();
 
@@ -135,14 +137,15 @@ impl ToTokens for CraftingShapelessRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = match &self.group {
-            Some(group) => quote! { Some(#group) },
-            None => quote! { None },
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
         };
         let ingredients = self
             .ingredients
             .iter()
-            .map(|c| c.to_token_stream())
+            .map(quote::ToTokens::to_token_stream)
             .collect::<Vec<_>>();
         let result = self.result.to_token_stream();
 
@@ -172,9 +175,10 @@ impl ToTokens for CraftingTransmuteRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = match &self.group {
-            Some(group) => quote! { Some(#group) },
-            None => quote! { None },
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
         };
         let input = self.input.to_token_stream();
         let material = self.material.to_token_stream();
@@ -243,17 +247,17 @@ pub enum RecipeIngredientTypes {
 impl ToTokens for RecipeIngredientTypes {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = match self {
-            RecipeIngredientTypes::Simple(ingredient) => {
-                if ingredient.starts_with("#") {
+            Self::Simple(ingredient) => {
+                if ingredient.starts_with('#') {
                     quote! { RecipeIngredientTypes::Tagged(#ingredient) }
                 } else {
                     quote! { RecipeIngredientTypes::Simple(#ingredient) }
                 }
             }
-            RecipeIngredientTypes::OneOf(ingredients) => {
+            Self::OneOf(ingredients) => {
                 let ingredients = ingredients
                     .iter()
-                    .map(|c| c.to_token_stream())
+                    .map(quote::ToTokens::to_token_stream)
                     .collect::<Vec<_>>();
                 quote! { RecipeIngredientTypes::OneOf(&[#(#ingredients),*]) }
             }
@@ -282,22 +286,22 @@ pub enum RecipeCategoryTypes {
 impl ToTokens for RecipeCategoryTypes {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = match self {
-            RecipeCategoryTypes::Equipment => {
+            Self::Equipment => {
                 quote! { RecipeCategoryTypes::Equipment }
             }
-            RecipeCategoryTypes::Building => {
+            Self::Building => {
                 quote! { RecipeCategoryTypes::Building }
             }
-            RecipeCategoryTypes::Restone => {
+            Self::Restone => {
                 quote! { RecipeCategoryTypes::Restone }
             }
-            RecipeCategoryTypes::Misc => {
+            Self::Misc => {
                 quote! { RecipeCategoryTypes::Misc }
             }
-            RecipeCategoryTypes::Food => {
+            Self::Food => {
                 quote! { RecipeCategoryTypes::Food }
             }
-            RecipeCategoryTypes::Blocks => {
+            Self::Blocks => {
                 quote! { RecipeCategoryTypes::Blocks }
             }
         };

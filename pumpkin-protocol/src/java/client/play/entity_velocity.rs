@@ -19,7 +19,8 @@ pub struct CEntityVelocity {
 }
 
 impl CEntityVelocity {
-    pub fn new(entity_id: VarInt, velocity: Vector3<f64>) -> Self {
+    #[must_use]
+    pub const fn new(entity_id: VarInt, velocity: Vector3<f64>) -> Self {
         Self {
             entity_id,
             velocity: Velocity(velocity),

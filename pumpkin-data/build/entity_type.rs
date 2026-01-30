@@ -63,14 +63,16 @@ impl ToTokens for NamedEntityType<'_> {
         let entity = self.1;
         let id = LitInt::new(&entity.id.to_string(), proc_macro2::Span::call_site());
 
-        let max_health = match entity.max_health {
-            Some(mh) => quote! { Some(#mh) },
-            None => quote! { None },
+        let max_health = if let Some(mh) = entity.max_health {
+            quote! { Some(#mh) }
+        } else {
+            quote! { None }
         };
 
-        let attackable = match entity.attackable {
-            Some(a) => quote! { Some(#a) },
-            None => quote! { None },
+        let attackable = if let Some(a) = entity.attackable {
+            quote! { Some(#a) }
+        } else {
+            quote! { None }
         };
 
         let spawn_restriction_location = match entity.spawn_restriction.location {
@@ -111,12 +113,14 @@ impl ToTokens for NamedEntityType<'_> {
         let summonable = entity.summonable;
         let fire_immune = entity.fire_immune;
         let eye_height = entity.eye_height;
-        if entity.mob.is_none() && name != "player" {
-            panic!("missing field 'mob', entity name {name}");
-        }
-        if entity.limit_per_chunk.is_none() && name != "player" {
-            panic!("missing field 'mob', entity name {name}");
-        }
+        assert!(
+            !(entity.mob.is_none() && name != "player"),
+            "missing field 'mob', entity name {name}"
+        );
+        assert!(
+            !(entity.limit_per_chunk.is_none() && name != "player"),
+            "missing field 'mob', entity name {name}"
+        );
         let mob = entity.mob.unwrap_or(false);
         let limit_per_chunk = entity.limit_per_chunk.unwrap_or(0);
         let can_spawn_far_from_player = entity.can_spawn_far_from_player;
@@ -124,12 +128,11 @@ impl ToTokens for NamedEntityType<'_> {
         let dimension0 = entity.dimension[0];
         let dimension1 = entity.dimension[1];
 
-        let loot_table = match &entity.loot_table {
-            Some(table) => {
-                let table_tokens = table.to_token_stream();
-                quote! { Some(#table_tokens) }
-            }
-            None => quote! { None },
+        let loot_table = if let Some(table) = &entity.loot_table {
+            let table_tokens = table.to_token_stream();
+            quote! { Some(#table_tokens) }
+        } else {
+            quote! { None }
         };
 
         tokens.extend(quote! {
@@ -165,7 +168,7 @@ pub(crate) fn build() -> TokenStream {
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut type_from_name = TokenStream::new();
 
-    for (name, entity) in json.iter() {
+    for (name, entity) in &json {
         let id = entity.id as u8;
         let id_lit = LitInt::new(&id.to_string(), proc_macro2::Span::call_site());
         let upper_name = format_ident!("{}", name.to_uppercase());

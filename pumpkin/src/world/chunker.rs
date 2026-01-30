@@ -11,10 +11,9 @@ use crate::{
     net::ClientPlatform,
 };
 
-pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
+pub fn get_view_distance(player: &Player) -> NonZeroU8 {
     let server = player.world().server.upgrade().unwrap();
-
-    player.config.read().await.view_distance.clamp(
+    player.config.load().view_distance.clamp(
         NonZeroU8::new(2).unwrap(),
         server.basic_config.view_distance,
     )
@@ -30,7 +29,7 @@ pub async fn update_position(player: &Arc<Player>) {
     //     return;
     // }
 
-    let view_distance = get_view_distance(player).await;
+    let view_distance = get_view_distance(player);
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical == new_cylindrical {
@@ -64,23 +63,22 @@ pub async fn update_position(player: &Arc<Player>) {
         &mut unloading_chunks,
     );
 
-    let level = &entity.world.level;
-
-    {
+    // Use the chunk_manager's world reference, which is updated on dimension change.
+    // This ensures we load chunks from the correct world after portal teleportation.
+    let world = {
         let mut chunk_manager = player.chunk_manager.lock().await;
+        let world = chunk_manager.world().clone();
         chunk_manager.update_center_and_view_distance(
             new_chunk_center,
             view_distance.into(),
-            level,
+            &world.level,
+            &loading_chunks,
+            &unloading_chunks,
         );
+        world
     };
 
     player.watched_section.store(new_cylindrical);
-
-    // Make sure the watched section and the chunk watcher updates are async atomic. We want to
-    // ensure what we unload when the player disconnects is correct.
-    level.mark_chunks_as_newly_watched(&loading_chunks).await;
-    level.mark_chunks_as_not_watched(&unloading_chunks).await;
 
     if let ClientPlatform::Java(_) = &player.client {
         for chunk in &unloading_chunks {
@@ -91,9 +89,18 @@ pub async fn update_position(player: &Arc<Player>) {
         }
     }
 
+    // Make sure the watched section and the chunk watcher updates are async atomic. We want to
+    // ensure what we unload when the player disconnects is correct.
+    world
+        .level
+        .mark_chunks_as_newly_watched(&loading_chunks)
+        .await;
+    world
+        .level
+        .mark_chunks_as_not_watched(&unloading_chunks)
+        .await;
+
     if !loading_chunks.is_empty() {
-        entity
-            .world
-            .spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
+        world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
     }
 }

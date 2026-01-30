@@ -27,9 +27,10 @@ impl VarULong {
     /// The maximum number of bytes a `VarULong` can occupy.
     const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
-    /// Returns the exact number of bytes this VarLong will write when
+    /// Returns the exact number of bytes this `VarLong` will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
-    pub fn written_size(&self) -> usize {
+    #[must_use]
+    pub const fn written_size(&self) -> usize {
         match self.0 {
             0 => 1,
             n => (31 - n.leading_zeros() as usize) / 7 + 1,
@@ -56,9 +57,9 @@ impl VarULong {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
-            val |= (u64::from(byte) & 0b01111111) << (i * 7);
-            if byte & 0b10000000 == 0 {
-                return Ok(VarULong(val));
+            val |= (u64::from(byte) & 0b0111_1111) << (i * 7);
+            if byte & 0b1000_0000 == 0 {
+                return Ok(Self(val));
             }
         }
         Err(ReadingError::TooLarge("VarLong".to_string()))
@@ -67,25 +68,25 @@ impl VarULong {
 
 impl From<u64> for VarULong {
     fn from(value: u64) -> Self {
-        VarULong(value)
+        Self(value)
     }
 }
 
 impl From<u32> for VarULong {
     fn from(value: u32) -> Self {
-        VarULong(value as u64)
+        Self(u64::from(value))
     }
 }
 
 impl From<u8> for VarULong {
     fn from(value: u8) -> Self {
-        VarULong(value as u64)
+        Self(u64::from(value))
     }
 }
 
 impl From<usize> for VarULong {
     fn from(value: usize) -> Self {
-        VarULong(value as u64)
+        Self(value as u64)
     }
 }
 
@@ -140,8 +141,8 @@ impl<'de> Deserialize<'de> for VarULong {
                 let mut val = 0;
                 for i in 0..VarULong::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
-                        val |= (u64::from(byte) & 0b01111111) << (i * 7);
-                        if byte & 0b10000000 == 0 {
+                        val |= (u64::from(byte) & 0b0111_1111) << (i * 7);
+                        if byte & 0b1000_0000 == 0 {
                             return Ok(VarULong(val));
                         }
                     } else {
@@ -178,9 +179,9 @@ impl PacketRead for VarULong {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = u8::read(reader)?;
-            val |= (u64::from(byte) & 0b01111111) << (i * 7);
-            if byte & 0b10000000 == 0 {
-                return Ok(VarULong(val));
+            val |= (u64::from(byte) & 0b0111_1111) << (i * 7);
+            if byte & 0b1000_0000 == 0 {
+                return Ok(Self(val));
             }
         }
         Err(Error::other("Invalid VarUInt"))

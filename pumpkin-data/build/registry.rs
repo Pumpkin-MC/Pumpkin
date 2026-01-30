@@ -9,8 +9,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/registry/1_21_11_synced_registries.json");
 
     let process_version = |path: &str| -> TokenStream {
-        let json_str =
-            fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {}", path));
+        let json_str = fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"));
         let mut data: IndexMap<String, IndexMap<String, Value>> =
             serde_json::from_str(&json_str).expect("Failed to parse JSON");
 

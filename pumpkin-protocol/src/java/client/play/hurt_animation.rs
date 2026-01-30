@@ -20,7 +20,8 @@ pub struct CHurtAnimation {
 }
 
 impl CHurtAnimation {
-    pub fn new(entity_id: VarInt, yaw: f32) -> Self {
+    #[must_use]
+    pub const fn new(entity_id: VarInt, yaw: f32) -> Self {
         Self { entity_id, yaw }
     }
 }

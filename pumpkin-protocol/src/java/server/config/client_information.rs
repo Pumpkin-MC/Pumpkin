@@ -8,7 +8,7 @@ use crate::VarInt;
 #[derive(serde::Deserialize, Serialize)]
 #[java_packet(CONFIG_CLIENT_INFORMATION)]
 pub struct SClientInformationConfig {
-    /// The language code used by the client (e.g., "en_us")
+    /// The language code used by the client (e.g., "`en_us`")
     pub locale: String,
     /// The maximum number of chunks the client renders
     pub view_distance: i8,

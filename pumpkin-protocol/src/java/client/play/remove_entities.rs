@@ -16,7 +16,8 @@ pub struct CRemoveEntities<'a> {
 }
 
 impl<'a> CRemoveEntities<'a> {
-    pub fn new(entity_ids: &'a [VarInt]) -> Self {
+    #[must_use]
+    pub const fn new(entity_ids: &'a [VarInt]) -> Self {
         Self { entity_ids }
     }
 }

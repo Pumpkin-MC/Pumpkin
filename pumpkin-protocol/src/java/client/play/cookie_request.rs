@@ -16,7 +16,8 @@ pub struct CPlayCookieRequest<'a> {
 }
 
 impl<'a> CPlayCookieRequest<'a> {
-    pub fn new(key: &'a ResourceLocation) -> Self {
+    #[must_use]
+    pub const fn new(key: &'a ResourceLocation) -> Self {
         Self { key }
     }
 }

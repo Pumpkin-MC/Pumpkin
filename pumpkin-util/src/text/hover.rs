@@ -24,7 +24,7 @@ pub enum HoverEvent {
         /// The entity's ID Entity Type
         id: Cow<'static, str>,
         /// The entity's UUID
-        /// The UUID cannot use uuid::Uuid because its serialization parses it into bytes, so its double bytes serialized
+        /// The UUID cannot use `uuid::Uuid` because its serialization parses it into bytes, so its double bytes serialized
         uuid: Cow<'static, str>,
         /// Optional custom name for the entity
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -33,6 +33,7 @@ pub enum HoverEvent {
 }
 
 impl HoverEvent {
+    #[must_use]
     pub fn show_text(text: TextComponent) -> Self {
         Self::ShowText {
             value: vec![text.0],

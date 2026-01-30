@@ -25,7 +25,8 @@ pub struct MultiNoiseSamplerBuilderOptions {
 }
 
 impl MultiNoiseSamplerBuilderOptions {
-    pub fn new(start_biome_x: i32, start_biome_z: i32, horizontal_biome_end: usize) -> Self {
+    #[must_use]
+    pub const fn new(start_biome_x: i32, start_biome_z: i32, horizontal_biome_end: usize) -> Self {
         Self {
             start_biome_x,
             start_biome_z,
@@ -113,6 +114,7 @@ impl<'a> MultiNoiseSampler<'a> {
         )
     }
 
+    #[must_use]
     pub fn generate(
         base: &'a ProtoMultiNoiseRouter,
         build_options: &MultiNoiseSamplerBuilderOptions,
@@ -122,7 +124,7 @@ impl<'a> MultiNoiseSampler<'a> {
         // (Should we traverse the functions and update the indices?)
         let mut component_stack =
             Vec::<ChunkNoiseFunctionComponent>::with_capacity(base.full_component_stack.len());
-        for base_component in base.full_component_stack.iter() {
+        for base_component in &base.full_component_stack {
             let chunk_component = match base_component {
                 ProtoNoiseFunctionComponent::Dependent(dependent) => {
                     ChunkNoiseFunctionComponent::Dependent(dependent)
@@ -237,7 +239,7 @@ mod test {
     use super::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions};
 
     #[test]
-    fn test_sample() {
+    fn sample() {
         let seed = 123;
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
@@ -253,11 +255,11 @@ mod test {
             depth: -19774,
             weirdness: 4421,
         };
-        assert_eq!(sampler.sample(123, 123, 123), expected)
+        assert_eq!(sampler.sample(123, 123, 123), expected);
     }
 
     #[test]
-    fn test_sample_2() {
+    fn sample_2() {
         // we use a different seed
         let seed = 13579;
         let random_config = GlobalRandomConfig::new(seed, false);
@@ -274,6 +276,6 @@ mod test {
             depth: -21237,
             weirdness: -5222,
         };
-        assert_eq!(sampler.sample(123, 123, 123), expected)
+        assert_eq!(sampler.sample(123, 123, 123), expected);
     }
 }

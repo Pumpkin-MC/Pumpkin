@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
+use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use log::warn;
@@ -28,6 +29,7 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
+use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
@@ -137,6 +139,8 @@ pub struct ChunkManager {
     chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
+    /// The current world for chunk loading. Updated on dimension change.
+    world: Arc<World>,
 }
 
 impl ChunkManager {
@@ -146,6 +150,7 @@ impl ChunkManager {
     pub fn new(
         chunks_per_tick: usize,
         chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
+        world: Arc<World>,
     ) -> Self {
         Self {
             chunks_per_tick,
@@ -156,7 +161,14 @@ impl ChunkManager {
             chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
+            world,
         }
+    }
+
+    /// Gets the current world for chunk loading.
+    #[must_use]
+    pub const fn world(&self) -> &Arc<World> {
+        &self.world
     }
 
     pub fn pull_new_chunks(&mut self) {
@@ -182,8 +194,10 @@ impl ChunkManager {
         center: Vector2<i32>,
         mut view_distance: u8,
         level: &Arc<Level>,
+        loading_chunks: &[Vector2<i32>],
+        unloading_chunks: &[Vector2<i32>],
     ) {
-        view_distance += 1;
+        view_distance += 1; // Margin for loading
         let old_center = self.center;
         let old_view_distance = self.view_distance;
 
@@ -203,32 +217,27 @@ impl ChunkManager {
             lock.send_change();
         };
 
-        let view_distance_i32 = i32::from(view_distance);
-
-        self.chunk_sent.retain(|pos| {
-            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
-        });
-
-        let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
-        for node in &self.chunk_queue {
-            let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
-            if dst <= view_distance_i32 {
-                new_queue.push(HeapNode(dst, node.1, node.2.clone()));
-            }
-        }
-
-        self.chunk_queue = new_queue;
         self.center = center;
         self.view_distance = view_distance;
+        let view_distance_i32 = i32::from(view_distance);
 
-        for dx in (-view_distance_i32)..=view_distance_i32 {
-            for dy in (-view_distance_i32)..=view_distance_i32 {
-                let new_pos = center.add_raw(dx, dy);
-                if !self.chunk_sent.contains(&new_pos)
-                    && let Some(chunk) = level.loaded_chunks.get(&new_pos)
-                {
-                    self.push_chunk(new_pos, chunk.value().clone());
-                }
+        self.chunk_sent
+            .retain(|pos| !unloading_chunks.contains(pos));
+
+        let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
+        for node in self.chunk_queue.drain() {
+            let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
+            if dst <= view_distance_i32 {
+                new_queue.push(HeapNode(dst, node.1, node.2));
+            }
+        }
+        self.chunk_queue = new_queue;
+
+        for pos in loading_chunks {
+            if !self.chunk_sent.contains(pos)
+                && let Some(chunk) = level.loaded_chunks.get(pos)
+            {
+                self.push_chunk(*pos, chunk.value().clone());
             }
         }
     }
@@ -244,16 +253,19 @@ impl ChunkManager {
         self.chunk_listener = tx;
     }
 
-    pub fn change_world(&mut self, old_level: &Arc<Level>, new_level: &Arc<Level>) {
+    pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
         let mut lock = old_level.chunk_loading.lock().unwrap();
         lock.remove_ticket(
             self.center,
             ChunkLoading::get_level_from_view_distance(self.view_distance),
         );
         drop(lock);
-        self.chunk_listener = new_level.chunk_listener.add_global_chunk_listener();
+        self.chunk_listener = new_world.level.chunk_listener.add_global_chunk_listener();
         self.chunk_sent.clear();
         self.chunk_queue.clear();
+        self.world = new_world;
+        // Reset batch state so chunks can be sent immediately in the new dimension
+        self.batches_sent_since_ack = BatchState::Initial;
     }
 
     pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
@@ -304,9 +316,10 @@ impl ChunkManager {
 
     pub fn next_entity(&mut self) -> Box<[SyncEntityChunk]> {
         let chunk_size = self.entity_chunk_queue.len().min(self.chunks_per_tick);
-        let chunks: Vec<Arc<RwLock<ChunkEntityData>>> = self
+
+        let chunks: Box<[Arc<RwLock<ChunkEntityData>>]> = self
             .entity_chunk_queue
-            .drain(0..chunk_size)
+            .drain(..chunk_size)
             .map(|(_, chunk)| chunk)
             .collect();
 
@@ -318,7 +331,7 @@ impl ChunkManager {
             BatchState::Waiting => unreachable!(),
         }
 
-        chunks.into_boxed_slice()
+        chunks
     }
 }
 
@@ -337,7 +350,7 @@ pub struct Player {
     /// The player's `EnderChest` inventory.
     pub ender_chest_inventory: Arc<EnderChestInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
-    pub config: RwLock<PlayerConfig>,
+    pub config: ArcSwap<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
     pub gamemode: AtomicCell<GameMode>,
     /// The player's previous gamemode
@@ -380,6 +393,8 @@ pub struct Player {
     pub keep_alive_id: AtomicI64,
     /// The last time we sent a keep alive packet.
     pub last_keep_alive_time: AtomicCell<Instant>,
+    /// The last time the player performed an action (for idle timeout).
+    pub last_action_time: AtomicCell<Instant>,
     /// The ping in millis.
     pub ping: AtomicU32,
     /// The amount of ticks since the player's last attack.
@@ -457,7 +472,7 @@ impl Player {
 
         Self {
             living_entity,
-            config: RwLock::new(config),
+            config: ArcSwap::new(Arc::new(config)),
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
@@ -491,6 +506,7 @@ impl Player {
             wait_for_keep_alive: AtomicBool::new(false),
             keep_alive_id: AtomicI64::new(0),
             last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
+            last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(false),
@@ -516,6 +532,7 @@ impl Player {
             chunk_manager: Mutex::new(ChunkManager::new(
                 16,
                 world.level.chunk_listener.add_global_chunk_listener(),
+                world.clone(),
             )),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
@@ -545,11 +562,11 @@ impl Player {
         self.client.spawn_task(task)
     }
 
-    pub fn inventory(&self) -> &Arc<PlayerInventory> {
+    pub const fn inventory(&self) -> &Arc<PlayerInventory> {
         &self.inventory
     }
 
-    pub fn ender_chest_inventory(&self) -> &Arc<EnderChestInventory> {
+    pub const fn ender_chest_inventory(&self) -> &Arc<EnderChestInventory> {
         &self.ender_chest_inventory
     }
 
@@ -576,7 +593,7 @@ impl Player {
         // Decrement the value of watched chunks
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
-        level.clean_entity_chunks(&chunks_to_clean).await;
+        level.clean_entity_chunks(&chunks_to_clean);
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
@@ -639,7 +656,7 @@ impl Player {
         // Only reduce attack damage if in cooldown
         // TODO: Enchantments are reduced in the same way, just without the square.
         if attack_cooldown_progress < 1.0 {
-            damage_multiplier = 0.2 + attack_cooldown_progress.powi(2) * 0.8;
+            damage_multiplier = attack_cooldown_progress.powi(2).mul_add(0.8, 0.2);
         }
         // Modify the added damage based on the multiplier.
         let mut damage = base_damage + add_damage * damage_multiplier;
@@ -675,11 +692,11 @@ impl Player {
 
         if victim.get_living_entity().is_some() {
             let mut knockback_strength = 1.0;
-            player_attack_sound(&pos, world, attack_type).await;
+            player_attack_sound(&pos, &world, attack_type).await;
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, world, &pos).await;
+                    combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
                 }
                 _ => {}
             }
@@ -793,29 +810,304 @@ impl Player {
         true
     }
 
-    pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32, f32)> {
+    /// Sets the respawn point with force=true, bypassing bed/anchor checks.
+    /// Used by /spawnpoint command.
+    pub async fn set_respawn_point_forced(
+        &self,
+        dimension: Dimension,
+        block_pos: BlockPos,
+        yaw: f32,
+        pitch: f32,
+    ) {
+        self.respawn_point.store(Some(RespawnPoint {
+            dimension,
+            position: block_pos,
+            yaw,
+            force: true,
+        }));
+
+        self.client
+            .send_packet_now(&CPlayerSpawnPosition::new(
+                block_pos,
+                yaw,
+                pitch,
+                dimension.minecraft_name.to_owned(),
+            ))
+            .await;
+    }
+
+    /// Calculates the player's respawn point based on stored spawn data.
+    ///
+    /// Returns `Some(CalculatedRespawnPoint)` if a valid respawn point exists, `None` otherwise.
+    ///
+    /// # Behavior
+    /// - If `force` flag is set (via `/spawnpoint` command), validates the spawn position is safe
+    ///   (both the block and block above allow mob spawn).
+    /// - For beds: validates the bed block still exists and finds a valid spawn position around it.
+    /// - For respawn anchors (Nether): validates the anchor has charges and finds a valid spawn position.
+    /// - Returns `None` if the spawn block is invalid/missing (caller should send
+    ///   `NoRespawnBlockAvailable` game event and use world spawn).
+    ///
+    /// # Note
+    /// This function does NOT send any packets. The caller is responsible for
+    /// sending `NoRespawnBlockAvailable` if this returns `None`.
+    pub async fn calculate_respawn_point(&self) -> Option<CalculatedRespawnPoint> {
+        type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
+        type AnchorProperties = pumpkin_data::block_properties::RespawnAnchorLikeProperties;
+
         let respawn_point = self.respawn_point.load()?;
+        let world = self.world();
+        let pos = &respawn_point.position;
+        let (block, state_id) = world.get_block_and_state_id(pos).await;
 
-        let block = self.world().get_block(&respawn_point.position).await;
+        // If force is set (from /spawnpoint command), validate position is safe
+        if respawn_point.force {
+            // For forced spawn, check if both the block and block above allow mob spawn
+            let block_state = world.get_block_state(pos).await;
+            let above_state = world.get_block_state(&pos.up()).await;
 
-        if respawn_point.dimension == Dimension::OVERWORLD
-            && block.has_tag(&tag::Block::MINECRAFT_BEDS)
-        {
-            // TODO: calculate respawn position
-            Some((respawn_point.position.to_f64(), respawn_point.yaw, 0.0))
-        } else if respawn_point.dimension == Dimension::THE_NETHER
-            && block == &Block::RESPAWN_ANCHOR
-        {
-            // TODO: calculate respawn position
-            // TODO: check if there is fuel for respawn
-            Some((respawn_point.position.to_f64(), respawn_point.yaw, 0.0))
-        } else {
-            self.client
-                .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
-                .await;
+            // Check if blocks are passable (non-solid or air)
+            let block_safe = block_state.is_air() || !block_state.is_solid();
+            let above_safe = above_state.is_air() || !above_state.is_solid();
 
-            None
+            if block_safe && above_safe {
+                let position = Vector3::new(
+                    f64::from(pos.0.x) + 0.5,
+                    f64::from(pos.0.y) + 0.1,
+                    f64::from(pos.0.z) + 0.5,
+                );
+                log::debug!(
+                    "Returning forced spawn point at {:?}, dimension: {:?}",
+                    position,
+                    respawn_point.dimension
+                );
+                return Some(CalculatedRespawnPoint {
+                    position,
+                    yaw: respawn_point.yaw,
+                    pitch: 0.0,
+                    dimension: respawn_point.dimension,
+                });
+            }
+            return None;
         }
+
+        // Handle bed respawn
+        if block.has_tag(&tag::Block::MINECRAFT_BEDS) {
+            let bed_props = BedProperties::from_state_id(state_id, block);
+            let facing = bed_props.facing;
+
+            // Try positions around the bed based on facing direction
+            // Vanilla tries multiple offset patterns; we use a simplified version
+            if let Some(spawn_pos) =
+                Self::find_bed_spawn_position(&world, pos, facing, respawn_point.yaw).await
+            {
+                return Some(CalculatedRespawnPoint {
+                    position: spawn_pos,
+                    yaw: respawn_point.yaw,
+                    pitch: 0.0,
+                    dimension: respawn_point.dimension,
+                });
+            }
+            return None;
+        }
+
+        // Handle respawn anchor (Nether)
+        if block == &Block::RESPAWN_ANCHOR {
+            use pumpkin_data::block_properties::Integer0To4;
+
+            let anchor_props = AnchorProperties::from_state_id(state_id, block);
+            let charges = anchor_props.charges.to_index();
+
+            // Anchor needs at least 1 charge to work
+            if charges == 0 {
+                return None;
+            }
+
+            // Try positions around the anchor
+            if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, pos).await {
+                // Decrement charges after successful respawn position found
+                let new_charges = charges - 1;
+                let mut new_props = anchor_props;
+                new_props.charges = Integer0To4::from_index(new_charges);
+                world
+                    .set_block_state(
+                        pos,
+                        new_props.to_state_id(block),
+                        pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+
+                return Some(CalculatedRespawnPoint {
+                    position: spawn_pos,
+                    yaw: respawn_point.yaw,
+                    pitch: 0.0,
+                    dimension: respawn_point.dimension,
+                });
+            }
+            return None;
+        }
+
+        None
+    }
+
+    /// Find a valid spawn position around a bed.
+    /// Vanilla uses a complex algorithm based on bed facing direction.
+    /// We use a simplified version that tries cardinal directions first.
+    async fn find_bed_spawn_position(
+        world: &Arc<crate::world::World>,
+        bed_pos: &BlockPos,
+        facing: HorizontalFacing,
+        _spawn_angle: f32,
+    ) -> Option<Vector3<f64>> {
+        // Get offsets based on bed facing direction (vanilla-like order)
+        let offsets = Self::get_bed_spawn_offsets(facing);
+
+        for (dx, dz) in offsets {
+            let check_pos = BlockPos(Vector3::new(
+                bed_pos.0.x + dx,
+                bed_pos.0.y,
+                bed_pos.0.z + dz,
+            ));
+
+            if let Some(pos) = Self::find_respawn_pos(world, &check_pos).await {
+                return Some(pos);
+            }
+
+            // Also try one block down (for beds on elevated platforms)
+            let check_pos_down = BlockPos(Vector3::new(
+                bed_pos.0.x + dx,
+                bed_pos.0.y - 1,
+                bed_pos.0.z + dz,
+            ));
+            if let Some(pos) = Self::find_respawn_pos(world, &check_pos_down).await {
+                return Some(pos);
+            }
+        }
+
+        // Try on the bed itself as last resort
+        if let Some(pos) = Self::find_respawn_pos(world, bed_pos).await {
+            return Some(pos);
+        }
+
+        None
+    }
+
+    /// Get spawn position offsets around a bed based on facing direction.
+    /// This is a simplified version of vanilla's getAroundBedOffsets.
+    fn get_bed_spawn_offsets(facing: HorizontalFacing) -> Vec<(i32, i32)> {
+        let (fx, fz) = match facing {
+            HorizontalFacing::North => (0, -1),
+            HorizontalFacing::South => (0, 1),
+            HorizontalFacing::West => (-1, 0),
+            HorizontalFacing::East => (1, 0),
+        };
+
+        // Clockwise rotation
+        let (rx, rz) = (-fz, fx);
+
+        vec![
+            (rx, rz),                   // Right of bed
+            (-rx, -rz),                 // Left of bed
+            (rx - fx, rz - fz),         // Right-back
+            (-rx - fx, -rz - fz),       // Left-back
+            (-fx, -fz),                 // Behind foot
+            (-fx * 2, -fz * 2),         // Further behind
+            (rx + fx, rz + fz),         // Right-front
+            (-rx + fx, -rz + fz),       // Left-front
+            (fx, fz),                   // In front
+            (rx - fx * 2, rz - fz * 2), // Far right-back
+        ]
+    }
+
+    /// Find a valid spawn position around a respawn anchor.
+    async fn find_anchor_spawn_position(
+        world: &Arc<crate::world::World>,
+        anchor_pos: &BlockPos,
+    ) -> Option<Vector3<f64>> {
+        // Vanilla VALID_HORIZONTAL_SPAWN_OFFSETS
+        let horizontal_offsets: [(i32, i32); 8] = [
+            (0, -1),
+            (-1, 0),
+            (0, 1),
+            (1, 0),
+            (-1, -1),
+            (1, -1),
+            (-1, 1),
+            (1, 1),
+        ];
+
+        // Try at same level, then one down, then one up
+        for dy in [0, -1, 1] {
+            for (dx, dz) in horizontal_offsets {
+                let check_pos = BlockPos(Vector3::new(
+                    anchor_pos.0.x + dx,
+                    anchor_pos.0.y + dy,
+                    anchor_pos.0.z + dz,
+                ));
+
+                if let Some(pos) = Self::find_respawn_pos(world, &check_pos).await {
+                    return Some(pos);
+                }
+            }
+        }
+
+        // Also try directly above the anchor
+        let above_pos = anchor_pos.up();
+        Self::find_respawn_pos(world, &above_pos).await
+    }
+
+    /// Check if a position is valid for respawning (vanilla Dismounting.findRespawnPos logic).
+    /// Returns the spawn position if valid, None otherwise.
+    async fn find_respawn_pos(
+        world: &Arc<crate::world::World>,
+        pos: &BlockPos,
+    ) -> Option<Vector3<f64>> {
+        let state = world.get_block_state(pos).await;
+        let below_state = world.get_block_state(&pos.down()).await;
+
+        // Check if block at position is invalid for spawn (e.g., inside solid block)
+        let block = world.get_block(pos).await;
+        if block.has_tag(&tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
+            return None;
+        }
+
+        // Check if block above is also invalid
+        let above_block = world.get_block(&pos.up()).await;
+        if above_block.has_tag(&tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
+            return None;
+        }
+
+        // Need solid floor below or at position
+        let has_floor = below_state.is_solid() || state.is_solid();
+        if !has_floor {
+            return None;
+        }
+
+        // Position must not be inside a solid block
+        if state.is_solid() && !state.is_air() {
+            return None;
+        }
+
+        // Create player-sized bounding box at this position
+        let x = f64::from(pos.0.x) + 0.5;
+        let y = f64::from(pos.0.y) + 0.1;
+        let z = f64::from(pos.0.z) + 0.5;
+        let spawn_pos = Vector3::new(x, y, z);
+
+        // Player dimensions: 0.6 wide, 1.8 tall
+        let half_width = 0.3;
+        let height = 1.8;
+        let player_box = BoundingBox::new(
+            Vector3::new(x - half_width, y, z - half_width),
+            Vector3::new(x + half_width, y + height, z + half_width),
+        );
+
+        // Check if the space is empty (no block collisions)
+        if !world.is_space_empty(player_box).await {
+            return None;
+        }
+
+        Some(spawn_pos)
     }
 
     pub async fn sleep(&self, bed_head_pos: BlockPos) {
@@ -868,7 +1160,7 @@ impl Player {
             .expect("Player waking up should have it's respawn point set on the bed.");
 
         let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position).await;
-        BedBlock::set_occupied(false, world, bed, &respawn_point.position, bed_state).await;
+        BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
 
         self.living_entity
             .entity
@@ -1063,7 +1355,7 @@ impl Player {
             } else {
                 self.continue_mining(
                     *pos,
-                    world,
+                    &world,
                     state,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
@@ -1084,8 +1376,22 @@ impl Player {
         // Timeout/keep alive handling
         self.tick_client_load_timeout();
 
-        // TODO This should only be handled by the ClientPlatform
+        // Idle timeout handling
         let now = Instant::now();
+        let idle_timeout_minutes = server.player_idle_timeout.load(Ordering::Relaxed);
+        if idle_timeout_minutes > 0 {
+            let idle_duration = now.duration_since(self.last_action_time.load());
+            if idle_duration >= Duration::from_secs(idle_timeout_minutes as u64 * 60) {
+                self.kick(
+                    DisconnectReason::KickedForIdle,
+                    TextComponent::translate("multiplayer.disconnect.idling", []),
+                )
+                .await;
+                return;
+            }
+        }
+
+        // TODO This should only be handled by the ClientPlatform
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
             if matches!(self.client, ClientPlatform::Bedrock(_)) {
                 return;
@@ -1173,8 +1479,8 @@ impl Player {
         self.living_entity.entity.entity_id
     }
 
-    pub fn world(&self) -> &Arc<World> {
-        &self.living_entity.entity.world
+    pub fn world(&self) -> Arc<World> {
+        self.living_entity.entity.world.load_full()
     }
 
     pub fn position(&self) -> Vector3<f64> {
@@ -1243,8 +1549,6 @@ impl Player {
                         ability_value |= 1 << (ability as u32);
                     }
                 };
-                dbg!(abilities.allow_flying);
-                dbg!(abilities.flying);
 
                 // Base Permissions
                 set_ability(Ability::MayFly, abilities.allow_flying);
@@ -1322,7 +1626,7 @@ impl Player {
     /// Sets the player's difficulty level.
     pub async fn send_difficulty_update(&self) {
         let world = self.world();
-        let level_info = world.level_info.read().await;
+        let level_info = world.level_info.load();
         self.client
             .enqueue_packet(&CChangeDifficulty::new(
                 level_info.difficulty as u8,
@@ -1366,7 +1670,7 @@ impl Player {
         }
     }
 
-    async fn unload_watched_chunks(&self, world: &World) {
+    pub async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
@@ -1391,9 +1695,9 @@ impl Player {
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
-        let current_world = self.living_entity.entity.world.clone();
-        let yaw = yaw.unwrap_or(new_world.level_info.read().await.spawn_yaw);
-        let pitch = pitch.unwrap_or(new_world.level_info.read().await.spawn_pitch);
+        let current_world = self.living_entity.entity.world.load_full();
+        let yaw = yaw.unwrap_or(new_world.level_info.load().spawn_yaw);
+        let pitch = pitch.unwrap_or(new_world.level_info.load().spawn_pitch);
 
         let server = new_world.server.upgrade().unwrap();
 
@@ -1417,12 +1721,17 @@ impl Player {
                 let new_world = event.new_world;
 
                 self.set_client_loaded(false);
-                let uuid = self.gameprofile.id;
                 let player = current_world.remove_player(self, false).await.unwrap();
-                new_world.players.write().await.insert(uuid, player);
+               new_world.players.rcu(|current_list| {
+                    let mut new_list = (**current_list).clone();
+                    new_list.push(player.clone());
+                    new_list
+                });
                 self.unload_watched_chunks(&current_world).await;
 
-                self.chunk_manager.lock().await.change_world(&current_world.level, &new_world.level);
+                self.chunk_manager.lock().await.change_world(&current_world.level, new_world.clone());
+                // Update the entity's world reference for correct dimension-based operations
+                self.living_entity.entity.set_world(new_world.clone());
 
                 let last_pos = self.living_entity.entity.last_pos.load();
                 let death_dimension = ResourceLocation::from(self.world().dimension.minecraft_name);
@@ -1444,19 +1753,24 @@ impl Player {
                         VarInt(self.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                         new_world.sea_level.into(),
                         1,
-                    )).await
-                    ;
+                    )).await;
+
                 self.send_permission_lvl_update().await;
-                self.clone().request_teleport(position, yaw, pitch).await;
-                self.living_entity.entity.last_pos.store(position);
+
+                player.clone().request_teleport(position, yaw, pitch).await;
+                player.living_entity.entity.last_pos.store(position);
+
                 self.send_abilities_update().await;
+
                 self.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
                    self.get_inventory().get_selected_slot() as i8,
                 )).await;
+
                 self.on_screen_handler_opened(self.player_screen_handler.clone()).await;
+
                 self.send_health().await;
 
-                new_world.send_world_info(self, position, yaw, pitch).await;
+                new_world.send_world_info(&player, position, yaw, pitch).await;
             }
         }}
     }
@@ -1526,6 +1840,11 @@ impl Player {
         self.client.kick(reason, message).await;
     }
 
+    /// Updates the last action time to now. Call this on player actions like movement, chat, etc.
+    pub fn update_last_action_time(&self) {
+        self.last_action_time.store(std::time::Instant::now());
+    }
+
     pub fn can_food_heal(&self) -> bool {
         let health = self.living_entity.health.load();
         let max_health = 20.0; // TODO
@@ -1589,14 +1908,7 @@ impl Player {
         self.set_client_loaded(false);
         let block_pos = self.position().to_block_pos();
 
-        let keep_inventory = {
-            self.world()
-                .level_info
-                .read()
-                .await
-                .game_rules
-                .keep_inventory
-        };
+        let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
 
         if !keep_inventory {
             for item in &self.inventory().main_inventory {
@@ -1660,6 +1972,7 @@ impl Player {
                 self.living_entity
                     .entity
                     .world
+                    .load()
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
                         PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
                         &[pumpkin_protocol::java::client::play::Player {
@@ -1680,7 +1993,7 @@ impl Player {
 
     /// Send the player's skin layers and used hand to all players.
     pub async fn send_client_information(&self) {
-        let config = self.config.read().await;
+        let config = self.config.load();
         self.living_entity
             .entity
             .send_meta_data(&[
@@ -1717,7 +2030,7 @@ impl Player {
                 .has_effect(&StatusEffect::CONDUIT_POWER)
                 .await
         {
-            speed *= 1.0 + (self.get_haste_amplifier().await + 1) as f32 * 0.2;
+            speed *= ((self.get_haste_amplifier().await + 1) as f32).mul_add(0.2, 1.0);
         }
         // Fatigue
         if let Some(fatigue) = self
@@ -1776,7 +2089,7 @@ impl Player {
     pub async fn drop_item(&self, item_stack: ItemStack) {
         let item_pos = self.living_entity.entity.pos.load()
             + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
-        let entity = Entity::new(self.world().clone(), item_pos, &EntityType::ITEM);
+        let entity = Entity::new(self.world(), item_pos, &EntityType::ITEM);
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
         let yaw = f64::from(self.living_entity.entity.yaw.load()).to_radians();
@@ -1788,9 +2101,10 @@ impl Player {
         let l = 0.02 * rand::random::<f64>();
 
         let velocity = Vector3::new(
-            -yaw_sin * pitch_cos * 0.3 + horizontal_offset.cos() * l,
-            -pitch_sin * 0.3 + 0.1 + (rand::random::<f64>() - rand::random::<f64>()) * 0.1,
-            yaw_cos * pitch_cos * 0.3 + horizontal_offset.sin() * l,
+            (-yaw_sin * pitch_cos).mul_add(0.3, horizontal_offset.cos() * l),
+            (rand::random::<f64>() - rand::random::<f64>())
+                .mul_add(0.1, (-pitch_sin).mul_add(0.3, 0.1)),
+            (yaw_cos * pitch_cos).mul_add(0.3, horizontal_offset.sin() * l),
         );
 
         // TODO: Merge stacks together
@@ -2209,6 +2523,7 @@ impl Player {
     }
 
     pub async fn on_slot_click(&self, packet: SClickSlot) {
+        self.update_last_action_time();
         let screen_handler = self.current_screen_handler.lock().await;
         let mut screen_handler = screen_handler.lock().await;
         let behaviour = screen_handler.get_behaviour();
@@ -2571,7 +2886,7 @@ impl EntityBase for Player {
         world: Arc<World>,
     ) -> TeleportFuture {
         Box::pin(async move {
-            if Arc::ptr_eq(&world, self.world()) {
+            if Arc::ptr_eq(&world, &self.world()) {
                 // Same world
                 let yaw = yaw.unwrap_or(self.living_entity.entity.yaw.load());
                 let pitch = pitch.unwrap_or(self.living_entity.entity.pitch.load());
@@ -2590,6 +2905,7 @@ impl EntityBase for Player {
                         self.request_teleport(position, yaw, pitch).await;
                         entity
                             .world
+                            .load()
                             .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
                                 self.living_entity.entity.entity_id.into(),
                                 position,
@@ -2721,7 +3037,7 @@ impl Default for Abilities {
 }
 
 impl Abilities {
-    pub fn set_for_gamemode(&mut self, gamemode: GameMode) {
+    pub const fn set_for_gamemode(&mut self, gamemode: GameMode) {
         match gamemode {
             GameMode::Creative => {
                 // self.flying = false; // Start not flying
@@ -2745,13 +3061,27 @@ impl Abilities {
     }
 }
 
-/// Represents the player's respawn point.
+/// Represents the player's stored respawn point (bed/anchor/forced).
 #[derive(Copy, Debug, Clone, PartialEq)]
 pub struct RespawnPoint {
     pub dimension: Dimension,
     pub position: BlockPos,
     pub yaw: f32,
     pub force: bool,
+}
+
+/// Calculated respawn position ready for use.
+/// Returned by `calculate_respawn_point()`.
+#[derive(Debug, Clone)]
+pub struct CalculatedRespawnPoint {
+    /// The exact position to spawn at (centered in block).
+    pub position: Vector3<f64>,
+    /// The yaw rotation.
+    pub yaw: f32,
+    /// The pitch rotation.
+    pub pitch: f32,
+    /// The dimension to spawn in.
+    pub dimension: Dimension,
 }
 
 /// Represents the player's chat mode settings.
@@ -2799,7 +3129,7 @@ impl Default for ChatSession {
 
 impl ChatSession {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         session_id: Uuid,
         expires_at: i64,
         public_key: Box<[u8]>,

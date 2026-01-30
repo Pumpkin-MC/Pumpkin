@@ -61,7 +61,8 @@ impl fmt::Display for ServerInfo {
 }
 
 impl CUnconnectedPong {
-    pub fn new(time: u64, server_guid: u64, magic: [u8; 16], server_id: String) -> Self {
+    #[must_use]
+    pub const fn new(time: u64, server_guid: u64, magic: [u8; 16], server_id: String) -> Self {
         Self {
             time,
             server_guid,

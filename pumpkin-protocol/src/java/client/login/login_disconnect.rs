@@ -14,7 +14,8 @@ pub struct CLoginDisconnect {
 }
 
 impl CLoginDisconnect {
-    pub fn new(json_reason: String) -> Self {
+    #[must_use]
+    pub const fn new(json_reason: String) -> Self {
         Self { json_reason }
     }
 }

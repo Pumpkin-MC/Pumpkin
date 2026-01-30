@@ -2,14 +2,15 @@ use std::num::NonZeroU8;
 
 use pumpkin_util::math::vector2::Vector2;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Cylindrical {
     pub center: Vector2<i32>,
     pub view_distance: NonZeroU8,
 }
 
 impl Cylindrical {
-    pub fn new(center: Vector2<i32>, view_distance: NonZeroU8) -> Self {
+    #[must_use]
+    pub const fn new(center: Vector2<i32>, view_distance: NonZeroU8) -> Self {
         Self {
             center,
             view_distance,
@@ -17,8 +18,8 @@ impl Cylindrical {
     }
 
     pub fn for_each_changed_chunk(
-        old_cylindrical: Cylindrical,
-        new_cylindrical: Cylindrical,
+        old_cylindrical: Self,
+        new_cylindrical: Self,
         newly_included: &mut Vec<Vector2<i32>>,
         just_removed: &mut Vec<Vector2<i32>>,
     ) {
@@ -37,22 +38,23 @@ impl Cylindrical {
         }
     }
 
-    fn left(&self) -> i32 {
+    const fn left(&self) -> i32 {
         self.center.x - self.view_distance.get() as i32 - 1
     }
 
-    fn bottom(&self) -> i32 {
+    const fn bottom(&self) -> i32 {
         self.center.y - self.view_distance.get() as i32 - 1
     }
 
-    fn right(&self) -> i32 {
+    const fn right(&self) -> i32 {
         self.center.x + self.view_distance.get() as i32 + 1
     }
 
-    fn top(&self) -> i32 {
+    const fn top(&self) -> i32 {
         self.center.y + self.view_distance.get() as i32 + 1
     }
 
+    #[must_use]
     pub fn is_within_distance(&self, x: i32, z: i32) -> bool {
         if self.view_distance.get() == 1 {
             return false;
@@ -66,6 +68,7 @@ impl Cylindrical {
     }
 
     /// Returns an iterator of all chunks within this cylinder
+    #[must_use]
     pub fn all_chunks_within(&self) -> Vec<Vector2<i32>> {
         if self.view_distance.get() == 1 {
             return Vec::new();
@@ -102,7 +105,7 @@ mod test {
     use pumpkin_util::math::vector2::Vector2;
 
     #[test]
-    fn test_bounds() {
+    fn bounds() {
         let mut cylinder = Cylindrical::new(Vector2::new(0, 0), NonZeroU8::new(1).unwrap());
 
         for view_distance in 1..=32 {
@@ -133,9 +136,7 @@ mod test {
             let chunks = cylinder.all_chunks_within();
             let estimated_capacity = ((distance as usize + 3).pow(2) * 3167) >> 10;
 
-            if estimated_capacity < chunks.len() {
-                panic!()
-            }
+            assert!(estimated_capacity >= chunks.len(),);
         }
     }
 }

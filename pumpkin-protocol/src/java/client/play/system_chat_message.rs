@@ -12,7 +12,8 @@ pub struct CSystemChatMessage<'a> {
 }
 
 impl<'a> CSystemChatMessage<'a> {
-    pub fn new(content: &'a TextComponent, overlay: bool) -> Self {
+    #[must_use]
+    pub const fn new(content: &'a TextComponent, overlay: bool) -> Self {
         Self { content, overlay }
     }
 }

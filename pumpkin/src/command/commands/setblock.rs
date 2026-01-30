@@ -25,6 +25,9 @@ enum Mode {
 
     /// default; without particles
     Replace,
+
+    /// places block without triggering updates around it
+    Strict,
 }
 
 struct Executor(Mode);
@@ -43,7 +46,7 @@ impl CommandExecutor for Executor {
             let mode = self.0;
             let world = match sender {
                 CommandSender::Console | CommandSender::Rcon(_) => {
-                    let guard = server.worlds.read().await;
+                    let guard = server.worlds.load();
 
                     guard
                         .first()
@@ -53,6 +56,14 @@ impl CommandExecutor for Executor {
                 CommandSender::Player(player) => player.world().clone(),
                 CommandSender::CommandBlock(_, w) => w.clone(),
             };
+
+            if !world.is_in_build_limit(pos) {
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "argument.pos.outofbounds",
+                    [],
+                )));
+            }
+
             let success = match mode {
                 Mode::Destroy => {
                     world
@@ -93,24 +104,36 @@ impl CommandExecutor for Executor {
                         false
                     }
                 }
+                Mode::Strict => {
+                    world
+                        .set_block_state(
+                            &pos,
+                            block_state_id,
+                            BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                        )
+                        .await;
+                    true
+                }
             };
 
-            sender
-                .send_message(if success {
-                    TextComponent::translate(
+            if success {
+                sender
+                    .send_message(TextComponent::translate(
                         "commands.setblock.success",
                         [
                             TextComponent::text(pos.0.x.to_string()),
                             TextComponent::text(pos.0.y.to_string()),
                             TextComponent::text(pos.0.z.to_string()),
                         ],
-                    )
-                } else {
-                    TextComponent::translate("commands.setblock.failed", [])
-                })
-                .await;
-
-            Ok(())
+                    ))
+                    .await;
+                Ok(())
+            } else {
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.setblock.failed",
+                    [],
+                )))
+            }
         })
     }
 }
@@ -122,6 +145,7 @@ pub fn init_command_tree() -> CommandTree {
                 .then(literal("replace").execute(Executor(Mode::Replace)))
                 .then(literal("destroy").execute(Executor(Mode::Destroy)))
                 .then(literal("keep").execute(Executor(Mode::Keep)))
+                .then(literal("strict").execute(Executor(Mode::Strict)))
                 .execute(Executor(Mode::Replace)),
         ),
     )

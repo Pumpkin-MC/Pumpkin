@@ -52,35 +52,43 @@ pub enum PistonBehavior {
 }
 
 impl BlockState {
+    #[must_use]
     pub const fn is_air(&self) -> bool {
         self.state_flags & IS_AIR != 0
     }
 
+    #[must_use]
     pub const fn burnable(&self) -> bool {
         self.state_flags & BURNABLE != 0
     }
 
+    #[must_use]
     pub const fn tool_required(&self) -> bool {
         self.state_flags & TOOL_REQUIRED != 0
     }
 
+    #[must_use]
     pub const fn sided_transparency(&self) -> bool {
         self.state_flags & SIDED_TRANSPARENCY != 0
     }
 
+    #[must_use]
     pub const fn replaceable(&self) -> bool {
         self.state_flags & REPLACEABLE != 0
     }
 
+    #[must_use]
     pub const fn is_liquid(&self) -> bool {
         self.state_flags & IS_LIQUID != 0
     }
 
     /// Returns the legacy value for whether a block is solid.
+    #[must_use]
     pub const fn is_solid(&self) -> bool {
         self.state_flags & IS_SOLID != 0
     }
 
+    #[must_use]
     pub const fn is_full_cube(&self) -> bool {
         self.state_flags & IS_FULL_CUBE != 0
     }
@@ -88,15 +96,18 @@ impl BlockState {
     /// Returns whether the block is solid.
     /// Solid blocks conduct redstone and block redstone wire.
     /// Non-solid blocks don't allow redstone wire on top to propagate their signal downwards in java.
+    #[must_use]
     pub const fn is_solid_block(&self) -> bool {
         self.state_flags & IS_SOLID_BLOCK != 0
     }
 
+    #[must_use]
     pub const fn has_random_ticks(&self) -> bool {
         self.state_flags & HAS_RANDOM_TICKS != 0
     }
 
-    ///isSideSolidFullSquare() in Java!
+    ///`isSideSolidFullSquare()` in Java!
+    #[must_use]
     pub const fn is_side_solid(&self, side: BlockDirection) -> bool {
         match side {
             BlockDirection::Down => self.side_flags & DOWN_SIDE_SOLID != 0,
@@ -110,6 +121,7 @@ impl BlockState {
 
     ///isSideSolid(..., Direction.UP, SideShapeType.CENTER) in Java!
     ///Only valid for UP and DOWN sides
+    #[must_use]
     pub const fn is_center_solid(&self, side: BlockDirection) -> bool {
         match side {
             BlockDirection::Down => self.side_flags & DOWN_CENTER_SOLID != 0,
@@ -118,17 +130,16 @@ impl BlockState {
         }
     }
 
+    #[must_use]
     pub fn is_waterlogged(&self) -> bool {
         let block = Block::from_state_id(self.id);
 
-        if let Some(props) = block.properties(self.id) {
+        block.properties(self.id).is_some_and(|props| {
             props
                 .to_props()
                 .iter()
                 .any(|(k, v)| k == &"waterlogged" && v == &"true")
-        } else {
-            false
-        }
+        })
     }
 
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = CollisionShape> + '_ {
@@ -143,14 +154,9 @@ impl BlockState {
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize]);
 
-        let water_shape = if self.is_waterlogged() {
-            Some(CollisionShape::new(
-                Vector3::new(0.0, 0.0, 0.0),
-                Vector3::new(1.0, 0.875, 1.0),
-            ))
-        } else {
-            None
-        };
+        let water_shape = self.is_waterlogged().then(|| {
+            CollisionShape::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0))
+        });
 
         base_shapes.chain(water_shape)
     }

@@ -161,7 +161,7 @@ impl ScreenHandler for GenericContainerScreenHandler {
                 // Re-acquire lock for insert_item (which expects &mut ItemStack)
                 let mut slot_stack_mut = slot_stack_lock.lock().await;
 
-                if slot_index < (self.rows * 9) as i32 {
+                if slot_index < i32::from(self.rows * 9) {
                     // Move from inventory to player area (end)
                     if !self
                         .insert_item(

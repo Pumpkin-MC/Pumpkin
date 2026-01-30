@@ -19,7 +19,7 @@ use pumpkin_world::{
     BlockStateId,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::Rng;
+use rand::RngExt;
 
 type StemProperties = WheatLikeProperties;
 type AttachedStemProperties = WallTorchLikeProperties;

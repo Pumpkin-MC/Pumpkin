@@ -46,7 +46,7 @@ pub fn cancellable(_args: TokenStream, input: TokenStream) -> TokenStream {
             if fields
                 .named
                 .iter()
-                .any(|f| f.ident.as_ref().map(|i| i == "cancelled").unwrap_or(false))
+                .any(|f| f.ident.as_ref().is_some_and(|i| i == "cancelled"))
             {
                 abort!(fields.span(), "Struct already has a `cancelled` field");
             }
@@ -199,13 +199,10 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     let arg_value = arg_lit.value();
 
     let block_name = arg_value.strip_prefix("minecraft:").unwrap_or(&arg_value);
-    let block = match Block::from_name(block_name) {
-        Some(b) => b,
-        None => {
-            return syn::Error::new(arg_lit.span(), "Invalid block name")
-                .to_compile_error()
-                .into();
-        }
+    let Some(block) = Block::from_name(block_name) else {
+        return syn::Error::new(arg_lit.span(), "Invalid block name")
+            .to_compile_error()
+            .into();
     };
     let block_id = block.id;
 
@@ -239,16 +236,10 @@ pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStre
 
     let full_tag = arg_lit.value();
 
-    let values = match get_tag_ids(RegistryKey::Block, &full_tag) {
-        Some(v) => v,
-        None => {
-            return syn::Error::new(
-                arg_lit.span(),
-                format!("Failed to get tag IDs: {}", full_tag),
-            )
+    let Some(values) = get_tag_ids(RegistryKey::Block, &full_tag) else {
+        return syn::Error::new(arg_lit.span(), format!("Failed to get tag IDs: {full_tag}"))
             .to_compile_error()
             .into();
-        }
     };
 
     let expanded = quote! {
@@ -522,7 +513,7 @@ fn check_serial_attributes(attrs: &[Attribute]) -> (bool, bool) {
     let mut is_big_endian = false;
     let mut no_prefix = false;
 
-    for attr in attrs.iter() {
+    for attr in attrs {
         if attr.path().is_ident("serial") {
             let _ = attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("big_endian") {
@@ -545,8 +536,7 @@ fn is_vec(ty: &Type) -> bool {
             .segments
             .iter()
             .last()
-            .map(|segment| segment.ident == "Vec")
-            .unwrap_or(false)
+            .is_some_and(|segment| segment.ident == "Vec")
     } else {
         false
     }

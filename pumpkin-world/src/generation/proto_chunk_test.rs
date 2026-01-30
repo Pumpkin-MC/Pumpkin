@@ -22,7 +22,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_only_cell_cache() {
+    fn no_blend_no_beard_only_cell_cache() {
         // We say no wrapper, but it technically has a top-level cell cache
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_only_cell_cache_0_0.chunk");
@@ -80,7 +80,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_only_cell_2d_cache() {
+    fn no_blend_no_beard_only_cell_2d_cache() {
         // it technically has a top-level cell cache
         // should be the same as only cell_cache
         let expected_data: Vec<u16> =
@@ -140,7 +140,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_only_cell_flat_cache() {
+    fn no_blend_no_beard_only_cell_flat_cache() {
         // it technically has a top-level cell cache
         let expected_data: Vec<u16> = read_data_from_file!(
             "../../assets/no_blend_no_beard_only_cell_cache_flat_cache_0_0.chunk"
@@ -200,7 +200,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_only_cell_once_cache() {
+    fn no_blend_no_beard_only_cell_once_cache() {
         // it technically has a top-level cell cache
         let expected_data: Vec<u16> = read_data_from_file!(
             "../../assets/no_blend_no_beard_only_cell_cache_once_cache_0_0.chunk"
@@ -260,7 +260,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_only_cell_interpolated() {
+    fn no_blend_no_beard_only_cell_interpolated() {
         // it technically has a top-level cell cache
         let expected_data: Vec<u16> = read_data_from_file!(
             "../../assets/no_blend_no_beard_only_cell_cache_interpolated_0_0.chunk"
@@ -320,7 +320,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard() {
+    fn no_blend_no_beard() {
         let _expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_0_0.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -342,7 +342,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_aquifer() {
+    fn no_blend_no_beard_aquifer() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_7_4.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -366,7 +366,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_badlands() {
+    fn no_blend_no_beard_badlands() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_-595_544.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -395,7 +395,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_frozen_ocean() {
+    fn no_blend_no_beard_frozen_ocean() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_-119_183.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -424,7 +424,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_badlands2() {
+    fn no_blend_no_beard_badlands2() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_13579_-6_11.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -453,7 +453,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_badlands3() {
+    fn no_blend_no_beard_badlands3() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_13579_-2_15.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -482,7 +482,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_surface() {
+    fn no_blend_no_beard_surface() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_surface_0_0.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -514,7 +514,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_surface_badlands() {
+    fn no_blend_no_beard_surface_badlands() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_surface_badlands_-595_544.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -546,7 +546,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_surface_badlands2() {
+    fn no_blend_no_beard_surface_badlands2() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_surface_13579_-6_11.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -579,7 +579,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_surface_badlands3() {
+    fn no_blend_no_beard_surface_badlands3() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_surface_13579_-7_9.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -613,7 +613,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_surface_biome_blend() {
+    fn no_blend_no_beard_surface_biome_blend() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_surface_13579_-2_15.chunk");
         let surface_config = GENERATION_SETTINGS
@@ -647,7 +647,7 @@ mod test {
 
     #[test]
     #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard_surface_frozen_ocean() {
+    fn no_blend_no_beard_surface_frozen_ocean() {
         let expected_data: Vec<u16> = read_data_from_file!(
             "../../assets/no_blend_no_beard_surface_frozen_ocean_-119_183.chunk"
         );

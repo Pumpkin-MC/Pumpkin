@@ -27,7 +27,7 @@ impl From<MathAxis> for Axis {
     }
 }
 impl From<Axis> for MathAxis {
-    fn from(a: Axis) -> MathAxis {
+    fn from(a: Axis) -> Self {
         match a {
             Axis::X => Self::X,
             Axis::Y => Self::Y,
@@ -55,17 +55,19 @@ impl TryFrom<i32> for BlockDirection {
 }
 
 impl BlockDirection {
+    #[must_use]
     pub fn to_index(&self) -> u8 {
         match self {
-            BlockDirection::Down => 0,
-            BlockDirection::Up => 1,
-            BlockDirection::North => 2,
-            BlockDirection::South => 3,
-            BlockDirection::West => 4,
-            BlockDirection::East => 5,
+            Self::Down => 0,
+            Self::Up => 1,
+            Self::North => 2,
+            Self::South => 3,
+            Self::West => 4,
+            Self::East => 5,
         }
     }
 
+    #[must_use]
     pub fn from_index(index: u8) -> Option<Self> {
         match index {
             0 => Some(Self::Down),
@@ -86,176 +88,173 @@ impl BlockDirection {
         Self::horizontal()[random.next_bounded_i32(Self::horizontal().len() as i32 - 1) as usize]
     }
 
+    #[must_use]
     pub fn by_index(index: usize) -> Option<Self> {
-        Self::all().get(index % Self::all().len()).cloned()
+        Self::all().get(index % Self::all().len()).copied()
     }
 
+    #[must_use]
     pub fn to_offset(&self) -> Vector3<i32> {
         match self {
-            BlockDirection::Down => (0, -1, 0),
-            BlockDirection::Up => (0, 1, 0),
-            BlockDirection::North => (0, 0, -1),
-            BlockDirection::South => (0, 0, 1),
-            BlockDirection::West => (-1, 0, 0),
-            BlockDirection::East => (1, 0, 0),
+            Self::Down => (0, -1, 0),
+            Self::Up => (0, 1, 0),
+            Self::North => (0, 0, -1),
+            Self::South => (0, 0, 1),
+            Self::West => (-1, 0, 0),
+            Self::East => (1, 0, 0),
         }
         .into()
     }
 
-    pub fn opposite(&self) -> BlockDirection {
+    #[must_use]
+    pub fn opposite(&self) -> Self {
         match self {
-            BlockDirection::Down => BlockDirection::Up,
-            BlockDirection::Up => BlockDirection::Down,
-            BlockDirection::North => BlockDirection::South,
-            BlockDirection::South => BlockDirection::North,
-            BlockDirection::West => BlockDirection::East,
-            BlockDirection::East => BlockDirection::West,
+            Self::Down => Self::Up,
+            Self::Up => Self::Down,
+            Self::North => Self::South,
+            Self::South => Self::North,
+            Self::West => Self::East,
+            Self::East => Self::West,
         }
     }
 
+    #[must_use]
     pub fn positive(&self) -> bool {
         matches!(self, Self::South | Self::East | Self::Up)
     }
 
-    pub fn all() -> [BlockDirection; 6] {
+    #[must_use]
+    pub fn all() -> [Self; 6] {
         [
-            BlockDirection::Down,
-            BlockDirection::Up,
-            BlockDirection::North,
-            BlockDirection::South,
-            BlockDirection::West,
-            BlockDirection::East,
+            Self::Down,
+            Self::Up,
+            Self::North,
+            Self::South,
+            Self::West,
+            Self::East,
         ]
     }
-    pub fn update_order() -> [BlockDirection; 6] {
+    #[must_use]
+    pub fn update_order() -> [Self; 6] {
         [
-            BlockDirection::West,
-            BlockDirection::East,
-            BlockDirection::Down,
-            BlockDirection::Up,
-            BlockDirection::North,
-            BlockDirection::South,
-        ]
-    }
-
-    pub fn abstract_block_update_order() -> [BlockDirection; 6] {
-        [
-            BlockDirection::West,
-            BlockDirection::East,
-            BlockDirection::North,
-            BlockDirection::South,
-            BlockDirection::Down,
-            BlockDirection::Up,
+            Self::West,
+            Self::East,
+            Self::Down,
+            Self::Up,
+            Self::North,
+            Self::South,
         ]
     }
 
-    pub fn horizontal() -> [BlockDirection; 4] {
+    #[must_use]
+    pub fn abstract_block_update_order() -> [Self; 6] {
         [
-            BlockDirection::North,
-            BlockDirection::South,
-            BlockDirection::West,
-            BlockDirection::East,
+            Self::West,
+            Self::East,
+            Self::North,
+            Self::South,
+            Self::Down,
+            Self::Up,
         ]
     }
 
-    pub fn flow_directions() -> [BlockDirection; 5] {
-        [
-            BlockDirection::Down,
-            BlockDirection::North,
-            BlockDirection::South,
-            BlockDirection::West,
-            BlockDirection::East,
-        ]
+    #[must_use]
+    pub fn horizontal() -> [Self; 4] {
+        [Self::North, Self::South, Self::West, Self::East]
     }
 
+    #[must_use]
+    pub fn flow_directions() -> [Self; 5] {
+        [Self::Down, Self::North, Self::South, Self::West, Self::East]
+    }
+
+    #[must_use]
     pub fn is_horizontal(&self) -> bool {
-        matches!(
-            self,
-            BlockDirection::North
-                | BlockDirection::South
-                | BlockDirection::West
-                | BlockDirection::East
-        )
+        matches!(self, Self::North | Self::South | Self::West | Self::East)
     }
 
-    pub fn vertical() -> [BlockDirection; 2] {
-        [BlockDirection::Down, BlockDirection::Up]
+    #[must_use]
+    pub fn vertical() -> [Self; 2] {
+        [Self::Down, Self::Up]
     }
 
+    #[must_use]
     pub fn to_horizontal_facing(&self) -> Option<HorizontalFacing> {
         match self {
-            BlockDirection::North => Some(HorizontalFacing::North),
-            BlockDirection::South => Some(HorizontalFacing::South),
-            BlockDirection::West => Some(HorizontalFacing::West),
-            BlockDirection::East => Some(HorizontalFacing::East),
+            Self::North => Some(HorizontalFacing::North),
+            Self::South => Some(HorizontalFacing::South),
+            Self::West => Some(HorizontalFacing::West),
+            Self::East => Some(HorizontalFacing::East),
             _ => None,
         }
     }
 
+    #[must_use]
     pub fn to_horizontal_axis(&self) -> Option<HorizontalAxis> {
         match self {
-            BlockDirection::North | BlockDirection::South => Some(HorizontalAxis::Z),
-            BlockDirection::West | BlockDirection::East => Some(HorizontalAxis::X),
+            Self::North | Self::South => Some(HorizontalAxis::Z),
+            Self::West | Self::East => Some(HorizontalAxis::X),
             _ => None,
         }
     }
 
+    #[must_use]
     pub fn to_cardinal_direction(&self) -> HorizontalFacing {
         match self {
-            BlockDirection::North => HorizontalFacing::North,
-            BlockDirection::South => HorizontalFacing::South,
-            BlockDirection::West => HorizontalFacing::West,
-            BlockDirection::East => HorizontalFacing::East,
+            Self::South => HorizontalFacing::South,
+            Self::West => HorizontalFacing::West,
+            Self::East => HorizontalFacing::East,
             _ => HorizontalFacing::North,
         }
     }
 
-    pub fn from_cardinal_direction(direction: HorizontalFacing) -> BlockDirection {
+    #[must_use]
+    pub fn from_cardinal_direction(direction: HorizontalFacing) -> Self {
         match direction {
-            HorizontalFacing::North => BlockDirection::North,
-            HorizontalFacing::South => BlockDirection::South,
-            HorizontalFacing::West => BlockDirection::West,
-            HorizontalFacing::East => BlockDirection::East,
+            HorizontalFacing::North => Self::North,
+            HorizontalFacing::South => Self::South,
+            HorizontalFacing::West => Self::West,
+            HorizontalFacing::East => Self::East,
         }
     }
+    #[must_use]
     pub fn to_axis(&self) -> Axis {
         match self {
-            BlockDirection::North | BlockDirection::South => Axis::Z,
-            BlockDirection::West | BlockDirection::East => Axis::X,
-            BlockDirection::Up | BlockDirection::Down => Axis::Y,
+            Self::North | Self::South => Axis::Z,
+            Self::West | Self::East => Axis::X,
+            Self::Up | Self::Down => Axis::Y,
         }
     }
 
+    #[must_use]
     pub fn to_facing(&self) -> Facing {
         match self {
-            BlockDirection::North => Facing::North,
-            BlockDirection::South => Facing::South,
-            BlockDirection::West => Facing::West,
-            BlockDirection::East => Facing::East,
-            BlockDirection::Up => Facing::Up,
-            BlockDirection::Down => Facing::Down,
+            Self::North => Facing::North,
+            Self::South => Facing::South,
+            Self::West => Facing::West,
+            Self::East => Facing::East,
+            Self::Up => Facing::Up,
+            Self::Down => Facing::Down,
         }
     }
 
-    pub fn rotate_clockwise(&self) -> BlockDirection {
+    #[must_use]
+    pub fn rotate_clockwise(&self) -> Self {
         match self {
-            BlockDirection::North => BlockDirection::East,
-            BlockDirection::East => BlockDirection::South,
-            BlockDirection::South => BlockDirection::West,
-            BlockDirection::West => BlockDirection::North,
-            BlockDirection::Up => BlockDirection::East,
-            BlockDirection::Down => BlockDirection::West,
+            Self::East => Self::South,
+            Self::West => Self::North,
+            Self::Up | Self::North => Self::East,
+            Self::Down | Self::South => Self::West,
         }
     }
 
-    pub fn rotate_counter_clockwise(&self) -> BlockDirection {
+    #[must_use]
+    pub fn rotate_counter_clockwise(&self) -> Self {
         match self {
-            BlockDirection::North => BlockDirection::West,
-            BlockDirection::West => BlockDirection::South,
-            BlockDirection::South => BlockDirection::East,
-            BlockDirection::East => BlockDirection::North,
-            BlockDirection::Up => BlockDirection::West,
-            BlockDirection::Down => BlockDirection::East,
+            Self::West => Self::South,
+            Self::East => Self::North,
+            Self::Up | Self::North => Self::West,
+            Self::Down | Self::South => Self::East,
         }
     }
 }

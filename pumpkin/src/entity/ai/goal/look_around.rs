@@ -2,7 +2,7 @@ use std::f64::consts::TAU;
 
 use super::{Controls, Goal};
 use crate::entity::{ai::goal::GoalFuture, mob::Mob};
-use rand::Rng;
+use rand::RngExt;
 
 pub struct LookAroundGoal {
     goal_control: Controls,

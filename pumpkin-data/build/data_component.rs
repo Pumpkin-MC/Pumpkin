@@ -22,7 +22,7 @@ pub(crate) fn build() -> TokenStream {
         let strip_name = raw_name
             .strip_prefix("minecraft:")
             .unwrap()
-            .replace("/", "_");
+            .replace('/', "_");
         let pascal_case = format_ident!("{}", strip_name.to_pascal_case());
 
         // Enum variant

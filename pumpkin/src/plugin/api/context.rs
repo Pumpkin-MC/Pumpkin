@@ -83,8 +83,9 @@ impl Context {
     ///
     /// # Returns
     /// An optional reference to the player if found, or `None` if not.
-    pub async fn get_player_by_name(&self, player_name: String) -> Option<Arc<Player>> {
-        self.server.get_player_by_name(&player_name).await
+    #[must_use]
+    pub fn get_player_by_name(&self, player_name: &str) -> Option<Arc<Player>> {
+        self.server.get_player_by_name(player_name)
     }
 
     /// Registers a service with the plugin context.
@@ -166,8 +167,8 @@ impl Context {
             dispatcher_lock.register(tree, full_permission_node);
         };
 
-        for world in self.server.worlds.read().await.iter() {
-            for player in world.players.read().await.values() {
+        for world in self.server.worlds.load().iter() {
+            for player in world.players.load().iter() {
                 let command_dispatcher = self.server.command_dispatcher.read().await;
                 client_suggestions::send_c_commands_packet(
                     player,
@@ -189,8 +190,8 @@ impl Context {
             dispatcher_lock.unregister(name);
         };
 
-        for world in self.server.worlds.read().await.iter() {
-            for player in world.players.read().await.values() {
+        for world in self.server.worlds.load().iter() {
+            for player in world.players.load().iter() {
                 let command_dispatcher = self.server.command_dispatcher.read().await;
                 client_suggestions::send_c_commands_packet(
                     player,
@@ -223,7 +224,7 @@ impl Context {
         let permission_manager = self.permission_manager.read().await;
 
         // If the player isn't online, we need to find their op level
-        let player_op_level = (self.server.get_player_by_uuid(*player_uuid).await)
+        let player_op_level = (self.server.get_player_by_uuid(*player_uuid))
             .map_or(PermissionLvl::Zero, |player| player.permission_lvl.load());
 
         permission_manager

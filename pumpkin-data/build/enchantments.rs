@@ -37,17 +37,17 @@ pub enum AttributeModifierSlot {
 impl AttributeModifierSlot {
     pub fn to_tokens(&self) -> TokenStream {
         match self {
-            AttributeModifierSlot::Any => quote! { AttributeModifierSlot::Any },
-            AttributeModifierSlot::MainHand => quote! { AttributeModifierSlot::MainHand },
-            AttributeModifierSlot::OffHand => quote! { AttributeModifierSlot::OffHand },
-            AttributeModifierSlot::Hand => quote! { AttributeModifierSlot::Hand },
-            AttributeModifierSlot::Feet => quote! { AttributeModifierSlot::Feet },
-            AttributeModifierSlot::Legs => quote! { AttributeModifierSlot::Legs },
-            AttributeModifierSlot::Chest => quote! { AttributeModifierSlot::Chest },
-            AttributeModifierSlot::Head => quote! { AttributeModifierSlot::Head },
-            AttributeModifierSlot::Armor => quote! { AttributeModifierSlot::Armor },
-            AttributeModifierSlot::Body => quote! { AttributeModifierSlot::Body },
-            AttributeModifierSlot::Saddle => quote! { AttributeModifierSlot::Saddle },
+            Self::Any => quote! { AttributeModifierSlot::Any },
+            Self::MainHand => quote! { AttributeModifierSlot::MainHand },
+            Self::OffHand => quote! { AttributeModifierSlot::OffHand },
+            Self::Hand => quote! { AttributeModifierSlot::Hand },
+            Self::Feet => quote! { AttributeModifierSlot::Feet },
+            Self::Legs => quote! { AttributeModifierSlot::Legs },
+            Self::Chest => quote! { AttributeModifierSlot::Chest },
+            Self::Head => quote! { AttributeModifierSlot::Head },
+            Self::Armor => quote! { AttributeModifierSlot::Armor },
+            Self::Body => quote! { AttributeModifierSlot::Body },
+            Self::Saddle => quote! { AttributeModifierSlot::Saddle },
         }
     }
 }
@@ -63,7 +63,7 @@ pub(crate) fn build() -> TokenStream {
     let mut name_to_type = TokenStream::new();
     let mut id_to_type = TokenStream::new();
 
-    for (name, enchantment) in enchantments.into_iter() {
+    for (name, enchantment) in enchantments {
         let id = enchantment.id;
         let raw_name = name.strip_prefix("minecraft:").unwrap();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
@@ -74,13 +74,12 @@ pub(crate) fn build() -> TokenStream {
                 .supported_items
                 .strip_prefix("#")
                 .unwrap()
-                .replace(":", "_")
-                .replace("/", "_")
+                .replace([':', '/'], "_")
                 .to_uppercase()
         );
         let max_level = enchantment.max_level;
         let slots = enchantment.slots;
-        let slots = slots.iter().map(|slot| slot.to_tokens());
+        let slots = slots.iter().map(AttributeModifierSlot::to_tokens);
         let Translate { translate, with: _ } = &enchantment.description.0.content else {
             panic!()
         };
@@ -92,8 +91,7 @@ pub(crate) fn build() -> TokenStream {
                 exclusive_set
                     .strip_prefix("#")
                     .unwrap()
-                    .replace(":", "_")
-                    .replace("/", "_")
+                    .replace([':', '/'], "_")
                     .to_uppercase()
             );
             variants.extend([quote! {

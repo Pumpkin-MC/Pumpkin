@@ -46,10 +46,11 @@ pub enum DecryptionReader<R: AsyncRead + Unpin> {
 }
 
 impl<R: AsyncRead + Unpin> DecryptionReader<R> {
+    #[must_use]
     pub fn upgrade(self, cipher: Aes128Cfb8Dec) -> Self {
         match self {
             Self::None(stream) => Self::Decrypt(Box::new(StreamDecryptor::new(cipher, stream))),
-            _ => panic!("Cannot upgrade a stream that already has a cipher!"),
+            Self::Decrypt(_) => panic!("Cannot upgrade a stream that already has a cipher!"),
         }
     }
 }
@@ -75,7 +76,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
 }
 
 /// Decoder: Client -> Server
-/// Supports ZLib decoding/decompression
+/// Supports `ZLib` decoding/decompression
 /// Supports Aes128 Encryption
 pub struct UDPNetworkDecoder {
     compression: Option<CompressionThreshold>,
@@ -88,16 +89,17 @@ impl Default for UDPNetworkDecoder {
 }
 
 impl UDPNetworkDecoder {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self { compression: None }
     }
 
-    pub fn set_compression(&mut self, threshold: CompressionThreshold) {
+    pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
-    pub fn set_encryption(&mut self, _key: &[u8; 16]) {
+    pub const fn set_encryption(&mut self, _key: &[u8; 16]) {
         // if matches!(self.reader, DecryptionReader::Decrypt(_)) {
         //     panic!("Cannot upgrade a stream that already has a cipher!");
         // }
@@ -105,6 +107,7 @@ impl UDPNetworkDecoder {
         // take_mut::take(&mut self.reader, |decoder| decoder.upgrade(cipher));
     }
 
+    #[expect(clippy::unused_async)]
     pub async fn get_packet_payload(
         &mut self,
         reader: Cursor<Vec<u8>>,
@@ -118,7 +121,7 @@ impl UDPNetworkDecoder {
         Ok(reader.into_inner().into())
     }
 
-    pub async fn get_game_packet(
+    pub fn get_game_packet(
         &mut self,
         mut reader: Cursor<Vec<u8>>,
     ) -> Result<RawPacket, PacketDecodeError> {
@@ -134,7 +137,7 @@ impl UDPNetworkDecoder {
             err => PacketDecodeError::MalformedLength(err.to_string()),
         })?;
 
-        let packet_len = packet_len.0 as u64;
+        let packet_len = u64::from(packet_len.0);
 
         let var_header = VarUInt::decode(&mut reader)?;
 
@@ -148,10 +151,10 @@ impl UDPNetworkDecoder {
         // SubClient Target ID (2 bits)
 
         // SubClient Target ID: Lowest 2 bits
-        let _sub_client_target = (header >> 10 & 0b11) as u8;
+        // let _sub_client_target = (header >> 10 & 0b11) as u8;
 
         // SubClient Sender ID: Next 2 bits (bits 2 and 3)
-        let _sub_client_sender = (header >> 12 & 0b11) as u8;
+        // let _sub_client_sender = (header >> 12 & 0b11) as u8;
 
         // Gamepacket ID: Remaining 10 bits (bits 4 to 13)
         let gamepacket_id = (header & 0x3FF) as u16; // 0x3FF is 10 bits set to 1
@@ -161,7 +164,7 @@ impl UDPNetworkDecoder {
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
         Ok(RawPacket {
-            id: gamepacket_id as i32,
+            id: i32::from(gamepacket_id),
             payload: payload.into(),
         })
     }

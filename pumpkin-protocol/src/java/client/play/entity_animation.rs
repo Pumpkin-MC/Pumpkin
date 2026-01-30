@@ -19,7 +19,8 @@ pub struct CEntityAnimation {
 }
 
 impl CEntityAnimation {
-    pub fn new(entity_id: VarInt, animation: Animation) -> Self {
+    #[must_use]
+    pub const fn new(entity_id: VarInt, animation: Animation) -> Self {
         Self {
             entity_id,
             animation: animation as u8,

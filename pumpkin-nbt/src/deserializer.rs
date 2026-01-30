@@ -1,7 +1,10 @@
 use std::cell::RefCell;
 use std::io::{Seek, SeekFrom};
 
-use crate::*;
+use crate::{
+    BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, END_ID, Error, INT_ARRAY_ID, INT_ID, LIST_ID,
+    LONG_ARRAY_ID, LONG_ID, NbtTag, get_nbt_string, io,
+};
 use io::Read;
 use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, forward_to_deserialize_any};
@@ -13,7 +16,7 @@ thread_local! {
 }
 
 pub(super) fn take_curr_visitor_seq_list_id() -> Option<u8> {
-    CURR_VISITOR_LIST_TYPE.with(|cell| cell.take())
+    CURR_VISITOR_LIST_TYPE.with(std::cell::RefCell::take)
 }
 
 pub(super) fn set_curr_visitor_seq_list_id(tag: Option<u8>) {
@@ -27,7 +30,7 @@ pub struct NbtReadHelper<R: Read + Seek> {
 }
 
 impl<R: Read + Seek> NbtReadHelper<R> {
-    pub fn new(r: R) -> Self {
+    pub const fn new(r: R) -> Self {
         Self { reader: r }
     }
 }
@@ -84,8 +87,8 @@ pub struct Deserializer<R: Read + Seek> {
 }
 
 impl<R: Read + Seek> Deserializer<R> {
-    pub fn new(input: R, is_named: bool) -> Self {
-        Deserializer {
+    pub const fn new(input: R, is_named: bool) -> Self {
+        Self {
             input: NbtReadHelper { reader: input },
             tag_to_deserialize_stack: None,
             in_list: false,
@@ -230,8 +233,7 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
         if let Some(tag_id) = self.tag_to_deserialize_stack {
             if tag_id != COMPOUND_ID {
                 return Err(Error::SerdeError(format!(
-                    "Trying to deserialize a map without a compound ID (id {})",
-                    tag_id
+                    "Trying to deserialize a map without a compound ID (id {tag_id})"
                 )));
             }
         } else {

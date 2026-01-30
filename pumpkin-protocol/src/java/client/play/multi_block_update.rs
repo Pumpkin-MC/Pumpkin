@@ -1,7 +1,7 @@
 use pumpkin_data::packet::clientbound::PLAY_SECTION_BLOCKS_UPDATE;
 use pumpkin_util::math::{
     position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section},
-    vector3::{self, Vector3},
+    vector3::{self},
 };
 
 use pumpkin_macros::java_packet;
@@ -16,45 +16,45 @@ use crate::codec::{var_int::VarInt, var_long::VarLong};
 /// (e.g., explosions, structure generation, or large-scale terraforming).
 #[java_packet(PLAY_SECTION_BLOCKS_UPDATE)]
 pub struct CMultiBlockUpdate {
-    /// The coordinates of the chunk section being updated.
-    /// Calculated as (block_coord >> 4).
-    pub chunk_section: Vector3<i32>,
-    /// A list of relative positions and their new block state IDs.
-    /// The i16 encodes the relative position within the section.
-    pub positions_to_state_ids: Vec<(i16, i32)>,
+    /// Chunk section position (x << 42 | z << 20 | y)
+    pub chunk_section: i64,
+    /// Array of `VarLongs`: (Block State ID << 12 | Relative Position)
+    pub updates: Vec<VarLong>,
 }
 
 impl CMultiBlockUpdate {
-    pub fn new(positions_to_state_ids: Vec<(BlockPos, u16)>) -> Self {
-        let chunk_section = chunk_section_from_pos(&positions_to_state_ids[0].0);
+    #[must_use]
+    pub fn new(updates: &[(BlockPos, u16)]) -> Self {
+        let first_pos = updates[0].0;
+
+        let chunk_section_vec = chunk_section_from_pos(&first_pos);
+        let chunk_section = vector3::packed_chunk_pos(&chunk_section_vec);
+
+        let packed_updates = updates
+            .iter()
+            .map(|(pos, state_id)| {
+                let local_pos = pack_local_chunk_section(pos) as u64;
+                let packed = (u64::from(*state_id) << 12) | (local_pos & 0xFFF);
+                VarLong(packed as i64)
+            })
+            .collect();
+
         Self {
             chunk_section,
-            positions_to_state_ids: positions_to_state_ids
-                .into_iter()
-                .map(|(position, state_id)| (pack_local_chunk_section(&position), state_id as i32))
-                .collect(),
+            updates: packed_updates,
         }
     }
 }
 
 impl Serialize for CMultiBlockUpdate {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut tuple = serializer.serialize_tuple(2 + self.positions_to_state_ids.len())?;
+        let mut tuple = serializer.serialize_tuple(2 + self.updates.len())?;
 
-        tuple.serialize_element(&vector3::packed_chunk_pos(&self.chunk_section))?;
-        tuple.serialize_element(&VarInt(
-            self.positions_to_state_ids.len().try_into().map_err(|_| {
-                serde::ser::Error::custom(format!(
-                    "{} is not representable as a VarInt!",
-                    self.positions_to_state_ids.len()
-                ))
-            })?,
-        ))?;
+        tuple.serialize_element(&self.chunk_section)?;
+        tuple.serialize_element(&VarInt(self.updates.len() as i32))?;
 
-        for (position, state_id) in &self.positions_to_state_ids {
-            let long = (*state_id as u64) << 12 | (*position as u64);
-            let var_long = VarLong::from(long as i64);
-            tuple.serialize_element(&var_long)?;
+        for update in &self.updates {
+            tuple.serialize_element(update)?;
         }
 
         tuple.end()

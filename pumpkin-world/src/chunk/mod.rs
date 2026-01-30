@@ -7,12 +7,12 @@ use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
-use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::position::BlockPos;
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 use std::ops::{BitAnd, BitOr};
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
@@ -107,10 +107,11 @@ pub struct ChunkSections {
 
 impl ChunkSections {
     #[cfg(test)]
+    #[must_use]
     pub fn dump_blocks(&self) -> Vec<u16> {
         // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
-        for section in self.sections.iter() {
+        for section in &self.sections {
             section.block_states.for_each(|raw_id| {
                 dump.push(raw_id);
             });
@@ -119,10 +120,11 @@ impl ChunkSections {
     }
 
     #[cfg(test)]
+    #[must_use]
     pub fn dump_biomes(&self) -> Vec<u8> {
         // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
-        for section in self.sections.iter() {
+        for section in &self.sections {
             section.biomes.for_each(|raw_id| {
                 dump.push(raw_id);
             });
@@ -154,9 +156,9 @@ impl TryFrom<usize> for ChunkHeightmapType {
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(ChunkHeightmapType::WorldSurface),
-            1 => Ok(ChunkHeightmapType::MotionBlocking),
-            2 => Ok(ChunkHeightmapType::MotionBlockingNoLeaves),
+            0 => Ok(Self::WorldSurface),
+            1 => Ok(Self::MotionBlocking),
+            2 => Ok(Self::MotionBlockingNoLeaves),
             _ => Err("Invalid usize value for ChunkHeightmapType. The value should be 0~2."),
         }
     }
@@ -174,8 +176,8 @@ pub struct ChunkHeightmaps {
 }
 
 impl ChunkHeightmaps {
-    pub fn set(&mut self, _type: ChunkHeightmapType, pos: BlockPos, min_y: i32) {
-        let data = match _type {
+    pub fn set(&mut self, heightmap: ChunkHeightmapType, pos: BlockPos, min_y: i32) {
+        let data = match heightmap {
             ChunkHeightmapType::WorldSurface => &mut self.world_surface,
             ChunkHeightmapType::MotionBlocking => &mut self.motion_blocking,
             ChunkHeightmapType::MotionBlockingNoLeaves => &mut self.motion_blocking_no_leaves,
@@ -218,6 +220,7 @@ impl ChunkHeightmaps {
         data[packed_array_idx] = data[packed_array_idx].bitand(mask).bitor(height);
     }
 
+    #[must_use]
     pub fn get(&self, heightmap: ChunkHeightmapType, x: i32, z: i32, min_y: i32) -> i32 {
         let local_x = (x & 15) as usize;
         let local_z = (z & 15) as usize;
@@ -253,7 +256,7 @@ impl ChunkHeightmaps {
     pub fn log_heightmap(&self, _type: ChunkHeightmapType, min_y: i32) {
         let mut header = "Z/X".to_string();
         for x in 0..16 {
-            header.push_str(&format!("{x:4}"));
+            let _ = write!(header, "{x:4}");
         }
 
         let grid: String = (0..16)
@@ -287,10 +290,12 @@ impl Default for ChunkHeightmaps {
 }
 
 impl ChunkSections {
-    pub fn new(sections: Box<[SubChunk]>, min_y: i32) -> Self {
+    #[must_use]
+    pub const fn new(sections: Box<[SubChunk]>, min_y: i32) -> Self {
         Self { sections, min_y }
     }
 
+    #[must_use]
     pub fn get_block_absolute_y(
         &self,
         relative_x: usize,
@@ -306,6 +311,7 @@ impl ChunkSections {
         }
     }
 
+    #[must_use]
     pub fn get_rough_biome_absolute_y(
         &self,
         relative_x: usize,
@@ -417,6 +423,7 @@ impl ChunkSections {
         }
     }
 
+    #[must_use]
     pub fn get_noise_biome(
         &self,
         index: usize,
@@ -431,6 +438,7 @@ impl ChunkSections {
             .map(|section| section.biomes.get(scale_x, scale_y, scale_z))
     }
 
+    #[must_use]
     pub fn get_top_y(&self, relative_x: usize, relative_z: usize, first_y: i32) -> Option<i32> {
         debug_assert!(relative_x < BlockPalette::SIZE);
         debug_assert!(relative_z < BlockPalette::SIZE);
@@ -451,6 +459,7 @@ impl ChunkSections {
 impl ChunkData {
     /// Gets the given block in the chunk
     #[inline]
+    #[must_use]
     pub fn get_relative_block(
         &self,
         relative_x: usize,
@@ -526,7 +535,7 @@ impl ChunkData {
             let pos = BlockPos::new(x as i32, y, z as i32);
             let state_id = self.section.get_block_absolute_y(x, y, z).unwrap();
             let block_state = BlockState::from_id(state_id);
-            let block = Block::from_state_id(state_id);
+            let block = Block::get_raw_id_from_state_id(state_id);
 
             if !block_state.is_air() && !has_found[ChunkHeightmapType::WorldSurface as usize] {
                 heightmaps.set(ChunkHeightmapType::WorldSurface, pos, self.section.min_y);
@@ -534,8 +543,7 @@ impl ChunkData {
             }
 
             let is_motion_blocking = blocks_movement(block_state, block)
-                || Fluid::from_registry_key(block.registry_key())
-                    .is_some_and(|fluid| !fluid.states.is_empty());
+                || Fluid::from_id(block).is_some_and(|fluid| !fluid.states.is_empty());
 
             if !has_found[ChunkHeightmapType::MotionBlocking as usize] && is_motion_blocking {
                 heightmaps.set(ChunkHeightmapType::MotionBlocking, pos, self.section.min_y);
@@ -544,7 +552,7 @@ impl ChunkData {
 
             if !has_found[ChunkHeightmapType::MotionBlockingNoLeaves as usize]
                 && is_motion_blocking
-                && !block.has_tag(&MINECRAFT_LEAVES)
+                && !MINECRAFT_LEAVES.1.contains(&block)
             {
                 heightmaps.set(
                     ChunkHeightmapType::MotionBlockingNoLeaves,
@@ -567,6 +575,7 @@ impl ChunkData {
         }
     }
 
+    #[must_use]
     pub fn get_highest_non_empty_subchunk(&self) -> usize {
         self.section
             .sections
@@ -574,8 +583,7 @@ impl ChunkData {
             .enumerate()
             .rev()
             .position(|(_, sub)| !sub.block_states.has_only_air())
-            .map(|p| self.section.sections.len() - 1 - p)
-            .unwrap_or(0)
+            .map_or(0, |p| self.section.sections.len() - 1 - p)
     }
 }
 

@@ -1,9 +1,11 @@
 use itertools::Itertools;
 use pumpkin_data::fluid::{Fluid, FluidState};
-use pumpkin_data::{Block, BlockDirection, BlockState, tag::Taggable};
+use pumpkin_data::tag::{RegistryKey, get_tag_ids};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
 
+use crate::block::RawBlockState;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{block::BlockStateCodec, world::BlockRegistryExt};
 
@@ -47,18 +49,18 @@ impl BlockPredicate {
         pos: &BlockPos,
     ) -> bool {
         match self {
-            BlockPredicate::MatchingBlocks(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::MatchingBlockTag(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::MatchingFluids(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::HasSturdyFace(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::Solid(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::Replaceable(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::WouldSurvive(predicate) => predicate.test(block_registry, chunk, pos),
-            BlockPredicate::InsideWorldBounds(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::AnyOf(predicate) => predicate.test(block_registry, chunk, pos),
-            BlockPredicate::AllOf(predicate) => predicate.test(block_registry, chunk, pos),
-            BlockPredicate::Not(predicate) => predicate.test(block_registry, chunk, pos),
-            BlockPredicate::AlwaysTrue => true,
+            Self::MatchingBlocks(predicate) => predicate.test(chunk, pos),
+            Self::MatchingBlockTag(predicate) => predicate.test(chunk, pos),
+            Self::MatchingFluids(predicate) => predicate.test(chunk, pos),
+            Self::HasSturdyFace(predicate) => predicate.test(chunk, pos),
+            Self::Solid(predicate) => predicate.test(chunk, pos),
+            Self::Replaceable(predicate) => predicate.test(chunk, pos),
+            Self::WouldSurvive(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::InsideWorldBounds(predicate) => predicate.test(chunk, pos),
+            Self::AnyOf(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::AllOf(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::Not(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::AlwaysTrue => true,
         }
     }
 }
@@ -128,8 +130,10 @@ pub struct MatchingBlockTagPredicate {
 
 impl MatchingBlockTagPredicate {
     pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
-        let block = self.offset.get_block(chunk, pos);
-        block.is_tagged_with(&self.tag).unwrap()
+        let block = self.offset.get_raw(chunk, pos);
+        get_tag_ids(RegistryKey::Block, &self.tag)
+            .unwrap()
+            .contains(&block.to_block_id())
     }
 }
 
@@ -267,6 +271,11 @@ impl OffsetBlocksBlockPredicate {
         }
         *pos
     }
+    pub fn get_raw<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> RawBlockState {
+        let pos = self.get(pos);
+        GenerationCache::get_block_state(chunk, &pos.0)
+    }
+
     pub fn get_block<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> &'static Block {
         let pos = self.get(pos);
         GenerationCache::get_block_state(chunk, &pos.0).to_block()

@@ -18,7 +18,8 @@ pub struct CGameEvent {
 
 /// You need to implement all the random stuff somewhere, right?
 impl CGameEvent {
-    pub fn new(event: GameEvent, value: f32) -> Self {
+    #[must_use]
+    pub const fn new(event: GameEvent, value: f32) -> Self {
         Self {
             event: event as u8,
             value,

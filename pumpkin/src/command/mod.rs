@@ -163,16 +163,17 @@ impl CommandSender {
         match self {
             // TODO: maybe return first world when console
             Self::Console | Self::Rcon(..) => None,
-            Self::Player(p) => Some(p.living_entity.entity.world.clone()),
+            Self::Player(p) => Some(p.living_entity.entity.world.load_full()),
             Self::CommandBlock(_, w) => Some(w.clone()),
         }
     }
 
-    pub async fn get_locale(&self) -> Locale {
+    #[must_use]
+    pub fn get_locale(&self) -> Locale {
         match self {
             Self::CommandBlock(..) | Self::Console | Self::Rcon(..) => Locale::EnUs, // Default locale for console and RCON
             Self::Player(player) => {
-                Locale::from_str(&player.config.read().await.locale).unwrap_or(Locale::EnUs)
+                Locale::from_str(&player.config.load().locale).unwrap_or(Locale::EnUs)
             }
         }
     }

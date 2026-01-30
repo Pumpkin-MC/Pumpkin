@@ -14,7 +14,8 @@ pub struct CUpdateEntityPos {
 }
 
 impl CUpdateEntityPos {
-    pub fn new(entity_id: VarInt, delta: Vector3<i16>, on_ground: bool) -> Self {
+    #[must_use]
+    pub const fn new(entity_id: VarInt, delta: Vector3<i16>, on_ground: bool) -> Self {
         Self {
             entity_id,
             delta,

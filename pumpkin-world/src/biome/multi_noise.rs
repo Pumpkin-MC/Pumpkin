@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+#[must_use]
 pub fn to_long(float: f32) -> i64 {
     (float * 10000f32) as i64
 }
@@ -15,7 +16,8 @@ pub struct NoiseValuePoint {
 }
 
 impl NoiseValuePoint {
-    pub fn convert_to_list(&self) -> [i64; 7] {
+    #[must_use]
+    pub const fn convert_to_list(&self) -> [i64; 7] {
         [
             self.temperature,
             self.humidity,
@@ -48,7 +50,12 @@ mod test {
     };
 
     #[test]
-    fn test_sample_value() {
+    fn sample_value() {
+        use crate::biome::hash_seed;
+        use crate::generation::noise::router::multi_noise_sampler::{
+            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+        };
+        use crate::generation::{biome_coords, positions::chunk_pos};
         type PosToPoint = (i32, i32, i32, i64, i64, i64, i64, i64, i64);
         let expected_data: Vec<PosToPoint> =
             read_data_from_file!("../../assets/multi_noise_sample_no_blend_no_beard_0_0_0.json");
@@ -66,7 +73,6 @@ mod test {
             .unwrap();
         let _terrain_cache = TerrainCache::from_random(&random_config);
         // Calculate biome mixer seed
-        use crate::biome::hash_seed;
         let biome_mixer_seed = hash_seed(random_config.seed);
 
         let _chunk = ProtoChunk::new(
@@ -76,12 +82,6 @@ mod test {
             surface_config.default_block.get_state(),
             biome_mixer_seed,
         );
-
-        // Create MultiNoiseSampler for testing
-        use crate::generation::noise::router::multi_noise_sampler::{
-            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
-        };
-        use crate::generation::{biome_coords, positions::chunk_pos};
 
         let start_x = chunk_pos::start_block_x(chunk_x);
         let start_z = chunk_pos::start_block_z(chunk_z);
@@ -94,7 +94,7 @@ mod test {
         let mut multi_noise_sampler =
             MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
 
-        for (x, y, z, tem, hum, con, ero, dep, wei) in expected_data.into_iter() {
+        for (x, y, z, tem, hum, con, ero, dep, wei) in expected_data {
             let point = multi_noise_sampler.sample(x, y, z);
             assert_eq!(point.temperature, tem);
             assert_eq!(point.humidity, hum);
@@ -106,7 +106,7 @@ mod test {
     }
 
     #[test]
-    fn test_sample_multinoise_biome() {
+    fn sample_multinoise_biome() {
         let expected_data: Vec<(i32, i32, i32, u8)> =
             read_data_from_file!("../../assets/multi_noise_biome_source_test.json");
 

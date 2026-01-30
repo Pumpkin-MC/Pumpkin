@@ -49,7 +49,7 @@ pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     use simplelog::{ConfigBuilder, SharedLogger, SimpleLogger, WriteLogger};
 
-    let logger = if advanced_config.logging.enabled {
+    let logger = advanced_config.logging.enabled.then(|| {
         let mut config = ConfigBuilder::new();
 
         if advanced_config.logging.timestamp {
@@ -62,18 +62,18 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             config.set_time_level(LevelFilter::Off);
         }
 
-        if !advanced_config.logging.color {
+        if advanced_config.logging.color {
+            config.set_write_log_enable_colors(true);
+        } else {
             for level in Level::iter() {
                 config.set_level_color(level, None);
             }
-        } else {
-            config.set_write_log_enable_colors(true);
         }
 
-        if !advanced_config.logging.threads {
-            config.set_thread_level(LevelFilter::Off);
-        } else {
+        if advanced_config.logging.threads {
             config.set_thread_level(LevelFilter::Info);
+        } else {
+            config.set_thread_level(LevelFilter::Off);
         }
 
         let level = std::env::var("RUST_LOG")
@@ -133,15 +133,13 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         } else {
             (SimpleLogger::new(level, config.build()), None)
         };
+        (ReadlineLogWrapper::new(logger, file_logger, rl), level)
+    });
 
-        Some((ReadlineLogWrapper::new(logger, file_logger, rl), level))
-    } else {
-        None
-    };
-
-    if LOGGER_IMPL.set(logger).is_err() {
-        panic!("Failed to set logger. already initialized");
-    }
+    assert!(
+        LOGGER_IMPL.set(logger).is_ok(),
+        "Failed to set logger. already initialized"
+    );
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
@@ -157,10 +155,10 @@ fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
     func: F,
 ) -> futures::future::Either<T, std::future::Pending<T::Output>> {
     use futures::future::Either;
-    match opt {
-        Some(val) => Either::Left(func(val)),
-        None => Either::Right(std::future::pending()),
-    }
+    opt.map_or_else(
+        || Either::Right(std::future::pending()),
+        |val| Either::Left(func(val)),
+    )
 }
 
 pub struct PumpkinServer {
@@ -170,6 +168,7 @@ pub struct PumpkinServer {
 }
 
 impl PumpkinServer {
+    #[expect(clippy::if_then_some_else_none)]
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
@@ -192,7 +191,7 @@ impl PumpkinServer {
                         "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
                     );
                 }
-                setup_stdin_console(server.clone()).await;
+                setup_stdin_console(server.clone());
             }
         }
 
@@ -206,35 +205,32 @@ impl PumpkinServer {
             });
         }
 
-        let mut tcp_listener = None;
-
-        if server.basic_config.java_edition {
+        let tcp_listener = if server.basic_config.java_edition {
             let address = server.basic_config.java_edition_address;
             // Setup the TCP server socket.
             let listener = match TcpListener::bind(address).await {
                 Ok(l) => l,
                 Err(e) => match e.kind() {
                     ErrorKind::AddrInUse => {
-                        log::error!("Error: Address {} is already in use.", address);
+                        log::error!("Error: Address {address} is already in use.");
                         log::error!(
                             "Make sure another instance of the server isn't already running"
                         );
                         std::process::exit(1);
                     }
                     ErrorKind::PermissionDenied => {
-                        log::error!("Error: Permission denied when binding to {}.", address);
+                        log::error!("Error: Permission denied when binding to {address}.");
                         log::error!("You might need sudo/admin privileges to use ports below 1024");
                         std::process::exit(1);
                     }
                     ErrorKind::AddrNotAvailable => {
                         log::error!(
-                            "Error: The address {} is not available on this machine",
-                            address
+                            "Error: The address {address} is not available on this machine"
                         );
                         std::process::exit(1);
                     }
                     _ => {
-                        log::error!("Failed to start TcpListener on {}: {}", address, e);
+                        log::error!("Failed to start TcpListener on {address}: {e}");
                         std::process::exit(1);
                     }
                 },
@@ -262,8 +258,10 @@ impl PumpkinServer {
                 server.spawn_task(lan_broadcast.start(addr));
             }
 
-            tcp_listener = Some(listener);
-        }
+            Some(listener)
+        } else {
+            None
+        };
 
         // Ticker
         {
@@ -273,18 +271,18 @@ impl PumpkinServer {
             });
         };
 
-        let mut udp_socket = None;
-
-        if server.basic_config.bedrock_edition {
-            udp_socket = Some(Arc::new(
+        let udp_socket = if server.basic_config.bedrock_edition {
+            Some(Arc::new(
                 UdpSocket::bind(server.basic_config.bedrock_edition_address)
                     .await
                     .expect("Failed to bind UDP Socket"),
-            ));
-        }
+            ))
+        } else {
+            None
+        };
 
         Self {
-            server: server.clone(),
+            server,
             tcp_listener,
             udp_socket,
         }
@@ -301,7 +299,7 @@ impl PumpkinServer {
             .await;
         if let Err(err) = self.server.plugin_manager.load_plugins().await {
             log::error!("{err}");
-        };
+        }
     }
 
     pub async fn unload_plugins(&self) {
@@ -338,7 +336,7 @@ impl PumpkinServer {
         }
 
         let kick_message = TextComponent::text("Server stopped");
-        for player in self.server.get_all_players().await {
+        for player in self.server.get_all_players() {
             player
                 .kick(DisconnectReason::Shutdown, kick_message.clone())
                 .await;
@@ -364,6 +362,7 @@ impl PumpkinServer {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn unified_listener_task(
         &self,
         master_client_id_counter: &mut u64,
@@ -374,7 +373,7 @@ impl PumpkinServer {
 
         select! {
             // Branch for TCP connections (Java Edition)
-            tcp_result = resolve_some(self.tcp_listener.as_ref(), |listener| listener.accept()) => {
+            tcp_result = resolve_some(self.tcp_listener.as_ref(), tokio::net::TcpListener::accept) => {
                 match tcp_result {
                     Ok((connection, client_addr)) => {
                         if let Err(e) = connection.set_nodelay(true) {
@@ -494,7 +493,7 @@ impl PumpkinServer {
     }
 }
 
-async fn setup_stdin_console(server: Arc<Server>) {
+fn setup_stdin_console(server: Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     let rt = tokio::runtime::Handle::current();
     std::thread::spawn(move || {
@@ -507,7 +506,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
                 }
             } else {
                 break;
-            };
+            }
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 log::warn!("Console command was not terminated with a newline");
             }
@@ -523,8 +522,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
                     ServerCommandEvent::new(command.clone());
 
                     'after: {
-                        let dispatcher = &server.command_dispatcher.read().await;
-                        dispatcher
+                        server.command_dispatcher.read().await
                             .handle_command(&command::CommandSender::Console, &server, command.as_str())
                             .await;
                     };
@@ -591,9 +589,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     ServerCommandEvent::new(line.clone());
 
                     'after: {
-                        let dispatcher = server.command_dispatcher.read().await;
-
-                        dispatcher
+                        server.command_dispatcher.read().await
                             .handle_command(&command::CommandSender::Console, &server, &line)
                             .await;
                     }
