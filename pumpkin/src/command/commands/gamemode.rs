@@ -34,9 +34,12 @@ impl CommandExecutor for TargetSelfExecutor {
                 return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
             };
 
+            let mut succeeded: bool = false;
             if let Player(target) = sender {
                 if target.gamemode.load() != gamemode {
-                    target.set_gamemode(gamemode).await;
+                    if target.set_gamemode(gamemode).await {
+                        succeeded = true;
+                    }
                     let gamemode_string = format!("{gamemode:?}").to_lowercase();
                     let gamemode_string = format!("gameMode.{gamemode_string}");
                     target
@@ -46,7 +49,7 @@ impl CommandExecutor for TargetSelfExecutor {
                         ))
                         .await;
                 }
-                Ok(())
+                Ok(succeeded as i32)
             } else {
                 Err(InvalidRequirement)
             }
@@ -73,9 +76,12 @@ impl CommandExecutor for TargetPlayerExecutor {
 
             let target_count = targets.len();
 
+            let mut succeeded: i32 = 0;
             for target in targets {
                 if target.gamemode.load() != gamemode {
-                    target.set_gamemode(gamemode).await;
+                    if target.set_gamemode(gamemode).await {
+                        succeeded += 1;
+                    }
                     let gamemode_string = format!("{gamemode:?}").to_lowercase();
                     let gamemode_string = format!("gameMode.{gamemode_string}");
                     target
@@ -98,7 +104,7 @@ impl CommandExecutor for TargetPlayerExecutor {
                 }
             }
 
-            Ok(())
+            Ok(succeeded)
         })
     }
 }

@@ -231,13 +231,14 @@ impl LivingEntity {
         // TODO broadcast metadata
     }
 
-    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
-        self.active_effects.lock().await.remove(&effect_type);
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
+        let succeeded = self.active_effects.lock().await.remove(&effect_type).is_some();
         self.entity
             .world
             .load()
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
+        succeeded
     }
 
     pub async fn has_effect(&self, effect: &'static StatusEffect) -> bool {

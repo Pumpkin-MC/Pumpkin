@@ -1,7 +1,7 @@
 use crate::command::CommandResult;
 use crate::command::args::difficulty::DifficultyArgumentConsumer;
 use crate::command::args::{Arg, GetCloned};
-use crate::command::dispatcher::CommandError::InvalidConsumption;
+use crate::command::dispatcher::CommandError::{self, InvalidConsumption};
 use crate::command::tree::builder::argument;
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
 
@@ -33,13 +33,14 @@ impl CommandExecutor for DifficultyExecutor {
                 let level_info = server.level_info.load();
 
                 if level_info.difficulty == difficulty {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.difficulty.failure",
-                            [TextComponent::translate(translation_key, [])],
-                        ))
-                        .await;
-                    return Ok(());
+                    return Err(
+                        CommandError::CommandFailed(
+                            TextComponent::translate(
+                                "commands.difficulty.failure",
+                                [TextComponent::translate(translation_key, [])],
+                            )
+                        )
+                    );
                 }
             }
 
@@ -52,7 +53,7 @@ impl CommandExecutor for DifficultyExecutor {
                 ))
                 .await;
 
-            Ok(())
+            Ok(0)
         })
     }
 }

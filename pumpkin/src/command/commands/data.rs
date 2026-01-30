@@ -31,12 +31,7 @@ impl CommandExecutor for GetEntityDataExecutor {
             let Some(Arg::Entity(entity)) = args.get(&ARG_ENTITY) else {
                 return Err(InvalidConsumption(Some(ARG_ENTITY.into())));
             };
-            let data_storage = entity.as_nbt_storage();
-
-            sender
-                .send_message(display_data(data_storage, entity.get_display_name().await).await?)
-                .await;
-            Ok(())
+            display_data(entity.as_nbt_storage(), entity.get_display_name().await, sender).await
         })
     }
 }
@@ -221,15 +216,67 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
 async fn display_data(
     storage: &dyn NBTStorage,
     target_name: TextComponent,
-) -> Result<TextComponent, CommandError> {
+    sender: &CommandSender
+) -> Result<i32, CommandError> {
     let mut nbt = NbtCompound::new();
     storage.write_nbt(&mut nbt).await;
-    let display = snbt_colorful_display(&NbtTag::Compound(nbt), 0)
+    let tag = NbtTag::Compound(nbt);
+
+    let result = get_i32_result(&tag)?;
+    let display = snbt_colorful_display(&tag, 0)
         .map_err(|string| CommandError::CommandFailed(TextComponent::text(string)))?;
-    Ok(TextComponent::translate(
-        "commands.data.entity.query",
-        [target_name, display],
-    ))
+    sender.send_message(
+        TextComponent::translate(
+            "commands.data.entity.query",
+            [target_name, display]
+        )
+    );
+
+    Ok(result)
+}
+
+fn get_i32_result(tag: &NbtTag) -> Result<i32, CommandError> {
+    match tag {
+        NbtTag::End => Err(
+            CommandError::CommandFailed(
+                TextComponent::translate("commands.data.get.unknown", [])
+            )
+        ),
+
+        NbtTag::Byte(b) => Ok(*b as i32),
+        NbtTag::Short(s) => Ok(*s as i32),
+        NbtTag::Int(i) => Ok(*i),
+        NbtTag::Long(l) => Ok(
+            (*l).clamp(
+                i32::MIN as i64,
+                i32::MAX as i64
+            ) as i32
+        ),
+        NbtTag::Float(f) => Ok({
+            let i = *f as i32;
+            if *f < i as f32 {
+                i - 1
+            } else {
+                i
+            }
+        }),
+        NbtTag::Double(d) => Ok({
+            let i = *d as i32;
+            if *d < i as f64 {
+                i - 1
+            } else {
+                i
+            }
+        }),
+
+        NbtTag::ByteArray(items) => Ok(items.len() as i32),
+        NbtTag::IntArray(items) => Ok(items.len() as i32),
+        NbtTag::LongArray(items) => Ok(items.len() as i32),
+
+        NbtTag::String(string) => Ok(string.len() as i32),
+        NbtTag::List(nbt_tags) => Ok(nbt_tags.len() as i32),
+        NbtTag::Compound(nbt_compound) => Ok(nbt_compound.child_tags.len() as i32),
+    }
 }
 
 pub fn init_command_tree() -> CommandTree {

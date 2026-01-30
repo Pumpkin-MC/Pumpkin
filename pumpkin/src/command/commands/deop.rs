@@ -32,6 +32,7 @@ impl CommandExecutor for Executor {
                 return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
+            let mut succeeded_deops: i32 = 0;
             for player in targets {
                 if let Some(op_index) = config
                     .ops
@@ -39,8 +40,9 @@ impl CommandExecutor for Executor {
                     .position(|o| o.uuid == player.gameprofile.id)
                 {
                     config.ops.remove(op_index);
+                    config.save();
+                    succeeded_deops += 1;
                 }
-                config.save();
 
                 {
                     let command_dispatcher = server.command_dispatcher.read().await;
@@ -59,7 +61,19 @@ impl CommandExecutor for Executor {
                 );
                 sender.send_message(msg).await;
             }
-            Ok(())
+
+            if succeeded_deops == 0 {
+                Err(
+                    CommandError::CommandFailed(
+                        TextComponent::translate(
+                            "commands.deop.failed",
+                            [],
+                        )
+                    )
+                )
+            } else {
+                Ok(succeeded_deops)
+            }
         })
     }
 }
