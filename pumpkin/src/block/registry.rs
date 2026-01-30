@@ -72,6 +72,7 @@ use crate::block::blocks::slabs::SlabBlock;
 use crate::block::blocks::slime::SlimeBlock;
 use crate::block::blocks::snow::LayeredSnowBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
+use crate::block::blocks::sponge::{SpongeBlock, WetSpongeBlock};
 use crate::block::blocks::stairs::StairBlock;
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::blocks::torches::TorchBlock;
@@ -212,7 +213,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TallPlantBlock);
     manager.register(NoteBlock);
     manager.register(PowderSnowBlock);
+    manager.register(SpongeBlock);
     manager.register(PumpkinBlock);
+    manager.register(WetSpongeBlock);
     manager.register(CommandBlock);
     manager.register(ComposterBlock);
     manager.register(PressurePlateBlock);
