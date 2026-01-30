@@ -343,7 +343,7 @@ impl CountOnEveryLayerPlacementModifier {
 
             if !Self::blocks_spawn(&next_block_state)
                 && Self::blocks_spawn(&current_block_state)
-                && next_block_state.to_block() != &Block::BEDROCK
+                && next_block_state.to_block_id() != Block::BEDROCK
             {
                 if found_count == target_y {
                     return mutable_pos.0.y + 1;
@@ -477,7 +477,6 @@ impl ConditionalPlacementModifier for BiomePlacementModifier {
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        // we check if the current feature can be applied to the biome at the pos
         let name = format!("minecraft:{this_feature}");
         let biome = chunk.get_biome_for_terrain_gen(pos.0.x, pos.0.y, pos.0.z);
 

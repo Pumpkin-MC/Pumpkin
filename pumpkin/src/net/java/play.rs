@@ -1933,9 +1933,6 @@ impl JavaClient {
         );
     }
 
-    const WORLD_LOWEST_Y: i8 = -64;
-    const WORLD_MAX_Y: u16 = 320;
-
     #[expect(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
@@ -1948,26 +1945,6 @@ impl JavaClient {
     ) -> Result<bool, BlockPlacingError> {
         let entity = &player.living_entity.entity;
 
-        // Check if the block is under the world
-        if location.0.y + face.to_offset().y < i32::from(Self::WORLD_LOWEST_Y) {
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
-        // Check the world's max build height
-        if location.0.y + face.to_offset().y >= i32::from(Self::WORLD_MAX_Y) {
-            player
-                .send_system_message_raw(
-                    &TextComponent::translate(
-                        "build.tooHigh",
-                        vec![TextComponent::text((Self::WORLD_MAX_Y - 1).to_string())],
-                    )
-                    .color_named(NamedColor::Red),
-                    true,
-                )
-                .await;
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
         match player.gamemode.load() {
             GameMode::Spectator | GameMode::Adventure => {
                 return Err(BlockPlacingError::InvalidGamemode);
@@ -1977,6 +1954,26 @@ impl JavaClient {
 
         let clicked_block_pos = BlockPos(location.0);
         let world = entity.world.load_full();
+
+        // Check if the block is under the world
+        if location.0.y + face.to_offset().y < world.get_bottom_y() {
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
+
+        // Check the world's max build height
+        if location.0.y + face.to_offset().y > world.get_top_y() {
+            player
+                .send_system_message_raw(
+                    &TextComponent::translate(
+                        "build.tooHigh",
+                        vec![TextComponent::text((world.get_top_y()).to_string())],
+                    )
+                    .color_named(NamedColor::Red),
+                    true,
+                )
+                .await;
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
 
         let (clicked_block, clicked_block_state) =
             world.get_block_and_state(&clicked_block_pos).await;

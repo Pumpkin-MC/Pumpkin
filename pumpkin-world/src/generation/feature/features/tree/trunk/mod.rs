@@ -1,6 +1,6 @@
 use fancy::FancyTrunkPlacer;
 use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockState, tag::Taggable};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -49,11 +49,11 @@ impl TrunkPlacer {
         force_dirt: bool,
         dirt_state: &BlockState,
     ) {
-        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block();
+        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
         if force_dirt
-            || !(block.has_tag(&tag::Block::MINECRAFT_DIRT)
-                && block != &Block::GRASS_BLOCK
-                && block != &Block::MYCELIUM)
+            || !(tag::Block::MINECRAFT_DIRT.1.contains(&block)
+                && block != Block::GRASS_BLOCK
+                && block != Block::MYCELIUM)
         {
             chunk.set_block_state(&pos.0, dirt_state);
         }
@@ -66,7 +66,7 @@ impl TrunkPlacer {
         trunk_block: &BlockState,
     ) -> bool {
         let block = GenerationCache::get_block_state(chunk, &pos.0);
-        if TreeFeature::can_replace(block.to_state(), block.to_block()) {
+        if TreeFeature::can_replace(block.to_state(), block.to_block_id()) {
             chunk.set_block_state(&pos.0, trunk_block);
             return true;
         }
@@ -80,7 +80,7 @@ impl TrunkPlacer {
         trunk_block: &BlockState,
     ) -> bool {
         let block = GenerationCache::get_block_state(chunk, &pos.0);
-        if TreeFeature::can_replace_or_log(block.to_state(), block.to_block()) {
+        if TreeFeature::can_replace_or_log(block.to_state(), block.to_block_id()) {
             return self.place(chunk, pos, trunk_block);
         }
         false

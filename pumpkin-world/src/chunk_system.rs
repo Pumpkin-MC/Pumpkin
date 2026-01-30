@@ -803,8 +803,8 @@ impl Chunk {
 
                 for z in 0..4 {
                     for x in 0..4 {
-                        let biome = proto_chunk.get_biome(x as i32, absolute_biome_y, z as i32);
-                        section.biomes.set(x, relative_y, z, biome.id);
+                        let biome = proto_chunk.get_biome_id(x as i32, absolute_biome_y, z as i32);
+                        section.biomes.set(x, relative_y, z, biome);
                     }
                 }
             }
@@ -1131,7 +1131,7 @@ impl GenerationCache for Cache {
                 )
                 .unwrap()
             }
-            Chunk::Proto(data) => data.get_biome_for_terrain_gen(x, y, z),
+            Chunk::Proto(data) => data.get_terrain_gen_biome(x, y, z),
         }
     }
 

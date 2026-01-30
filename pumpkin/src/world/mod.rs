@@ -864,12 +864,12 @@ impl World {
             let fluid = Fluid::from_state_id(block_state_id).unwrap_or(&Fluid::EMPTY);
 
             if fluid.id == Fluid::EMPTY.id {
-                let block = Block::from_state_id(block_state_id);
+                let block = Block::get_raw_id_from_state_id(block_state_id);
                 let block_state = BlockState::from_id(block_state_id);
 
                 let blocks_movement = block_state.is_solid()
-                    && block != &Block::COBWEB
-                    && block != &Block::BAMBOO_SAPLING;
+                    && block != Block::COBWEB
+                    && block != Block::BAMBOO_SAPLING;
 
                 if !blocks_movement {
                     let down_pos = pos.down();
@@ -3054,17 +3054,33 @@ impl World {
             .await;
     }
     #[must_use]
-    pub fn is_valid(dest: Vector3<f64>) -> bool {
-        Self::is_valid_horizontally(dest) && Self::is_valid_vertically(dest.y)
+    pub fn is_valid(dest: BlockPos) -> bool {
+        Self::is_valid_horizontally(dest) && Self::is_valid_vertically(dest.0.y)
     }
     #[must_use]
-    pub fn is_valid_horizontally(dest: Vector3<f64>) -> bool {
-        (-30_000_000.0..=30_000_000.0).contains(&dest.x)
-            && (-30_000_000.0..=30_000_000.0).contains(&dest.z)
+    pub fn is_valid_horizontally(dest: BlockPos) -> bool {
+        // Note: 30_000_000 is not valid, but -30_000_000 is.
+        (-30_000_000..30_000_000).contains(&dest.0.x)
+            && (-30_000_000..30_000_000).contains(&dest.0.z)
     }
     #[must_use]
-    pub fn is_valid_vertically(y: f64) -> bool {
-        (-20_000_000.0..=20_000_000.0).contains(&y)
+    pub fn is_valid_vertically(y: i32) -> bool {
+        // Note: 20_000_000 is not valid, but -20_000_000 is.
+        (-20_000_000..20_000_000).contains(&y)
+    }
+    #[must_use]
+    pub fn is_in_build_limit(&self, dest: BlockPos) -> bool {
+        self.is_in_height_limit(dest.0.y) && Self::is_valid_horizontally(dest)
+    }
+    #[must_use]
+    pub fn is_in_height_limit(&self, y: i32) -> bool {
+        (self.get_bottom_y()..=self.get_top_y()).contains(&y)
+    }
+    pub const fn get_bottom_y(&self) -> i32 {
+        self.dimension.min_y
+    }
+    pub const fn get_top_y(&self) -> i32 {
+        self.dimension.min_y + self.dimension.height - 1
     }
     /// Gets a `Block` from the block registry. Returns `Block::AIR` if the block was not found.
     pub async fn get_block(&self, position: &BlockPos) -> &'static Block {

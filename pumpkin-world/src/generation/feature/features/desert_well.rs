@@ -29,9 +29,9 @@ impl DesertWellFeature {
         while chunk.is_air(&block_pos.0) && block_pos.0.y > chunk.bottom_y() as i32 + 2 {
             block_pos = block_pos.down();
         }
-        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block();
+        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
         const CAN_GENERATE: Block = Block::SAND;
-        if CAN_GENERATE.id != block.id {
+        if CAN_GENERATE.id != block {
             return false;
         }
 

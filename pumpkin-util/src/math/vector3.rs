@@ -338,6 +338,28 @@ impl<T: Math + Copy + Into<f64>> Vector3<T> {
 }
 
 impl<T: Math + Copy + Into<f64>> Vector3<T> {
+    pub fn floor_to_i32(&self) -> Vector3<i32> {
+        let x: f64 = self.x.into();
+        let y: f64 = self.y.into();
+        let z: f64 = self.z.into();
+        Vector3 {
+            x: x.floor() as i32,
+            y: y.floor() as i32,
+            z: z.floor() as i32,
+        }
+    }
+
+    pub fn floor_to_vec2_i32(&self) -> Vector2<i32> {
+        let x: f64 = self.x.into();
+        let z: f64 = self.z.into();
+        Vector2 {
+            x: x.floor() as i32,
+            y: z.floor() as i32,
+        }
+    }
+}
+
+impl<T: Math + Copy + Into<f64>> Vector3<T> {
     pub fn to_block_pos(&self) -> BlockPos {
         BlockPos(self.to_i32())
     }

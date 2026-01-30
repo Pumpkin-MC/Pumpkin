@@ -25,7 +25,7 @@ impl BlockWrapper {
     fn contains(&self, name: &str) -> bool {
         match self {
             Self::Single(s) => s == name,
-            Self::Multi(h) => h.contains(&name.to_string()),
+            Self::Multi(h) => h.iter().any(|s| s == name),
         }
     }
 }

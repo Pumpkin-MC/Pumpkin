@@ -73,19 +73,19 @@ impl StructurePieceBase for BuriedTreasurePiece {
             let state = chunk.get_block_state(&pos.0);
             let down_pos = pos.down();
             let down_raw_state = chunk.get_block_state(&down_pos.0);
-            let down_block = down_raw_state.to_block();
+            let down_block = down_raw_state.to_block_id();
 
-            if down_block == &Block::SANDSTONE
-                || down_block == &Block::STONE
-                || down_block == &Block::ANDESITE
-                || down_block == &Block::GRANITE
-                || down_block == &Block::DIORITE
+            if down_block == Block::SANDSTONE
+                || down_block == Block::STONE
+                || down_block == Block::ANDESITE
+                || down_block == Block::GRANITE
+                || down_block == Block::DIORITE
             {
                 for dir in BlockDirection::all() {
                     let offset_pos = pos.offset(dir.to_offset());
                     let dir_state = chunk.get_block_state(&offset_pos.0);
 
-                    if !dir_state.to_state().is_air() && !Self::is_liquid(dir_state.to_block()) {
+                    if !dir_state.to_state().is_air() && !Self::is_liquid(dir_state.to_block_id()) {
                         continue;
                     }
 
@@ -93,7 +93,7 @@ impl StructurePieceBase for BuriedTreasurePiece {
                     let down_offset_state = chunk.get_block_state(&down_offset_pos.0);
 
                     if (down_offset_state.to_state().is_air()
-                        || Self::is_liquid(down_offset_state.to_block()))
+                        || Self::is_liquid(down_offset_state.to_block_id()))
                         && dir != BlockDirection::Up
                     {
                         chunk.set_block_state(
@@ -105,11 +105,12 @@ impl StructurePieceBase for BuriedTreasurePiece {
                         continue;
                     }
 
-                    let state1 = if state.to_state().is_air() || Self::is_liquid(state.to_block()) {
-                        Block::SAND.default_state
-                    } else {
-                        state.to_state()
-                    };
+                    let state1 =
+                        if state.to_state().is_air() || Self::is_liquid(state.to_block_id()) {
+                            Block::SAND.default_state
+                        } else {
+                            state.to_state()
+                        };
                     chunk.set_block_state(offset_pos.0.x, offset_pos.0.y, offset_pos.0.z, state1);
                 }
 
@@ -132,7 +133,7 @@ impl StructurePieceBase for BuriedTreasurePiece {
 }
 
 impl BuriedTreasurePiece {
-    fn is_liquid(block: &Block) -> bool {
-        block == &Block::WATER || block == &Block::LAVA
+    fn is_liquid(block: u16) -> bool {
+        block == Block::WATER || block == Block::LAVA
     }
 }

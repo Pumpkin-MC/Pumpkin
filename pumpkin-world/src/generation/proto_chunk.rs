@@ -5,9 +5,7 @@ use pumpkin_data::block_properties::is_air;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::tag;
-use pumpkin_data::{
-    Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Taggable,
-};
+use pumpkin_data::{Block, BlockState, block_properties::blocks_movement, chunk::Biome};
 use pumpkin_util::random::{RandomImpl, get_carver_seed};
 use pumpkin_util::{
     HeightMap,
@@ -474,7 +472,7 @@ impl ProtoChunk {
         }
         if !block_state.is_air() {
             self.maybe_update_surface_height_map(local_x, y, local_z);
-            let block = Block::from_state_id(block_state.id);
+            let block = Block::get_raw_id_from_state_id(block_state.id);
 
             let blocks_movement = blocks_movement(block_state, block);
             if blocks_movement {
@@ -482,7 +480,7 @@ impl ProtoChunk {
             }
             if blocks_movement || block_state.is_liquid() {
                 self.maybe_update_motion_blocking_height_map(local_x, y, local_z);
-                if !block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
+                if !tag::Block::MINECRAFT_LEAVES.1.contains(&block) {
                     {
                         self.maybe_update_motion_blocking_no_leaves_height_map(local_x, y, local_z);
                     }
@@ -572,7 +570,11 @@ impl ProtoChunk {
             &noise_router.surface_estimator,
             &surface_config,
         );
-        self.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
+        self.populate_noise(
+            &mut noise_sampler,
+            random_config,
+            &mut surface_height_estimate_sampler,
+        );
 
         self.stage = StagedChunkEnum::Noise;
     }
@@ -673,6 +675,7 @@ impl ProtoChunk {
     pub fn populate_noise(
         &mut self,
         noise_sampler: &mut ChunkNoiseGenerator,
+        random_config: &GlobalRandomConfig,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) {
         let h_count = noise_sampler.horizontal_cell_block_count() as i32;
@@ -724,6 +727,7 @@ impl ProtoChunk {
 
                                 let block_state = noise_sampler
                                     .sample_block_state(
+                                        random_config,
                                         sample_start_x,
                                         sample_start_y,
                                         sample_start_z,
@@ -744,7 +748,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
+    pub fn get_terrain_gen_biome_id(&self, x: i32, y: i32, z: i32) -> u8 {
         // TODO: See if we can cache this value
         let seed_biome_pos = biome::get_biome_blend(
             self.bottom_y(),
@@ -755,7 +759,11 @@ impl ProtoChunk {
             z,
         );
 
-        self.get_biome(seed_biome_pos.x, seed_biome_pos.y, seed_biome_pos.z)
+        self.get_biome_id(seed_biome_pos.x, seed_biome_pos.y, seed_biome_pos.z)
+    }
+    #[must_use]
+    pub fn get_terrain_gen_biome(&self, x: i32, y: i32, z: i32) -> &'static Biome {
+        Biome::from_id(self.get_terrain_gen_biome_id(x, y, z)).unwrap()
     }
 
     /// Constructs the terrain surface, although "surface" is a misnomer as it also places underground blocks like bedrock and deepslate.
@@ -798,8 +806,8 @@ impl ProtoChunk {
                     top_block
                 };
 
-                let this_biome = self.get_biome_for_terrain_gen(x, biome_y, z);
-                if this_biome == &Biome::ERODED_BADLANDS {
+                let this_biome = self.get_terrain_gen_biome_id(x, biome_y, z);
+                if this_biome == Biome::ERODED_BADLANDS {
                     terrain_cache
                         .terrain_builder
                         .place_badlands_pillar(self, x, z, top_block);
@@ -857,7 +865,7 @@ impl ProtoChunk {
                     // panic!("Blending with biome {:?} at: {:?}", biome, biome_pos);
 
                     if state.id == self.default_block.id {
-                        context.biome = self.get_biome_for_terrain_gen(
+                        context.biome = self.get_terrain_gen_biome(
                             context.block_pos_x,
                             context.block_pos_y,
                             context.block_pos_z,
@@ -873,13 +881,13 @@ impl ProtoChunk {
                         }
                     }
                 }
-                if this_biome == &Biome::FROZEN_OCEAN || this_biome == &Biome::DEEP_FROZEN_OCEAN {
+                if this_biome == Biome::FROZEN_OCEAN || this_biome == Biome::DEEP_FROZEN_OCEAN {
                     let surface_estimate =
                         estimate_surface_height(&mut context, surface_height_estimate_sampler);
 
                     terrain_cache.terrain_builder.place_iceberg(
                         self,
-                        this_biome,
+                        Biome::from_id(this_biome).unwrap(),
                         x,
                         z,
                         surface_estimate,

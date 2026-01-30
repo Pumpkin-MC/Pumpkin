@@ -24,6 +24,8 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
 use rand::{RngExt, SeedableRng, rngs::SmallRng};
 use std::sync::Mutex;
+use std::time::Duration;
+use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 // use std::time::Duration;
 use std::{
@@ -283,13 +285,24 @@ impl Level {
         };
 
         log::info!("Joining {} synchronous threads...", handles.len());
-        tokio::task::spawn_blocking(move || {
+        let join_task = tokio::task::spawn_blocking(move || {
             for handle in handles {
+                // Attempt to join. If a thread is stuck, this block stays alive.
                 let _ = handle.join();
             }
-        })
-        .await
-        .unwrap();
+        });
+
+        match timeout(Duration::from_secs(3), join_task).await {
+            Ok(task_result) => {
+                task_result.unwrap();
+                log::info!("All threads joined successfully.");
+            }
+            Err(_) => {
+                log::warn!(
+                    "Timed out waiting for synchronous threads to join. Proceeding anyway..."
+                );
+            }
+        }
 
         log::debug!("Awaiting remaining async tasks...");
         self.tasks.wait().await;

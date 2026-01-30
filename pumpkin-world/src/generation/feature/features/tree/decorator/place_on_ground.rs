@@ -1,10 +1,7 @@
 use super::TreeDecorator;
 use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::proto_chunk::GenerationCache;
-use pumpkin_data::{
-    Block,
-    tag::{Block::MINECRAFT_LEAVES, Taggable},
-};
+use pumpkin_data::{Block, tag::Block::MINECRAFT_LEAVES};
 use pumpkin_util::{
     math::{block_box::BlockBox, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
@@ -72,9 +69,9 @@ impl PlaceOnGroundTreeDecorator {
         let up_pos = pos.up();
         let up_state = GenerationCache::get_block_state(chunk, &up_pos.0);
         // TODO
-        if (up_state.to_state().is_air() || up_state.to_block() == &Block::VINE)
+        if (up_state.to_state().is_air() || up_state.to_block_id() == Block::VINE)
             && state.to_state().is_full_cube()
-            && !state.to_block().has_tag(&MINECRAFT_LEAVES)
+            && !MINECRAFT_LEAVES.1.contains(&state.to_block_id())
         // TODO: using heightmap seems not to work
         {
             chunk.set_block_state(&up_pos.0, self.block_state_provider.get(random, up_pos));
