@@ -40,7 +40,7 @@ impl CommandExecutor for ListExecutor {
                         })
                         .collect();
 
-                    handle_banlist(entries, sender).await;
+                    handle_banlist(entries, sender).await
                 }
                 "players" => {
                     let lock = &server.data.banned_player_list.read().await;
@@ -56,16 +56,15 @@ impl CommandExecutor for ListExecutor {
                         })
                         .collect();
 
-                    handle_banlist(entries, sender).await;
+                    handle_banlist(entries, sender).await
                 }
                 _ => {
-                    return Err(CommandError::CommandFailed(TextComponent::text(
-                        "Incorrect argument for command",
-                    )));
+                    Err(CommandError::CommandFailed(TextComponent::translate(
+                        "command.unknown.argument",
+                        []
+                    )))
                 }
             }
-
-            Ok(())
         })
     }
 }
@@ -97,19 +96,19 @@ impl CommandExecutor for ListAllExecutor {
                 ));
             }
 
-            handle_banlist(entries, sender).await;
-            Ok(())
+            handle_banlist(entries, sender).await
         })
     }
 }
 
 /// `Vec<(name, source, reason)>`
-async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSender) {
+async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSender) -> Result<i32, CommandError> {
     if list.is_empty() {
-        sender
-            .send_message(TextComponent::translate("commands.banlist.none", []))
-            .await;
-        return;
+        return Result::Err(
+            CommandError::CommandFailed(
+                TextComponent::translate("commands.banlist.none", [])
+            )
+        )
     }
 
     sender
@@ -118,6 +117,8 @@ async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSen
             [TextComponent::text(list.len().to_string())],
         ))
         .await;
+
+    let count = list.len();
 
     for (name, source, reason) in list {
         sender
@@ -131,6 +132,8 @@ async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSen
             ))
             .await;
     }
+
+    Ok(count as i32)
 }
 
 pub fn init_command_tree() -> CommandTree {

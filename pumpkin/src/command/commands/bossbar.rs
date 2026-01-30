@@ -8,6 +8,7 @@ use crate::command::args::resource_location::ResourceLocationArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 
 use crate::command::args::textcomponent::TextComponentArgConsumer;
+use crate::command::dispatcher::CommandError;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
@@ -70,23 +71,28 @@ impl CommandExecutor for AddExecuter {
             let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
 
             if server.bossbars.lock().await.has_bossbar(&namespace) {
-                send_error_message(
-                    sender,
-                    TextComponent::translate(
-                        "commands.bossbar.create.failed",
-                        [TextComponent::text(namespace.clone())],
-                    ),
-                )
-                .await;
-                return Ok(());
+                return Result::Err(
+                    CommandError::CommandFailed(
+                        TextComponent::translate(
+                            "commands.bossbar.create.failed",
+                            [TextComponent::text(namespace.clone())],
+                        )
+                    )
+                );
             }
 
             let bossbar = Bossbar::new(text_component);
-            server
-                .bossbars
-                .lock()
-                .await
-                .create_bossbar(namespace.clone(), bossbar.clone());
+            let new_size;
+
+            {
+                let mut bossbars = server
+                    .bossbars
+                    .lock()
+                    .await;
+                
+                bossbars.create_bossbar(namespace.clone(), bossbar.clone());
+                new_size = bossbars.get_bossbars_len();
+            }
 
             sender
                 .send_message(TextComponent::translate(
@@ -95,7 +101,7 @@ impl CommandExecutor for AddExecuter {
                 ))
                 .await;
 
-            Ok(())
+            Ok(new_size as i32)
         })
     }
 }
@@ -115,12 +121,11 @@ impl CommandExecutor for GetExecuter {
                 .to_string();
 
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
-                handle_bossbar_error(
-                    sender,
-                    BossbarUpdateError::InvalidResourceLocation(namespace.clone()),
-                )
-                .await;
-                return Ok(());
+                return Err(
+                    handle_bossbar_error(
+                        BossbarUpdateError::InvalidResourceLocation(namespace.clone()),
+                    ).await
+                );
             };
 
             match self.0 {
@@ -137,9 +142,9 @@ impl CommandExecutor for GetExecuter {
                             ],
                         ))
                         .await;
-                    return Ok(());
+                    return Ok(bossbar.max);
                 }
-                CommandValueGet::Players => {}
+                CommandValueGet::Players => Ok(bossbar.player.len() as i32),
                 CommandValueGet::Value => {
                     sender
                         .send_message(TextComponent::translate(
@@ -153,7 +158,7 @@ impl CommandExecutor for GetExecuter {
                             ],
                         ))
                         .await;
-                    return Ok(());
+                    Ok(bossbar.value)
                 }
                 CommandValueGet::Visible => {
                     let state = if bossbar.visible {
@@ -170,11 +175,9 @@ impl CommandExecutor for GetExecuter {
                             )],
                         ))
                         .await;
-                    return Ok(());
+                    Ok(bossbar.visible as i32)
                 }
             }
-
-            Ok(())
         })
     }
 }
@@ -190,15 +193,7 @@ impl CommandExecutor for ListExecuter {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let bossbars = server.bossbars.lock().await.get_all_bossbars();
-            let Some(bossbars) = bossbars else {
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.bossbar.list.bars.none",
-                        [],
-                    ))
-                    .await;
-                return Ok(());
-            };
+
             if bossbars.is_empty() {
                 sender
                     .send_message(TextComponent::translate(
@@ -206,7 +201,7 @@ impl CommandExecutor for ListExecuter {
                         [],
                     ))
                     .await;
-                return Ok(());
+                return Ok(0);
             }
 
             let mut bossbars_text = TextComponent::text("");
@@ -235,7 +230,8 @@ impl CommandExecutor for ListExecuter {
                     ],
                 ))
                 .await;
-            Ok(())
+
+            Ok(bossbars.len() as i32)
         })
     }
 }
@@ -255,12 +251,11 @@ impl CommandExecutor for RemoveExecuter {
                 .to_string();
 
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
-                handle_bossbar_error(
-                    sender,
-                    BossbarUpdateError::InvalidResourceLocation(namespace),
-                )
-                .await;
-                return Ok(());
+                return Err(
+                    handle_bossbar_error(
+                        BossbarUpdateError::InvalidResourceLocation(namespace),
+                    ).await
+                );
             };
 
             sender
@@ -273,21 +268,16 @@ impl CommandExecutor for RemoveExecuter {
                 ))
                 .await;
 
-            match server
-                .bossbars
-                .lock()
-                .await
-                .remove_bossbar(server, namespace.clone())
-                .await
-            {
-                Ok(()) => {}
-                Err(err) => {
-                    handle_bossbar_error(sender, err).await;
-                    return Ok(());
+            let error = {
+                match server.bossbars.lock().await.remove_bossbar(server, namespace.clone()).await {
+                    Ok(()) => return Ok(server.bossbars.lock().await.get_bossbars_len() as i32),
+                    Err(error) => error
                 }
-            }
+            };
 
-            Ok(())
+            Err(
+                handle_bossbar_error(error).await
+            )
         })
     }
 }
@@ -306,17 +296,17 @@ impl CommandExecutor for SetExecuter {
             let namespace = autocomplete_consumer().find_arg_default_name(args)?;
 
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(namespace) else {
-                handle_bossbar_error(
-                    sender,
-                    BossbarUpdateError::InvalidResourceLocation(namespace.to_string()),
-                )
-                .await;
-                return Ok(());
+                return Err(
+                    handle_bossbar_error(
+                        BossbarUpdateError::InvalidResourceLocation(namespace.to_string()),
+                    ).await
+                );
             };
 
             match self.0 {
                 CommandValueSet::Color => {
                     let color = BossbarColorArgumentConsumer.find_arg_default_name(args)?;
+
                     match server
                         .bossbars
                         .lock()
@@ -326,10 +316,12 @@ impl CommandExecutor for SetExecuter {
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(
+                                handle_bossbar_error(err).await
+                            );
                         }
                     }
+
                     sender
                         .send_message(TextComponent::translate(
                             "commands.bossbar.set.color.success",
@@ -339,19 +331,19 @@ impl CommandExecutor for SetExecuter {
                             )],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(0)
                 }
                 CommandValueSet::Max => {
                     let Ok(max_value) = max_value_consumer().find_arg_default_name(args)? else {
-                        send_error_message(
-                            sender,
-                            TextComponent::translate(
-                                "parsing.int.invalid",
-                                [TextComponent::text(i32::MAX.to_string())],
-                            ),
-                        )
-                        .await;
-                        return Ok(());
+                        return Err(
+                            CommandError::CommandFailed(
+                                TextComponent::translate(
+                                    "parsing.int.invalid",
+                                    [TextComponent::text(i32::MAX.to_string())],
+                                )
+                            )
+                        );
                     };
 
                     match server
@@ -361,15 +353,16 @@ impl CommandExecutor for SetExecuter {
                         .update_health(
                             server,
                             namespace.to_string(),
-                            max_value as u32,
+                            max_value,
                             bossbar.value,
                         )
                         .await
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(
+                                handle_bossbar_error(err).await
+                            );
                         }
                     }
 
@@ -385,7 +378,8 @@ impl CommandExecutor for SetExecuter {
                             ],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(max_value)
                 }
                 CommandValueSet::Name => {
                     let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
@@ -398,8 +392,9 @@ impl CommandExecutor for SetExecuter {
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(
+                                handle_bossbar_error(err).await
+                            );
                         }
                     }
 
@@ -409,7 +404,8 @@ impl CommandExecutor for SetExecuter {
                             [bossbar_prefix(text_component, namespace.to_string())],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(0)
                 }
                 CommandValueSet::Players(has_players) => {
                     if !has_players {
@@ -422,8 +418,9 @@ impl CommandExecutor for SetExecuter {
                         {
                             Ok(()) => {}
                             Err(err) => {
-                                handle_bossbar_error(sender, err).await;
-                                return Ok(());
+                                return Err(
+                                    handle_bossbar_error(err).await
+                                );
                             }
                         }
                         sender
@@ -435,10 +432,11 @@ impl CommandExecutor for SetExecuter {
                                 )],
                             ))
                             .await;
-                        return Ok(());
+
+                        return Ok(0);
                     }
 
-                    //TODO: Confirm that this is the vanilla way
+                    // TODO: Overwrite this with vanilla's solution.
                     let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
                     let players: Vec<Uuid> =
                         targets.iter().map(|player| player.gameprofile.id).collect();
@@ -453,8 +451,9 @@ impl CommandExecutor for SetExecuter {
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(
+                                handle_bossbar_error(err).await
+                            );
                         }
                     }
 
@@ -477,7 +476,8 @@ impl CommandExecutor for SetExecuter {
                             ],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(count as i32)
                 }
                 CommandValueSet::Style => {
                     let style = BossbarStyleArgumentConsumer.find_arg_default_name(args)?;
@@ -490,8 +490,9 @@ impl CommandExecutor for SetExecuter {
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(
+                                handle_bossbar_error(err).await
+                            );
                         }
                     }
                     sender
@@ -503,32 +504,32 @@ impl CommandExecutor for SetExecuter {
                             )],
                         ))
                         .await;
-                    Ok(())
+                    Ok(0)
                 }
                 CommandValueSet::Value => {
                     let Ok(value) = value_consumer().find_arg_default_name(args)? else {
-                        send_error_message(
-                            sender,
-                            TextComponent::translate(
-                                "parsing.int.invalid",
-                                [TextComponent::text(i32::MAX.to_string())],
-                            ),
-                        )
-                        .await;
-                        return Ok(());
+                        return Err(
+                            CommandError::CommandFailed(
+                                TextComponent::translate(
+                                    "parsing.int.invalid",
+                                    [TextComponent::text(i32::MAX.to_string())],
+                                )
+                            )
+                        );
                     };
 
                     match server
                         .bossbars
                         .lock()
                         .await
-                        .update_health(server, namespace.to_string(), bossbar.max, value as u32)
+                        .update_health(server, namespace.to_string(), bossbar.max, value)
                         .await
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(
+                                handle_bossbar_error(err).await
+                            );
                         }
                     }
 
@@ -544,7 +545,8 @@ impl CommandExecutor for SetExecuter {
                             ],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(value)
                 }
                 CommandValueSet::Visible => {
                     let visibility = BoolArgConsumer::find_arg(args, ARG_VISIBLE)?;
@@ -558,8 +560,9 @@ impl CommandExecutor for SetExecuter {
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(
+                                handle_bossbar_error(err).await
+                            );
                         }
                     }
 
@@ -578,7 +581,8 @@ impl CommandExecutor for SetExecuter {
                             )],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(visibility as i32)
                 }
             }
         })
@@ -586,7 +590,7 @@ impl CommandExecutor for SetExecuter {
 }
 
 const fn max_value_consumer() -> BoundedNumArgumentConsumer<i32> {
-    BoundedNumArgumentConsumer::new().min(0).name("max")
+    BoundedNumArgumentConsumer::new().min(1).name("max")
 }
 
 const fn value_consumer() -> BoundedNumArgumentConsumer<i32> {
@@ -679,17 +683,15 @@ async fn send_error_message(sender: &CommandSender, message: TextComponent) {
         .await;
 }
 
-async fn handle_bossbar_error(sender: &CommandSender, error: BossbarUpdateError<'_>) {
+async fn handle_bossbar_error(error: BossbarUpdateError) -> CommandError {
     match error {
         BossbarUpdateError::InvalidResourceLocation(location) => {
-            send_error_message(
-                sender,
+            CommandError::CommandFailed(
                 TextComponent::translate(
                     "commands.bossbar.unknown",
                     [TextComponent::text(location)],
-                ),
+                )
             )
-            .await;
         }
         BossbarUpdateError::NoChanges(value, variation) => {
             let mut key = "commands.bossbar.set.".to_string();
@@ -699,7 +701,12 @@ async fn handle_bossbar_error(sender: &CommandSender, error: BossbarUpdateError<
                 write!(key, ".{variation}").unwrap();
             }
 
-            send_error_message(sender, TextComponent::translate(key, [])).await;
+            CommandError::CommandFailed(
+                TextComponent::translate(
+                    key,
+                    [],
+                )
+            )
         }
     }
 }

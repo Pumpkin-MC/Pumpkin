@@ -179,7 +179,7 @@ impl CommandSender {
     }
 }
 
-pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<(), CommandError>> + Send + 'a>>;
+pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<i32, CommandError>> + Send + 'a>>;
 
 pub trait CommandExecutor: Sync + Send {
     fn execute<'a>(

@@ -45,8 +45,7 @@ impl CommandExecutor for NoReasonExecutor {
                 return Err(InvalidConsumption(Some(ARG_TARGET.into())));
             };
 
-            ban_ip(sender, server, target, None).await;
-            Ok(())
+            ban_ip(sender, server, target, None).await
         })
     }
 }
@@ -69,29 +68,30 @@ impl CommandExecutor for ReasonExecutor {
                 return Err(InvalidConsumption(Some(ARG_REASON.into())));
             };
 
-            ban_ip(sender, server, target, Some(reason.clone())).await;
-            Ok(())
+            ban_ip(sender, server, target, Some(reason.clone())).await
         })
     }
 }
 
-async fn ban_ip(sender: &CommandSender, server: &Server, target: &str, reason: Option<String>) {
+async fn ban_ip(sender: &CommandSender, server: &Server, target: &str, reason: Option<String>) -> Result<i32, CommandError> {
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
 
     let Some(target_ip) = parse_ip(target, server).await else {
-        sender
-            .send_message(TextComponent::translate("commands.banip.invalid", []))
-            .await;
-        return;
+        return Err(
+            CommandError::CommandFailed(
+                TextComponent::translate("commands.banip.invalid", [])
+            )
+        );
     };
 
     let mut banned_ips = server.data.banned_ip_list.write().await;
 
     if banned_ips.get_entry(&target_ip).is_some() {
-        sender
-            .send_message(TextComponent::translate("commands.banip.failed", []))
-            .await;
-        return;
+        return Err(
+            CommandError::CommandFailed(
+                TextComponent::translate("commands.banip.failed", [])
+            )
+        );
     }
 
     banned_ips.banned_ips.push(BannedIpEntry::new(
@@ -132,6 +132,7 @@ async fn ban_ip(sender: &CommandSender, server: &Server, target: &str, reason: O
         ))
         .await;
 
+    let count = affected.len();
     for target in affected {
         target
             .kick(
@@ -140,6 +141,8 @@ async fn ban_ip(sender: &CommandSender, server: &Server, target: &str, reason: O
             )
             .await;
     }
+
+    Ok(count as i32)
 }
 
 pub fn init_command_tree() -> CommandTree {
