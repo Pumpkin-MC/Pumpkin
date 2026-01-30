@@ -1540,12 +1540,6 @@ impl World {
             let position = player.position();
             let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
             let pitch = player.living_entity.entity.pitch.load();
-            log::debug!(
-                "Teleporting player to know location : {}, {}, {}",
-                position.x,
-                position.y,
-                position.z
-            );
 
             (position, yaw, pitch)
         } else {
@@ -1555,12 +1549,6 @@ impl World {
                 f64::from(info.spawn_x) + 0.5,
                 f64::from(info.spawn_y),
                 f64::from(info.spawn_z) + 0.5,
-            );
-            log::debug!(
-                "Teleporting player at: {}, {}, {}",
-                position.x,
-                position.y,
-                position.z
             );
             (position, info.spawn_yaw, info.spawn_pitch)
         };
