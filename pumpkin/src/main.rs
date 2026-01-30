@@ -9,6 +9,8 @@ use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::process::Command;
+#[cfg(not(unix))]
+use std::process::Stdio;
 use std::{
     io::{self},
     sync::{Arc, LazyLock, OnceLock},
