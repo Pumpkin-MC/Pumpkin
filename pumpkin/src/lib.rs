@@ -1,4 +1,5 @@
 // Not warn event sending macros
+#![recursion_limit = "256"]
 #![allow(unused_labels)]
 
 use crate::data::VanillaData;
@@ -346,7 +347,7 @@ impl PumpkinServer {
         } else {
             TextComponent::text(self.server.basic_config.server_stop_message.clone())
         };
-        for player in self.server.get_all_players().await {
+        for player in self.server.get_all_players() {
             player
                 .kick(DisconnectReason::Shutdown, kick_message.clone())
                 .await;
