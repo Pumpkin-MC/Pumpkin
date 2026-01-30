@@ -255,8 +255,9 @@ impl LevelData {
         }
     }
 
-    pub const fn set_pos(&mut self, x: i32, z: i32) {
+    pub const fn set_pos(&mut self, x: i32, y: i32, z: i32) {
         self.spawn_x = x;
+        self.spawn_y = y;
         self.spawn_z = z;
     }
 }

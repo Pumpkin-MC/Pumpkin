@@ -1194,6 +1194,8 @@ impl World {
             return Some(Vector3::new(x, top_y + 1, z));
         }
         None
+    }
+
     /// Gets the `MOTION_BLOCKING` heightmap value for a given XZ position.
     pub async fn get_motion_blocking_height(&self, x: i32, z: i32) -> i32 {
         let chunk_pos = Vector2::new(x >> 4, z >> 4);
@@ -1538,19 +1540,29 @@ impl World {
             let position = player.position();
             let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
             let pitch = player.living_entity.entity.pitch.load();
+            log::debug!(
+                "Teleporting player to know location : {}, {}, {}",
+                position.x,
+                position.y,
+                position.z
+            );
 
             (position, yaw, pitch)
         } else {
             let info = &self.level_info.load();
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
 
             let position = Vector3::new(
                 f64::from(info.spawn_x) + 0.5,
                 f64::from(info.spawn_y),
                 f64::from(info.spawn_z) + 0.5,
             );
-            (spawn_position, info.spawn_yaw, info.spawn_pitch)
+            log::debug!(
+                "Teleporting player at: {}, {}, {}",
+                position.x,
+                position.y,
+                position.z
+            );
+            (position, info.spawn_yaw, info.spawn_pitch)
         };
 
         let velocity = player.living_entity.entity.velocity.load();
