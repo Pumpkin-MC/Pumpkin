@@ -316,12 +316,11 @@ impl Server {
                 let mut new_level_info = (**level_info).clone();
                 new_level_info.set_pos(safe_pos.x, safe_pos.y, safe_pos.z);
                 server.level_info.swap(Arc::new(new_level_info));
-                let test = server.level_info.load();
                 log::info!(
                     "Safe spawn location set to ({}, {}, {})",
-                    test.spawn_x,
-                    test.spawn_y,
-                    test.spawn_z
+                    safe_pos.x,
+                    safe_pos.y,
+                    safe_pos.z
                 );
             }
         }
