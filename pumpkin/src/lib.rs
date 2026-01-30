@@ -288,7 +288,7 @@ impl PumpkinServer {
         };
 
         Self {
-            server,
+            server: server.clone(),
             tcp_listener,
             udp_socket,
         }
@@ -505,10 +505,9 @@ impl PumpkinServer {
 
 fn setup_stdin_console(server: Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-    let rt = tokio::runtime::Handle::current();
+    let rt_thread = tokio::runtime::Handle::current();
     let warmup = std::env::var_os("PUMPKIN_RESTARTED").is_some();
     let tx_thread = tx.clone();
-    let rt_thread = rt.clone();
     std::thread::spawn(move || {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let mut line = String::new();
@@ -523,7 +522,8 @@ fn setup_stdin_console(server: Arc<Server>) {
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 log::warn!("Console command was not terminated with a newline");
             }
-            rt_thread.block_on(tx_thread.send(line.trim().to_string()))
+            rt_thread
+                .block_on(tx_thread.send(line.trim().to_string()))
                 .expect("Failed to send command to server");
         }
     });
@@ -546,7 +546,8 @@ fn setup_stdin_console(server: Arc<Server>) {
                     ServerCommandEvent::new(command.clone());
 
                     'after: {
-                        server.command_dispatcher.read().await
+                        let dispatcher = &server.command_dispatcher.read().await;
+                        dispatcher
                             .handle_command(&command::CommandSender::Console, &server, command.as_str())
                             .await;
                     };
@@ -634,7 +635,9 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     ServerCommandEvent::new(line.clone());
 
                     'after: {
-                        server.command_dispatcher.read().await
+                        let dispatcher = server.command_dispatcher.read().await;
+
+                        dispatcher
                             .handle_command(&command::CommandSender::Console, &server, &line)
                             .await;
                     }

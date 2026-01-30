@@ -1,27 +1,28 @@
 // Don't warn on event sending macros
-#![recursion_limit = "512"]
 #![expect(unused_labels)]
 
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
 
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+use std::process::{Command, Stdio};
 use std::{
     io::{self},
     sync::{Arc, LazyLock, OnceLock},
 };
-use std::process::{Command, Stdio};
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
 #[cfg(not(unix))]
 use tokio::signal::ctrl_c;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
 
 use pumpkin::data::VanillaData;
-use pumpkin::{LoggerOption, PumpkinServer, RESTART_REQUESTED, SHOULD_STOP, STOP_INTERRUPT, stop_server};
-use std::sync::atomic::Ordering;
 pub use pumpkin::request_restart;
+use pumpkin::{
+    LoggerOption, PumpkinServer, RESTART_REQUESTED, SHOULD_STOP, STOP_INTERRUPT, stop_server,
+};
+use std::sync::atomic::Ordering;
 
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
@@ -49,6 +50,7 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
 // runtime with a channel! See `Level::fetch_chunks` as an example!
+#[expect(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
     #[cfg(feature = "console-subscriber")]
