@@ -17,13 +17,13 @@ impl RawBlockState {
 
     #[inline]
     #[must_use]
-    pub const fn to_block(&self) -> &'static Block {
+    pub fn to_block(&self) -> &'static Block {
         Block::from_state_id(self.0)
     }
 
     #[inline]
     #[must_use]
-    pub const fn to_block_id(&self) -> u16 {
+    pub fn to_block_id(&self) -> u16 {
         Block::get_raw_id_from_state_id(self.0)
     }
 }

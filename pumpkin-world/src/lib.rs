@@ -116,7 +116,11 @@ pub fn bench_create_and_populate_noise(
     let mut surface_height_estimate_sampler =
         SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
-    chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
+    chunk.populate_noise(
+        &mut noise_sampler,
+        random_config,
+        &mut surface_height_estimate_sampler,
+    );
 }
 
 pub fn bench_create_and_populate_biome(
@@ -230,7 +234,11 @@ pub fn bench_create_and_populate_noise_with_surface(
         SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
     chunk.populate_biomes(Dimension::OVERWORLD, &mut multi_noise_sampler);
-    chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
+    chunk.populate_noise(
+        &mut noise_sampler,
+        random_config,
+        &mut surface_height_estimate_sampler,
+    );
     chunk.build_surface(
         settings,
         random_config,

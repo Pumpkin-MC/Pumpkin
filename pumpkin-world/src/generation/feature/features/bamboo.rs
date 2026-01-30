@@ -2,7 +2,6 @@ use pumpkin_data::{
     Block, BlockState,
     block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1},
     tag,
-    tag::Taggable,
 };
 use pumpkin_util::{
     math::position::BlockPos,
@@ -42,7 +41,7 @@ impl BambooFeature {
                             let block_below =
                                 BlockPos::new(x, chunk.top_block_height_exclusive(x, z) - 1, z);
                             let block = GenerationCache::get_block_state(chunk, &block_below.0);
-                            if !block.to_block().has_tag(&tag::Block::MINECRAFT_DIRT) {
+                            if !tag::Block::MINECRAFT_DIRT.1.contains(&block.to_block_id()) {
                                 continue;
                             }
                             chunk.set_block_state(&block_below.0, Block::PODZOL.default_state);

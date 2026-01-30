@@ -1,4 +1,4 @@
-use pumpkin_data::{BlockState, chunk::DoublePerlinNoiseParameters};
+use pumpkin_data::BlockState;
 use pumpkin_util::{
     DoublePerlinNoiseParametersCodec,
     math::{
@@ -85,10 +85,10 @@ pub struct DualNoiseBlockStateProvider {
 
 impl DualNoiseBlockStateProvider {
     pub fn get(&self, pos: BlockPos) -> &'static BlockState {
-        let noise = perlin_codec_to_static(self.slow_noise.clone());
         let sampler = DoublePerlinNoiseSampler::new(
             &mut RandomGenerator::Legacy(LegacyRand::from_seed(self.base.base.seed as u64)),
-            &noise,
+            self.slow_noise.first_octave,
+            &self.slow_noise.amplitudes,
             false,
         );
         let slow_noise =
@@ -103,14 +103,10 @@ impl DualNoiseBlockStateProvider {
         let mut list = Vec::with_capacity(mapped as usize);
         for i in 0..mapped {
             let value = self.get_slow_noise(i as f64 * 54545.0, 0.0, i as f64 * 34234.0, &sampler);
-            list.push(
-                self.base
-                    .get_state_by_value(&self.base.states, value)
-                    .clone(),
-            );
+            list.push(self.base.get_state_by_value(&self.base.states, value));
         }
         let value = self.base.base.get_noise(pos);
-        self.base.get_state_by_value(&list, value).get_state()
+        self.base.get_state_by_value_2(&list, value).get_state()
     }
 
     fn get_slow_noise(&self, x: f64, y: f64, z: f64, sampler: &DoublePerlinNoiseSampler) -> f64 {
@@ -151,17 +147,12 @@ pub struct NoiseBlockStateProviderBase {
     scale: f32,
 }
 
-fn perlin_codec_to_static(noise: DoublePerlinNoiseParametersCodec) -> DoublePerlinNoiseParameters {
-    let amplitudes_static: &'static [f64] = noise.amplitudes.leak();
-    DoublePerlinNoiseParameters::new(noise.first_octave, amplitudes_static, "none")
-}
-
 impl NoiseBlockStateProviderBase {
     pub fn get_noise(&self, pos: BlockPos) -> f64 {
-        let noise = perlin_codec_to_static(self.noise.clone());
         let sampler = DoublePerlinNoiseSampler::new(
             &mut RandomGenerator::Legacy(LegacyRand::from_seed(self.seed as u64)),
-            &noise,
+            self.noise.first_octave,
+            &self.noise.amplitudes,
             false,
         );
         sampler.sample(
@@ -192,6 +183,15 @@ impl NoiseBlockStateProvider {
     ) -> &'a BlockStateCodec {
         let val = f64::midpoint(1.0, value).clamp(0.0, 0.9999);
         &states[(val * states.len() as f64) as usize]
+    }
+
+    fn get_state_by_value_2<'a>(
+        &self,
+        states: &'a [&BlockStateCodec],
+        value: f64,
+    ) -> &'a BlockStateCodec {
+        let val = f64::midpoint(1.0, value).clamp(0.0, 0.9999);
+        states[(val * states.len() as f64) as usize]
     }
 }
 

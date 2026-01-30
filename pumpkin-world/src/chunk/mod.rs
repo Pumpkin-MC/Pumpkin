@@ -7,7 +7,6 @@ use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
-use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
@@ -536,7 +535,7 @@ impl ChunkData {
             let pos = BlockPos::new(x as i32, y, z as i32);
             let state_id = self.section.get_block_absolute_y(x, y, z).unwrap();
             let block_state = BlockState::from_id(state_id);
-            let block = Block::from_state_id(state_id);
+            let block = Block::get_raw_id_from_state_id(state_id);
 
             if !block_state.is_air() && !has_found[ChunkHeightmapType::WorldSurface as usize] {
                 heightmaps.set(ChunkHeightmapType::WorldSurface, pos, self.section.min_y);
@@ -544,8 +543,7 @@ impl ChunkData {
             }
 
             let is_motion_blocking = blocks_movement(block_state, block)
-                || Fluid::from_registry_key(block.registry_key())
-                    .is_some_and(|fluid| !fluid.states.is_empty());
+                || Fluid::from_id(block).is_some_and(|fluid| !fluid.states.is_empty());
 
             if !has_found[ChunkHeightmapType::MotionBlocking as usize] && is_motion_blocking {
                 heightmaps.set(ChunkHeightmapType::MotionBlocking, pos, self.section.min_y);
@@ -554,7 +552,7 @@ impl ChunkData {
 
             if !has_found[ChunkHeightmapType::MotionBlockingNoLeaves as usize]
                 && is_motion_blocking
-                && !block.has_tag(&MINECRAFT_LEAVES)
+                && !MINECRAFT_LEAVES.1.contains(&block)
             {
                 heightmaps.set(
                     ChunkHeightmapType::MotionBlockingNoLeaves,

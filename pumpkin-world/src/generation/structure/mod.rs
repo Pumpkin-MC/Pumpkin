@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use pumpkin_data::{chunk::Biome, tag::Taggable};
+use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use pumpkin_util::include_json_static;
 use serde::Deserialize;
 
@@ -185,14 +185,21 @@ impl StructureKeys {
 
         if let Some(pos) = structure_pos {
             // Get the biome at the structure's starting position
-            let current_biome = chunk.get_biome(
+            let current_biome = chunk.get_biome_id(
                 biome_coords::from_block(pos.start_pos.0.x),
                 biome_coords::from_block(pos.start_pos.0.y),
                 biome_coords::from_block(pos.start_pos.0.z),
-            );
-            let biomes = Biome::get_tag_values(&structure.biomes).unwrap();
+            ) as u16;
+            let biomes = get_tag_ids(
+                RegistryKey::WorldgenBiome,
+                structure
+                    .biomes
+                    .strip_prefix("#")
+                    .unwrap_or(&structure.biomes),
+            )
+            .unwrap();
             // Check if the biome is allowed for this structure
-            if biomes.contains(&current_biome.registry_id) {
+            if biomes.contains(&current_biome) {
                 return Some(pos);
             }
         }

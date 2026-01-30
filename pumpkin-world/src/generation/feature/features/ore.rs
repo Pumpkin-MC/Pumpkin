@@ -1,14 +1,14 @@
 use core::f32;
 
-use pumpkin_data::{BlockDirection, BlockState};
+use pumpkin_data::BlockDirection;
 use pumpkin_util::{
     math::{lerp, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
 
-use crate::generation::proto_chunk::GenerationCache;
 use crate::{block::BlockStateCodec, generation::rule::RuleTest, world::BlockRegistryExt};
+use crate::{block::RawBlockState, generation::proto_chunk::GenerationCache};
 
 #[derive(Deserialize)]
 pub struct OreFeature {
@@ -187,13 +187,7 @@ impl OreFeature {
                         let block_state = GenerationCache::get_block_state(chunk, &pos_vec);
 
                         for target in &self.targets {
-                            if self.should_place(
-                                chunk,
-                                block_state.to_state(),
-                                random,
-                                target,
-                                &mutable_pos,
-                            ) {
+                            if self.should_place(chunk, block_state, random, target, &mutable_pos) {
                                 chunk.set_block_state(&pos_vec, target.state.get_state());
                                 placed_blocks_count += 1;
                                 break; // Equivalent to 'continue block11;'
@@ -209,12 +203,12 @@ impl OreFeature {
     fn should_place<T: GenerationCache>(
         &self,
         chunk: &T,
-        state: &'static BlockState,
+        state: RawBlockState,
         random: &mut RandomGenerator,
         target: &OreTarget,
         pos: &BlockPos,
     ) -> bool {
-        if !target.target.test(state, random) {
+        if !target.target.test(&state, random) {
             return false;
         }
         if Self::should_not_discard(random, self.discard_chance_on_air_exposure) {
