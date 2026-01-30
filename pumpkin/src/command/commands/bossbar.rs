@@ -106,9 +106,9 @@ impl CommandExecutor for AddExecuter {
     }
 }
 
-struct GetExecuter(CommandValueGet);
+struct GetExecutor(CommandValueGet);
 
-impl CommandExecutor for GetExecuter {
+impl CommandExecutor for GetExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
@@ -436,7 +436,6 @@ impl CommandExecutor for SetExecuter {
                         return Ok(0);
                     }
 
-                    // TODO: Overwrite this with vanilla's solution.
                     let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
                     let players: Vec<Uuid> =
                         targets.iter().map(|player| player.gameprofile.id).collect();
@@ -608,10 +607,10 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("get").then(
                 argument_default_name(autocomplete_consumer())
-                    .then(literal("max").execute(GetExecuter(CommandValueGet::Max)))
-                    .then(literal("players").execute(GetExecuter(CommandValueGet::Players)))
-                    .then(literal("value").execute(GetExecuter(CommandValueGet::Value)))
-                    .then(literal("visible").execute(GetExecuter(CommandValueGet::Visible))),
+                    .then(literal("max").execute(GetExecutor(CommandValueGet::Max)))
+                    .then(literal("players").execute(GetExecutor(CommandValueGet::Players)))
+                    .then(literal("value").execute(GetExecutor(CommandValueGet::Value)))
+                    .then(literal("visible").execute(GetExecutor(CommandValueGet::Visible))),
             ),
         )
         .then(literal("list").execute(ListExecuter))

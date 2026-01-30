@@ -105,6 +105,7 @@ pub enum Arg<'a> {
     Difficulty(Difficulty),
     CommandTree(CommandTree),
     Item(&'a str),
+    ItemPredicate(&'a str),
     ResourceLocation(&'a str),
     Block(&'a str),
     BlockPredicate(&'a str),
