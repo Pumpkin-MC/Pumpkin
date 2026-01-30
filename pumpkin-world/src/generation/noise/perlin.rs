@@ -18,14 +18,20 @@ impl DoublePerlinNoiseSampler {
         self.max_value
     }
 
-    pub fn new(
+    pub fn from_params(
         rand: &mut RandomGenerator,
         parameters: &DoublePerlinNoiseParameters,
         legacy: bool,
     ) -> Self {
-        let first_octave = parameters.first_octave;
-        let amplitudes = parameters.amplitudes;
+        Self::new(rand, parameters.first_octave, parameters.amplitudes, legacy)
+    }
 
+    pub fn new(
+        rand: &mut RandomGenerator,
+        first_octave: i32,
+        amplitudes: &[f64],
+        legacy: bool,
+    ) -> Self {
         let first_sampler = OctavePerlinNoiseSampler::new(rand, first_octave, amplitudes, legacy);
         let second_sampler = OctavePerlinNoiseSampler::new(rand, first_octave, amplitudes, legacy);
 
@@ -75,7 +81,7 @@ mod double_perlin_noise_sampler_test {
 
         let mut rand_gen = RandomGenerator::Legacy(rand);
         let params = DoublePerlinNoiseParameters::new(0, &[4f64], "");
-        let sampler = DoublePerlinNoiseSampler::new(&mut rand_gen, &params, true);
+        let sampler = DoublePerlinNoiseSampler::from_params(&mut rand_gen, &params, true);
 
         let values = [
             (
@@ -174,7 +180,7 @@ mod double_perlin_noise_sampler_test {
 
         let params = DoublePerlinNoiseParameters::new(1, &[2f64, 4f64], "");
 
-        let sampler = DoublePerlinNoiseSampler::new(&mut rand_gen, &params, false);
+        let sampler = DoublePerlinNoiseSampler::from_params(&mut rand_gen, &params, false);
 
         let values = [
             (

@@ -37,7 +37,6 @@ pub enum RandomGenerator {
     Legacy(LegacyRand),
 }
 
-#[derive(Clone)]
 #[enum_dispatch(RandomDeriverImpl)]
 pub enum RandomDeriver {
     Xoroshiro(XoroshiroSplitter),

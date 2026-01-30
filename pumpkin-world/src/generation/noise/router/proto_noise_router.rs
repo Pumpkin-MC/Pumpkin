@@ -79,7 +79,7 @@ impl<'a> DoublePerlinNoiseBuilder<'a> {
             .random_config
             .base_random_deriver
             .split_string(parameters.id());
-        DoublePerlinNoiseSampler::new(&mut random, parameters, false)
+        DoublePerlinNoiseSampler::from_params(&mut random, parameters, false)
     }
 }
 

@@ -966,9 +966,9 @@ pub(crate) fn build() -> TokenStream {
             #mod_ident::#contains_ident(state_id)
         }
 
-        pub fn blocks_movement(block_state: &BlockState, block: &Block) -> bool {
+        pub fn blocks_movement(block_state: &BlockState, block: u16) -> bool {
             if block_state.is_solid() {
-                return block != &Block::COBWEB && block != &Block::BAMBOO_SAPLING;
+                return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
             }
             false
         }
@@ -982,7 +982,10 @@ pub(crate) fn build() -> TokenStream {
             #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
             #[inline]
             pub fn from_id(id: u16) -> &'static Self {
-                Block::STATE_FROM_STATE_ID[id as usize]
+                // In debug, this avoids the slow range-checking logic
+                unsafe {
+                    Block::STATE_FROM_STATE_ID.get_unchecked(id as usize)
+                }
             }
 
             #[doc = r" Get a block state from a state id and the corresponding block."]
@@ -1039,23 +1042,26 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-             #[doc = r" Get a raw ID from an State ID."]
+            #[doc = r" Get a raw ID from an State ID."]
             #[inline]
-            pub const fn get_raw_id_from_state_id(state_id: u16) -> u16 {
-                if state_id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+           pub fn get_raw_id_from_state_id(state_id: u16) -> u16 {
+                let index = state_id as usize;
+                if index >= Self::RAW_ID_FROM_STATE_ID.len() {
                     0
                 } else {
-                    Self::RAW_ID_FROM_STATE_ID[state_id as usize]
+                    unsafe { *Self::RAW_ID_FROM_STATE_ID.get_unchecked(index) }
                 }
             }
 
             #[doc = r" Get a block from a state id."]
             #[inline]
-            pub const fn from_state_id(id: u16) -> &'static Self {
-                if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+            pub fn from_state_id(id: u16) -> &'static Self {
+                let index = id as usize;
+                if index >= Self::RAW_ID_FROM_STATE_ID.len() {
                     return &Self::AIR;
                 }
-                Self::from_id(Self::RAW_ID_FROM_STATE_ID[id as usize])
+                let raw_id = unsafe { *Self::RAW_ID_FROM_STATE_ID.get_unchecked(index) };
+                Self::from_id(raw_id)
             }
 
             #[doc = r" Try to parse a block from an item id."]

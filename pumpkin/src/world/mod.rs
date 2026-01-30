@@ -864,12 +864,12 @@ impl World {
             let fluid = Fluid::from_state_id(block_state_id).unwrap_or(&Fluid::EMPTY);
 
             if fluid.id == Fluid::EMPTY.id {
-                let block = Block::from_state_id(block_state_id);
+                let block = Block::get_raw_id_from_state_id(block_state_id);
                 let block_state = BlockState::from_id(block_state_id);
 
                 let blocks_movement = block_state.is_solid()
-                    && block != &Block::COBWEB
-                    && block != &Block::BAMBOO_SAPLING;
+                    && block != Block::COBWEB
+                    && block != Block::BAMBOO_SAPLING;
 
                 if !blocks_movement {
                     let down_pos = pos.down();

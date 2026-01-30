@@ -132,7 +132,7 @@ impl FoliagePlacer {
         block_state: &BlockState,
     ) {
         let block = GenerationCache::get_block_state(chunk, &pos.0);
-        if !TreeFeature::can_replace(block.to_state(), block.to_block()) {
+        if !TreeFeature::can_replace(block.to_state(), block.to_block_id()) {
             return;
         }
         chunk.set_block_state(&pos.0, block_state);
