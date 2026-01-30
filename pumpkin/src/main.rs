@@ -8,7 +8,7 @@ compile_error!("Compiling for WASI targets is not supported!");
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::{
     io::{self},
     sync::{Arc, LazyLock, OnceLock},
