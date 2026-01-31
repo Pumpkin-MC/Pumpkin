@@ -365,6 +365,9 @@ pub struct Entity {
     pub damage_immunities: Vec<DamageType>,
     pub fire_ticks: AtomicI32,
     pub has_visual_fire: AtomicBool,
+    /// The number of ticks the entity has been frozen (in powder snow)
+    /// Max is 140 ticks (7 seconds). Increases by 1/tick in powder snow, decreases by 2/tick outside.
+    pub frozen_ticks: AtomicI32,
     pub removal_reason: AtomicCell<Option<RemovalReason>>,
     // The passengers that entity has
     pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
@@ -461,6 +464,7 @@ impl Entity {
             data: AtomicI32::new(0),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
+            frozen_ticks: AtomicI32::new(0),
             removal_reason: AtomicCell::new(None),
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
@@ -1578,6 +1582,68 @@ impl Entity {
         // TODO: defrost
     }
 
+    /// Maximum freeze ticks (7 seconds at 20 tps)
+    pub const MAX_FROZEN_TICKS: i32 = 140;
+
+    /// Freeze damage is dealt every 40 ticks when fully frozen
+    const FREEZE_DAMAGE_INTERVAL: i32 = 40;
+
+    /// Check if the entity is currently in powder snow
+    pub async fn is_in_powder_snow(&self) -> bool {
+        let block_pos = self.block_pos.load();
+        self.world.load().get_block(&block_pos).await == &Block::POWDER_SNOW
+    }
+
+    /// Check if this entity type is immune to freezing
+    /// In vanilla: snow golems, strays, polar bears, wither, wither skeletons
+    pub fn is_freeze_immune(&self) -> bool {
+        std::ptr::eq(self.entity_type, &EntityType::SNOW_GOLEM)
+            || std::ptr::eq(self.entity_type, &EntityType::STRAY)
+            || std::ptr::eq(self.entity_type, &EntityType::POLAR_BEAR)
+            || std::ptr::eq(self.entity_type, &EntityType::WITHER)
+            || std::ptr::eq(self.entity_type, &EntityType::WITHER_SKELETON)
+    }
+
+    /// Ticks the frozen state of the entity.
+    /// In powder snow: `frozen_ticks` increases by 1 (up to `MAX_FROZEN_TICKS`)
+    /// Outside powder snow: `frozen_ticks` decreases by 2 (down to 0)
+    /// When fully frozen, deals 1 damage every 40 ticks
+    pub async fn tick_frozen(&self, caller: &dyn EntityBase) {
+        // Freeze-immune entities don't accumulate freeze ticks
+        if self.is_freeze_immune() {
+            return;
+        }
+
+        let in_powder_snow = self.is_in_powder_snow().await;
+        let old_frozen_ticks = self.frozen_ticks.load(Ordering::Relaxed);
+
+        let new_frozen_ticks = if in_powder_snow {
+            // Increase frozen ticks when in powder snow
+            (old_frozen_ticks + 1).min(Self::MAX_FROZEN_TICKS)
+        } else {
+            // Decrease frozen ticks when not in powder snow (2x faster thaw rate)
+            (old_frozen_ticks - 2).max(0)
+        };
+
+        // Only update and send metadata if the value changed
+        if new_frozen_ticks != old_frozen_ticks {
+            self.frozen_ticks.store(new_frozen_ticks, Ordering::Relaxed);
+            self.send_meta_data(&[Metadata::new(
+                TrackedData::DATA_FROZEN_TICKS,
+                MetaDataType::Integer,
+                VarInt(new_frozen_ticks),
+            )])
+            .await;
+        }
+
+        // Deal freeze damage when fully frozen (every 40 ticks)
+        if new_frozen_ticks >= Self::MAX_FROZEN_TICKS
+            && self.age.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
+        {
+            caller.damage(caller, 1.0, DamageType::FREEZE).await;
+        }
+    }
+
     /// Sets the `Entity` yaw & pitch rotation
     pub fn set_rotation(&self, yaw: f32, pitch: f32) {
         // TODO
@@ -2102,7 +2168,9 @@ impl EntityBase for Entity {
             }
             self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
                 .await;
-            // TODO: Tick
+
+            // Tick freeze state (powder snow)
+            self.tick_frozen(&*caller).await;
         })
     }
 
