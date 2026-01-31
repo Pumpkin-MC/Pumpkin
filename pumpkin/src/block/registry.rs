@@ -238,6 +238,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
     manager.register(LayeredSnowBlock);
+    manager.register(VineBlock);
 
     manager.register(FallingBlock);
 
