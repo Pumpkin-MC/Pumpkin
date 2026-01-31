@@ -44,7 +44,12 @@ struct Executor {
 }
 
 impl Executor {
-    async fn handle_query(&self, sender: &CommandSender, target: &Player, exp_type: ExpType) -> i32 {
+    async fn handle_query(
+        &self,
+        sender: &CommandSender,
+        target: &Player,
+        exp_type: ExpType,
+    ) -> i32 {
         match exp_type {
             ExpType::Levels => {
                 let level = target.experience_level.load(Ordering::Relaxed);
@@ -212,43 +217,29 @@ impl CommandExecutor for Executor {
                 Mode::Query => {
                     if targets.len() != 1 {
                         // TODO: Add proper error message for multiple players in query mode during parsing itself and not here
-                        return Err(
-                            CommandError::CommandFailed(
-                                TextComponent::translate(
-                                    "argument.player.toomany",
-                                    []
-                                )
-                            )
-                        );
+                        return Err(CommandError::CommandFailed(TextComponent::translate(
+                            "argument.player.toomany",
+                            [],
+                        )));
                     }
-                    Ok(
-                        self.handle_query(sender, &targets[0], self.exp_type.unwrap())
-                            .await
-                    )
-
+                    Ok(self
+                        .handle_query(sender, &targets[0], self.exp_type.unwrap())
+                        .await)
                 }
                 Mode::Add | Mode::Set => {
                     let Ok(amount) = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_AMOUNT)?
                     else {
-                        return Err(
-                            CommandError::CommandFailed(
-                                TextComponent::translate(
-                                    "commands.experience.set.points.invalid",
-                                    [],
-                                )
-                            )
-                        );
+                        return Err(CommandError::CommandFailed(TextComponent::translate(
+                            "commands.experience.set.points.invalid",
+                            [],
+                        )));
                     };
 
                     if self.mode == Mode::Set && amount < 0 {
-                        return Err(
-                            CommandError::CommandFailed(
-                                TextComponent::translate(
-                                    "commands.experience.set.points.invalid",
-                                    [],
-                                )
-                            )
-                        );
+                        return Err(CommandError::CommandFailed(TextComponent::translate(
+                            "commands.experience.set.points.invalid",
+                            [],
+                        )));
                     }
 
                     let mut successes: i32 = 0;
@@ -263,11 +254,10 @@ impl CommandExecutor for Executor {
                     }
 
                     if successes == 0 {
-                        Err(
-                            CommandError::CommandFailed(
-                                TextComponent::translate("commands.experience.set.points.invalid", [])
-                            )
-                        )
+                        Err(CommandError::CommandFailed(TextComponent::translate(
+                            "commands.experience.set.points.invalid",
+                            [],
+                        )))
                     } else {
                         // This should not panic as we already check the number of successes to not be equal to `0`.
                         let target = targets

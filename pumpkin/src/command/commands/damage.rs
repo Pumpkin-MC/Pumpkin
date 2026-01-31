@@ -2,14 +2,17 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
-    CommandExecutor, CommandResult, CommandSender, args::{
+    CommandExecutor, CommandResult, CommandSender,
+    args::{
         Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
         entity::EntityArgumentConsumer, position_3d::Position3DArgumentConsumer,
         resource::damage_type::DamageTypeArgumentConsumer,
-    }, dispatcher::CommandError, tree::{
+    },
+    dispatcher::CommandError,
+    tree::{
         CommandTree,
         builder::{argument, literal},
-    }
+    },
 };
 use crate::entity::EntityBase;
 
@@ -36,11 +39,10 @@ async fn send_damage_result(
     target_name: TextComponent,
 ) -> Result<i32, CommandError> {
     if !success {
-        return Err(
-            CommandError::CommandFailed(
-                TextComponent::translate("commands.damage.invulnerable", [])
-            )
-        );
+        return Err(CommandError::CommandFailed(TextComponent::translate(
+            "commands.damage.invulnerable",
+            [],
+        )));
     }
 
     sender
@@ -65,11 +67,9 @@ impl CommandExecutor for LocationExecutor {
 
             let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
             else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text("Invalid damage amount")
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    "Invalid damage amount",
+                )));
             };
 
             let damage_type =
@@ -102,11 +102,9 @@ impl CommandExecutor for EntityExecutor {
 
             let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
             else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text("Invalid damage amount")
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    "Invalid damage amount",
+                )));
             };
 
             let damage_type =

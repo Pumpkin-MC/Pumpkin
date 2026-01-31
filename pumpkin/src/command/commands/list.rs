@@ -25,7 +25,7 @@ impl CommandExecutor for Executor {
         Box::pin(async move {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let players_len = players.len() as i32;
-            
+
             sender
                 .send_message(TextComponent::translate(
                     "commands.list.players",

@@ -73,25 +73,28 @@ impl CommandExecutor for ReasonExecutor {
     }
 }
 
-async fn ban_ip(sender: &CommandSender, server: &Server, target: &str, reason: Option<String>) -> Result<i32, CommandError> {
+async fn ban_ip(
+    sender: &CommandSender,
+    server: &Server,
+    target: &str,
+    reason: Option<String>,
+) -> Result<i32, CommandError> {
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
 
     let Some(target_ip) = parse_ip(target, server).await else {
-        return Err(
-            CommandError::CommandFailed(
-                TextComponent::translate("commands.banip.invalid", [])
-            )
-        );
+        return Err(CommandError::CommandFailed(TextComponent::translate(
+            "commands.banip.invalid",
+            [],
+        )));
     };
 
     let mut banned_ips = server.data.banned_ip_list.write().await;
 
     if banned_ips.get_entry(&target_ip).is_some() {
-        return Err(
-            CommandError::CommandFailed(
-                TextComponent::translate("commands.banip.failed", [])
-            )
-        );
+        return Err(CommandError::CommandFailed(TextComponent::translate(
+            "commands.banip.failed",
+            [],
+        )));
     }
 
     banned_ips.banned_ips.push(BannedIpEntry::new(

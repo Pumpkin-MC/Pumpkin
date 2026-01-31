@@ -1937,6 +1937,7 @@ impl Player {
         //    gamemode,
         //    "Attempt to set the gamemode to the already current gamemode"
         // );
+        // Why are we panicking if the gamemodes are the same? Vanilla just exits early.
         if self.gamemode.load() == gamemode {
             return false;
         }
@@ -2283,7 +2284,7 @@ impl Player {
                 ),
             )
             .await;
-        
+
         self.living_entity.remove_effect(effect_type).await
 
         // TODO broadcast metadata

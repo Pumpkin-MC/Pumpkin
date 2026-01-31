@@ -54,11 +54,7 @@ impl CommandExecutor for Executor {
                         }
                     };
 
-                    return Err(
-                        CommandError::CommandFailed(
-                            TextComponent::text(err_msg)
-                        )
-                    );
+                    return Err(CommandError::CommandFailed(TextComponent::text(err_msg)));
                 }
             };
 

@@ -76,13 +76,12 @@ async fn ban_players(
             count += 1;
         }
     }
-    
+
     if count == 0 {
-        Err(
-            CommandError::CommandFailed(
-                TextComponent::translate("commands.ban.failed", [])
-            )
-        )
+        Err(CommandError::CommandFailed(TextComponent::translate(
+            "commands.ban.failed",
+            [],
+        )))
     } else {
         Ok(count as i32)
     }

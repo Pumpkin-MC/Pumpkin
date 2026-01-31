@@ -95,8 +95,9 @@ impl CommandExecutor for GiveExecutor {
                         .await
                         .unwrap()
                         .amplifier
-                        > amplifier
-                {} else {
+                        >= amplifier
+                {
+                } else {
                     target
                         .add_effect(Effect {
                             effect_type: effect,
@@ -115,11 +116,10 @@ impl CommandExecutor for GiveExecutor {
             let translation_name = TextComponent::translate(effect.translation_key.to_string(), []);
 
             if successes == 0 {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate("commands.effect.give.failed", [])
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.effect.give.failed",
+                    [],
+                )));
             } else if targets.len() == 1 {
                 sender
                     .send_message(TextComponent::translate(
@@ -170,11 +170,10 @@ impl CommandExecutor for ClearExecutor {
 
                 //if the player or everyplayer don't have any effect
                 if succeeded_clears == 0 {
-                    return Err(
-                        CommandError::CommandFailed(
-                            TextComponent::translate("commands.effect.clear.everything.failed", [])
-                        )
-                    );
+                    return Err(CommandError::CommandFailed(TextComponent::translate(
+                        "commands.effect.clear.everything.failed",
+                        [],
+                    )));
                 }
                 //a player have at least 1 effect
                 else if targets.len() == 1 {
@@ -193,7 +192,6 @@ impl CommandExecutor for ClearExecutor {
                         .await;
                 }
                 Ok(succeeded_clears)
-
             } else {
                 let Some(Arg::Effect(effect_type)) = args.get(ARG_EFFECT) else {
                     return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
@@ -203,45 +201,39 @@ impl CommandExecutor for ClearExecutor {
 
                 let mut succeeded_clears: i32 = 0;
                 for target in targets {
-                    if !target.living_entity.has_effect(effect).await {
+                    if target.living_entity.has_effect(effect).await {
                         target.remove_effect(effect).await;
                         succeeded_clears += 1;
                     }
                 }
 
                 if succeeded_clears == 0 {
-                    return Err(
-                        CommandError::CommandFailed(
-                            TextComponent::translate(
-                                "commands.effect.clear.specific.failed",
-                                [],
-                            )
-                        )
-                    );
+                    return Err(CommandError::CommandFailed(TextComponent::translate(
+                        "commands.effect.clear.specific.failed",
+                        [],
+                    )));
+                } else if targets.len() == 1 {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.effect.clear.specific.success.single",
+                            [
+                                TextComponent::translate(effect.translation_key, []),
+                                targets[0].get_display_name().await,
+                            ],
+                        ))
+                        .await;
                 } else {
-                    if targets.len() == 1 {
-                        sender
-                            .send_message(TextComponent::translate(
-                                "commands.effect.clear.specific.success.single",
-                                [
-                                    TextComponent::translate(effect.translation_key, []),
-                                    targets[0].get_display_name().await,
-                                ],
-                            ))
-                            .await;
-                    } else {
-                        sender
-                            .send_message(TextComponent::translate(
-                                "commands.effect.clear.specific.success.multiple",
-                                [
-                                    TextComponent::translate(effect.translation_key, []),
-                                    TextComponent::text(targets.len().to_string()),
-                                ],
-                            ))
-                            .await;
-                    }
-                    Ok(succeeded_clears)
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.effect.clear.specific.success.multiple",
+                            [
+                                TextComponent::translate(effect.translation_key, []),
+                                TextComponent::text(targets.len().to_string()),
+                            ],
+                        ))
+                        .await;
                 }
+                Ok(succeeded_clears)
             }
         })
     }

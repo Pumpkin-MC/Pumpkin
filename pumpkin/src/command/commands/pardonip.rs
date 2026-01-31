@@ -31,16 +31,16 @@ impl CommandExecutor for Executor {
             };
 
             let Ok(ip) = IpAddr::from_str(target) else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate("commands.pardonip.invalid", [])
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.pardonip.invalid",
+                    [],
+                )));
             };
 
             let mut lock = server.data.banned_ip_list.write().await;
 
-            let result = if let Some(idx) = lock.banned_ips.iter().position(|entry| entry.ip == ip) {
+            let result = if let Some(idx) = lock.banned_ips.iter().position(|entry| entry.ip == ip)
+            {
                 lock.banned_ips.remove(idx);
                 sender
                     .send_message(TextComponent::translate(
@@ -50,11 +50,10 @@ impl CommandExecutor for Executor {
                     .await;
                 Ok(1)
             } else {
-                Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate("commands.pardonip.failed", [])
-                    )
-                )
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.pardonip.failed",
+                    [],
+                )))
             };
 
             lock.save();

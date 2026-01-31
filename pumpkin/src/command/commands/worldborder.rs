@@ -1,10 +1,7 @@
-use pumpkin_util::{
-    math::vector2::Vector2,
-    text::TextComponent,
-};
+use pumpkin_util::{math::vector2::Vector2, text::TextComponent};
 
 use crate::command::{
-    CommandExecutor, CommandResult, CommandSender, CommandError,
+    CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{
         ConsumedArgs, DefaultNameArgConsumer, FindArgDefaultName,
         bounded_num::BoundedNumArgumentConsumer, position_2d::Position2DArgumentConsumer,
@@ -91,22 +88,17 @@ impl CommandExecutor for SetExecutor {
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!(
-                            "{} is out of bounds.",
-                            distance_consumer().default_name()
-                        ))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "{} is out of bounds.",
+                    distance_consumer().default_name()
+                ))));
             };
 
             if (distance - border.new_diameter).abs() < f64::EPSILON {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [])
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    NOTHING_CHANGED_EXCEPTION,
+                    [],
+                )));
             }
 
             sender
@@ -115,7 +107,7 @@ impl CommandExecutor for SetExecutor {
                     [TextComponent::text(format!("{distance:.1}"))],
                 ))
                 .await;
-            
+
             let d = border.new_diameter;
             border.set_diameter(world, distance, None).await;
 
@@ -142,33 +134,24 @@ impl CommandExecutor for SetTimeExecutor {
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!(
-                            "{} is out of bounds.",
-                            distance_consumer().default_name()
-                        ))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "{} is out of bounds.",
+                    distance_consumer().default_name()
+                ))));
             };
             let Ok(time) = time_consumer().find_arg_default_name(args)? else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!(
-                            "{} is out of bounds.",
-                            distance_consumer().default_name()
-                        ))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "{} is out of bounds.",
+                    distance_consumer().default_name()
+                ))));
             };
 
             match distance.total_cmp(&border.new_diameter) {
                 std::cmp::Ordering::Equal => {
-                    return Err(
-                        CommandError::CommandFailed(
-                            TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [])
-                        )
-                    );
+                    return Err(CommandError::CommandFailed(TextComponent::translate(
+                        NOTHING_CHANGED_EXCEPTION,
+                        [],
+                    )));
                 }
                 std::cmp::Ordering::Less => {
                     let dist = format!("{distance:.1}");
@@ -200,7 +183,7 @@ impl CommandExecutor for SetTimeExecutor {
             border
                 .set_diameter(world, distance, Some(i64::from(time) * 1000))
                 .await;
-           
+
             Ok((distance - d) as i32)
         })
     }
@@ -224,22 +207,17 @@ impl CommandExecutor for AddExecutor {
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance_add) = distance_consumer().find_arg_default_name(args)? else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!(
-                            "{} is out of bounds.",
-                            distance_consumer().default_name()
-                        ))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "{} is out of bounds.",
+                    distance_consumer().default_name()
+                ))));
             };
 
             if distance_add == 0.0 {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [])
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    NOTHING_CHANGED_EXCEPTION,
+                    [],
+                )));
             }
 
             let distance = border.new_diameter + distance_add;
@@ -275,38 +253,26 @@ impl CommandExecutor for AddTimeExecutor {
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance_add) = distance_consumer().find_arg_default_name(args)? else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!(
-                            "{} is out of bounds.",
-                            distance_consumer().default_name()
-                        ))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "{} is out of bounds.",
+                    distance_consumer().default_name()
+                ))));
             };
             let Ok(time) = time_consumer().find_arg_default_name(args)? else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!(
-                            "{} is out of bounds.",
-                            distance_consumer().default_name()
-                        ))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "{} is out of bounds.",
+                    distance_consumer().default_name()
+                ))));
             };
 
             let distance = distance_add + border.new_diameter;
 
             match distance.total_cmp(&border.new_diameter) {
                 std::cmp::Ordering::Equal => {
-                    return Err(
-                        CommandError::CommandFailed(
-                            TextComponent::text(format!(
-                                "{} is out of bounds.",
-                                distance_consumer().default_name()
-                            ))
-                        )
-                    );
+                    return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                        "{} is out of bounds.",
+                        distance_consumer().default_name()
+                    ))));
                 }
                 std::cmp::Ordering::Less => {
                     let dist = format!("{distance:.1}");
@@ -396,22 +362,17 @@ impl CommandExecutor for DamageAmountExecutor {
 
             let Ok(damage_per_block) = damage_per_block_consumer().find_arg_default_name(args)?
             else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!(
-                            "{} is out of bounds.",
-                            distance_consumer().default_name()
-                        ))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "{} is out of bounds.",
+                    distance_consumer().default_name()
+                ))));
             };
 
             if (damage_per_block - border.damage_per_block).abs() < f32::EPSILON {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate("commands.worldborder.damage.amount.failed", [])
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.worldborder.damage.amount.failed",
+                    [],
+                )));
             }
 
             let damage = format!("{damage_per_block:.2}");
@@ -445,22 +406,17 @@ impl CommandExecutor for DamageBufferExecutor {
             let mut border = world.worldborder.lock().await;
 
             let Ok(buffer) = damage_buffer_consumer().find_arg_default_name(args)? else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!(
-                            "{} is out of bounds.",
-                            distance_consumer().default_name()
-                        ))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "{} is out of bounds.",
+                    distance_consumer().default_name()
+                ))));
             };
 
             if (buffer - border.buffer).abs() < f32::EPSILON {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate("commands.worldborder.damage.amount.failed", [])
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.worldborder.damage.amount.failed",
+                    [],
+                )));
             }
 
             let buf = format!("{buffer:.2}");
@@ -494,25 +450,17 @@ impl CommandExecutor for WarningDistanceExecutor {
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance) = warning_distance_consumer().find_arg_default_name(args)? else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!(
-                            "{} is out of bounds.",
-                            distance_consumer().default_name()
-                        ))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "{} is out of bounds.",
+                    distance_consumer().default_name()
+                ))));
             };
 
             if distance == border.warning_blocks {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate(
-                            "commands.worldborder.warning.distance.failed",
-                            [],
-                        )
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.worldborder.warning.distance.failed",
+                    [],
+                )));
             }
 
             sender
@@ -545,25 +493,17 @@ impl CommandExecutor for WarningTimeExecutor {
             let mut border = world.worldborder.lock().await;
 
             let Ok(time) = time_consumer().find_arg_default_name(args)? else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!(
-                            "{} is out of bounds.",
-                            distance_consumer().default_name()
-                        ))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "{} is out of bounds.",
+                    distance_consumer().default_name()
+                ))));
             };
 
             if time == border.warning_time {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate(
-                            "commands.worldborder.warning.time.failed",
-                            [],
-                        )
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.worldborder.warning.time.failed",
+                    [],
+                )));
             }
 
             sender

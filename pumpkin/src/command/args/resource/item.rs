@@ -1,4 +1,7 @@
-use pumpkin_data::{item::Item, tag::{RegistryKey, get_tag_ids}};
+use pumpkin_data::{
+    item::Item,
+    tag::{RegistryKey, get_tag_ids},
+};
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
@@ -53,25 +56,22 @@ impl<'a> FindArg<'a> for ItemArgumentConsumer {
 
     fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::Item(name)) => {
-                Item::from_registry_key(name)
-                    .map_or_else(
-                        || {
-                            if name.starts_with("minecraft:") {
-                                Err(CommandError::CommandFailed(TextComponent::translate(
-                                    "argument.item.id.invalid",
-                                    [TextComponent::text((*name).to_string())],
-                                )))
-                            } else {
-                                Err(CommandError::CommandFailed(TextComponent::translate(
-                                    "argument.item.id.invalid",
-                                    [TextComponent::text("minecraft:".to_string() + *name)],
-                                )))
-                            }
-                        },
-                        |item| Ok((*name, item)),
-                    )
-            }
+            Some(Arg::Item(name)) => Item::from_registry_key(name).map_or_else(
+                || {
+                    if name.starts_with("minecraft:") {
+                        Err(CommandError::CommandFailed(TextComponent::translate(
+                            "argument.item.id.invalid",
+                            [TextComponent::text((*name).to_string())],
+                        )))
+                    } else {
+                        Err(CommandError::CommandFailed(TextComponent::translate(
+                            "argument.item.id.invalid",
+                            [TextComponent::text("minecraft:".to_string() + *name)],
+                        )))
+                    }
+                },
+                |item| Ok((*name, item)),
+            ),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
     }
@@ -82,20 +82,16 @@ pub struct ItemPredicateArgumentConsumer;
 pub enum ItemPredicate {
     Item(&'static Item),
     Tag(Vec<u16>),
-    Any
+    Any,
 }
 
 impl ItemPredicate {
     #[must_use]
     pub fn test_item_stack(&self, stack: &ItemStack) -> bool {
         match self {
-            ItemPredicate::Any => true,
-            ItemPredicate::Item(item) => {
-                stack.get_item() == *item
-            },
-            ItemPredicate::Tag(tag) => {
-                tag.contains(&stack.get_item().id)
-            },
+            Self::Any => true,
+            Self::Item(item) => stack.get_item() == *item,
+            Self::Tag(tag) => tag.contains(&stack.get_item().id),
         }
     }
 }
@@ -169,7 +165,7 @@ impl<'a> FindArg<'a> for ItemPredicateArgumentConsumer {
                             },
                             |items| Ok(ItemPredicate::Tag(items.to_vec())),
                         )
-                    }
+                    },
                 )
             }
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),

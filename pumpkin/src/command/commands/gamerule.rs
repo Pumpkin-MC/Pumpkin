@@ -34,9 +34,7 @@ impl CommandExecutor for QueryExecutor {
                 GameRuleValue::Int(value) => {
                     (*value).clamp(i32::MIN as i64, i32::MAX as i64) as i32
                 }
-                GameRuleValue::Bool(value) => {
-                    *value as i32
-                }
+                GameRuleValue::Bool(value) => *value as i32,
             };
             let value = TextComponent::text(game_rule.to_string());
             drop(level_info);

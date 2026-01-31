@@ -24,7 +24,7 @@ pub struct CustomBossbar {
     pub max: i32,
     pub value: i32,
     pub visible: bool,
-    pub player: Vec<Uuid>,
+    pub players: Vec<Uuid>,
 }
 
 impl CustomBossbar {
@@ -37,7 +37,7 @@ impl CustomBossbar {
             max: 100,
             value: 0,
             visible: true,
-            player: vec![],
+            players: vec![],
         }
     }
 }
@@ -64,7 +64,7 @@ impl CustomBossbars {
     pub fn get_player_bars(&self, uuid: &Uuid) -> Option<Vec<&Bossbar>> {
         let mut player_bars: Vec<&Bossbar> = Vec::new();
         for bossbar in &self.custom_bossbars {
-            if bossbar.1.player.contains(uuid) {
+            if bossbar.1.players.contains(uuid) {
                 player_bars.push(&bossbar.1.bossbar_data);
             }
         }
@@ -121,7 +121,7 @@ impl CustomBossbars {
 
             let online_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
 
             if bossbar.visible {
                 for player in online_players {
@@ -176,7 +176,7 @@ impl CustomBossbars {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
             for player in matching_players {
                 player
                     .update_bossbar_health(&bossbar.bossbar_data.uuid, bossbar.bossbar_data.health)
@@ -211,7 +211,7 @@ impl CustomBossbars {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let online_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
 
             for player in online_players {
                 if bossbar.visible {
@@ -249,7 +249,7 @@ impl CustomBossbars {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
             for player in matching_players {
                 player
                     .update_bossbar_title(
@@ -287,7 +287,7 @@ impl CustomBossbars {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
             for player in matching_players {
                 player
                     .update_bossbar_style(
@@ -326,7 +326,7 @@ impl CustomBossbars {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
             for player in matching_players {
                 player
                     .update_bossbar_style(
@@ -354,7 +354,7 @@ impl CustomBossbars {
         if let Some(bossbar) = bossbar {
             // Get the difference between the old and new player list and remove bossbars from old players.
             let removed_players: Vec<Uuid> = bossbar
-                .player
+                .players
                 .iter()
                 .filter(|item| !new_players.contains(item))
                 .copied()
@@ -362,7 +362,7 @@ impl CustomBossbars {
 
             let added_players: Vec<Uuid> = new_players
                 .iter()
-                .filter(|item| !bossbar.player.contains(item))
+                .filter(|item| !bossbar.players.contains(item))
                 .copied()
                 .collect();
 
@@ -380,7 +380,7 @@ impl CustomBossbars {
                 }
             }
 
-            bossbar.player = new_players;
+            bossbar.players = new_players;
 
             if !bossbar.visible {
                 return Ok(());

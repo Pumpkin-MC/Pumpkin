@@ -106,14 +106,10 @@ async fn setworldspawn(
         )));
     };
     if world.dimension != Dimension::OVERWORLD && world.dimension != Dimension::OVERWORLD_CAVES {
-        return Err(
-            CommandError::CommandFailed(
-                TextComponent::translate(
-                    "commands.setworldspawn.failure.not_overworld",
-                    [],
-                )
-            )
-        );
+        return Err(CommandError::CommandFailed(TextComponent::translate(
+            "commands.setworldspawn.failure.not_overworld",
+            [],
+        )));
     }
 
     let current_info = server.level_info.load();

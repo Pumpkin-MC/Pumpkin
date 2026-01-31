@@ -113,11 +113,9 @@ impl CommandExecutor for BaseHelpExecutor {
                 Err(_) => 1,
                 Ok(Ok(number)) => number,
                 Ok(Err(_)) => {
-                    return Err(
-                        CommandError::CommandFailed(
-                            TextComponent::text("Invalid page number.")
-                        )
-                    );
+                    return Err(CommandError::CommandFailed(TextComponent::text(
+                        "Invalid page number.",
+                    )));
                 }
             };
 

@@ -31,7 +31,12 @@ impl CommandExecutor for GetEntityDataExecutor {
             let Some(Arg::Entity(entity)) = args.get(&ARG_ENTITY) else {
                 return Err(InvalidConsumption(Some(ARG_ENTITY.into())));
             };
-            display_data(entity.as_nbt_storage(), entity.get_display_name().await, sender).await
+            display_data(
+                entity.as_nbt_storage(),
+                entity.get_display_name().await,
+                sender,
+            )
+            .await
         })
     }
 }
@@ -216,7 +221,7 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
 async fn display_data(
     storage: &dyn NBTStorage,
     target_name: TextComponent,
-    sender: &CommandSender
+    sender: &CommandSender,
 ) -> Result<i32, CommandError> {
     let mut nbt = NbtCompound::new();
     storage.write_nbt(&mut nbt).await;
@@ -225,48 +230,34 @@ async fn display_data(
     let result = get_i32_result(&tag)?;
     let display = snbt_colorful_display(&tag, 0)
         .map_err(|string| CommandError::CommandFailed(TextComponent::text(string)))?;
-    sender.send_message(
-        TextComponent::translate(
+    sender
+        .send_message(TextComponent::translate(
             "commands.data.entity.query",
-            [target_name, display]
-        )
-    ).await;
+            [target_name, display],
+        ))
+        .await;
 
     Ok(result)
 }
 
 fn get_i32_result(tag: &NbtTag) -> Result<i32, CommandError> {
     match tag {
-        NbtTag::End => Err(
-            CommandError::CommandFailed(
-                TextComponent::translate("commands.data.get.unknown", [])
-            )
-        ),
+        NbtTag::End => Err(CommandError::CommandFailed(TextComponent::translate(
+            "commands.data.get.unknown",
+            [],
+        ))),
 
         NbtTag::Byte(b) => Ok(*b as i32),
         NbtTag::Short(s) => Ok(*s as i32),
         NbtTag::Int(i) => Ok(*i),
-        NbtTag::Long(l) => Ok(
-            (*l).clamp(
-                i32::MIN as i64,
-                i32::MAX as i64
-            ) as i32
-        ),
+        NbtTag::Long(l) => Ok((*l).clamp(i32::MIN as i64, i32::MAX as i64) as i32),
         NbtTag::Float(f) => Ok({
             let i = *f as i32;
-            if *f < i as f32 {
-                i - 1
-            } else {
-                i
-            }
+            if *f < i as f32 { i - 1 } else { i }
         }),
         NbtTag::Double(d) => Ok({
             let i = *d as i32;
-            if *d < i as f64 {
-                i - 1
-            } else {
-                i
-            }
+            if *d < i as f64 { i - 1 } else { i }
         }),
 
         NbtTag::ByteArray(items) => Ok(items.len() as i32),

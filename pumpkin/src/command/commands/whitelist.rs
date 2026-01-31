@@ -53,14 +53,10 @@ impl CommandExecutor for OnExecutor {
         Box::pin(async move {
             let previous = server.white_list.swap(true, Ordering::Relaxed);
             if previous {
-                Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate(
-                            "commands.whitelist.alreadyOn",
-                            &[],
-                        )
-                    )
-                )
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.whitelist.alreadyOn",
+                    &[],
+                )))
             } else {
                 kick_non_whitelisted_players(server).await;
                 sender
@@ -89,14 +85,10 @@ impl CommandExecutor for OffExecutor {
                     .await;
                 Ok(1)
             } else {
-                Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate(
-                            "commands.whitelist.alreadyOff",
-                            &[],
-                        )
-                    )
-                )
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.whitelist.alreadyOff",
+                    &[],
+                )))
             }
         })
     }
@@ -199,14 +191,10 @@ impl CommandExecutor for AddExecutor {
             whitelist.save();
 
             if successes == 0 {
-                Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate(
-                            "commands.whitelist.add.failed",
-                            &[],
-                        )
-                    )
-                )
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.whitelist.add.failed",
+                    &[],
+                )))
             } else {
                 Ok(successes)
             }
@@ -254,14 +242,10 @@ impl CommandExecutor for RemoveExecutor {
             kick_non_whitelisted_players(server).await;
 
             if successes == 0 {
-                Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate(
-                            "commands.whitelist.remove.failed",
-                            &[],
-                        )
-                    )
-                )
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.whitelist.remove.failed",
+                    &[],
+                )))
             } else {
                 Ok(successes)
             }

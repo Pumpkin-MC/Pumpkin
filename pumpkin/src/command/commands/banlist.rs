@@ -58,12 +58,10 @@ impl CommandExecutor for ListExecutor {
 
                     handle_banlist(entries, sender).await
                 }
-                _ => {
-                    Err(CommandError::CommandFailed(TextComponent::translate(
-                        "command.unknown.argument",
-                        []
-                    )))
-                }
+                _ => Err(CommandError::CommandFailed(TextComponent::translate(
+                    "command.unknown.argument",
+                    [],
+                ))),
             }
         })
     }
@@ -102,13 +100,15 @@ impl CommandExecutor for ListAllExecutor {
 }
 
 /// `Vec<(name, source, reason)>`
-async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSender) -> Result<i32, CommandError> {
+async fn handle_banlist(
+    list: Vec<(String, String, String)>,
+    sender: &CommandSender,
+) -> Result<i32, CommandError> {
     if list.is_empty() {
-        return Result::Err(
-            CommandError::CommandFailed(
-                TextComponent::translate("commands.banlist.none", [])
-            )
-        )
+        return Result::Err(CommandError::CommandFailed(TextComponent::translate(
+            "commands.banlist.none",
+            [],
+        )));
     }
 
     sender

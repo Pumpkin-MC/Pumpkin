@@ -276,16 +276,13 @@ impl CommandExecutor for SelfToEntityExecutor {
                         .clone()
                         .teleport(pos, Some(yaw), Some(pitch), world)
                         .await;
-                    
+
                     Ok(1)
                 }
-                _ => {
-                    Err(
-                        CommandError::CommandFailed(
-                            TextComponent::translate("permissions.requires.player", [])
-                        )
-                    )
-                }
+                _ => Err(CommandError::CommandFailed(TextComponent::translate(
+                    "permissions.requires.player",
+                    [],
+                ))),
             }
         })
     }
@@ -318,13 +315,10 @@ impl CommandExecutor for SelfToPosExecutor {
 
                     Ok(1)
                 }
-                _ => {
-                    Err(
-                        CommandError::CommandFailed(
-                            TextComponent::translate("permissions.requires.player", [])
-                        )
-                    )
-                }
+                _ => Err(CommandError::CommandFailed(TextComponent::translate(
+                    "permissions.requires.player",
+                    [],
+                ))),
             }
         })
     }

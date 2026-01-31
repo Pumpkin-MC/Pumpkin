@@ -80,11 +80,10 @@ impl CommandExecutor for Executor {
             }
 
             if successes == 0 {
-                Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate("commands.op.failed", [])
-                    )
-                )
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.op.failed",
+                    [],
+                )))
             } else {
                 Ok(successes)
             }

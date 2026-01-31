@@ -6,10 +6,13 @@ use pumpkin_util::{
 };
 
 use crate::command::{
-    CommandExecutor, CommandResult, CommandSender, args::{Arg, ConsumedArgs, simple::SimpleArgConsumer}, dispatcher::CommandError, tree::{
+    CommandExecutor, CommandResult, CommandSender,
+    args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+    dispatcher::CommandError,
+    tree::{
         CommandTree,
         builder::{argument, literal, require},
-    }
+    },
 };
 
 use crate::command::CommandError::InvalidConsumption;
@@ -80,11 +83,9 @@ impl CommandExecutor for LoadExecutor {
             };
 
             if server.plugin_manager.is_plugin_active(plugin_name).await {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!("Plugin {plugin_name} is already loaded"))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "Plugin {plugin_name} is already loaded"
+                ))));
             }
 
             let result = server
@@ -104,15 +105,9 @@ impl CommandExecutor for LoadExecutor {
                         .await;
                     Ok(1)
                 }
-                Err(e) => {
-                    Err(
-                        CommandError::CommandFailed(
-                            TextComponent::text(format!(
-                                "Failed to load plugin {plugin_name}: {e}"
-                            ))
-                        )
-                    )
-                }
+                Err(e) => Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "Failed to load plugin {plugin_name}: {e}"
+                )))),
             }
         })
     }
@@ -133,11 +128,9 @@ impl CommandExecutor for UnloadExecutor {
             };
 
             if !server.plugin_manager.is_plugin_active(plugin_name).await {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text(format!("Plugin {plugin_name} is not loaded"))
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "Plugin {plugin_name} is not loaded"
+                ))));
             }
 
             let result = server.plugin_manager.unload_plugin(plugin_name).await;
@@ -155,15 +148,9 @@ impl CommandExecutor for UnloadExecutor {
 
                     Ok(1)
                 }
-                Err(e) => {
-                    return Err(
-                        CommandError::CommandFailed(
-                            TextComponent::text(format!(
-                                "Failed to unload plugin {plugin_name}: {e}"
-                            ))
-                        )
-                    );
-                }
+                Err(e) => Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "Failed to unload plugin {plugin_name}: {e}"
+                )))),
             }
         })
     }

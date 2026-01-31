@@ -36,7 +36,7 @@ impl CommandExecutor for Executor {
                     None,
                 )
                 .await;
-            
+
             Ok(1)
         })
     }

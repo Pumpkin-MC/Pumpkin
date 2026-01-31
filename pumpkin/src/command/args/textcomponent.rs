@@ -33,6 +33,7 @@ impl ArgumentConsumer for TextComponentArgConsumer {
 
         let text_component_opt = parse_text_component(s);
 
+        // TODO: Allow identifiers (starting with alphabetic or _, then alphanumeric+-_.) as display names
         let final_arg: Option<Arg<'a>> = text_component_opt.map_or_else(
             || {
                 (s.starts_with('"') && s.ends_with('"')).then(|| {

@@ -232,7 +232,12 @@ impl LivingEntity {
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
-        let succeeded = self.active_effects.lock().await.remove(&effect_type).is_some();
+        let succeeded = self
+            .active_effects
+            .lock()
+            .await
+            .remove(&effect_type)
+            .is_some();
         self.entity
             .world
             .load()

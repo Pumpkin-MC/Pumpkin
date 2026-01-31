@@ -45,11 +45,10 @@ impl CommandExecutor for Executor {
                     .await;
                 Ok(1)
             } else {
-                Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate("commands.pardon.failed", [])
-                    )
-                )
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.pardon.failed",
+                    [],
+                )))
             };
 
             lock.save();

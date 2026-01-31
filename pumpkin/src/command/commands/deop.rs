@@ -63,14 +63,10 @@ impl CommandExecutor for Executor {
             }
 
             if succeeded_deops == 0 {
-                Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate(
-                            "commands.deop.failed",
-                            [],
-                        )
-                    )
-                )
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.deop.failed",
+                    [],
+                )))
             } else {
                 Ok(succeeded_deops)
             }

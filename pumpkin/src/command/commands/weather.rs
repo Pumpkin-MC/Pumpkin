@@ -44,9 +44,8 @@ impl CommandExecutor for Executor {
 
             match self.mode {
                 WeatherMode::Clear => {
-                    let processed_duration = duration.unwrap_or_else(
-                        || rand::random_range(12_000..=180_000)
-                    );
+                    let processed_duration =
+                        duration.unwrap_or_else(|| rand::random_range(12_000..=180_000));
 
                     weather
                         .set_weather_parameters(&world, processed_duration, 0, false, false)
@@ -56,9 +55,8 @@ impl CommandExecutor for Executor {
                         .await;
                 }
                 WeatherMode::Rain => {
-                    let processed_duration = duration.unwrap_or_else(
-                        || rand::random_range(12_000..=24_000)
-                    );
+                    let processed_duration =
+                        duration.unwrap_or_else(|| rand::random_range(12_000..=24_000));
 
                     weather
                         .set_weather_parameters(&world, 0, processed_duration, true, false)
@@ -68,9 +66,8 @@ impl CommandExecutor for Executor {
                         .await;
                 }
                 WeatherMode::Thunder => {
-                    let processed_duration = duration.unwrap_or_else(
-                        || rand::random_range(3_600..=15_600)
-                    );
+                    let processed_duration =
+                        duration.unwrap_or_else(|| rand::random_range(3_600..=15_600));
 
                     weather
                         .set_weather_parameters(&world, 0, processed_duration, true, true)

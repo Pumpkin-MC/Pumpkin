@@ -65,12 +65,12 @@ impl CommandExecutor for QueryExecutor {
                 QueryMode::GameTime => level_time.query_gametime(),
                 QueryMode::Day => level_time.query_day(),
             };
-            sender.send_message(
-                TextComponent::translate(
+            sender
+                .send_message(TextComponent::translate(
                     "commands.time.query",
                     [TextComponent::text(curr_time.to_string())],
-                )
-            ).await;
+                ))
+                .await;
             Ok(curr_time as i32)
         })
     }
@@ -91,11 +91,9 @@ impl CommandExecutor for ChangeExecutor {
             } else if let Ok(ticks) = TimeArgumentConsumer::find_arg(args, ARG_TIME) {
                 ticks
             } else {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::text("Invalid time specified.")
-                    )
-                );
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    "Invalid time specified.",
+                )));
             };
 
             let mode = self.0;
@@ -112,25 +110,25 @@ impl CommandExecutor for ChangeExecutor {
                     level_time.add_time(time_count.into());
                     level_time.send_time(world).await;
                     let curr_time = level_time.query_daytime();
-                    sender.send_message(
-                        TextComponent::translate(
+                    sender
+                        .send_message(TextComponent::translate(
                             "commands.time.set",
-                            [TextComponent::text(curr_time.to_string())]
-                        )
-                    ).await;
+                            [TextComponent::text(curr_time.to_string())],
+                        ))
+                        .await;
                     Ok(curr_time as i32)
                 }
                 Mode::Set(_) => {
                     // set
                     level_time.set_time(time_count.into());
                     level_time.send_time(world).await;
-                    sender.send_message(
-                        TextComponent::translate(
+                    sender
+                        .send_message(TextComponent::translate(
                             "commands.time.set",
                             [TextComponent::text(time_count.to_string())],
-                        )
-                    ).await;
-                    Ok(time_count as i32)
+                        ))
+                        .await;
+                    Ok(time_count)
                 }
             }
         })

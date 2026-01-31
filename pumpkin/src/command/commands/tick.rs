@@ -53,7 +53,6 @@ struct TickExecutor(SubCommand);
 
 impl TickExecutor {
     async fn handle_query(
-        &self,
         sender: &CommandSender,
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
@@ -79,8 +78,7 @@ impl TickExecutor {
                 ))
                 .await;
         } else {
-            self.handle_non_sprinting_status(sender, manager, avg_tick_nanos)
-                .await;
+            Self::handle_non_sprinting_status(sender, manager, avg_tick_nanos).await;
 
             let target_mspt_str = nanos_to_millis_string(manager.nanoseconds_per_tick());
             sender
@@ -95,11 +93,10 @@ impl TickExecutor {
                 .await;
         }
 
-        self.send_percentiles(sender, server).await;
+        Self::send_percentiles(sender, server).await;
         Ok(tickrate as i32)
     }
     async fn handle_non_sprinting_status(
-        &self,
         sender: &CommandSender,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         avg_tick_nanos: i64,
@@ -119,7 +116,7 @@ impl TickExecutor {
         }
     }
 
-    async fn send_percentiles(&self, sender: &CommandSender, server: &crate::server::Server) {
+    async fn send_percentiles(sender: &CommandSender, server: &crate::server::Server) {
         let tick_count = server.tick_count.load(Ordering::Relaxed);
         let sample_size = (tick_count as usize).min(100);
 
@@ -146,7 +143,6 @@ impl TickExecutor {
         }
     }
     async fn handle_step_command(
-        &self,
         sender: &CommandSender,
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
@@ -169,7 +165,6 @@ impl TickExecutor {
         }
     }
     async fn handle_sprint_command(
-        &self,
         sender: &CommandSender,
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
@@ -193,6 +188,22 @@ impl TickExecutor {
             ))
             .await;
     }
+
+    async fn handle_set_tick_rate<E>(
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        manager: &crate::server::tick_rate_manager::ServerTickRateManager,
+        rate: f32,
+    ) -> Result<i32, E> {
+        manager.set_tick_rate(server, rate).await;
+        sender
+            .send_message(TextComponent::translate(
+                "commands.tick.rate.success",
+                [TextComponent::text(format!("{rate:.1}"))],
+            ))
+            .await;
+        Ok(rate as i32)
+    }
 }
 
 impl CommandExecutor for TickExecutor {
@@ -204,29 +215,14 @@ impl CommandExecutor for TickExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let manager = &server.tick_rate_manager;
-
             match self.0 {
-                SubCommand::Query => self.handle_query(sender, server, manager).await,
+                SubCommand::Query => Self::handle_query(sender, server, manager).await,
                 SubCommand::Rate => {
                     let rate = BoundedNumArgumentConsumer::<f32>::find_arg(args, "rate")??;
-                    manager.set_tick_rate(server, rate).await;
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.rate.success",
-                            [TextComponent::text(format!("{rate:.1}"))],
-                        ))
-                        .await;
-                    Ok(rate as i32)
+                    Self::handle_set_tick_rate(sender, server, manager, rate).await
                 }
                 SubCommand::RateLiteral(rate) => {
-                    manager.set_tick_rate(server, rate).await;
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.rate.success",
-                            [TextComponent::text(format!("{rate:.1}"))],
-                        ))
-                        .await;
-                    Ok(rate as i32)
+                    Self::handle_set_tick_rate(sender, server, manager, rate).await
                 }
                 SubCommand::Freeze(freeze) => {
                     manager.set_frozen(server, freeze).await;
@@ -241,16 +237,16 @@ impl CommandExecutor for TickExecutor {
                     Ok(freeze as i32)
                 }
                 SubCommand::StepDefault => {
-                    self.handle_step_command(sender, server, manager, 1).await;
+                    Self::handle_step_command(sender, server, manager, 1).await;
                     Ok(1)
                 }
                 SubCommand::StepTimed => {
                     let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
-                    self.handle_step_command(sender, server, manager, ticks).await;
+                    Self::handle_step_command(sender, server, manager, ticks).await;
                     Ok(1)
                 }
                 SubCommand::StepLiteral(ticks) => {
-                    self.handle_step_command(sender, server, manager, ticks).await;
+                    Self::handle_step_command(sender, server, manager, ticks).await;
                     Ok(1)
                 }
                 SubCommand::StepStop => {
@@ -274,14 +270,17 @@ impl CommandExecutor for TickExecutor {
                     }
                 }
                 SubCommand::SprintTimed => {
-                    let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
-                    self.handle_sprint_command(sender, server, manager, ticks)
-                        .await;
+                    Self::handle_sprint_command(
+                        sender,
+                        server,
+                        manager,
+                        TimeArgumentConsumer::find_arg(args, "time")?,
+                    )
+                    .await;
                     Ok(1)
                 }
                 SubCommand::SprintLiteral(ticks) => {
-                    self.handle_sprint_command(sender, server, manager, ticks)
-                        .await;
+                    Self::handle_sprint_command(sender, server, manager, ticks).await;
                     Ok(1)
                 }
                 SubCommand::SprintStop => {

@@ -45,11 +45,9 @@ impl CommandExecutor for TargetSelfExecutor {
                 Err(_) => 25565,
                 Ok(Ok(count)) => count,
                 Ok(Err(_)) => {
-                    return Err(
-                        InvalidConsumption(
-                            Some("Port must be between 1 and 65535.".into())
-                        )
-                    );
+                    return Err(InvalidConsumption(Some(
+                        "Port must be between 1 and 65535.".into(),
+                    )));
                 }
             };
 
@@ -87,11 +85,9 @@ impl CommandExecutor for TargetPlayerExecutor {
                 Err(_) => 25565,
                 Ok(Ok(count)) => count,
                 Ok(Err(_)) => {
-                    return Err(
-                        InvalidConsumption(
-                            Some("Port must be between 1 and 65535.".into())
-                        )
-                    );
+                    return Err(InvalidConsumption(Some(
+                        "Port must be between 1 and 65535.".into(),
+                    )));
                 }
             };
 
@@ -99,15 +95,11 @@ impl CommandExecutor for TargetPlayerExecutor {
                 return Err(InvalidConsumption(Some(ARG_PLAYERS.into())));
             };
 
-            if players.len() == 0 {
-                return Err(
-                    CommandError::CommandFailed(
-                        TextComponent::translate(
-                            "commands.transfer.error.no_players",
-                            []
-                        )
-                    )
-                );
+            if players.is_empty() {
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.transfer.error.no_players",
+                    [],
+                )));
             }
 
             for p in players {
@@ -121,27 +113,27 @@ impl CommandExecutor for TargetPlayerExecutor {
             }
 
             if players.len() == 1 {
-                sender.send_message(
-                    TextComponent::translate(
+                sender
+                    .send_message(TextComponent::translate(
                         "commands.transfer.success.single",
                         [
                             players[0].get_display_name().await,
                             TextComponent::text(hostname.to_owned()),
-                            TextComponent::text(port.to_string())
-                        ]
-                    )
-                ).await;
+                            TextComponent::text(port.to_string()),
+                        ],
+                    ))
+                    .await;
             } else {
-                sender.send_message(
-                    TextComponent::translate(
+                sender
+                    .send_message(TextComponent::translate(
                         "commands.transfer.success.multiple",
                         [
                             TextComponent::text(players.len().to_string()),
                             TextComponent::text(hostname.to_owned()),
-                            TextComponent::text(port.to_string())
-                        ]
-                    )
-                ).await;
+                            TextComponent::text(port.to_string()),
+                        ],
+                    ))
+                    .await;
             }
 
             Ok(players.len() as i32)
