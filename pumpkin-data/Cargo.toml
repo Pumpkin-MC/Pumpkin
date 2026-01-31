@@ -40,3 +40,6 @@ harness = false
 # Generated files generate a lot of warns
 # [lints]
 # workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["phf"]
