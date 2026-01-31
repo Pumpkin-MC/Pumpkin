@@ -130,7 +130,8 @@ pub struct TargetSelector {
 
 impl TargetSelector {
     /// Creates a new target selector with the specified type and default conditions.
-    fn new(selector_type: EntitySelectorType) -> Self {
+    #[must_use]
+    pub fn new(selector_type: EntitySelectorType) -> Self {
         let mut filter = Vec::new();
         match selector_type {
             EntitySelectorType::Source => filter.push(EntityFilter::Limit(1)),
