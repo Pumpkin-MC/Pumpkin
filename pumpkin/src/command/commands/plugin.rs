@@ -8,6 +8,7 @@ use pumpkin_util::{
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+    dispatcher::CommandError,
     tree::{
         CommandTree,
         builder::{argument, literal, require},
@@ -62,7 +63,7 @@ impl CommandExecutor for ListExecutor {
 
             sender.send_message(message).await;
 
-            Ok(())
+            Ok(plugins.len() as i32)
         })
     }
 }
@@ -82,13 +83,9 @@ impl CommandExecutor for LoadExecutor {
             };
 
             if server.plugin_manager.is_plugin_active(plugin_name).await {
-                sender
-                    .send_message(
-                        TextComponent::text(format!("Plugin {plugin_name} is already loaded"))
-                            .color_named(NamedColor::Red),
-                    )
-                    .await;
-                return Ok(());
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "Plugin {plugin_name} is already loaded"
+                ))));
             }
 
             let result = server
@@ -106,20 +103,12 @@ impl CommandExecutor for LoadExecutor {
                             .color_named(NamedColor::Green),
                         )
                         .await;
+                    Ok(1)
                 }
-                Err(e) => {
-                    sender
-                        .send_message(
-                            TextComponent::text(format!(
-                                "Failed to load plugin {plugin_name}: {e}"
-                            ))
-                            .color_named(NamedColor::Red),
-                        )
-                        .await;
-                }
+                Err(e) => Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "Failed to load plugin {plugin_name}: {e}"
+                )))),
             }
-
-            Ok(())
         })
     }
 }
@@ -139,13 +128,9 @@ impl CommandExecutor for UnloadExecutor {
             };
 
             if !server.plugin_manager.is_plugin_active(plugin_name).await {
-                sender
-                    .send_message(
-                        TextComponent::text(format!("Plugin {plugin_name} is not loaded"))
-                            .color_named(NamedColor::Red),
-                    )
-                    .await;
-                return Ok(());
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "Plugin {plugin_name} is not loaded"
+                ))));
             }
 
             let result = server.plugin_manager.unload_plugin(plugin_name).await;
@@ -160,20 +145,13 @@ impl CommandExecutor for UnloadExecutor {
                             .color_named(NamedColor::Green),
                         )
                         .await;
-                }
-                Err(e) => {
-                    sender
-                        .send_message(
-                            TextComponent::text(format!(
-                                "Failed to unload plugin {plugin_name}: {e}"
-                            ))
-                            .color_named(NamedColor::Red),
-                        )
-                        .await;
-                }
-            }
 
-            Ok(())
+                    Ok(1)
+                }
+                Err(e) => Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "Failed to unload plugin {plugin_name}: {e}"
+                )))),
+            }
         })
     }
 }

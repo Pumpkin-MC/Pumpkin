@@ -80,7 +80,8 @@ impl CommandExecutor for Executor {
                 ))
                 .await;
 
-            Ok(())
+            // TODO: Add `viewers` arguments and change the logic for this result
+            Ok(1)
         })
     }
 }

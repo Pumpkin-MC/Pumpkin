@@ -1,8 +1,8 @@
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::color::{Color, NamedColor};
 
 use crate::command::CommandResult;
 use crate::command::args::{FindArg, time::TimeArgumentConsumer};
+use crate::command::dispatcher::CommandError;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender, ConsumedArgs, tree::CommandTree};
 
@@ -60,32 +60,18 @@ impl CommandExecutor for QueryExecutor {
                 .expect("There should always be at least one world");
             let level_time = world.level_time.lock().await;
 
-            let msg = match mode {
-                QueryMode::DayTime => {
-                    let curr_time = level_time.query_daytime();
-                    TextComponent::translate(
-                        "commands.time.query",
-                        [TextComponent::text(curr_time.to_string())],
-                    )
-                }
-                QueryMode::GameTime => {
-                    let curr_time = level_time.query_gametime();
-                    TextComponent::translate(
-                        "commands.time.query",
-                        [TextComponent::text(curr_time.to_string())],
-                    )
-                }
-                QueryMode::Day => {
-                    let curr_time = level_time.query_day();
-                    TextComponent::translate(
-                        "commands.time.query",
-                        [TextComponent::text(curr_time.to_string())],
-                    )
-                }
+            let curr_time = match mode {
+                QueryMode::DayTime => level_time.query_daytime(),
+                QueryMode::GameTime => level_time.query_gametime(),
+                QueryMode::Day => level_time.query_day(),
             };
-
-            sender.send_message(msg).await;
-            Ok(())
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.time.query",
+                    [TextComponent::text(curr_time.to_string())],
+                ))
+                .await;
+            Ok(curr_time as i32)
         })
     }
 }
@@ -105,13 +91,9 @@ impl CommandExecutor for ChangeExecutor {
             } else if let Ok(ticks) = TimeArgumentConsumer::find_arg(args, ARG_TIME) {
                 ticks
             } else {
-                sender
-                    .send_message(
-                        TextComponent::text("Invalid time specified.")
-                            .color(Color::Named(NamedColor::Red)),
-                    )
-                    .await;
-                return Ok(());
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    "Invalid time specified.",
+                )));
             };
 
             let mode = self.0;
@@ -122,30 +104,33 @@ impl CommandExecutor for ChangeExecutor {
                 .expect("There should always be at least one world");
             let mut level_time = world.level_time.lock().await;
 
-            let msg = match mode {
+            match mode {
                 Mode::Add => {
                     // add
                     level_time.add_time(time_count.into());
                     level_time.send_time(world).await;
                     let curr_time = level_time.query_daytime();
-                    TextComponent::translate(
-                        "commands.time.set",
-                        [TextComponent::text(curr_time.to_string())],
-                    )
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.time.set",
+                            [TextComponent::text(curr_time.to_string())],
+                        ))
+                        .await;
+                    Ok(curr_time as i32)
                 }
                 Mode::Set(_) => {
                     // set
                     level_time.set_time(time_count.into());
                     level_time.send_time(world).await;
-                    TextComponent::translate(
-                        "commands.time.set",
-                        [TextComponent::text(time_count.to_string())],
-                    )
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.time.set",
+                            [TextComponent::text(time_count.to_string())],
+                        ))
+                        .await;
+                    Ok(time_count)
                 }
-            };
-
-            sender.send_message(msg).await;
-            Ok(())
+            }
         })
     }
 }

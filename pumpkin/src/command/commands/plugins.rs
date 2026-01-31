@@ -47,7 +47,7 @@ impl CommandExecutor for Executor {
 
             sender.send_message(message).await;
 
-            Ok(())
+            Ok(plugins.len() as i32)
         })
     }
 }

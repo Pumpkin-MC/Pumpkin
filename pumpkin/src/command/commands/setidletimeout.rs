@@ -39,14 +39,22 @@ impl CommandExecutor for SetIdleTimeoutExecutor {
 
             server.player_idle_timeout.store(minutes, Ordering::Relaxed);
 
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.setidletimeout.success",
-                    [TextComponent::text(minutes.to_string())],
-                ))
-                .await;
+            {
+                if minutes == 0 {
+                    sender.send_message(TextComponent::translate(
+                        "commands.setidletimeout.success.disabled",
+                        [],
+                    ))
+                } else {
+                    sender.send_message(TextComponent::translate(
+                        "commands.setidletimeout.success",
+                        [TextComponent::text(minutes.to_string())],
+                    ))
+                }
+            }
+            .await;
 
-            Ok(())
+            Ok(minutes)
         })
     }
 }

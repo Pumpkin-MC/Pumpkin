@@ -141,7 +141,7 @@ impl CommandExecutor for Executor {
                 );
                 sender.send_message(msg).await;
             }
-            Ok(())
+            Ok(success)
         })
     }
 }

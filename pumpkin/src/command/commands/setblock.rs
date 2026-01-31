@@ -127,7 +127,7 @@ impl CommandExecutor for Executor {
                         ],
                     ))
                     .await;
-                Ok(())
+                Ok(1)
             } else {
                 Err(CommandError::CommandFailed(TextComponent::translate(
                     "commands.setblock.failed",

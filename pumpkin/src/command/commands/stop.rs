@@ -27,7 +27,7 @@ impl CommandExecutor for Executor {
                 )
                 .await;
             stop_server();
-            Ok(())
+            Ok(1)
         })
     }
 }

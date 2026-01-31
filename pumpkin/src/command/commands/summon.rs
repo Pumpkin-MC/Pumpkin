@@ -67,7 +67,7 @@ impl CommandExecutor for Executor {
                 .send_message(TextComponent::translate("commands.summon.success", [name]))
                 .await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }

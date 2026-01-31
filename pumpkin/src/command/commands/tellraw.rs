@@ -33,7 +33,7 @@ impl CommandExecutor for TellRawExecutor {
             for target in targets {
                 target.send_system_message(&text).await;
             }
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }

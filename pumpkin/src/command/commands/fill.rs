@@ -337,7 +337,7 @@ impl CommandExecutor for Executor {
                 ))
                 .await;
 
-            Ok(())
+            Ok(context.placed_blocks)
         })
     }
 }

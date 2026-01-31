@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::command::CommandResult;
 use crate::entity::EntityBase;
 use crate::{
@@ -33,8 +35,7 @@ impl CommandExecutor for NoReasonExecutor {
                 return Err(InvalidConsumption(Some(ARG_TARGET.into())));
             };
 
-            ban_player(sender, server, &targets[0], None).await;
-            Ok(())
+            ban_players(sender, server, targets.as_slice(), None).await
         })
     }
 }
@@ -57,28 +58,49 @@ impl CommandExecutor for ReasonExecutor {
                 return Err(InvalidConsumption(Some(ARG_REASON.into())));
             };
 
-            ban_player(sender, server, &targets[0], Some(reason.clone())).await;
-            Ok(())
+            ban_players(sender, server, targets.as_slice(), Some(reason)).await
         })
     }
 }
 
+/// Returns the number of players successfully banned.
+async fn ban_players(
+    sender: &CommandSender,
+    server: &crate::server::Server,
+    targets: &[Arc<Player>],
+    reason: Option<&String>,
+) -> Result<i32, CommandError> {
+    let mut count: usize = 0;
+    for target in targets {
+        if ban_player(sender, server, target, reason.cloned()).await {
+            count += 1;
+        }
+    }
+
+    if count == 0 {
+        Err(CommandError::CommandFailed(TextComponent::translate(
+            "commands.ban.failed",
+            [],
+        )))
+    } else {
+        Ok(count as i32)
+    }
+}
+
+/// Returns `true` if the player was successfully banned.
 async fn ban_player(
     sender: &CommandSender,
     server: &crate::server::Server,
     player: &Player,
     reason: Option<String>,
-) {
+) -> bool {
     let mut banned_players = server.data.banned_player_list.write().await;
 
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
     let profile = &player.gameprofile;
 
     if banned_players.get_entry(&player.gameprofile).is_some() {
-        sender
-            .send_message(TextComponent::translate("commands.ban.failed", []))
-            .await;
-        return;
+        return false;
     }
 
     banned_players.banned_players.push(BannedPlayerEntry::new(
@@ -105,6 +127,8 @@ async fn ban_player(
             TextComponent::translate("multiplayer.disconnect.banned", []),
         )
         .await;
+
+    true
 }
 
 pub fn init_command_tree() -> CommandTree {

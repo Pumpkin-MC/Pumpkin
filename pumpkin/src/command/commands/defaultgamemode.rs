@@ -31,9 +31,12 @@ impl CommandExecutor for DefaultGamemodeExecutor {
                 return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
             };
 
+            let mut successful_changes: i32 = 0;
             if server.basic_config.force_gamemode {
                 for player in server.get_all_players() {
-                    player.set_gamemode(gamemode).await;
+                    if player.set_gamemode(gamemode).await {
+                        successful_changes += 1;
+                    }
                 }
             }
 
@@ -50,7 +53,7 @@ impl CommandExecutor for DefaultGamemodeExecutor {
             //Change the default gamemode (not in configuration.toml)
             server.defaultgamemode.lock().await.gamemode = gamemode;
 
-            Ok(())
+            Ok(successful_changes)
         })
     }
 }

@@ -58,7 +58,7 @@ impl CommandExecutor for Executor {
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }

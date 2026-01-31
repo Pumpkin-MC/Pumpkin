@@ -6,7 +6,7 @@ use pumpkin_util::text::color::{Color, NamedColor};
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::command::CommandTreeArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
-use crate::command::dispatcher::CommandError::InvalidConsumption;
+use crate::command::dispatcher::CommandError::{self, InvalidConsumption};
 use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::tree::{Command, CommandTree};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
@@ -93,7 +93,7 @@ impl CommandExecutor for Executor {
 
             sender.send_message(message).await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }
@@ -113,13 +113,9 @@ impl CommandExecutor for BaseHelpExecutor {
                 Err(_) => 1,
                 Ok(Ok(number)) => number,
                 Ok(Err(_)) => {
-                    sender
-                        .send_message(
-                            TextComponent::text("Invalid page number.")
-                                .color(Color::Named(NamedColor::Red)),
-                        )
-                        .await;
-                    return Ok(());
+                    return Err(CommandError::CommandFailed(TextComponent::text(
+                        "Invalid page number.",
+                    )));
                 }
             };
 
@@ -231,7 +227,7 @@ impl CommandExecutor for BaseHelpExecutor {
 
             sender.send_message(message).await;
 
-            Ok(())
+            Ok(commands.len() as i32)
         })
     }
 }
