@@ -1,11 +1,16 @@
 // Don't warn on event sending macros
-#![recursion_limit = "512"]
+#![recursion_limit = "256"]
 #![expect(unused_labels)]
 
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
 
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+use std::process::Command;
+#[cfg(not(unix))]
+use std::process::Stdio;
 use std::{
     io::{self},
     sync::{Arc, LazyLock, OnceLock},
@@ -16,11 +21,15 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 
 use pumpkin::data::VanillaData;
-use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
+pub use pumpkin::request_restart;
+use pumpkin::{
+    LoggerOption, PumpkinServer, RESTART_REQUESTED, SHOULD_STOP, STOP_INTERRUPT, stop_server,
+};
+use std::sync::atomic::Ordering;
 
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 // Setup some tokens to allow us to identify which event is for which socket.
 
@@ -44,6 +53,7 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
 // runtime with a channel! See `Level::fetch_chunks` as an example!
+#[expect(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
     #[cfg(feature = "console-subscriber")]
@@ -119,9 +129,61 @@ async fn main() {
             String::new()
         }
     );
+    if std::env::var_os("PUMPKIN_RESTARTED").is_some() {
+        log::info!(
+            "{}",
+            TextComponent::text("Server restarted. Press Enter once before using the console.")
+                .color_named(NamedColor::Green)
+                .to_pretty_console()
+        );
+    }
+    let restart_delay_ms = basic_config.restart_delay_ms;
 
     pumpkin_server.start().await;
     log::info!("The server has stopped.");
+    drop(pumpkin_server);
+
+    if RESTART_REQUESTED.load(Ordering::Relaxed) {
+        log::warn!("Restart requested; respawning server process...");
+        let exe = match std::env::current_exe() {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Failed to get current exe for restart: {e}");
+                return;
+            }
+        };
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        #[cfg(unix)]
+        {
+            std::thread::sleep(Duration::from_millis(restart_delay_ms));
+            // Replace current process to keep console attached.
+            let err = Command::new(exe)
+                .args(&args)
+                .env("PUMPKIN_RESTARTED", "1")
+                .exec();
+            log::error!("Failed to exec new server process: {err}");
+        }
+        #[cfg(not(unix))]
+        {
+            std::thread::sleep(Duration::from_millis(restart_delay_ms));
+            match Command::new(exe)
+                .args(&args)
+                .env("PUMPKIN_RESTARTED", "1")
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn()
+            {
+                Ok(mut child) => {
+                    log::info!("Spawned new server process.");
+                    // Keep the console attached to the child so PowerShell doesn't take over stdin.
+                    let _ = child.wait();
+                    std::process::exit(0);
+                }
+                Err(e) => log::error!("Failed to spawn new server process: {e}"),
+            }
+        }
+    }
 }
 
 fn handle_interrupt() {
