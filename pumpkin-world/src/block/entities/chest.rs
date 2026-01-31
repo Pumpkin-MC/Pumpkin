@@ -138,6 +138,11 @@ impl ChestBlockEntity {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:chest";
 
+    /// Returns the number of players currently viewing this chest
+    pub fn get_viewer_count(&self) -> u16 {
+        self.viewers.get_viewer_count()
+    }
+
     #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {

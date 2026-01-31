@@ -203,7 +203,9 @@ impl PumpkinServer {
             });
         }
 
-        let tcp_listener = if server.basic_config.java_edition {
+        let mut tcp_listener = None;
+
+        if server.basic_config.java_edition {
             let address = server.basic_config.java_edition_address;
             // Setup the TCP server socket.
             let listener = match TcpListener::bind(address).await {
@@ -256,10 +258,8 @@ impl PumpkinServer {
                 server.spawn_task(lan_broadcast.start(addr));
             }
 
-            Some(listener)
-        } else {
-            None
-        };
+            tcp_listener = Some(listener);
+        }
 
         // Ticker
         {
