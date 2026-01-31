@@ -36,6 +36,18 @@ jobs:
       - run: rustup component add clippy rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features
+  machete:
+    name: Detect unused dependencies
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
+      - uses: bnjbvr/cargo-machete@main
   build_and_test:
     name: Build project and test
     runs-on: ${{ matrix.os }}
