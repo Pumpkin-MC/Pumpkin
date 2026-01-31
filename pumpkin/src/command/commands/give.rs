@@ -1,7 +1,6 @@
 use pumpkin_data::data_component::DataComponent::MaxStackSize;
 use pumpkin_data::data_component_impl::{MaxStackSizeImpl, get};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_world::item::ItemStack;
 

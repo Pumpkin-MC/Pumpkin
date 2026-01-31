@@ -230,7 +230,7 @@ async fn display_data(
             "commands.data.entity.query",
             [target_name, display]
         )
-    );
+    ).await;
 
     Ok(result)
 }

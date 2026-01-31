@@ -15,7 +15,6 @@ use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::world::bossbar::Bossbar;
 use crate::world::custom_bossbar::BossbarUpdateError;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
 use std::fmt::Write as _;
 use uuid::Uuid;
@@ -674,12 +673,6 @@ fn bossbar_prefix(title: TextComponent, namespace: String) -> TextComponent {
         .add_child(title)
         .add_child(TextComponent::text("]"))
         .hover_event(HoverEvent::show_text(TextComponent::text(namespace)))
-}
-
-async fn send_error_message(sender: &CommandSender, message: TextComponent) {
-    sender
-        .send_message(message.color(Color::Named(NamedColor::Red)))
-        .await;
 }
 
 async fn handle_bossbar_error(error: BossbarUpdateError) -> CommandError {

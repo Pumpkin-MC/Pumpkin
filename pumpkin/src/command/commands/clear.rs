@@ -39,10 +39,10 @@ async fn clear_player(target: &Player, item: &ItemPredicate, max: i32) -> i32 {
     let mut max: i32 = max;
     let mut is_done: bool = false;
 
-    iter_test_and_clear(&inventory.main_inventory, &mut count, &mut max, item, &mut is_done);
+    iter_test_and_clear(&inventory.main_inventory, &mut count, &mut max, item, &mut is_done).await;
 
     let entity_equipment_lock = inventory.entity_equipment.lock().await;
-    iter_test_and_clear(entity_equipment_lock.equipment.values(), &mut count, &mut max, item, &mut is_done);
+    iter_test_and_clear(entity_equipment_lock.equipment.values(), &mut count, &mut max, item, &mut is_done).await;
     drop(entity_equipment_lock);
 
     async fn test_and_clear(count: &mut i32, max: &mut i32, item: &ItemPredicate, slot: &Arc<Mutex<ItemStack>>, is_done: &mut bool) {
@@ -86,7 +86,7 @@ async fn clear_player(target: &Player, item: &ItemPredicate, max: i32) -> i32 {
         // Don't need to enter the loop if we are already done.
         if !*is_done {
             for slot in iter {
-                test_and_clear(count, max, item, slot, is_done);
+                test_and_clear(count, max, item, slot, is_done).await;
                 if *is_done {
                     break;
                 }

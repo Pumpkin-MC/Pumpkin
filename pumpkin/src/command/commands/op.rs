@@ -33,6 +33,7 @@ impl CommandExecutor for Executor {
                 return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
+            let mut successes: i32 = 0;
             for player in targets {
                 let new_level = server
                     .basic_config
@@ -40,9 +41,6 @@ impl CommandExecutor for Executor {
                     .min(sender.permission_lvl());
 
                 if player.permission_lvl.load() == new_level {
-                    sender
-                        .send_message(TextComponent::translate("commands.op.failed", []))
-                        .await;
                     continue;
                 }
 
@@ -77,9 +75,19 @@ impl CommandExecutor for Executor {
                         [player.get_display_name().await],
                     ))
                     .await;
+
+                successes += 1;
             }
 
-            Ok(())
+            if successes == 0 {
+                Err(
+                    CommandError::CommandFailed(
+                        TextComponent::translate("commands.op.failed", [])
+                    )
+                )
+            } else {
+                Ok(successes)
+            }
         })
     }
 }

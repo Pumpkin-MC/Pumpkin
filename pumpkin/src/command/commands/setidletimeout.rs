@@ -46,7 +46,7 @@ impl CommandExecutor for SetIdleTimeoutExecutor {
                 ))
                 .await;
 
-            Ok(())
+            Ok(minutes)
         })
     }
 }

@@ -37,7 +37,9 @@ impl CommandExecutor for SelfExecutor {
             };
             let pos = player.position().to_block_pos();
             let yaw = player.living_entity.entity.yaw.load();
-            set_spawnpoint(sender, &player, pos, yaw).await
+            set_spawnpoint(sender, &player, pos, yaw).await;
+
+            Ok(1)
         })
     }
 }
@@ -58,9 +60,10 @@ impl CommandExecutor for TargetsExecutor {
             for target in targets {
                 let pos = target.position().to_block_pos();
                 let yaw = target.living_entity.entity.yaw.load();
-                set_spawnpoint(sender, target, pos, yaw).await?;
+                set_spawnpoint(sender, target, pos, yaw).await;
             }
-            Ok(())
+
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -83,9 +86,10 @@ impl CommandExecutor for TargetsPosExecutor {
 
             for target in targets {
                 let yaw = target.living_entity.entity.yaw.load();
-                set_spawnpoint(sender, target, *pos, yaw).await?;
+                set_spawnpoint(sender, target, *pos, yaw).await;
             }
-            Ok(())
+
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -110,9 +114,10 @@ impl CommandExecutor for TargetsPosAngleExecutor {
             };
 
             for target in targets {
-                set_spawnpoint(sender, target, *pos, *yaw).await?;
+                set_spawnpoint(sender, target, *pos, *yaw).await;
             }
-            Ok(())
+
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -122,7 +127,7 @@ async fn set_spawnpoint(
     target: &Arc<Player>,
     pos: BlockPos,
     yaw: f32,
-) -> Result<(), CommandError> {
+) {
     let dimension = target.world().dimension;
 
     target
@@ -143,8 +148,6 @@ async fn set_spawnpoint(
             ],
         ))
         .await;
-
-    Ok(())
 }
 
 #[must_use]

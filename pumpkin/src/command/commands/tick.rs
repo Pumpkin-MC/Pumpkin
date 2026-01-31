@@ -57,7 +57,7 @@ impl TickExecutor {
         sender: &CommandSender,
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
-    ) -> Result<(), CommandError> {
+    ) -> Result<i32, CommandError> {
         let tickrate = manager.tickrate();
         let avg_tick_nanos = server.get_average_tick_time_nanos();
         let avg_mspt_str = nanos_to_millis_string(avg_tick_nanos);
@@ -96,7 +96,7 @@ impl TickExecutor {
         }
 
         self.send_percentiles(sender, server).await;
-        Ok(())
+        Ok(tickrate as i32)
     }
     async fn handle_non_sprinting_status(
         &self,
@@ -151,7 +151,7 @@ impl TickExecutor {
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         ticks: i32,
-    ) -> Result<(), CommandError> {
+    ) {
         if manager.step_game_if_paused(server, ticks).await {
             sender
                 .send_message(TextComponent::translate(
@@ -167,7 +167,6 @@ impl TickExecutor {
                 )
                 .await;
         }
-        Ok(())
     }
     async fn handle_sprint_command(
         &self,
@@ -175,7 +174,7 @@ impl TickExecutor {
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         ticks: i32,
-    ) -> Result<(), CommandError> {
+    ) {
         if manager
             .request_game_to_sprint(server, i64::from(ticks))
             .await
@@ -193,7 +192,6 @@ impl TickExecutor {
                 [],
             ))
             .await;
-        Ok(())
     }
 }
 
@@ -218,7 +216,7 @@ impl CommandExecutor for TickExecutor {
                             [TextComponent::text(format!("{rate:.1}"))],
                         ))
                         .await;
-                    Ok(())
+                    Ok(rate as i32)
                 }
                 SubCommand::RateLiteral(rate) => {
                     manager.set_tick_rate(server, rate).await;
@@ -228,7 +226,7 @@ impl CommandExecutor for TickExecutor {
                             [TextComponent::text(format!("{rate:.1}"))],
                         ))
                         .await;
-                    Ok(())
+                    Ok(rate as i32)
                 }
                 SubCommand::Freeze(freeze) => {
                     manager.set_frozen(server, freeze).await;
@@ -240,19 +238,20 @@ impl CommandExecutor for TickExecutor {
                     sender
                         .send_message(TextComponent::translate(message_key, []))
                         .await;
-                    Ok(())
+                    Ok(freeze as i32)
                 }
                 SubCommand::StepDefault => {
-                    self.handle_step_command(sender, server, manager, 1).await
+                    self.handle_step_command(sender, server, manager, 1).await;
+                    Ok(1)
                 }
                 SubCommand::StepTimed => {
                     let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
-                    self.handle_step_command(sender, server, manager, ticks)
-                        .await
+                    self.handle_step_command(sender, server, manager, ticks).await;
+                    Ok(1)
                 }
                 SubCommand::StepLiteral(ticks) => {
-                    self.handle_step_command(sender, server, manager, ticks)
-                        .await
+                    self.handle_step_command(sender, server, manager, ticks).await;
+                    Ok(1)
                 }
                 SubCommand::StepStop => {
                     if manager.stop_stepping(server).await {
@@ -262,24 +261,28 @@ impl CommandExecutor for TickExecutor {
                                 [],
                             ))
                             .await;
+                        Ok(1)
                     } else {
+                        // TODO: send feedback as error without Err
                         sender
                             .send_message(TextComponent::translate(
                                 "commands.tick.step.stop.fail",
                                 [],
                             ))
                             .await;
+                        Ok(0)
                     }
-                    Ok(())
                 }
                 SubCommand::SprintTimed => {
                     let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
                     self.handle_sprint_command(sender, server, manager, ticks)
-                        .await
+                        .await;
+                    Ok(1)
                 }
                 SubCommand::SprintLiteral(ticks) => {
                     self.handle_sprint_command(sender, server, manager, ticks)
-                        .await
+                        .await;
+                    Ok(1)
                 }
                 SubCommand::SprintStop => {
                     if manager.stop_sprinting(server).await {
@@ -289,15 +292,17 @@ impl CommandExecutor for TickExecutor {
                                 [],
                             ))
                             .await;
+                        Ok(1)
                     } else {
+                        // TODO: send feedback as error without Err
                         sender
                             .send_message(
                                 TextComponent::translate("commands.tick.sprint.stop.fail", [])
                                     .color(Color::Named(NamedColor::Red)),
                             )
                             .await;
+                        Ok(0)
                     }
-                    Ok(())
                 }
             }
         })
