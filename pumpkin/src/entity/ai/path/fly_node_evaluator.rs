@@ -151,19 +151,15 @@ impl FlyNodeEvaluator {
     }
 
     /// Checks if a node is open (not closed and not blocked).
+    #[allow(clippy::unused_self)]
     fn is_open(&self, node: Option<&Node>) -> bool {
-        match node {
-            Some(n) => !n.closed,
-            None => false,
-        }
+        node.is_some_and(|n| !n.closed)
     }
 
     /// Checks if a node has a non-negative malus.
+    #[allow(clippy::unused_self)]
     fn has_malus(&self, node: Option<&Node>) -> bool {
-        match node {
-            Some(n) => n.cost_malus >= 0.0,
-            None => false,
-        }
+        node.is_some_and(|n| n.cost_malus >= 0.0)
     }
 
     /// Gets the starting node for pathfinding.
@@ -234,10 +230,10 @@ impl FlyNodeEvaluator {
         ];
 
         for cn in &cardinal_nodes {
-            if self.is_open(cn.as_ref()) {
-                if let Some(n) = cn {
-                    neighbors.push(n.clone());
-                }
+            if self.is_open(cn.as_ref())
+                && let Some(n) = cn
+            {
+                neighbors.push(n.clone());
             }
         }
 
@@ -252,15 +248,12 @@ impl FlyNodeEvaluator {
         for (idx1, idx2, dx, dz) in horiz_diagonals {
             if self.has_malus(cardinal_nodes[idx1].as_ref())
                 && self.has_malus(cardinal_nodes[idx2].as_ref())
-            {
-                if let Some(neighbor) = self
+                && let Some(neighbor) = self
                     .find_accepted_node(node.x + dx, node.y, node.z + dz)
                     .await
-                {
-                    if self.is_open(Some(&neighbor)) {
-                        neighbors.push(neighbor);
-                    }
-                }
+                && self.is_open(Some(&neighbor))
+            {
+                neighbors.push(neighbor);
             }
         }
 
@@ -274,7 +267,7 @@ impl FlyNodeEvaluator {
     }
 
     /// Sets whether the entity can float in water.
-    pub fn set_can_float(&mut self, can_float: bool) {
+    pub const fn set_can_float(&mut self, can_float: bool) {
         self.can_float = can_float;
     }
 }

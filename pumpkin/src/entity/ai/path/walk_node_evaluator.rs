@@ -271,11 +271,10 @@ impl WalkNodeEvaluator {
             if let Some(neighbor) = self
                 .find_accepted_node(node.x + dx, node.y, node.z + dz, max_up_step, floor_level)
                 .await
+                && self.is_neighbor_valid(Some(&neighbor), node)
             {
-                if self.is_neighbor_valid(Some(&neighbor), node) {
-                    cardinal_nodes[i] = Some(neighbor.clone());
-                    neighbors.push(neighbor);
-                }
+                cardinal_nodes[i] = Some(neighbor.clone());
+                neighbors.push(neighbor);
             }
         }
 
@@ -287,28 +286,25 @@ impl WalkNodeEvaluator {
                 node,
                 cardinal_nodes[n1_idx].as_ref(),
                 cardinal_nodes[n2_idx].as_ref(),
-            ) {
-                if let Some(neighbor) = self
-                    .find_accepted_node(node.x + dx, node.y, node.z + dz, max_up_step, floor_level)
-                    .await
-                {
-                    if neighbor.cost_malus >= 0.0 && !neighbor.closed {
-                        neighbors.push(neighbor);
-                    }
-                }
+            ) && let Some(neighbor) = self
+                .find_accepted_node(node.x + dx, node.y, node.z + dz, max_up_step, floor_level)
+                .await
+                && neighbor.cost_malus >= 0.0
+                && !neighbor.closed
+            {
+                neighbors.push(neighbor);
             }
         }
 
         neighbors
     }
 
+    #[allow(clippy::unused_self)]
     fn is_neighbor_valid(&self, node: Option<&Node>, from: &Node) -> bool {
-        match node {
-            Some(n) => !n.closed && (n.cost_malus >= 0.0 || from.cost_malus < 0.0),
-            None => false,
-        }
+        node.is_some_and(|n| !n.closed && (n.cost_malus >= 0.0 || from.cost_malus < 0.0))
     }
 
+    #[allow(clippy::unused_self)]
     fn is_diagonal_valid(&self, from: &Node, n1: Option<&Node>, n2: Option<&Node>) -> bool {
         let (Some(n1), Some(n2)) = (n1, n2) else {
             return false;
@@ -415,7 +411,7 @@ impl WalkNodeEvaluator {
     }
 
     /// Sets whether the entity can float in water.
-    pub fn set_can_float(&mut self, can_float: bool) {
+    pub const fn set_can_float(&mut self, can_float: bool) {
         self.can_float = can_float;
     }
 
@@ -426,7 +422,7 @@ impl WalkNodeEvaluator {
     }
 
     /// Sets whether the entity can open doors.
-    pub fn set_can_open_doors(&mut self, can_open_doors: bool) {
+    pub const fn set_can_open_doors(&mut self, can_open_doors: bool) {
         self.can_open_doors = can_open_doors;
     }
 
@@ -437,7 +433,7 @@ impl WalkNodeEvaluator {
     }
 
     /// Sets whether the entity can pass through doors.
-    pub fn set_can_pass_doors(&mut self, can_pass_doors: bool) {
+    pub const fn set_can_pass_doors(&mut self, can_pass_doors: bool) {
         self.can_pass_doors = can_pass_doors;
     }
 
@@ -448,7 +444,7 @@ impl WalkNodeEvaluator {
     }
 
     /// Sets whether the entity can walk over fences.
-    pub fn set_can_walk_over_fences(&mut self, can_walk_over_fences: bool) {
+    pub const fn set_can_walk_over_fences(&mut self, can_walk_over_fences: bool) {
         self.can_walk_over_fences = can_walk_over_fences;
     }
 }

@@ -52,7 +52,7 @@ impl Path {
 
     /// Creates an empty path that cannot be reached.
     #[must_use]
-    pub fn empty(target: BlockPos) -> Self {
+    pub const fn empty(target: BlockPos) -> Self {
         Self {
             nodes: Vec::new(),
             next_node_index: 0,
@@ -63,7 +63,7 @@ impl Path {
     }
 
     /// Advances to the next node in the path.
-    pub fn advance(&mut self) {
+    pub const fn advance(&mut self) {
         self.next_node_index += 1;
     }
 
@@ -75,7 +75,7 @@ impl Path {
 
     /// Returns whether the path traversal is complete.
     #[must_use]
-    pub fn is_done(&self) -> bool {
+    pub const fn is_done(&self) -> bool {
         self.next_node_index >= self.nodes.len()
     }
 
@@ -114,7 +114,7 @@ impl Path {
 
     /// Returns the total number of nodes in the path.
     #[must_use]
-    pub fn get_node_count(&self) -> usize {
+    pub const fn get_node_count(&self) -> usize {
         self.nodes.len()
     }
 
@@ -125,7 +125,7 @@ impl Path {
     }
 
     /// Sets the index of the next node to visit.
-    pub fn set_next_node_index(&mut self, index: usize) {
+    pub const fn set_next_node_index(&mut self, index: usize) {
         self.next_node_index = index;
     }
 
@@ -147,7 +147,7 @@ impl Path {
     /// Returns the block position at a specific node index.
     #[must_use]
     pub fn get_node_pos(&self, index: usize) -> Option<BlockPos> {
-        self.nodes.get(index).map(|node| node.as_block_pos())
+        self.nodes.get(index).map(super::node::Node::as_block_pos)
     }
 
     /// Returns the position for an entity at the next node.
@@ -180,11 +180,8 @@ impl Path {
 
     /// Checks if this path is the same as another path.
     #[must_use]
-    pub fn same_as(&self, other: Option<&Path>) -> bool {
-        match other {
-            Some(other) => self.nodes == other.nodes,
-            None => false,
-        }
+    pub fn same_as(&self, other: Option<&Self>) -> bool {
+        other.is_some_and(|other| self.nodes == other.nodes)
     }
 
     /// Returns whether this path can reach its target.
@@ -223,6 +220,7 @@ impl Path {
     }
 
     /// Returns the remaining nodes from the current position.
+    #[must_use]
     pub fn remaining_nodes(&self) -> &[Node] {
         if self.next_node_index < self.nodes.len() {
             &self.nodes[self.next_node_index..]

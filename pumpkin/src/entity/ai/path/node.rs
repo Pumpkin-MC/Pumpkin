@@ -47,7 +47,7 @@ pub struct Node {
 impl Node {
     /// Creates a new node at the specified coordinates.
     #[must_use]
-    pub fn new(x: i32, y: i32, z: i32) -> Self {
+    pub const fn new(x: i32, y: i32, z: i32) -> Self {
         Self {
             x,
             y,
@@ -67,7 +67,7 @@ impl Node {
 
     /// Creates a new node from a block position.
     #[must_use]
-    pub fn from_block_pos(pos: BlockPos) -> Self {
+    pub const fn from_block_pos(pos: BlockPos) -> Self {
         Self::new(pos.0.x, pos.0.y, pos.0.z)
     }
 
@@ -98,7 +98,7 @@ impl Node {
 
     /// Calculates the Euclidean distance to another node.
     #[must_use]
-    pub fn distance_to(&self, other: &Node) -> f32 {
+    pub fn distance_to(&self, other: &Self) -> f32 {
         let dx = (other.x - self.x) as f32;
         let dy = (other.y - self.y) as f32;
         let dz = (other.z - self.z) as f32;
@@ -107,10 +107,10 @@ impl Node {
 
     /// Calculates the horizontal (XZ plane) distance to another node.
     #[must_use]
-    pub fn distance_to_xz(&self, other: &Node) -> f32 {
+    pub fn distance_to_xz(&self, other: &Self) -> f32 {
         let dx = (other.x - self.x) as f32;
         let dz = (other.z - self.z) as f32;
-        (dx * dx + dz * dz).sqrt()
+        dx.hypot(dz)
     }
 
     /// Calculates the Euclidean distance to a block position.
@@ -124,7 +124,7 @@ impl Node {
 
     /// Calculates the squared Euclidean distance to another node.
     #[must_use]
-    pub fn distance_to_sqr(&self, other: &Node) -> f32 {
+    pub fn distance_to_sqr(&self, other: &Self) -> f32 {
         let dx = (other.x - self.x) as f32;
         let dy = (other.y - self.y) as f32;
         let dz = (other.z - self.z) as f32;
@@ -142,7 +142,7 @@ impl Node {
 
     /// Calculates the Manhattan distance to another node.
     #[must_use]
-    pub fn distance_manhattan(&self, other: &Node) -> f32 {
+    pub fn distance_manhattan(&self, other: &Self) -> f32 {
         let dx = (other.x - self.x).abs() as f32;
         let dy = (other.y - self.y).abs() as f32;
         let dz = (other.z - self.z).abs() as f32;
@@ -184,7 +184,7 @@ impl Node {
 
     /// Creates a clone of this node moved to new coordinates.
     #[must_use]
-    pub fn clone_and_move(&self, x: i32, y: i32, z: i32) -> Self {
+    pub const fn clone_and_move(&self, x: i32, y: i32, z: i32) -> Self {
         let mut new_node = Self::new(x, y, z);
         new_node.heap_idx = self.heap_idx;
         new_node.g = self.g;
@@ -199,7 +199,7 @@ impl Node {
     }
 
     /// Resets this node for reuse in pathfinding.
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.heap_idx = -1;
         self.g = 0.0;
         self.h = 0.0;

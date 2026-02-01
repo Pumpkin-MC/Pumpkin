@@ -7,6 +7,7 @@ mod binary_heap;
 mod fly_node_evaluator;
 mod node;
 mod node_evaluator;
+#[allow(clippy::module_inception)]
 mod path;
 mod path_finder;
 mod path_type;

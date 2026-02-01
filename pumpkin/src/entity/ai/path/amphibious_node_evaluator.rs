@@ -85,6 +85,7 @@ impl AmphibiousNodeEvaluator {
     }
 
     /// Checks if a vertical neighbor is valid.
+    #[allow(clippy::unused_self)]
     fn is_vertical_neighbor_valid(&self, neighbor: &Node, _from: &Node) -> bool {
         // Vertical movement is only valid in water
         neighbor.path_type == PathType::Water

@@ -26,7 +26,7 @@ pub struct Target {
 impl Target {
     /// Creates a new target from a node.
     #[must_use]
-    pub fn new(node: Node) -> Self {
+    pub const fn new(node: Node) -> Self {
         Self {
             node,
             best_heuristic: f32::MAX,
@@ -37,13 +37,13 @@ impl Target {
 
     /// Creates a new target at the specified coordinates.
     #[must_use]
-    pub fn from_coords(x: i32, y: i32, z: i32) -> Self {
+    pub const fn from_coords(x: i32, y: i32, z: i32) -> Self {
         Self::new(Node::new(x, y, z))
     }
 
     /// Creates a new target from a block position.
     #[must_use]
-    pub fn from_block_pos(pos: BlockPos) -> Self {
+    pub const fn from_block_pos(pos: BlockPos) -> Self {
         Self::new(Node::from_block_pos(pos))
     }
 
@@ -85,7 +85,7 @@ impl Target {
     }
 
     /// Marks this target as reached.
-    pub fn set_reached(&mut self) {
+    pub const fn set_reached(&mut self) {
         self.reached = true;
     }
 

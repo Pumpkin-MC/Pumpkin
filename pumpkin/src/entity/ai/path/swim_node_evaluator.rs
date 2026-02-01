@@ -130,23 +130,18 @@ impl SwimNodeEvaluator {
     }
 
     /// Checks if a node is valid for swimming.
+    #[allow(clippy::unused_self)]
     fn is_node_valid(&self, node: Option<&Node>) -> bool {
-        match node {
-            Some(n) => !n.closed,
-            None => false,
-        }
+        node.is_some_and(|n| !n.closed)
     }
 
     /// Checks if a node has a non-negative malus.
     fn has_malus(node: Option<&Node>) -> bool {
-        match node {
-            Some(n) => n.cost_malus >= 0.0,
-            None => false,
-        }
+        node.is_some_and(|n| n.cost_malus >= 0.0)
     }
 
     /// Gets the starting node for pathfinding.
-    pub async fn get_start(&mut self) -> Option<Node> {
+    pub fn get_start(&mut self) -> Option<Node> {
         let _world = self.world.as_ref()?;
         let mob_pos = self.mob.block_pos;
 
@@ -209,11 +204,10 @@ impl SwimNodeEvaluator {
             if let Some(neighbor) = self
                 .find_accepted_node(node.x + dx, node.y + dy, node.z + dz)
                 .await
+                && self.is_node_valid(Some(&neighbor))
             {
-                if self.is_node_valid(Some(&neighbor)) {
-                    cardinal_nodes.insert((dx, dy, dz), neighbor.clone());
-                    neighbors.push(neighbor);
-                }
+                cardinal_nodes.insert((dx, dy, dz), neighbor.clone());
+                neighbors.push(neighbor);
             }
         }
 
@@ -229,15 +223,14 @@ impl SwimNodeEvaluator {
             let n1 = cardinal_nodes.get(&(dx1, 0, dz1));
             let n2 = cardinal_nodes.get(&(dx2, 0, dz2));
 
-            if Self::has_malus(n1) && Self::has_malus(n2) {
-                if let Some(neighbor) = self
+            if Self::has_malus(n1)
+                && Self::has_malus(n2)
+                && let Some(neighbor) = self
                     .find_accepted_node(node.x + dx1 + dx2, node.y, node.z + dz1 + dz2)
                     .await
-                {
-                    if self.is_node_valid(Some(&neighbor)) {
-                        neighbors.push(neighbor);
-                    }
-                }
+                && self.is_node_valid(Some(&neighbor))
+            {
+                neighbors.push(neighbor);
             }
         }
 

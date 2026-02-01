@@ -47,7 +47,7 @@ impl PathFinder {
     }
 
     /// Sets the maximum number of nodes to visit.
-    pub fn set_max_visited_nodes(&mut self, max_visited_nodes: usize) {
+    pub const fn set_max_visited_nodes(&mut self, max_visited_nodes: usize) {
         self.max_visited_nodes = max_visited_nodes;
     }
 
@@ -94,7 +94,7 @@ impl PathFinder {
             evaluator,
             context,
             start_node,
-            &mut target_set,
+            &mut target_set[..],
             max_distance,
             reach_range,
             max_visited_multiplier,
@@ -103,12 +103,13 @@ impl PathFinder {
     }
 
     /// Internal A* pathfinding implementation.
+    #[allow(clippy::too_many_arguments, clippy::unused_async)]
     async fn find_path_internal<E: NodeEvaluator + ?Sized>(
         &mut self,
         evaluator: &mut E,
         context: &mut super::node_evaluator::PathfindingContext,
         mut start_node: Node,
-        targets: &mut Vec<Target>,
+        targets: &mut [Target],
         max_distance: f32,
         reach_range: i32,
         max_visited_multiplier: f32,
@@ -119,7 +120,7 @@ impl PathFinder {
         start_node.f = start_node.h;
 
         // Add start node to all_nodes and open set
-        self.all_nodes.push(start_node.clone());
+        self.all_nodes.push(start_node);
         let start_idx = self.all_nodes.len() - 1;
         self.open_set.insert(self.all_nodes[start_idx].clone());
 
@@ -238,20 +239,21 @@ impl PathFinder {
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
 
-        if let Some(target) = best_target {
-            if let Some(best_idx) = target.best_node_index {
-                return Some(self.reconstruct_path(
-                    &self.all_nodes[best_idx],
-                    target.as_block_pos(),
-                    false,
-                ));
-            }
+        if let Some(target) = best_target
+            && let Some(best_idx) = target.best_node_index
+        {
+            return Some(self.reconstruct_path(
+                &self.all_nodes[best_idx],
+                target.as_block_pos(),
+                false,
+            ));
         }
 
         None
     }
 
     /// Calculates the distance between two nodes.
+    #[allow(clippy::unused_self)]
     fn distance(&self, from: &Node, to: &Node) -> f32 {
         from.distance_to(to)
     }
@@ -270,7 +272,7 @@ impl PathFinder {
         best
     }
 
-    /// Finds the index of a node in all_nodes.
+    /// Finds the index of a node in `all_nodes`.
     fn find_node_index(&self, node: &Node) -> Option<usize> {
         self.all_nodes
             .iter()

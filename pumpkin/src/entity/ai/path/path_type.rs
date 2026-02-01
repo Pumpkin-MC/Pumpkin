@@ -73,32 +73,32 @@ impl PathType {
     #[must_use]
     pub const fn malus(&self) -> f32 {
         match self {
-            Self::Blocked => -1.0,
-            Self::Open => 0.0,
-            Self::Walkable => 0.0,
-            Self::WalkableDoor => 0.0,
-            Self::Trapdoor => 0.0,
-            Self::PowderSnow => -1.0,
-            Self::DangerPowderSnow => 0.0,
-            Self::Fence => -1.0,
-            Self::Lava => -1.0,
-            Self::Water => 8.0,
-            Self::WaterBorder => 8.0,
-            Self::Rail => 0.0,
-            Self::UnpassableRail => -1.0,
-            Self::DangerFire => 8.0,
+            Self::Blocked
+            | Self::PowderSnow
+            | Self::Fence
+            | Self::Lava
+            | Self::UnpassableRail
+            | Self::DamageOther
+            | Self::DoorWoodClosed
+            | Self::DoorIronClosed
+            | Self::Leaves => -1.0,
+            Self::Open
+            | Self::Walkable
+            | Self::WalkableDoor
+            | Self::Trapdoor
+            | Self::DangerPowderSnow
+            | Self::Rail
+            | Self::DoorOpen
+            | Self::Cocoa
+            | Self::DamageCautious
+            | Self::DangerTrapdoor => 0.0,
+            Self::Water
+            | Self::WaterBorder
+            | Self::DangerFire
+            | Self::DangerOther
+            | Self::StickyHoney => 8.0,
             Self::DamageFire => 16.0,
-            Self::DangerOther => 8.0,
-            Self::DamageOther => -1.0,
-            Self::DoorOpen => 0.0,
-            Self::DoorWoodClosed => -1.0,
-            Self::DoorIronClosed => -1.0,
             Self::Breach => 4.0,
-            Self::Leaves => -1.0,
-            Self::StickyHoney => 8.0,
-            Self::Cocoa => 0.0,
-            Self::DamageCautious => 0.0,
-            Self::DangerTrapdoor => 0.0,
         }
     }
 

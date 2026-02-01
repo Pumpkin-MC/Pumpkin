@@ -38,7 +38,7 @@ impl BinaryHeap {
     /// The node's `heap_idx` will be updated to reflect its position.
     ///
     /// # Panics
-    /// Panics if the node is already in a heap (heap_idx >= 0).
+    /// Panics if the node is already in a heap (`heap_idx` >= 0).
     pub fn insert(&mut self, mut node: Node) -> usize {
         assert!(node.heap_idx < 0, "Node is already in a heap");
 
@@ -57,7 +57,7 @@ impl BinaryHeap {
     }
 
     /// Clears the heap, removing all nodes.
-    pub fn clear(&mut self) {
+    pub const fn clear(&mut self) {
         self.size = 0;
     }
 
@@ -66,11 +66,7 @@ impl BinaryHeap {
     /// Returns `None` if the heap is empty.
     #[must_use]
     pub fn peek(&self) -> Option<&Node> {
-        if self.size > 0 {
-            Some(&self.heap[0])
-        } else {
-            None
-        }
+        (self.size > 0).then(|| &self.heap[0])
     }
 
     /// Removes and returns the node with the lowest f-score.
@@ -151,21 +147,13 @@ impl BinaryHeap {
     /// Returns a reference to a node by index.
     #[must_use]
     pub fn get(&self, idx: usize) -> Option<&Node> {
-        if idx < self.size {
-            Some(&self.heap[idx])
-        } else {
-            None
-        }
+        (idx < self.size).then(|| &self.heap[idx])
     }
 
     /// Returns a mutable reference to a node by index.
     #[must_use]
     pub fn get_mut(&mut self, idx: usize) -> Option<&mut Node> {
-        if idx < self.size {
-            Some(&mut self.heap[idx])
-        } else {
-            None
-        }
+        (idx < self.size).then(|| &mut self.heap[idx])
     }
 
     /// Returns all nodes currently in the heap.
@@ -246,7 +234,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_insert_and_pop() {
+    fn insert_and_pop() {
         let mut heap = BinaryHeap::new();
 
         let mut n1 = Node::new(0, 0, 0);
@@ -276,7 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn test_change_cost() {
+    fn change_cost() {
         let mut heap = BinaryHeap::new();
 
         let mut n1 = Node::new(0, 0, 0);
