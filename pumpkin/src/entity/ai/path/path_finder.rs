@@ -98,7 +98,8 @@ impl PathFinder {
             max_distance,
             reach_range,
             max_visited_multiplier,
-        ).await
+        )
+        .await
     }
 
     /// Internal A* pathfinding implementation.
@@ -211,13 +212,19 @@ impl PathFinder {
                 .min_by(|&&a, &&b| {
                     let path_a = targets[a].best_node_index.map(|i| self.all_nodes[i].g);
                     let path_b = targets[b].best_node_index.map(|i| self.all_nodes[i].g);
-                    path_a.partial_cmp(&path_b).unwrap_or(std::cmp::Ordering::Equal)
+                    path_a
+                        .partial_cmp(&path_b)
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 })
                 .copied()?;
 
             let target = &targets[best_target_idx];
             if let Some(best_idx) = target.best_node_index {
-                return Some(self.reconstruct_path(&self.all_nodes[best_idx], target.as_block_pos(), true));
+                return Some(self.reconstruct_path(
+                    &self.all_nodes[best_idx],
+                    target.as_block_pos(),
+                    true,
+                ));
             }
         }
 
@@ -226,12 +233,18 @@ impl PathFinder {
             .iter()
             .filter(|t| t.best_node_index.is_some())
             .min_by(|a, b| {
-                a.best_heuristic.partial_cmp(&b.best_heuristic).unwrap_or(std::cmp::Ordering::Equal)
+                a.best_heuristic
+                    .partial_cmp(&b.best_heuristic)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
 
         if let Some(target) = best_target {
             if let Some(best_idx) = target.best_node_index {
-                return Some(self.reconstruct_path(&self.all_nodes[best_idx], target.as_block_pos(), false));
+                return Some(self.reconstruct_path(
+                    &self.all_nodes[best_idx],
+                    target.as_block_pos(),
+                    false,
+                ));
             }
         }
 

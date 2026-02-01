@@ -83,7 +83,9 @@ impl Navigator {
                     }
 
                     // Simple distance calculation for greedy navigation
-                    let cost = potential_pos.squared_distance_to_vec(&goal.destination).sqrt();
+                    let cost = potential_pos
+                        .squared_distance_to_vec(&goal.destination)
+                        .sqrt();
 
                     if cost < lowest_cost {
                         lowest_cost = cost;

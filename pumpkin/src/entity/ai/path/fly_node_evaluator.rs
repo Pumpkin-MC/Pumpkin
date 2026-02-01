@@ -225,12 +225,12 @@ impl FlyNodeEvaluator {
 
         // All 6 cardinal directions
         let cardinal_nodes: [Option<Node>; 6] = [
-            self.find_accepted_node(node.x, node.y, node.z + 1).await,  // South
-            self.find_accepted_node(node.x - 1, node.y, node.z).await,  // West
-            self.find_accepted_node(node.x + 1, node.y, node.z).await,  // East
-            self.find_accepted_node(node.x, node.y, node.z - 1).await,  // North
-            self.find_accepted_node(node.x, node.y + 1, node.z).await,  // Up
-            self.find_accepted_node(node.x, node.y - 1, node.z).await,  // Down
+            self.find_accepted_node(node.x, node.y, node.z + 1).await, // South
+            self.find_accepted_node(node.x - 1, node.y, node.z).await, // West
+            self.find_accepted_node(node.x + 1, node.y, node.z).await, // East
+            self.find_accepted_node(node.x, node.y, node.z - 1).await, // North
+            self.find_accepted_node(node.x, node.y + 1, node.z).await, // Up
+            self.find_accepted_node(node.x, node.y - 1, node.z).await, // Down
         ];
 
         for cn in &cardinal_nodes {
@@ -243,10 +243,10 @@ impl FlyNodeEvaluator {
 
         // Horizontal diagonals
         let horiz_diagonals = [
-            (2, 3, 1, -1),   // East + North
-            (2, 0, 1, 1),    // East + South
-            (1, 3, -1, -1),  // West + North
-            (1, 0, -1, 1),   // West + South
+            (2, 3, 1, -1),  // East + North
+            (2, 0, 1, 1),   // East + South
+            (1, 3, -1, -1), // West + North
+            (1, 0, -1, 1),  // West + South
         ];
 
         for (idx1, idx2, dx, dz) in horiz_diagonals {
@@ -286,7 +286,11 @@ impl Default for FlyNodeEvaluator {
 }
 
 impl super::node_evaluator::NodeEvaluator for FlyNodeEvaluator {
-    fn prepare(&mut self, context: &mut super::node_evaluator::PathfindingContext, start: BlockPos) {
+    fn prepare(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        start: BlockPos,
+    ) {
         self.nodes.clear();
         self.path_types_cache.clear();
 
@@ -314,18 +318,34 @@ impl super::node_evaluator::NodeEvaluator for FlyNodeEvaluator {
         self.nodes.get(&hash)
     }
 
-    fn get_target(&mut self, context: &mut super::node_evaluator::PathfindingContext, x: i32, y: i32, z: i32) -> Target {
+    fn get_target(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> Target {
         let _ = context;
         Target::from_coords(x, y, z)
     }
 
-    fn get_neighbors(&mut self, context: &mut super::node_evaluator::PathfindingContext, node: &super::node::Node) -> Vec<super::node::Node> {
+    fn get_neighbors(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        node: &super::node::Node,
+    ) -> Vec<super::node::Node> {
         let _ = context;
         let _ = node;
         Vec::new()
     }
 
-    fn get_path_type(&mut self, context: &mut super::node_evaluator::PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
+    fn get_path_type(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> PathType {
         let key = BlockPos::new(x, y, z).as_long();
         if let Some(&cached) = self.path_types_cache.get(&key) {
             return cached;

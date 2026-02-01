@@ -173,11 +173,7 @@ impl Node {
     /// Converts this node to a Vector3<f64> (block center at bottom).
     #[must_use]
     pub fn as_vec3_f64(&self) -> Vector3<f64> {
-        Vector3::new(
-            self.x as f64 + 0.5,
-            self.y as f64,
-            self.z as f64 + 0.5,
-        )
+        Vector3::new(self.x as f64 + 0.5, self.y as f64, self.z as f64 + 0.5)
     }
 
     /// Returns whether this node is in the open set (binary heap).

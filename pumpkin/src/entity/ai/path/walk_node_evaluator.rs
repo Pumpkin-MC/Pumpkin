@@ -137,7 +137,9 @@ impl WalkNodeEvaluator {
                 if below_block.id == Block::LAVA.id {
                     return PathType::DangerFire;
                 }
-                if below_block.id == Block::CACTUS.id || below_block.id == Block::SWEET_BERRY_BUSH.id {
+                if below_block.id == Block::CACTUS.id
+                    || below_block.id == Block::SWEET_BERRY_BUSH.id
+                {
                     return PathType::DangerOther;
                 }
 
@@ -257,7 +259,9 @@ impl WalkNodeEvaluator {
             0
         };
 
-        let floor_level = self.get_floor_level(BlockPos::new(node.x, node.y, node.z)).await;
+        let floor_level = self
+            .get_floor_level(BlockPos::new(node.x, node.y, node.z))
+            .await;
 
         // Cardinal directions
         let directions = [(0, -1), (0, 1), (-1, 0), (1, 0)];
@@ -279,7 +283,11 @@ impl WalkNodeEvaluator {
         let diagonals = [(1, -1, 0, 3), (1, 1, 1, 3), (-1, -1, 0, 2), (-1, 1, 1, 2)];
 
         for (dx, dz, n1_idx, n2_idx) in diagonals {
-            if self.is_diagonal_valid(node, cardinal_nodes[n1_idx].as_ref(), cardinal_nodes[n2_idx].as_ref()) {
+            if self.is_diagonal_valid(
+                node,
+                cardinal_nodes[n1_idx].as_ref(),
+                cardinal_nodes[n2_idx].as_ref(),
+            ) {
                 if let Some(neighbor) = self
                     .find_accepted_node(node.x + dx, node.y, node.z + dz, max_up_step, floor_level)
                     .await
@@ -352,7 +360,8 @@ impl WalkNodeEvaluator {
             && path_type != PathType::PowderSnow
             && max_up_step > 0
         {
-            return Box::pin(self.find_accepted_node(x, y + 1, z, max_up_step - 1, floor_level)).await;
+            return Box::pin(self.find_accepted_node(x, y + 1, z, max_up_step - 1, floor_level))
+                .await;
         }
 
         if path_type == PathType::Open {
@@ -451,7 +460,11 @@ impl Default for WalkNodeEvaluator {
 }
 
 impl super::node_evaluator::NodeEvaluator for WalkNodeEvaluator {
-    fn prepare(&mut self, context: &mut super::node_evaluator::PathfindingContext, start: BlockPos) {
+    fn prepare(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        start: BlockPos,
+    ) {
         self.nodes.clear();
         self.path_types_cache.clear();
 
@@ -481,19 +494,35 @@ impl super::node_evaluator::NodeEvaluator for WalkNodeEvaluator {
         self.nodes.get(&hash)
     }
 
-    fn get_target(&mut self, context: &mut super::node_evaluator::PathfindingContext, x: i32, y: i32, z: i32) -> Target {
+    fn get_target(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> Target {
         let _ = context;
         Target::from_coords(x, y, z)
     }
 
-    fn get_neighbors(&mut self, context: &mut super::node_evaluator::PathfindingContext, node: &Node) -> Vec<Node> {
+    fn get_neighbors(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        node: &Node,
+    ) -> Vec<Node> {
         // Synchronous version - returns empty vec, async version should be used
         let _ = context;
         let _ = node;
         Vec::new()
     }
 
-    fn get_path_type(&mut self, context: &mut super::node_evaluator::PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
+    fn get_path_type(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> PathType {
         let key = BlockPos::new(x, y, z).as_long();
         if let Some(&cached) = self.path_types_cache.get(&key) {
             return cached;

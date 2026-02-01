@@ -162,7 +162,8 @@ impl SwimNodeEvaluator {
     async fn find_accepted_node(&mut self, x: i32, y: i32, z: i32) -> Option<Node> {
         let path_type = self.get_cached_path_type(x, y, z).await;
 
-        if !(self.allow_breaching && path_type == PathType::Breach) && path_type != PathType::Water {
+        if !(self.allow_breaching && path_type == PathType::Breach) && path_type != PathType::Water
+        {
             return None;
         }
 
@@ -257,7 +258,11 @@ impl Default for SwimNodeEvaluator {
 }
 
 impl super::node_evaluator::NodeEvaluator for SwimNodeEvaluator {
-    fn prepare(&mut self, context: &mut super::node_evaluator::PathfindingContext, start: BlockPos) {
+    fn prepare(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        start: BlockPos,
+    ) {
         self.nodes.clear();
         self.path_types_cache.clear();
 
@@ -283,18 +288,34 @@ impl super::node_evaluator::NodeEvaluator for SwimNodeEvaluator {
         self.nodes.get(&hash)
     }
 
-    fn get_target(&mut self, context: &mut super::node_evaluator::PathfindingContext, x: i32, y: i32, z: i32) -> Target {
+    fn get_target(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> Target {
         let _ = context;
         Target::from_coords(x, y, z)
     }
 
-    fn get_neighbors(&mut self, context: &mut super::node_evaluator::PathfindingContext, node: &Node) -> Vec<Node> {
+    fn get_neighbors(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        node: &Node,
+    ) -> Vec<Node> {
         let _ = context;
         let _ = node;
         Vec::new()
     }
 
-    fn get_path_type(&mut self, context: &mut super::node_evaluator::PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
+    fn get_path_type(
+        &mut self,
+        context: &mut super::node_evaluator::PathfindingContext,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> PathType {
         let key = BlockPos::new(x, y, z).as_long();
         if let Some(&cached) = self.path_types_cache.get(&key) {
             return cached;

@@ -40,14 +40,12 @@ impl BinaryHeap {
     /// # Panics
     /// Panics if the node is already in a heap (heap_idx >= 0).
     pub fn insert(&mut self, mut node: Node) -> usize {
-        assert!(
-            node.heap_idx < 0,
-            "Node is already in a heap"
-        );
+        assert!(node.heap_idx < 0, "Node is already in a heap");
 
         // Grow if necessary
         if self.size >= self.heap.len() {
-            self.heap.resize(self.heap.len().max(1) * 2, Node::new(0, 0, 0));
+            self.heap
+                .resize(self.heap.len().max(1) * 2, Node::new(0, 0, 0));
         }
 
         let idx = self.size;

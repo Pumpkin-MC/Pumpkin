@@ -125,7 +125,9 @@ impl NodeEvaluator for AmphibiousNodeEvaluator {
 
         // Increase walkable cost (prefer water slightly)
         context.mob.set_pathfinding_malus(PathType::Walkable, 6.0);
-        context.mob.set_pathfinding_malus(PathType::WaterBorder, 4.0);
+        context
+            .mob
+            .set_pathfinding_malus(PathType::WaterBorder, 4.0);
 
         // Create start node
         self.start_node = Some(self.get_node(start.0.x, start.0.y, start.0.z));
@@ -142,22 +144,12 @@ impl NodeEvaluator for AmphibiousNodeEvaluator {
         self.start_node.as_ref()
     }
 
-    fn get_target(
-        &mut self,
-        _context: &mut PathfindingContext,
-        x: i32,
-        y: i32,
-        z: i32,
-    ) -> Target {
+    fn get_target(&mut self, _context: &mut PathfindingContext, x: i32, y: i32, z: i32) -> Target {
         // Offset y by 0.5 for amphibious targeting
         Target::from_coords(x, y, z)
     }
 
-    fn get_neighbors(
-        &mut self,
-        context: &mut PathfindingContext,
-        node: &Node,
-    ) -> Vec<Node> {
+    fn get_neighbors(&mut self, context: &mut PathfindingContext, node: &Node) -> Vec<Node> {
         let mut neighbors = Vec::with_capacity(18);
 
         // Get horizontal neighbors (from walk evaluator behavior)

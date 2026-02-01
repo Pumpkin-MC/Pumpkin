@@ -189,16 +189,38 @@ pub trait NodeEvaluator {
     fn get_start(&self) -> Option<&super::node::Node>;
 
     /// Gets a target node at the specified position.
-    fn get_target(&mut self, context: &mut PathfindingContext, x: i32, y: i32, z: i32) -> super::target::Target;
+    fn get_target(
+        &mut self,
+        context: &mut PathfindingContext,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> super::target::Target;
 
     /// Gets all neighbor nodes of the given node.
-    fn get_neighbors(&mut self, context: &mut PathfindingContext, node: &super::node::Node) -> Vec<super::node::Node>;
+    fn get_neighbors(
+        &mut self,
+        context: &mut PathfindingContext,
+        node: &super::node::Node,
+    ) -> Vec<super::node::Node>;
 
     /// Gets the path type at a position.
-    fn get_path_type(&mut self, context: &mut PathfindingContext, x: i32, y: i32, z: i32) -> PathType;
+    fn get_path_type(
+        &mut self,
+        context: &mut PathfindingContext,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> PathType;
 
     /// Gets the path type for the cached position.
-    fn get_path_type_cached(&mut self, context: &mut PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
+    fn get_path_type_cached(
+        &mut self,
+        context: &mut PathfindingContext,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> PathType {
         // Default implementation delegates to get_path_type
         self.get_path_type(context, x, y, z)
     }
