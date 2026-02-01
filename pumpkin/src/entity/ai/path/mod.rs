@@ -1,3 +1,32 @@
+//! Pathfinding and navigation system for entity AI.
+//!
+//! This module provides A* pathfinding implementation for Minecraft entities.
+
+mod amphibious_node_evaluator;
+mod binary_heap;
+mod fly_node_evaluator;
+mod node;
+mod node_evaluator;
+mod path;
+mod path_finder;
+mod path_type;
+mod swim_node_evaluator;
+mod target;
+mod walk_node_evaluator;
+
+// Re-export core types
+pub use amphibious_node_evaluator::AmphibiousNodeEvaluator;
+pub use binary_heap::BinaryHeap;
+pub use fly_node_evaluator::FlyNodeEvaluator;
+pub use node::Node as PathNode;
+pub use node_evaluator::{NodeEvaluator, PathfindingContext, PathfindingMob};
+pub use path::Path;
+pub use path_finder::PathFinder;
+pub use path_type::PathType;
+pub use swim_node_evaluator::SwimNodeEvaluator;
+pub use target::Target;
+pub use walk_node_evaluator::WalkNodeEvaluator;
+
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::entity::living::LivingEntity;
@@ -53,8 +82,8 @@ impl Navigator {
                         continue;
                     }
 
-                    let node = Node::new(potential_pos);
-                    let cost = node.get_expense(goal.destination);
+                    // Simple distance calculation for greedy navigation
+                    let cost = potential_pos.squared_distance_to_vec(&goal.destination).sqrt();
 
                     if cost < lowest_cost {
                         lowest_cost = cost;
@@ -82,23 +111,5 @@ impl Navigator {
     pub const fn is_idle(&self) -> bool {
         // TODO: implement
         false
-    }
-}
-
-pub struct Node {
-    pub location: Vector3<f64>,
-}
-
-impl Node {
-    #[must_use]
-    pub const fn new(location: Vector3<f64>) -> Self {
-        Self { location }
-    }
-    /// How expensive is it to go to a location?
-    ///
-    /// Returns an `f64`; higher means more expensive.
-    #[must_use]
-    pub fn get_expense(&self, end: Vector3<f64>) -> f64 {
-        self.location.squared_distance_to_vec(&end).sqrt()
     }
 }
