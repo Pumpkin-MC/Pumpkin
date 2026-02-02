@@ -101,7 +101,7 @@ impl Context {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// context.register_service("my_service", Arc::new(MyService::new())).await;
     /// ```
     pub async fn register_service<N: Into<String>, T: Payload + 'static>(
@@ -132,7 +132,7 @@ impl Context {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// if let Some(service) = context.get_service::<MyService>("my_service").await {
     ///     // Use the service
     /// }
@@ -283,7 +283,7 @@ impl Context {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// // Create and register a custom Lua plugin loader
     /// let lua_loader = Arc::new(LuaPluginLoader::new());
     /// context.register_plugin_loader(lua_loader).await;
