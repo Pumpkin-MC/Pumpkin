@@ -20,12 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
+      - run: rustup component add rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
-  clippy:
-    name: Run lints
+  machete:
+    name: Detect unused dependencies
     runs-on: ubuntu-latest
+    needs: [format]
     strategy:
       matrix:
         toolchain:
@@ -33,36 +34,84 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup component add clippy rustfmt --toolchain ${{ matrix.toolchain }}
+      - uses: bnjbvr/cargo-machete@main
+  clippy_debug:
+    name: Run lints (debug)
+    runs-on: ubuntu-latest
+    needs: [machete]
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets --all-features
+      - name: Clippy (debug)
+        run: cargo clippy --all-targets --all-features
+  clippy_release:
+    name: Run lints (release)
+    runs-on: ubuntu-latest
+    needs: [machete]
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy (release)
+        run: cargo clippy --release --all-targets --all-features
   build_and_test:
     name: Build project and test
     runs-on: ${{ matrix.os }}
+    needs: [clippy_debug, clippy_release]
     strategy:
       matrix:
-        os: [ubuntu-latest,  ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            windows-latest,
+            windows-11-arm,
+            macos-latest,
+            macos-15-intel,
+          ]
         toolchain:
           - stable
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
+      - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --verbose
+      - name: Cargo nextest
+        run: cargo nextest run --verbose
+      - name: Cargo doctest
+        run: cargo test --doc --verbose
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
+    needs: [build_and_test]
     strategy:
       matrix:
-        os: [ubuntu-latest,  ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            windows-latest,
+            windows-11-arm,
+            macos-latest,
+            macos-15-intel,
+          ]
         toolchain:
           - stable
     steps:
       - uses: actions/checkout@v6
 
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - name: Build Release
         shell: bash
@@ -83,20 +132,6 @@ jobs:
           name: pumpkin-${{ runner.arch }}-${{ runner.os }}
           compression-level: 9
           path: dist/pumpkin-*
-
-  clippy_release:
-    name: Run lints in release mode
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
-    steps:
-      - uses: actions/checkout@v6
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup component add clippy rustfmt --toolchain ${{ matrix.toolchain }}
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --release --all-targets --all-features
   draft_release:
     permissions:
       contents: write
