@@ -77,7 +77,7 @@ impl SimpleCommandErrorType {
     }
 
     #[must_use]
-    pub fn instance_without_context(&'_ self) -> CommandSyntaxError {
+    pub fn instance_without_context(&self) -> CommandSyntaxError {
         CommandSyntaxError::new_without_context(TextComponent::translate(self.translation_key, []))
     }
 
@@ -107,7 +107,7 @@ impl<const N: usize> DynamicCommandErrorType<N> {
     }
 
     #[must_use]
-    pub fn instance_without_context(&'_ self, args: &[TextComponent; N]) -> CommandSyntaxError {
+    pub fn instance_without_context(&self, args: &[TextComponent; N]) -> CommandSyntaxError {
         CommandSyntaxError::new_without_context(TextComponent::translate(
             self.translation_key,
             args,

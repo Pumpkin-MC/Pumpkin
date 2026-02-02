@@ -9,11 +9,11 @@ pub struct CommandSyntaxErrorContext {
 
 /// Indicates an object that can provide context of a command syntax error from itself.
 pub trait ContextProvider {
-    fn context(&'_ self) -> CommandSyntaxErrorContext;
+    fn context(&self) -> CommandSyntaxErrorContext;
 }
 
 impl ContextProvider for CommandSyntaxErrorContext {
-    fn context(&'_ self) -> CommandSyntaxErrorContext {
+    fn context(&self) -> CommandSyntaxErrorContext {
         self.clone()
     }
 }
