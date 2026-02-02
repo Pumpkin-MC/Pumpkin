@@ -269,7 +269,7 @@ impl RemovalReason {
 static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
 
 /// Eye height for entities in swimming or fall flying poses
-const SWIMMING_EYE_HEIGHT: f32 = 0.4;
+pub const SWIMMING_EYE_HEIGHT: f32 = 0.4;
 
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
