@@ -20,6 +20,8 @@ pub mod args;
 pub mod client_suggestions;
 pub mod commands;
 pub mod dispatcher;
+pub mod errors;
+pub mod string_reader;
 pub mod tree;
 
 /// Represents the source of a command execution.
