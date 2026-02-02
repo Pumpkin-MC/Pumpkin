@@ -1074,10 +1074,11 @@ impl Player {
     }
 
     pub fn eye_position(&self) -> Vector3<f64> {
-        let eye_height = if self.living_entity.entity.pose.load() == EntityPose::Crouching {
-            1.27
-        } else {
-            f64::from(self.living_entity.entity.standing_eye_height)
+        let pose = self.living_entity.entity.pose.load();
+        let eye_height = match pose {
+            EntityPose::Crouching => 1.27,
+            EntityPose::Swimming | EntityPose::FallFlying => 0.4,
+            _ => f64::from(self.living_entity.entity.standing_eye_height),
         };
         Vector3::new(
             self.living_entity.entity.pos.load().x,

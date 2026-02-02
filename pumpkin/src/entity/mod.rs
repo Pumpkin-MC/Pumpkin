@@ -1729,7 +1729,7 @@ impl Entity {
     }
 
     pub fn get_eye_y(&self) -> f64 {
-        self.pos.load().y + f64::from(self.standing_eye_height)
+        self.pos.load().y + f64::from(self.get_eye_height())
     }
 
     /// Get the actual eye height based on the current pose
