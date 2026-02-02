@@ -21,7 +21,7 @@ impl ContextProvider for CommandSyntaxErrorContext {
 /// A struct detailing a syntax error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandSyntaxError {
-    pub message: Box<TextComponent>,
+    pub message: TextComponent,
     pub context: Option<CommandSyntaxErrorContext>,
 }
 
@@ -32,9 +32,9 @@ impl CommandSyntaxError {
     /// This means this error will not print a context to the client, which
     /// includes the string and the location the error was caused.
     #[must_use]
-    pub fn new_without_context(message: TextComponent) -> Self {
+    pub const fn new_without_context(message: TextComponent) -> Self {
         Self {
-            message: Box::new(message),
+            message,
             context: None,
         }
     }
@@ -48,7 +48,7 @@ impl CommandSyntaxError {
         C: ContextProvider,
     {
         Self {
-            message: Box::new(message),
+            message,
             context: Some(context_provider.context()),
         }
     }
