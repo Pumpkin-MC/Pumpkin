@@ -1969,6 +1969,14 @@ impl Player {
                     self.get_entity().set_on_fire(false).await;
                 }
 
+                // Stop elytra flight when switching to spectator mode
+                if gamemode == GameMode::Spectator {
+                    let entity = self.get_entity();
+                    if entity.fall_flying.load(Ordering::Relaxed) {
+                        entity.set_fall_flying(false).await;
+                    }
+                }
+
                 self.living_entity.entity.invulnerable.store(
                     matches!(gamemode, GameMode::Creative | GameMode::Spectator),
                     Ordering::Relaxed,

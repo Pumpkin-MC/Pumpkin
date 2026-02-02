@@ -636,9 +636,9 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "crossfire"
-version = "3.0.2"
+version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e1ff29ef3add47897a4dab381889ccf8dedcedec4e2c8feed37efcf22a6392b"
+checksum = "cf9c756fd351d7bc1f95698a33a90ce39c8f7458335cc7e95132d3d36124902a"
 dependencies = [
  "crossbeam-utils",
  "futures-core",
@@ -2386,7 +2386,7 @@ dependencies = [
 [[package]]
 name = "rand"
 version = "0.10.0-rc.8"
-source = "git+https://github.com/rust-random/rand#47455a0b004d5992d2a3d23ecf244f1edea27f40"
+source = "git+https://github.com/rust-random/rand#a4c9a8e565fa310de423e3ba89593b647b721e8c"
 dependencies = [
  "chacha20",
  "getrandom 0.4.0-rc.1",

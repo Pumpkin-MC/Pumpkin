@@ -178,8 +178,6 @@ impl PumpkinServer {
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
-        let mut ticker = Ticker::new();
-
         if server.advanced_config.commands.use_console
             && let Some((wrapper, _)) = LOGGER_IMPL.wait()
         {
@@ -267,7 +265,7 @@ impl PumpkinServer {
         {
             let ticker_server = server.clone();
             server.spawn_task(async move {
-                ticker.run(&ticker_server).await;
+                Ticker::run(&ticker_server).await;
             });
         };
 

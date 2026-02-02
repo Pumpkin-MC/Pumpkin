@@ -170,7 +170,7 @@ impl ConcentricRingsStructurePlacement {
         //     ^ (salt as i64);
 
         // (seed.abs() % 400) == 0
-        rand::random_bool(1.0 / 1000.0)
+        rand::random_bool(1.0 / 100.0)
     }
 }
 

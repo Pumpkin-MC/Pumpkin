@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::dimension::Dimension;
@@ -52,6 +53,8 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
 
     fn get_chunk_mut(&mut self, chunk_x: i32, chunk_z: i32) -> Option<&mut ProtoChunk>;
     fn get_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk>;
+
+    fn try_get_proto_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk>;
 
     fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState;
     fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState);
@@ -987,6 +990,9 @@ impl ProtoChunk {
         let mut tasks = Vec::new();
         {
             let center_chunk = cache.get_center_chunk();
+            let center_x = center_chunk.x;
+            let center_z = center_chunk.z;
+
             for (id, instance) in &center_chunk.structure_starts {
                 if let Some(s) = STRUCTURES.get(id)
                     && s.step.ordinal() != step
@@ -1004,6 +1010,72 @@ impl ProtoChunk {
                                 neighbor.structure_starts.get(id)
                         {
                             tasks.push(pos.collector.clone());
+                        }
+                    }
+                }
+            }
+
+            let radius = 8;
+            for dx in -radius..=radius {
+                for dz in -radius..=radius {
+                    if dx == 0 && dz == 0 {
+                        continue;
+                    }
+
+                    let neighbor_x = center_x + dx;
+                    let neighbor_z = center_z + dz;
+
+                    if let Some(neighbor) = cache.try_get_proto_chunk(neighbor_x, neighbor_z) {
+                        for (id, instance) in &neighbor.structure_starts {
+                            if let Some(s) = STRUCTURES.get(id)
+                                && s.step.ordinal() != step
+                            {
+                                continue;
+                            }
+
+                            match instance {
+                                StructureInstance::Start(pos) => {
+                                    let start_x = chunk_pos::start_block_x(center_x);
+                                    let start_z = chunk_pos::start_block_z(center_z);
+                                    let end_x = start_x + 15;
+                                    let end_z = start_z + 15;
+
+                                    if pos
+                                        .get_bounding_box()
+                                        .intersects_raw_xz(start_x, start_z, end_x, end_z)
+                                    {
+                                        let collector_arc = pos.collector.clone();
+                                        if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc)) {
+                                            tasks.push(collector_arc);
+                                        }
+                                    }
+                                }
+                                StructureInstance::Reference(origin_block_pos) => {
+                                    let origin_chunk_x = origin_block_pos.0.x >> 4;
+                                    let origin_chunk_z = origin_block_pos.0.z >> 4;
+                                    if let Some(origin_neighbor) =
+                                        cache.try_get_proto_chunk(origin_chunk_x, origin_chunk_z)
+                                        && let Some(StructureInstance::Start(pos)) =
+                                            origin_neighbor.structure_starts.get(id)
+                                    {
+                                        let start_x = chunk_pos::start_block_x(center_x);
+                                        let start_z = chunk_pos::start_block_z(center_z);
+                                        let end_x = start_x + 15;
+                                        let end_z = start_z + 15;
+
+                                        if pos
+                                            .get_bounding_box()
+                                            .intersects_raw_xz(start_x, start_z, end_x, end_z)
+                                        {
+                                            let collector_arc = pos.collector.clone();
+                                            if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc))
+                                            {
+                                                tasks.push(collector_arc);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

@@ -165,6 +165,8 @@ impl PumpkinError for GetBlockError {
 /// - Stores and tracks active `Player` entities within the world.
 /// - Provides a central hub for interacting with the world's entities and environment.
 pub struct World {
+    /// Represents the World's Unique Identifier
+    pub uuid: Uuid,
     /// The underlying level, responsible for chunk management and terrain generation.
     pub level: Arc<Level>,
     pub level_info: Arc<ArcSwap<LevelData>>,
@@ -197,6 +199,14 @@ pub struct World {
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
 }
 
+impl PartialEq for World {
+    fn eq(&self, other: &Self) -> bool {
+        self.uuid == other.uuid
+    }
+}
+
+impl Eq for World {}
+
 impl World {
     #[must_use]
     pub fn load(
@@ -213,6 +223,7 @@ impl World {
         let portal_poi = portal::PortalPoiStorage::new(&level.level_folder.root_folder);
 
         Self {
+            uuid: Uuid::new_v4(),
             level,
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
@@ -1452,7 +1463,7 @@ impl World {
             .send_packet_now(&CLogin::new(
                 entity_id,
                 base_config.hardcore,
-                &dimensions,
+                dimensions,
                 base_config.max_players.try_into().unwrap(),
                 base_config.view_distance.get().into(), //  TODO: view distance
                 base_config.simulation_distance.get().into(), // TODO: sim view dinstance

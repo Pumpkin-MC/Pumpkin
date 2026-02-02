@@ -350,11 +350,6 @@ impl<'a> ChunkNoiseRouter<'a> {
                     ChunkNoiseFunctionComponent::PassThrough(pass_through.clone())
                 }
                 ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
-                    //NOTE: Due to our previous invariant with the proto-function, it is guaranteed
-                    // that the wrapped function is already on the stack
-
-                    // NOTE: Current wrapped functions do not give different values than what they
-                    // wrap. If they do, maxs and mins need to be changed here
                     let min_value = component_stack[wrapper.input_index].min();
                     let max_value = component_stack[wrapper.input_index].max();
 

@@ -88,7 +88,7 @@ impl CachedStatus {
             //     .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             //     .is_ok()
             // {
-            players.online += 1;
+            players.online = players.online.saturating_add(1);
             // }
         }
 
@@ -106,7 +106,7 @@ impl CachedStatus {
             //     .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
             //     .is_ok()
             // {
-            players.online -= 1;
+            players.online = players.online.saturating_sub(1);
             // }
         }
 

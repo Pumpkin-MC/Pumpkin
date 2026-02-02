@@ -935,6 +935,20 @@ impl GenerationCache for Cache {
             .then(|| self.chunks[(dx * self.size + dz) as usize].get_proto_chunk())
     }
 
+    fn try_get_proto_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk> {
+        let dx = chunk_x - self.x;
+        let dz = chunk_z - self.z;
+
+        if dx < 0 || dx >= self.size || dz < 0 || dz >= self.size {
+            return None;
+        }
+
+        match &self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Proto(chunk) => Some(chunk),
+            Chunk::Level(_) => None,
+        }
+    }
+
     fn get_center_chunk(&self) -> &ProtoChunk {
         let mid = ((self.size * self.size) >> 1) as usize;
         self.chunks[mid].get_proto_chunk()
@@ -983,7 +997,7 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::error!(
+            log::debug!(
                 "illegal get_block_state {pos:?} cache pos ({}, {}) size {}",
                 self.x,
                 self.z,
@@ -1011,7 +1025,7 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::error!(
+            log::debug!(
                 "illegal set_block_state {pos:?} cache pos ({}, {}) size {}",
                 self.x,
                 self.z,

@@ -12,7 +12,8 @@ use crate::{
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
             stronghold::{
-                EntranceType, StoneBrickRandomizer, StrongholdPiece, StrongholdPieceType,
+                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                StrongholdPieceType,
             },
         },
     },
@@ -47,11 +48,7 @@ impl SpiralStaircasePiece {
     pub fn new_start(random: &mut impl RandomImpl, x: i32, z: i32) -> Self {
         let orientation = StructurePiece::get_random_horizontal_direction(random);
         let bounding_box = BlockBox::create_box(x, 64, z, orientation.get_axis(), 5, 11, 5);
-        let mut piece = StrongholdPiece::new(
-            StructurePieceType::StrongholdSpiralStaircase,
-            0,
-            bounding_box,
-        );
+        let mut piece = StrongholdPiece::new(StructurePieceType::StrongholdStart, 0, bounding_box);
         piece.piece.set_facing(Some(orientation));
         Self {
             piece,
@@ -120,6 +117,10 @@ impl StructurePieceBase for SpiralStaircasePiece {
         &self,
         start: &StructurePiece,
         random: &mut RandomGenerator,
+        weights: &mut Vec<PieceWeight>,
+        last_piece_type: &mut Option<StrongholdPieceType>,
+        _has_portal_room: &mut bool,
+
         collector: &mut StructurePiecesCollector,
         pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
@@ -127,6 +128,8 @@ impl StructurePieceBase for SpiralStaircasePiece {
             start,
             collector,
             random,
+            weights,
+            last_piece_type,
             1,
             1,
             pieces_to_process,

@@ -115,7 +115,7 @@ console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = "1.10.0"
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = "0.8.21"
-crossfire = { version= "3.0.2", features = ["compat"]}
+crossfire = { version= "3.0.3", features = ["compat"]}
 dashmap = "6.1"
 ecdsa = "0.16.9"
 enum_dispatch = "0.3.13"

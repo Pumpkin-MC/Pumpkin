@@ -1,4 +1,7 @@
-use pumpkin_data::Block;
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{BlockProperties, ResinBrickSlabLikeProperties, SlabType},
+};
 use pumpkin_util::{
     BlockDirection,
     math::block_box::BlockBox,
@@ -11,7 +14,10 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
+            stronghold::{
+                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                StrongholdPieceType,
+            },
         },
     },
 };
@@ -74,6 +80,10 @@ impl StructurePieceBase for FiveWayCrossingPiece {
         &self,
         start: &StructurePiece,
         random: &mut RandomGenerator,
+        weights: &mut Vec<PieceWeight>,
+        last_piece_type: &mut Option<StrongholdPieceType>,
+        _has_portal_room: &mut bool,
+
         collector: &mut StructurePiecesCollector,
         pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
@@ -86,25 +96,66 @@ impl StructurePieceBase for FiveWayCrossingPiece {
             j = 8 - j;
         }
 
-        self.piece
-            .fill_forward_opening(start, collector, random, 5, 1, pieces_to_process, None);
+        self.piece.fill_forward_opening(
+            start,
+            collector,
+            random,
+            weights,
+            last_piece_type,
+            5,
+            1,
+            pieces_to_process,
+            None,
+        );
 
         if self.lower_left_exists {
-            self.piece
-                .fill_nw_opening(start, collector, random, i, 1, pieces_to_process);
+            self.piece.fill_nw_opening(
+                start,
+                collector,
+                random,
+                weights,
+                last_piece_type,
+                i,
+                1,
+                pieces_to_process,
+            );
         }
         if self.upper_left_exists {
-            self.piece
-                .fill_nw_opening(start, collector, random, j, 7, pieces_to_process);
+            self.piece.fill_nw_opening(
+                start,
+                collector,
+                random,
+                weights,
+                last_piece_type,
+                j,
+                7,
+                pieces_to_process,
+            );
         }
 
         if self.lower_right_exists {
-            self.piece
-                .fill_se_opening(start, collector, random, i, 1, pieces_to_process);
+            self.piece.fill_se_opening(
+                start,
+                collector,
+                random,
+                weights,
+                last_piece_type,
+                i,
+                1,
+                pieces_to_process,
+            );
         }
         if self.upper_right_exists {
-            self.piece
-                .fill_se_opening(start, collector, random, j, 7, pieces_to_process);
+            self.piece.fill_se_opening(
+                start,
+                collector,
+                random,
+                weights,
+                last_piece_type,
+                j,
+                7,
+                pieces_to_process,
+            );
         }
     }
 
@@ -236,8 +287,22 @@ impl StructurePieceBase for FiveWayCrossingPiece {
         inner.fill_with_outline(chunk, &box_limit, false, 4, 5, 7, 4, 5, 9, slab, slab);
         inner.fill_with_outline(chunk, &box_limit, false, 8, 5, 7, 8, 5, 9, slab, slab);
 
-        // let double_slab = Block::SMOOTH_STONE_SLAB.default_state.with("type", "double");
-        // inner.fill_with_outline(chunk, &box_limit, false, 5, 5, 7, 7, 5, 9, &double_slab, &double_slab);
+        let mut props = ResinBrickSlabLikeProperties::default(&Block::SMOOTH_STONE_SLAB);
+        props.r#type = SlabType::Double;
+        let double_slab = BlockState::from_id(props.to_state_id(&Block::SMOOTH_STONE_SLAB));
+        inner.fill_with_outline(
+            chunk,
+            &box_limit,
+            false,
+            5,
+            5,
+            7,
+            7,
+            5,
+            9,
+            double_slab,
+            double_slab,
+        );
 
         // let torch = Block::WALL_TORCH.default_state.with("facing", "south");
         // inner.add_block(chunk, &torch, 6, 5, 6, &box_limit);
