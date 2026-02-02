@@ -52,8 +52,7 @@ impl BinaryHeap {
         node.heap_idx = idx as i32;
         self.heap[idx] = node;
         self.size += 1;
-        self.up_heap(idx);
-        idx
+        self.up_heap(idx)
     }
 
     /// Clears the heap, removing all nodes.
@@ -163,7 +162,8 @@ impl BinaryHeap {
     }
 
     /// Moves a node up the heap until the heap property is restored.
-    fn up_heap(&mut self, mut idx: usize) {
+    /// Returns the final index of the node after moving.
+    fn up_heap(&mut self, mut idx: usize) -> usize {
         let node = self.heap[idx].clone();
         let f = node.f;
 
@@ -182,6 +182,7 @@ impl BinaryHeap {
 
         self.heap[idx] = node;
         self.heap[idx].heap_idx = idx as i32;
+        idx
     }
 
     /// Moves a node down the heap until the heap property is restored.
