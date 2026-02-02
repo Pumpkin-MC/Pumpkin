@@ -15,7 +15,7 @@ use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
@@ -1596,11 +1596,9 @@ impl Entity {
     }
 
     /// Check if this entity type is immune to freezing
-    /// Uses the `minecraft:freeze_immune_entity_types` tag
     pub fn is_freeze_immune(&self) -> bool {
         self.entity_type
-            .is_tagged_with("minecraft:freeze_immune_entity_types")
-            .unwrap_or(false)
+            .has_tag(&tag::EntityType::MINECRAFT_FREEZE_IMMUNE_ENTITY_TYPES)
     }
 
     /// Ticks the frozen state of the entity.
