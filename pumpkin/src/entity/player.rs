@@ -97,6 +97,11 @@ use pumpkin_world::chunk_system::ChunkLoading;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
+/// Eye height for players in crouching pose
+const CROUCHING_EYE_HEIGHT: f64 = 1.27;
+/// Eye height for players in swimming or fall flying poses (imported from entity mod)
+const SWIMMING_EYE_HEIGHT: f64 = 0.4;
+
 pub const DATA_VERSION: i32 = 4671; // 1.21.11
 
 enum BatchState {
@@ -1076,8 +1081,8 @@ impl Player {
     pub fn eye_position(&self) -> Vector3<f64> {
         let pose = self.living_entity.entity.pose.load();
         let eye_height = match pose {
-            EntityPose::Crouching => 1.27,
-            EntityPose::Swimming | EntityPose::FallFlying => 0.4,
+            EntityPose::Crouching => CROUCHING_EYE_HEIGHT,
+            EntityPose::Swimming | EntityPose::FallFlying => SWIMMING_EYE_HEIGHT,
             _ => f64::from(self.living_entity.entity.standing_eye_height),
         };
         Vector3::new(

@@ -268,6 +268,9 @@ impl RemovalReason {
 
 static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
 
+/// Eye height for entities in swimming or fall flying poses
+const SWIMMING_EYE_HEIGHT: f32 = 0.4;
+
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
     /// A unique identifier for the entity
@@ -1736,7 +1739,7 @@ impl Entity {
     pub fn get_eye_height(&self) -> f32 {
         let pose = self.pose.load();
         match pose {
-            EntityPose::Swimming | EntityPose::FallFlying => 0.4,
+            EntityPose::Swimming | EntityPose::FallFlying => SWIMMING_EYE_HEIGHT,
             _ => self.standing_eye_height,
         }
     }
