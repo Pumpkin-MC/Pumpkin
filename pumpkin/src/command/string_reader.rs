@@ -377,7 +377,7 @@ mod test {
         assert_eq!(reader.read_long(), Ok(34));
         reader.skip_whitespace();
 
-        assert!(matches!(reader.read_int(), Err(_)));
+        assert!(reader.read_int().is_err());
         reader.skip_whitespace();
         assert_eq!(reader.read_long(), Ok(7890123456));
         reader.skip_whitespace();
@@ -408,6 +408,6 @@ mod test {
         assert_eq!(reader.read_string(), Ok("orange".to_string()));
         reader.skip_whitespace();
 
-        assert!(matches!(reader.read_quoted_string(), Err(_)));
+        assert!(reader.read_quoted_string().is_err());
     }
 }
