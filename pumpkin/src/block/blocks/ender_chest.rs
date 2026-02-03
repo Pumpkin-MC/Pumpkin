@@ -16,6 +16,8 @@ use pumpkin_world::{
     BlockStateId, block::entities::ender_chest::EnderChestBlockEntity, inventory::Inventory,
 };
 use tokio::sync::Mutex;
+use pumpkin_util::math::position::BlockPos;
+use crate::world::World;
 
 struct EnderChestScreenFactory(Arc<dyn Inventory>);
 
@@ -68,6 +70,10 @@ impl BlockBehaviour for EnderChestBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
+            if is_chest_blocked(args.world, args.position).await {
+                return BlockActionResult::Success;
+            }
+
             if let Some(block_entity) = args.world.get_block_entity(args.position).await
                 && let Some(block_entity) = block_entity
                     .as_any()
@@ -95,6 +101,15 @@ impl BlockBehaviour for EnderChestBlock {
     }
 }
 
+async fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
+    // TODO: Block opening when a cat is sitting on top.
+    has_block_on_top(world, block_pos).await
+}
+async fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
+    let above_pos = block_pos.up();
+    let above_block = world.get_block(&above_pos).await;
+    above_block.is_solid()
+}
 impl EnderChestBlock {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
 }

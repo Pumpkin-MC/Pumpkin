@@ -114,7 +114,7 @@ impl Block {
 
     /// Returns whether this block is solid (based on default state)
     pub fn is_solid(&self) -> bool {
-        self.default_state.is_solid()
+        self.default_state.is_solid_block()
     }
 
     /// Returns whether this block is air (based on default state)

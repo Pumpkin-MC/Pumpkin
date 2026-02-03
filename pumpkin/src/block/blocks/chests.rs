@@ -158,6 +158,17 @@ impl BlockBehaviour for ChestBlock {
                 ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
             };
 
+            if is_chest_blocked(args.world, args.position).await {
+                return BlockActionResult::Success;
+            }
+
+            if let Some(direction) = connected_towards {
+                let neighbor_pos = args.position.offset(direction.to_offset());
+                if is_chest_blocked(args.world, &neighbor_pos).await {
+                    return BlockActionResult::Success;
+                }
+            }
+
             let inventory = if let Some(direction) = connected_towards
                 && let Some(second_inventory) = args
                     .world
@@ -309,6 +320,15 @@ async fn get_chest_properties_if_can_connect(
     None
 }
 
+async fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
+    // TODO: Block opening when a cat is sitting on top.
+    has_block_on_top(world, block_pos).await
+}
+async fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
+    let above_pos = block_pos.up();
+    let above_block = world.get_block(&above_pos).await;
+    above_block.is_solid()
+}
 trait ChestTypeExt {
     fn opposite(&self) -> ChestType;
 }
