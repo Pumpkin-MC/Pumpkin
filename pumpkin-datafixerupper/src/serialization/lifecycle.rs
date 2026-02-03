@@ -1,6 +1,6 @@
 /// A marker to convey the lifecycle of some object.
 /// It could be stable, experimental or deprecated.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Lifecycle {
     /// Represents something stable.
     Stable,
