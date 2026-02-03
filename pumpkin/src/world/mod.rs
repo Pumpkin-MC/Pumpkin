@@ -94,8 +94,8 @@ use pumpkin_protocol::{
 use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{
-        CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage,
-        CWorldEvent,
+        CBlockUpdate, CDisguisedChatMessage, CExplosion, CLightUpdate, CRespawn,
+        CSetBlockDestroyStage, CWorldEvent,
     },
 };
 use pumpkin_util::resource_location::ResourceLocation;
@@ -2590,9 +2590,19 @@ impl World {
     pub async fn perform_block_light_updates(self: &Arc<Self>) -> i32 {
         let mut updates = 0;
 
-        updates += self.perform_block_light_decrease_updates().await;
-
-        updates += self.perform_block_light_increase_updates().await;
+        // Keep processing until both queues are empty
+        // Light propagation queues new updates, so we need to process until convergence
+        loop {
+            let decrease_updates = self.perform_block_light_decrease_updates().await;
+            let increase_updates = self.perform_block_light_increase_updates().await;
+            
+            updates += decrease_updates + increase_updates;
+            
+            // Stop when no more updates were processed
+            if decrease_updates == 0 && increase_updates == 0 {
+                break;
+            }
+        }
 
         updates
     }
@@ -2687,11 +2697,13 @@ impl World {
         let block_state = self.get_block_state(&pos).await;
         let expected_light = block_state.luminance;
 
+        // Handle light decrease (removing light source or placing opaque block)
         if expected_light < current_light {
             self.set_block_light_level(&pos, 0).await.unwrap();
             self.queue_block_light_decrease(pos, current_light);
         }
 
+        // Handle light increase (placing light source)
         if expected_light > 0 {
             self.set_block_light_level(&pos, expected_light)
                 .await
@@ -2701,7 +2713,8 @@ impl World {
 
         //TODO check sky light updates
 
-        self.check_neighbors_light_updates(pos, current_light).await;
+        // Always check neighbors - even non-emissive blocks can affect light propagation
+        self.check_neighbors_light_updates(pos, expected_light).await;
     }
 
     pub async fn check_neighbors_light_updates(self: &Arc<Self>, pos: BlockPos, current_light: u8) {
@@ -2724,11 +2737,11 @@ impl World {
             panic!("Timed out while waiting to acquire chunk read lock")
         };
         let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
-        // +1 since block light has 1 section padding on both top and bottom
-        if section_index + 1 >= chunk.light_engine.block_light.len() {
+        // Bounds check for section index
+        if section_index >= chunk.light_engine.block_light.len() {
             return None;
         }
-        Some(chunk.light_engine.block_light[section_index + 1].get(
+        Some(chunk.light_engine.block_light[section_index].get(
             relative.x as usize,
             (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE,
             relative.z as usize,
@@ -2748,16 +2761,18 @@ impl World {
             panic!("Timed out while waiting to acquire chunk write lock")
         };
         let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+        // Bounds check for section index
         if section_index >= chunk.light_engine.block_light.len() {
             return Err("Invalid section index".to_string());
         }
         let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
-        chunk.light_engine.block_light[section_index + 1].set(
+        chunk.light_engine.block_light[section_index].set(
             relative.x as usize,
             relative_y,
             relative.z as usize,
             light_level,
         );
+        // Mark chunk as dirty so lighting changes are saved to disk
         chunk.mark_dirty(true);
         Ok(())
     }
@@ -2893,8 +2908,17 @@ impl World {
             }
         }
 
+        let (chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
+        
         self.check_block_light_updates(*position).await;
         self.perform_block_light_updates().await;
+
+        // Send light update to all players who have this chunk loaded
+        // let chunk = self.level.get_chunk(chunk_coordinate).await;
+        // if let Ok(chunk_data) = tokio::time::timeout(std::time::Duration::from_secs(1), chunk.read()).await {
+        //     let packet = CLightUpdate(&*chunk_data);
+        //     self.broadcast_packet_all(&packet).await;
+        // }
 
         replaced_block_state_id
     }

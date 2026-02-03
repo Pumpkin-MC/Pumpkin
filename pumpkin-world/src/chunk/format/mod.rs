@@ -120,14 +120,16 @@ impl ChunkData {
             .sections
             .into_iter()
             .map(|section| {
+                // When loading light data, missing data should default to 0 (no light)
+                // not 15 (full light) as LightContainer::default() would give
                 let block_light = section
                     .block_light
                     .map(LightContainer::new)
-                    .unwrap_or_default();
+                    .unwrap_or_else(|| LightContainer::new_empty(0));
                 let sky_light = section
                     .sky_light
                     .map(LightContainer::new)
-                    .unwrap_or_default();
+                    .unwrap_or_else(|| LightContainer::new_empty(0));
 
                 let sub_chunk = SubChunk {
                     block_states: section
@@ -194,17 +196,33 @@ impl ChunkData {
                 y: (i as i8) + section_coords::block_to_section(self.section.min_y) as i8,
                 block_states: Some(section.block_states.to_disk_nbt()),
                 biomes: Some(section.biomes.to_disk_nbt()),
-                block_light: match self.light_engine.block_light[i].clone() {
-                    LightContainer::Empty(_) => None,
-                    LightContainer::Full(data) => Some(data),
+                // Serialize light data: Full arrays are saved, Empty containers with non-zero defaults
+                // are saved as well to preserve the default value
+                block_light: match &self.light_engine.block_light[i] {
+                    LightContainer::Empty(default) if *default == 0 => None,
+                    LightContainer::Empty(default) => {
+                        // Save a filled array with the default value
+                        let value = (*default << 4) | *default;
+                        Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
+                    }
+                    LightContainer::Full(data) => Some(data.clone()),
                 },
-                sky_light: match self.light_engine.sky_light[i].clone() {
-                    LightContainer::Empty(_) => None,
-                    LightContainer::Full(data) => Some(data),
+                sky_light: match &self.light_engine.sky_light[i] {
+                    LightContainer::Empty(default) if *default == 0 => None,
+                    LightContainer::Empty(default) => {
+                        // Save a filled array with the default value
+                        let value = (*default << 4) | *default;
+                        Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
+                    }
+                    LightContainer::Full(data) => Some(data.clone()),
                 },
             })
             .collect();
 
+        // Check if any light data exists in the chunk
+        let has_light_data = self.light_engine.sky_light.iter().any(|l| !matches!(l, LightContainer::Empty(0)))
+            || self.light_engine.block_light.iter().any(|l| !matches!(l, LightContainer::Empty(0)));
+        
         let nbt = ChunkNbt {
             data_version: WORLD_DATA_VERSION,
             x_pos: self.x,
@@ -221,8 +239,8 @@ impl ChunkData {
                 nbt
             }))
             .await,
-            // we have not implemented light engine
-            light_correct: false,
+            // Mark as light correct if we have calculated light data
+            light_correct: has_light_data,
         };
 
         let mut result = Vec::new();

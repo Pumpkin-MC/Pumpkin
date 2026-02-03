@@ -30,6 +30,7 @@ impl BlockLightEngine {
         let end_x = start_x + 16;
         let end_z = start_z + 16;
 
+        // Initialize light sources in the center chunk
         for y in min_y..max_y {
             for z in start_z..end_z {
                 for x in start_x..end_x {
@@ -44,6 +45,10 @@ impl BlockLightEngine {
                 }
             }
         }
+        
+        // Add edge blocks from neighboring chunks to the queue to ensure proper
+        // light propagation across chunk boundaries
+        self.seed_boundary_lights(cache, center_x, center_z, min_y, max_y);
 
         while let Some(pos) = self.queue.pop_front() {
             let level = get_block_light(cache, pos);
@@ -68,6 +73,54 @@ impl BlockLightEngine {
                     if new_level > 1 {
                         self.queue.push_back(neighbor_pos);
                     }
+                }
+            }
+        }
+    }
+
+    /// Seeds the light propagation queue with blocks at chunk boundaries
+    /// to ensure light properly propagates across chunk edges
+    fn seed_boundary_lights(&mut self, cache: &mut Cache, center_x: i32, center_z: i32, min_y: i32, max_y: i32) {
+        let start_x = center_x * 16;
+        let start_z = center_z * 16;
+        let end_x = start_x + 16;
+        let end_z = start_z + 16;
+        
+        // Check all four edges of the center chunk
+        for y in min_y..max_y {
+            // West edge (x = start_x - 1)
+            for z in start_z..end_z {
+                let pos = BlockPos(Vector3::new(start_x - 1, y, z));
+                let level = get_block_light(cache, pos);
+                if level > 1 {
+                    self.queue.push_back(pos);
+                }
+            }
+            
+            // East edge (x = end_x)
+            for z in start_z..end_z {
+                let pos = BlockPos(Vector3::new(end_x, y, z));
+                let level = get_block_light(cache, pos);
+                if level > 1 {
+                    self.queue.push_back(pos);
+                }
+            }
+            
+            // North edge (z = start_z - 1)
+            for x in start_x..end_x {
+                let pos = BlockPos(Vector3::new(x, y, start_z - 1));
+                let level = get_block_light(cache, pos);
+                if level > 1 {
+                    self.queue.push_back(pos);
+                }
+            }
+            
+            // South edge (z = end_z)
+            for x in start_x..end_x {
+                let pos = BlockPos(Vector3::new(x, y, end_z));
+                let level = get_block_light(cache, pos);
+                if level > 1 {
+                    self.queue.push_back(pos);
                 }
             }
         }
