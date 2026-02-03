@@ -857,23 +857,50 @@ impl Player {
         let pos = &respawn_point.position;
         let (block, state_id) = world.get_block_and_state_id(pos).await;
 
+        log::info!(
+            "calculate_respawn_point: pos={:?}, force={}, block={:?}",
+            pos,
+            respawn_point.force,
+            block.name
+        );
+
         // If force is set (from /spawnpoint command), validate position is safe
         if respawn_point.force {
             // For forced spawn, check if both the block and block above allow mob spawn
             let block_state = world.get_block_state(pos).await;
             let above_state = world.get_block_state(&pos.up()).await;
+            let below_state = world.get_block_state(&pos.down()).await;
 
             // Check if blocks are passable (non-solid or air)
             let block_safe = block_state.is_air() || !block_state.is_solid();
             let above_safe = above_state.is_air() || !above_state.is_solid();
 
             if block_safe && above_safe {
+                // Like vanilla, if there's no solid ground below, find it
+                let mut spawn_y = pos.0.y;
+                if !below_state.is_solid() {
+                    // Find solid ground below
+                    for y in (world.dimension.min_y..pos.0.y).rev() {
+                        let check_pos = BlockPos::new(pos.0.x, y, pos.0.z);
+                        let check_state = world.get_block_state(&check_pos).await;
+                        if check_state.is_solid() {
+                            spawn_y = y + 1;
+                            log::info!(
+                                "Forced spawn: found solid ground at y={}, spawning at y={}",
+                                y,
+                                spawn_y
+                            );
+                            break;
+                        }
+                    }
+                }
+
                 let position = Vector3::new(
                     f64::from(pos.0.x) + 0.5,
-                    f64::from(pos.0.y) + 0.1,
+                    f64::from(spawn_y) + 0.1,
                     f64::from(pos.0.z) + 0.5,
                 );
-                log::debug!(
+                log::info!(
                     "Returning forced spawn point at {:?}, dimension: {:?}",
                     position,
                     respawn_point.dimension
