@@ -857,13 +857,6 @@ impl Player {
         let pos = &respawn_point.position;
         let (block, state_id) = world.get_block_and_state_id(pos).await;
 
-        log::info!(
-            "calculate_respawn_point: pos={:?}, force={}, block={:?}",
-            pos,
-            respawn_point.force,
-            block.name
-        );
-
         // If force is set (from /spawnpoint command), validate position is safe
         if respawn_point.force {
             // For forced spawn, check if both the block and block above allow mob spawn
@@ -885,9 +878,6 @@ impl Player {
                         let check_state = world.get_block_state(&check_pos).await;
                         if check_state.is_solid() {
                             spawn_y = y + 1;
-                            log::info!(
-                                "Forced spawn: found solid ground at y={y}, spawning at y={spawn_y}"
-                            );
                             break;
                         }
                     }
@@ -897,11 +887,6 @@ impl Player {
                     f64::from(pos.0.x) + 0.5,
                     f64::from(spawn_y) + 0.1,
                     f64::from(pos.0.z) + 0.5,
-                );
-                log::info!(
-                    "Returning forced spawn point at {:?}, dimension: {:?}",
-                    position,
-                    respawn_point.dimension
                 );
                 return Some(CalculatedRespawnPoint {
                     position,

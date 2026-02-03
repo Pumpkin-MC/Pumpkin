@@ -186,7 +186,6 @@ impl JavaClient {
                 // in the position handler when the client sends a position close to the destination.
                 // This prevents stale position packets from causing fall damage.
                 player.living_entity.fall_distance.store(0.0);
-                log::info!("Teleport confirmed: position={position:?}");
 
                 *awaiting_teleport = None;
                 drop(awaiting_teleport);
