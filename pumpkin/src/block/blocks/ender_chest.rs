@@ -4,6 +4,7 @@ use crate::block::{
     BlockBehaviour, BlockFuture, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
     registry::BlockActionResult,
 };
+use crate::world::World;
 use pumpkin_data::block_properties::{BlockProperties, LadderLikeProperties};
 use pumpkin_inventory::{
     generic_container_screen_handler::create_generic_9x3,
@@ -11,13 +12,12 @@ use pumpkin_inventory::{
     screen_handler::{BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
 };
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::{
     BlockStateId, block::entities::ender_chest::EnderChestBlockEntity, inventory::Inventory,
 };
 use tokio::sync::Mutex;
-use pumpkin_util::math::position::BlockPos;
-use crate::world::World;
 
 struct EnderChestScreenFactory(Arc<dyn Inventory>);
 
