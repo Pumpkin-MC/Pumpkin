@@ -1,10 +1,10 @@
 use super::{ChunkLevel, ChunkPos, HashMapType};
-use std::collections::hash_map::Entry;
-use std::sync::{Arc, Condvar, Mutex};
-use std::mem::swap;
-use crate::level::Level;
-use std::sync::atomic::Ordering::SeqCst;
 use crate::chunk_system::chunk_state::StagedChunkEnum;
+use crate::level::Level;
+use std::collections::hash_map::Entry;
+use std::mem::swap;
+use std::sync::atomic::Ordering::SeqCst;
+use std::sync::{Arc, Condvar, Mutex};
 
 pub type LevelChange = (
     HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,

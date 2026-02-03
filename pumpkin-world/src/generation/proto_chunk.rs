@@ -26,8 +26,8 @@ use super::{
     settings::GenerationSettings,
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
-use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk::format::LightContainer;
+use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::StagedChunkEnum;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::noise::aquifer_sampler::{

@@ -1,6 +1,6 @@
-use crate::chunk_system::generation_cache::Cache;
 use super::block_light::BlockLightEngine;
 use super::sky_light::SkyLightEngine;
+use crate::chunk_system::generation_cache::Cache;
 
 pub struct LightEngine {
     block_light: BlockLightEngine,
@@ -19,5 +19,11 @@ impl LightEngine {
         self.sky_light.convert_light(cache);
         self.block_light.propagate_light(cache);
         self.sky_light.propagate_light(cache);
+    }
+}
+
+impl Default for LightEngine {
+    fn default() -> Self {
+        Self::new()
     }
 }

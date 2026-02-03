@@ -3,7 +3,7 @@ use super::chunk_holder::ChunkHolder;
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use super::dag::{DAG, EdgeKey, Node, NodeKey};
 use super::generation_cache::Cache;
-use super::worker_logic::{generation_work, io_read_work, io_write_work, RecvChunk};
+use super::worker_logic::{RecvChunk, generation_work, io_read_work, io_write_work};
 use super::{
     ChunkLevel, ChunkListener, ChunkLoading, ChunkPos, HashMapType, HashSetType, IOLock,
     LevelChannel,
@@ -243,10 +243,12 @@ impl GenerationSchedule {
                                 let req_stage = dependency[dx.abs().max(dz.abs()) as usize];
                                 if new_pos == pos {
                                     // TODO
-                                    holder.occupied_by = self
-                                        .graph
-                                        .edges
-                                        .insert(crate::chunk_system::dag::Edge::new(task, holder.occupied_by));
+                                    holder.occupied_by = self.graph.edges.insert(
+                                        crate::chunk_system::dag::Edge::new(
+                                            task,
+                                            holder.occupied_by,
+                                        ),
+                                    );
                                     if holder.current_stage >= req_stage {
                                         continue;
                                     }
@@ -259,10 +261,11 @@ impl GenerationSchedule {
                                     continue;
                                 }
                                 let ano_chunk = self.chunk_map.entry(new_pos).or_default();
-                                ano_chunk.occupied_by = self
-                                    .graph
-                                    .edges
-                                    .insert(crate::chunk_system::dag::Edge::new(task, ano_chunk.occupied_by));
+                                ano_chunk.occupied_by =
+                                    self.graph.edges.insert(crate::chunk_system::dag::Edge::new(
+                                        task,
+                                        ano_chunk.occupied_by,
+                                    ));
 
                                 if !ano_chunk.occupied.is_null() {
                                     self.graph.add_edge(ano_chunk.occupied, task);
@@ -293,7 +296,6 @@ impl GenerationSchedule {
         self.sort_queue();
         true
     }
-
 
     fn unload_chunk(&mut self) {
         let mut unload_chunks = HashSetType::default();

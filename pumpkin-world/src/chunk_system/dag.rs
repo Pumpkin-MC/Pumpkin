@@ -1,6 +1,6 @@
-use super::chunk_state::StagedChunkEnum;
 use super::ChunkPos;
-use slotmap::{new_key_type, SlotMap, Key};
+use super::chunk_state::StagedChunkEnum;
+use slotmap::{Key, SlotMap, new_key_type};
 
 #[derive(Clone, Debug)]
 pub struct Node {
@@ -39,7 +39,6 @@ new_key_type! { pub struct NodeKey; }
 new_key_type! { pub struct EdgeKey; }
 
 #[derive(Default)]
-#[expect(clippy::upper_case_acronyms)]
 pub struct DAG {
     pub nodes: SlotMap<NodeKey, Node>,
     pub edges: SlotMap<EdgeKey, Edge>,

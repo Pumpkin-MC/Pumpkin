@@ -4,8 +4,8 @@ use itertools::Itertools;
 use log::debug;
 use num_traits::abs;
 use std::cmp::{Ordering, PartialEq, min};
-use std::collections::hash_map::Entry;
 use std::collections::BinaryHeap;
+use std::collections::hash_map::Entry;
 use std::mem::swap;
 use std::sync::Arc;
 

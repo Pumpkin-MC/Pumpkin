@@ -1,13 +1,12 @@
-use crate::chunk::{ChunkData, ChunkLight, ChunkSections, SubChunk};
+use crate::chunk::{ChunkData, ChunkSections, SubChunk};
 use crate::generation::biome_coords;
 use pumpkin_data::dimension::Dimension;
 use std::sync::Arc;
 
-use crate::level::SyncChunk;
 use crate::ProtoChunk;
+use crate::level::SyncChunk;
 use tokio::sync::RwLock;
 
-use crate::chunk::format::LightContainer;
 use pumpkin_data::chunk::ChunkStatus;
 
 #[repr(u8)]

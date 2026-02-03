@@ -1,11 +1,11 @@
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use super::generation_cache::Cache;
 use super::{ChunkPos, IOLock};
+use crate::ProtoChunk;
 use crate::chunk::io::LoadedData;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::generation::settings::gen_settings_from_dimension;
 use crate::level::Level;
-use crate::ProtoChunk;
 use crossfire::compat::AsyncRx;
 use itertools::Itertools;
 use pumpkin_data::chunk::ChunkStatus;
@@ -55,13 +55,12 @@ pub async fn io_read_work(
                     }
                 } else {
                     // debug!("io read thread receive proto chunk {pos:?}",);
-                    let val =
-                        RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
-                            &*chunk.read().await,
-                            dimension,
-                            level.world_gen.default_block,
-                            biome_mixer_seed,
-                        ))));
+                    let val = RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
+                        &*chunk.read().await,
+                        dimension,
+                        level.world_gen.default_block,
+                        biome_mixer_seed,
+                    ))));
                     if send.send((pos, val)).is_err() {
                         break;
                     }
