@@ -11,6 +11,7 @@ members = [
     "pumpkin/",
     "pumpkin-data",
     "pumpkin-plugin-api",
+    "pumpkin-datafixerupper"
 ]
 exclude = ["pumpkin-codegen"]
 
