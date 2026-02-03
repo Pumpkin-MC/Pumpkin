@@ -47,7 +47,7 @@ impl BlockLightEngine {
         
         while let Some(pos) = self.queue.pop_front() {
              let level = get_block_light(cache, pos);
-             if level == 0 { continue; }
+             if level <= 1 { continue; } // Light level 0 and 1 don't propagate further
              
              for face in BlockDirection::all() {
                   let offset = face.to_offset();
@@ -56,11 +56,16 @@ impl BlockLightEngine {
                   let neighbor_level = get_block_light(cache, neighbor_pos);
                   let state = cache.get_block_state(&neighbor_pos.0);
                   
+                  // Vanilla uses max(1, opacity) to ensure minimum 1 level reduction per block
                   let opacity = state.to_state().opacity.max(1);
-                  if (level as i16 - opacity as i16) > neighbor_level as i16 {
-                       let new_level = (level as i16 - opacity as i16) as u8;
+                  let new_level = level.saturating_sub(opacity);
+                  
+                  // Only update if new light level is brighter
+                  if new_level > neighbor_level {
                        set_block_light(cache, neighbor_pos, new_level);
-                       self.queue.push_back(neighbor_pos);
+                       if new_level > 1 {
+                           self.queue.push_back(neighbor_pos);
+                       }
                   }
              }
         }

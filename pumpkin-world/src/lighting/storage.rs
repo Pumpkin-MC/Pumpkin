@@ -79,10 +79,13 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     let chunk_x = pos.0.x >> 4;
     let chunk_z = pos.0.z >> 4;
     
-    let Some(idx) = get_chunk_index(cache, chunk_x, chunk_z) else { return 15; };
+    // Fix: Return 0 instead of 15 for missing chunks to prevent void light bleed.
+    // However, if it's "No horizontal propagation", we need to ensure we can propagate INTO empty chunks?
+    // No, we can only propagate into things we store.
+    let Some(idx) = get_chunk_index(cache, chunk_x, chunk_z) else { return 0; };
     let chunk = &cache.chunks[idx];
     
-    let Some(section_y) = get_section_y(cache, pos.0.y) else { return 15; };
+    let Some(section_y) = get_section_y(cache, pos.0.y) else { return 0; };
     
     let x = (pos.0.x & 15) as usize;
     let y = (pos.0.y & 15) as usize;
@@ -91,11 +94,11 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     match chunk {
         Chunk::Level(c) => {
             let read = c.blocking_read();
-            if section_y >= read.light_engine.sky_light.len() { return 15; }
+            if section_y >= read.light_engine.sky_light.len() { return 0; }
             read.light_engine.sky_light[section_y].get(x, y, z)
         },
         Chunk::Proto(c) => {
-             if section_y >= c.light.sky_light.len() { return 15; }
+             if section_y >= c.light.sky_light.len() { return 0; }
              c.light.sky_light[section_y].get(x, y, z)
         }
     }

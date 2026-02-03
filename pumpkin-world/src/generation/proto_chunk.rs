@@ -212,14 +212,19 @@ impl ProtoChunk {
                 sky_light: (0..section_count)
                     .map(|_| {
                         if dimension.has_skylight {
-                            LightContainer::new_empty(0)
+                            // Pre-allocate full arrays for sky light in dimensions with skylight
+                            // Initialize to 0 - lighting engine will calculate proper values
+                            LightContainer::new_filled(0)
                         } else {
+                            // No skylight in Nether/End, can use Empty
                             LightContainer::new_empty(0)
                         }
                     })
                     .collect(),
                 block_light: (0..section_count)
-                    .map(|_| LightContainer::new_empty(0))
+                    // Pre-allocate full arrays for block light
+                    // Initialize to 0 - lighting engine will set emissive blocks
+                    .map(|_| LightContainer::new_filled(0))
                     .collect(),
             },
         }
