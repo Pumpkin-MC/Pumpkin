@@ -1,7 +1,11 @@
 use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::{fuels::is_fuel, screen::WindowType};
-use pumpkin_world::{block::entities::BlockEntity, inventory::Inventory, item::ItemStack};
+use pumpkin_world::{
+    block::entities::{PropertyDelegate, furnace_like_block_entity::ExperienceContainer},
+    inventory::Inventory,
+    item::ItemStack,
+};
 
 use crate::{
     player::player_inventory::PlayerInventory,
@@ -11,10 +15,11 @@ use crate::{
     },
 };
 
-use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType};
+use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType, FurnaceOutputSlot};
 
 pub struct FurnaceLikeScreenHandler {
     pub inventory: Arc<dyn Inventory>,
+    experience_container: Arc<dyn ExperienceContainer>,
     behaviour: ScreenHandlerBehaviour,
 }
 
@@ -23,7 +28,8 @@ impl FurnaceLikeScreenHandler {
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
         inventory: Arc<dyn Inventory>,
-        furnace_block_entity: Arc<dyn BlockEntity>,
+        property_delegate: Arc<dyn PropertyDelegate>,
+        experience_container: Arc<dyn ExperienceContainer>,
         window_type: WindowType,
     ) -> Self {
         struct FurnaceLikeScreenListener;
@@ -43,9 +49,9 @@ impl FurnaceLikeScreenHandler {
                 })
             }
         }
-        let furnace_like_property_delegate = furnace_block_entity.to_property_delegate().unwrap();
         let mut handler = Self {
             inventory,
+            experience_container,
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(window_type)),
         };
 
@@ -54,10 +60,7 @@ impl FurnaceLikeScreenHandler {
         // 2: Progress arrow counting from 0 to maximum progress (in-game ticks)
         // 3: Maximum progress always 200 on the vanilla server
         for i in 0..4 {
-            handler.add_property(ScreenProperty::new(
-                furnace_like_property_delegate.clone(),
-                i,
-            ));
+            handler.add_property(ScreenProperty::new(property_delegate.clone(), i));
         }
 
         handler
@@ -79,9 +82,10 @@ impl FurnaceLikeScreenHandler {
             self.inventory.clone(),
             FurnaceLikeSlotType::Bottom,
         )));
-        self.add_slot(Arc::new(FurnaceLikeSlot::new(
+        // Output slot awards experience when items are taken
+        self.add_slot(Arc::new(FurnaceOutputSlot::new(
             self.inventory.clone(),
-            FurnaceLikeSlotType::Side,
+            self.experience_container.clone(),
         )));
     }
 }

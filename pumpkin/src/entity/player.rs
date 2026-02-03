@@ -3344,4 +3344,12 @@ impl InventoryPlayer for Player {
             }
         })
     }
+
+    fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()> {
+        Box::pin(async move {
+            if amount > 0 {
+                self.add_experience_points(amount).await;
+            }
+        })
+    }
 }

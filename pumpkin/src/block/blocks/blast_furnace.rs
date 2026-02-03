@@ -13,7 +13,10 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::{
     BlockStateId,
-    block::entities::{BlockEntity, blasting_furnace::BlastingFurnaceBlockEntity},
+    block::entities::{
+        PropertyDelegate, blasting_furnace::BlastingFurnaceBlockEntity,
+        furnace_like_block_entity::ExperienceContainer,
+    },
     inventory::Inventory,
 };
 use tokio::sync::Mutex;
@@ -25,14 +28,20 @@ use crate::block::{
 
 struct BlastingFurnaceScreenFactory {
     inventory: Arc<dyn Inventory>,
-    block_entity: Arc<dyn BlockEntity>,
+    property_delegate: Arc<dyn PropertyDelegate>,
+    experience_container: Arc<dyn ExperienceContainer>,
 }
 
 impl BlastingFurnaceScreenFactory {
-    fn new(inventory: Arc<dyn Inventory>, block_entity: Arc<dyn BlockEntity>) -> Self {
+    fn new(
+        inventory: Arc<dyn Inventory>,
+        property_delegate: Arc<dyn PropertyDelegate>,
+        experience_container: Arc<dyn ExperienceContainer>,
+    ) -> Self {
         Self {
             inventory,
-            block_entity,
+            property_delegate,
+            experience_container,
         }
     }
 }
@@ -49,7 +58,8 @@ impl ScreenHandlerFactory for BlastingFurnaceScreenFactory {
                 sync_id,
                 player_inventory,
                 self.inventory.clone(),
-                self.block_entity.clone(),
+                self.property_delegate.clone(),
+                self.experience_container.clone(),
                 WindowType::BlastFurnace,
             )
             .await;
@@ -73,9 +83,14 @@ impl BlockBehaviour for BlastFurnaceBlock {
         Box::pin(async move {
             if let Some(block_entity) = args.world.get_block_entity(args.position).await
                 && let Some(inventory) = block_entity.clone().get_inventory()
+                && let Some(property_delegate) = block_entity.clone().to_property_delegate()
+                && let Some(experience_container) = block_entity.to_experience_container()
             {
-                let blasting_furnace_screen_factory =
-                    BlastingFurnaceScreenFactory::new(inventory, block_entity);
+                let blasting_furnace_screen_factory = BlastingFurnaceScreenFactory::new(
+                    inventory,
+                    property_delegate,
+                    experience_container,
+                );
                 args.player
                     .open_handled_screen(&blasting_furnace_screen_factory)
                     .await;

@@ -13,7 +13,9 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::{
     BlockStateId,
-    block::entities::{BlockEntity, smoker::SmokerBlockEntity},
+    block::entities::{
+        PropertyDelegate, furnace_like_block_entity::ExperienceContainer, smoker::SmokerBlockEntity,
+    },
     inventory::Inventory,
 };
 use tokio::sync::Mutex;
@@ -25,14 +27,20 @@ use crate::block::{
 
 struct SmokerScreenFactory {
     inventory: Arc<dyn Inventory>,
-    block_entity: Arc<dyn BlockEntity>,
+    property_delegate: Arc<dyn PropertyDelegate>,
+    experience_container: Arc<dyn ExperienceContainer>,
 }
 
 impl SmokerScreenFactory {
-    fn new(inventory: Arc<dyn Inventory>, block_entity: Arc<dyn BlockEntity>) -> Self {
+    fn new(
+        inventory: Arc<dyn Inventory>,
+        property_delegate: Arc<dyn PropertyDelegate>,
+        experience_container: Arc<dyn ExperienceContainer>,
+    ) -> Self {
         Self {
             inventory,
-            block_entity,
+            property_delegate,
+            experience_container,
         }
     }
 }
@@ -49,7 +57,8 @@ impl ScreenHandlerFactory for SmokerScreenFactory {
                 sync_id,
                 player_inventory,
                 self.inventory.clone(),
-                self.block_entity.clone(),
+                self.property_delegate.clone(),
+                self.experience_container.clone(),
                 WindowType::Smoker,
             )
             .await;
@@ -72,8 +81,11 @@ impl BlockBehaviour for SmokerBlock {
         Box::pin(async move {
             if let Some(block_entity) = args.world.get_block_entity(args.position).await
                 && let Some(inventory) = block_entity.clone().get_inventory()
+                && let Some(property_delegate) = block_entity.clone().to_property_delegate()
+                && let Some(experience_container) = block_entity.to_experience_container()
             {
-                let smoker_screen_factory = SmokerScreenFactory::new(inventory, block_entity);
+                let smoker_screen_factory =
+                    SmokerScreenFactory::new(inventory, property_delegate, experience_container);
                 args.player
                     .open_handled_screen(&smoker_screen_factory)
                     .await;

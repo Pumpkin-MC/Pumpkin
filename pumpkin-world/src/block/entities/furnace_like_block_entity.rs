@@ -9,6 +9,13 @@ use crate::{
     item::ItemStack,
 };
 
+/// Trait for extracting smelting experience from cooking block entities.
+/// This is a separate dyn-compatible trait since CookingBlockEntityBase is not.
+pub trait ExperienceContainer: Send + Sync {
+    /// Extract and reset accumulated experience, returning the total as an integer
+    fn extract_experience(&self) -> i32;
+}
+
 pub trait CookingBlockEntityBase:
     Sync + Send + Inventory + PropertyDelegate + BlockEntity + Clearable
 {
@@ -16,6 +23,11 @@ pub trait CookingBlockEntityBase:
     fn get_cooking_total_time(&self) -> u16;
     fn get_lit_time_remaining(&self) -> u16;
     fn get_lit_total_time(&self) -> u16;
+
+    /// Add experience to the accumulated total (from smelting a recipe)
+    fn add_experience(&self, amount: f32);
+    /// Extract and reset accumulated experience, returning the total as an integer
+    fn extract_experience(&self) -> i32;
 
     fn get_input_item(&self) -> impl std::future::Future<Output = Arc<Mutex<ItemStack>>>;
     fn get_fuel_item(&self) -> impl std::future::Future<Output = Arc<Mutex<ItemStack>>>;
@@ -91,6 +103,20 @@ macro_rules! impl_cooking_block_entity_base {
                 self.get_lit_time_remaining() > 0
             }
 
+            fn add_experience(&self, amount: f32) {
+                // Store experience as fixed-point (multiplied by 100) to avoid float atomics
+                let amount_fixed = (amount * 100.0) as u32;
+                self.experience_held
+                    .fetch_add(amount_fixed, Ordering::Relaxed);
+            }
+
+            fn extract_experience(&self) -> i32 {
+                // Swap out accumulated experience and convert back from fixed-point
+                let experience_fixed = self.experience_held.swap(0, Ordering::Relaxed);
+                // Convert from fixed-point and round
+                (experience_fixed as f32 / 100.0).round() as i32
+            }
+
             async fn can_accept_recipe_output(
                 &self,
                 recipe: Option<&pumpkin_data::recipes::CookingRecipe>,
@@ -145,6 +171,9 @@ macro_rules! impl_cooking_block_entity_base {
                         } else if side_items.are_items_and_components_equal(&output_item_stack) {
                             side_items.increment(1);
                         }
+
+                        // Accumulate experience from the recipe
+                        self.add_experience(recipe.experience);
                     }
 
                     let bottom_items = self.items[1].lock().await;
@@ -213,6 +242,22 @@ macro_rules! impl_clearable_for_cooking {
                         *slot.lock().await = ItemStack::EMPTY.clone();
                     }
                 })
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_experience_container_for_cooking {
+    ($struct_name:ty) => {
+        impl $crate::block::entities::furnace_like_block_entity::ExperienceContainer
+            for $struct_name
+        {
+            fn extract_experience(&self) -> i32 {
+                // Swap out accumulated experience and convert back from fixed-point
+                let experience_fixed = self.experience_held.swap(0, Ordering::Relaxed);
+                // Convert from fixed-point and round
+                (experience_fixed as f32 / 100.0).round() as i32
             }
         }
     };
@@ -480,6 +525,7 @@ macro_rules! impl_block_entity_for_cooking {
                     cooking_time_spent,
                     lit_total_time,
                     lit_time_remaining,
+                    experience_held: AtomicU32::new(0),
                 };
                 furnace.read_data(nbt, &furnace.items);
 
@@ -515,6 +561,18 @@ macro_rules! impl_block_entity_for_cooking {
                 self: Arc<Self>,
             ) -> Option<Arc<dyn $crate::block::entities::PropertyDelegate>> {
                 Some(self as Arc<dyn $crate::block::entities::PropertyDelegate>)
+            }
+
+            fn to_experience_container(
+                self: Arc<Self>,
+            ) -> Option<
+                Arc<dyn $crate::block::entities::furnace_like_block_entity::ExperienceContainer>,
+            > {
+                Some(
+                    self as Arc<
+                        dyn $crate::block::entities::furnace_like_block_entity::ExperienceContainer,
+                    >,
+                )
             }
         }
     };

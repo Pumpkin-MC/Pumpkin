@@ -5,7 +5,7 @@ use std::{
     array::from_fn,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU16, Ordering},
+        atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering},
     },
 };
 
@@ -16,7 +16,8 @@ use tokio::sync::Mutex;
 use crate::{
     block::entities::furnace_like_block_entity::CookingBlockEntityBase,
     impl_block_entity_for_cooking, impl_clearable_for_cooking, impl_cooking_block_entity_base,
-    impl_inventory_for_cooking, impl_property_delegate_for_cooking, item::ItemStack,
+    impl_experience_container_for_cooking, impl_inventory_for_cooking,
+    impl_property_delegate_for_cooking, item::ItemStack,
 };
 
 pub struct FurnaceBlockEntity {
@@ -29,6 +30,9 @@ pub struct FurnaceBlockEntity {
     pub lit_total_time: AtomicU16,
 
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
+
+    /// Accumulated experience from smelting, stored as fixed-point (multiplied by 100)
+    pub experience_held: AtomicU32,
 }
 
 impl FurnaceBlockEntity {
@@ -45,6 +49,7 @@ impl FurnaceBlockEntity {
             cooking_time_spent: AtomicU16::new(0),
             lit_total_time: AtomicU16::new(0),
             lit_time_remaining: AtomicU16::new(0),
+            experience_held: AtomicU32::new(0),
         }
     }
 }
@@ -54,3 +59,4 @@ impl_block_entity_for_cooking!(FurnaceBlockEntity, CookingRecipeKind::Smelting);
 impl_inventory_for_cooking!(FurnaceBlockEntity);
 impl_clearable_for_cooking!(FurnaceBlockEntity);
 impl_property_delegate_for_cooking!(FurnaceBlockEntity);
+impl_experience_container_for_cooking!(FurnaceBlockEntity);
