@@ -382,6 +382,7 @@ fn check_remaining_pieces(pieces: &[PieceData]) -> i32 {
     if has_limited { total_weight } else { -1 }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn pick_piece(
     start: &mut StartPiece,
     inside: bool,
@@ -459,6 +460,7 @@ fn create_bridge_end(
         .map(FortressPiece::BridgeEnd)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_piece(
     piece_type: NetherFortressPieceType,
     random: &mut RandomGenerator,
@@ -528,6 +530,7 @@ fn create_piece(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn piece_generator(
     start: &mut StartPiece,
     random: &mut RandomGenerator,
