@@ -209,22 +209,7 @@ impl Chunk {
         }
 
         let mut chunk = ChunkData {
-            light_engine: ChunkLight {
-                sky_light: (0..sections.sections.len())
-                    .map(|_| {
-                        if dimension.has_skylight {
-                            // Overworld: Start with full sky light before occlusion
-                            LightContainer::new_filled(15)
-                        } else {
-                            // Nether/End: No sky light permitted
-                            LightContainer::new_empty(0)
-                        }
-                    })
-                    .collect(),
-                block_light: (0..sections.sections.len())
-                    .map(|_| LightContainer::new_empty(0))
-                    .collect(),
-            },
+            light_engine: proto_chunk.light.clone(),
             section: sections,
             heightmap: Default::default(),
             x: proto_chunk.x,

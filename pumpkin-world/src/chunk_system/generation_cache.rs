@@ -354,6 +354,8 @@ impl Cache {
             ),
             StagedChunkEnum::Features => {
                 ProtoChunk::generate_features_and_structure(self, block_registry, random_config);
+                let mut engine = crate::lighting::LightEngine::new();
+                engine.initialize_light(self);
             }
             StagedChunkEnum::Full => {
                 let chunk = self.chunks[mid].get_proto_chunk_mut();
