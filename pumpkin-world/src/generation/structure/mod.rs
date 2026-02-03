@@ -13,6 +13,7 @@ use crate::{
             structures::{
                 StructureGenerator, StructureGeneratorContext, StructurePosition,
                 buried_treasure::BuriedTreasureGenerator, create_chunk_random,
+                nether_fortress::NetherFortressGenerator,
                 stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
             },
         },
@@ -166,9 +167,12 @@ impl StructureKeys {
             Self::BuriedTreasure => {
                 BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
             }
-            // StructureKeys::Fortress => {
-            //     NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
-            // }
+            Self::Fortress => {
+                NetherFortressGenerator::get_structure_position(
+                    &NetherFortressGenerator,
+                    context,
+                )
+            }
             Self::SwampHut => {
                 SwampHutGenerator::get_structure_position(&SwampHutGenerator, context)
             }
