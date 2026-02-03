@@ -56,7 +56,7 @@ impl BlockLightEngine {
                   let neighbor_level = get_block_light(cache, neighbor_pos);
                   let state = cache.get_block_state(&neighbor_pos.0);
                   
-                  // Vanilla uses max(1, opacity) to ensure minimum 1 level reduction per block
+                  // Uses max(1, opacity) to ensure minimum 1 level reduction per block
                   let opacity = state.to_state().opacity.max(1);
                   let new_level = level.saturating_sub(opacity);
                   

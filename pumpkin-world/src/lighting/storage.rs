@@ -79,9 +79,6 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     let chunk_x = pos.0.x >> 4;
     let chunk_z = pos.0.z >> 4;
     
-    // Fix: Return 0 instead of 15 for missing chunks to prevent void light bleed.
-    // However, if it's "No horizontal propagation", we need to ensure we can propagate INTO empty chunks?
-    // No, we can only propagate into things we store.
     let Some(idx) = get_chunk_index(cache, chunk_x, chunk_z) else { return 0; };
     let chunk = &cache.chunks[idx];
     

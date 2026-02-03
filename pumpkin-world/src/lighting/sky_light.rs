@@ -35,7 +35,7 @@ impl SkyLightEngine {
         let end_x = start_x + 16;
         let end_z = start_z + 16;
 
-        // 1. Initialize Direct Sky Light (Top-Down)
+        // Initialize direct sky light
         // Sky light starts at 15 at the top and only decreases when passing through opaque blocks
         for z in start_z..end_z {
             for x in start_x..end_x {
@@ -63,7 +63,7 @@ impl SkyLightEngine {
             }
         }
         
-        // 2. Horizontal Spread (BFS)
+        // Horizontal spread (BFS)
         // Propagate light horizontally using flood fill
         while let Some(pos) = self.queue.pop_front() {
              let level = get_sky_light(cache, pos);
@@ -76,7 +76,6 @@ impl SkyLightEngine {
                   let state = cache.get_block_state(&neighbor_pos.0);
                   
                   // Calculate light reduction based on block opacity
-                  // Vanilla uses max(1, opacity) to ensure at least 1 level reduction per block
                   let opacity = state.to_state().opacity.max(1);
                   let new_level = level.saturating_sub(opacity);
                   
