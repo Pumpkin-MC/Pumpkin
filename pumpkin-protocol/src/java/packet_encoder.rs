@@ -344,7 +344,7 @@ mod tests {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
         writer
-            .write_var_int(&VarInt(T::PACKET_ID.latest_id))
+            .write_var_int(&VarInt(T::PACKET_ID.v_1_21_11_id))
             .unwrap();
         packet
             .write_packet_data(writer, &MinecraftVersion::V_1_21_11)
@@ -378,7 +378,7 @@ mod tests {
 
         // Read packet ID VarInt
         let decoded_packet_id = decode_varint(&mut buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.v_1_21_11_id);
 
         // Remaining buffer is the payload
         // We need to obtain the expected payload
@@ -417,7 +417,7 @@ mod tests {
             .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
             .unwrap();
         let uncompressed_data_length =
-            VarInt(CStatusResponse::PACKET_ID.latest_id).written_size() + expected_payload.len();
+            VarInt(CStatusResponse::PACKET_ID.v_1_21_11_id).written_size() + expected_payload.len();
         assert_eq!(data_length as usize, uncompressed_data_length);
 
         // Remaining buffer is the compressed data
@@ -433,7 +433,7 @@ mod tests {
         // Read packet ID VarInt
         let decoded_packet_id =
             decode_varint(&mut decompressed_buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.v_1_21_11_id);
 
         // Remaining buffer is the payload
         assert_eq!(decompressed_buffer, expected_payload);
@@ -467,7 +467,7 @@ mod tests {
 
         // Read packet ID VarInt
         let decoded_packet_id = decode_varint(&mut buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.v_1_21_11_id);
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
@@ -511,7 +511,7 @@ mod tests {
             .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
             .unwrap();
         let uncompressed_data_length =
-            VarInt(CStatusResponse::PACKET_ID.latest_id).written_size() + expected_payload.len();
+            VarInt(CStatusResponse::PACKET_ID.v_1_21_11_id).written_size() + expected_payload.len();
         assert_eq!(data_length as usize, uncompressed_data_length);
 
         // Remaining buffer is the compressed data
@@ -527,7 +527,7 @@ mod tests {
         // Read packet ID VarInt
         let decoded_packet_id =
             decode_varint(&mut decompressed_buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.v_1_21_11_id);
 
         // Remaining buffer is the payload
         assert_eq!(decompressed_buffer, expected_payload);
@@ -555,7 +555,7 @@ mod tests {
 
         // Read packet ID VarInt
         let decoded_packet_id = decode_varint(&mut buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.v_1_21_11_id);
 
         // Remaining buffer is the payload (empty)
         let mut expected_payload = Vec::new();
@@ -602,7 +602,7 @@ mod tests {
         // Read packet ID VarInt
         let decoded_packet_id = decode_varint(&mut buffer).expect("Failed to decode packet ID");
         // Assume packet ID is 0 for CStatusResponse
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.v_1_21_11_id);
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
@@ -656,7 +656,7 @@ mod tests {
 
         // Read packet ID VarInt
         let decoded_packet_id = decode_varint(&mut buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.v_1_21_11_id);
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();

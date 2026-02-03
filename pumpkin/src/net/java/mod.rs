@@ -4,7 +4,7 @@ use std::{io::Write, sync::Arc};
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
-use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::java::server::play::{
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
@@ -115,7 +115,7 @@ impl JavaClient {
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
-            version: AtomicCell::new(MinecraftVersion::from_protocol(CURRENT_MC_PROTOCOL)),
+            version: AtomicCell::new(CURRENT_MC_VERSION),
             network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
             brand: Mutex::new(None),

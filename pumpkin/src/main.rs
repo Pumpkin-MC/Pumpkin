@@ -5,7 +5,7 @@
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
 
-use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use std::{
     io::{self},
     sync::{Arc, LazyLock, OnceLock},
@@ -72,7 +72,10 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
+    log::info!(
+        "Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {})",
+        CURRENT_MC_VERSION.protocol_version()
+    );
 
     log::debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",

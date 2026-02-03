@@ -2,13 +2,12 @@ use crate::entity::player::Player;
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::{
     Players, StatusResponse, Version,
     codec::var_int::VarInt,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
-use pumpkin_world::CURRENT_MC_VERSION;
 use std::{fs::File, io::Read, path::Path};
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
@@ -145,8 +144,8 @@ impl CachedStatus {
 
         StatusResponse {
             version: Some(Version {
-                name: CURRENT_MC_VERSION.into(),
-                protocol: CURRENT_MC_PROTOCOL,
+                name: CURRENT_MC_VERSION.to_string(),
+                protocol: CURRENT_MC_VERSION.protocol_version() as u32,
             }),
             players: Some(Players {
                 max: config.max_players,

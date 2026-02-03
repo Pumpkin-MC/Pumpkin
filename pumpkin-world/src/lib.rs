@@ -23,7 +23,6 @@ pub type BlockId = u16;
 pub type BlockStateId = u16;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.11";
-pub const LOWEST_SUPPRORTED_PROTOCOL_VERSION: u32 = 772;
 
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.132";
 pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 898;
