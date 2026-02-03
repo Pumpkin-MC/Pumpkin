@@ -326,8 +326,8 @@ async fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
 }
 async fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
     let above_pos = block_pos.up();
-    let above_block = world.get_block(&above_pos).await;
-    above_block.is_solid()
+    let above_state = world.get_block_state(&above_pos).await;
+    above_state.is_solid_block()
 }
 trait ChestTypeExt {
     fn opposite(&self) -> ChestType;
