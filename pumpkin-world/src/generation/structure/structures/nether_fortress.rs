@@ -15,8 +15,8 @@ use crate::{
         structure::{
             piece::StructurePieceType,
             structures::{
-                StructureGenerator, StructureGeneratorContext, StructurePiece,
-                StructurePieceBase, StructurePiecesCollector, StructurePosition,
+                StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
+                StructurePiecesCollector, StructurePosition,
             },
         },
     },
@@ -29,20 +29,46 @@ use crate::{
 type FenceProps = pumpkin_data::block_properties::OakFenceLikeProperties;
 
 fn make_fence(n: bool, s: bool, e: bool, w: bool) -> &'static BlockState {
-    let props = FenceProps { north: n, south: s, east: e, west: w, waterlogged: false };
+    let props = FenceProps {
+        north: n,
+        south: s,
+        east: e,
+        west: w,
+        waterlogged: false,
+    };
     BlockState::from_id(props.to_state_id(&Block::NETHER_BRICK_FENCE))
 }
 
-fn fence_we() -> &'static BlockState { make_fence(false, false, true, true) }
-fn fence_ns() -> &'static BlockState { make_fence(true, true, false, false) }
-fn fence_nsw() -> &'static BlockState { make_fence(true, true, false, true) }
-fn fence_nse() -> &'static BlockState { make_fence(true, true, true, false) }
-fn fence_ne() -> &'static BlockState { make_fence(true, false, true, false) }
-fn fence_se() -> &'static BlockState { make_fence(false, true, true, false) }
-fn fence_sw() -> &'static BlockState { make_fence(false, true, false, true) }
-fn fence_nw() -> &'static BlockState { make_fence(true, false, false, true) }
-fn fence_e() -> &'static BlockState { make_fence(false, false, true, false) }
-fn fence_w() -> &'static BlockState { make_fence(false, false, false, true) }
+fn fence_we() -> &'static BlockState {
+    make_fence(false, false, true, true)
+}
+fn fence_ns() -> &'static BlockState {
+    make_fence(true, true, false, false)
+}
+fn fence_nsw() -> &'static BlockState {
+    make_fence(true, true, false, true)
+}
+fn fence_nse() -> &'static BlockState {
+    make_fence(true, true, true, false)
+}
+fn fence_ne() -> &'static BlockState {
+    make_fence(true, false, true, false)
+}
+fn fence_se() -> &'static BlockState {
+    make_fence(false, true, true, false)
+}
+fn fence_sw() -> &'static BlockState {
+    make_fence(false, true, false, true)
+}
+fn fence_nw() -> &'static BlockState {
+    make_fence(true, false, false, true)
+}
+fn fence_e() -> &'static BlockState {
+    make_fence(false, false, true, false)
+}
+fn fence_w() -> &'static BlockState {
+    make_fence(false, false, false, true)
+}
 
 // ============================================================================
 // Generator
@@ -88,7 +114,10 @@ impl StructureGenerator for NetherFortressGenerator {
         let final_bbox = collector.get_bounding_box();
         log::info!(
             "Nether Fortress generated at ({}, {}, {}) with {} pieces",
-            start_x, final_bbox.min.y, start_z, collector.pieces.len()
+            start_x,
+            final_bbox.min.y,
+            start_z,
+            collector.pieces.len()
         );
 
         Some(StructurePosition {
@@ -139,11 +168,23 @@ pub struct PieceData {
 
 impl PieceData {
     const fn new(piece_type: NetherFortressPieceType, weight: i32, limit: i32) -> Self {
-        Self { piece_type, weight, limit, generated_count: 0, repeatable: false }
+        Self {
+            piece_type,
+            weight,
+            limit,
+            generated_count: 0,
+            repeatable: false,
+        }
     }
 
     const fn new_repeatable(piece_type: NetherFortressPieceType, weight: i32, limit: i32) -> Self {
-        Self { piece_type, weight, limit, generated_count: 0, repeatable: true }
+        Self {
+            piece_type,
+            weight,
+            limit,
+            generated_count: 0,
+            repeatable: true,
+        }
     }
 
     fn can_generate(&self) -> bool {
@@ -272,7 +313,7 @@ impl FortressPiece {
             FortressPiece::BridgeSmallCrossing(p) => p.fill_openings(start, random, collector),
             FortressPiece::BridgeStairs(p) => p.fill_openings(start, random, collector),
             FortressPiece::BridgePlatform(_) => {} // Dead end
-            FortressPiece::BridgeEnd(_) => {} // Dead end
+            FortressPiece::BridgeEnd(_) => {}      // Dead end
             FortressPiece::CorridorExit(p) => p.fill_openings(start, random, collector),
             FortressPiece::SmallCorridor(p) => p.fill_openings(start, random, collector),
             FortressPiece::CorridorCrossing(p) => p.fill_openings(start, random, collector),
@@ -352,7 +393,11 @@ fn pick_piece(
     chain_length: u32,
     collector: &StructurePiecesCollector,
 ) -> Option<FortressPiece> {
-    let pieces = if inside { &mut start.corridor_pieces } else { &mut start.bridge_pieces };
+    let pieces = if inside {
+        &mut start.corridor_pieces
+    } else {
+        &mut start.bridge_pieces
+    };
     let total_weight = check_remaining_pieces(pieces);
     let can_generate = total_weight > 0 && chain_length <= 30;
 
@@ -382,14 +427,9 @@ fn pick_piece(
             let piece_data = &pieces[idx];
             let piece_type = piece_data.piece_type;
 
-            if let Some(new_piece) = create_piece(
-                piece_type,
-                random,
-                x, y, z,
-                facing,
-                chain_length,
-                collector,
-            ) {
+            if let Some(new_piece) =
+                create_piece(piece_type, random, x, y, z, facing, chain_length, collector)
+            {
                 pieces[idx].generated_count += 1;
                 start.last_piece = Some(piece_type);
 
@@ -434,43 +474,56 @@ fn create_piece(
             BridgePiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::Bridge)
         }
         NetherFortressPieceType::BridgeCrossing => {
-            BridgeCrossingPiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::BridgeCrossing)
+            BridgeCrossingPiece::create(x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::BridgeCrossing)
         }
         NetherFortressPieceType::BridgeSmallCrossing => {
-            BridgeSmallCrossingPiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::BridgeSmallCrossing)
+            BridgeSmallCrossingPiece::create(x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::BridgeSmallCrossing)
         }
         NetherFortressPieceType::BridgeStairs => {
-            BridgeStairsPiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::BridgeStairs)
+            BridgeStairsPiece::create(x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::BridgeStairs)
         }
         NetherFortressPieceType::BridgePlatform => {
-            BridgePlatformPiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::BridgePlatform)
+            BridgePlatformPiece::create(x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::BridgePlatform)
         }
         NetherFortressPieceType::BridgeEnd => {
-            BridgeEndPiece::create(random, x, y, z, facing, chain_length, collector).map(FortressPiece::BridgeEnd)
+            BridgeEndPiece::create(random, x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::BridgeEnd)
         }
         NetherFortressPieceType::CorridorExit => {
-            CorridorExitPiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::CorridorExit)
+            CorridorExitPiece::create(x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::CorridorExit)
         }
         NetherFortressPieceType::SmallCorridor => {
-            SmallCorridorPiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::SmallCorridor)
+            SmallCorridorPiece::create(x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::SmallCorridor)
         }
         NetherFortressPieceType::CorridorCrossing => {
-            CorridorCrossingPiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::CorridorCrossing)
+            CorridorCrossingPiece::create(x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::CorridorCrossing)
         }
         NetherFortressPieceType::CorridorRightTurn => {
-            CorridorRightTurnPiece::create(random, x, y, z, facing, chain_length, collector).map(FortressPiece::CorridorRightTurn)
+            CorridorRightTurnPiece::create(random, x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::CorridorRightTurn)
         }
         NetherFortressPieceType::CorridorLeftTurn => {
-            CorridorLeftTurnPiece::create(random, x, y, z, facing, chain_length, collector).map(FortressPiece::CorridorLeftTurn)
+            CorridorLeftTurnPiece::create(random, x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::CorridorLeftTurn)
         }
         NetherFortressPieceType::CorridorStairs => {
-            CorridorStairsPiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::CorridorStairs)
+            CorridorStairsPiece::create(x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::CorridorStairs)
         }
         NetherFortressPieceType::CorridorBalcony => {
-            CorridorBalconyPiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::CorridorBalcony)
+            CorridorBalconyPiece::create(x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::CorridorBalcony)
         }
         NetherFortressPieceType::CorridorNetherWartsRoom => {
-            CorridorNetherWartsRoomPiece::create(x, y, z, facing, chain_length, collector).map(FortressPiece::CorridorNetherWartsRoom)
+            CorridorNetherWartsRoomPiece::create(x, y, z, facing, chain_length, collector)
+                .map(FortressPiece::CorridorNetherWartsRoom)
         }
     }
 }
@@ -494,7 +547,17 @@ fn piece_generator(
     }
 
     // Collision check happens inside create functions (like vanilla)
-    if let Some(new_piece) = pick_piece(start, inside, random, x, y, z, facing, chain_length + 1, collector) {
+    if let Some(new_piece) = pick_piece(
+        start,
+        inside,
+        random,
+        x,
+        y,
+        z,
+        facing,
+        chain_length + 1,
+        collector,
+    ) {
         collector.add_piece(new_piece.to_boxed());
         start.pieces.push(new_piece.clone());
         return Some(new_piece);
@@ -525,7 +588,17 @@ fn fill_forward_opening(
         _ => return,
     };
 
-    piece_generator(start, random, x, bbox.min.y + height_offset, z, new_facing, chain_length, inside, collector);
+    piece_generator(
+        start,
+        random,
+        x,
+        bbox.min.y + height_offset,
+        z,
+        new_facing,
+        chain_length,
+        inside,
+        collector,
+    );
 }
 
 fn fill_nw_opening(
@@ -542,16 +615,30 @@ fn fill_nw_opening(
     let chain_length = piece.chain_length;
 
     let (x, z, new_facing) = match facing {
-        BlockDirection::North | BlockDirection::South => {
-            (bbox.min.x - 1, bbox.min.z + left_right_offset, BlockDirection::West)
-        }
-        BlockDirection::West | BlockDirection::East => {
-            (bbox.min.x + left_right_offset, bbox.min.z - 1, BlockDirection::North)
-        }
+        BlockDirection::North | BlockDirection::South => (
+            bbox.min.x - 1,
+            bbox.min.z + left_right_offset,
+            BlockDirection::West,
+        ),
+        BlockDirection::West | BlockDirection::East => (
+            bbox.min.x + left_right_offset,
+            bbox.min.z - 1,
+            BlockDirection::North,
+        ),
         _ => return,
     };
 
-    piece_generator(start, random, x, bbox.min.y + height_offset, z, new_facing, chain_length, inside, collector);
+    piece_generator(
+        start,
+        random,
+        x,
+        bbox.min.y + height_offset,
+        z,
+        new_facing,
+        chain_length,
+        inside,
+        collector,
+    );
 }
 
 fn fill_se_opening(
@@ -568,16 +655,30 @@ fn fill_se_opening(
     let chain_length = piece.chain_length;
 
     let (x, z, new_facing) = match facing {
-        BlockDirection::North | BlockDirection::South => {
-            (bbox.max.x + 1, bbox.min.z + left_right_offset, BlockDirection::East)
-        }
-        BlockDirection::West | BlockDirection::East => {
-            (bbox.min.x + left_right_offset, bbox.max.z + 1, BlockDirection::South)
-        }
+        BlockDirection::North | BlockDirection::South => (
+            bbox.max.x + 1,
+            bbox.min.z + left_right_offset,
+            BlockDirection::East,
+        ),
+        BlockDirection::West | BlockDirection::East => (
+            bbox.min.x + left_right_offset,
+            bbox.max.z + 1,
+            BlockDirection::South,
+        ),
         _ => return,
     };
 
-    piece_generator(start, random, x, bbox.min.y + height_offset, z, new_facing, chain_length, inside, collector);
+    piece_generator(
+        start,
+        random,
+        x,
+        bbox.min.y + height_offset,
+        z,
+        new_facing,
+        chain_length,
+        inside,
+        collector,
+    );
 }
 
 // ============================================================================
@@ -591,13 +692,16 @@ pub struct BridgePiece {
 
 impl BridgePiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -1, -3, 0, 5, 10, 19, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -622,45 +726,97 @@ impl BridgePiece {
 }
 
 impl StructurePieceBase for BridgePiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 0, 4, 4, 18, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 5, 0, 3, 7, 18, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 0, 0, 5, 18, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 5, 0, 4, 5, 18, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 4, 2, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 13, 4, 2, 18, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 0, 4, 1, 3, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 15, 4, 1, 18, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 0, 4, 4, 18, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 5, 0, 3, 7, 18, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 0, 0, 5, 18, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 5, 0, 4, 5, 18, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 4, 2, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 13, 4, 2, 18, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 0, 4, 1, 3, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 15, 4, 1, 18, bricks, bricks);
 
         for i in 0..=4 {
             for j in 0..=2 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, 18 - j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, 18 - j, &bb);
             }
         }
 
         // Fence railings with proper connections
         let fence_nse = fence_nse();
         let fence_nsw = fence_nsw();
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 1, 1, 0, 4, 1, fence_nse, fence_nse);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 4, 0, 4, 4, fence_nse, fence_nse);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 14, 0, 4, 14, fence_nse, fence_nse);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 1, 17, 0, 4, 17, fence_nse, fence_nse);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 1, 1, 4, 4, 1, fence_nsw, fence_nsw);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 3, 4, 4, 4, 4, fence_nsw, fence_nsw);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 3, 14, 4, 4, 14, fence_nsw, fence_nsw);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 1, 17, 4, 4, 17, fence_nsw, fence_nsw);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 1, 1, 0, 4, 1, fence_nse, fence_nse);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 4, 0, 4, 4, fence_nse, fence_nse);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 14, 0, 4, 14, fence_nse, fence_nse);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 1, 17, 0, 4, 17, fence_nse, fence_nse);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 1, 1, 4, 4, 1, fence_nsw, fence_nsw);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 3, 4, 4, 4, 4, fence_nsw, fence_nsw);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 3, 14, 4, 4, 14, fence_nsw, fence_nsw);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 1, 17, 4, 4, 17, fence_nsw, fence_nsw);
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -674,13 +830,16 @@ pub struct BridgeCrossingPiece {
 
 impl BridgeCrossingPiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -8, -3, 0, 19, 10, 19, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -707,9 +866,15 @@ impl BridgeCrossingPiece {
 }
 
 impl StructurePieceBase for BridgeCrossingPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
@@ -717,48 +882,106 @@ impl StructurePieceBase for BridgeCrossingPiece {
         let air = Block::AIR.default_state;
 
         // Main cross platform
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 7, 3, 0, 11, 4, 18, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 7, 18, 4, 11, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 8, 5, 0, 10, 7, 18, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 8, 18, 7, 10, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 7, 3, 0, 11, 4, 18, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 7, 18, 4, 11, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 8, 5, 0, 10, 7, 18, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 8, 18, 7, 10, air, air);
 
         // Side walls
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 7, 5, 0, 7, 5, 7, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 7, 5, 11, 7, 5, 18, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 11, 5, 0, 11, 5, 7, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 11, 5, 11, 11, 5, 18, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 7, 7, 5, 7, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 11, 5, 7, 18, 5, 7, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 11, 7, 5, 11, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 11, 5, 11, 18, 5, 11, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 7, 5, 0, 7, 5, 7, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 7, 5, 11, 7, 5, 18, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 11, 5, 0, 11, 5, 7, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 11, 5, 11, 11, 5, 18, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 7, 7, 5, 7, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 11, 5, 7, 18, 5, 7, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 11, 7, 5, 11, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 11, 5, 11, 18, 5, 11, bricks, bricks);
 
         // Lower sections
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 7, 2, 0, 11, 2, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 7, 2, 13, 11, 2, 18, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 7, 0, 0, 11, 1, 3, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 7, 0, 15, 11, 1, 18, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 7, 2, 0, 11, 2, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 7, 2, 13, 11, 2, 18, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 7, 0, 0, 11, 1, 3, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 7, 0, 15, 11, 1, 18, bricks, bricks);
 
         for i in 7..=11 {
             for j in 0..=2 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, 18 - j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, 18 - j, &bb);
             }
         }
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 7, 5, 2, 11, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 13, 2, 7, 18, 2, 11, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 7, 3, 1, 11, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 15, 0, 7, 18, 1, 11, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 7, 5, 2, 11, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 13, 2, 7, 18, 2, 11, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 7, 3, 1, 11, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 15, 0, 7, 18, 1, 11, bricks, bricks);
 
         for i in 0..=2 {
             for j in 7..=11 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
-                self.piece.piece.fill_downwards(chunk, bricks, 18 - i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, 18 - i, -1, j, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -772,13 +995,16 @@ pub struct BridgeSmallCrossingPiece {
 
 impl BridgeSmallCrossingPiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -2, 0, 0, 7, 9, 7, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -805,45 +1031,99 @@ impl BridgeSmallCrossingPiece {
 }
 
 impl StructurePieceBase for BridgeSmallCrossingPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 0, 6, 1, 6, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 6, 7, 6, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 1, 6, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 6, 1, 6, 6, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 5, 2, 0, 6, 6, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 5, 2, 6, 6, 6, 6, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 0, 6, 1, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 5, 0, 6, 6, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 2, 0, 6, 6, 1, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 2, 5, 6, 6, 6, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 0, 6, 1, 6, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 6, 7, 6, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 1, 6, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 6, 1, 6, 6, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 2, 0, 6, 6, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 2, 6, 6, 6, 6, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 0, 6, 1, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 5, 0, 6, 6, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 2, 0, 6, 6, 1, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 2, 5, 6, 6, 6, bricks, bricks);
 
         let fence_we = fence_we();
         let fence_ns = fence_ns();
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 6, 0, 4, 6, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 5, 0, 4, 5, 0, fence_we, fence_we);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 6, 6, 4, 6, 6, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 5, 6, 4, 5, 6, fence_we, fence_we);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 6, 2, 0, 6, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 2, 0, 5, 4, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 6, 2, 6, 6, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 5, 2, 6, 5, 4, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 6, 0, 4, 6, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 5, 0, 4, 5, 0, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 6, 6, 4, 6, 6, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 5, 6, 4, 5, 6, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 6, 2, 0, 6, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 2, 0, 5, 4, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 6, 2, 6, 6, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 5, 2, 6, 5, 4, fence_ns, fence_ns);
 
         for i in 0..=6 {
             for j in 0..=6 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -857,13 +1137,16 @@ pub struct BridgeStairsPiece {
 
 impl BridgeStairsPiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -2, 0, 0, 7, 11, 7, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -888,47 +1171,101 @@ impl BridgeStairsPiece {
 }
 
 impl StructurePieceBase for BridgeStairsPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 0, 6, 1, 6, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 6, 10, 6, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 1, 8, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 5, 2, 0, 6, 8, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 1, 0, 8, 6, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 2, 1, 6, 8, 6, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 2, 6, 5, 8, 6, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 0, 6, 1, 6, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 6, 10, 6, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 1, 8, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 2, 0, 6, 8, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 1, 0, 8, 6, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 2, 1, 6, 8, 6, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 2, 6, 5, 8, 6, bricks, bricks);
 
         let fence_we = fence_we();
         let fence_ns = fence_ns();
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 2, 0, 5, 4, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 3, 2, 6, 5, 2, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 3, 4, 6, 5, 4, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 2, 0, 5, 4, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 3, 2, 6, 5, 2, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 3, 4, 6, 5, 4, fence_ns, fence_ns);
 
         self.piece.piece.add_block(chunk, bricks, 5, 2, 5, &bb);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 2, 5, 4, 3, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 3, 2, 5, 3, 4, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 2, 5, 2, 5, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 2, 5, 1, 6, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 7, 1, 5, 7, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 8, 2, 6, 8, 4, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 6, 0, 4, 8, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 5, 0, 4, 5, 0, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 2, 5, 4, 3, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 3, 2, 5, 3, 4, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 2, 5, 2, 5, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 2, 5, 1, 6, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 7, 1, 5, 7, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 8, 2, 6, 8, 4, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 6, 0, 4, 8, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 5, 0, 4, 5, 0, fence_we, fence_we);
 
         for i in 0..=6 {
             for j in 0..=6 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -942,13 +1279,16 @@ pub struct BridgePlatformPiece {
 
 impl BridgePlatformPiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -2, 0, 0, 7, 8, 9, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -964,9 +1304,15 @@ impl BridgePlatformPiece {
 }
 
 impl StructurePieceBase for BridgePlatformPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
@@ -974,31 +1320,103 @@ impl StructurePieceBase for BridgePlatformPiece {
         let air = Block::AIR.default_state;
         let spawner = Block::SPAWNER.default_state;
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 6, 7, 7, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 0, 0, 5, 1, 7, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 2, 1, 5, 2, 7, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 3, 2, 5, 3, 7, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 4, 3, 5, 4, 7, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 2, 0, 1, 4, 2, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 5, 2, 0, 5, 4, 2, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 5, 2, 1, 5, 3, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 5, 5, 2, 5, 5, 3, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 3, 0, 5, 8, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 5, 3, 6, 5, 8, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 5, 8, 5, 5, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 6, 7, 7, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 0, 0, 5, 1, 7, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 2, 1, 5, 2, 7, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 3, 2, 5, 3, 7, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 4, 3, 5, 4, 7, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 2, 0, 1, 4, 2, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 2, 0, 5, 4, 2, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 5, 2, 1, 5, 3, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 5, 2, 5, 5, 3, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 3, 0, 5, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 5, 3, 6, 5, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 5, 8, 5, 5, 8, bricks, bricks);
 
         // Fence railings
         self.piece.piece.add_block(chunk, fence_w(), 1, 6, 3, &bb);
         self.piece.piece.add_block(chunk, fence_e(), 5, 6, 3, &bb);
         self.piece.piece.add_block(chunk, fence_ne(), 0, 6, 3, &bb);
         self.piece.piece.add_block(chunk, fence_nw(), 6, 6, 3, &bb);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 6, 4, 0, 6, 7, fence_ns(), fence_ns());
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 6, 4, 6, 6, 7, fence_ns(), fence_ns());
+        self.piece.piece.fill_with_outline(
+            chunk,
+            &bb,
+            false,
+            0,
+            6,
+            4,
+            0,
+            6,
+            7,
+            fence_ns(),
+            fence_ns(),
+        );
+        self.piece.piece.fill_with_outline(
+            chunk,
+            &bb,
+            false,
+            6,
+            6,
+            4,
+            6,
+            6,
+            7,
+            fence_ns(),
+            fence_ns(),
+        );
         self.piece.piece.add_block(chunk, fence_se(), 0, 6, 8, &bb);
         self.piece.piece.add_block(chunk, fence_sw(), 6, 6, 8, &bb);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 6, 8, 5, 6, 8, fence_we(), fence_we());
+        self.piece.piece.fill_with_outline(
+            chunk,
+            &bb,
+            false,
+            1,
+            6,
+            8,
+            5,
+            6,
+            8,
+            fence_we(),
+            fence_we(),
+        );
         self.piece.piece.add_block(chunk, fence_e(), 1, 7, 8, &bb);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 7, 8, 4, 7, 8, fence_we(), fence_we());
+        self.piece.piece.fill_with_outline(
+            chunk,
+            &bb,
+            false,
+            2,
+            7,
+            8,
+            4,
+            7,
+            8,
+            fence_we(),
+            fence_we(),
+        );
         self.piece.piece.add_block(chunk, fence_w(), 5, 7, 8, &bb);
         self.piece.piece.add_block(chunk, fence_e(), 2, 8, 8, &bb);
         self.piece.piece.add_block(chunk, fence_we(), 3, 8, 8, &bb);
@@ -1009,12 +1427,24 @@ impl StructurePieceBase for BridgePlatformPiece {
 
         for i in 0..=6 {
             for j in 0..=6 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -1030,13 +1460,16 @@ pub struct BridgeEndPiece {
 impl BridgeEndPiece {
     pub fn create(
         random: &mut RandomGenerator,
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -1, -3, 0, 5, 10, 8, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -1047,47 +1480,78 @@ impl BridgeEndPiece {
             bbox,
         );
         piece.piece.set_facing(Some(facing));
-        Some(Self { piece, seed: random.next_i32() })
+        Some(Self {
+            piece,
+            seed: random.next_i32(),
+        })
     }
 }
 
 impl StructurePieceBase for BridgeEndPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
         let bricks = Block::NETHER_BRICKS.default_state;
 
-        let mut rng = RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(self.seed as u64));
+        let mut rng = RandomGenerator::Legacy(
+            pumpkin_util::random::legacy_rand::LegacyRand::from_seed(self.seed as u64),
+        );
 
         for i in 0..=4 {
             for j in 3..=4 {
                 let k = rng.next_bounded_i32(8);
-                self.piece.piece.fill_with_outline(chunk, &bb, false, i, j, 0, i, j, k, bricks, bricks);
+                self.piece
+                    .piece
+                    .fill_with_outline(chunk, &bb, false, i, j, 0, i, j, k, bricks, bricks);
             }
         }
 
         let i = rng.next_bounded_i32(8);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 0, 0, 5, i, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 0, 0, 5, i, bricks, bricks);
         let i = rng.next_bounded_i32(8);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 5, 0, 4, 5, i, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 5, 0, 4, 5, i, bricks, bricks);
 
         for ix in 0..=4 {
             let j = rng.next_bounded_i32(5);
-            self.piece.piece.fill_with_outline(chunk, &bb, false, ix, 2, 0, ix, 2, j, bricks, bricks);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, ix, 2, 0, ix, 2, j, bricks, bricks);
         }
 
         for ix in 0..=4 {
             for j in 0..=1 {
                 let k = rng.next_bounded_i32(3);
-                self.piece.piece.fill_with_outline(chunk, &bb, false, ix, j, 0, ix, j, k, bricks, bricks);
+                self.piece
+                    .piece
+                    .fill_with_outline(chunk, &bb, false, ix, j, 0, ix, j, k, bricks, bricks);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -1101,13 +1565,16 @@ pub struct CorridorExitPiece {
 
 impl CorridorExitPiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -5, -3, 0, 13, 14, 13, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -1132,9 +1599,15 @@ impl CorridorExitPiece {
 }
 
 impl StructurePieceBase for CorridorExitPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
@@ -1142,76 +1615,178 @@ impl StructurePieceBase for CorridorExitPiece {
         let air = Block::AIR.default_state;
         let lava = Block::LAVA.default_state;
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 0, 12, 4, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 0, 12, 13, 12, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 0, 1, 12, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 11, 5, 0, 12, 12, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 5, 11, 4, 12, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 8, 5, 11, 10, 12, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 5, 9, 11, 7, 12, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 5, 0, 4, 12, 1, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 8, 5, 0, 10, 12, 1, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 5, 9, 0, 7, 12, 1, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 11, 2, 10, 12, 10, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 0, 12, 4, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 0, 12, 13, 12, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 0, 1, 12, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 11, 5, 0, 12, 12, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 5, 11, 4, 12, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 8, 5, 11, 10, 12, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 9, 11, 7, 12, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 5, 0, 4, 12, 1, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 8, 5, 0, 10, 12, 1, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 9, 0, 7, 12, 1, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 11, 2, 10, 12, 10, bricks, bricks);
 
         let fence_we = fence_we();
         let fence_ns = fence_ns();
 
         for i in (1..=11).step_by(2) {
-            self.piece.piece.fill_with_outline(chunk, &bb, false, i, 10, 0, i, 11, 0, fence_we, fence_we);
-            self.piece.piece.fill_with_outline(chunk, &bb, false, i, 10, 12, i, 11, 12, fence_we, fence_we);
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 10, i, 0, 11, i, fence_ns, fence_ns);
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 12, 10, i, 12, 11, i, fence_ns, fence_ns);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, i, 10, 0, i, 11, 0, fence_we, fence_we);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, i, 10, 12, i, 11, 12, fence_we, fence_we);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, 0, 10, i, 0, 11, i, fence_ns, fence_ns);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, 12, 10, i, 12, 11, i, fence_ns, fence_ns);
             self.piece.piece.add_block(chunk, bricks, i, 13, 0, &bb);
             self.piece.piece.add_block(chunk, bricks, i, 13, 12, &bb);
             self.piece.piece.add_block(chunk, bricks, 0, 13, i, &bb);
             self.piece.piece.add_block(chunk, bricks, 12, 13, i, &bb);
             if i != 11 {
-                self.piece.piece.add_block(chunk, fence_we, i + 1, 13, 0, &bb);
-                self.piece.piece.add_block(chunk, fence_we, i + 1, 13, 12, &bb);
-                self.piece.piece.add_block(chunk, fence_ns, 0, 13, i + 1, &bb);
-                self.piece.piece.add_block(chunk, fence_ns, 12, 13, i + 1, &bb);
+                self.piece
+                    .piece
+                    .add_block(chunk, fence_we, i + 1, 13, 0, &bb);
+                self.piece
+                    .piece
+                    .add_block(chunk, fence_we, i + 1, 13, 12, &bb);
+                self.piece
+                    .piece
+                    .add_block(chunk, fence_ns, 0, 13, i + 1, &bb);
+                self.piece
+                    .piece
+                    .add_block(chunk, fence_ns, 12, 13, i + 1, &bb);
             }
         }
 
         self.piece.piece.add_block(chunk, fence_ne(), 0, 13, 0, &bb);
-        self.piece.piece.add_block(chunk, fence_se(), 0, 13, 12, &bb);
-        self.piece.piece.add_block(chunk, fence_sw(), 12, 13, 12, &bb);
-        self.piece.piece.add_block(chunk, fence_nw(), 12, 13, 0, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, fence_se(), 0, 13, 12, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, fence_sw(), 12, 13, 12, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, fence_nw(), 12, 13, 0, &bb);
 
         for i in (3..=9).step_by(2) {
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 7, i, 1, 8, i, fence_nsw(), fence_nsw());
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 11, 7, i, 11, 8, i, fence_nse(), fence_nse());
+            self.piece.piece.fill_with_outline(
+                chunk,
+                &bb,
+                false,
+                1,
+                7,
+                i,
+                1,
+                8,
+                i,
+                fence_nsw(),
+                fence_nsw(),
+            );
+            self.piece.piece.fill_with_outline(
+                chunk,
+                &bb,
+                false,
+                11,
+                7,
+                i,
+                11,
+                8,
+                i,
+                fence_nse(),
+                fence_nse(),
+            );
         }
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 2, 0, 8, 2, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 4, 12, 2, 8, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 0, 0, 8, 1, 3, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 0, 9, 8, 1, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 4, 3, 1, 8, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 9, 0, 4, 12, 1, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 2, 0, 8, 2, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 4, 12, 2, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 0, 0, 8, 1, 3, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 0, 9, 8, 1, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 4, 3, 1, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 9, 0, 4, 12, 1, 8, bricks, bricks);
 
         for i in 4..=8 {
             for j in 0..=2 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, 12 - j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, 12 - j, &bb);
             }
         }
 
         for i in 0..=2 {
             for j in 4..=8 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
-                self.piece.piece.fill_downwards(chunk, bricks, 12 - i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, 12 - i, -1, j, &bb);
             }
         }
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 5, 5, 5, 7, 5, 7, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 1, 6, 6, 4, 6, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 5, 5, 7, 5, 7, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 1, 6, 6, 4, 6, air, air);
         self.piece.piece.add_block(chunk, bricks, 6, 0, 6, &bb);
         self.piece.piece.add_block(chunk, lava, 6, 5, 6, &bb);
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -1225,13 +1800,16 @@ pub struct SmallCorridorPiece {
 
 impl SmallCorridorPiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -1, 0, 0, 5, 7, 5, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -1256,35 +1834,71 @@ impl SmallCorridorPiece {
 }
 
 impl StructurePieceBase for SmallCorridorPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 0, 4, 1, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 4, 5, 4, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 0, 4, 1, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 4, 5, 4, air, air);
 
         let fence_ns = fence_ns();
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 0, 5, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 2, 0, 4, 5, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 1, 0, 4, 1, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 3, 0, 4, 3, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 3, 1, 4, 4, 1, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 3, 3, 4, 4, 3, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 6, 0, 4, 6, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 0, 5, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 2, 0, 4, 5, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 1, 0, 4, 1, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 3, 0, 4, 3, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 3, 1, 4, 4, 1, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 3, 3, 4, 4, 3, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 6, 0, 4, 6, 4, bricks, bricks);
 
         for i in 0..=4 {
             for j in 0..=4 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -1298,13 +1912,16 @@ pub struct CorridorCrossingPiece {
 
 impl CorridorCrossingPiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -1, 0, 0, 5, 7, 5, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -1331,31 +1948,63 @@ impl CorridorCrossingPiece {
 }
 
 impl StructurePieceBase for CorridorCrossingPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 0, 4, 1, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 4, 5, 4, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 0, 5, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 2, 0, 4, 5, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 4, 0, 5, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 2, 4, 4, 5, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 6, 0, 4, 6, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 0, 4, 1, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 4, 5, 4, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 0, 5, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 2, 0, 4, 5, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 4, 0, 5, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 2, 4, 4, 5, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 6, 0, 4, 6, 4, bricks, bricks);
 
         for i in 0..=4 {
             for j in 0..=4 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -1371,13 +2020,16 @@ pub struct CorridorRightTurnPiece {
 impl CorridorRightTurnPiece {
     pub fn create(
         random: &mut RandomGenerator,
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -1, 0, 0, 5, 7, 5, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -1389,7 +2041,10 @@ impl CorridorRightTurnPiece {
         );
         piece.piece.set_facing(Some(facing));
         let contains_chest = random.next_bounded_i32(3) == 0;
-        Some(Self { piece, contains_chest })
+        Some(Self {
+            piece,
+            contains_chest,
+        })
     }
 
     pub fn fill_openings(
@@ -1403,27 +2058,51 @@ impl CorridorRightTurnPiece {
 }
 
 impl StructurePieceBase for CorridorRightTurnPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 0, 4, 1, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 4, 5, 4, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 0, 4, 1, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 4, 5, 4, air, air);
 
         let fence_we = fence_we();
         let fence_ns = fence_ns();
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 0, 5, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 1, 0, 4, 1, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 3, 0, 4, 3, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 2, 0, 4, 5, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 2, 4, 4, 5, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 3, 4, 1, 4, 4, fence_we, fence_we);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 3, 3, 4, 3, 4, 4, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 0, 5, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 1, 0, 4, 1, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 3, 0, 4, 3, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 2, 0, 4, 5, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 2, 4, 4, 5, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 3, 4, 1, 4, 4, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 3, 3, 4, 3, 4, 4, fence_we, fence_we);
 
         // Chest (33% chance, set during creation)
         if self.contains_chest {
@@ -1431,16 +2110,30 @@ impl StructurePieceBase for CorridorRightTurnPiece {
             self.piece.piece.add_block(chunk, chest, 1, 2, 3, &bb);
         }
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 6, 0, 4, 6, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 6, 0, 4, 6, 4, bricks, bricks);
 
         for i in 0..=4 {
             for j in 0..=4 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -1456,13 +2149,16 @@ pub struct CorridorLeftTurnPiece {
 impl CorridorLeftTurnPiece {
     pub fn create(
         random: &mut RandomGenerator,
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -1, 0, 0, 5, 7, 5, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -1474,7 +2170,10 @@ impl CorridorLeftTurnPiece {
         );
         piece.piece.set_facing(Some(facing));
         let contains_chest = random.next_bounded_i32(3) == 0;
-        Some(Self { piece, contains_chest })
+        Some(Self {
+            piece,
+            contains_chest,
+        })
     }
 
     pub fn fill_openings(
@@ -1488,27 +2187,51 @@ impl CorridorLeftTurnPiece {
 }
 
 impl StructurePieceBase for CorridorLeftTurnPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 0, 4, 1, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 4, 5, 4, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 0, 4, 1, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 4, 5, 4, air, air);
 
         let fence_we = fence_we();
         let fence_ns = fence_ns();
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 2, 0, 4, 5, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 3, 1, 4, 4, 1, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 3, 3, 4, 4, 3, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 0, 5, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 4, 3, 5, 4, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 3, 4, 1, 4, 4, fence_we, fence_we);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 3, 3, 4, 3, 4, 4, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 2, 0, 4, 5, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 3, 1, 4, 4, 1, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 3, 3, 4, 4, 3, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 0, 5, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 4, 3, 5, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 3, 4, 1, 4, 4, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 3, 3, 4, 3, 4, 4, fence_we, fence_we);
 
         // Chest (33% chance, set during creation)
         if self.contains_chest {
@@ -1516,16 +2239,30 @@ impl StructurePieceBase for CorridorLeftTurnPiece {
             self.piece.piece.add_block(chunk, chest, 3, 2, 3, &bb);
         }
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 6, 0, 4, 6, 4, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 6, 0, 4, 6, 4, bricks, bricks);
 
         for i in 0..=4 {
             for j in 0..=4 {
-                self.piece.piece.fill_downwards(chunk, bricks, i, -1, j, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, i, -1, j, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -1539,13 +2276,16 @@ pub struct CorridorStairsPiece {
 
 impl CorridorStairsPiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -1, -7, 0, 5, 14, 10, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -1570,9 +2310,15 @@ impl CorridorStairsPiece {
 }
 
 impl StructurePieceBase for CorridorStairsPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
@@ -1586,8 +2332,22 @@ impl StructurePieceBase for CorridorStairsPiece {
             let j = 1.max(7 - i);
             let k = (j + 5).min(14 - i).min(13);
 
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, i, 4, j, i, bricks, bricks);
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 1, j + 1, i, 3, k - 1, i, air, air);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, 0, 0, i, 4, j, i, bricks, bricks);
+            self.piece.piece.fill_with_outline(
+                chunk,
+                &bb,
+                false,
+                1,
+                j + 1,
+                i,
+                3,
+                k - 1,
+                i,
+                air,
+                air,
+            );
 
             if i <= 6 {
                 self.piece.piece.add_block(chunk, stairs, 1, j + 1, i, &bb);
@@ -1595,22 +2355,84 @@ impl StructurePieceBase for CorridorStairsPiece {
                 self.piece.piece.add_block(chunk, stairs, 3, j + 1, i, &bb);
             }
 
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 0, k, i, 4, k, i, bricks, bricks);
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 0, j + 1, i, 0, k - 1, i, bricks, bricks);
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 4, j + 1, i, 4, k - 1, i, bricks, bricks);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, 0, k, i, 4, k, i, bricks, bricks);
+            self.piece.piece.fill_with_outline(
+                chunk,
+                &bb,
+                false,
+                0,
+                j + 1,
+                i,
+                0,
+                k - 1,
+                i,
+                bricks,
+                bricks,
+            );
+            self.piece.piece.fill_with_outline(
+                chunk,
+                &bb,
+                false,
+                4,
+                j + 1,
+                i,
+                4,
+                k - 1,
+                i,
+                bricks,
+                bricks,
+            );
 
             if (i & 1) == 0 {
-                self.piece.piece.fill_with_outline(chunk, &bb, false, 0, j + 2, i, 0, j + 3, i, fence_ns, fence_ns);
-                self.piece.piece.fill_with_outline(chunk, &bb, false, 4, j + 2, i, 4, j + 3, i, fence_ns, fence_ns);
+                self.piece.piece.fill_with_outline(
+                    chunk,
+                    &bb,
+                    false,
+                    0,
+                    j + 2,
+                    i,
+                    0,
+                    j + 3,
+                    i,
+                    fence_ns,
+                    fence_ns,
+                );
+                self.piece.piece.fill_with_outline(
+                    chunk,
+                    &bb,
+                    false,
+                    4,
+                    j + 2,
+                    i,
+                    4,
+                    j + 3,
+                    i,
+                    fence_ns,
+                    fence_ns,
+                );
             }
 
             for m in 0..=4 {
-                self.piece.piece.fill_downwards(chunk, bricks, m, -1, i, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, m, -1, i, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -1624,13 +2446,16 @@ pub struct CorridorBalconyPiece {
 
 impl CorridorBalconyPiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -3, 0, 0, 9, 7, 9, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -1651,7 +2476,11 @@ impl CorridorBalconyPiece {
         collector: &mut StructurePiecesCollector,
     ) {
         let facing = self.piece.piece.facing.unwrap_or(BlockDirection::North);
-        let i = if facing == BlockDirection::West || facing == BlockDirection::North { 5 } else { 1 };
+        let i = if facing == BlockDirection::West || facing == BlockDirection::North {
+            5
+        } else {
+            1
+        };
 
         let inside = random.next_bounded_i32(8) > 0;
         fill_nw_opening(&self.piece.piece, start, random, 0, i, inside, collector);
@@ -1661,9 +2490,15 @@ impl CorridorBalconyPiece {
 }
 
 impl StructurePieceBase for CorridorBalconyPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
@@ -1673,36 +2508,86 @@ impl StructurePieceBase for CorridorBalconyPiece {
         let fence_ns = fence_ns();
         let fence_we = fence_we();
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 0, 8, 1, 8, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 8, 5, 8, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 6, 0, 8, 6, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 0, 2, 5, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 2, 0, 8, 5, 0, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 3, 0, 1, 4, 0, fence_we, fence_we);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 7, 3, 0, 7, 4, 0, fence_we, fence_we);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 4, 8, 2, 8, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 1, 4, 2, 2, 4, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 1, 4, 7, 2, 4, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 3, 8, 7, 3, 8, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 0, 8, 1, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 8, 5, 8, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 6, 0, 8, 6, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 0, 2, 5, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 2, 0, 8, 5, 0, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 3, 0, 1, 4, 0, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 7, 3, 0, 7, 4, 0, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 4, 8, 2, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 1, 4, 2, 2, 4, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 1, 4, 7, 2, 4, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 3, 8, 7, 3, 8, fence_we, fence_we);
         self.piece.piece.add_block(chunk, fence_se(), 0, 3, 8, &bb);
         self.piece.piece.add_block(chunk, fence_sw(), 8, 3, 8, &bb);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 6, 0, 3, 7, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 8, 3, 6, 8, 3, 7, fence_ns, fence_ns);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 4, 0, 5, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 8, 3, 4, 8, 5, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 3, 5, 2, 5, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 6, 3, 5, 7, 5, 5, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 4, 5, 1, 5, 5, fence_we, fence_we);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 7, 4, 5, 7, 5, 5, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 6, 0, 3, 7, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 8, 3, 6, 8, 3, 7, fence_ns, fence_ns);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 4, 0, 5, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 8, 3, 4, 8, 5, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 3, 5, 2, 5, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 6, 3, 5, 7, 5, 5, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 1, 4, 5, 1, 5, 5, fence_we, fence_we);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 7, 4, 5, 7, 5, 5, fence_we, fence_we);
 
         for i in 0..=5 {
             for j in 0..=8 {
-                self.piece.piece.fill_downwards(chunk, bricks, j, -1, i, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, j, -1, i, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }
 
 // ============================================================================
@@ -1716,13 +2601,16 @@ pub struct CorridorNetherWartsRoomPiece {
 
 impl CorridorNetherWartsRoomPiece {
     pub fn create(
-        x: i32, y: i32, z: i32,
+        x: i32,
+        y: i32,
+        z: i32,
         facing: BlockDirection,
         chain_length: u32,
         collector: &StructurePiecesCollector,
     ) -> Option<Self> {
         let bbox = BlockBox::rotated(x, y, z, -5, -3, 0, 13, 14, 13, &facing);
-        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some() {
+        if !NetherFortressPiece::is_in_bounds(&bbox) || collector.get_intersecting(&bbox).is_some()
+        {
             return None;
         }
 
@@ -1749,9 +2637,15 @@ impl CorridorNetherWartsRoomPiece {
 }
 
 impl StructurePieceBase for CorridorNetherWartsRoomPiece {
-    fn get_structure_piece(&self) -> &StructurePiece { &self.piece.piece }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece.piece }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> { Box::new(self.clone()) }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece.piece
+    }
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
         let bb = self.piece.piece.bounding_box;
@@ -1763,72 +2657,198 @@ impl StructurePieceBase for CorridorNetherWartsRoomPiece {
         let fence_we = fence_we();
         let fence_ns = fence_ns();
 
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 3, 0, 12, 4, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 0, 12, 13, 12, air, air);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 5, 0, 1, 12, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 11, 5, 0, 12, 12, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 5, 11, 4, 12, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 8, 5, 11, 10, 12, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 5, 9, 11, 7, 12, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 5, 0, 4, 12, 1, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 8, 5, 0, 10, 12, 1, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 5, 9, 0, 7, 12, 1, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 2, 11, 2, 10, 12, 10, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 3, 0, 12, 4, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 0, 12, 13, 12, air, air);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 5, 0, 1, 12, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 11, 5, 0, 12, 12, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 5, 11, 4, 12, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 8, 5, 11, 10, 12, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 9, 11, 7, 12, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 5, 0, 4, 12, 1, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 8, 5, 0, 10, 12, 1, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 9, 0, 7, 12, 1, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 11, 2, 10, 12, 10, bricks, bricks);
 
         for i in (1..=11).step_by(2) {
-            self.piece.piece.fill_with_outline(chunk, &bb, false, i, 10, 0, i, 11, 0, fence_we, fence_we);
-            self.piece.piece.fill_with_outline(chunk, &bb, false, i, 10, 12, i, 11, 12, fence_we, fence_we);
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 10, i, 0, 11, i, fence_ns, fence_ns);
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 12, 10, i, 12, 11, i, fence_ns, fence_ns);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, i, 10, 0, i, 11, 0, fence_we, fence_we);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, i, 10, 12, i, 11, 12, fence_we, fence_we);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, 0, 10, i, 0, 11, i, fence_ns, fence_ns);
+            self.piece
+                .piece
+                .fill_with_outline(chunk, &bb, false, 12, 10, i, 12, 11, i, fence_ns, fence_ns);
             self.piece.piece.add_block(chunk, bricks, i, 13, 0, &bb);
             self.piece.piece.add_block(chunk, bricks, i, 13, 12, &bb);
             self.piece.piece.add_block(chunk, bricks, 0, 13, i, &bb);
             self.piece.piece.add_block(chunk, bricks, 12, 13, i, &bb);
             if i != 11 {
-                self.piece.piece.add_block(chunk, fence_we, i + 1, 13, 0, &bb);
-                self.piece.piece.add_block(chunk, fence_we, i + 1, 13, 12, &bb);
-                self.piece.piece.add_block(chunk, fence_ns, 0, 13, i + 1, &bb);
-                self.piece.piece.add_block(chunk, fence_ns, 12, 13, i + 1, &bb);
+                self.piece
+                    .piece
+                    .add_block(chunk, fence_we, i + 1, 13, 0, &bb);
+                self.piece
+                    .piece
+                    .add_block(chunk, fence_we, i + 1, 13, 12, &bb);
+                self.piece
+                    .piece
+                    .add_block(chunk, fence_ns, 0, 13, i + 1, &bb);
+                self.piece
+                    .piece
+                    .add_block(chunk, fence_ns, 12, 13, i + 1, &bb);
             }
         }
 
         self.piece.piece.add_block(chunk, fence_ne(), 0, 13, 0, &bb);
-        self.piece.piece.add_block(chunk, fence_se(), 0, 13, 12, &bb);
-        self.piece.piece.add_block(chunk, fence_sw(), 12, 13, 12, &bb);
-        self.piece.piece.add_block(chunk, fence_nw(), 12, 13, 0, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, fence_se(), 0, 13, 12, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, fence_sw(), 12, 13, 12, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, fence_nw(), 12, 13, 0, &bb);
 
         for i in (3..=9).step_by(2) {
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 1, 7, i, 1, 8, i, fence_nsw(), fence_nsw());
-            self.piece.piece.fill_with_outline(chunk, &bb, false, 11, 7, i, 11, 8, i, fence_nse(), fence_nse());
+            self.piece.piece.fill_with_outline(
+                chunk,
+                &bb,
+                false,
+                1,
+                7,
+                i,
+                1,
+                8,
+                i,
+                fence_nsw(),
+                fence_nsw(),
+            );
+            self.piece.piece.fill_with_outline(
+                chunk,
+                &bb,
+                false,
+                11,
+                7,
+                i,
+                11,
+                8,
+                i,
+                fence_nse(),
+                fence_nse(),
+            );
         }
 
         // Soul sand and nether wart
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 3, 4, 4, 4, 4, 8, soul_sand, soul_sand);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 8, 4, 4, 9, 4, 8, soul_sand, soul_sand);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 3, 5, 4, 4, 5, 8, nether_wart, nether_wart);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 8, 5, 4, 9, 5, 8, nether_wart, nether_wart);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 3, 4, 4, 4, 4, 8, soul_sand, soul_sand);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 8, 4, 4, 9, 4, 8, soul_sand, soul_sand);
+        self.piece.piece.fill_with_outline(
+            chunk,
+            &bb,
+            false,
+            3,
+            5,
+            4,
+            4,
+            5,
+            8,
+            nether_wart,
+            nether_wart,
+        );
+        self.piece.piece.fill_with_outline(
+            chunk,
+            &bb,
+            false,
+            8,
+            5,
+            4,
+            9,
+            5,
+            8,
+            nether_wart,
+            nether_wart,
+        );
 
         // Lower cross floor
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 2, 0, 8, 2, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 2, 4, 12, 2, 8, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 0, 0, 8, 1, 3, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 4, 0, 9, 8, 1, 12, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 0, 0, 4, 3, 1, 8, bricks, bricks);
-        self.piece.piece.fill_with_outline(chunk, &bb, false, 9, 0, 4, 12, 1, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 2, 0, 8, 2, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 2, 4, 12, 2, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 0, 0, 8, 1, 3, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 4, 0, 9, 8, 1, 12, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 0, 0, 4, 3, 1, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 9, 0, 4, 12, 1, 8, bricks, bricks);
 
         for l in 4..=8 {
             for m in 0..=2 {
-                self.piece.piece.fill_downwards(chunk, bricks, l, -1, m, &bb);
-                self.piece.piece.fill_downwards(chunk, bricks, l, -1, 12 - m, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, l, -1, m, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, l, -1, 12 - m, &bb);
             }
         }
         for l in 0..=2 {
             for m in 4..=8 {
-                self.piece.piece.fill_downwards(chunk, bricks, l, -1, m, &bb);
-                self.piece.piece.fill_downwards(chunk, bricks, 12 - l, -1, m, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, l, -1, m, &bb);
+                self.piece
+                    .piece
+                    .fill_downwards(chunk, bricks, 12 - l, -1, m, &bb);
             }
         }
     }
 
-    fn fill_openings(&self, _: &StructurePiece, _: &mut RandomGenerator, _: &mut Vec<super::stronghold::PieceWeight>, _: &mut Option<super::stronghold::StrongholdPieceType>, _: &mut bool, _: &mut StructurePiecesCollector, _: &mut Vec<Box<dyn StructurePieceBase>>) {}
+    fn fill_openings(
+        &self,
+        _: &StructurePiece,
+        _: &mut RandomGenerator,
+        _: &mut Vec<super::stronghold::PieceWeight>,
+        _: &mut Option<super::stronghold::StrongholdPieceType>,
+        _: &mut bool,
+        _: &mut StructurePiecesCollector,
+        _: &mut Vec<Box<dyn StructurePieceBase>>,
+    ) {
+    }
 }

@@ -1172,8 +1172,13 @@ impl World {
     }
 
     /// Finds a safe spawn position within the spawn radius around the world spawn point.
-    /// This mimics vanilla's SpawnLocating behavior.
-    pub async fn find_spawn_position(&self, base_x: i32, base_z: i32, spawn_radius: i32) -> Vector3<f64> {
+    /// This mimics vanilla's `SpawnLocating` behavior.
+    pub async fn find_spawn_position(
+        &self,
+        base_x: i32,
+        base_z: i32,
+        spawn_radius: i32,
+    ) -> Vector3<f64> {
         // If spawn radius is 0, just use the base position with heightmap
         if spawn_radius <= 0 {
             return self.find_spawn_in_column(base_x, base_z).await;
@@ -1182,10 +1187,7 @@ impl World {
         // Try center first (like vanilla prioritizes)
         if let Some(pos) = self.find_overworld_spawn(base_x, base_z).await {
             log::info!(
-                "find_spawn_position: found valid spawn at center ({}, {}): {:?}",
-                base_x,
-                base_z,
-                pos
+                "find_spawn_position: found valid spawn at center ({base_x}, {base_z}): {pos:?}"
             );
             return pos;
         }
@@ -1199,12 +1201,7 @@ impl World {
                     let x = base_x + dx;
                     let z = base_z + dz;
                     if let Some(pos) = self.find_overworld_spawn(x, z).await {
-                        log::info!(
-                            "find_spawn_position: found valid spawn at ({}, {}): {:?}",
-                            x,
-                            z,
-                            pos
-                        );
+                        log::info!("find_spawn_position: found valid spawn at ({x}, {z}): {pos:?}");
                         return pos;
                     }
                 }
@@ -1215,10 +1212,7 @@ impl World {
                         let z = base_z + dz;
                         if let Some(pos) = self.find_overworld_spawn(x, z).await {
                             log::info!(
-                                "find_spawn_position: found valid spawn at ({}, {}): {:?}",
-                                x,
-                                z,
-                                pos
+                                "find_spawn_position: found valid spawn at ({x}, {z}): {pos:?}"
                             );
                             return pos;
                         }
@@ -1229,9 +1223,7 @@ impl World {
 
         // Fallback: just find position in the base column
         log::info!(
-            "find_spawn_position: no valid spawn in radius, falling back to column at ({}, {})",
-            base_x,
-            base_z
+            "find_spawn_position: no valid spawn in radius, falling back to column at ({base_x}, {base_z})"
         );
         self.find_spawn_in_column(base_x, base_z).await
     }
@@ -1252,10 +1244,10 @@ impl World {
         let block_state_id = self.get_block_state_id(&pos).await;
 
         // If the top block is water/fluid, this is underwater - skip
-        if let Some(fluid) = Fluid::from_state_id(block_state_id) {
-            if fluid.id != Fluid::EMPTY.id {
-                return None;
-            }
+        if let Some(fluid) = Fluid::from_state_id(block_state_id)
+            && fluid.id != Fluid::EMPTY.id
+        {
+            return None;
         }
 
         // Scan down from heightmap to find solid ground with full top face
@@ -1270,10 +1262,10 @@ impl World {
             }
 
             // Skip fluids
-            if let Some(fluid) = Fluid::from_state_id(state_id) {
-                if fluid.id != Fluid::EMPTY.id {
-                    continue;
-                }
+            if let Some(fluid) = Fluid::from_state_id(state_id)
+                && fluid.id != Fluid::EMPTY.id
+            {
+                continue;
             }
 
             // Check if block is solid (has collision)
@@ -1283,7 +1275,9 @@ impl World {
 
                 // Verify there's space for player (2 blocks of air above)
                 let above1 = self.get_block_state(&BlockPos::new(x, spawn_y, z)).await;
-                let above2 = self.get_block_state(&BlockPos::new(x, spawn_y + 1, z)).await;
+                let above2 = self
+                    .get_block_state(&BlockPos::new(x, spawn_y + 1, z))
+                    .await;
 
                 if above1.is_air() && above2.is_air() {
                     return Some(Vector3::new(
@@ -1302,12 +1296,7 @@ impl World {
     /// This is the fallback when no valid spawn is found in the radius.
     async fn find_spawn_in_column(&self, x: i32, z: i32) -> Vector3<f64> {
         let heightmap_y = self.get_motion_blocking_height(x, z).await;
-        log::debug!(
-            "find_spawn_in_column: x={}, z={}, heightmap_y={}",
-            x,
-            z,
-            heightmap_y
-        );
+        log::debug!("find_spawn_in_column: x={x}, z={z}, heightmap_y={heightmap_y}");
 
         // Start at heightmap and find valid position
         let mut y = heightmap_y + 1;
@@ -1333,10 +1322,9 @@ impl World {
             let state_below = self.get_block_state(&below).await;
 
             if state_below.is_solid() && !state_below.is_air() {
+                let ground_y = y - 1;
                 log::debug!(
-                    "find_spawn_in_column: found solid ground at y={}, block={:?}",
-                    y - 1,
-                    state_below
+                    "find_spawn_in_column: found solid ground at y={ground_y}, block={state_below:?}"
                 );
                 break;
             }
@@ -1347,19 +1335,10 @@ impl World {
         y = y.max(self.dimension.min_y + 1);
 
         log::info!(
-            "find_spawn_in_column: x={}, z={}, heightmap={}, after_up={}, final_y={}",
-            x,
-            z,
-            heightmap_y,
-            after_up,
-            y
+            "find_spawn_in_column: x={x}, z={z}, heightmap={heightmap_y}, after_up={after_up}, final_y={y}"
         );
 
-        Vector3::new(
-            f64::from(x) + 0.5,
-            f64::from(y),
-            f64::from(z) + 0.5,
-        )
+        Vector3::new(f64::from(x) + 0.5, f64::from(y), f64::from(z) + 0.5)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -2093,39 +2072,37 @@ impl World {
         };
 
         // Get respawn position and dimension
-        let (position, yaw, pitch, respawn_dimension) =
-            if let Some(respawn) = player.calculate_respawn_point().await {
-                log::info!(
-                    "Respawn: using player spawn point at {:?} (dimension: {:?})",
-                    respawn.position,
-                    respawn.dimension
-                );
-                (
-                    respawn.position,
-                    respawn.yaw,
-                    respawn.pitch,
-                    respawn.dimension,
-                )
-            } else {
-                // No valid respawn point - send notification and use world spawn
-                player
-                    .client
-                    .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
-                    .await;
+        let (position, yaw, pitch, respawn_dimension) = if let Some(respawn) =
+            player.calculate_respawn_point().await
+        {
+            log::info!(
+                "Respawn: using player spawn point at {:?} (dimension: {:?})",
+                respawn.position,
+                respawn.dimension
+            );
+            (
+                respawn.position,
+                respawn.yaw,
+                respawn.pitch,
+                respawn.dimension,
+            )
+        } else {
+            // No valid respawn point - send notification and use world spawn
+            player
+                .client
+                .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
+                .await;
 
-                // Find a safe spawn position within the spawn radius (like vanilla)
-                let position = self
-                    .find_spawn_position(spawn_x, spawn_z, respawn_radius as i32)
-                    .await;
+            // Find a safe spawn position within the spawn radius (like vanilla)
+            let position = self
+                .find_spawn_position(spawn_x, spawn_z, respawn_radius as i32)
+                .await;
 
-                log::info!(
-                    "Respawn: using world spawn at {:?} (world spawn x={}, z={})",
-                    position,
-                    spawn_x,
-                    spawn_z
-                );
-                (position, spawn_yaw, spawn_pitch, self.dimension)
-            };
+            log::info!(
+                "Respawn: using world spawn at {position:?} (world spawn x={spawn_x}, z={spawn_z})"
+            );
+            (position, spawn_yaw, spawn_pitch, self.dimension)
+        };
 
         // Get target world (may be different from current world for cross-dimension respawn)
         let target_world = if respawn_dimension == self.dimension {

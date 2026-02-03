@@ -886,9 +886,7 @@ impl Player {
                         if check_state.is_solid() {
                             spawn_y = y + 1;
                             log::info!(
-                                "Forced spawn: found solid ground at y={}, spawning at y={}",
-                                y,
-                                spawn_y
+                                "Forced spawn: found solid ground at y={y}, spawning at y={spawn_y}"
                             );
                             break;
                         }
