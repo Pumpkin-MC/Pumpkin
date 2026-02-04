@@ -37,7 +37,11 @@ pub mod player_changed_main_hand;
 pub mod player_register_channel;
 pub mod player_unregister_channel;
 pub mod player_move;
+pub mod player_swap_hand_items;
 pub mod player_teleport;
+pub mod player_toggle_flight;
+pub mod player_toggle_sneak;
+pub mod player_toggle_sprint;
 
 use std::sync::Arc;
 

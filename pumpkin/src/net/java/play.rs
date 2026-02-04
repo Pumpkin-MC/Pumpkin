@@ -52,10 +52,11 @@ use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_macros::send_cancellable;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
-    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot, CSystemChatMessage,
+    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetPlayerInventory, CSetSelectedSlot, CSystemChatMessage,
     CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
@@ -795,11 +796,31 @@ impl JavaClient {
             match action {
                 Action::StartSprinting => {
                     if !entity.sprinting.load(Ordering::Relaxed) {
+                        if let Some(server) = player.world().server.upgrade() {
+                            let event = crate::plugin::player::player_toggle_sprint::PlayerToggleSprintEvent::new(
+                                player.clone(),
+                                true,
+                            );
+                            let event = server.plugin_manager.fire(event).await;
+                            if event.cancelled {
+                                return;
+                            }
+                        }
                         entity.set_sprinting(true).await;
                     }
                 }
                 Action::StopSprinting => {
                     if entity.sprinting.load(Ordering::Relaxed) {
+                        if let Some(server) = player.world().server.upgrade() {
+                            let event = crate::plugin::player::player_toggle_sprint::PlayerToggleSprintEvent::new(
+                                player.clone(),
+                                false,
+                            );
+                            let event = server.plugin_manager.fire(event).await;
+                            if event.cancelled {
+                                return;
+                            }
+                        }
                         entity.set_sprinting(false).await;
                     }
                 }
@@ -824,6 +845,16 @@ impl JavaClient {
     pub async fn handle_player_input(&self, player: &Arc<Player>, input: SPlayerInput) {
         let sneak = input.input & SPlayerInput::SNEAK != 0;
         if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
+            if let Some(server) = player.world().server.upgrade() {
+                let event = crate::plugin::player::player_toggle_sneak::PlayerToggleSneakEvent::new(
+                    player.clone(),
+                    sneak,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
+                }
+            }
             player.get_entity().set_sneaking(sneak).await;
         }
     }
@@ -1676,7 +1707,47 @@ impl JavaClient {
                     player.living_entity.clear_active_hand().await;
                 }
                 Status::SwapItem => {
-                    player.swap_item().await;
+                    let main_hand = player.inventory.held_item().lock().await.clone();
+                    let off_hand = player.inventory.off_hand_item().await.lock().await.clone();
+                    if let Some(server) = player.world().server.upgrade() {
+                        let event = crate::plugin::player::player_swap_hand_items::PlayerSwapHandItemsEvent::new(
+                            player.clone(),
+                            off_hand.clone(),
+                            main_hand.clone(),
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                        let selected_slot = player.inventory.get_selected_slot() as usize;
+                        player
+                            .inventory
+                            .set_stack(selected_slot, event.main_hand_item.clone())
+                            .await;
+                        player
+                            .inventory
+                            .set_stack(pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT, event.off_hand_item.clone())
+                            .await;
+                        let equipment = &[
+                            (EquipmentSlot::MAIN_HAND, event.main_hand_item.clone()),
+                            (EquipmentSlot::OFF_HAND, event.off_hand_item.clone()),
+                        ];
+                        player.living_entity.send_equipment_changes(equipment).await;
+                        player
+                            .enqueue_slot_set_packet(&CSetPlayerInventory::new(
+                                (selected_slot as i32).into(),
+                                &ItemStackSerializer::from(event.main_hand_item),
+                            ))
+                            .await;
+                        player
+                            .enqueue_slot_set_packet(&CSetPlayerInventory::new(
+                                (pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT as i32).into(),
+                                &ItemStackSerializer::from(event.off_hand_item),
+                            ))
+                            .await;
+                    } else {
+                        player.swap_item().await;
+                    }
                 }
                 Status::SpearJab => {
                     debug!("todo");
@@ -1724,6 +1795,18 @@ impl JavaClient {
 
         // Set the flying ability
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
+        if abilities.flying != flying {
+            if let Some(server) = player.world().server.upgrade() {
+                let event = crate::plugin::player::player_toggle_flight::PlayerToggleFlightEvent::new(
+                    player.clone(),
+                    flying,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
+                }
+            }
+        }
         if flying {
             player.living_entity.fall_distance.store(0.0);
         }
