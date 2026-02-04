@@ -26,6 +26,10 @@ use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
+use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
+use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
+use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
+use crate::plugin::player::player_item_held::PlayerItemHeldEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -1850,6 +1854,19 @@ impl JavaClient {
             self.kick(TextComponent::text("Invalid held slot")).await;
             return;
         }
+        let previous_slot = player.inventory.get_selected_slot() as i32;
+        if let Some(server) = player.world().server.upgrade() {
+            let event = PlayerItemHeldEvent::new(player.clone(), previous_slot, slot as i32);
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                player
+                    .client
+                    .enqueue_packet(&CSetSelectedSlot::new(previous_slot as i8))
+                    .await;
+                return;
+            }
+        }
+
         let inv = player.inventory();
         inv.set_selected_slot(slot as u8);
         let stack = inv.held_item().lock().await.clone();
