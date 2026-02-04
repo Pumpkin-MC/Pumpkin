@@ -178,8 +178,6 @@ impl PumpkinServer {
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
-        let mut ticker = Ticker::new();
-
         if server.advanced_config.commands.use_console
             && let Some((wrapper, _)) = LOGGER_IMPL.wait()
         {
@@ -205,9 +203,7 @@ impl PumpkinServer {
             });
         }
 
-        let mut tcp_listener = None;
-
-        if server.basic_config.java_edition {
+        let tcp_listener = if server.basic_config.java_edition {
             let address = server.basic_config.java_edition_address;
             // Setup the TCP server socket.
             let listener = match TcpListener::bind(address).await {
@@ -260,14 +256,16 @@ impl PumpkinServer {
                 server.spawn_task(lan_broadcast.start(addr));
             }
 
-            tcp_listener = Some(listener);
-        }
+            Some(listener)
+        } else {
+            None
+        };
 
         // Ticker
         {
             let ticker_server = server.clone();
             server.spawn_task(async move {
-                ticker.run(&ticker_server).await;
+                Ticker::run(&ticker_server).await;
             });
         };
 
