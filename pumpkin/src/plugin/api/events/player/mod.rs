@@ -4,6 +4,7 @@ pub mod player_command_send;
 pub mod player_command_preprocess;
 pub mod player_drop_item;
 pub mod player_edit_book;
+pub mod player_egg_throw;
 pub mod player_gamemode_change;
 pub mod player_interact_event;
 pub mod player_join;
