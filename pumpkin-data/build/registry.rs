@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::fs;
 
 pub(crate) fn build() -> TokenStream {
+    println!("cargo:rerun-if-changed=../assets/registry/1_21_6_synced_registries.json");
     println!("cargo:rerun-if-changed=../assets/registry/1_21_9_synced_registries.json");
     println!("cargo:rerun-if-changed=../assets/registry/1_21_11_synced_registries.json");
 
@@ -52,6 +53,7 @@ pub(crate) fn build() -> TokenStream {
         quote! { &[#(#reg_tokens),*] }
     };
 
+    let v1_21_6_registries = process_version("../assets/registry/1_21_6_synced_registries.json");
     let v1_21_9_registries = process_version("../assets/registry/1_21_9_synced_registries.json");
     let v1_21_11_registries = process_version("../assets/registry/1_21_11_synced_registries.json");
 
@@ -79,12 +81,14 @@ pub(crate) fn build() -> TokenStream {
             pub registry_entries: Vec<RegistryEntryData>,
         }
 
+        pub static REGISTRIES_1_21_6: &[StaticRegistry] = #v1_21_6_registries;
         pub static REGISTRIES_1_21_9: &[StaticRegistry] = #v1_21_9_registries;
         pub static REGISTRIES_1_21_11: &[StaticRegistry] = #v1_21_11_registries;
 
         impl Registry {
             pub fn get_synced(version: MinecraftVersion) -> Vec<Self> {
                 let static_regs = match version {
+                    MinecraftVersion::V_1_21_6 => REGISTRIES_1_21_6,
                     MinecraftVersion::V_1_21_7 => REGISTRIES_1_21_9,
                     MinecraftVersion::V_1_21_9 => REGISTRIES_1_21_9,
                     _ => REGISTRIES_1_21_11,

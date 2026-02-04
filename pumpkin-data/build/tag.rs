@@ -74,6 +74,7 @@ pub(crate) fn build() -> TokenStream {
     // Watch specific tag versions
     println!("cargo:rerun-if-changed=../assets/tags/1_21_11_tags.json");
     println!("cargo:rerun-if-changed=../assets/tags/1_21_9_tags.json");
+    println!("cargo:rerun-if-changed=../assets/tags/1_21_6_tags.json");
 
     // --- Load Global Assets ---
     let blocks_assets: BlockAssets =
@@ -112,7 +113,7 @@ pub(crate) fn build() -> TokenStream {
 
     let mut match_get_map = Vec::new();
 
-    let versions = vec![latest_version_key, legacy_version_key];
+    let versions = vec![latest_version_key, legacy_version_key, "1_21_6"];
 
     for version in versions {
         let file_path = format!("../assets/tags/{version}_tags.json");
@@ -203,10 +204,16 @@ pub(crate) fn build() -> TokenStream {
                     }
                 }
             });
-            match_get_map
-                .push(quote! { MinecraftVersion::V_1_21_9 => tags_1_21_9::get_map(tag_category) });
-            match_get_map
-                .push(quote! { MinecraftVersion::V_1_21_7 => tags_1_21_9::get_map(tag_category) });
+            let version_ident = format_ident!("V_{}", version);
+            match_get_map.push(
+                quote! { MinecraftVersion::#version_ident => #mod_name::get_map(tag_category) },
+            );
+
+            // Special-case: 1_21_9 also covers 1_21_7 in the original mapping — preserve that behavior.
+            if version == "1_21_9" {
+                let v_1_21_7_ident = format_ident!("V_1_21_7");
+                match_get_map.push(quote! { MinecraftVersion::#v_1_21_7_ident => #mod_name::get_map(tag_category) });
+            }
         }
     }
 

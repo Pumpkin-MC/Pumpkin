@@ -17,6 +17,7 @@ pub(crate) fn build() -> TokenStream {
         "../assets/packet/1_21_11_packets.json",
         "../assets/packet/1_21_9_packets.json",
         "../assets/packet/1_21_7_packets.json",
+        "../assets/packet/1_21_6_packets.json",
     ];
 
     // Parse available packet files into a BTreeMap keyed by MinecraftVersion
@@ -63,7 +64,7 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::version::MinecraftVersion;
 
         pub const CURRENT_MC_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
-        pub const LOWEST_SUPPORTED_MC_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_7;
+        pub const LOWEST_SUPPORTED_MC_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_6;
 
         #packet_id_struct
 
