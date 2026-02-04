@@ -1,5 +1,6 @@
 use pumpkin_data::Block;
 use pumpkin_macros::{Event, cancellable};
+use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
@@ -21,6 +22,9 @@ pub struct BlockPlaceEvent {
 
     /// The block that the new block is being placed against.
     pub block_placed_against: &'static Block,
+
+    /// The position where the block is being placed.
+    pub position: BlockPos,
 
     /// A boolean indicating whether the player can build.
     pub can_build: bool,
