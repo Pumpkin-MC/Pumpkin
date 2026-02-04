@@ -91,13 +91,17 @@ impl Taggable for Block {
 
 impl ToResourceLocation for &'static Block {
     fn to_resource_location(&self) -> ResourceLocation {
-        ResourceLocation::vanilla(self.name)
+        format!("minecraft:{}", self.name)
     }
 }
 
 impl FromResourceLocation for &'static Block {
     fn from_resource_location(resource_location: &ResourceLocation) -> Option<Self> {
-        Block::from_registry_key(&resource_location.path)
+        Block::from_registry_key(
+            resource_location
+                .strip_prefix(resource_location)
+                .unwrap_or(resource_location),
+        )
     }
 }
 

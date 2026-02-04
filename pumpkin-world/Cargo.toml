@@ -47,8 +47,8 @@ ruzstd.workspace = true
 itertools.workspace = true
 enum_dispatch.workspace = true
 
-thread_local.workspace = true
-lru.workspace = true
+# thread_local.workspace = true
+# lru.workspace = true
 
 tokio-util = { workspace = true, features = ["rt"] }
 rand.workspace = true

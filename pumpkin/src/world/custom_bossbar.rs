@@ -9,11 +9,11 @@ use thiserror::Error;
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
-pub enum BossbarUpdateError<'a> {
+pub enum BossbarUpdateError {
     #[error("Invalid resource location")]
     InvalidResourceLocation(String),
     #[error("No changes")]
-    NoChanges(&'a str, Option<&'a str>),
+    NoChanges(&'static str, Option<&'static str>),
 }
 
 /// Representing the stored custom boss bars from level.dat
@@ -21,10 +21,10 @@ pub enum BossbarUpdateError<'a> {
 pub struct CustomBossbar {
     pub namespace: String,
     pub bossbar_data: Bossbar,
-    pub max: u32,
-    pub value: u32,
+    pub max: i32,
+    pub value: i32,
     pub visible: bool,
-    pub player: Vec<Uuid>,
+    pub players: Vec<Uuid>,
 }
 
 impl CustomBossbar {
@@ -37,7 +37,7 @@ impl CustomBossbar {
             max: 100,
             value: 0,
             visible: true,
-            player: vec![],
+            players: vec![],
         }
     }
 }
@@ -64,7 +64,7 @@ impl CustomBossbars {
     pub fn get_player_bars(&self, uuid: &Uuid) -> Option<Vec<&Bossbar>> {
         let mut player_bars: Vec<&Bossbar> = Vec::new();
         for bossbar in &self.custom_bossbars {
-            if bossbar.1.player.contains(uuid) {
+            if bossbar.1.players.contains(uuid) {
                 player_bars.push(&bossbar.1.bossbar_data);
             }
         }
@@ -86,12 +86,17 @@ impl CustomBossbars {
     }
 
     #[must_use]
-    pub fn get_all_bossbars(&self) -> Option<Vec<CustomBossbar>> {
+    pub fn get_all_bossbars(&self) -> Vec<CustomBossbar> {
         let mut bossbars: Vec<CustomBossbar> = Vec::new();
         for bossbar in self.custom_bossbars.clone() {
             bossbars.push(bossbar.1);
         }
-        Some(bossbars)
+        bossbars
+    }
+
+    #[must_use]
+    pub fn get_bossbars_len(&self) -> usize {
+        self.custom_bossbars.len()
     }
 
     #[must_use]
@@ -107,7 +112,7 @@ impl CustomBossbars {
         &mut self,
         server: &Server,
         resource_location: String,
-    ) -> Result<(), BossbarUpdateError<'_>> {
+    ) -> Result<(), BossbarUpdateError> {
         let bossbar = self.custom_bossbars.get_cloned(&resource_location);
         if let Some(bossbar) = bossbar {
             self.custom_bossbars.remove(&resource_location);
@@ -116,7 +121,7 @@ impl CustomBossbars {
 
             let online_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
 
             if bossbar.visible {
                 for player in online_players {
@@ -140,9 +145,9 @@ impl CustomBossbars {
         &mut self,
         server: &Server,
         resource_location: String,
-        max_value: u32,
-        value: u32,
-    ) -> Result<(), BossbarUpdateError<'_>> {
+        max_value: i32,
+        value: i32,
+    ) -> Result<(), BossbarUpdateError> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.value == value && bossbar.max == max_value {
@@ -152,10 +157,10 @@ impl CustomBossbars {
             let ratio = f64::from(value) / f64::from(max_value);
             let health: f32;
 
-            if ratio >= 1.0 {
-                health = 1.0;
-            } else if ratio <= 0.0 {
+            if ratio < 0.0 {
                 health = 0.0;
+            } else if ratio > 1.0 {
+                health = 1.0;
             } else {
                 health = ratio as f32;
             }
@@ -171,7 +176,7 @@ impl CustomBossbars {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
             for player in matching_players {
                 player
                     .update_bossbar_health(&bossbar.bossbar_data.uuid, bossbar.bossbar_data.health)
@@ -190,7 +195,7 @@ impl CustomBossbars {
         server: &Server,
         resource_location: String,
         new_visibility: bool,
-    ) -> Result<(), BossbarUpdateError<'_>> {
+    ) -> Result<(), BossbarUpdateError> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.visible == new_visibility && new_visibility {
@@ -206,7 +211,7 @@ impl CustomBossbars {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let online_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
 
             for player in online_players {
                 if bossbar.visible {
@@ -228,7 +233,7 @@ impl CustomBossbars {
         server: &Server,
         resource_location: &str,
         new_title: TextComponent,
-    ) -> Result<(), BossbarUpdateError<'_>> {
+    ) -> Result<(), BossbarUpdateError> {
         let bossbar = self.custom_bossbars.get_mut(resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.bossbar_data.title == new_title {
@@ -244,7 +249,7 @@ impl CustomBossbars {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
             for player in matching_players {
                 player
                     .update_bossbar_title(
@@ -266,7 +271,7 @@ impl CustomBossbars {
         server: &Server,
         resource_location: String,
         new_color: BossbarColor,
-    ) -> Result<(), BossbarUpdateError<'_>> {
+    ) -> Result<(), BossbarUpdateError> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.bossbar_data.color == new_color {
@@ -282,7 +287,7 @@ impl CustomBossbars {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
             for player in matching_players {
                 player
                     .update_bossbar_style(
@@ -305,7 +310,7 @@ impl CustomBossbars {
         server: &Server,
         resource_location: String,
         new_division: BossbarDivisions,
-    ) -> Result<(), BossbarUpdateError<'_>> {
+    ) -> Result<(), BossbarUpdateError> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.bossbar_data.division == new_division {
@@ -321,7 +326,7 @@ impl CustomBossbars {
             let players: Vec<Arc<Player>> = server.get_all_players();
             let matching_players = players
                 .iter()
-                .filter(|player| bossbar.player.contains(&player.gameprofile.id));
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
             for player in matching_players {
                 player
                     .update_bossbar_style(
@@ -344,12 +349,12 @@ impl CustomBossbars {
         server: &Server,
         resource_location: String,
         new_players: Vec<Uuid>,
-    ) -> Result<(), BossbarUpdateError<'_>> {
+    ) -> Result<(), BossbarUpdateError> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             // Get the difference between the old and new player list and remove bossbars from old players.
             let removed_players: Vec<Uuid> = bossbar
-                .player
+                .players
                 .iter()
                 .filter(|item| !new_players.contains(item))
                 .copied()
@@ -357,7 +362,7 @@ impl CustomBossbars {
 
             let added_players: Vec<Uuid> = new_players
                 .iter()
-                .filter(|item| !bossbar.player.contains(item))
+                .filter(|item| !bossbar.players.contains(item))
                 .copied()
                 .collect();
 
@@ -375,7 +380,7 @@ impl CustomBossbars {
                 }
             }
 
-            bossbar.player = new_players;
+            bossbar.players = new_players;
 
             if !bossbar.visible {
                 return Ok(());

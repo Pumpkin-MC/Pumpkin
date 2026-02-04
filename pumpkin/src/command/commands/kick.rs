@@ -45,7 +45,7 @@ impl CommandExecutor for Executor {
                 sender.send_message(msg.color_named(NamedColor::Blue)).await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }

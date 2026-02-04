@@ -37,7 +37,7 @@ impl ClientPacket for CStopSound {
             (Some(category), Some(sound_id)) => {
                 write.write_u8(CATEGORY_AND_SOUND)?;
                 write.write_var_int(&VarInt(category as i32))?;
-                write.write_resource_location(sound_id)
+                write.write_string(sound_id)
             }
             (Some(category), None) => {
                 write.write_u8(CATEGORY_ONLY)?;
@@ -45,7 +45,7 @@ impl ClientPacket for CStopSound {
             }
             (None, Some(sound_id)) => {
                 write.write_u8(SOUND_ONLY)?;
-                write.write_resource_location(sound_id)
+                write.write_string(sound_id)
             }
             (None, None) => write.write_u8(NO_CATEGORY_NO_SOUND),
         }

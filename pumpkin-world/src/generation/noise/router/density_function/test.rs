@@ -1,4 +1,5 @@
 use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::{assert_eq_delta, read_data_from_file};
 use serde::Deserialize;
 use std::fs;
@@ -18,26 +19,7 @@ use crate::generation::noise::router::proto_noise_router::{
 };
 
 use super::test_deserializer::DensityFunctionRepr;
-use super::{NoiseFunctionComponentRange, NoisePos, PassThrough};
-
-#[derive(Debug)]
-struct TestNoisePos {
-    x: i32,
-    y: i32,
-    z: i32,
-}
-
-impl NoisePos for TestNoisePos {
-    fn x(&self) -> i32 {
-        self.x
-    }
-    fn y(&self) -> i32 {
-        self.y
-    }
-    fn z(&self) -> i32 {
-        self.z
-    }
-}
+use super::{NoiseFunctionComponentRange, PassThrough};
 
 // This is a dummy value because we are not actually building chunk-specific functions
 static TEST_OPTIONS: ChunkNoiseFunctionBuilderOptions =
@@ -131,7 +113,7 @@ macro_rules! sample_surface_router_function {
 // This is equivalent to a Java `NoiseRouter` after being passed into `NoiseConfig` but before being
 // passed into `ChunkNoiseGenerator`
 fn normal_surface_noisified() {
-    let pos = TestNoisePos { x: 0, y: 0, z: 0 };
+    let pos = Vector3 { x: 0, y: 0, z: 0 };
     // TODO: Move these values to a file and create an extractor for them
     assert_eq!(
         sample_noise_router_function!(barrier_noise, pos),
@@ -307,7 +289,7 @@ fn normal_surface_noisified() {
         ((100, 200, 100), 0.0f64),
     ];
     for ((x, y, z), value) in values {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq!(sample_noise_router_function!(vein_toggle, pos), value);
     }
 
@@ -439,7 +421,7 @@ fn normal_surface_noisified() {
         ((100, 200, 100), -0.07999999821186066f64),
     ];
     for ((x, y, z), value) in values {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq!(sample_noise_router_function!(vein_ridged, pos), value);
     }
 
@@ -571,7 +553,7 @@ fn normal_surface_noisified() {
         ((100, 200, 100), 0.3867496985743827f64),
     ];
     for ((x, y, z), value) in values {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq!(sample_noise_router_function!(vein_gap, pos), value);
     }
 }
@@ -589,7 +571,7 @@ fn config_final_density() {
 
     // This is a lot of data it iter over, one two skip a few done
     for (x, y, z, sample) in expected_data.into_iter().step_by(5) {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
@@ -659,7 +641,7 @@ fn base_sloped_cheese() {
     let expected_data: Vec<(i32, i32, i32, f64)> =
         read_data_from_file!("../../../../../assets/converted_sloped_cheese_7_4.json");
     for (x, y, z, sample) in expected_data {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
@@ -678,7 +660,7 @@ fn base_factor() {
     let expected_data: Vec<(i32, i32, i32, f64)> =
         read_data_from_file!("../../../../../assets/converted_factor_7_4.json");
     for (x, y, z, sample) in expected_data {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
@@ -697,7 +679,7 @@ fn base_depth() {
     let expected_data: Vec<(i32, i32, i32, f64)> =
         read_data_from_file!("../../../../../assets/converted_depth_7_4.json");
     for (x, y, z, sample) in expected_data {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
@@ -716,7 +698,7 @@ fn base_offset() {
     let expected_data: Vec<(i32, i32, i32, f64)> =
         read_data_from_file!("../../../../../assets/converted_offset_7_4.json");
     for (x, y, z, sample) in expected_data {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
@@ -735,7 +717,7 @@ fn base_cave_entrances() {
     let expected_data: Vec<(i32, i32, i32, f64)> =
         read_data_from_file!("../../../../../assets/converted_cave_entrances_overworld_7_4.json");
     for (x, y, z, sample) in expected_data {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
@@ -754,7 +736,7 @@ fn base_3d_noise() {
     let expected_data: Vec<(i32, i32, i32, f64)> =
         read_data_from_file!("../../../../../assets/converted_3d_overworld_7_4.json");
     for (x, y, z, sample) in expected_data {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
@@ -776,7 +758,7 @@ fn base_spahetti_roughness() {
         "../../../../../assets/converted_cave_spaghetti_rough_overworld_7_4.json"
     );
     for (x, y, z, sample) in expected_data {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
@@ -795,7 +777,7 @@ fn base_cave_noodle() {
     let expected_data: Vec<(i32, i32, i32, f64)> =
         read_data_from_file!("../../../../../assets/converted_cave_noodle_7_4.json");
     for (x, y, z, sample) in expected_data {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
@@ -814,7 +796,7 @@ fn base_cave_pillars() {
     let expected_data: Vec<(i32, i32, i32, f64)> =
         read_data_from_file!("../../../../../assets/converted_cave_pillar_7_4.json");
     for (x, y, z, sample) in expected_data {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
@@ -835,7 +817,7 @@ fn base_spaghetti_2d_thickness() {
     let expected_data: Vec<(i32, i32, i32, f64)> =
         read_data_from_file!("../../../../../assets/converted_cave_spaghetti_2d_thicc_7_4.json");
     for (x, y, z, sample) in expected_data {
-        let pos = TestNoisePos { x, y, z };
+        let pos = Vector3 { x, y, z };
         assert_eq_delta!(
             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
             sample,
