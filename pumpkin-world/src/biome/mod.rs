@@ -60,13 +60,15 @@ pub fn hash_seed(seed: u64) -> i64 {
 #[cfg(test)]
 mod test {
     use pumpkin_data::{
-        chunk::Biome, dimension::Dimension, noise_router::OVERWORLD_BASE_NOISE_ROUTER,
+        chunk::Biome, chunk_gen_settings::GenerationSettings, dimension::Dimension,
+        noise_router::OVERWORLD_BASE_NOISE_ROUTER,
     };
     use pumpkin_util::read_data_from_file;
     use serde::Deserialize;
 
     use crate::{
-        GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
+        GlobalRandomConfig, ProtoChunk,
+        block::to_state_from_blueprint,
         chunk::palette::BIOME_NETWORK_MAX_BITS,
         generation::noise::router::{
             multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -110,11 +112,10 @@ mod test {
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
-        let surface_settings = GENERATION_SETTINGS
-            .get(&GeneratorSetting::Overworld)
-            .unwrap();
+        let surface_settings = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
+
         //let _terrain_cache = TerrainCache::from_random(&random_config);
-        let default_block = surface_settings.default_block.get_state();
+        let default_block = to_state_from_blueprint(&surface_settings.default_block);
 
         for data in expected_data {
             let chunk_x = data.x;

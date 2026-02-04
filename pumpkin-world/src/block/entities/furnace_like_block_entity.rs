@@ -315,7 +315,7 @@ macro_rules! impl_block_entity_for_cooking {
         impl $crate::block::entities::BlockEntity for $struct_name {
             fn tick<'a>(
                 &'a self,
-                world: Arc<dyn $crate::world::SimpleWorld>,
+                world: &'a Arc<dyn $crate::world::SimpleWorld>,
             ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
                 Box::pin(async move {
                     let is_burning = self.is_burning();

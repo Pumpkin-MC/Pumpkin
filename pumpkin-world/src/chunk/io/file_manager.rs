@@ -1,6 +1,5 @@
 use std::{
     collections::BTreeMap,
-    io::ErrorKind,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -9,7 +8,6 @@ use futures::future::join_all;
 use log::{error, trace};
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
-    io::AsyncReadExt,
     join,
     sync::{OnceCell, RwLock, mpsc},
 };
@@ -86,38 +84,30 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
 
     async fn read_from_disk(&self) -> Result<S, ChunkReadingError> {
         trace!("Opening file from Disk: {}", self.path.display());
-        let file = tokio::fs::OpenOptions::new()
-            .read(true)
-            .write(false)
-            .create(false)
-            .truncate(false)
-            .open(&self.path)
-            .await
-            .map_err(|err| match err.kind() {
-                ErrorKind::NotFound => ChunkReadingError::ChunkNotExist,
-                kind => ChunkReadingError::IoError(kind),
-            });
 
-        let value = match file {
-            Ok(mut file) => {
-                let capacity = match file.metadata().await {
-                    Ok(metadata) => metadata.len() as usize,
-                    Err(_) => 4096, // A sane default
-                };
-
-                // TODO: Memmap?
-                let mut file_bytes = Vec::with_capacity(capacity);
-                file.read_to_end(&mut file_bytes)
-                    .await
-                    .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
-                S::read(file_bytes.into())?
+        let file_bytes = tokio::fs::read(&self.path).await.map_err(|err| {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                ChunkReadingError::ChunkNotExist
+            } else {
+                ChunkReadingError::IoError(err.kind())
             }
-            Err(ChunkReadingError::ChunkNotExist) => S::default(),
-            Err(err) => return Err(err),
-        };
+        });
 
-        trace!("Successfully read file from Disk: {}", self.path.display());
-        Ok(value)
+        match file_bytes {
+            Ok(bytes) => {
+                let value = S::read(bytes.into())?;
+                trace!("Successfully read file from Disk: {}", self.path.display());
+                Ok(value)
+            }
+            Err(ChunkReadingError::ChunkNotExist) => {
+                trace!(
+                    "Chunk not found, using default for: {}",
+                    self.path.display()
+                );
+                Ok(S::default())
+            }
+            Err(err) => Err(err),
+        }
     }
 }
 
@@ -399,13 +389,6 @@ where
             let _test: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
 
             Ok(())
-        })
-    }
-
-    fn clean_up_log(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async move {
-            let locks = self.file_locks.read().await;
-            log::debug!("{} File locks remain in cache", locks.len());
         })
     }
 

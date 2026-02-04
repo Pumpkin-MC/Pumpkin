@@ -11,6 +11,7 @@ use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
 use crate::generation::biome_coords;
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
@@ -18,7 +19,6 @@ use std::pin::Pin;
 use crate::generation::height_limit::HeightLimitView;
 
 use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
-use crate::generation::settings::{GenerationSettings, gen_settings_from_dimension};
 use crate::level::{Level, SyncChunk};
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{BlockStateId, GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
@@ -1769,7 +1769,7 @@ impl GenerationSchedule {
             thread::current().name().unwrap_or("unknown")
         );
 
-        let settings = gen_settings_from_dimension(&level.world_gen.dimension);
+        let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
         while let Ok((pos, mut cache, stage)) = recv.recv() {
             // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
             cache.advance(

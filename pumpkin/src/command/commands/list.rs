@@ -30,7 +30,7 @@ impl CommandExecutor for Executor {
                     [
                         TextComponent::text(players.len().to_string()),
                         TextComponent::text(server.basic_config.max_players.to_string()),
-                        TextComponent::text(get_player_names(players)),
+                        TextComponent::text(get_player_names(&players)),
                     ],
                 ))
                 .await;
@@ -39,7 +39,7 @@ impl CommandExecutor for Executor {
     }
 }
 
-fn get_player_names(players: Vec<Arc<Player>>) -> String {
+fn get_player_names(players: &[Arc<Player>]) -> String {
     let mut names = String::new();
     for player in players {
         if !names.is_empty() {

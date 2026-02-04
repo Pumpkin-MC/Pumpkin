@@ -100,14 +100,13 @@ pub(crate) fn build() -> TokenStream {
 
                 static_regs.iter().map(|static_reg| {
                     let registry_id = if static_reg.registry_id.contains(':') {
-                        ResourceLocation::from(static_reg.registry_id)
+                        static_reg.registry_id.to_string()
                     } else {
-                        ResourceLocation::vanilla(static_reg.registry_id)
+                        format!("minecraft:{}", static_reg.registry_id)
                     };
 
                     let registry_entries = static_reg.entries.iter().map(|entry| {
-                        let entry_id =
-                            ResourceLocation::vanilla(entry.name);
+                        let entry_id = format!("minecraft:{}", entry.name);
 
                         RegistryEntryData {
                             entry_id,

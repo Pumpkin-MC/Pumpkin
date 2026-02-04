@@ -1,5 +1,6 @@
-use generation::settings::GenerationSettings;
-use pumpkin_data::{BlockState, dimension::Dimension};
+use pumpkin_data::{
+    Block, BlockState, chunk_gen_settings::GenerationSettings, dimension::Dimension,
+};
 use pumpkin_util::math::vector2::Vector2;
 
 pub mod biome;
@@ -44,7 +45,7 @@ macro_rules! global_path {
 // TODO: is there a way to do in-file benches?
 pub use generation::{
     GlobalRandomConfig, noise::router::proto_noise_router::ProtoNoiseRouters,
-    proto_chunk::ProtoChunk, settings::GENERATION_SETTINGS, settings::GeneratorSetting,
+    proto_chunk::ProtoChunk,
 };
 
 use crate::generation::{
@@ -77,7 +78,10 @@ pub fn bench_create_and_populate_noise(
     let generation_shape = &settings.shape;
     let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
     let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-        FluidLevel::new(settings.sea_level, settings.default_fluid.name),
+        FluidLevel::new(
+            settings.sea_level,
+            Block::from_registry_key(settings.default_fluid.name).unwrap(),
+        ),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
     ));
 
@@ -204,7 +208,10 @@ pub fn bench_create_and_populate_noise_with_surface(
 
     // Noise sampler
     let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-        FluidLevel::new(settings.sea_level, settings.default_fluid.name),
+        FluidLevel::new(
+            settings.sea_level,
+            Block::from_registry_key(settings.default_fluid.name).unwrap(),
+        ),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
     ));
 

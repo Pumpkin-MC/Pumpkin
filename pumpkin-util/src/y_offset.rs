@@ -23,14 +23,14 @@ impl YOffset {
 
 #[derive(Deserialize)]
 pub struct Absolute {
-    absolute: i16,
+    pub absolute: i16,
 }
 
 #[derive(Deserialize)]
 pub struct AboveBottom {
-    above_bottom: i8,
+    pub above_bottom: i8,
 }
 #[derive(Deserialize)]
 pub struct BelowTop {
-    below_top: i8,
+    pub below_top: i8,
 }

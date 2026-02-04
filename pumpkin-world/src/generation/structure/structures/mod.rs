@@ -321,7 +321,7 @@ impl StructurePiece {
         let block_pos = self.offset_pos(x, y, z);
 
         if !box_limit.contains_pos(&block_pos) {
-            log::warn!("Structure out of bounds");
+            log::debug!("Structure out of bounds");
             return Block::AIR.default_state;
         }
 
@@ -341,7 +341,7 @@ impl StructurePiece {
 
         // Bounds and logic checks
         if !box_limit.contains_pos(&block_pos) {
-            log::warn!("Structure out of bounds");
+            log::debug!("Structure out of bounds");
             return;
         }
 

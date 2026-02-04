@@ -22,7 +22,7 @@ impl ServerPacket for SLoginCookieResponse {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
 
-        let key = read.get_resource_location()?;
+        let key = read.get_string()?;
         let has_payload = read.get_bool()?;
 
         if !has_payload {

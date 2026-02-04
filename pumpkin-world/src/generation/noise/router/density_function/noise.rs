@@ -2,7 +2,9 @@ use std::array;
 
 use pumpkin_data::noise_router::{InterpolatedNoiseSamplerData, NoiseData, ShiftedNoiseData};
 use pumpkin_util::{
-    math::clamped_lerp, noise::perlin::OctavePerlinNoiseSampler, random::RandomGenerator,
+    math::{clamped_lerp, vector3::Vector3},
+    noise::perlin::OctavePerlinNoiseSampler,
+    random::RandomGenerator,
 };
 
 use crate::generation::{
@@ -13,9 +15,7 @@ use crate::generation::{
     },
 };
 
-use super::{
-    NoiseFunctionComponentRange, NoisePos, StaticIndependentChunkNoiseFunctionComponentImpl,
-};
+use super::{NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl};
 
 pub struct Noise {
     sampler: DoublePerlinNoiseSampler,
@@ -41,11 +41,11 @@ impl NoiseFunctionComponentRange for Noise {
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for Noise {
-    fn sample(&self, pos: &impl NoisePos) -> f64 {
+    fn sample(&self, pos: &Vector3<i32>) -> f64 {
         self.sampler.sample(
-            pos.x() as f64 * self.data.xz_scale,
-            pos.y() as f64 * self.data.y_scale,
-            pos.z() as f64 * self.data.xz_scale,
+            pos.x as f64 * self.data.xz_scale,
+            pos.y as f64 * self.data.y_scale,
+            pos.z as f64 * self.data.xz_scale,
         )
     }
 }
@@ -78,8 +78,8 @@ impl NoiseFunctionComponentRange for ShiftA {
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for ShiftA {
-    fn sample(&self, pos: &impl NoisePos) -> f64 {
-        shift_sample_3d(&self.sampler, pos.x() as f64, 0.0, pos.z() as f64)
+    fn sample(&self, pos: &Vector3<i32>) -> f64 {
+        shift_sample_3d(&self.sampler, pos.x as f64, 0.0, pos.z as f64)
     }
 }
 
@@ -106,8 +106,8 @@ impl NoiseFunctionComponentRange for ShiftB {
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for ShiftB {
-    fn sample(&self, pos: &impl NoisePos) -> f64 {
-        shift_sample_3d(&self.sampler, pos.z() as f64, pos.x() as f64, 0.0)
+    fn sample(&self, pos: &Vector3<i32>) -> f64 {
+        shift_sample_3d(&self.sampler, pos.z as f64, pos.x as f64, 0.0)
     }
 }
 
@@ -135,22 +135,22 @@ impl StaticChunkNoiseFunctionComponentImpl for ShiftedNoise {
     fn sample(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
-        let translated_x = pos.x() as f64 * self.data.xz_scale
+        let translated_x = pos.x as f64 * self.data.xz_scale
             + ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut component_stack[..=self.input_x_index],
                 pos,
                 sample_options,
             );
-        let translated_y = pos.y() as f64 * self.data.y_scale
+        let translated_y = pos.y as f64 * self.data.y_scale
             + ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut component_stack[..=self.input_y_index],
                 pos,
                 sample_options,
             );
-        let translated_z = pos.z() as f64 * self.data.xz_scale
+        let translated_z = pos.z as f64 * self.data.xz_scale
             + ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut component_stack[..=self.input_z_index],
                 pos,
@@ -235,10 +235,10 @@ impl NoiseFunctionComponentRange for InterpolatedNoiseSampler {
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for InterpolatedNoiseSampler {
-    fn sample(&self, pos: &impl NoisePos) -> f64 {
-        let d = pos.x() as f64 * self.data.scaled_xz_scale;
-        let e = pos.y() as f64 * self.data.scaled_y_scale;
-        let f = pos.z() as f64 * self.data.scaled_xz_scale;
+    fn sample(&self, pos: &Vector3<i32>) -> f64 {
+        let d = pos.x as f64 * self.data.scaled_xz_scale;
+        let e = pos.y as f64 * self.data.scaled_y_scale;
+        let f = pos.z as f64 * self.data.scaled_xz_scale;
 
         let g = d / self.data.xz_factor;
         let h = e / self.data.y_factor;

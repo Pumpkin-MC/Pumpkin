@@ -203,16 +203,15 @@ impl ChunkManager {
 
         {
             let mut lock = level.chunk_loading.lock().unwrap();
-            lock.add_ticket(
-                center,
-                ChunkLoading::get_level_from_view_distance(view_distance),
-            );
+            let new_level = ChunkLoading::get_level_from_view_distance(view_distance);
+            lock.add_ticket(center, new_level);
 
             if old_center != center || old_view_distance != view_distance {
-                lock.remove_ticket(
-                    old_center,
-                    ChunkLoading::get_level_from_view_distance(old_view_distance),
-                );
+                let old_level = ChunkLoading::get_level_from_view_distance(old_view_distance);
+                // Don't remove if it would be the same ticket
+                if old_center != center || old_level != new_level {
+                    lock.remove_ticket(old_center, old_level);
+                }
             }
             lock.send_change();
         };
@@ -603,8 +602,6 @@ impl Player {
             "world", // TODO: Add world names
             level.loaded_chunk_count(),
         );
-
-        level.clean_up_log().await;
 
         //self.world().level.list_cached();
     }
@@ -1743,7 +1740,7 @@ impl Player {
                 self.client
                     .send_packet_now(&CRespawn::new(
                         (new_world.dimension.id).into(),
-                        ResourceLocation::from(new_world.dimension.minecraft_name),
+                        new_world.dimension.minecraft_name.to_string(),
                         biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
@@ -2666,7 +2663,7 @@ impl NBTStorage for Player {
 
             nbt.put_string(
                 "Dimension",
-                ResourceLocation::from(self.world().dimension.minecraft_name).to_string(),
+                self.world().dimension.minecraft_name.to_string(),
             );
         })
     }

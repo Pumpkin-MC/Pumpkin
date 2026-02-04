@@ -13,6 +13,7 @@ mod attributes;
 mod biome;
 mod bitsets;
 mod block;
+mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
 mod damage_type;
@@ -54,9 +55,7 @@ mod world_event;
 pub const OUT_DIR: &str = "src/generated";
 
 pub fn main() {
-    if let Err(e) = fs::create_dir_all(OUT_DIR) {
-        eprintln!("Failed to create output directory {OUT_DIR}: {e}");
-    }
+    fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
 
     type BuilderFn = fn() -> TokenStream;
 
@@ -85,6 +84,7 @@ pub fn main() {
         (spawn_egg::build, "spawn_egg.rs"),
         (block::build, "block.rs"),
         (item::build, "item.rs"),
+        (chunk_gen_settings::build, "chunk_gen_settings.rs"),
         (fluid::build, "fluid.rs"),
         (entity_status::build, "entity_status.rs"),
         (tag::build, "tag.rs"),
@@ -110,8 +110,14 @@ pub fn main() {
 
     build_functions.par_iter().for_each(|(build_fn, file)| {
         let raw_code = build_fn().to_string();
-        let final_code = format_code(&raw_code);
-        write_generated_file(&final_code.unwrap_or(raw_code), file);
+
+        let header = "/* This file is generated. Do not edit manually. */\n";
+
+        let final_code = format_code(&raw_code)
+            .map(|formatted| format!("{}{}", header, formatted))
+            .unwrap_or_else(|_| format!("{}{}", header, raw_code));
+
+        write_generated_file(&final_code, file);
     });
 }
 

@@ -97,7 +97,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -310,8 +310,8 @@ impl BlockActionResult {
 
 #[derive(Default)]
 pub struct BlockRegistry {
-    blocks: HashMap<u16, Arc<dyn BlockBehaviour>>,
-    fluids: HashMap<u16, Arc<dyn FluidBehaviour>>,
+    blocks: FxHashMap<u16, Arc<dyn BlockBehaviour>>,
+    fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
 
 impl BlockRegistryExt for BlockRegistry {

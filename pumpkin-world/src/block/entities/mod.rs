@@ -55,7 +55,7 @@ pub trait BlockEntity: Send + Sync {
         Self: Sized;
     fn tick<'a>(
         &'a self,
-        _world: Arc<dyn SimpleWorld>,
+        _world: &'a Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {})
     }

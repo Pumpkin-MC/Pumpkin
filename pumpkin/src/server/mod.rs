@@ -585,6 +585,20 @@ impl Server {
         players
     }
 
+    pub fn for_each_player<F>(&self, mut f: F)
+    where
+        F: FnMut(&Arc<Player>),
+    {
+        let worlds = self.worlds.load();
+
+        for world in worlds.iter() {
+            let players = world.players.load();
+            for player in players.iter() {
+                f(player);
+            }
+        }
+    }
+
     /// Returns a random player from any of the worlds, or `None` if all worlds are empty.
     pub fn get_random_player(&self) -> Option<Arc<Player>> {
         let players = self.get_all_players();

@@ -8,14 +8,12 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
-use std::{fs::File, io::Read, path::Path};
+use std::{fs, path::Path};
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
 
 fn load_icon_from_file<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn error::Error>> {
-    let mut icon_file = File::open(path)?;
-    let mut buf = Vec::new();
-    icon_file.read_to_end(&mut buf)?;
+    let buf = fs::read(path)?;
     Ok(load_icon_from_bytes(&buf))
 }
 
