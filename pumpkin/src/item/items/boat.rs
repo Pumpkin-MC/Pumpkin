@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::entity::Entity;
 use crate::entity::player::Player;
+use crate::entity::vehicle::boat::BoatEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
@@ -184,8 +185,8 @@ impl ItemBehaviour for BoatItem {
             let (player_yaw, _) = player.rotation();
             entity.set_rotation(player_yaw, 0.0);
 
-            let entity = Arc::new(entity);
-            world.spawn_entity(entity).await;
+            let boat_entity = Arc::new(BoatEntity::new(entity));
+            world.spawn_entity(boat_entity).await;
 
             // Decrement item unless in creative mode
             let held_item = player.inventory.held_item();
