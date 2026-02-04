@@ -4,7 +4,6 @@ use super::{ChunkPos, IOLock};
 use crate::ProtoChunk;
 use crate::chunk::io::LoadedData;
 use crate::chunk::io::LoadedData::Loaded;
-use crate::generation::settings::gen_settings_from_dimension;
 use crate::level::Level;
 use crossfire::compat::AsyncRx;
 use itertools::Itertools;
@@ -12,6 +11,7 @@ use pumpkin_data::chunk::ChunkStatus;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::thread;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 
 pub enum RecvChunk {
     IO(Chunk),
@@ -148,7 +148,7 @@ pub fn generation_work(
         thread::current().name().unwrap_or("unknown")
     );
 
-    let settings = gen_settings_from_dimension(&level.world_gen.dimension);
+    let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
     while let Ok((pos, mut cache, stage)) = recv.recv() {
         // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
         cache.advance(

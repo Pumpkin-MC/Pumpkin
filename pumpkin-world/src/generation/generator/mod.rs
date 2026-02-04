@@ -1,12 +1,12 @@
 use pumpkin_data::BlockState;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::noise_router::{
     END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
 };
 
-use super::{
-    noise::router::proto_noise_router::ProtoNoiseRouters, settings::gen_settings_from_dimension,
-};
+use super::noise::router::proto_noise_router::ProtoNoiseRouters;
+use crate::block::to_state_from_blueprint;
 use crate::generation::proto_chunk::TerrainCache;
 use crate::generation::{GlobalRandomConfig, Seed};
 
@@ -40,9 +40,9 @@ impl GeneratorInit for VanillaGenerator {
             unreachable!()
         };
         let terrain_cache = TerrainCache::from_random(&random_config);
-        let generation_settings = gen_settings_from_dimension(&dimension);
+        let generation_settings = GenerationSettings::from_dimension(&dimension);
 
-        let default_block = generation_settings.default_block.get_state();
+        let default_block = to_state_from_blueprint(&generation_settings.default_block);
         let base_router = ProtoNoiseRouters::generate(&base, &random_config);
         Self {
             random_config,

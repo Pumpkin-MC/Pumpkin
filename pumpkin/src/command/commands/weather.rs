@@ -31,7 +31,7 @@ impl CommandExecutor for Executor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).unwrap_or(6000);
+            let duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).ok();
             let world = {
                 let guard = server.worlds.load();
 
@@ -44,24 +44,33 @@ impl CommandExecutor for Executor {
 
             match self.mode {
                 WeatherMode::Clear => {
+                    let processed_duration =
+                        duration.unwrap_or_else(|| rand::random_range(12_000..=180_000));
+
                     weather
-                        .set_weather_parameters(&world, duration, 0, false, false)
+                        .set_weather_parameters(&world, processed_duration, 0, false, false)
                         .await;
                     sender
                         .send_message(TextComponent::translate("commands.weather.set.clear", []))
                         .await;
                 }
                 WeatherMode::Rain => {
+                    let processed_duration =
+                        duration.unwrap_or_else(|| rand::random_range(12_000..=24_000));
+
                     weather
-                        .set_weather_parameters(&world, 0, duration, true, false)
+                        .set_weather_parameters(&world, 0, processed_duration, true, false)
                         .await;
                     sender
                         .send_message(TextComponent::translate("commands.weather.set.rain", []))
                         .await;
                 }
                 WeatherMode::Thunder => {
+                    let processed_duration =
+                        duration.unwrap_or_else(|| rand::random_range(3_600..=15_600));
+
                     weather
-                        .set_weather_parameters(&world, 0, duration, true, true)
+                        .set_weather_parameters(&world, 0, processed_duration, true, true)
                         .await;
                     sender
                         .send_message(TextComponent::translate("commands.weather.set.thunder", []))
@@ -69,7 +78,8 @@ impl CommandExecutor for Executor {
                 }
             }
 
-            Ok(())
+            // Vanilla returns -1 when duration is not specified
+            Ok(duration.unwrap_or(-1))
         })
     }
 }

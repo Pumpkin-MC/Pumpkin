@@ -3,8 +3,8 @@ pub mod ore_sampler;
 pub mod perlin;
 pub mod router;
 
-use pumpkin_data::{Block, BlockState};
-use pumpkin_util::math::{floor_div, floor_mod};
+use pumpkin_data::{Block, BlockState, chunk_gen_settings::GenerationShapeConfig};
+use pumpkin_util::math::{floor_div, floor_mod, vector3::Vector3};
 
 use crate::generation::{
     noise::{
@@ -25,11 +25,10 @@ use super::{
             WrapperData,
         },
         chunk_noise_router::ChunkNoiseRouter,
-        density_function::{IndexToNoisePos, NoisePos, UnblendedNoisePos},
+        density_function::IndexToNoisePos,
         proto_noise_router::ProtoNoiseRouter,
         surface_height_sampler::SurfaceHeightEstimateSampler,
     },
-    settings::GenerationShapeConfig,
 };
 
 pub const LAVA_BLOCK: Block = Block::LAVA;
@@ -47,7 +46,7 @@ impl BlockStateSampler {
         &mut self,
         router: &mut ChunkNoiseRouter,
         random_config: &GlobalRandomConfig,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
@@ -72,7 +71,7 @@ impl ChainedBlockStateSampler {
         &mut self,
         router: &mut ChunkNoiseRouter,
         random_config: &GlobalRandomConfig,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
@@ -100,7 +99,7 @@ impl IndexToNoisePos for InterpolationIndexMapper {
         &self,
         index: usize,
         sample_data: Option<&mut ChunkNoiseFunctionSampleOptions>,
-    ) -> impl NoisePos + 'static {
+    ) -> Vector3<i32> {
         if let Some(sample_data) = sample_data {
             sample_data.cache_result_unique_id += 1;
             sample_data.fill_index = index;
@@ -109,7 +108,7 @@ impl IndexToNoisePos for InterpolationIndexMapper {
         let y = (index as i32 + self.minimum_cell_y) * self.vertical_cell_block_count;
 
         // TODO: Change this when Blender is implemented
-        UnblendedNoisePos::new(self.x, y, self.z)
+        Vector3::new(self.x, y, self.z)
     }
 }
 
@@ -127,7 +126,7 @@ impl IndexToNoisePos for ChunkIndexMapper {
         &self,
         index: usize,
         sample_options: Option<&mut ChunkNoiseFunctionSampleOptions>,
-    ) -> impl NoisePos + 'static {
+    ) -> Vector3<i32> {
         let cell_z_position = floor_mod(index, self.horizontal_cell_block_count);
         let xy_portion = floor_div(index, self.horizontal_cell_block_count);
         let cell_x_position = floor_mod(xy_portion, self.horizontal_cell_block_count);
@@ -143,7 +142,7 @@ impl IndexToNoisePos for ChunkIndexMapper {
         }
 
         // TODO: Change this when Blender is implemented
-        UnblendedNoisePos::new(
+        Vector3::new(
             self.start_x + cell_x_position as i32,
             self.start_y + cell_y_position as i32,
             self.start_z + cell_z_position as i32,
@@ -382,7 +381,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         //TODO: Fix this when Blender is added
-        let pos = UnblendedNoisePos::new(start_x + cell_x, start_y + cell_y, start_z + cell_z);
+        let pos = Vector3::new(start_x + cell_x, start_y + cell_y, start_z + cell_z);
 
         let options = ChunkNoiseFunctionSampleOptions::new(
             false,

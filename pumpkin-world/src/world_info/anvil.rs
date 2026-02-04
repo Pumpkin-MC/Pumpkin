@@ -1,5 +1,5 @@
 use std::{
-    fs::OpenOptions,
+    fs::File,
     io::{Cursor, Read},
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -82,10 +82,9 @@ impl WorldInfoReader for AnvilLevelInfo {
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError> {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
 
-        let world_info_file = OpenOptions::new().read(true).open(path)?;
-        let mut compression_reader = GzDecoder::new(world_info_file);
+        let world_info_file = File::open(path)?;
         let mut buf = Vec::new();
-        let _ = compression_reader.read_to_end(&mut buf)?;
+        GzDecoder::new(world_info_file).read_to_end(&mut buf)?;
 
         check_file_data_version(&buf)?;
         check_file_level_version(&buf)?;
@@ -114,11 +113,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
 
         // open file
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
-        let world_info_file = OpenOptions::new()
-            .truncate(true)
-            .create(true)
-            .write(true)
-            .open(path)?;
+        let world_info_file = File::create(path)?;
 
         // write compressed data into file
         let compression_writer = GzEncoder::new(world_info_file, Compression::best());

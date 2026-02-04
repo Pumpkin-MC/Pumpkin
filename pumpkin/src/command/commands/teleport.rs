@@ -83,7 +83,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -125,7 +125,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -165,7 +165,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -202,7 +202,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -243,7 +243,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -276,15 +276,14 @@ impl CommandExecutor for SelfToEntityExecutor {
                         .clone()
                         .teleport(pos, Some(yaw), Some(pitch), world)
                         .await;
-                }
-                _ => {
-                    sender
-                        .send_message(TextComponent::translate("permissions.requires.player", []))
-                        .await;
-                }
-            }
 
-            Ok(())
+                    Ok(1)
+                }
+                _ => Err(CommandError::CommandFailed(TextComponent::translate(
+                    "permissions.requires.player",
+                    [],
+                ))),
+            }
         })
     }
 }
@@ -313,15 +312,14 @@ impl CommandExecutor for SelfToPosExecutor {
                         .clone()
                         .teleport(pos, Some(yaw), Some(pitch), player.world().clone())
                         .await;
-                }
-                _ => {
-                    sender
-                        .send_message(TextComponent::translate("permissions.requires.player", []))
-                        .await;
-                }
-            }
 
-            Ok(())
+                    Ok(1)
+                }
+                _ => Err(CommandError::CommandFailed(TextComponent::translate(
+                    "permissions.requires.player",
+                    [],
+                ))),
+            }
         })
     }
 }

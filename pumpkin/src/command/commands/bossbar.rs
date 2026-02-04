@@ -8,13 +8,13 @@ use crate::command::args::resource_location::ResourceLocationArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 
 use crate::command::args::textcomponent::TextComponentArgConsumer;
+use crate::command::dispatcher::CommandError;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::world::bossbar::Bossbar;
 use crate::world::custom_bossbar::BossbarUpdateError;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
 use std::fmt::Write as _;
 use uuid::Uuid;
@@ -27,10 +27,8 @@ const ARG_NAME: &str = "name";
 const ARG_VISIBLE: &str = "visible";
 
 const fn autocomplete_consumer() -> ResourceLocationArgumentConsumer {
-    ResourceLocationArgumentConsumer::new(true)
-}
-const fn non_autocomplete_consumer() -> ResourceLocationArgumentConsumer {
-    ResourceLocationArgumentConsumer::new(false)
+    // TODO: Add autocompletion when implemented properly
+    ResourceLocationArgumentConsumer
 }
 
 enum CommandValueGet {
@@ -50,9 +48,9 @@ enum CommandValueSet {
     Visible,
 }
 
-struct AddExecuter;
+struct AddExecutor;
 
-impl CommandExecutor for AddExecuter {
+impl CommandExecutor for AddExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
@@ -60,7 +58,7 @@ impl CommandExecutor for AddExecuter {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let mut namespace = non_autocomplete_consumer()
+            let mut namespace = autocomplete_consumer()
                 .find_arg_default_name(args)?
                 .to_string();
             if !namespace.contains(':') {
@@ -70,23 +68,18 @@ impl CommandExecutor for AddExecuter {
             let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
 
             if server.bossbars.lock().await.has_bossbar(&namespace) {
-                send_error_message(
-                    sender,
-                    TextComponent::translate(
-                        "commands.bossbar.create.failed",
-                        [TextComponent::text(namespace.clone())],
-                    ),
-                )
-                .await;
-                return Ok(());
+                return Result::Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.bossbar.create.failed",
+                    [TextComponent::text(namespace.clone())],
+                )));
             }
 
             let bossbar = Bossbar::new(text_component);
-            server
-                .bossbars
-                .lock()
-                .await
-                .create_bossbar(namespace.clone(), bossbar.clone());
+            let mut bossbars = server.bossbars.lock().await;
+
+            bossbars.create_bossbar(namespace.clone(), bossbar.clone());
+            let new_size = bossbars.get_bossbars_len();
+            drop(bossbars);
 
             sender
                 .send_message(TextComponent::translate(
@@ -95,14 +88,14 @@ impl CommandExecutor for AddExecuter {
                 ))
                 .await;
 
-            Ok(())
+            Ok(new_size as i32)
         })
     }
 }
 
-struct GetExecuter(CommandValueGet);
+struct GetExecutor(CommandValueGet);
 
-impl CommandExecutor for GetExecuter {
+impl CommandExecutor for GetExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
@@ -115,12 +108,9 @@ impl CommandExecutor for GetExecuter {
                 .to_string();
 
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
-                handle_bossbar_error(
-                    sender,
+                return Err(handle_bossbar_error(
                     BossbarUpdateError::InvalidResourceLocation(namespace.clone()),
-                )
-                .await;
-                return Ok(());
+                ));
             };
 
             match self.0 {
@@ -137,9 +127,9 @@ impl CommandExecutor for GetExecuter {
                             ],
                         ))
                         .await;
-                    return Ok(());
+                    Ok(bossbar.max)
                 }
-                CommandValueGet::Players => {}
+                CommandValueGet::Players => Ok(bossbar.players.len() as i32),
                 CommandValueGet::Value => {
                     sender
                         .send_message(TextComponent::translate(
@@ -153,7 +143,7 @@ impl CommandExecutor for GetExecuter {
                             ],
                         ))
                         .await;
-                    return Ok(());
+                    Ok(bossbar.value)
                 }
                 CommandValueGet::Visible => {
                     let state = if bossbar.visible {
@@ -170,18 +160,16 @@ impl CommandExecutor for GetExecuter {
                             )],
                         ))
                         .await;
-                    return Ok(());
+                    Ok(bossbar.visible as i32)
                 }
             }
-
-            Ok(())
         })
     }
 }
 
-struct ListExecuter;
+struct ListExecutor;
 
-impl CommandExecutor for ListExecuter {
+impl CommandExecutor for ListExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
@@ -190,15 +178,7 @@ impl CommandExecutor for ListExecuter {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let bossbars = server.bossbars.lock().await.get_all_bossbars();
-            let Some(bossbars) = bossbars else {
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.bossbar.list.bars.none",
-                        [],
-                    ))
-                    .await;
-                return Ok(());
-            };
+
             if bossbars.is_empty() {
                 sender
                     .send_message(TextComponent::translate(
@@ -206,7 +186,7 @@ impl CommandExecutor for ListExecuter {
                         [],
                     ))
                     .await;
-                return Ok(());
+                return Ok(0);
             }
 
             let mut bossbars_text = TextComponent::text("");
@@ -235,14 +215,15 @@ impl CommandExecutor for ListExecuter {
                     ],
                 ))
                 .await;
-            Ok(())
+
+            Ok(bossbars.len() as i32)
         })
     }
 }
 
-struct RemoveExecuter;
+struct RemoveExecutor;
 
-impl CommandExecutor for RemoveExecuter {
+impl CommandExecutor for RemoveExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
@@ -255,12 +236,9 @@ impl CommandExecutor for RemoveExecuter {
                 .to_string();
 
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
-                handle_bossbar_error(
-                    sender,
+                return Err(handle_bossbar_error(
                     BossbarUpdateError::InvalidResourceLocation(namespace),
-                )
-                .await;
-                return Ok(());
+                ));
             };
 
             sender
@@ -273,28 +251,27 @@ impl CommandExecutor for RemoveExecuter {
                 ))
                 .await;
 
-            match server
-                .bossbars
-                .lock()
-                .await
-                .remove_bossbar(server, namespace.clone())
-                .await
-            {
-                Ok(()) => {}
-                Err(err) => {
-                    handle_bossbar_error(sender, err).await;
-                    return Ok(());
+            let error = {
+                match server
+                    .bossbars
+                    .lock()
+                    .await
+                    .remove_bossbar(server, namespace.clone())
+                    .await
+                {
+                    Ok(()) => return Ok(server.bossbars.lock().await.get_bossbars_len() as i32),
+                    Err(error) => error,
                 }
-            }
+            };
 
-            Ok(())
+            Err(handle_bossbar_error(error))
         })
     }
 }
 
-struct SetExecuter(CommandValueSet);
+struct SetExecutor(CommandValueSet);
 
-impl CommandExecutor for SetExecuter {
+impl CommandExecutor for SetExecutor {
     #[expect(clippy::too_many_lines)]
     fn execute<'a>(
         &'a self,
@@ -306,17 +283,15 @@ impl CommandExecutor for SetExecuter {
             let namespace = autocomplete_consumer().find_arg_default_name(args)?;
 
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(namespace) else {
-                handle_bossbar_error(
-                    sender,
+                return Err(handle_bossbar_error(
                     BossbarUpdateError::InvalidResourceLocation(namespace.to_string()),
-                )
-                .await;
-                return Ok(());
+                ));
             };
 
             match self.0 {
                 CommandValueSet::Color => {
                     let color = BossbarColorArgumentConsumer.find_arg_default_name(args)?;
+
                     match server
                         .bossbars
                         .lock()
@@ -326,10 +301,10 @@ impl CommandExecutor for SetExecuter {
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(handle_bossbar_error(err));
                         }
                     }
+
                     sender
                         .send_message(TextComponent::translate(
                             "commands.bossbar.set.color.success",
@@ -339,37 +314,27 @@ impl CommandExecutor for SetExecuter {
                             )],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(0)
                 }
                 CommandValueSet::Max => {
                     let Ok(max_value) = max_value_consumer().find_arg_default_name(args)? else {
-                        send_error_message(
-                            sender,
-                            TextComponent::translate(
-                                "parsing.int.invalid",
-                                [TextComponent::text(i32::MAX.to_string())],
-                            ),
-                        )
-                        .await;
-                        return Ok(());
+                        return Err(CommandError::CommandFailed(TextComponent::translate(
+                            "parsing.int.invalid",
+                            [TextComponent::text(i32::MAX.to_string())],
+                        )));
                     };
 
                     match server
                         .bossbars
                         .lock()
                         .await
-                        .update_health(
-                            server,
-                            namespace.to_string(),
-                            max_value as u32,
-                            bossbar.value,
-                        )
+                        .update_health(server, namespace.to_string(), max_value, bossbar.value)
                         .await
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(handle_bossbar_error(err));
                         }
                     }
 
@@ -385,7 +350,8 @@ impl CommandExecutor for SetExecuter {
                             ],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(max_value)
                 }
                 CommandValueSet::Name => {
                     let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
@@ -398,8 +364,7 @@ impl CommandExecutor for SetExecuter {
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(handle_bossbar_error(err));
                         }
                     }
 
@@ -409,7 +374,8 @@ impl CommandExecutor for SetExecuter {
                             [bossbar_prefix(text_component, namespace.to_string())],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(0)
                 }
                 CommandValueSet::Players(has_players) => {
                     if !has_players {
@@ -422,8 +388,7 @@ impl CommandExecutor for SetExecuter {
                         {
                             Ok(()) => {}
                             Err(err) => {
-                                handle_bossbar_error(sender, err).await;
-                                return Ok(());
+                                return Err(handle_bossbar_error(err));
                             }
                         }
                         sender
@@ -435,10 +400,10 @@ impl CommandExecutor for SetExecuter {
                                 )],
                             ))
                             .await;
-                        return Ok(());
+
+                        return Ok(0);
                     }
 
-                    //TODO: Confirm that this is the vanilla way
                     let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
                     let players: Vec<Uuid> =
                         targets.iter().map(|player| player.gameprofile.id).collect();
@@ -453,8 +418,7 @@ impl CommandExecutor for SetExecuter {
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(handle_bossbar_error(err));
                         }
                     }
 
@@ -477,7 +441,8 @@ impl CommandExecutor for SetExecuter {
                             ],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(count as i32)
                 }
                 CommandValueSet::Style => {
                     let style = BossbarStyleArgumentConsumer.find_arg_default_name(args)?;
@@ -490,8 +455,7 @@ impl CommandExecutor for SetExecuter {
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(handle_bossbar_error(err));
                         }
                     }
                     sender
@@ -503,32 +467,26 @@ impl CommandExecutor for SetExecuter {
                             )],
                         ))
                         .await;
-                    Ok(())
+                    Ok(0)
                 }
                 CommandValueSet::Value => {
                     let Ok(value) = value_consumer().find_arg_default_name(args)? else {
-                        send_error_message(
-                            sender,
-                            TextComponent::translate(
-                                "parsing.int.invalid",
-                                [TextComponent::text(i32::MAX.to_string())],
-                            ),
-                        )
-                        .await;
-                        return Ok(());
+                        return Err(CommandError::CommandFailed(TextComponent::translate(
+                            "parsing.int.invalid",
+                            [TextComponent::text(i32::MAX.to_string())],
+                        )));
                     };
 
                     match server
                         .bossbars
                         .lock()
                         .await
-                        .update_health(server, namespace.to_string(), bossbar.max, value as u32)
+                        .update_health(server, namespace.to_string(), bossbar.max, value)
                         .await
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(handle_bossbar_error(err));
                         }
                     }
 
@@ -544,7 +502,8 @@ impl CommandExecutor for SetExecuter {
                             ],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(value)
                 }
                 CommandValueSet::Visible => {
                     let visibility = BoolArgConsumer::find_arg(args, ARG_VISIBLE)?;
@@ -558,8 +517,7 @@ impl CommandExecutor for SetExecuter {
                     {
                         Ok(()) => {}
                         Err(err) => {
-                            handle_bossbar_error(sender, err).await;
-                            return Ok(());
+                            return Err(handle_bossbar_error(err));
                         }
                     }
 
@@ -578,7 +536,8 @@ impl CommandExecutor for SetExecuter {
                             )],
                         ))
                         .await;
-                    Ok(())
+
+                    Ok(visibility as i32)
                 }
             }
         })
@@ -586,7 +545,7 @@ impl CommandExecutor for SetExecuter {
 }
 
 const fn max_value_consumer() -> BoundedNumArgumentConsumer<i32> {
-    BoundedNumArgumentConsumer::new().min(0).name("max")
+    BoundedNumArgumentConsumer::new().min(1).name("max")
 }
 
 const fn value_consumer() -> BoundedNumArgumentConsumer<i32> {
@@ -597,23 +556,23 @@ pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(
             literal("add").then(
-                argument_default_name(non_autocomplete_consumer())
-                    .then(argument(ARG_NAME, TextComponentArgConsumer).execute(AddExecuter)),
+                argument_default_name(autocomplete_consumer())
+                    .then(argument(ARG_NAME, TextComponentArgConsumer).execute(AddExecutor)),
             ),
         )
         .then(
             literal("get").then(
                 argument_default_name(autocomplete_consumer())
-                    .then(literal("max").execute(GetExecuter(CommandValueGet::Max)))
-                    .then(literal("players").execute(GetExecuter(CommandValueGet::Players)))
-                    .then(literal("value").execute(GetExecuter(CommandValueGet::Value)))
-                    .then(literal("visible").execute(GetExecuter(CommandValueGet::Visible))),
+                    .then(literal("max").execute(GetExecutor(CommandValueGet::Max)))
+                    .then(literal("players").execute(GetExecutor(CommandValueGet::Players)))
+                    .then(literal("value").execute(GetExecutor(CommandValueGet::Value)))
+                    .then(literal("visible").execute(GetExecutor(CommandValueGet::Visible))),
             ),
         )
-        .then(literal("list").execute(ListExecuter))
+        .then(literal("list").execute(ListExecutor))
         .then(
             literal("remove")
-                .then(argument_default_name(autocomplete_consumer()).execute(RemoveExecuter)),
+                .then(argument_default_name(autocomplete_consumer()).execute(RemoveExecutor)),
         )
         .then(
             literal("set").then(
@@ -621,45 +580,45 @@ pub fn init_command_tree() -> CommandTree {
                     .then(
                         literal("color").then(
                             argument_default_name(BossbarColorArgumentConsumer)
-                                .execute(SetExecuter(CommandValueSet::Color)),
+                                .execute(SetExecutor(CommandValueSet::Color)),
                         ),
                     )
                     .then(
                         literal("max").then(
                             argument_default_name(max_value_consumer())
-                                .execute(SetExecuter(CommandValueSet::Max)),
+                                .execute(SetExecutor(CommandValueSet::Max)),
                         ),
                     )
                     .then(
                         literal("name").then(
                             argument(ARG_NAME, TextComponentArgConsumer)
-                                .execute(SetExecuter(CommandValueSet::Name)),
+                                .execute(SetExecutor(CommandValueSet::Name)),
                         ),
                     )
                     .then(
                         literal("players")
                             .then(
                                 argument_default_name(PlayersArgumentConsumer)
-                                    .execute(SetExecuter(CommandValueSet::Players(true))),
+                                    .execute(SetExecutor(CommandValueSet::Players(true))),
                             )
-                            .execute(SetExecuter(CommandValueSet::Players(false))),
+                            .execute(SetExecutor(CommandValueSet::Players(false))),
                     )
                     .then(
                         literal("style").then(
                             argument_default_name(BossbarStyleArgumentConsumer)
-                                .execute(SetExecuter(CommandValueSet::Style)),
+                                .execute(SetExecutor(CommandValueSet::Style)),
                         ),
                     )
                     .then(
                         literal("value").then(
                             argument_default_name(value_consumer())
-                                .execute(SetExecuter(CommandValueSet::Value)),
+                                .execute(SetExecutor(CommandValueSet::Value)),
                         ),
                     )
                     .then(
                         literal("visible").then(
                             argument(ARG_VISIBLE, BoolArgConsumer)
-                                .execute(SetExecuter(CommandValueSet::Visible)),
+                                .execute(SetExecutor(CommandValueSet::Visible)),
                         ),
                     ),
             ),
@@ -673,24 +632,11 @@ fn bossbar_prefix(title: TextComponent, namespace: String) -> TextComponent {
         .hover_event(HoverEvent::show_text(TextComponent::text(namespace)))
 }
 
-async fn send_error_message(sender: &CommandSender, message: TextComponent) {
-    sender
-        .send_message(message.color(Color::Named(NamedColor::Red)))
-        .await;
-}
-
-async fn handle_bossbar_error(sender: &CommandSender, error: BossbarUpdateError<'_>) {
+fn handle_bossbar_error(error: BossbarUpdateError) -> CommandError {
     match error {
-        BossbarUpdateError::InvalidResourceLocation(location) => {
-            send_error_message(
-                sender,
-                TextComponent::translate(
-                    "commands.bossbar.unknown",
-                    [TextComponent::text(location)],
-                ),
-            )
-            .await;
-        }
+        BossbarUpdateError::InvalidResourceLocation(location) => CommandError::CommandFailed(
+            TextComponent::translate("commands.bossbar.unknown", [TextComponent::text(location)]),
+        ),
         BossbarUpdateError::NoChanges(value, variation) => {
             let mut key = "commands.bossbar.set.".to_string();
             key.push_str(value);
@@ -699,7 +645,7 @@ async fn handle_bossbar_error(sender: &CommandSender, error: BossbarUpdateError<
                 write!(key, ".{variation}").unwrap();
             }
 
-            send_error_message(sender, TextComponent::translate(key, [])).await;
+            CommandError::CommandFailed(TextComponent::translate(key, []))
         }
     }
 }

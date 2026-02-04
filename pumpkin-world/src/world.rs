@@ -130,6 +130,13 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
         position: &'a BlockPos,
         inventory: &'a Arc<dyn Inventory>,
     ) -> WorldFuture<'a, ()>;
+
+    /// Spawn experience orbs at the given position with the specified amount
+    fn spawn_experience_orbs(
+        self: Arc<Self>,
+        position: Vector3<f64>,
+        amount: u32,
+    ) -> WorldFuture<'static, ()>;
 }
 
 pub trait BlockRegistryExt: Send + Sync {

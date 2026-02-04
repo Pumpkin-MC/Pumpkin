@@ -10,7 +10,7 @@ use crate::{
 
 pub mod deserializer;
 use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
-use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
+use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
 pub mod serializer;
 
@@ -71,7 +71,6 @@ pub trait NetworkReadExt {
     fn get_var_ulong(&mut self) -> Result<VarULong, ReadingError>;
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
     fn get_string(&mut self) -> Result<String, ReadingError>;
-    fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError>;
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError>;
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
@@ -171,17 +170,6 @@ impl<R: Read> NetworkReadExt for R {
         self.get_string_bounded(i32::MAX as usize)
     }
 
-    fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError> {
-        let resource_location = self.get_string_bounded(ResourceLocation::MAX_SIZE.get())?;
-        match resource_location.split_once(':') {
-            Some((namespace, path)) => Ok(ResourceLocation {
-                namespace: namespace.to_string(),
-                path: path.to_string(),
-            }),
-            None => Err(ReadingError::Incomplete("ResourceLocation".to_string())),
-        }
-    }
-
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError> {
         let mut bytes = [0u8; 16];
         self.read_exact(&mut bytes)
@@ -245,7 +233,6 @@ pub trait NetworkWriteExt {
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
-    fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError>;
     fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError>;
 
     fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError> {
@@ -364,10 +351,6 @@ impl<W: Write> NetworkWriteExt for W {
 
     fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError> {
         self.write_i64_be(pos.as_long())
-    }
-
-    fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError> {
-        self.write_string_bounded(&data.to_string(), ResourceLocation::MAX_SIZE.get())
     }
 
     fn write_bitset(&mut self, data: &BitSet) -> Result<(), WritingError> {
