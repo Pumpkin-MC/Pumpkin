@@ -7,6 +7,7 @@ pub mod player_drop_item;
 pub mod player_edit_book;
 pub mod player_egg_throw;
 pub mod player_exp_change;
+pub mod player_fish;
 pub mod player_gamemode_change;
 pub mod player_interact_entity_event;
 pub mod player_interact_event;
