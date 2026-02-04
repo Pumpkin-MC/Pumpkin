@@ -17,11 +17,14 @@ use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 
 pub mod args;
+pub mod argument_types;
 pub mod client_suggestions;
 pub mod commands;
+pub mod context;
 pub mod dispatcher;
 pub mod errors;
 pub mod string_reader;
+pub mod suggestion;
 pub mod tree;
 
 /// Represents the source of a command execution.
