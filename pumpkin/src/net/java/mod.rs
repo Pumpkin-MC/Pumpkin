@@ -8,10 +8,11 @@ use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::java::server::play::{
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SKeepAlive, SPickItemFromBlock,
-    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded,
-    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
-    SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    SCookieResponse as SPCookieResponse, SCustomPayload, SEditBook, SInteract, SKeepAlive,
+    SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand,
+    SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
+    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
+    SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -767,6 +768,10 @@ impl JavaClient {
             }
             id if id == SUseItem::PACKET_ID => {
                 self.handle_use_item(player, &SUseItem::read(payload)?, server)
+                    .await;
+            }
+            id if id == SEditBook::PACKET_ID => {
+                self.handle_edit_book(player, server, SEditBook::read(payload)?)
                     .await;
             }
             id if id == SCommandSuggestion::PACKET_ID => {
