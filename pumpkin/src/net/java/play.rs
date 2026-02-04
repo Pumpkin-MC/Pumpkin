@@ -21,6 +21,7 @@ use crate::net::java::JavaClient;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_animation::PlayerAnimationEvent;
+use crate::plugin::player::player_armor_stand_manipulate::PlayerArmorStandManipulateEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
@@ -32,6 +33,7 @@ use pumpkin_data::block_properties::{
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -1197,7 +1199,7 @@ impl JavaClient {
 
     pub async fn handle_interact(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         interact: SInteract,
         server: &Arc<Server>,
     ) {
@@ -1274,7 +1276,8 @@ impl JavaClient {
             }
             ActionType::Interact | ActionType::InteractAt => {
                 // TODO: split this up
-                let entity = player.world().get_player_by_id(entity_id.0);
+                let world = player.world();
+                let entity = world.get_player_by_id(entity_id.0);
                 if let Some(entity) = entity {
                     let held = player.inventory.held_item();
                     let mut stack = held.lock().await;
@@ -1282,6 +1285,33 @@ impl JavaClient {
                         .item_registry
                         .use_on_entity(&mut stack, player, entity)
                         .await;
+                    return;
+                }
+
+                if let Some(entity) = world.get_entity_by_id(entity_id.0) {
+                    if entity.get_entity().entity_type == &EntityType::ARMOR_STAND {
+                        let hand = interact.hand.and_then(|h| Hand::try_from(h.0).ok());
+                        let (slot, item_stack) = match hand {
+                            Some(Hand::Left) => ("OFF_HAND", player.inventory.off_hand_item().await),
+                            _ => ("HAND", player.inventory.held_item()),
+                        };
+                        let item_key = {
+                            let item_guard = item_stack.lock().await;
+                            format!("minecraft:{}", item_guard.get_item().registry_key)
+                        };
+                        let armor_uuid = entity.get_entity().entity_uuid;
+                        let event = PlayerArmorStandManipulateEvent::new(
+                            player.clone(),
+                            armor_uuid,
+                            item_key,
+                            "minecraft:air".to_string(),
+                            slot.to_string(),
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                    }
                 }
             }
         }
