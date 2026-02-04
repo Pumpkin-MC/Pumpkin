@@ -35,6 +35,7 @@ impl ItemBehaviour for FlintAndSteelItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
+            let _ = item;
             let ignited = Ignition::ignite_block(
                 |world: Arc<World>, pos: BlockPos, new_state_id: u16| async move {
                     world
@@ -49,7 +50,7 @@ impl ItemBehaviour for FlintAndSteelItem {
             .await;
 
             if ignited && player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                item.damage_item_with_context(1, false);
+                player.damage_held_item(1).await;
             }
         })
     }
