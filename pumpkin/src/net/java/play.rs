@@ -23,7 +23,13 @@ use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
-use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
+use crate::plugin::player::player_command_preprocess::PlayerCommandPreprocessEvent;
+use crate::plugin::player::player_interact_at_entity::PlayerInteractAtEntityEvent;
+use crate::plugin::player::player_interact_entity::PlayerInteractEntityEvent as PlayerInteractEntitySimpleEvent;
+use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent as PlayerInteractEntityCoreEvent;
+use crate::plugin::player::player_animation::PlayerAnimationEvent;
+use crate::plugin::player::player_armor_stand_manipulate::PlayerArmorStandManipulateEvent;
+use crate::plugin::player::player_changed_main_hand::PlayerChangedMainHandEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
@@ -1229,7 +1235,7 @@ impl JavaClient {
         if let Some(target) = target {
             send_cancellable! {{
                 server;
-                PlayerInteractEntityEvent::new(
+                PlayerInteractEntityCoreEvent::new(
                     player,
                     Arc::clone(&target),
                     action.clone(),
@@ -1274,6 +1280,47 @@ impl JavaClient {
                             player.attack(event.target).await;
                         }
                         ActionType::Interact | ActionType::InteractAt => {
+                            let hand_name = match interact.hand.and_then(|h| Hand::try_from(h.0).ok())
+                            {
+                                Some(Hand::Left) => "OFF_HAND",
+                                _ => "HAND",
+                            }
+                            .to_string();
+                            let clicked_position = interact
+                                .target_position
+                                .unwrap_or_else(|| Vector3::new(0.0, 0.0, 0.0));
+                            let target_entity = event.target.get_entity();
+                            let entity_uuid = target_entity.entity_uuid;
+                            let entity_type =
+                                format!("minecraft:{}", target_entity.entity_type.resource_name);
+
+                            if matches!(event.action, ActionType::InteractAt) {
+                                let interact_at_event = PlayerInteractAtEntityEvent::new(
+                                    player.clone(),
+                                    entity_uuid,
+                                    entity_type.clone(),
+                                    hand_name.clone(),
+                                    clicked_position,
+                                );
+                                let interact_at_event =
+                                    server.plugin_manager.fire(interact_at_event).await;
+                                if interact_at_event.cancelled {
+                                    return;
+                                }
+                            }
+
+                            let interact_entity_event = PlayerInteractEntitySimpleEvent::new(
+                                player.clone(),
+                                entity_uuid,
+                                entity_type,
+                                hand_name,
+                            );
+                            let interact_entity_event =
+                                server.plugin_manager.fire(interact_entity_event).await;
+                            if interact_entity_event.cancelled {
+                                return;
+                            }
+
                             let held = player.inventory.held_item();
                             let mut stack = held.lock().await;
                             if !event.target.interact(player, &mut stack).await {
