@@ -684,7 +684,8 @@ impl JavaClient {
                     .await;
             }
             id if id == SCustomPayload::PACKET_ID => {
-                // TODO: this fixes Failed to handle player packet id for now
+                self.handle_custom_payload(player, server, SCustomPayload::read(payload)?)
+                    .await;
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);
