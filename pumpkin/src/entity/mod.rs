@@ -1,4 +1,6 @@
 use crate::entity::item::ItemEntity;
+use crate::plugin::player::player_portal::PlayerPortalEvent;
+use crate::plugin::player::player_velocity::PlayerVelocityEvent;
 use crate::net::ClientPlatform;
 use crate::world::World;
 use crate::{
@@ -514,6 +516,18 @@ impl Entity {
     }
 
     pub async fn set_velocity(&self, velocity: Vector3<f64>) {
+        let mut velocity = velocity;
+        let world = self.world.load();
+        if let Some(player) = world.get_player_by_id(self.entity_id) {
+            if let Some(server) = world.server.upgrade() {
+                let event = PlayerVelocityEvent::new(player, velocity);
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
+                }
+                velocity = event.velocity;
+            }
+        }
         self.velocity.store(velocity);
         self.send_velocity().await;
     }
@@ -1435,12 +1449,12 @@ impl Entity {
                 let target_pos =
                     BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
 
-                let dest_world = portal_manager.portal_world.clone();
+                let mut dest_world = portal_manager.portal_world.clone();
                 let source_portal = portal_manager.source_portal.clone();
                 let source_axis = source_portal.as_ref().map(|p| p.axis);
                 drop(portal_manager);
 
-                let (teleport_pos, new_yaw) = if let Some(dest_result) =
+                let (mut teleport_pos, new_yaw) = if let Some(dest_result) =
                     NetherPortal::search_for_portal(&dest_world, target_pos).await
                 {
                     let base_pos = source_portal.as_ref().map_or_else(
@@ -1486,6 +1500,52 @@ impl Entity {
                 } else {
                     (target_pos.0.to_f64(), None)
                 };
+
+                let current_world = self.world.load();
+                if let Some(server) = current_world.server.upgrade() {
+                    if let Some(player) = current_world.get_player_by_id(self.entity_id) {
+                        let from_position = player.position();
+                        let cause = if dest_world.dimension == Dimension::THE_END
+                            || current_world.dimension == Dimension::THE_END
+                        {
+                            "END_PORTAL"
+                        } else if dest_world.dimension == Dimension::THE_NETHER
+                            || current_world.dimension == Dimension::THE_NETHER
+                        {
+                            "NETHER_PORTAL"
+                        } else {
+                            "UNKNOWN"
+                        };
+
+                        let event = PlayerPortalEvent::new(
+                            player,
+                            from_position,
+                            current_world.uuid,
+                            teleport_pos,
+                            dest_world.uuid,
+                            cause.to_string(),
+                            128,
+                            true,
+                            16,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+
+                        teleport_pos = event.to_position;
+                        if event.to_world_uuid != dest_world.uuid {
+                            if let Some(found) = server
+                                .worlds
+                                .load()
+                                .iter()
+                                .find(|w| w.uuid == event.to_world_uuid)
+                            {
+                                dest_world = found.clone();
+                            }
+                        }
+                    }
+                }
 
                 // Teleport the main entity
                 caller
