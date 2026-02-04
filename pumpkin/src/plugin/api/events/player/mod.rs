@@ -15,6 +15,9 @@ pub mod player_animation;
 pub mod player_armor_stand_manipulate;
 pub mod player_bed_enter;
 pub mod player_bed_leave;
+pub mod player_bucket_empty;
+pub mod player_bucket_fill;
+pub mod player_bucket_entity;
 pub mod player_move;
 pub mod player_teleport;
 
