@@ -75,6 +75,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/tags/1_21_11_tags.json");
     println!("cargo:rerun-if-changed=../assets/tags/1_21_9_tags.json");
     println!("cargo:rerun-if-changed=../assets/tags/1_21_6_tags.json");
+    println!("cargo:rerun-if-changed=../assets/tags/1_21_5_tags.json");
 
     // --- Load Global Assets ---
     let blocks_assets: BlockAssets =
@@ -113,7 +114,7 @@ pub(crate) fn build() -> TokenStream {
 
     let mut match_get_map = Vec::new();
 
-    let versions = vec![latest_version_key, legacy_version_key, "1_21_6"];
+    let versions = vec![latest_version_key, legacy_version_key, "1_21_6", "1_21_5"];
 
     for version in versions {
         let file_path = format!("../assets/tags/{version}_tags.json");

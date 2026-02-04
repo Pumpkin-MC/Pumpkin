@@ -35,7 +35,12 @@ impl ClientPacket for CUpdateTags<'_> {
                 registry_key.identifier_string(),
             ))?;
 
-            let values = get_registry_key_tags(*version, *registry_key).unwrap();
+            let values = get_registry_key_tags(*version, *registry_key).unwrap_or_else(|| {
+                panic!(
+                    "No tag data available for registry key '{}'",
+                    registry_key.identifier_string()
+                )
+            });
             p.write_var_int(&values.len().try_into().map_err(|_| {
                 WritingError::Message(format!("{} isn't representable as a VarInt", values.len()))
             })?)?;
