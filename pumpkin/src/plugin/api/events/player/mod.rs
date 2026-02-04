@@ -10,6 +10,7 @@ pub mod player_exp_change;
 pub mod player_fish;
 pub mod player_interact_at_entity;
 pub mod player_interact_entity;
+pub mod player_item_held;
 pub mod player_gamemode_change;
 pub mod player_interact_entity_event;
 pub mod player_interact_event;
