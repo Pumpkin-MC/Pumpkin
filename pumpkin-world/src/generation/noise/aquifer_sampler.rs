@@ -684,7 +684,7 @@ impl WorldAquiferSampler {
     pub(crate) fn apply_with_density_and_schedule(
         &mut self,
         router: &mut ChunkNoiseRouter,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,
@@ -704,7 +704,7 @@ impl WorldAquiferSampler {
     pub(crate) fn apply_with_density(
         &mut self,
         router: &mut ChunkNoiseRouter,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,
@@ -757,7 +757,7 @@ impl SeaLevelAquiferSampler {
     pub(crate) fn apply_with_density(
         &mut self,
         _router: &mut ChunkNoiseRouter,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         _sample_options: &ChunkNoiseFunctionSampleOptions,
         _height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,
@@ -767,8 +767,8 @@ impl SeaLevelAquiferSampler {
         } else {
             Some(
                 self.level_sampler
-                    .get_fluid_level(pos.x(), pos.y(), pos.z())
-                    .get_block(pos.y())
+                    .get_fluid_level(pos.x, pos.y, pos.z)
+                    .get_block(pos.y)
                     .default_state,
             )
         }
@@ -780,7 +780,7 @@ impl AquiferSampler {
     pub(crate) fn apply_with_density(
         &mut self,
         router: &mut ChunkNoiseRouter,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,
@@ -800,7 +800,7 @@ impl AquiferSampler {
     pub(crate) fn apply_with_density_and_schedule(
         &mut self,
         router: &mut ChunkNoiseRouter,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,

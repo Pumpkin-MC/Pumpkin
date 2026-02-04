@@ -3,7 +3,9 @@ mod mask;
 
 use std::{collections::HashMap, sync::LazyLock};
 
-use pumpkin_data::{Block, BlockState, dimension::Dimension, tag};
+use pumpkin_data::{
+    Block, BlockState, chunk_gen_settings::GenerationSettings, dimension::Dimension, tag,
+};
 use pumpkin_util::{
     math::{float_provider::FloatProvider, vector2::Vector2, vector3::Vector3},
     random::{RandomGenerator, get_large_feature_seed, legacy_rand::LegacyRand},
@@ -21,14 +23,13 @@ use crate::{
             CHUNK_DIM,
             aquifer_sampler::{
                 AquiferSampler, FluidLevel, FluidLevelSampler, SeaLevelAquiferSampler,
-                StaticFluidLevelSampler, WorldAquiferSampler,
+                WorldAquiferSampler,
             },
             router::{
                 chunk_density_function::{
                     ChunkNoiseFunctionBuilderOptions, ChunkNoiseFunctionSampleOptions, SampleAction,
                 },
                 chunk_noise_router::ChunkNoiseRouter,
-                density_function::UnblendedNoisePos,
                 proto_noise_router::ProtoNoiseRouters,
                 surface_height_sampler::{
                     SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
@@ -38,11 +39,10 @@ use crate::{
         positions::chunk_pos,
         proto_chunk::{GenerationCache, StandardChunkFluidLevelSampler, TerrainCache},
         section_coords,
-        settings::GenerationSettings,
-        surface::MaterialRuleContext,
-        y_offset::YOffset,
+        surface::{MaterialRuleContext, rule::try_apply_material_rule},
     },
 };
+use pumpkin_util::y_offset::YOffset;
 
 mod ravine;
 
@@ -203,12 +203,11 @@ fn resolve_debug_settings(
     }
 }
 
-fn is_debug_enabled(settings: &GenerationSettings, config: &CarverConfig) -> bool {
-    settings.debug_carvers
-        || config
-            .debug_settings
-            .as_ref()
-            .is_some_and(|debug_settings| debug_settings.debug_mode)
+fn is_debug_enabled(config: &CarverConfig) -> bool {
+    config
+        .debug_settings
+        .as_ref()
+        .is_some_and(|debug_settings| debug_settings.debug_mode)
 }
 
 fn should_use_carver(config: &CarverConfig, required_tag: &str) -> bool {
@@ -506,12 +505,11 @@ fn build_carver_setup<'a, T: GenerationCache>(
 fn run_carver<'a, 'b, T: GenerationCache, C: Carver>(
     carver: &C,
     config: &'a CarverConfig,
-    settings: &GenerationSettings,
     context: &mut CarverContext<'a, 'b, T>,
     min_y: i8,
     height: u16,
 ) {
-    context.debug_enabled = is_debug_enabled(settings, config);
+    context.debug_enabled = is_debug_enabled(config);
     context.lava_level = config.lava_level.get_y(min_y as i16, height);
     context.debug_settings = resolve_debug_settings(config, context.debug_enabled);
     if carver.should_carve(context.random) {
@@ -530,9 +528,6 @@ fn carve_dimension<T: GenerationCache>(
     dimension: Dimension,
     selection: CarverSelection,
 ) -> Vec<(i32, i32)> {
-    if settings.debug_disable_carvers {
-        return Vec::new();
-    }
     let terrain_cache = TerrainCache::from_random(random_config);
     let mut setup = build_carver_setup(
         cache,
@@ -585,7 +580,7 @@ fn carve_dimension<T: GenerationCache>(
                     liquid_mask: &mut setup.liquid_mask,
                     aquifer_sampler: &mut setup.aquifer_sampler,
                     debug_settings: None,
-                    debug_enabled: settings.debug_carvers,
+                    debug_enabled: false,
                     nether_carver: selection == CarverSelection::Nether,
                     surface_rules: settings,
                     surface_context: &mut setup.surface_context,
@@ -600,7 +595,6 @@ fn carve_dimension<T: GenerationCache>(
                         run_carver(
                             carver,
                             &carver.config,
-                            settings,
                             &mut context,
                             setup.min_y,
                             setup.height,
@@ -613,7 +607,6 @@ fn carve_dimension<T: GenerationCache>(
                         run_carver(
                             carver,
                             &carver.config,
-                            settings,
                             &mut context,
                             setup.min_y,
                             setup.height,
@@ -626,7 +619,6 @@ fn carve_dimension<T: GenerationCache>(
                         run_carver(
                             carver,
                             &carver.config,
-                            settings,
                             &mut context,
                             setup.min_y,
                             setup.height,
@@ -701,28 +693,12 @@ fn create_aquifer_sampler<'a>(
 ) -> CarverAquiferSampler<'a> {
     let start_x = chunk_pos::start_block_x(chunk_x);
     let start_z = chunk_pos::start_block_z(chunk_z);
-    let sampler = if settings.debug_disable_fluid_generation {
-        FluidLevelSampler::Static(StaticFluidLevelSampler::new(
-            (min_y as i32) * 2,
-            &Block::AIR,
-        ))
-    } else {
-        FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-            FluidLevel::new(settings.sea_level, settings.default_fluid.name),
-            FluidLevel::new(-54, &Block::LAVA),
-        ))
-    };
-    if settings.debug_disable_fluid_generation {
-        return create_fluid_only_sampler(
-            AquiferSampler::SeaLevel(SeaLevelAquiferSampler::new(sampler)),
-            chunk_x,
-            chunk_z,
-            min_y,
-            height,
-            settings,
-            noise_router,
-        );
-    }
+    let default_fluid = Block::from_registry_key(settings.default_fluid.name)
+        .unwrap_or_else(|| panic!("Unknown default fluid: {}", settings.default_fluid.name));
+    let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
+        FluidLevel::new(settings.sea_level, default_fluid),
+        FluidLevel::new(-54, &Block::LAVA),
+    ));
     let section_x = section_coords::block_to_section(start_x);
     let section_z = section_coords::block_to_section(start_z);
     let aquifer_sampler = if settings.aquifers_enabled {
@@ -811,10 +787,9 @@ impl<'a> CarverAquiferSampler<'a> {
     ) -> Option<&'static pumpkin_data::BlockState> {
         self.sample_options.cache_result_unique_id =
             self.sample_options.cache_result_unique_id.wrapping_add(1);
-        let density_pos = UnblendedNoisePos::new(pos.x, pos.y, pos.z);
         self.sampler.apply_with_density_and_schedule(
             &mut self.router,
-            &density_pos,
+            pos,
             &self.sample_options,
             &mut self.surface_height_estimator,
             0.0,
@@ -844,7 +819,8 @@ impl<'a> CarverAquiferSampler<'a> {
             if is_underwater { below.y + 1 } else { i32::MIN },
         );
         surface_context.biome = cache.get_biome_for_terrain_gen(below.x, below.y, below.z);
-        if let Some(top_state) = settings.surface_rule.try_apply(
+        if let Some(top_state) = try_apply_material_rule(
+            &settings.surface_rule,
             cache.get_center_chunk_mut(),
             surface_context,
             surface_height_estimator,

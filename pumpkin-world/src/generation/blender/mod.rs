@@ -8,7 +8,6 @@ use pumpkin_util::random::{RandomGenerator, xoroshiro128::Xoroshiro};
 use crate::generation::carver::CarvingStage;
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::proto_chunk::{GenerationCache, ProtoChunk};
-use crate::generation::settings::GenerationSettings;
 
 type CarvingMaskFn = Arc<dyn Fn(i32, i32, i32) -> bool + Send + Sync + 'static>;
 
@@ -46,11 +45,7 @@ pub trait BlenderImpl {
     fn get_biome_supplier(&self) {}
 }
 
-pub fn apply_carving_mask_filter<T: GenerationCache>(cache: &mut T, settings: &GenerationSettings) {
-    if settings.debug_disable_blending {
-        return;
-    }
-
+pub fn apply_carving_mask_filter<T: GenerationCache>(cache: &mut T) {
     if let Some(mask) = build_additional_mask(cache) {
         let chunk = cache.get_center_chunk_mut();
         chunk.set_additional_carving_mask(CarvingStage::Air, Arc::clone(&mask));

@@ -853,9 +853,7 @@ impl ProtoChunk {
         noise_router: &ProtoNoiseRouters,
         dimension: Dimension,
     ) {
-        if !settings.debug_disable_carvers {
-            crate::generation::blender::apply_carving_mask_filter(cache, settings);
-        }
+        crate::generation::blender::apply_carving_mask_filter(cache);
         let (chunk_x, chunk_z) = {
             let chunk = cache.get_center_chunk();
             (chunk.x, chunk.z)
