@@ -230,7 +230,10 @@ impl CommandExecutor for Executor {
                     ),
                 )
                 .await;
-            Ok(())
+
+            // It makes total sense to return the number of
+            // contributors as the i32 result for this command.
+            Ok(contributors.len() as i32)
         })
     }
 }

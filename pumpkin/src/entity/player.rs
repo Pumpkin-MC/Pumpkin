@@ -1927,13 +1927,17 @@ impl Player {
             .await;
     }
 
-    pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) {
+    pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) -> bool {
         // We could send the same gamemode without any problems. But why waste bandwidth?
-        assert_ne!(
-            self.gamemode.load(),
-            gamemode,
-            "Attempt to set the gamemode to the already current gamemode"
-        );
+        // assert_ne!(
+        //    self.gamemode.load(),
+        //    gamemode,
+        //    "Attempt to set the gamemode to the already current gamemode"
+        // );
+        // Why are we panicking if the gamemodes are the same? Vanilla just exits early.
+        if self.gamemode.load() == gamemode {
+            return false;
+        }
         let server = self.world().server.upgrade().unwrap();
         send_cancellable! {{
             server;
@@ -1995,6 +1999,12 @@ impl Player {
                         GameEvent::ChangeGameMode,
                         gamemode as i32 as f32,
                     )).await;
+
+                true
+            }
+
+            'cancelled: {
+                false
             }
         }}
     }
@@ -2272,7 +2282,7 @@ impl Player {
             .await;
     }
 
-    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
         let effect_id = VarInt(i32::from(effect_type.id));
         self.client
             .enqueue_packet(
@@ -2282,13 +2292,14 @@ impl Player {
                 ),
             )
             .await;
-        self.living_entity.remove_effect(effect_type).await;
+
+        self.living_entity.remove_effect(effect_type).await
 
         // TODO broadcast metadata
     }
 
-    pub async fn remove_all_effect(&self) -> u8 {
-        let mut count = 0;
+    pub async fn remove_all_effects(&self) -> bool {
+        let mut succeeded = false;
         let mut effect_list = vec![];
         for effect in self.living_entity.active_effects.lock().await.keys() {
             effect_list.push(*effect);
@@ -2301,14 +2312,15 @@ impl Player {
                     ),
                 )
                 .await;
-            count += 1;
+            succeeded = true;
         }
-        //Need to remove effect after because the player effect are lock in the for before
+
+        // Need to remove effects afterward here because there would be a deadlock if this is done in the for loop.
         for effect in effect_list {
             self.living_entity.remove_effect(effect).await;
         }
 
-        count
+        succeeded
     }
 
     /// Add experience levels to the player.
@@ -3341,6 +3353,16 @@ impl InventoryPlayer for Player {
                 self.world()
                     .play_sound(sound, SoundCategory::Players, &self.position())
                     .await;
+            }
+        })
+    }
+
+    fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()> {
+        Box::pin(async move {
+            log::debug!("Player::award_experience called with amount={amount}");
+            if amount > 0 {
+                log::debug!("Player: adding {amount} experience points");
+                self.add_experience_points(amount).await;
             }
         })
     }

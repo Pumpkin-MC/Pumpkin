@@ -5,6 +5,9 @@ use pumpkin_data::block_properties::is_air;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
+use pumpkin_data::structures::{
+    Structure, StructureKeys, StructurePlacementCalculator, StructureSet, WeightedEntry,
+};
 use pumpkin_data::tag;
 use pumpkin_data::{Block, BlockState, block_properties::blocks_movement, chunk::Biome};
 use pumpkin_util::random::{RandomImpl, get_carver_seed};
@@ -35,9 +38,9 @@ use crate::generation::noise::aquifer_sampler::{
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
 use crate::generation::noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK};
-use crate::generation::structure::placement::StructurePlacementCalculator;
+use crate::generation::structure::placement::should_generate_structure;
 use crate::generation::structure::structures::StructureInstance;
-use crate::generation::structure::{STRUCTURE_SETS, STRUCTURES, StructureKeys, WeightedEntry};
+use crate::generation::structure::try_generate_structure;
 use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
     BlockStateId, ProtoNoiseRouters,
@@ -972,9 +975,8 @@ impl ProtoChunk {
             let center_z = center_chunk.z;
 
             for (id, instance) in &center_chunk.structure_starts {
-                if let Some(s) = STRUCTURES.get(id)
-                    && s.step.ordinal() != step
-                {
+                let s = Structure::get(id);
+                if s.step.ordinal() != step {
                     continue;
                 }
 
@@ -1005,9 +1007,8 @@ impl ProtoChunk {
 
                     if let Some(neighbor) = cache.try_get_proto_chunk(neighbor_x, neighbor_z) {
                         for (id, instance) in &neighbor.structure_starts {
-                            if let Some(s) = STRUCTURES.get(id)
-                                && s.step.ordinal() != step
-                            {
+                            let s = Structure::get(id);
+                            if s.step.ordinal() != step {
                                 continue;
                             }
 
@@ -1078,8 +1079,8 @@ impl ProtoChunk {
         let seed = random_config.seed;
         let calculator = StructurePlacementCalculator::new(seed as i64);
 
-        for (_set_name, set) in STRUCTURE_SETS.iter() {
-            if !set.placement.should_generate(&calculator, self.x, self.z) {
+        for set in StructureSet::ALL {
+            if !should_generate_structure(&set.placement, &calculator, self.x, self.z) {
                 continue;
             }
 
@@ -1090,7 +1091,7 @@ impl ProtoChunk {
                 continue;
             }
 
-            let mut candidates = set.structures.clone();
+            let mut candidates = set.structures.to_vec();
             let mut random: RandomGenerator =
                 RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed));
             let carver_seed = get_carver_seed(&mut random, seed, self.x, self.z);
@@ -1130,17 +1131,19 @@ impl ProtoChunk {
         entry: &WeightedEntry,
         random_config: &GlobalRandomConfig,
     ) -> bool {
-        if let Some(structure) = STRUCTURES.get(&entry.structure) {
-            let position =
-                entry
-                    .structure
-                    .try_generate(structure, random_config.seed as i64, self, sea_level);
+        let structure = Structure::get(&entry.structure);
+        let position = try_generate_structure(
+            &entry.structure,
+            structure,
+            random_config.seed as i64,
+            self,
+            sea_level,
+        );
 
-            if let Some(pos) = position {
-                self.structure_starts
-                    .insert(entry.structure.clone(), StructureInstance::Start(pos));
-                return true;
-            }
+        if let Some(pos) = position {
+            self.structure_starts
+                .insert(entry.structure, StructureInstance::Start(pos));
+            return true;
         }
         false
     }
@@ -1175,7 +1178,7 @@ impl ProtoChunk {
                                 .get_bounding_box()
                                 .intersects_raw_xz(start_x, start_z, end_x, end_z)
                         {
-                            references.push((key.clone(), start_data.start_pos));
+                            references.push((*key, start_data.start_pos));
                         }
                     }
                 }

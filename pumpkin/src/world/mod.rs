@@ -11,7 +11,9 @@ pub mod time;
 
 use crate::block::RandomTickArgs;
 use crate::world::loot::LootContextParameters;
-use crate::{block::BlockEvent, entity::item::ItemEntity};
+use crate::{
+    block::BlockEvent, entity::experience_orb::ExperienceOrbEntity, entity::item::ItemEntity,
+};
 use crate::{
     block::{
         self,
@@ -324,6 +326,13 @@ impl World {
             VarInt(i32::from(effect_type.id)),
         ))
         .await;
+    }
+
+    pub fn get_difficulty(&self, difficulty: Difficulty) {
+        let current_info = self.level_info.load();
+        let mut new_info = (**current_info).clone();
+        new_info.difficulty = difficulty;
+        self.level_info.store(Arc::new(new_info));
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
@@ -3682,6 +3691,16 @@ impl pumpkin_world::world::SimpleWorld for World {
     ) -> WorldFuture<'a, ()> {
         Box::pin(async move {
             Self::scatter_inventory(&self, position, inventory).await;
+        })
+    }
+
+    fn spawn_experience_orbs(
+        self: Arc<Self>,
+        position: Vector3<f64>,
+        amount: u32,
+    ) -> WorldFuture<'static, ()> {
+        Box::pin(async move {
+            ExperienceOrbEntity::spawn(&self, position, amount).await;
         })
     }
 }

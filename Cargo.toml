@@ -118,12 +118,12 @@ console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = "1.10.0"
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = "0.8.21"
-crossfire = { version= "3.0.3", features = ["compat"]}
+crossfire = { version= "3.0.4", features = ["compat"]}
 dashmap = "6.1"
 ecdsa = "0.16.9"
 enum_dispatch = "0.3.13"
 env_logger = "0.11.8"
-flate2 = "1.1.8"
+flate2 = "1.1.9"
 heck = "0.5"
 hmac = "=0.13.0-rc.4"
 indexmap = "2.13"

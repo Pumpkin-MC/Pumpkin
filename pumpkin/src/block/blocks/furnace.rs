@@ -13,26 +13,38 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::{
     BlockStateId,
-    block::entities::{BlockEntity, furnace::FurnaceBlockEntity},
+    block::entities::{
+        PropertyDelegate, furnace::FurnaceBlockEntity,
+        furnace_like_block_entity::ExperienceContainer,
+    },
     inventory::Inventory,
 };
 use tokio::sync::Mutex;
 
-use crate::block::{
-    BlockBehaviour, BlockFuture, BrokenArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
-    registry::BlockActionResult,
+use crate::{
+    block::{
+        BlockBehaviour, BlockFuture, BrokenArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
+        registry::BlockActionResult,
+    },
+    entity::experience_orb::ExperienceOrbEntity,
 };
 
 struct FurnaceScreenFactory {
     inventory: Arc<dyn Inventory>,
-    block_entity: Arc<dyn BlockEntity>,
+    property_delegate: Arc<dyn PropertyDelegate>,
+    experience_container: Arc<dyn ExperienceContainer>,
 }
 
 impl FurnaceScreenFactory {
-    fn new(inventory: Arc<dyn Inventory>, block_entity: Arc<dyn BlockEntity>) -> Self {
+    fn new(
+        inventory: Arc<dyn Inventory>,
+        property_delegate: Arc<dyn PropertyDelegate>,
+        experience_container: Arc<dyn ExperienceContainer>,
+    ) -> Self {
         Self {
             inventory,
-            block_entity,
+            property_delegate,
+            experience_container,
         }
     }
 }
@@ -49,7 +61,8 @@ impl ScreenHandlerFactory for FurnaceScreenFactory {
                 sync_id,
                 player_inventory,
                 self.inventory.clone(),
-                self.block_entity.clone(),
+                self.property_delegate.clone(),
+                self.experience_container.clone(),
                 WindowType::Furnace,
             )
             .await;
@@ -73,8 +86,11 @@ impl BlockBehaviour for FurnaceBlock {
         Box::pin(async move {
             if let Some(block_entity) = args.world.get_block_entity(args.position).await
                 && let Some(inventory) = block_entity.clone().get_inventory()
+                && let Some(property_delegate) = block_entity.clone().to_property_delegate()
+                && let Some(experience_container) = block_entity.to_experience_container()
             {
-                let furnace_screen_factory = FurnaceScreenFactory::new(inventory, block_entity);
+                let furnace_screen_factory =
+                    FurnaceScreenFactory::new(inventory, property_delegate, experience_container);
                 args.player
                     .open_handled_screen(&furnace_screen_factory)
                     .await;
@@ -108,6 +124,16 @@ impl BlockBehaviour for FurnaceBlock {
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
+            // Extract and drop accumulated XP as orbs before removing the block entity
+            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+                && let Some(experience_container) = block_entity.to_experience_container()
+            {
+                let xp = experience_container.extract_experience();
+                if xp > 0 {
+                    let pos = args.position.to_f64();
+                    ExperienceOrbEntity::spawn(args.world, pos, xp as u32).await;
+                }
+            }
             args.world.remove_block_entity(args.position).await;
         })
     }
