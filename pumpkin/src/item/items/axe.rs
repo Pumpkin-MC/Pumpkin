@@ -34,6 +34,7 @@ impl ItemBehaviour for AxeItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
+            let _ = item;
             // I tried to follow mojang order of doing things.
             let world = player.world();
             let replacement_block = try_use_axe(block);
@@ -84,7 +85,7 @@ impl ItemBehaviour for AxeItem {
             };
 
             if changed && player.gamemode.load() != GameMode::Creative {
-                item.damage_item_with_context(1, false);
+                player.damage_held_item(1).await;
             }
         })
     }
