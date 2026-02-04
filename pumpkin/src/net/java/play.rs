@@ -24,6 +24,8 @@ use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
+use crate::plugin::player::player_animation::PlayerAnimationEvent;
+use crate::plugin::player::player_armor_stand_manipulate::PlayerArmorStandManipulateEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
@@ -1274,6 +1276,32 @@ impl JavaClient {
                             player.attack(event.target).await;
                         }
                         ActionType::Interact | ActionType::InteractAt => {
+                            if event.target.get_entity().entity_type == &EntityType::ARMOR_STAND {
+                                let hand = interact.hand.and_then(|h| Hand::try_from(h.0).ok());
+                                let (slot, item_stack) = match hand {
+                                    Some(Hand::Left) => {
+                                        ("OFF_HAND", player.inventory.off_hand_item().await)
+                                    }
+                                    _ => ("HAND", player.inventory.held_item()),
+                                };
+                                let item_key = {
+                                    let item_guard = item_stack.lock().await;
+                                    format!("minecraft:{}", item_guard.get_item().registry_key)
+                                };
+                                let armor_uuid = event.target.get_entity().entity_uuid;
+                                let armor_event = PlayerArmorStandManipulateEvent::new(
+                                    player.clone(),
+                                    armor_uuid,
+                                    item_key,
+                                    "minecraft:air".to_string(),
+                                    slot.to_string(),
+                                );
+                                let armor_event = server.plugin_manager.fire(armor_event).await;
+                                if armor_event.cancelled {
+                                    return;
+                                }
+                            }
+
                             let held = player.inventory.held_item();
                             let mut stack = held.lock().await;
                             if !event.target.interact(player, &mut stack).await {
