@@ -792,10 +792,11 @@ impl JavaClient {
                 let payload = SCustomPayload::read(payload)?;
                 let event = PlayerCustomPayloadEvent::new(
                     player.clone(),
-                    payload.channel,
-                    Bytes::from(payload.data),
+                    payload.channel.clone(),
+                    Bytes::copy_from_slice(payload.data.as_ref()),
                 );
                 server.plugin_manager.fire(event).await;
+                self.handle_custom_payload(player, server, payload).await;
             }
             _ => {
                 warn!("Failed to handle player packet id {}", packet.id);

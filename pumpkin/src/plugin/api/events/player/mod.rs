@@ -19,6 +19,8 @@ pub mod player_bucket_empty;
 pub mod player_bucket_fill;
 pub mod player_bucket_entity;
 pub mod player_changed_main_hand;
+pub mod player_register_channel;
+pub mod player_unregister_channel;
 pub mod player_move;
 pub mod player_teleport;
 
