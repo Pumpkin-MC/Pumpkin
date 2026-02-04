@@ -1,5 +1,6 @@
 use pumpkin_data::Block;
 use pumpkin_macros::{Event, cancellable};
+use pumpkin_util::math::position::BlockPos;
 
 use super::BlockEvent;
 
@@ -14,6 +15,12 @@ pub struct BlockBurnEvent {
 
     /// The block that is burning.
     pub block: &'static Block,
+
+    /// The block position that is burning.
+    pub block_pos: BlockPos,
+
+    /// The world UUID where the block burned.
+    pub world_uuid: uuid::Uuid,
 }
 
 impl BlockEvent for BlockBurnEvent {

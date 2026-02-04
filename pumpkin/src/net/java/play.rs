@@ -26,6 +26,11 @@ use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
+use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
+use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
+use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
+use crate::plugin::player::player_item_held::PlayerItemHeldEvent;
+use crate::plugin::block::block_can_build::BlockCanBuildEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -2163,6 +2168,38 @@ impl JavaClient {
             .await
         {
             return Ok(false);
+        }
+
+        if let Some(server) = world.server.upgrade() {
+            let can_build_event = BlockCanBuildEvent {
+                player: player.clone(),
+                block_to_build: block,
+                buildable: true,
+                block: clicked_block,
+                block_pos: final_block_pos,
+                cancelled: false,
+            };
+            let can_build_event = server
+                .plugin_manager
+                .fire::<BlockCanBuildEvent>(can_build_event)
+                .await;
+            if can_build_event.cancelled || !can_build_event.buildable {
+                return Ok(false);
+            }
+
+            let event = BlockPlaceEvent {
+                player: player.clone(),
+                block_placed: block,
+                block_placed_against: clicked_block,
+                position: final_block_pos,
+                can_build: true,
+                cancelled: false,
+            };
+
+            let event = server.plugin_manager.fire::<BlockPlaceEvent>(event).await;
+            if event.cancelled || !event.can_build {
+                return Ok(false);
+            }
         }
 
         let new_state = server
