@@ -35,6 +35,7 @@ use crossbeam::queue::SegQueue;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
@@ -135,7 +136,6 @@ pub mod weather;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
-use pumpkin_world::generation::settings::gen_settings_from_dimension;
 use uuid::Uuid;
 use weather::Weather;
 
@@ -217,7 +217,7 @@ impl World {
         server: Weak<Server>,
     ) -> Self {
         // TODO
-        let generation_settings = gen_settings_from_dimension(&dimension);
+        let generation_settings = GenerationSettings::from_dimension(&dimension);
 
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(&level.level_folder.root_folder);
@@ -324,6 +324,13 @@ impl World {
             VarInt(i32::from(effect_type.id)),
         ))
         .await;
+    }
+
+    pub fn get_difficulty(&self, difficulty: Difficulty) {
+        let current_info = self.level_info.load();
+        let mut new_info = (**current_info).clone();
+        new_info.difficulty = difficulty;
+        self.level_info.store(Arc::new(new_info));
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
@@ -768,11 +775,8 @@ impl World {
             }
         }
 
-        let mut spawning_chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)> =
-            spawning_chunks_map.into_iter().collect();
-
         let mut spawn_state =
-            SpawnState::new(spawning_chunks.len() as i32, &self.entities, self).await; // TODO store it
+            SpawnState::new(spawning_chunks_map.len() as i32, &self.entities, self).await; // TODO store it
 
         // TODO gamerule this.spawnEnemies || this.spawnFriendlies
         let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
@@ -785,7 +789,8 @@ impl World {
             );
 
         // log::debug!("spawning list size {}", spawn_list.len());
-
+        let mut spawning_chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)> =
+            spawning_chunks_map.into_iter().collect();
         spawning_chunks.shuffle(&mut rng());
 
         // TODO i think it can be multithread
@@ -794,9 +799,10 @@ impl World {
                 .await;
         }
 
+        let world: Arc<dyn SimpleWorld> = self.clone();
+
         for block_entity in tick_data.block_entities {
-            let world: Arc<dyn SimpleWorld> = self.clone();
-            block_entity.tick(world).await;
+            block_entity.tick(&world).await;
         }
     }
 
@@ -3001,13 +3007,16 @@ impl World {
 
     pub async fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
         let height = EntityType::ITEM.dimension[1] / 2.0;
-        let pos = Vector3::new(
-            f64::from(pos.0.x) + 0.5 + rand::rng().random_range(-0.25..0.25),
-            f64::from(pos.0.y) + 0.5 + rand::rng().random_range(-0.25..0.25) - f64::from(height),
-            f64::from(pos.0.z) + 0.5 + rand::rng().random_range(-0.25..0.25),
-        );
+        let spawn_pos = {
+            let mut r = rand::rng();
+            Vector3::new(
+                f64::from(pos.0.x) + 0.5 + r.random_range(-0.25..0.25),
+                f64::from(pos.0.y) + 0.5 + r.random_range(-0.25..0.25) - f64::from(height),
+                f64::from(pos.0.z) + 0.5 + r.random_range(-0.25..0.25),
+            )
+        };
 
-        let entity = Entity::new(self.clone(), pos, &EntityType::ITEM);
+        let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
         let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
         self.spawn_entity(item_entity).await;
     }

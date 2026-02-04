@@ -1,4 +1,5 @@
 use pumpkin_data::noise_router::WrapperType;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     biome::multi_noise::{NoiseValuePoint, to_long},
@@ -11,7 +12,7 @@ use super::{
         SampleAction,
     },
     chunk_noise_router::ChunkNoiseFunctionComponent,
-    density_function::{NoiseFunctionComponentRange, PassThrough, UnblendedNoisePos},
+    density_function::{NoiseFunctionComponentRange, PassThrough},
     proto_noise_router::{ProtoMultiNoiseRouter, ProtoNoiseFunctionComponent},
 };
 
@@ -52,7 +53,7 @@ impl<'a> MultiNoiseSampler<'a> {
         let block_y = biome_coords::to_block(biome_y);
         let block_z = biome_coords::to_block(biome_z);
 
-        let pos = UnblendedNoisePos::new(block_x, block_y, block_z);
+        let pos = Vector3::new(block_x, block_y, block_z);
         let sample_options =
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
 
@@ -103,7 +104,7 @@ impl<'a> MultiNoiseSampler<'a> {
     }
 
     pub fn sample_erosion(&mut self, block_x: i32, block_y: i32, block_z: i32) -> f64 {
-        let pos = UnblendedNoisePos::new(block_x, block_y, block_z);
+        let pos = Vector3::new(block_x, block_y, block_z);
         let sample_options =
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
 
@@ -178,11 +179,7 @@ impl<'a> MultiNoiseSampler<'a> {
                                     let block_z_position =
                                         biome_coords::to_block(absolute_biome_z_position);
 
-                                    let pos = UnblendedNoisePos::new(
-                                        block_x_position,
-                                        0,
-                                        block_z_position,
-                                    );
+                                    let pos = Vector3::new(block_x_position, 0, block_z_position);
 
                                     //NOTE: Due to our stack invariant, what is on the stack is a
                                     // valid density function

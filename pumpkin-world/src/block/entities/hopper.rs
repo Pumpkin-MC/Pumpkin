@@ -77,7 +77,7 @@ impl BlockEntity for HopperBlockEntity {
 
     fn tick<'a>(
         &'a self,
-        world: Arc<dyn SimpleWorld>,
+        world: &'a Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.ticked_game_time.store(
@@ -95,7 +95,7 @@ impl BlockEntity for HopperBlockEntity {
                     world.get_block_state(&self.position).await.id,
                     &Block::HOPPER,
                 );
-                self.try_move_items(&state, &world).await;
+                self.try_move_items(&state, world).await;
             }
         })
     }

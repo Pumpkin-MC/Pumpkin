@@ -3,6 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::tag;
@@ -14,6 +15,7 @@ use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
 };
+use rustc_hash::FxHashMap;
 
 use super::{
     GlobalRandomConfig, biome_coords, carver,
@@ -24,7 +26,6 @@ use super::{
     },
     positions::chunk_pos::{start_block_x, start_block_z},
     section_coords,
-    settings::GenerationSettings,
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
 use crate::chunk::{ChunkData, ChunkHeightmapType};
@@ -39,6 +40,7 @@ use crate::generation::noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER
 use crate::generation::structure::placement::StructurePlacementCalculator;
 use crate::generation::structure::structures::StructureInstance;
 use crate::generation::structure::{STRUCTURE_SETS, STRUCTURES, StructureKeys, WeightedEntry};
+use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
     BlockStateId, ProtoNoiseRouters,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier},
@@ -145,7 +147,7 @@ pub struct ProtoChunk {
     flat_ocean_floor_height_map: Box<[i16]>,
     pub flat_motion_blocking_height_map: Box<[i16]>,
     pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
-    structure_starts: HashMap<StructureKeys, StructureInstance>,
+    structure_starts: FxHashMap<StructureKeys, StructureInstance>,
     post_processing_positions: HashSet<BlockPos>,
     carving_masks: HashMap<carver::CarvingStage, carver::CarvingMask>,
     carving_mask_storage: HashMap<carver::CarvingStage, Box<[i64]>>,
@@ -248,7 +250,7 @@ impl ProtoChunk {
             flat_ocean_floor_height_map: default_heightmap.clone(),
             flat_motion_blocking_height_map: default_heightmap.clone(),
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
-            structure_starts: HashMap::new(),
+            structure_starts: FxHashMap::default(),
             post_processing_positions: HashSet::new(),
             carving_masks: HashMap::new(),
             carving_mask_storage: HashMap::new(),
@@ -526,45 +528,24 @@ impl ProtoChunk {
         self.old_noise_generation = old_noise_generation;
     }
 
-    fn maybe_update_surface_height_map(&mut self, local_x: i32, y: i32, local_z: i32) {
-        let index = Self::local_position_to_height_map_index(local_x, local_z);
+    fn maybe_update_surface_height_map(&mut self, index: usize, y: i16) {
         let current_height = self.flat_surface_height_map[index];
-
-        if y > current_height as i32 {
-            self.flat_surface_height_map[index] = y as _;
-        }
+        self.flat_surface_height_map[index] = current_height.max(y) as _;
     }
 
-    fn maybe_update_ocean_floor_height_map(&mut self, local_x: i32, y: i32, local_z: i32) {
-        let index = Self::local_position_to_height_map_index(local_x, local_z);
+    fn maybe_update_ocean_floor_height_map(&mut self, index: usize, y: i16) {
         let current_height = self.flat_ocean_floor_height_map[index];
-
-        if y > current_height as i32 {
-            self.flat_ocean_floor_height_map[index] = y as _;
-        }
+        self.flat_ocean_floor_height_map[index] = current_height.max(y) as _;
     }
 
-    fn maybe_update_motion_blocking_height_map(&mut self, local_x: i32, y: i32, local_z: i32) {
-        let index = Self::local_position_to_height_map_index(local_x, local_z);
+    fn maybe_update_motion_blocking_height_map(&mut self, index: usize, y: i16) {
         let current_height = self.flat_motion_blocking_height_map[index];
-
-        if y > current_height as i32 {
-            self.flat_motion_blocking_height_map[index] = y as _;
-        }
+        self.flat_motion_blocking_height_map[index] = current_height.max(y) as _;
     }
 
-    fn maybe_update_motion_blocking_no_leaves_height_map(
-        &mut self,
-        local_x: i32,
-        y: i32,
-        local_z: i32,
-    ) {
-        let index = Self::local_position_to_height_map_index(local_x, local_z);
+    fn maybe_update_motion_blocking_no_leaves_height_map(&mut self, index: usize, y: i16) {
         let current_height = self.flat_motion_blocking_no_leaves_height_map[index];
-
-        if y > current_height as i32 {
-            self.flat_motion_blocking_no_leaves_height_map[index] = y as _;
-        }
+        self.flat_motion_blocking_no_leaves_height_map[index] = current_height.max(y) as _;
     }
 
     fn recompute_heightmaps_for_column(&mut self, local_x: i32, local_z: i32) {
@@ -672,13 +653,10 @@ impl ProtoChunk {
 
     #[inline]
     fn local_pos_to_block_index(&self, x: i32, y: i32, z: i32) -> usize {
-        #[cfg(debug_assertions)]
-        {
-            assert!((0..=15).contains(&x));
-            assert!(y < self.height() as i32);
-            assert!(y >= 0);
-            assert!((0..=15).contains(&z));
-        };
+        debug_assert!((0..16).contains(&x), "x out of bounds: {}", x);
+        debug_assert!((0..16).contains(&z), "z out of bounds: {}", z);
+        debug_assert!(y >= 0 && y < self.height() as i32, "y out of bounds: {}", y);
+
         self.height() as usize * CHUNK_DIM as usize * x as usize
             + CHUNK_DIM as usize * y as usize
             + z as usize
@@ -687,22 +665,17 @@ impl ProtoChunk {
     #[inline]
     #[must_use]
     pub fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
-        #[cfg(debug_assertions)]
-        {
-            assert!((0..=3).contains(&x));
-            assert!(
-                y < biome_coords::from_chunk(self.height() as i32) && y >= 0,
-                "{} - {} vs {}",
-                0,
-                biome_coords::from_chunk(self.height() as i32),
-                y
-            );
-            assert!((0..=3).contains(&z));
-        };
+        let biome_height = self.height() as usize >> 2;
 
-        biome_coords::from_block(self.height() as usize)
-            * biome_coords::from_block(CHUNK_DIM as usize)
-            * x as usize
+        debug_assert!((0..4).contains(&x), "Biome X out of bounds: {}", x);
+        debug_assert!((0..4).contains(&z), "Biome Z out of bounds: {}", z);
+        debug_assert!(
+            y >= 0 && y < biome_height as i32,
+            "Biome Y out of bounds: {}",
+            y
+        );
+
+        biome_height * biome_coords::from_block(CHUNK_DIM as usize) * x as usize
             + biome_coords::from_block(CHUNK_DIM as usize) * y as usize
             + z as usize
     }
@@ -739,18 +712,20 @@ impl ProtoChunk {
             return;
         }
         if !block_state.is_air() {
-            self.maybe_update_surface_height_map(local_x, y, local_z);
+            let index = Self::local_position_to_height_map_index(local_x, local_z);
+            let y = y as i16;
+            self.maybe_update_surface_height_map(index, y);
             let block = Block::get_raw_id_from_state_id(block_state.id);
 
             let blocks_movement = blocks_movement(block_state, block);
             if blocks_movement {
-                self.maybe_update_ocean_floor_height_map(local_x, y, local_z);
+                self.maybe_update_ocean_floor_height_map(index, y);
             }
             if blocks_movement || block_state.is_liquid() {
-                self.maybe_update_motion_blocking_height_map(local_x, y, local_z);
+                self.maybe_update_motion_blocking_height_map(index, y);
                 if !tag::Block::MINECRAFT_LEAVES.1.contains(&block) {
                     {
-                        self.maybe_update_motion_blocking_no_leaves_height_map(local_x, y, local_z);
+                        self.maybe_update_motion_blocking_no_leaves_height_map(index, y);
                     }
                 }
             }
@@ -805,7 +780,10 @@ impl ProtoChunk {
         let start_z = start_block_z(self.z);
 
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-            FluidLevel::new(settings.sea_level, settings.default_fluid.name),
+            FluidLevel::new(
+                settings.sea_level,
+                Block::from_registry_key(settings.default_fluid.name).unwrap(),
+            ),
             FluidLevel::new(-54, &Block::LAVA),
         ));
 
@@ -1236,7 +1214,8 @@ impl ProtoChunk {
                             context.block_pos_y,
                             context.block_pos_z,
                         );
-                        let new_state = settings.surface_rule.try_apply(
+                        let new_state = try_apply_material_rule(
+                            &settings.surface_rule,
                             self,
                             &mut context,
                             surface_height_estimate_sampler,

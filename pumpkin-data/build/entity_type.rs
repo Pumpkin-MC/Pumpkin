@@ -230,7 +230,7 @@ pub(crate) fn build() -> TokenStream {
         impl Taggable for EntityType {
             #[inline]
             fn tag_key() -> RegistryKey {
-                RegistryKey::Block
+                RegistryKey::EntityType
             }
 
             #[inline]

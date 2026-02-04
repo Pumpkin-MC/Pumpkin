@@ -22,6 +22,8 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::{Hand, text::TextComponent, version::MinecraftVersion};
 
+const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
+
 impl JavaClient {
     pub async fn handle_client_information_config(
         &self,
@@ -59,11 +61,7 @@ impl JavaClient {
 
     pub async fn handle_plugin_message(&self, plugin_message: SPluginMessage) {
         log::debug!("Handling plugin message");
-        if plugin_message
-            .channel
-            .to_string()
-            .starts_with("minecraft:brand")
-        {
+        if plugin_message.channel.starts_with(BRAND_CHANNEL_PREFIX) {
             log::debug!("Got a client brand");
             match str::from_utf8(&plugin_message.data) {
                 Ok(brand) => *self.brand.lock().await = Some(brand.to_string()),

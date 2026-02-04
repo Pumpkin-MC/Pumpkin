@@ -24,22 +24,25 @@ impl CommandExecutor for Executor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let players: Vec<Arc<Player>> = server.get_all_players();
+            let players_len = players.len() as i32;
+
             sender
                 .send_message(TextComponent::translate(
                     "commands.list.players",
                     [
                         TextComponent::text(players.len().to_string()),
                         TextComponent::text(server.basic_config.max_players.to_string()),
-                        TextComponent::text(get_player_names(players)),
+                        TextComponent::text(get_player_names(&players)),
                     ],
                 ))
                 .await;
-            Ok(())
+
+            Ok(players_len)
         })
     }
 }
 
-fn get_player_names(players: Vec<Arc<Player>>) -> String {
+fn get_player_names(players: &[Arc<Player>]) -> String {
     let mut names = String::new();
     for player in players {
         if !names.is_empty() {

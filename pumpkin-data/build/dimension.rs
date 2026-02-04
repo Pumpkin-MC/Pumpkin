@@ -102,7 +102,7 @@ pub(crate) fn build() -> TokenStream {
         });
     }
 
-    quote! {
+    quote!(
         #[derive(Debug, Clone, Copy)]
         pub struct Dimension {
             pub id: u8,
@@ -134,5 +134,5 @@ pub(crate) fn build() -> TokenStream {
             }
        }
         impl Eq for Dimension {}
-    }
+    )
 }

@@ -11,13 +11,11 @@ use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::position::BlockPos;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::ops::{BitAnd, BitOr};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 use thiserror::Error;
 
 pub mod format;
@@ -79,7 +77,7 @@ pub struct ChunkData {
     pub z: i32,
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
-    pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
+    pub block_entities: FxHashMap<BlockPos, Arc<dyn BlockEntity>>,
     pub light_engine: ChunkLight,
     pub status: ChunkStatus,
     pub dirty: bool,
@@ -97,7 +95,7 @@ pub struct ChunkEntityData {
     pub x: i32,
     /// Chunk Z
     pub z: i32,
-    pub data: HashMap<uuid::Uuid, NbtCompound>,
+    pub data: FxHashMap<uuid::Uuid, NbtCompound>,
 
     pub dirty: bool,
 }

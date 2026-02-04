@@ -1,9 +1,10 @@
-use std::{collections::HashMap, io::Cursor, path::PathBuf, pin::Pin};
+use std::{io::Cursor, path::PathBuf, pin::Pin};
 
 use bytes::Bytes;
 use futures::future::join_all;
 use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
+use rustc_hash::FxHashMap;
 use uuid::Uuid;
 
 use crate::{
@@ -198,7 +199,7 @@ impl ChunkData {
             carving_mask_air,
             carving_mask_liquid,
             block_entities: {
-                let mut block_entities = HashMap::new();
+                let mut block_entities = FxHashMap::default();
                 for nbt in chunk_data.block_entities {
                     let block_entity = block_entity_from_nbt(&nbt);
                     if let Some(block_entity) = block_entity {
@@ -330,7 +331,7 @@ impl ChunkEntityData {
                 chunk_entity_data.position[1],
             )));
         }
-        let mut map = HashMap::new();
+        let mut map = FxHashMap::default();
         for entity_nbt in chunk_entity_data.entities {
             let uuid = if let Some(uuid) = entity_nbt.get_int_array("UUID") {
                 Uuid::from_u128(

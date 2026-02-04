@@ -85,8 +85,6 @@ where
     /// Tells the `ChunkIO` that no more chunks are loaded in memory
     fn clear_watched_chunks(&self) -> BoxFuture<'_, ()>;
 
-    fn clean_up_log(&self) -> BoxFuture<'_, ()>;
-
     /// Ensure that all ongoing operations are finished
     fn block_and_await_ongoing_tasks(&self) -> BoxFuture<'_, ()>;
 }

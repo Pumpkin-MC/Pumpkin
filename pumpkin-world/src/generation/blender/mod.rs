@@ -1,14 +1,14 @@
 use std::sync::{Arc, LazyLock};
 
 use enum_dispatch::enum_dispatch;
+use pumpkin_data::chunk::OFFSET;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::{xoroshiro128::Xoroshiro, RandomGenerator};
 
-use super::noise::router::density_function::NoisePos;
 use crate::generation::carver::CarvingStage;
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::proto_chunk::{GenerationCache, ProtoChunk};
 use crate::generation::settings::GenerationSettings;
-use pumpkin_data::chunk::OFFSET;
-use pumpkin_util::random::{RandomGenerator, xoroshiro128::Xoroshiro};
 
 type CarvingMaskFn = Arc<dyn Fn(i32, i32, i32) -> bool + Send + Sync + 'static>;
 
@@ -41,7 +41,7 @@ impl Blender {
 pub trait BlenderImpl {
     fn calculate(&self, block_x: i32, block_z: i32) -> BlendResult;
 
-    fn apply_blend_density(&self, pos: &impl NoisePos, density: f64) -> f64;
+    fn apply_blend_density(&self, pos: &Vector3<i32>, density: f64) -> f64;
 
     fn get_biome_supplier(&self) {}
 }
@@ -188,7 +188,7 @@ impl BlenderImpl for NoBlendBlender {
         BlendResult::new(1f64, 1f64)
     }
 
-    fn apply_blend_density(&self, _pos: &impl NoisePos, density: f64) -> f64 {
+    fn apply_blend_density(&self, _pos: &Vector3<i32>, density: f64) -> f64 {
         density
     }
 }

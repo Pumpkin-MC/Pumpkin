@@ -4,7 +4,7 @@ use pumpkin_data::noise_router::{
     ClampedYGradientData, RangeChoiceData, WeirdScaledData, WeirdScaledMapper,
 };
 use pumpkin_util::{
-    math::clamped_map,
+    math::{clamped_map, vector3::Vector3},
     noise::simplex::SimplexNoiseSampler,
     random::{RandomImpl, legacy_rand::LegacyRand},
 };
@@ -18,8 +18,7 @@ use crate::generation::{
 };
 
 use super::{
-    IndexToNoisePos, NoiseFunctionComponentRange, NoisePos,
-    StaticIndependentChunkNoiseFunctionComponentImpl,
+    IndexToNoisePos, NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl,
 };
 
 #[derive(Clone)]
@@ -80,8 +79,8 @@ impl NoiseFunctionComponentRange for EndIsland {
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for EndIsland {
-    fn sample(&self, pos: &impl NoisePos) -> f64 {
-        (Self::sample_2d(&self.sampler, pos.x() / 8, pos.z() / 8) as f64 - 8.0) / 128.0
+    fn sample(&self, pos: &Vector3<i32>) -> f64 {
+        (Self::sample_2d(&self.sampler, pos.x / 8, pos.z / 8) as f64 - 8.0) / 128.0
     }
 }
 
@@ -109,7 +108,7 @@ impl StaticChunkNoiseFunctionComponentImpl for WeirdScaled {
     fn sample(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         let input_density = ChunkNoiseFunctionComponent::sample_from_stack(
@@ -122,9 +121,9 @@ impl StaticChunkNoiseFunctionComponentImpl for WeirdScaled {
             * self
                 .sampler
                 .sample(
-                    pos.x() as f64 / scaled_density,
-                    pos.y() as f64 / scaled_density,
-                    pos.z() as f64 / scaled_density,
+                    pos.x as f64 / scaled_density,
+                    pos.y as f64 / scaled_density,
+                    pos.z as f64 / scaled_density,
                 )
                 .abs()
     }
@@ -150,9 +149,9 @@ impl StaticChunkNoiseFunctionComponentImpl for WeirdScaled {
                 * self
                     .sampler
                     .sample(
-                        pos.x() as f64 / scaled_density,
-                        pos.y() as f64 / scaled_density,
-                        pos.z() as f64 / scaled_density,
+                        pos.x as f64 / scaled_density,
+                        pos.y as f64 / scaled_density,
+                        pos.z as f64 / scaled_density,
                     )
                     .abs();
         });
@@ -195,9 +194,9 @@ impl NoiseFunctionComponentRange for ClampedYGradient {
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for ClampedYGradient {
-    fn sample(&self, pos: &impl NoisePos) -> f64 {
+    fn sample(&self, pos: &Vector3<i32>) -> f64 {
         clamped_map(
-            pos.y() as f64,
+            pos.y as f64,
             self.data.from_y,
             self.data.to_y,
             self.data.from_value,
@@ -252,7 +251,7 @@ impl StaticChunkNoiseFunctionComponentImpl for RangeChoice {
     fn sample(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         let input_sample = ChunkNoiseFunctionComponent::sample_from_stack(
