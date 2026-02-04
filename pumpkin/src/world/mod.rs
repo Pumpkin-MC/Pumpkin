@@ -2675,6 +2675,19 @@ impl World {
 
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
+        if let Some(server) = self.server.upgrade() {
+            let event = crate::plugin::entity::entity_spawn::EntitySpawnEvent::new(
+                base_entity.entity_uuid,
+                base_entity.entity_type,
+            );
+            let event = server
+                .plugin_manager
+                .fire::<crate::plugin::entity::entity_spawn::EntitySpawnEvent>(event)
+                .await;
+            if event.cancelled {
+                return;
+            }
+        }
         self.broadcast_packet_all(&base_entity.create_spawn_packet())
             .await;
         entity.init_data_tracker().await;

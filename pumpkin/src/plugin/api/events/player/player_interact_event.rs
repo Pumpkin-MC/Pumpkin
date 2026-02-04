@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::entity::player::Player;
-use pumpkin_data::Block;
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;
@@ -29,8 +29,14 @@ pub struct PlayerInteractEvent {
     /// The item in the player's hand at the time of interaction.
     pub item: Arc<Mutex<ItemStack>>,
 
+    /// A best-effort key for the item in hand (e.g., "minecraft:stone").
+    pub item_key: String,
+
     /// The block that was interacted with.
     pub block: &'static Block,
+
+    /// The face that was interacted with, if any.
+    pub face: Option<BlockDirection>,
 }
 
 impl PlayerInteractEvent {
@@ -51,15 +57,19 @@ impl PlayerInteractEvent {
         player: &Arc<Player>,
         action: InteractAction,
         item: &Arc<Mutex<ItemStack>>,
+        item_key: String,
         block: &'static Block,
         clicked_pos: Option<BlockPos>,
+        face: Option<BlockDirection>,
     ) -> Self {
         Self {
             player: Arc::clone(player),
             action,
             item: Arc::clone(item),
+            item_key,
             block,
             clicked_pos,
+            face,
             cancelled: false,
         }
     }

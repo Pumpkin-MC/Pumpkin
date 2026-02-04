@@ -841,19 +841,31 @@ impl JavaClient {
             .await;
 
         let event = if let Some((hit_pos, _hit_dir)) = hit_result {
+            let item_key = {
+                let item_guard = item.lock().await;
+                format!("minecraft:{}", item_guard.get_item().registry_key)
+            };
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickBlock,
                 &item,
+                item_key,
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
+                Some(face),
             )
         } else {
+            let item_key = {
+                let item_guard = item.lock().await;
+                format!("minecraft:{}", item_guard.get_item().registry_key)
+            };
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickAir,
                 &item,
+                item_key,
                 &Block::AIR,
+                None,
                 None,
             )
         };
@@ -1772,19 +1784,31 @@ impl JavaClient {
             .await;
 
         let event = if let Some((hit_pos, _hit_dir)) = hit_result {
+            let item_key = {
+                let item_guard = item_in_hand.lock().await;
+                format!("minecraft:{}", item_guard.get_item().registry_key)
+            };
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickBlock,
                 &item_in_hand,
+                item_key,
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
+                Some(face),
             )
         } else {
+            let item_key = {
+                let item_guard = item_in_hand.lock().await;
+                format!("minecraft:{}", item_guard.get_item().registry_key)
+            };
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickAir,
                 &item_in_hand,
+                item_key,
                 &Block::AIR,
+                None,
                 None,
             )
         };
@@ -2161,6 +2185,22 @@ impl JavaClient {
             .await
         {
             return Ok(false);
+        }
+
+        if let Some(server) = world.server.upgrade() {
+            let event = BlockPlaceEvent {
+                player: player.clone(),
+                block_placed: block,
+                block_placed_against: clicked_block,
+                position: final_block_pos,
+                can_build: true,
+                cancelled: false,
+            };
+
+            let event = server.plugin_manager.fire::<BlockPlaceEvent>(event).await;
+            if event.cancelled || !event.can_build {
+                return Ok(false);
+            }
         }
 
         let new_state = server
