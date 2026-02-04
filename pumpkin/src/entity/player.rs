@@ -3347,7 +3347,9 @@ impl InventoryPlayer for Player {
 
     fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()> {
         Box::pin(async move {
+            log::debug!("Player::award_experience called with amount={amount}");
             if amount > 0 {
+                log::debug!("Player: adding {amount} experience points");
                 self.add_experience_points(amount).await;
             }
         })

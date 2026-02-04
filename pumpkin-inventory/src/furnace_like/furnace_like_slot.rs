@@ -118,9 +118,12 @@ impl Slot for FurnaceOutputSlot {
         _stack: &'a pumpkin_world::item::ItemStack,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
+            log::debug!("FurnaceOutputSlot: on_take_item called");
             // Extract accumulated experience and award to player
             let experience = self.experience_container.extract_experience();
+            log::debug!("FurnaceOutputSlot: extracted experience = {experience}");
             if experience > 0 {
+                log::debug!("FurnaceOutputSlot: awarding {experience} xp to player");
                 player.award_experience(experience).await;
             }
             self.mark_dirty().await;

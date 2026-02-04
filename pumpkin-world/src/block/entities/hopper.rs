@@ -177,7 +177,7 @@ impl HopperBlockEntity {
         // TODO getEntityContainer
         let pos_up = &self.position.up();
         if let Some(entity) = world.get_block_entity(pos_up).await
-            && let Some(container) = entity.get_inventory()
+            && let Some(container) = entity.clone().get_inventory()
         {
             // TODO check WorldlyContainer
             for i in 0..container.size() {
@@ -188,6 +188,18 @@ impl HopperBlockEntity {
                     let backup = item.clone();
                     let one_item = item.split(1);
                     if Self::add_one_item(container.as_ref(), self, one_item).await {
+                        // If extracting from furnace output slot (index 2), drop XP as orbs
+                        const FURNACE_OUTPUT_SLOT: usize = 2;
+                        if i == FURNACE_OUTPUT_SLOT
+                            && let Some(experience_container) =
+                                entity.clone().to_experience_container()
+                        {
+                            let xp = experience_container.extract_experience();
+                            if xp > 0 {
+                                let pos = self.position.to_f64();
+                                world.clone().spawn_experience_orbs(pos, xp as u32).await;
+                            }
+                        }
                         return true;
                     }
                     *item = backup;

@@ -3,9 +3,10 @@ use pumpkin_data::block_properties::BlockProperties;
 
 use std::{
     array::from_fn,
+    collections::HashMap,
     sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering},
+        Arc, Mutex as StdMutex,
+        atomic::{AtomicBool, AtomicU16, Ordering},
     },
 };
 
@@ -31,8 +32,9 @@ pub struct SmokerBlockEntity {
 
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
 
-    /// Accumulated experience from smelting, stored as fixed-point (multiplied by 100)
-    pub experience_held: AtomicU32,
+    /// Tracks recipes used for XP calculation (vanilla RecipesUsed NBT format)
+    /// Maps result item ID -> craft count
+    pub recipes_used: StdMutex<HashMap<String, u32>>,
 }
 
 impl SmokerBlockEntity {
@@ -49,7 +51,7 @@ impl SmokerBlockEntity {
             cooking_time_spent: AtomicU16::new(0),
             lit_total_time: AtomicU16::new(0),
             lit_time_remaining: AtomicU16::new(0),
-            experience_held: AtomicU32::new(0),
+            recipes_used: StdMutex::new(HashMap::new()),
         }
     }
 }

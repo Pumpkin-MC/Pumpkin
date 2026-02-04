@@ -21,9 +21,12 @@ use pumpkin_world::{
 };
 use tokio::sync::Mutex;
 
-use crate::block::{
-    BlockBehaviour, BlockFuture, BrokenArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
-    registry::BlockActionResult,
+use crate::{
+    block::{
+        BlockBehaviour, BlockFuture, BrokenArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
+        registry::BlockActionResult,
+    },
+    entity::experience_orb::ExperienceOrbEntity,
 };
 
 struct FurnaceScreenFactory {
@@ -121,6 +124,16 @@ impl BlockBehaviour for FurnaceBlock {
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
+            // Extract and drop accumulated XP as orbs before removing the block entity
+            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+                && let Some(experience_container) = block_entity.to_experience_container()
+            {
+                let xp = experience_container.extract_experience();
+                if xp > 0 {
+                    let pos = args.position.to_f64();
+                    ExperienceOrbEntity::spawn(args.world, pos, xp as u32).await;
+                }
+            }
             args.world.remove_block_entity(args.position).await;
         })
     }
