@@ -114,7 +114,13 @@ pub(crate) fn build() -> TokenStream {
 
     let mut match_get_map = Vec::new();
 
-    let versions = vec![latest_version_key, legacy_version_key, "1_21_6", "1_21_5"];
+    let versions = vec![
+        latest_version_key,
+        legacy_version_key,
+        "1_21_6",
+        "1_21_5",
+        "1_21_4",
+    ];
 
     for version in versions {
         let file_path = format!("../assets/tags/{version}_tags.json");

@@ -4,10 +4,17 @@ use std::{collections::BTreeMap, fs};
 
 pub(crate) fn build() -> TokenStream {
     // 1. Track files
+    println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_4_tracked_data.json");
     println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_5_tracked_data.json");
     println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_6_tracked_data.json");
     println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_7_tracked_data.json");
     println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_11_tracked_data.json");
+
+    let data_4: BTreeMap<String, u8> = serde_json::from_str(
+        &fs::read_to_string("../assets/tracked_data/1_21_4_tracked_data.json")
+            .expect("1.21.4 data missing"),
+    )
+    .unwrap();
 
     let data_5: BTreeMap<String, u8> = serde_json::from_str(
         &fs::read_to_string("../assets/tracked_data/1_21_5_tracked_data.json")
@@ -38,13 +45,16 @@ pub(crate) fn build() -> TokenStream {
     for (name, id_11) in &data_11 {
         let ident = format_ident!("DATA_{}", name.to_uppercase());
 
-        let id_5 = data_5.get(name).copied().unwrap_or(255); // 255 as an 'Invalid' marker
-        let id_6 = data_6.get(name).copied().unwrap_or(255); // 255 as an 'Invalid' marker
-        let id_7 = data_7.get(name).copied().unwrap_or(255); // 255 as an 'Invalid' marker
+        // 255 as an 'Invalid' marker
+        let id_4 = data_4.get(name).copied().unwrap_or(255);
+        let id_5 = data_5.get(name).copied().unwrap_or(255);
+        let id_6 = data_6.get(name).copied().unwrap_or(255);
+        let id_7 = data_7.get(name).copied().unwrap_or(255);
 
         constants.extend(quote! {
             pub const #ident: TrackedId = TrackedId {
                 latest: #id_11,
+                v1_21_4: #id_4,
                 v1_21_5: #id_5,
                 v1_21_6: #id_6,
                 v1_21_7: #id_7,
@@ -58,6 +68,7 @@ pub(crate) fn build() -> TokenStream {
         #[derive(Copy, Clone, Debug)]
         pub struct TrackedId {
             pub latest: u8,
+            pub v1_21_4: u8,
             pub v1_21_5: u8,
             pub v1_21_6: u8,
             pub v1_21_7: u8,
@@ -66,6 +77,7 @@ pub(crate) fn build() -> TokenStream {
         impl TrackedId {
             pub fn get(&self, version: &MinecraftVersion) -> u8 {
                 match version {
+                    MinecraftVersion::V_1_21_4 => self.v1_21_4,
                     MinecraftVersion::V_1_21_5 => self.v1_21_5,
                     MinecraftVersion::V_1_21_6 => self.v1_21_6,
                     MinecraftVersion::V_1_21_7 => self.v1_21_7,
