@@ -12,6 +12,7 @@ pub mod player_login;
 pub mod player_pre_login;
 pub mod player_advancement_done;
 pub mod player_animation;
+pub mod player_armor_stand_manipulate;
 pub mod player_move;
 pub mod player_teleport;
 
