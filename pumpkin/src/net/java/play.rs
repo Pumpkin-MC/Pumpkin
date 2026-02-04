@@ -179,6 +179,13 @@ impl JavaClient {
                 // We should set the position now to what we requested in the teleport packet.
                 // This may fix issues when the client sends the position while being teleported.
                 player.living_entity.entity.set_pos(*position);
+                player.living_entity.entity.last_pos.store(*position);
+
+                // Reset fall distance now that teleport is confirmed.
+                // Note: fall_damage_immune_until_near is NOT cleared here - it will be cleared
+                // in the position handler when the client sends a position close to the destination.
+                // This prevents stale position packets from causing fall damage.
+                player.living_entity.fall_distance.store(0.0);
 
                 *awaiting_teleport = None;
                 drop(awaiting_teleport);
@@ -270,6 +277,11 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        // Skip movement processing when awaiting teleport confirmation (like vanilla)
+        if player.awaiting_teleport.lock().await.is_some() {
+            log::debug!("Skipping movement: awaiting teleport confirmation");
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
@@ -328,7 +340,17 @@ impl JavaClient {
                         .await;
                 }
 
+                // Skip fall damage if flying
                 if !player.abilities.lock().await.flying {
+                    if height_difference < -3.0 {
+                        log::warn!(
+                            "Large fall detected: height_diff={}, pos={:?}, last_pos={:?}, on_ground={}",
+                            height_difference,
+                            pos,
+                            last_pos,
+                            packet.collision & FLAG_ON_GROUND != 0
+                        );
+                    }
                     player.living_entity
                         .fall(
                             player.clone(),
@@ -372,6 +394,16 @@ impl JavaClient {
         packet: SPlayerPositionRotation,
     ) {
         if !player.has_client_loaded() {
+            return;
+        }
+        // Skip movement processing when awaiting teleport confirmation (like vanilla)
+        // Vanilla still updates angles but skips position/movement processing
+        if player.awaiting_teleport.lock().await.is_some() {
+            // Only update angles, like vanilla does
+            player
+                .living_entity
+                .entity
+                .set_rotation(packet.yaw, packet.pitch);
             return;
         }
         // y = feet Y
@@ -460,6 +492,7 @@ impl JavaClient {
                         &CHeadRot::new(entity_id.into(), yaw as u8),
                     )
                     .await;
+                // Skip fall damage if flying
                 if !player.abilities.lock().await.flying {
                     player.living_entity
                         .fall(
