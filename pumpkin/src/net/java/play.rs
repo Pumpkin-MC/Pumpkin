@@ -26,6 +26,8 @@ use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
+use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
+use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -50,8 +52,8 @@ use pumpkin_protocol::java::client::play::{
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
     SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
-    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
-    SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
+    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SCustomPayload,
+    SInteract, SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
     SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
     SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
     SUpdateSign, SUseItem, SUseItemOn, Status,
@@ -1307,6 +1309,41 @@ impl JavaClient {
                     }
                 }
             }}
+        }
+    }
+
+    pub async fn handle_custom_payload(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        custom_payload: SCustomPayload,
+    ) {
+        let channel = custom_payload.channel.as_str();
+        let is_register = matches!(channel, "minecraft:register" | "REGISTER");
+        let is_unregister = matches!(channel, "minecraft:unregister" | "UNREGISTER");
+
+        if !is_register && !is_unregister {
+            return;
+        }
+
+        let Ok(payload_str) = std::str::from_utf8(&custom_payload.data) else {
+            return;
+        };
+
+        for registered_channel in payload_str.split('\0').filter(|entry| !entry.is_empty()) {
+            if is_register {
+                let event = PlayerRegisterChannelEvent::new(
+                    player.clone(),
+                    registered_channel.to_string(),
+                );
+                let _ = server.plugin_manager.fire(event).await;
+            } else {
+                let event = PlayerUnregisterChannelEvent::new(
+                    player.clone(),
+                    registered_channel.to_string(),
+                );
+                let _ = server.plugin_manager.fire(event).await;
+            }
         }
     }
 

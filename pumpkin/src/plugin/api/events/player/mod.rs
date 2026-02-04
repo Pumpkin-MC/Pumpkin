@@ -9,6 +9,18 @@ pub mod player_interact_unknown_entity_event;
 pub mod player_join;
 pub mod player_leave;
 pub mod player_login;
+pub mod player_pre_login;
+pub mod player_advancement_done;
+pub mod player_animation;
+pub mod player_armor_stand_manipulate;
+pub mod player_bed_enter;
+pub mod player_bed_leave;
+pub mod player_bucket_empty;
+pub mod player_bucket_fill;
+pub mod player_bucket_entity;
+pub mod player_changed_main_hand;
+pub mod player_register_channel;
+pub mod player_unregister_channel;
 pub mod player_move;
 pub mod player_teleport;
 
