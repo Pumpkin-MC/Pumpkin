@@ -22,6 +22,7 @@ use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_animation::PlayerAnimationEvent;
 use crate::plugin::player::player_armor_stand_manipulate::PlayerArmorStandManipulateEvent;
+use crate::plugin::player::player_bucket_entity::PlayerBucketEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
@@ -1289,6 +1290,28 @@ impl JavaClient {
                 }
 
                 if let Some(entity) = world.get_entity_by_id(entity_id.0) {
+                    let held = player.inventory.held_item();
+                    let item_key = {
+                        let item_guard = held.lock().await;
+                        format!("minecraft:{}", item_guard.get_item().registry_key)
+                    };
+                    if item_key.ends_with("_bucket") || item_key == "minecraft:bucket" {
+                        let event = PlayerBucketEntityEvent::new(
+                            player.clone(),
+                            entity.get_entity().entity_uuid,
+                            format!(
+                                "minecraft:{}",
+                                entity.get_entity().entity_type.resource_name
+                            ),
+                            item_key.clone(),
+                            String::new(),
+                            "HAND".to_string(),
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                    }
                     if entity.get_entity().entity_type == &EntityType::ARMOR_STAND {
                         let hand = interact.hand.and_then(|h| Hand::try_from(h.0).ok());
                         let (slot, item_stack) = match hand {
