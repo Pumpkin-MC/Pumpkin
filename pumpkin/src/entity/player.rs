@@ -1274,6 +1274,17 @@ impl Player {
         let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position).await;
         BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
 
+        if let Some(server) = world.server.upgrade() {
+            let bed_position = respawn_point.position.to_f64().add_raw(0.5, 0.0, 0.5);
+            if let Some(player) = server.get_player_by_uuid(self.gameprofile.id) {
+                let event = crate::plugin::player::player_bed_leave::PlayerBedLeaveEvent::new(
+                    player,
+                    bed_position,
+                );
+                let _ = server.plugin_manager.fire(event).await;
+            }
+        }
+
         self.living_entity
             .entity
             .set_pose(EntityPose::Standing)
