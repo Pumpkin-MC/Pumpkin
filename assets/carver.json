@@ -16,6 +16,7 @@
         "above_bottom": 8
       },
       "debug_settings": {
+        "debug_mode": false,
         "air_state": {
           "Properties": {
             "powered": "false",
@@ -90,6 +91,7 @@
         "above_bottom": 8
       },
       "debug_settings": {
+        "debug_mode": false,
         "air_state": {
           "Properties": {
             "powered": "false",
@@ -153,6 +155,7 @@
         "above_bottom": 8
       },
       "debug_settings": {
+        "debug_mode": false,
         "air_state": {
           "Properties": {
             "powered": "false",

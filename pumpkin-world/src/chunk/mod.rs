@@ -14,7 +14,10 @@ use pumpkin_util::math::position::BlockPos;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::ops::{BitAnd, BitOr};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use thiserror::Error;
 
 pub mod format;
@@ -67,10 +70,10 @@ pub enum CompressionError {
     ZstdError(std::io::Error),
 }
 
-// Clone here cause we want to clone a snapshot of the chunk so we don't block writing for too long
+// Clone to snapshot without blocking writers for long.
 pub struct ChunkData {
     pub section: ChunkSections,
-    /// See `https://minecraft.wiki/w/Heightmap` for more info
+    /// See <https://minecraft.wiki/w/Heightmap>.
     pub heightmap: ChunkHeightmaps,
     pub x: i32,
     pub z: i32,
@@ -80,6 +83,12 @@ pub struct ChunkData {
     pub light_engine: ChunkLight,
     pub status: ChunkStatus,
     pub dirty: bool,
+    pub post_processing_positions: HashSet<BlockPos>,
+    pub blending_data: Option<NbtCompound>,
+    /// Stage-specific carving masks; serialization writes the union to match vanilla.
+    pub carving_mask_air: Box<[i64]>,
+    /// Stage-specific carving masks; serialization writes the union to match vanilla.
+    pub carving_mask_liquid: Box<[i64]>,
 }
 
 #[derive(Clone)]
@@ -93,12 +102,7 @@ pub struct ChunkEntityData {
     pub dirty: bool,
 }
 
-/// Represents pure block data for a chunk.
-/// Subchunks are vertical portions of a chunk. They are 16 blocks tall.
-/// There are currently 24 subchunks per chunk.
-///
-/// A chunk can be:
-/// - Subchunks: 24 separate subchunks are stored.
+/// Pure block data for a chunk, stored in 16-block-tall subchunks (currently 24).
 #[derive(Clone)]
 pub struct ChunkSections {
     pub sections: Box<[SubChunk]>,
@@ -176,46 +180,92 @@ pub struct ChunkHeightmaps {
 }
 
 impl ChunkHeightmaps {
-    pub fn set(&mut self, heightmap: ChunkHeightmapType, pos: BlockPos, min_y: i32) {
-        let data = match heightmap {
+    const HEIGHTMAP_BITS: u32 = 9;
+    const HEIGHTMAP_ENTRY_MASK: i64 = (1 << Self::HEIGHTMAP_BITS) - 1;
+    const HEIGHTMAP_COLUMNS_PER_LONG: usize = 7;
+    const HEIGHTMAP_LONG_BITS: u32 = 64;
+    #[inline]
+    fn select_heightmap_mut(&mut self, heightmap: ChunkHeightmapType) -> &mut [i64] {
+        match heightmap {
             ChunkHeightmapType::WorldSurface => &mut self.world_surface,
             ChunkHeightmapType::MotionBlocking => &mut self.motion_blocking,
             ChunkHeightmapType::MotionBlockingNoLeaves => &mut self.motion_blocking_no_leaves,
-        };
+        }
+    }
+
+    #[inline]
+    fn select_heightmap(&self, heightmap: ChunkHeightmapType) -> &[i64] {
+        match heightmap {
+            ChunkHeightmapType::WorldSurface => &self.world_surface,
+            ChunkHeightmapType::MotionBlocking => &self.motion_blocking,
+            ChunkHeightmapType::MotionBlockingNoLeaves => &self.motion_blocking_no_leaves,
+        }
+    }
+
+    #[inline]
+    fn heightmap_packed_array_indices(local_x: usize, local_z: usize) -> (usize, u32) {
+        let column_idx = local_z * 16 + local_x;
+        let bit_start_idx = column_idx * Self::HEIGHTMAP_BITS as usize;
+        let packed_array_bit_start_idx = bit_start_idx as u32 % (Self::HEIGHTMAP_LONG_BITS - 1);
+        let packed_array_idx = column_idx / Self::HEIGHTMAP_COLUMNS_PER_LONG;
+
+        (packed_array_idx, packed_array_bit_start_idx)
+    }
+
+    #[inline]
+    fn heightmap_set_mask(packed_array_bit_start_idx: u32) -> i64 {
+        if packed_array_bit_start_idx == 0 {
+            //0b0000_0000_0111_1111_...
+            !(Self::HEIGHTMAP_ENTRY_MASK << (Self::HEIGHTMAP_LONG_BITS - Self::HEIGHTMAP_BITS))
+        } else {
+            !(
+                Self::HEIGHTMAP_ENTRY_MASK
+                    << (Self::HEIGHTMAP_LONG_BITS - packed_array_bit_start_idx - Self::HEIGHTMAP_BITS)
+            )
+        }
+    }
+
+    #[inline]
+    fn heightmap_get_mask(packed_array_bit_start_idx: u32) -> i64 {
+        if packed_array_bit_start_idx == 0 {
+            //0b1111_1111_1000_0000_...
+            Self::HEIGHTMAP_ENTRY_MASK << (Self::HEIGHTMAP_LONG_BITS - Self::HEIGHTMAP_BITS)
+        } else {
+            Self::HEIGHTMAP_ENTRY_MASK
+                << (Self::HEIGHTMAP_LONG_BITS - packed_array_bit_start_idx - Self::HEIGHTMAP_BITS)
+        }
+    }
+
+    #[inline]
+    fn heightmap_height_bits(adjust_height: usize, packed_array_bit_start_idx: u32) -> i64 {
+        let height_bit_bytes = adjust_height
+            .wrapping_shl(Self::HEIGHTMAP_LONG_BITS - Self::HEIGHTMAP_BITS - packed_array_bit_start_idx)
+            .to_ne_bytes();
+        i64::from_ne_bytes(height_bit_bytes)
+    }
+
+    #[inline]
+    fn heightmap_unpack_height(packed_value: i64, packed_array_bit_start_idx: u32) -> i32 {
+        u64::from_ne_bytes(packed_value.to_ne_bytes())
+            .wrapping_shr(Self::HEIGHTMAP_LONG_BITS - (packed_array_bit_start_idx + Self::HEIGHTMAP_BITS))
+            as i32
+    }
+
+    pub fn set(&mut self, heightmap: ChunkHeightmapType, pos: BlockPos, min_y: i32) {
+        let data = self.select_heightmap_mut(heightmap);
 
         let local_x = (pos.0.x & 15) as usize;
         let local_z = (pos.0.z & 15) as usize;
 
         let adjust_height = (pos.0.y + min_y.abs()) as usize;
 
-        assert!(adjust_height <= 2 << 9);
+        assert!(adjust_height <= 2 << Self::HEIGHTMAP_BITS);
 
-        //chunk column index in 16*16 chunk.
-        let column_idx = local_z * 16 + local_x;
+        let (packed_array_idx, packed_array_bit_start_idx) =
+            Self::heightmap_packed_array_indices(local_x, local_z);
 
-        // Each height value uses 9 bits, calculate starting bit position
-        let bit_start_idx = column_idx * 9;
-
-        // Find where these 9 bits start within a 64-bit packed array element
-        // We use bit_start_index % 63, which means the last bit of i64 won't be used,
-        // but this avoids the hassle of bit concatenation.
-        let packed_array_bit_start_idx = bit_start_idx as u32 % 63;
-
-        let mask = {
-            if packed_array_bit_start_idx == 0 {
-                //0b0000_0000_0111_1111_...
-                !(0x1FF << (64 - 9))
-            } else {
-                !(0x1FF << (64 - packed_array_bit_start_idx - 9))
-            }
-        };
-
-        let height_bit_bytes = adjust_height
-            .wrapping_shl(64 - 9 - packed_array_bit_start_idx)
-            .to_ne_bytes();
-        let height = i64::from_ne_bytes(height_bit_bytes);
-
-        let packed_array_idx = column_idx / 7;
+        let mask = Self::heightmap_set_mask(packed_array_bit_start_idx);
+        let height = Self::heightmap_height_bits(adjust_height, packed_array_bit_start_idx);
 
         data[packed_array_idx] = data[packed_array_idx].bitand(mask).bitor(height);
     }
@@ -225,32 +275,14 @@ impl ChunkHeightmaps {
         let local_x = (x & 15) as usize;
         let local_z = (z & 15) as usize;
 
-        let column_idx = local_z * 16 + local_x;
-        let bit_start_idx = column_idx * 9;
+        let (packed_array_idx, packed_array_bit_start_idx) =
+            Self::heightmap_packed_array_indices(local_x, local_z);
+        let mask = Self::heightmap_get_mask(packed_array_bit_start_idx);
 
-        let packed_array_bit_start_idx = bit_start_idx as u32 % 63;
+        let data = self.select_heightmap(heightmap);
+        let packed_value = data[packed_array_idx].bitand(mask);
 
-        let mask = {
-            if packed_array_bit_start_idx == 0 {
-                //0b1111_1111_1000_0000_...
-                0x1ff << (64 - 9)
-            } else {
-                0x1ff << (64 - packed_array_bit_start_idx - 9)
-            }
-        };
-
-        let packed_array_idx = column_idx / 7;
-
-        let data = match heightmap {
-            ChunkHeightmapType::WorldSurface => &self.world_surface,
-            ChunkHeightmapType::MotionBlocking => &self.motion_blocking,
-            ChunkHeightmapType::MotionBlockingNoLeaves => &self.motion_blocking_no_leaves,
-        };
-        let height_bit_bytes_i64 = data[packed_array_idx].bitand(mask).to_ne_bytes();
-
-        (u64::from_ne_bytes(height_bit_bytes_i64)
-            .wrapping_shr(64 - (packed_array_bit_start_idx + 9)) as i32)
-            - min_y.abs()
+        Self::heightmap_unpack_height(packed_value, packed_array_bit_start_idx) - min_y.abs()
     }
 
     pub fn log_heightmap(&self, _type: ChunkHeightmapType, min_y: i32) {
@@ -332,7 +364,7 @@ impl ChunkSections {
         }
     }
 
-    /// Returns the replaced block state ID
+    /// Returns the replaced block state ID.
     pub fn set_block_absolute_y(
         &mut self,
         relative_x: usize,
@@ -349,7 +381,7 @@ impl ChunkSections {
         self.set_relative_block(relative_x, relative_y, relative_z, block_state_id)
     }
 
-    /// Gets the given block in the chunk
+    /// Gets the given block in the chunk.
     fn get_relative_block(
         &self,
         relative_x: usize,
@@ -366,7 +398,7 @@ impl ChunkSections {
             .map(|section| section.block_states.get(relative_x, relative_y, relative_z))
     }
 
-    /// Sets the given block in the chunk, returning the old block state ID
+    /// Sets the given block in the chunk, returning the old block state ID.
     #[inline]
     pub fn set_relative_block(
         &mut self,
@@ -375,15 +407,12 @@ impl ChunkSections {
         relative_z: usize,
         block_state_id: BlockStateId,
     ) -> BlockStateId {
-        // TODO @LUK_ESC? update the heightmap
+        // Heightmap updates are handled by callers when needed.
         self.set_block_no_heightmap_update(relative_x, relative_y, relative_z, block_state_id)
     }
 
-    /// Sets the given block in the chunk, returning the old block
-    /// Contrary to `set_block` this does not update the heightmap.
-    ///
-    /// Only use this if you know you don't need to update the heightmap
-    /// or if you manually set the heightmap in `empty_with_heightmap`
+    /// Sets the given block, returning the old block without heightmap updates.
+    /// Only use when heightmaps are handled elsewhere.
     pub fn set_block_no_heightmap_update(
         &mut self,
         relative_x: usize,
@@ -457,7 +486,25 @@ impl ChunkSections {
 }
 
 impl ChunkData {
-    /// Gets the given block in the chunk
+    #[must_use]
+    pub fn carving_mask_union(&self) -> Vec<i64> {
+        let max_len = self
+            .carving_mask_air
+            .len()
+            .max(self.carving_mask_liquid.len());
+        let mut combined = Vec::with_capacity(max_len);
+        for idx in 0..max_len {
+            let air = self.carving_mask_air.get(idx).copied().unwrap_or(0);
+            let liquid = self.carving_mask_liquid.get(idx).copied().unwrap_or(0);
+            combined.push(air | liquid);
+        }
+        while matches!(combined.last(), Some(0)) {
+            combined.pop();
+        }
+        combined
+    }
+
+    /// Gets the given block in the chunk.
     #[inline]
     #[must_use]
     pub fn get_relative_block(
@@ -470,7 +517,7 @@ impl ChunkData {
             .get_relative_block(relative_x, relative_y, relative_z)
     }
 
-    /// Sets the given block in the chunk
+    /// Sets the given block in the chunk.
     #[inline]
     pub fn set_relative_block(
         &mut self,
@@ -479,16 +526,13 @@ impl ChunkData {
         relative_z: usize,
         block_state_id: BlockStateId,
     ) {
-        // TODO @LUK_ESC? update the heightmap
+        // Heightmap updates are handled by callers when needed.
         self.section
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
     }
 
-    /// Sets the given block in the chunk, returning the old block
-    /// Contrary to `set_block` this does not update the heightmap.
-    ///
-    /// Only use this if you know you don't need to update the heightmap
-    /// or if you manually set the heightmap in `empty_with_heightmap`
+    /// Sets the given block, returning the old block without heightmap updates.
+    /// Only use when heightmaps are handled elsewhere.
     #[inline]
     pub fn set_block_no_heightmap_update(
         &mut self,
@@ -501,8 +545,8 @@ impl ChunkData {
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
     }
 
-    //TODO: Tracking heightmaps update.
     pub fn calculate_heightmap(&mut self) -> ChunkHeightmaps {
+        // Heightmaps are rebuilt on demand for fully populated chunk data.
         let highest_non_empty_subchunk = self.get_highest_non_empty_subchunk();
         let mut heightmaps = ChunkHeightmaps::default();
 
@@ -512,11 +556,6 @@ impl ChunkData {
             }
         }
 
-        // log::info!("WorldSurface:");
-        // heightmaps.log_heightmap(ChunkHeightmapType::WorldSurface, self.section.min_y);
-        // log::info!("MotionBlocking:");
-        // heightmaps.log_heightmap(ChunkHeightmapType::MotionBlocking, self.section.min_y);
-        // log::info!("min_y: {}", self.section.min_y);
         heightmaps
     }
 

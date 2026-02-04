@@ -38,7 +38,7 @@ pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<VanillaGenerator> 
 
 pub struct GlobalRandomConfig {
     pub seed: u64,
-    base_random_deriver: RandomDeriver,
+    pub base_random_deriver: RandomDeriver,
     aquifer_random_deriver: RandomDeriver,
     ore_random_deriver: RandomDeriver,
 }
@@ -67,6 +67,11 @@ impl GlobalRandomConfig {
     #[must_use]
     pub const fn seed(&self) -> u64 {
         self.seed
+    }
+
+    #[must_use]
+    pub const fn aquifer_random_deriver(&self) -> &RandomDeriver {
+        &self.aquifer_random_deriver
     }
 }
 

@@ -1,6 +1,12 @@
+use pumpkin_data::{chunk::Biome, dimension::Dimension};
 use pumpkin_util::math::{floor_mod, square, vector3::Vector3};
 
 use super::biome_coords;
+use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
+use crate::generation::noise::router::multi_noise_sampler::{
+    MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+};
+use crate::generation::noise::router::proto_noise_router::ProtoNoiseRouters;
 
 // This blends biome boundaries, returning which biome to populate the surface on based on the seed
 pub fn get_biome_blend(
@@ -106,6 +112,42 @@ pub fn get_biome_blend(
     let biome_y = biome_y.clamp(biome_bottom, biome_top);
 
     Vector3::new(biome_x, biome_y, biome_z)
+}
+
+pub(crate) struct NoiseBiomeSampler<'a> {
+    sampler: MultiNoiseSampler<'a>,
+}
+
+impl<'a> NoiseBiomeSampler<'a> {
+    #[must_use]
+    pub fn new(
+        noise_router: &'a ProtoNoiseRouters,
+        start_biome_x: i32,
+        start_biome_z: i32,
+        horizontal_biome_end: usize,
+    ) -> Self {
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
+            start_biome_x,
+            start_biome_z,
+            horizontal_biome_end,
+        );
+        let sampler = MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
+        Self { sampler }
+    }
+
+    pub fn biome(
+        &mut self,
+        dimension: Dimension,
+        biome_x: i32,
+        biome_y: i32,
+        biome_z: i32,
+    ) -> &'static Biome {
+        if dimension == Dimension::THE_END {
+            TheEndBiomeSupplier::biome(biome_x, biome_y, biome_z, &mut self.sampler, dimension)
+        } else {
+            MultiNoiseBiomeSupplier::biome(biome_x, biome_y, biome_z, &mut self.sampler, dimension)
+        }
+    }
 }
 
 // This is effectively getting a random offset (+/- 0.0-0.8ish) to our biome position quarters and

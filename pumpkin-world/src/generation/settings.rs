@@ -40,6 +40,14 @@ pub struct GenerationSettings {
     pub aquifers_enabled: bool,
     pub ore_veins_enabled: bool,
     pub legacy_random_source: bool,
+    #[serde(default)]
+    pub debug_carvers: bool,
+    #[serde(default)]
+    pub debug_disable_carvers: bool,
+    #[serde(default)]
+    pub debug_disable_fluid_generation: bool,
+    #[serde(default)]
+    pub debug_disable_blending: bool,
     pub sea_level: i32,
     pub default_fluid: BlockStateCodec,
     #[serde(rename = "noise")]
