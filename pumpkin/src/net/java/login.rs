@@ -22,6 +22,7 @@ use crate::{
         offline_uuid,
         proxy::{bungeecord, velocity},
     },
+    plugin::player::player_pre_login::PlayerPreLoginEvent,
     server::Server,
 };
 
@@ -45,6 +46,30 @@ impl JavaClient {
         if !is_valid_player_name(&login_start.name) {
             self.kick(TextComponent::text("Invalid characters in username"))
                 .await;
+            return;
+        }
+
+        let prelogin_uuid = if server.basic_config.online_mode {
+            login_start.uuid
+        } else {
+            offline_uuid(&login_start.name).expect("This is very not safe and bad")
+        };
+        let address = self.address.lock().await.ip().to_string();
+        let prelogin_event = PlayerPreLoginEvent::new(
+            login_start.name.clone(),
+            prelogin_uuid,
+            address,
+            "ALLOWED".to_string(),
+            "".to_string(),
+        );
+        let prelogin_event = server.plugin_manager.fire(prelogin_event).await;
+        if prelogin_event.cancelled || prelogin_event.result != "ALLOWED" {
+            let message = if prelogin_event.kick_message.is_empty() {
+                "Disconnected".to_string()
+            } else {
+                prelogin_event.kick_message
+            };
+            self.kick(TextComponent::text(message)).await;
             return;
         }
         // Default game profile, when no online mode
