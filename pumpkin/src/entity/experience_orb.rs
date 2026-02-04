@@ -117,7 +117,9 @@ impl EntityBase for ExperienceOrbEntity {
                 if *delay == 0 {
                     *delay = 2;
                     player.living_entity.pickup(&self.entity, 1).await;
-                    let remaining = player.apply_mending_from_xp(self.amount as i32).await;
+                    let remaining = player
+                        .apply_mending_from_xp(self.amount as i32, Some(self.entity.entity_uuid))
+                        .await;
                     if remaining > 0 {
                         player.add_experience_points(remaining).await;
                     }
