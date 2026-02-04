@@ -16,7 +16,7 @@ use crossbeam::channel::Sender;
 use dashmap::DashMap;
 use log::trace;
 use num_traits::Zero;
-use pumpkin_config::{chunk::ChunkConfig, world::LevelConfig};
+use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
@@ -65,6 +65,7 @@ pub struct Level {
     pub seed: Seed,
     pub block_registry: Arc<dyn BlockRegistryExt>,
     pub level_folder: LevelFolder,
+    pub lighting_config: LightingEngineConfig,
 
     /// Counts the number of ticks that have been scheduled for this world
     schedule_tick_counts: AtomicU64,
@@ -178,6 +179,7 @@ impl Level {
             block_registry,
             world_gen,
             level_folder,
+            lighting_config: level_config.lighting,
             chunk_saver,
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),

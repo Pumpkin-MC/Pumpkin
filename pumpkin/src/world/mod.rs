@@ -94,7 +94,7 @@ use pumpkin_protocol::{
 use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{
-        CBlockUpdate, CDisguisedChatMessage, CExplosion, CLightUpdate, CRespawn,
+        CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn,
         CSetBlockDestroyStage, CWorldEvent,
     },
 };
@@ -133,6 +133,7 @@ pub mod scoreboard;
 pub mod weather;
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
+use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
 use pumpkin_world::generation::settings::gen_settings_from_dimension;
@@ -247,6 +248,13 @@ impl World {
             increase_sky_light_queue: SegQueue::new(),
             server,
         }
+    }
+
+    pub fn get_lighting_config(&self) -> LightingEngineConfig {
+        self.server
+            .upgrade()
+            .map(|s| s.advanced_config.world.lighting)
+            .unwrap_or_default()
     }
 
     pub async fn shutdown(&self) {
@@ -2715,6 +2723,18 @@ impl World {
     }
 
     pub async fn check_block_light_updates(self: &Arc<Self>, pos: BlockPos) {
+        match self.get_lighting_config() {
+            LightingEngineConfig::Full => {
+                self.set_block_light_level(&pos, 15).await.unwrap();
+                return;
+            }
+            LightingEngineConfig::Dark => {
+                self.set_block_light_level(&pos, 0).await.unwrap();
+                return;
+            }
+            LightingEngineConfig::Default => {}
+        }
+
         let current_light = self.get_block_light_level(&pos).await.unwrap_or(0);
         let block_state = self.get_block_state(&pos).await;
         let expected_light = block_state.luminance;
@@ -2732,8 +2752,6 @@ impl World {
             self.queue_block_light_increase(pos, expected_light);
         }
 
-        //TODO check sky light updates
-
         // Only check neighbors if we didn't trigger a decrease
         // Decrease propagation handles re-validating neighbors
         if expected_light >= current_light {
@@ -2750,7 +2768,6 @@ impl World {
                 self.queue_block_light_increase(neighbor_pos, neighbor_light);
             }
         }
-        // TODO check sky light updates
     }
 
     pub async fn perform_sky_light_updates(self: &Arc<Self>) -> i32 {
@@ -2845,6 +2862,18 @@ impl World {
     }
 
     pub async fn check_sky_light_updates(self: &Arc<Self>, pos: BlockPos) {
+        match self.get_lighting_config() {
+            LightingEngineConfig::Full => {
+                self.set_sky_light_level(&pos, 15).await.unwrap();
+                return;
+            }
+            LightingEngineConfig::Dark => {
+                self.set_sky_light_level(&pos, 0).await.unwrap();
+                return;
+            }
+            LightingEngineConfig::Default => {}
+        }
+        
         let current_light = self.get_sky_light_level(&pos).await.unwrap_or(0);
         let block_state = self.get_block_state(&pos).await;
         
@@ -2853,7 +2882,6 @@ impl World {
             let neighbor_pos = pos.offset(dir.to_offset());
             if let Some(n_light) = self.get_sky_light_level(&neighbor_pos).await {
                 // Determine potential light from this neighbor
-                // If I am DOWN from neighbor (neighbor is UP), check 15 rule.
                 let pot = if n_light == 15 && dir == BlockDirection::Up {
                     15
                 } else {
@@ -2864,6 +2892,7 @@ impl World {
         }
 
         let opacity = block_state.opacity;
+        // Apply opacity decay
         let expected_light = best_light.saturating_sub(opacity);
 
         if expected_light < current_light {
@@ -2874,6 +2903,8 @@ impl World {
              self.queue_sky_light_increase(pos, expected_light);
         }
 
+        // Only check/notify neighbors if we didn't just cause a massive drop 
+        // (decrease queue handles notifying neighbors to drop their light)
         if expected_light >= current_light {
              self.check_neighbors_sky_light_updates(pos, expected_light).await;
         }
@@ -2883,7 +2914,7 @@ impl World {
         // Kickstart neighbors
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
-            if let Some(neighbor_light) = self.get_sky_light_level(&neighbor_pos).await {
+            if self.get_sky_light_level(&neighbor_pos).await.is_some() {
                 // Simply queueing self will force re-propagation to neighbors
                 self.queue_sky_light_increase(pos, current_light);
                 break;
@@ -3118,7 +3149,7 @@ impl World {
             }
         }
 
-        let (chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
+        let (_chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
         
         self.check_block_light_updates(*position).await;
         self.perform_block_light_updates().await;

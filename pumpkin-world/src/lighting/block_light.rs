@@ -109,7 +109,7 @@ impl BlockLightEngine {
                     let chunk_x = neighbor_pos.0.x >> 4;
                     let chunk_z = neighbor_pos.0.z >> 4;
                     pending_updates.entry((chunk_x, chunk_z))
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push((neighbor_pos, new_level));
                     shadow_cache.insert(neighbor_pos, new_level);
                     
@@ -221,13 +221,13 @@ impl BlockLightEngine {
                     if neighbor_luminance == 0 {
                         // No self-emission, darken it
                         pending_updates.entry((chunk_x, chunk_z))
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((neighbor_pos, 0));
                         self.decrease_queue.push_back((neighbor_pos, neighbor_level));
                     } else {
                         // Has self-emission, set to its own light level
                         pending_updates.entry((chunk_x, chunk_z))
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((neighbor_pos, neighbor_luminance));
                         relight_queue.push((neighbor_pos, neighbor_luminance));
                     }
@@ -278,7 +278,7 @@ impl BlockLightEngine {
                         let chunk_x = neighbor_pos.0.x >> 4;
                         let chunk_z = neighbor_pos.0.z >> 4;
                         pending_updates.entry((chunk_x, chunk_z))
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((neighbor_pos, new_level));
                         shadow_cache.insert(neighbor_pos, new_level);
                         

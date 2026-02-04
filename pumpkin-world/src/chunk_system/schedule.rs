@@ -12,6 +12,7 @@ use crate::level::{Level, SyncChunk};
 use dashmap::DashMap;
 use log::error;
 use num_traits::abs;
+use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_util::math::vector2::Vector2;
 use slotmap::Key;
 use std::cmp::{Ordering, max};
@@ -58,6 +59,7 @@ pub struct GenerationSchedule {
     io_write: crossfire::compat::Tx<Vec<(ChunkPos, Chunk)>>,
     generate: crossfire::compat::MTx<(ChunkPos, Cache, StagedChunkEnum)>,
     listener: Arc<ChunkListener>,
+    lighting_config: LightingEngineConfig,
 }
 
 impl GenerationSchedule {
@@ -111,6 +113,7 @@ impl GenerationSchedule {
         }
 
         let level_sched = level.clone();
+        let lighting_config = level.lighting_config;
         let handle = thread::Builder::new()
             .name("Schedule".to_string())
             .spawn(move || {
@@ -130,12 +133,37 @@ impl GenerationSchedule {
                     generate: send_gen,
                     listener,
                     chunk_map: Default::default(),
+                    lighting_config,
                 };
                 scheduler.work(level_sched);
             })
             .expect("Failed to spawn Scheduler Thread");
 
         thread_tracker.push(handle);
+    }
+
+    fn apply_lighting_override(&self, chunk: &SyncChunk) {
+        match self.lighting_config {
+            LightingEngineConfig::Full => {
+                let mut chunk = chunk.blocking_write();
+                for section in chunk.light_engine.block_light.iter_mut() {
+                    section.fill(15);
+                }
+                for section in chunk.light_engine.sky_light.iter_mut() {
+                    section.fill(15);
+                }
+            }
+            LightingEngineConfig::Dark => {
+                let mut chunk = chunk.blocking_write();
+                for section in chunk.light_engine.block_light.iter_mut() {
+                    section.fill(0);
+                }
+                for section in chunk.light_engine.sky_light.iter_mut() {
+                    section.fill(0);
+                }
+            }
+            _ => {}
+        }
     }
 
     fn calc_priority(
@@ -217,6 +245,7 @@ impl GenerationSchedule {
                         holder.public = true;
                         match holder.chunk.as_ref().unwrap() {
                             Chunk::Level(chunk) => {
+                                self.apply_lighting_override(chunk);
                                 self.public_chunk_map.insert(pos, chunk.clone());
                                 self.listener.process_new_chunk(pos, chunk);
                             }
@@ -425,6 +454,7 @@ impl GenerationSchedule {
                 debug_assert!(!holder.public);
                 match &chunk {
                     Chunk::Level(data) => {
+                        self.apply_lighting_override(data);
                         let result = self.public_chunk_map.insert(pos, data.clone());
                         debug_assert!(result.is_none());
                         holder.public = true;
@@ -454,6 +484,7 @@ impl GenerationSchedule {
 
                                 holder.chunk = Some(Chunk::Level(chunk.clone()));
                                 debug_assert!(!holder.public);
+                                self.apply_lighting_override(&chunk);
                                 let result = self.public_chunk_map.insert(new_pos, chunk.clone());
                                 holder.public = true;
                                 debug_assert!(result.is_none());

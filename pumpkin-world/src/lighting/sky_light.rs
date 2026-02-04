@@ -131,8 +131,7 @@ impl SkyLightEngine {
 
                         // Precompute opacities for this section range to avoid borrowing cache
                         // while holding a mutable reference to the chunk.
-                        let mut opacities: Vec<u8> = Vec::new();
-                        opacities.reserve((y - start + 1) as usize);
+                        let mut opacities: Vec<u8> = Vec::with_capacity((y - start + 1) as usize);
                         for yy in start..=y {
                             let pos_vec = Vector3::new(x, yy, z);
                             let state = cache.get_block_state(&pos_vec);
@@ -254,7 +253,7 @@ impl SkyLightEngine {
                     let chunk_x = neighbor_pos.0.x >> 4;
                     let chunk_z = neighbor_pos.0.z >> 4;
                     pending_updates.entry((chunk_x, chunk_z))
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push((neighbor_pos, new_level));
                     shadow_cache.insert(neighbor_pos, new_level);
                     
@@ -357,7 +356,7 @@ impl SkyLightEngine {
                     let chunk_x = neighbor_pos.0.x >> 4;
                     let chunk_z = neighbor_pos.0.z >> 4;
                     pending_updates.entry((chunk_x, chunk_z))
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push((neighbor_pos, 0));
                     self.decrease_queue.push_back((neighbor_pos, neighbor_level));
                 } else {
@@ -407,7 +406,7 @@ impl SkyLightEngine {
                         let chunk_x = neighbor_pos.0.x >> 4;
                         let chunk_z = neighbor_pos.0.z >> 4;
                         pending_updates.entry((chunk_x, chunk_z))
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((neighbor_pos, new_level));
                         shadow_cache.insert(neighbor_pos, new_level);
                         

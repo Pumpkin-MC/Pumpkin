@@ -462,6 +462,10 @@ impl LightContainer {
             }
         }
     }
+
+    pub fn fill(&mut self, value: u8) {
+        *self = Self::new_filled(value);
+    }
 }
 
 impl Default for LightContainer {

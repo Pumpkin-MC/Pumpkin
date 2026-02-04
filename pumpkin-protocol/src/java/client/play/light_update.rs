@@ -77,8 +77,8 @@ impl ClientPacket for CLightUpdate<'_> {
                 // by swapping high/low nibbles per byte.
                 write.write_var_int(&light_data_size)?;
                 let mut swapped = Vec::with_capacity(data.len());
-                for b in data.iter() {
-                    swapped.push((b << 4) | (b >> 4));
+                for b in data {
+                    swapped.push(b.rotate_right(4));
                 }
                 write.write_slice(&swapped)?;
             }
@@ -90,8 +90,8 @@ impl ClientPacket for CLightUpdate<'_> {
             if let LightContainer::Full(data) = &self.0.light_engine.block_light[section_index] {
                 write.write_var_int(&light_data_size)?;
                 let mut swapped = Vec::with_capacity(data.len());
-                for b in data.iter() {
-                    swapped.push((b << 4) | (b >> 4));
+                for b in data {
+                    swapped.push(b.rotate_right(4));
                 }
                 write.write_slice(&swapped)?;
             }
