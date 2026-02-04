@@ -1,6 +1,7 @@
 use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
 use crate::world::World;
+use arc_swap::ArcSwap;
 use pumpkin_data::biome::Spawner;
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
 use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
@@ -20,7 +21,7 @@ use pumpkin_util::random::{RandomImpl, get_seed};
 use pumpkin_world::chunk::io::Dirtiable;
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use rand::seq::IndexedRandom;
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt;
@@ -67,20 +68,20 @@ impl LocalMobCapCalculator {
         dx * dx + dy * dy
     }
 
-    async fn get_players_near<'b>(
+    fn get_players_near<'b>(
         players_near_chunk: &'b mut HashMap<Vector2<i32>, Vec<i32>>,
         world: &Arc<World>,
-        chunk_pos: &Vector2<i32>,
+        chunk_pos: Vector2<i32>,
     ) -> &'b Vec<i32> {
-        match players_near_chunk.entry(*chunk_pos) {
+        match players_near_chunk.entry(chunk_pos) {
             Entry::Occupied(value) => value.into_mut(),
             Entry::Vacant(entry) => {
                 let mut players = Vec::new();
-                for (_uuid, player) in world.players.read().await.iter() {
+                for player in world.players.load().iter() {
                     if player.gamemode.load() == GameMode::Spectator {
                         continue;
                     }
-                    if Self::calc_distance(*chunk_pos, &player.position()) < 16384. {
+                    if Self::calc_distance(chunk_pos, &player.position()) < 16384. {
                         players.push(player.entity_id());
                     }
                 }
@@ -88,13 +89,13 @@ impl LocalMobCapCalculator {
             }
         }
     }
-    pub async fn add_mob(
+    pub fn add_mob(
         &mut self,
-        chunk_pos: &Vector2<i32>,
+        chunk_pos: Vector2<i32>,
         world: &Arc<World>,
         category: &'static MobCategory,
     ) {
-        let players = Self::get_players_near(&mut self.players_near_chunk, world, chunk_pos).await;
+        let players = Self::get_players_near(&mut self.players_near_chunk, world, chunk_pos);
         for player in players {
             self.player_mob_counts
                 .entry(*player)
@@ -106,13 +107,13 @@ impl LocalMobCapCalculator {
         // debug!("chunk_pos {:?}", chunk_pos);
         // debug!("players {:?}", players);
     }
-    pub async fn can_spawn(
+    pub fn can_spawn(
         &mut self,
         category: &'static MobCategory,
         world: &Arc<World>,
-        chunk_pos: &Vector2<i32>,
+        chunk_pos: Vector2<i32>,
     ) -> bool {
-        let players = Self::get_players_near(&mut self.players_near_chunk, world, chunk_pos).await;
+        let players = Self::get_players_near(&mut self.players_near_chunk, world, chunk_pos);
         for player in players {
             if let Some(count) = self.player_mob_counts.get(player) {
                 if count.can_spawn(category) {
@@ -185,13 +186,13 @@ impl fmt::Debug for SpawnState {
 impl SpawnState {
     pub async fn new(
         chunk_count: i32,
-        entities: &Arc<RwLock<HashMap<Uuid, Arc<dyn EntityBase>>>>,
+        entities: &ArcSwap<Vec<Arc<dyn EntityBase>>>,
         world: &Arc<World>,
     ) -> Self {
         let mut potential = PotentialCalculator::default();
         let mut local_mob_cap = LocalMobCapCalculator::default();
         let mut counter = MobCounts::default();
-        for entity in entities.read().await.values() {
+        for entity in entities.load().iter() {
             let entity = entity.get_entity();
             let entity_type = entity.entity_type;
             if !entity_type.mob || entity_type.category == &MobCategory::MISC {
@@ -204,9 +205,7 @@ impl SpawnState {
                 potential.add_charge(&entity_pos, cost.charge);
             }
             if entity_type.mob {
-                local_mob_cap
-                    .add_mob(&entity.chunk_pos.load(), world, entity_type.category)
-                    .await;
+                local_mob_cap.add_mob(entity.chunk_pos.load(), world, entity_type.category);
             }
             counter.add(entity_type.category);
         }
@@ -222,19 +221,18 @@ impl SpawnState {
         }
     }
     #[inline]
-    fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
+    const fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
         self.mob_category_counts.0[category.id]
             < category.max * self.spawnable_chunk_count / MAGIC_NUMBER
     }
-    async fn can_spawn_for_category_local(
+    fn can_spawn_for_category_local(
         &mut self,
         world: &Arc<World>,
         category: &'static MobCategory,
-        chunk_pos: &Vector2<i32>,
+        chunk_pos: Vector2<i32>,
     ) -> bool {
         self.local_mob_cap_calculator
             .can_spawn(category, world, chunk_pos)
-            .await
     }
     async fn can_spawn(
         &mut self,
@@ -277,13 +275,11 @@ impl SpawnState {
 
         self.spawn_potential.add_charge(pos, charge);
         self.mob_category_counts.add(entity_type.category);
-        self.local_mob_cap_calculator
-            .add_mob(
-                &Vector2::<i32>::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)),
-                world,
-                entity_type.category,
-            )
-            .await;
+        self.local_mob_cap_calculator.add_mob(
+            Vector2::<i32>::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)),
+            world,
+            entity_type.category,
+        );
     }
 }
 
@@ -319,20 +315,17 @@ pub fn get_filtered_spawning_categories(
 
 pub async fn spawn_for_chunk(
     world: &Arc<World>,
-    chunk_pos: &Vector2<i32>,
+    chunk_pos: Vector2<i32>,
     chunk: &Arc<RwLock<ChunkData>>,
     spawn_state: &mut SpawnState,
     spawn_list: &Vec<&'static MobCategory>,
 ) {
     // debug!("spawn for chunk {:?}", chunk_pos);
     for category in spawn_list {
-        if spawn_state
-            .can_spawn_for_category_local(world, category, chunk_pos)
-            .await
-        {
-            let random_pos = get_random_pos_within(world.min_y, chunk_pos, chunk).await;
+        if spawn_state.can_spawn_for_category_local(world, category, chunk_pos) {
+            let random_pos = get_random_pos_within(world.min_y, &chunk_pos, chunk).await;
             if random_pos.0.y > world.min_y {
-                spawn_category_for_position(category, world, random_pos, chunk_pos, spawn_state)
+                spawn_category_for_position(category, world, random_pos, &chunk_pos, spawn_state)
                     .await;
             }
         }
@@ -369,13 +362,7 @@ pub async fn spawn_category_for_position(
     let mut batch_buffer = vec![];
     let mut spawn_cluster_size = 0;
     let mut new_pos = pos;
-    let player_positions: Vec<_> = world
-        .players
-        .read()
-        .await
-        .values()
-        .map(|p| p.position())
-        .collect();
+    let player_positions: Vec<_> = world.players.load().iter().map(|p| p.position()).collect();
     for _ in 0..3 {
         let mut new_x = new_pos.0.x;
         let mut new_z = new_pos.0.z;
@@ -444,26 +431,35 @@ pub async fn spawn_category_for_position(
             let packet = base_entity.create_spawn_packet();
             let mut nbt = NbtCompound::new();
             entity.write_nbt(&mut nbt).await;
-            prepared_data.push((base_entity.entity_uuid, nbt, packet));
+            // Keep the entity reference here so we don't have to "find" it later
+            prepared_data.push((base_entity.entity_uuid, nbt, packet, entity.clone()));
         }
+
         {
             let chunk_handle = world.level.get_entity_chunk(*chunk_pos).await;
             let mut chunk_lock = chunk_handle.write().await;
-            let mut entities_lock = world.entities.write().await;
 
-            for (uuid, nbt, _) in &prepared_data {
-                let entity_ref = batch_buffer
-                    .iter()
-                    .find(|e| e.get_entity().entity_uuid == *uuid)
-                    .unwrap();
-
-                entities_lock.insert(*uuid, entity_ref.clone());
+            for (uuid, nbt, _, _) in &prepared_data {
                 chunk_lock.data.insert(*uuid, nbt.clone());
             }
             chunk_lock.mark_dirty(true);
+
+            world.entities.rcu(|current_entities| {
+                let mut new_entities = (**current_entities).clone();
+
+                for (uuid, _, _, entity_ref) in &prepared_data {
+                    if !new_entities
+                        .iter()
+                        .any(|e| e.get_entity().entity_uuid == *uuid)
+                    {
+                        new_entities.push(entity_ref.clone());
+                    }
+                }
+                new_entities
+            });
         };
 
-        for (_, _, packet) in prepared_data {
+        for (_, _, packet, _) in prepared_data {
             world.broadcast_packet_all(&packet).await;
         }
     }

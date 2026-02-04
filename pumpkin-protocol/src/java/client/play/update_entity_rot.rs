@@ -14,7 +14,8 @@ pub struct CUpdateEntityRot {
 }
 
 impl CUpdateEntityRot {
-    pub fn new(entity_id: VarInt, yaw: u8, pitch: u8, on_ground: bool) -> Self {
+    #[must_use]
+    pub const fn new(entity_id: VarInt, yaw: u8, pitch: u8, on_ground: bool) -> Self {
         Self {
             entity_id,
             yaw,

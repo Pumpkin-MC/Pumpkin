@@ -213,11 +213,11 @@ impl JavaClient {
         }
     }
 
-    fn clamp_horizontal(pos: f64) -> f64 {
+    const fn clamp_horizontal(pos: f64) -> f64 {
         pos.clamp(-3.0E7, 3.0E7)
     }
 
-    fn clamp_vertical(pos: f64) -> f64 {
+    const fn clamp_vertical(pos: f64) -> f64 {
         pos.clamp(-2.0E7, 2.0E7)
     }
 
@@ -881,19 +881,19 @@ impl JavaClient {
                     None => event.message.clone(),
                 };
 
-                let decorated_message = &TextComponent::chat_decorated(
-                    config.chat.format.clone(),
-                    gameprofile.name.clone(),
-                    message.clone(),
+                let decorated_message = TextComponent::chat_decorated(
+                    &config.chat.format,
+                    &gameprofile.name,
+                    &message,
                 );
 
                 let entity = &player.living_entity.entity;
                 let world = entity.world.load_full();
                 if server.basic_config.allow_chat_reports {
-                    world.broadcast_secure_player_chat(player, &chat_message, decorated_message).await;
+                    world.broadcast_secure_player_chat(player, &chat_message, &decorated_message).await;
                 } else {
                     let je_packet = CSystemChatMessage::new(
-                        decorated_message,
+                        &decorated_message,
                         false,
                     );
                     let be_packet = SText::new(
@@ -976,7 +976,7 @@ impl JavaClient {
             return;
         }
 
-        if let Err(err) = self.validate_chat_session(player, server, &session).await {
+        if let Err(err) = self.validate_chat_session(player, server, &session) {
             log::log!(
                 err.severity(),
                 "{} (uuid {}) {}",
@@ -1017,7 +1017,7 @@ impl JavaClient {
     }
 
     /// Runs vanilla checks for a valid player session
-    pub async fn validate_chat_session(
+    pub fn validate_chat_session(
         &self,
         player: &Player,
         server: &Server,
@@ -1040,7 +1040,7 @@ impl JavaClient {
         signable.extend_from_slice(&session.expires_at.to_be_bytes());
         signable.extend_from_slice(&session.public_key);
 
-        let public_keys_guard = server.mojang_public_keys.lock().await;
+        let public_keys_guard = server.mojang_public_keys.load();
 
         // Verify signature with RSA-SHA1
         let is_valid = public_keys_guard.iter().any(|key| {
@@ -1074,38 +1074,38 @@ impl JavaClient {
             }
 
             let (update_settings, update_watched) = {
-                let mut config = player.config.write().await;
-                let update_settings = config.main_hand != main_hand
-                    || config.skin_parts != client_information.skin_parts;
+                // 1. Load current snapshot
+                let current_config = player.config.load();
 
-                let old_view_distance = config.view_distance;
+                // 2. Calculate if settings changed before we overwrite
+                let update_settings = current_config.main_hand != main_hand
+                    || current_config.skin_parts != client_information.skin_parts;
 
-                let update_watched =
-                    if old_view_distance.get() == client_information.view_distance as u8 {
-                        false
-                    } else {
-                        log::debug!(
-                            "Player {} ({}) updated their render distance: {} -> {}.",
-                            player.gameprofile.name,
-                            self.id,
-                            old_view_distance,
-                            client_information.view_distance
-                        );
+                let old_view_distance = current_config.view_distance;
+                let new_view_distance_raw = client_information.view_distance as u8;
 
-                        true
-                    };
+                let update_watched = if old_view_distance.get() == new_view_distance_raw {
+                    false
+                } else {
+                    log::debug!(
+                        "Player {} ({}) updated their render distance: {} -> {}.",
+                        player.gameprofile.name,
+                        self.id,
+                        old_view_distance,
+                        new_view_distance_raw
+                    );
+                    true
+                };
 
-                *config = PlayerConfig {
+                // 3. Construct the new config
+                // If view_distance is 0, we exit early (safe guard)
+                let Some(new_view_distance) = NonZeroU8::new(new_view_distance_raw) else {
+                    return;
+                };
+
+                let new_config = PlayerConfig {
                     locale: client_information.locale,
-                    // A negative view distance would be impossible and makes no sense, right? Mojang: Let's make it signed :D
-                    // client_information.view_distance was checked above to be > 0, so compiler should optimize this out.
-                    view_distance: match NonZeroU8::new(client_information.view_distance as u8) {
-                        Some(dist) => dist,
-                        None => {
-                            // Unreachable branch
-                            return;
-                        }
-                    },
+                    view_distance: new_view_distance,
                     chat_mode,
                     chat_colors: client_information.chat_colors,
                     skin_parts: client_information.skin_parts,
@@ -1113,6 +1113,10 @@ impl JavaClient {
                     text_filtering: client_information.text_filtering,
                     server_listing: client_information.server_listing,
                 };
+
+                // 4. Atomically swap the new config into the player
+                player.config.store(std::sync::Arc::new(new_config));
+
                 (update_settings, update_watched)
             };
 
@@ -1199,7 +1203,7 @@ impl JavaClient {
                 // TODO: set as camera entity when spectator
 
                 let world = player_entity.world.load_full();
-                let player_victim = world.get_player_by_id(entity_id.0).await;
+                let player_victim = world.get_player_by_id(entity_id.0);
                 if entity_id.0 == player.entity_id() {
                     // This can't be triggered from a non-modded client.
                     self.kick(TextComponent::translate(
@@ -1228,7 +1232,7 @@ impl JavaClient {
                         return;
                     }
                     player.attack(player_victim).await;
-                } else if let Some(entity_victim) = world.get_entity_by_id(entity_id.0).await {
+                } else if let Some(entity_victim) = world.get_entity_by_id(entity_id.0) {
                     player.attack(entity_victim).await;
                 } else {
                     log::error!(
@@ -1245,7 +1249,7 @@ impl JavaClient {
             }
             ActionType::Interact | ActionType::InteractAt => {
                 // TODO: split this up
-                let entity = player.world().get_player_by_id(entity_id.0).await;
+                let entity = player.world().get_player_by_id(entity_id.0);
                 if let Some(entity) = entity {
                     let held = player.inventory.held_item();
                     let mut stack = held.lock().await;
@@ -1392,7 +1396,7 @@ impl JavaClient {
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
 
-                    world
+                    let new_state = world
                         .break_block(
                             &location,
                             Some(player.clone()),
@@ -1403,12 +1407,13 @@ impl JavaClient {
                             },
                         )
                         .await;
-
-                    server
-                        .block_registry
-                        .broken(&world, block, player, &location, server, state)
-                        .await;
-                    player.apply_tool_damage_for_block_break(state).await;
+                    if new_state.is_some() {
+                        server
+                            .block_registry
+                            .broken(&world, block, player, &location, server, state)
+                            .await;
+                        player.apply_tool_damage_for_block_break(state).await;
+                    }
 
                     self.update_sequence(player, player_action.sequence.0);
                 }
@@ -1823,7 +1828,6 @@ impl JavaClient {
 
             let is_armor_equipped = player_screen_handler
                 .get_slot(packet.slot as usize)
-                .await
                 .get_stack()
                 .await
                 .lock()
@@ -1854,7 +1858,6 @@ impl JavaClient {
 
             player_screen_handler
                 .get_slot(packet.slot as usize)
-                .await
                 .set_stack(item_stack.clone())
                 .await;
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
@@ -1930,9 +1933,6 @@ impl JavaClient {
         );
     }
 
-    const WORLD_LOWEST_Y: i8 = -64;
-    const WORLD_MAX_Y: u16 = 320;
-
     #[expect(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
@@ -1945,26 +1945,6 @@ impl JavaClient {
     ) -> Result<bool, BlockPlacingError> {
         let entity = &player.living_entity.entity;
 
-        // Check if the block is under the world
-        if location.0.y + face.to_offset().y < i32::from(Self::WORLD_LOWEST_Y) {
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
-        // Check the world's max build height
-        if location.0.y + face.to_offset().y >= i32::from(Self::WORLD_MAX_Y) {
-            player
-                .send_system_message_raw(
-                    &TextComponent::translate(
-                        "build.tooHigh",
-                        vec![TextComponent::text((Self::WORLD_MAX_Y - 1).to_string())],
-                    )
-                    .color_named(NamedColor::Red),
-                    true,
-                )
-                .await;
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
         match player.gamemode.load() {
             GameMode::Spectator | GameMode::Adventure => {
                 return Err(BlockPlacingError::InvalidGamemode);
@@ -1974,6 +1954,26 @@ impl JavaClient {
 
         let clicked_block_pos = BlockPos(location.0);
         let world = entity.world.load_full();
+
+        // Check if the block is under the world
+        if location.0.y + face.to_offset().y < world.get_bottom_y() {
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
+
+        // Check the world's max build height
+        if location.0.y + face.to_offset().y > world.get_top_y() {
+            player
+                .send_system_message_raw(
+                    &TextComponent::translate(
+                        "build.tooHigh",
+                        vec![TextComponent::text((world.get_top_y()).to_string())],
+                    )
+                    .color_named(NamedColor::Red),
+                    true,
+                )
+                .await;
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
 
         let (clicked_block, clicked_block_state) =
             world.get_block_and_state(&clicked_block_pos).await;
@@ -2083,8 +2083,8 @@ impl JavaClient {
 
         // Check if there is a player in the way of the block being placed
         let state = BlockState::from_id(new_state);
-        for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
-            let player_box = player.1.living_entity.entity.bounding_box.load();
+        for player in world.get_nearby_players(location.0.to_f64(), 3.0) {
+            let player_box = player.living_entity.entity.bounding_box.load();
             for shape in state.get_block_collision_shapes() {
                 if shape.at_pos(final_block_pos).intersects(&player_box) {
                     return Ok(false);

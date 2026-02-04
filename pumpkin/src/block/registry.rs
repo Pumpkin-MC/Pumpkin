@@ -72,6 +72,7 @@ use crate::block::blocks::slabs::SlabBlock;
 use crate::block::blocks::slime::SlimeBlock;
 use crate::block::blocks::snow::LayeredSnowBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
+use crate::block::blocks::sponge::{SpongeBlock, WetSpongeBlock};
 use crate::block::blocks::stairs::StairBlock;
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::blocks::torches::TorchBlock;
@@ -96,7 +97,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -212,7 +213,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TallPlantBlock);
     manager.register(NoteBlock);
     manager.register(PowderSnowBlock);
+    manager.register(SpongeBlock);
     manager.register(PumpkinBlock);
+    manager.register(WetSpongeBlock);
     manager.register(CommandBlock);
     manager.register(ComposterBlock);
     manager.register(PressurePlateBlock);
@@ -282,7 +285,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 }
 
 // ActionResult.java
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum BlockActionResult {
     /// Action was successful | Same as SUCCESS in vanilla
     Success,
@@ -300,15 +303,15 @@ pub enum BlockActionResult {
 
 impl BlockActionResult {
     #[must_use]
-    pub fn consumes_action(&self) -> bool {
+    pub const fn consumes_action(&self) -> bool {
         matches!(self, Self::Consume | Self::Success | Self::SuccessServer)
     }
 }
 
 #[derive(Default)]
 pub struct BlockRegistry {
-    blocks: HashMap<u16, Arc<dyn BlockBehaviour>>,
-    fluids: HashMap<u16, Arc<dyn FluidBehaviour>>,
+    blocks: FxHashMap<u16, Arc<dyn BlockBehaviour>>,
+    fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
 
 impl BlockRegistryExt for BlockRegistry {

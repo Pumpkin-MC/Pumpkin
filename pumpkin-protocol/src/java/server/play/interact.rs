@@ -29,8 +29,7 @@ impl ServerPacket for SInteract {
         let action = ActionType::try_from(r#type.0)
             .map_err(|_| ReadingError::Message("invalid action type".to_string()))?;
         let target_position: Option<Vector3<f32>> = match action {
-            ActionType::Interact => None,
-            ActionType::Attack => None,
+            ActionType::Interact | ActionType::Attack => None,
             ActionType::InteractAt => Some(Vector3::new(
                 read.get_f32_be()?,
                 read.get_f32_be()?,
@@ -38,9 +37,8 @@ impl ServerPacket for SInteract {
             )),
         };
         let hand = match action {
-            ActionType::Interact => Some(read.get_var_int()?),
+            ActionType::Interact | ActionType::InteractAt => Some(read.get_var_int()?),
             ActionType::Attack => None,
-            ActionType::InteractAt => Some(read.get_var_int()?),
         };
 
         Ok(Self {

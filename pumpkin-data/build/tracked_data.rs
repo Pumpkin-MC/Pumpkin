@@ -24,7 +24,7 @@ pub(crate) fn build() -> TokenStream {
     for (name, id_11) in &data_11 {
         let ident = format_ident!("DATA_{}", name.to_uppercase());
 
-        let id_7 = data_7.get(name).cloned().unwrap_or(255); // 255 as an 'Invalid' marker
+        let id_7 = data_7.get(name).copied().unwrap_or(255); // 255 as an 'Invalid' marker
 
         constants.extend(quote! {
             pub const #ident: TrackedId = TrackedId {

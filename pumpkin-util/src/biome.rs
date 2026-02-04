@@ -29,8 +29,8 @@ pub enum TemperatureModifier {
 impl TemperatureModifier {
     pub fn convert_temperature(&self, x: f64, z: f64, temperature: f32) -> f32 {
         match self {
-            TemperatureModifier::None => temperature,
-            TemperatureModifier::Frozen => {
+            Self::None => temperature,
+            Self::Frozen => {
                 let frozen_ocean_sample =
                     FROZEN_OCEAN_NOISE.sample(x * 0.05, z * 0.05, false) * 7.0;
                 let foliage_sample = FOLIAGE_NOISE.sample(x * 0.2, z * 0.2, false);
@@ -60,6 +60,7 @@ pub struct Weather {
 }
 
 impl Weather {
+    #[must_use]
     pub const fn new(
         has_precipitation: bool,
         temperature: f32,

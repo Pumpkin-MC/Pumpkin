@@ -22,19 +22,18 @@ pub struct NetherPortalBlock;
 
 impl NetherPortalBlock {
     /// Gets the portal delay time based on entity type and gamemode
-    async fn get_portal_time(world: &Arc<World>, entity: &dyn EntityBase) -> u32 {
+    fn get_portal_time(world: &Arc<World>, entity: &dyn EntityBase) -> u32 {
         let entity_type = entity.get_entity().entity_type;
-        let level_info = world.level_info.read().await;
+        let level_info = world.level_info.load();
         match entity_type.id {
             id if id == EntityType::PLAYER.id => (world
-                .get_player_by_id(entity.get_entity().entity_id)
-                .await)
-                .map_or(80, |player| match player.gamemode.load() {
-                    GameMode::Creative => {
-                        level_info.game_rules.players_nether_portal_creative_delay as u32
-                    }
-                    _ => level_info.game_rules.players_nether_portal_default_delay as u32,
-                }),
+                .get_player_by_id(entity.get_entity().entity_id))
+            .map_or(80, |player| match player.gamemode.load() {
+                GameMode::Creative => {
+                    level_info.game_rules.players_nether_portal_creative_delay as u32
+                }
+                _ => level_info.game_rules.players_nether_portal_default_delay as u32,
+            }),
             _ => 0,
         }
     }
@@ -73,16 +72,12 @@ impl BlockBehaviour for NetherPortalBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let target_world = if args.world.dimension == Dimension::THE_NETHER {
-                args.server
-                    .get_world_from_dimension(&Dimension::OVERWORLD)
-                    .await
+                args.server.get_world_from_dimension(&Dimension::OVERWORLD)
             } else {
-                args.server
-                    .get_world_from_dimension(&Dimension::THE_NETHER)
-                    .await
+                args.server.get_world_from_dimension(&Dimension::THE_NETHER)
             };
 
-            let portal_delay = Self::get_portal_time(args.world, args.entity).await;
+            let portal_delay = Self::get_portal_time(args.world, args.entity);
 
             args.entity
                 .get_entity()

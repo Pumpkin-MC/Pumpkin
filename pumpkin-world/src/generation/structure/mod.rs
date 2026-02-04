@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use pumpkin_data::{chunk::Biome, tag::Taggable};
+use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use pumpkin_util::include_json_static;
 use serde::Deserialize;
 
@@ -144,10 +144,8 @@ pub enum StructureKeys {
     TrialChambers,
 }
 
-#[derive(Deserialize, Clone)]
-pub struct EmptyStruct {}
-
 impl StructureKeys {
+    #[must_use]
     pub fn try_generate(
         &self,
         structure: &Structure,
@@ -165,16 +163,16 @@ impl StructureKeys {
             min_y: chunk.bottom_y() as i32,
         };
         let structure_pos = match self {
-            StructureKeys::BuriedTreasure => {
+            Self::BuriedTreasure => {
                 BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
             }
             // StructureKeys::Fortress => {
             //     NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
             // }
-            StructureKeys::SwampHut => {
+            Self::SwampHut => {
                 SwampHutGenerator::get_structure_position(&SwampHutGenerator, context)
             }
-            StructureKeys::Stronghold => {
+            Self::Stronghold => {
                 StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
             }
             // StructureKeys::DesertPyramid => DesertTempleGenerator::get_structure_position(
@@ -187,14 +185,21 @@ impl StructureKeys {
 
         if let Some(pos) = structure_pos {
             // Get the biome at the structure's starting position
-            let current_biome = chunk.get_biome(
+            let current_biome = chunk.get_biome_id(
                 biome_coords::from_block(pos.start_pos.0.x),
                 biome_coords::from_block(pos.start_pos.0.y),
                 biome_coords::from_block(pos.start_pos.0.z),
-            );
-            let biomes = Biome::get_tag_values(&structure.biomes).unwrap();
+            ) as u16;
+            let biomes = get_tag_ids(
+                RegistryKey::WorldgenBiome,
+                structure
+                    .biomes
+                    .strip_prefix("#")
+                    .unwrap_or(&structure.biomes),
+            )
+            .unwrap();
             // Check if the biome is allowed for this structure
-            if biomes.contains(&current_biome.registry_id) {
+            if biomes.contains(&current_biome) {
                 return Some(pos);
             }
         }
@@ -226,7 +231,8 @@ pub enum GenerationStep {
 }
 
 impl GenerationStep {
-    pub fn ordinal(&self) -> usize {
+    #[must_use]
+    pub const fn ordinal(&self) -> usize {
         *self as usize
     }
 }

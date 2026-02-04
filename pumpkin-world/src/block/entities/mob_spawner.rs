@@ -35,7 +35,8 @@ impl MobSpawnerBlockEntity {
     pub const DEFAULT_SPAWN_COUNT: i32 = 4;
     pub const DEFAULT_SPAWN_RANGE: i32 = 4;
 
-    pub fn new(position: BlockPos) -> Self {
+    #[must_use]
+    pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
             delay: AtomicI32::new(Self::DEFAULT_DELAY),
@@ -61,7 +62,7 @@ impl MobSpawnerBlockEntity {
             },
             Ordering::Relaxed,
         );
-        world.add_synced_block_event(self.position, 1, 0).await
+        world.add_synced_block_event(self.position, 1, 0).await;
     }
 
     pub fn set_entity_type(&self, entity_type: &'static EntityType) {
@@ -80,12 +81,12 @@ impl BlockEntity for MobSpawnerBlockEntity {
 
     fn tick<'a>(
         &'a self,
-        world: Arc<dyn SimpleWorld>,
+        world: &'a Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             if let Some(entity_type) = &self.entity_type.load() {
                 if self.delay.load(Ordering::Relaxed) == -1 {
-                    self.update_spawns(&world).await;
+                    self.update_spawns(world).await;
                 } else {
                     self.delay.fetch_sub(1, Ordering::Relaxed);
                     return;
@@ -127,7 +128,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
                     update_spawns = true;
                 }
                 if update_spawns {
-                    self.update_spawns(&world).await;
+                    self.update_spawns(world).await;
                 }
             }
         })

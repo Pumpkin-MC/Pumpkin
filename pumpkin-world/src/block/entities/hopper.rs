@@ -26,6 +26,7 @@ pub struct HopperBlockEntity {
     pub ticked_game_time: AtomicI64,
 }
 
+#[must_use]
 pub fn to_offset(facing: &HopperFacing) -> Vector3<i32> {
     match facing {
         HopperFacing::Down => (0, -1, 0),
@@ -76,7 +77,7 @@ impl BlockEntity for HopperBlockEntity {
 
     fn tick<'a>(
         &'a self,
-        world: Arc<dyn SimpleWorld>,
+        world: &'a Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.ticked_game_time.store(
@@ -94,7 +95,7 @@ impl BlockEntity for HopperBlockEntity {
                     world.get_block_state(&self.position).await.id,
                     &Block::HOPPER,
                 );
-                self.try_move_items(&state, &world).await;
+                self.try_move_items(&state, world).await;
             }
         })
     }
@@ -129,6 +130,7 @@ impl HopperBlockEntity {
     pub const INVENTORY_SIZE: usize = 5;
     pub const ID: &'static str = "minecraft:hopper";
 
+    #[must_use]
     pub fn new(position: BlockPos, facing: HopperFacing) -> Self {
         Self {
             position,
@@ -254,14 +256,13 @@ impl HopperBlockEntity {
                 }
                 if success {
                     if to_empty
-                        && let Some(hopper) = to.as_any().downcast_ref::<HopperBlockEntity>()
+                        && let Some(hopper) = to.as_any().downcast_ref::<Self>()
                         && hopper
                             .cooldown_time
                             .load(std::sync::atomic::Ordering::Relaxed)
                             <= 8
                     {
-                        if let Some(from_hopper) = from.as_any().downcast_ref::<HopperBlockEntity>()
-                        {
+                        if let Some(from_hopper) = from.as_any().downcast_ref::<Self>() {
                             if from_hopper
                                 .cooldown_time
                                 .load(std::sync::atomic::Ordering::Relaxed)
@@ -299,7 +300,7 @@ impl Inventory for HopperBlockEntity {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -344,7 +345,7 @@ impl Inventory for HopperBlockEntity {
 impl Clearable for HopperBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })

@@ -64,7 +64,7 @@ impl CommandExecutor for ClearOrResetExecutor {
                 })
                 .await;
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -106,7 +106,7 @@ impl CommandExecutor for TitleExecutor {
                 })
                 .await;
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -147,7 +147,7 @@ impl CommandExecutor for TimesTitleExecutor {
                 })
                 .await;
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }

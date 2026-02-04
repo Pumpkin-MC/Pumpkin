@@ -12,7 +12,8 @@ pub struct CPingResponse {
 }
 
 impl CPingResponse {
-    pub fn new(payload: i64) -> Self {
+    #[must_use]
+    pub const fn new(payload: i64) -> Self {
         Self { payload }
     }
 }

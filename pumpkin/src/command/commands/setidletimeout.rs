@@ -15,7 +15,7 @@ const DESCRIPTION: &str = "Sets the time before idle players are kicked from the
 
 const ARG_MINUTES: &str = "minutes";
 
-fn minutes_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn minutes_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name(ARG_MINUTES)
 }
 
@@ -39,14 +39,22 @@ impl CommandExecutor for SetIdleTimeoutExecutor {
 
             server.player_idle_timeout.store(minutes, Ordering::Relaxed);
 
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.setidletimeout.success",
-                    [TextComponent::text(minutes.to_string())],
-                ))
-                .await;
+            {
+                if minutes == 0 {
+                    sender.send_message(TextComponent::translate(
+                        "commands.setidletimeout.success.disabled",
+                        [],
+                    ))
+                } else {
+                    sender.send_message(TextComponent::translate(
+                        "commands.setidletimeout.success",
+                        [TextComponent::text(minutes.to_string())],
+                    ))
+                }
+            }
+            .await;
 
-            Ok(())
+            Ok(minutes)
         })
     }
 }

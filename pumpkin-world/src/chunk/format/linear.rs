@@ -17,7 +17,7 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use super::anvil::CHUNK_COUNT;
 
 /// The signature of the linear file format
-/// used as a header and footer described in https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98
+/// used as a header and footer described in <https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98>
 const SIGNATURE: [u8; 8] = u64::to_be_bytes(0xc3ff13183cca9d9a);
 
 #[derive(Default, Copy, Clone)]
@@ -33,11 +33,11 @@ pub enum LinearVersion {
     None = 0x00,
     /// Version 1 of the Linear Region File Format. (Default)
     ///
-    /// Described in: https://github.com/xymb-endcrystalme/LinearRegionFileFormatTools/blob/linearv2/LINEAR.md
+    /// Described in: <https://github.com/xymb-endcrystalme/LinearRegionFileFormatTools/blob/linearv2/LINEAR.md>
     V1 = 0x01,
     /// Version 2 of the Linear Region File Format (currently unsupported).
     ///
-    /// Described in: https://github.com/xymb-endcrystalme/LinearRegionFileFormatTools/blob/linearv2/LINEARv2.md
+    /// Described in: <https://github.com/xymb-endcrystalme/LinearRegionFileFormatTools/blob/linearv2/LINEARv2.md>
     V2 = 0x02,
 }
 struct LinearFileHeader {
@@ -65,14 +65,14 @@ impl LinearChunkHeader {
     const CHUNK_HEADER_SIZE: usize = 8;
     fn from_bytes(bytes: &[u8]) -> Self {
         let mut bytes = bytes;
-        LinearChunkHeader {
+        Self {
             size: bytes.get_u32(),
             timestamp: bytes.get_u32(),
         }
     }
 
-    pub fn to_bytes(self) -> [u8; LinearChunkHeader::CHUNK_HEADER_SIZE] {
-        let mut bytes = [0u8; LinearChunkHeader::CHUNK_HEADER_SIZE];
+    pub fn to_bytes(self) -> [u8; Self::CHUNK_HEADER_SIZE] {
+        let mut bytes = [0u8; Self::CHUNK_HEADER_SIZE];
         bytes[0..4].copy_from_slice(&self.size.to_be_bytes());
         bytes[4..8].copy_from_slice(&self.timestamp.to_be_bytes());
 
@@ -83,9 +83,9 @@ impl LinearChunkHeader {
 impl From<u8> for LinearVersion {
     fn from(value: u8) -> Self {
         match value {
-            0x01 => LinearVersion::V1,
-            0x02 => LinearVersion::V2,
-            _ => LinearVersion::None,
+            0x01 => Self::V1,
+            0x02 => Self::V2,
+            _ => Self::None,
         }
     }
 }
@@ -109,7 +109,7 @@ impl LinearFileHeader {
     fn from_bytes(bytes: &[u8]) -> Self {
         let mut buf = bytes;
 
-        LinearFileHeader {
+        Self {
             version: buf.get_u8().into(),
             newest_timestamp: buf.get_u64(),
             compression_level: buf.get_u8(),
@@ -120,7 +120,7 @@ impl LinearFileHeader {
     }
 
     fn to_bytes(&self) -> Box<[u8]> {
-        let mut bytes: Vec<u8> = Vec::with_capacity(LinearFileHeader::FILE_HEADER_SIZE);
+        let mut bytes: Vec<u8> = Vec::with_capacity(Self::FILE_HEADER_SIZE);
 
         bytes.put_u8(self.version as u8);
         bytes.put_u64(self.newest_timestamp);
@@ -141,18 +141,18 @@ impl<S: SingleChunkDataSerializer> LinearFile<S> {
     }
 
     fn check_signature(bytes: &[u8]) -> Result<(), ChunkReadingError> {
-        if bytes != SIGNATURE {
+        if bytes == SIGNATURE {
+            Ok(())
+        } else {
             error!("Linear signature is invalid!");
             Err(ChunkReadingError::InvalidHeader)
-        } else {
-            Ok(())
         }
     }
 }
 
 impl<S: SingleChunkDataSerializer> Default for LinearFile<S> {
     fn default() -> Self {
-        LinearFile {
+        Self {
             chunks_headers: [LinearChunkHeader::default(); CHUNK_COUNT],
             chunks_data: [const { None }; CHUNK_COUNT],
             _dummy: Default::default(),
@@ -179,14 +179,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         let temp_path = path.with_extension("tmp");
         log::trace!("Writing tmp file to disk: {}", temp_path.display());
 
-        let file = tokio::fs::OpenOptions::new()
-            .read(false)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&temp_path)
-            .await?;
-
+        let file = tokio::fs::File::create(&temp_path).await?;
         let mut write = BufWriter::new(file);
 
         // Parse the headers to a buffer
@@ -312,7 +305,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
             }
         }
 
-        Ok(LinearFile {
+        Ok(Self {
             chunks_headers: chunk_headers,
             chunks_data: chunks,
             _dummy: Default::default(),
@@ -324,7 +317,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         chunk: &Self::Data,
         _chunk_config: &Self::ChunkConfig,
     ) -> Result<(), ChunkWritingError> {
-        let index = LinearFile::<S>::get_chunk_index(chunk.position().0, chunk.position().1);
+        let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
         let chunk_raw: Bytes = chunk
             .to_bytes()
             .await
@@ -350,8 +343,8 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
     ) {
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
-        for chunk in chunks.into_iter() {
-            let index = LinearFile::<S>::get_chunk_index(chunk.x, chunk.y);
+        for chunk in chunks {
+            let index = Self::get_chunk_index(chunk.x, chunk.y);
             let linear_chunk_data = &self.chunks_data[index];
 
             let result = if let Some(data) = linear_chunk_data {
@@ -436,7 +429,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_writing() {
+    async fn writing() {
         let _ = env_logger::try_init();
 
         let generator = get_world_gen(Seed(0), Dimension::Overworld);

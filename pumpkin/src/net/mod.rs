@@ -376,7 +376,7 @@ mod tests {
 
     /// Test case for a standard, valid English name at max length.
     #[test]
-    fn test_valid_max_length_ascii() {
+    fn valid_max_length_ascii() {
         let name = "player_name_1234"; // 16 characters (16 bytes)
         assert!(
             is_valid_player_name(name),
@@ -386,7 +386,7 @@ mod tests {
 
     /// Test case for a short, valid ASCII name.
     #[test]
-    fn test_valid_short_ascii() {
+    fn valid_short_ascii() {
         let name = "GamerX";
         assert!(
             is_valid_player_name(name),
@@ -396,7 +396,7 @@ mod tests {
 
     /// Test case for a name containing allowed punctuation (codepoints 33-126).
     #[test]
-    fn test_valid_with_punctuation() {
+    fn valid_with_punctuation() {
         let name = "!-@#$%.^&*_+-=";
         assert!(
             is_valid_player_name(name),
@@ -406,7 +406,7 @@ mod tests {
 
     /// Test case for allowed high-codepoint Unicode characters (like Chinese/CJK).
     #[test]
-    fn test_valid_unicode_chinese() {
+    fn valid_unicode_chinese() {
         let name = "玩家一号"; // 4 characters, 12 bytes
         assert!(
             is_valid_player_name(name),
@@ -416,7 +416,7 @@ mod tests {
 
     /// Test case for a mix of valid ASCII and Unicode characters.
     #[test]
-    fn test_valid_mixed_chars() {
+    fn valid_mixed_chars() {
         let name = "Player_玩家"; // 9 characters
         assert!(
             is_valid_player_name(name),
@@ -426,7 +426,7 @@ mod tests {
 
     /// Test case for a name that exceeds the 16-byte limit (ASCII).
     #[test]
-    fn test_invalid_length_ascii_over() {
+    fn invalid_length_ascii_over() {
         let name = "this_name_is_too_long"; // 21 characters (21 bytes)
         assert!(
             !is_valid_player_name(name),
@@ -436,7 +436,7 @@ mod tests {
 
     /// Test case for a name that exceeds the 16-byte limit (Unicode).
     #[test]
-    fn test_invalid_length_unicode_over() {
+    fn invalid_length_unicode_over() {
         let name = "超长玩家名称哈哈"; // 8 Chinese characters * 3 bytes/char = 24 bytes
         assert!(
             !is_valid_player_name(name),
@@ -446,7 +446,7 @@ mod tests {
 
     /// Test case for a name containing a standard space (codepoint 32).
     #[test]
-    fn test_invalid_contains_space() {
+    fn invalid_contains_space() {
         let name = "Player Name";
         assert!(
             !is_valid_player_name(name),
@@ -456,7 +456,7 @@ mod tests {
 
     /// Test case for an empty string (length 0, but included for completeness).
     #[test]
-    fn test_invalid_empty_string() {
+    fn invalid_empty_string() {
         let name = "";
         assert!(
             is_valid_player_name(name),
@@ -466,7 +466,7 @@ mod tests {
 
     /// Test case for a name containing a control character (e.g., Null, codepoint 0).
     #[test]
-    fn test_invalid_contains_null() {
+    fn invalid_contains_null() {
         let name = "Player\0Name";
         assert!(
             !is_valid_player_name(name),
@@ -476,7 +476,7 @@ mod tests {
 
     /// Test case for a name containing a newline character (codepoint 10).
     #[test]
-    fn test_invalid_contains_newline() {
+    fn invalid_contains_newline() {
         let name = "Player\nName";
         assert!(
             !is_valid_player_name(name),
@@ -486,7 +486,7 @@ mod tests {
 
     /// Test case for a name containing the DEL control character (codepoint 127).
     #[test]
-    fn test_invalid_contains_del() {
+    fn invalid_contains_del() {
         // DEL character is char::from_u32(127).unwrap()
         let name = format!("Player{}Name", 127u8 as char);
         assert!(

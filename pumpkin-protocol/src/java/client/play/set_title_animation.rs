@@ -12,7 +12,8 @@ pub struct CTitleAnimation {
 }
 
 impl CTitleAnimation {
-    pub fn new(fade_in_ticks: i32, stay_ticks: i32, fade_out_ticks: i32) -> Self {
+    #[must_use]
+    pub const fn new(fade_in_ticks: i32, stay_ticks: i32, fade_out_ticks: i32) -> Self {
         Self {
             fade_in_ticks,
             stay_ticks,

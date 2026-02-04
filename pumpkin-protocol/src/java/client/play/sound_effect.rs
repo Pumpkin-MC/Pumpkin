@@ -17,6 +17,7 @@ pub struct CSoundEffect {
 }
 
 impl CSoundEffect {
+    #[must_use]
     pub fn new(
         sound_event: IdOr<SoundEvent>,
         sound_category: SoundCategory,

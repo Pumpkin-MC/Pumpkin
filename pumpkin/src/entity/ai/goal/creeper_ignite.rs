@@ -13,7 +13,7 @@ pub struct CreeperIgniteGoal {
 
 impl CreeperIgniteGoal {
     #[must_use]
-    pub fn new(creeper: Arc<CreeperEntity>) -> Self {
+    pub const fn new(creeper: Arc<CreeperEntity>) -> Self {
         Self {
             goal_control: Controls::MOVE,
             creeper,

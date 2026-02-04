@@ -49,6 +49,7 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
     }
 }
 
+#[must_use]
 pub fn hash_seed(seed: u64) -> i64 {
     let mut hasher = Sha256::new();
     hasher.update(seed.to_le_bytes());
@@ -59,13 +60,15 @@ pub fn hash_seed(seed: u64) -> i64 {
 #[cfg(test)]
 mod test {
     use pumpkin_data::{
-        chunk::Biome, dimension::Dimension, noise_router::OVERWORLD_BASE_NOISE_ROUTER,
+        chunk::Biome, chunk_gen_settings::GenerationSettings, dimension::Dimension,
+        noise_router::OVERWORLD_BASE_NOISE_ROUTER,
     };
     use pumpkin_util::read_data_from_file;
     use serde::Deserialize;
 
     use crate::{
-        GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
+        GlobalRandomConfig, ProtoChunk,
+        block::to_state_from_blueprint,
         chunk::palette::BIOME_NETWORK_MAX_BITS,
         generation::noise::router::{
             multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -76,7 +79,7 @@ mod test {
     use super::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed};
 
     #[test]
-    fn test_biome_desert() {
+    fn biome_desert() {
         let seed = 13579;
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
@@ -85,11 +88,16 @@ mod test {
         let mut sampler =
             MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
         let biome = MultiNoiseBiomeSupplier::biome(-24, 1, 8, &mut sampler, Dimension::OVERWORLD);
-        assert_eq!(biome, &Biome::DESERT)
+        assert_eq!(biome, &Biome::DESERT);
     }
 
     #[test]
-    fn test_wide_area_surface() {
+    fn wide_area_surface() {
+        use crate::biome::hash_seed;
+        use crate::generation::noise::router::multi_noise_sampler::{
+            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+        };
+        use crate::generation::{biome_coords, positions::chunk_pos};
         #[derive(Deserialize)]
         struct BiomeData {
             x: i32,
@@ -104,18 +112,16 @@ mod test {
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
-        let surface_settings = GENERATION_SETTINGS
-            .get(&GeneratorSetting::Overworld)
-            .unwrap();
-        //let _terrain_cache = TerrainCache::from_random(&random_config);
-        let default_block = surface_settings.default_block.get_state();
+        let surface_settings = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
 
-        for data in expected_data.into_iter() {
+        //let _terrain_cache = TerrainCache::from_random(&random_config);
+        let default_block = to_state_from_blueprint(&surface_settings.default_block);
+
+        for data in expected_data {
             let chunk_x = data.x;
             let chunk_z = data.z;
 
             // Calculate biome mixer seed
-            use crate::biome::hash_seed;
             let biome_mixer_seed = hash_seed(random_config.seed);
 
             let mut chunk = ProtoChunk::new(
@@ -127,10 +133,6 @@ mod test {
             );
 
             // Create MultiNoiseSampler for populate_biomes
-            use crate::generation::noise::router::multi_noise_sampler::{
-                MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
-            };
-            use crate::generation::{biome_coords, positions::chunk_pos};
 
             let start_x = chunk_pos::start_block_x(chunk_x);
             let start_z = chunk_pos::start_block_z(chunk_z);
@@ -166,7 +168,7 @@ mod test {
     }
 
     #[test]
-    fn test_hash_seed() {
+    fn hash_seed_test() {
         let hashed_seed = hash_seed(0);
         assert_eq!(8794265229978523055, hashed_seed);
 
@@ -175,10 +177,11 @@ mod test {
     }
 
     #[test]
-    fn test_proper_network_bits_per_entry() {
+    fn proper_network_bits_per_entry() {
         let id_to_test = 1 << BIOME_NETWORK_MAX_BITS;
-        if Biome::from_id(id_to_test).is_some() {
-            panic!("We need to update our constants!");
-        }
+        assert!(
+            Biome::from_id(id_to_test).is_none(),
+            "We need to update our constants!"
+        );
     }
 }

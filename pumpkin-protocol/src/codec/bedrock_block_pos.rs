@@ -10,7 +10,7 @@ use crate::{
 /// A wrapper for `BlockPos` that handles Bedrock-specific network serialization.
 ///
 /// Bedrock Edition encodes coordinates differently than Java Edition, using
-/// VarInt's to save bandwidth.
+/// `VarInt`'s to save bandwidth.
 pub struct NetworkPos(pub BlockPos);
 
 impl NetworkPos {

@@ -20,7 +20,8 @@ pub struct BlockPosIterator {
 }
 
 impl BlockPosIterator {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         start_x: i32,
         start_y: i32,
         start_z: i32,
@@ -32,7 +33,7 @@ impl BlockPosIterator {
         let count_y = end_y - start_y + 1;
         let count_z = end_z - start_z + 1;
         let count = (count_x * count_y * count_z) as usize;
-        BlockPosIterator {
+        Self {
             start_x,
             start_y,
             start_z,
@@ -87,9 +88,10 @@ pub struct OutwardIterator {
 }
 
 impl OutwardIterator {
-    pub fn new(center: BlockPos, range_x: i32, range_y: i32, range_z: i32) -> Self {
+    #[must_use]
+    pub const fn new(center: BlockPos, range_x: i32, range_y: i32, range_z: i32) -> Self {
         let max_manhattan_distance = range_x + range_y + range_z;
-        OutwardIterator {
+        Self {
             center_x: center.0.x,
             center_y: center.0.y,
             center_z: center.0.z,
@@ -156,6 +158,7 @@ pub struct BlockPos(pub Vector3<i32>);
 impl BlockPos {
     pub const ZERO: Self = Self::new(0, 0, 0);
 
+    #[must_use]
     pub const fn new(x: i32, y: i32, z: i32) -> Self {
         Self(Vector3::new(x, y, z))
     }
@@ -176,7 +179,8 @@ impl BlockPos {
     /// # Returns
     ///
     /// A `BlockPosIterator` that yields each `BlockPos` within the defined cuboid.
-    pub fn iterate(start: BlockPos, end: BlockPos) -> BlockPosIterator {
+    #[must_use]
+    pub fn iterate(start: Self, end: Self) -> BlockPosIterator {
         BlockPosIterator::new(
             start.0.x.min(end.0.x),
             start.0.y.min(end.0.y),
@@ -205,8 +209,9 @@ impl BlockPos {
     /// # Returns
     ///
     /// An `OutwardIterator` that yields `BlockPos` instances in the described outward order.
-    pub fn iterate_outwards(
-        center: BlockPos,
+    #[must_use]
+    pub const fn iterate_outwards(
+        center: Self,
         range_x: i32,
         range_y: i32,
         range_z: i32,
@@ -214,7 +219,8 @@ impl BlockPos {
         OutwardIterator::new(center, range_x, range_y, range_z)
     }
 
-    pub fn iterate_block_pos(
+    #[must_use]
+    pub const fn iterate_block_pos(
         start_x: i32,
         start_y: i32,
         start_z: i32,
@@ -225,11 +231,13 @@ impl BlockPos {
         BlockPosIterator::new(start_x, start_y, start_z, end_x, end_y, end_z)
     }
 
-    pub fn chunk_and_chunk_relative_position(&self) -> (Vector2<i32>, Vector3<i32>) {
+    #[must_use]
+    pub const fn chunk_and_chunk_relative_position(&self) -> (Vector2<i32>, Vector3<i32>) {
         (self.chunk_position(), self.chunk_relative_position())
     }
 
-    pub fn chunk_position(&self) -> Vector2<i32> {
+    #[must_use]
+    pub const fn chunk_position(&self) -> Vector2<i32> {
         let z_chunk = self.0.z.div_euclid(16);
         let x_chunk = self.0.x.div_euclid(16);
         Vector2 {
@@ -238,7 +246,8 @@ impl BlockPos {
         }
     }
 
-    pub fn chunk_relative_position(&self) -> Vector3<i32> {
+    #[must_use]
+    pub const fn chunk_relative_position(&self) -> Vector3<i32> {
         let z_chunk = self.0.z.rem_euclid(16);
         let x_chunk = self.0.x.rem_euclid(16);
         Vector3 {
@@ -248,6 +257,7 @@ impl BlockPos {
         }
     }
 
+    #[must_use]
     pub fn section_relative_position(&self) -> Vector3<i32> {
         let (_z_chunk, z_rem) = self.0.z.div_rem_euclid(&16);
         let (_x_chunk, x_rem) = self.0.x.div_rem_euclid(&16);
@@ -260,14 +270,16 @@ impl BlockPos {
             y: y_rem,
         }
     }
-    pub fn from_i64(encoded_position: i64) -> Self {
-        BlockPos(Vector3 {
+    #[must_use]
+    pub const fn from_i64(encoded_position: i64) -> Self {
+        Self(Vector3 {
             x: (encoded_position >> 38) as i32,
             y: (encoded_position << 52 >> 52) as i32,
             z: (encoded_position << 26 >> 38) as i32,
         })
     }
 
+    #[must_use]
     pub fn floored(x: f64, y: f64, z: f64) -> Self {
         Self(Vector3::new(
             x.floor() as i32,
@@ -276,6 +288,7 @@ impl BlockPos {
         ))
     }
 
+    #[must_use]
     pub fn floored_v(pos: Vector3<f64>) -> Self {
         Self(Vector3::new(
             pos.x.floor() as i32,
@@ -284,6 +297,7 @@ impl BlockPos {
         ))
     }
 
+    #[must_use]
     pub fn ceiled_v(pos: Vector3<f64>) -> Self {
         Self(Vector3::new(
             pos.x.ceil() as i32,
@@ -292,85 +306,101 @@ impl BlockPos {
         ))
     }
 
+    #[must_use]
     pub fn to_f64(&self) -> Vector3<f64> {
         Vector3::new(
-            self.0.x as f64 + 0.5,
-            self.0.y as f64,
-            self.0.z as f64 + 0.5,
+            f64::from(self.0.x) + 0.5,
+            f64::from(self.0.y),
+            f64::from(self.0.z) + 0.5,
         )
     }
 
+    #[must_use]
     pub fn to_centered_f64(&self) -> Vector3<f64> {
         Vector3::new(
-            self.0.x as f64 + 0.5,
-            self.0.y as f64 + 0.5,
-            self.0.z as f64 + 0.5,
+            f64::from(self.0.x) + 0.5,
+            f64::from(self.0.y) + 0.5,
+            f64::from(self.0.z) + 0.5,
         )
     }
 
+    #[must_use]
     pub fn offset(&self, offset: Vector3<i32>) -> Self {
-        BlockPos(self.0 + offset)
+        Self(self.0 + offset)
     }
 
-    pub fn add(&self, x: i32, y: i32, z: i32) -> Self {
-        BlockPos::new(self.0.x + x, self.0.y + y, self.0.z + z)
+    #[must_use]
+    pub const fn add(&self, x: i32, y: i32, z: i32) -> Self {
+        Self::new(self.0.x + x, self.0.y + y, self.0.z + z)
     }
 
-    pub fn offset_dir(&self, offset: Vector3<i32>, direction: i32) -> Self {
-        BlockPos(Vector3::new(
+    #[must_use]
+    pub const fn offset_dir(&self, offset: Vector3<i32>, direction: i32) -> Self {
+        Self(Vector3::new(
             self.0.x + offset.x * direction,
             self.0.y + offset.y * direction,
             self.0.z + offset.z * direction,
         ))
     }
 
+    #[must_use]
     pub fn up(&self) -> Self {
         self.offset(Vector3::new(0, 1, 0))
     }
 
+    #[must_use]
     pub fn up_height(&self, height: i32) -> Self {
         self.offset(Vector3::new(0, height, 0))
     }
 
+    #[must_use]
     pub fn down(&self) -> Self {
         self.offset(Vector3::new(0, -1, 0))
     }
 
+    #[must_use]
     pub fn down_height(&self, height: i32) -> Self {
         self.offset(Vector3::new(0, -height, 0))
     }
 
+    #[must_use]
     pub fn west(&self) -> Self {
         self.offset(Vector3::new(-1, 0, 0))
     }
 
+    #[must_use]
     pub fn north(&self) -> Self {
         self.offset(Vector3::new(0, 0, -1))
     }
 
+    #[must_use]
     pub fn east(&self) -> Self {
         self.offset(Vector3::new(1, 0, 0))
     }
 
+    #[must_use]
     pub fn south(&self) -> Self {
         self.offset(Vector3::new(0, 0, 1))
     }
 
-    pub fn manhattan_distance(&self, other: Self) -> i32 {
+    #[must_use]
+    pub const fn manhattan_distance(&self, other: Self) -> i32 {
         let x = (other.0.x - self.0.x).abs();
         let y = (other.0.y - self.0.y).abs();
         let z = (other.0.z - self.0.z).abs();
         x + y + z
     }
 
+    #[must_use]
     pub fn squared_distance(&self, other: &Self) -> i32 {
         self.0.squared_distance_to_vec(&other.0)
     }
 
+    #[must_use]
     pub fn as_long(&self) -> i64 {
-        ((self.0.x as i64 & 0x3FFFFFF) << 38)
-            | ((self.0.z as i64 & 0x3FFFFFF) << 12)
-            | (self.0.y as i64 & 0xFFF)
+        ((i64::from(self.0.x) & 0x03FF_FFFF) << 38)
+            | ((i64::from(self.0.z) & 0x03FF_FFFF) << 12)
+            | (i64::from(self.0.y) & 0xFFF)
     }
 }
 
@@ -416,12 +446,13 @@ pub const fn chunk_section_from_pos(block_pos: &BlockPos) -> Vector3<i32> {
     )
 }
 
+#[must_use]
 pub const fn get_local_cord(cord: i32) -> i32 {
     cord & 15
 }
 
 #[must_use]
-pub fn pack_local_chunk_section(block_pos: &BlockPos) -> i16 {
+pub const fn pack_local_chunk_section(block_pos: &BlockPos) -> i16 {
     let x = get_local_cord(block_pos.0.x);
     let z = get_local_cord(block_pos.0.z);
     let y = get_local_cord(block_pos.0.y);

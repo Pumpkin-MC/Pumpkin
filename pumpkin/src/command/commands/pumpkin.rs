@@ -4,6 +4,7 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::translation::get_translation_text;
 use pumpkin_world::CURRENT_MC_VERSION;
+use serde::Deserialize;
 use std::borrow::Cow;
 
 use crate::command::CommandResult;
@@ -19,6 +20,53 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_HASH: &str = env!("GIT_HASH");
 const GIT_HASH_FULL: &str = env!("GIT_HASH_FULL");
 
+#[derive(Deserialize)]
+struct Contributor {
+    login: String,
+}
+
+fn fetch_all_contributors() -> Vec<Contributor> {
+    let mut all_contributors = Vec::new();
+    let mut next_url = Some(
+        "https://api.github.com/repos/Pumpkin-MC/Pumpkin/contributors?per_page=100".to_string(),
+    );
+
+    while let Some(url) = next_url {
+        let response = ureq::get(&url).header("User-Agent", "Pumpkin-MC").call();
+
+        match response {
+            Ok(mut res) => {
+                if let Ok(contributors) = res.body_mut().read_json::<Vec<Contributor>>() {
+                    all_contributors.extend(contributors);
+                } else {
+                    break;
+                }
+                let link_header = res.headers().get("link").map(|s| s.to_str().unwrap_or(""));
+
+                next_url = link_header.and_then(extract_next_url);
+            }
+            Err(_) => break,
+        }
+    }
+
+    if all_contributors.is_empty() {
+        return vec![];
+    }
+
+    all_contributors
+}
+
+fn extract_next_url(header: &str) -> Option<String> {
+    header
+        .split(',')
+        .find(|part| part.contains("rel=\"next\""))
+        .and_then(|part| {
+            let start = part.find('<')? + 1;
+            let end = part.find('>')?;
+            Some(part[start..end].to_string())
+        })
+}
+
 #[expect(clippy::too_many_lines)]
 impl CommandExecutor for Executor {
     fn execute<'a>(
@@ -28,8 +76,19 @@ impl CommandExecutor for Executor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let locale = sender.get_locale().await;
-            let version_string = format!("{CARGO_PKG_VERSION} (Commit: {GIT_HASH})");
+            let contributors = fetch_all_contributors();
+            let contributor_names = contributors
+                .iter()
+                .map(|c| c.login.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let locale = sender.get_locale();
+            let version_string = format!(
+                "{} (Commit: {}) - {} Contributors",
+                CARGO_PKG_VERSION,
+                GIT_HASH,
+                contributors.len()
+            );
             sender
                 .send_message(
                     TextComponent::custom(
@@ -38,9 +97,14 @@ impl CommandExecutor for Executor {
                         locale,
                         vec![TextComponent::text(version_string.clone())],
                     )
-                    .hover_event(HoverEvent::show_text(TextComponent::text(format!(
-                        "Commit: {GIT_HASH_FULL}\nClick to copy"
-                    ))))
+                    .hover_event(HoverEvent::show_text(
+                        TextComponent::text(format!("Commit: {GIT_HASH_FULL}\n\nContributors:\n",))
+                            .add_child(
+                                TextComponent::text(contributor_names)
+                                    .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green])
+                                    .new_line(),
+                            ),
+                    ))
                     .click_event(ClickEvent::CopyToClipboard {
                         value: Cow::from(
                             get_translation_text(
@@ -124,7 +188,21 @@ impl CommandExecutor for Executor {
                             .bold()
                             .underlined(),
                     )
-                    // Added docs. and a space for spacing
+                    // Spacing
+                    .add_child(TextComponent::text("  "))
+                    .add_child(
+                        TextComponent::text("[Donate]")
+                            .click_event(ClickEvent::OpenUrl {
+                                url: Cow::from("https://github.com/sponsors/Snowiiii"),
+                            })
+                            .hover_event(HoverEvent::show_text(TextComponent::text(
+                                "Click to open Donate",
+                            )))
+                            .rainbow()
+                            .bold()
+                            .underlined(),
+                    )
+                    // Spacing
                     .add_child(TextComponent::text("  "))
                     .add_child(
                         TextComponent::custom(
@@ -148,7 +226,10 @@ impl CommandExecutor for Executor {
                     ),
                 )
                 .await;
-            Ok(())
+
+            // It makes total sense to return the number of
+            // contributors as the i32 result for this command.
+            Ok(contributors.len() as i32)
         })
     }
 }

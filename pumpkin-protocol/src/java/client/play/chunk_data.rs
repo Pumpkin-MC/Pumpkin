@@ -19,6 +19,7 @@ use std::io::Write;
 pub struct CChunkData<'a>(pub &'a ChunkData);
 
 impl ClientPacket for CChunkData<'_> {
+    #[expect(clippy::too_many_lines)]
     fn write_packet_data(
         &self,
         write: impl Write,
@@ -116,7 +117,7 @@ impl ClientPacket for CChunkData<'_> {
                 ))
             })?)?;
             write.write_slice(&blocks_and_biomes_buf)?;
-        }
+        };
 
         write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
         for block_entity in self.0.block_entities.values() {

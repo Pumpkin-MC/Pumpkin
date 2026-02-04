@@ -1,7 +1,6 @@
 use pumpkin_data::data_component::DataComponent::MaxStackSize;
 use pumpkin_data::data_component_impl::{MaxStackSizeImpl, get};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_world::item::ItemStack;
 
@@ -9,6 +8,7 @@ use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds}
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource::item::ItemArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
+use crate::command::dispatcher::CommandError;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
@@ -20,7 +20,7 @@ const DESCRIPTION: &str = "Give items to player(s).";
 
 const ARG_ITEM: &str = "item";
 
-fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("count")
         .min(1)
@@ -54,12 +54,7 @@ impl CommandExecutor for Executor {
                         }
                     };
 
-                    sender
-                        .send_message(
-                            TextComponent::text(err_msg).color(Color::Named(NamedColor::Red)),
-                        )
-                        .await;
-                    return Ok(());
+                    return Err(CommandError::CommandFailed(TextComponent::text(err_msg)));
                 }
             };
 
@@ -84,6 +79,7 @@ impl CommandExecutor for Executor {
                     remaining -= take;
                 }
             }
+
             let msg = if targets.len() == 1 {
                 TextComponent::translate(
                     "commands.give.success.single",
@@ -117,7 +113,7 @@ impl CommandExecutor for Executor {
             };
             sender.send_message(msg).await;
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }

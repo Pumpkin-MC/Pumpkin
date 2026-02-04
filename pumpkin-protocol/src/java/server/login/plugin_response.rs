@@ -4,7 +4,7 @@ use crate::{ReadingError, ServerPacket, VarInt, ser::NetworkReadExt};
 use pumpkin_data::packet::serverbound::LOGIN_CUSTOM_QUERY_ANSWER;
 use pumpkin_macros::java_packet;
 
-const MAX_PAYLOAD_SIZE: usize = 1048576;
+const MAX_PAYLOAD_SIZE: usize = 1_048_576;
 
 #[java_packet(LOGIN_CUSTOM_QUERY_ANSWER)]
 pub struct SLoginPluginResponse {

@@ -28,9 +28,10 @@ impl VarInt {
     /// The maximum number of bytes a `VarInt` can occupy.
     const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
-    /// Returns the exact number of bytes this VarInt will write when
+    /// Returns the exact number of bytes this `VarInt` will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
-    pub fn written_size(&self) -> usize {
+    #[must_use]
+    pub const fn written_size(&self) -> usize {
         match self.0 {
             0 => 1,
             n => (31 - n.leading_zeros() as usize) / 7 + 1,
@@ -57,7 +58,7 @@ impl VarInt {
             let byte = read.get_u8()?;
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarInt(val));
+                return Ok(Self(val));
             }
         }
         Err(ReadingError::TooLarge("VarInt".to_string()))
@@ -77,7 +78,7 @@ impl VarInt {
             })?;
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarInt(val));
+                return Ok(Self(val));
             }
         }
         Err(ReadingError::TooLarge("VarInt".to_string()))
@@ -89,10 +90,10 @@ impl VarInt {
     ) -> Result<(), WritingError> {
         let mut val = self.0;
         for _ in 0..Self::MAX_SIZE.get() {
-            let b: u8 = val as u8 & 0b01111111;
+            let b: u8 = val as u8 & 0b0111_1111;
             val >>= 7;
             write
-                .write_u8(if val == 0 { b } else { b | 0b10000000 })
+                .write_u8(if val == 0 { b } else { b | 0b1000_0000 })
                 .await
                 .map_err(WritingError::IoError)?;
             if val == 0 {
@@ -183,8 +184,8 @@ impl<'de> Deserialize<'de> for VarInt {
                 let mut val = 0;
                 for i in 0..VarInt::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
-                        val |= (i32::from(byte) & 0b01111111) << (i * 7);
-                        if byte & 0b10000000 == 0 {
+                        val |= (i32::from(byte) & 0b0111_1111) << (i * 7);
+                        if byte & 0b1000_0000 == 0 {
                             return Ok(VarInt(val));
                         }
                     } else {
@@ -220,7 +221,7 @@ impl PacketRead for VarInt {
             let byte = u8::read(read)?;
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarInt((val >> 1) ^ (val << 31)));
+                return Ok(Self((val >> 1) ^ (val << 31)));
             }
         }
         Err(Error::new(ErrorKind::InvalidData, ""))

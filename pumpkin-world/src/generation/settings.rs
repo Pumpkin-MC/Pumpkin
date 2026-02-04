@@ -1,101 +1,104 @@
-use std::{collections::HashMap, sync::LazyLock};
+// use std::{collections::HashMap, sync::LazyLock};
 
-use pumpkin_data::dimension::Dimension;
-use pumpkin_util::include_json_static;
-use serde::Deserialize;
+// use pumpkin_data::dimension::Dimension;
+// use pumpkin_util::include_json_static;
+// use serde::Deserialize;
 
-use crate::block::BlockStateCodec;
+// use crate::block::BlockStateCodec;
 
-use super::{biome_coords::to_block, height_limit::HeightLimitView, surface::rule::MaterialRule};
+// use super::{biome_coords::to_block, height_limit::HeightLimitView, surface::rule::MaterialRule};
 
-pub static GENERATION_SETTINGS: LazyLock<HashMap<GeneratorSetting, GenerationSettings>> =
-    LazyLock::new(
-        || include_json_static!("../../../assets/chunk_gen_settings.json", HashMap<GeneratorSetting, GenerationSettings>),
-    );
+// pub static GENERATION_SETTINGS: LazyLock<HashMap<GeneratorSetting, GenerationSettings>> =
+//     LazyLock::new(
+//         || include_json_static!("../../../assets/chunk_gen_settings.json", HashMap<GeneratorSetting, GenerationSettings>),
+//     );
 
-pub fn gen_settings_from_dimension(dimension: &Dimension) -> &GenerationSettings {
-    let setting = if dimension == &Dimension::OVERWORLD {
-        GeneratorSetting::Overworld
-    } else if dimension == &Dimension::THE_NETHER {
-        GeneratorSetting::Nether
-    } else {
-        GeneratorSetting::End
-    };
-    GENERATION_SETTINGS.get(&setting).unwrap()
-}
+// pub fn gen_settings_from_dimension(dimension: &Dimension) -> &GenerationSettings {
+//     let setting = if dimension == &Dimension::OVERWORLD {
+//         GeneratorSetting::Overworld
+//     } else if dimension == &Dimension::THE_NETHER {
+//         GeneratorSetting::Nether
+//     } else {
+//         GeneratorSetting::End
+//     };
+//     GENERATION_SETTINGS.get(&setting).unwrap()
+// }
 
-#[derive(Deserialize, Hash, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum GeneratorSetting {
-    Overworld,
-    LargeBiomes,
-    Amplified,
-    Nether,
-    End,
-    Caves,
-    FloatingIslands,
-}
-#[derive(Deserialize)]
-pub struct GenerationSettings {
-    pub aquifers_enabled: bool,
-    pub ore_veins_enabled: bool,
-    pub legacy_random_source: bool,
-    pub sea_level: i32,
-    pub default_fluid: BlockStateCodec,
-    #[serde(rename = "noise")]
-    pub shape: GenerationShapeConfig,
-    pub surface_rule: MaterialRule,
-    pub default_block: BlockStateCodec,
-}
-#[derive(Deserialize)]
-pub struct GenerationShapeConfig {
-    pub min_y: i8,
-    pub height: u16,
-    size_horizontal: u8,
-    size_vertical: u8,
-}
+// #[derive(Deserialize, Hash, PartialEq, Eq)]
+// #[serde(rename_all = "snake_case")]
+// pub enum GeneratorSetting {
+//     Overworld,
+//     LargeBiomes,
+//     Amplified,
+//     Nether,
+//     End,
+//     Caves,
+//     FloatingIslands,
+// }
+// #[derive(Deserialize)]
+// pub struct GenerationSettings {
+//     pub aquifers_enabled: bool,
+//     pub ore_veins_enabled: bool,
+//     pub legacy_random_source: bool,
+//     pub sea_level: i32,
+//     pub default_fluid: BlockStateCodec,
+//     #[serde(rename = "noise")]
+//     pub shape: GenerationShapeConfig,
+//     pub surface_rule: MaterialRule,
+//     pub default_block: BlockStateCodec,
+// }
+// #[derive(Deserialize)]
+// pub struct GenerationShapeConfig {
+//     pub min_y: i8,
+//     pub height: u16,
+//     size_horizontal: u8,
+//     size_vertical: u8,
+// }
 
-impl GenerationShapeConfig {
-    #[inline]
-    pub fn vertical_cell_block_count(&self) -> u8 {
-        to_block(self.size_vertical)
-    }
+// impl GenerationShapeConfig {
+//     #[inline]
+//     #[must_use]
+//     pub fn vertical_cell_block_count(&self) -> u8 {
+//         to_block(self.size_vertical)
+//     }
 
-    #[inline]
-    pub fn horizontal_cell_block_count(&self) -> u8 {
-        to_block(self.size_horizontal)
-    }
+//     #[inline]
+//     #[must_use]
+//     pub fn horizontal_cell_block_count(&self) -> u8 {
+//         to_block(self.size_horizontal)
+//     }
 
-    pub fn max_y(&self) -> u16 {
-        if self.min_y >= 0 {
-            self.height + self.min_y as u16
-        } else {
-            (self.height as i32 + self.min_y as i32) as u16
-        }
-    }
+//     #[must_use]
+//     pub const fn max_y(&self) -> u16 {
+//         if self.min_y >= 0 {
+//             self.height + self.min_y as u16
+//         } else {
+//             (self.height as i32 + self.min_y as i32) as u16
+//         }
+//     }
 
-    pub fn trim_height(&self, limit: &dyn HeightLimitView) -> Self {
-        let new_min = self.min_y.max(limit.bottom_y());
+//     pub fn trim_height(&self, limit: &dyn HeightLimitView) -> Self {
+//         let new_min = self.min_y.max(limit.bottom_y());
 
-        let this_top = if self.min_y >= 0 {
-            self.height + self.min_y as u16
-        } else {
-            self.height - self.min_y.unsigned_abs() as u16
-        };
+//         let this_top = if self.min_y >= 0 {
+//             self.height + self.min_y as u16
+//         } else {
+//             self.height - self.min_y.unsigned_abs() as u16
+//         };
 
-        let new_top = this_top.min(limit.top_y());
+//         let new_top = this_top.min(limit.top_y());
 
-        let new_height = if new_min >= 0 {
-            new_top - new_min as u16
-        } else {
-            new_top + new_min.unsigned_abs() as u16
-        };
+//         let new_height = if new_min >= 0 {
+//             new_top - new_min as u16
+//         } else {
+//             new_top + new_min.unsigned_abs() as u16
+//         };
 
-        Self {
-            min_y: new_min,
-            height: new_height,
-            size_horizontal: self.size_horizontal,
-            size_vertical: self.size_vertical,
-        }
-    }
-}
+//         Self {
+//             min_y: new_min,
+//             height: new_height,
+//             size_horizontal: self.size_horizontal,
+//             size_vertical: self.size_vertical,
+//         }
+//     }
+// }

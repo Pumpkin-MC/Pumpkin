@@ -13,6 +13,7 @@ pub struct CSetContainerProperty {
 }
 
 impl CSetContainerProperty {
+    #[must_use]
     pub const fn new(window_id: VarInt, property: i16, value: i16) -> Self {
         Self {
             window_id,

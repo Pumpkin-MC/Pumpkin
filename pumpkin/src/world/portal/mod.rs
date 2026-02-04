@@ -41,7 +41,7 @@ pub struct PortalManager {
 }
 
 impl PortalManager {
-    pub fn new(portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) -> Self {
+    pub const fn new(portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) -> Self {
         Self {
             portal_delay,
             portal_world,
@@ -52,11 +52,11 @@ impl PortalManager {
         }
     }
 
-    pub fn set_source_portal(&mut self, info: SourcePortalInfo) {
+    pub const fn set_source_portal(&mut self, info: SourcePortalInfo) {
         self.source_portal = Some(info);
     }
 
-    pub fn tick(&mut self) -> bool {
+    pub const fn tick(&mut self) -> bool {
         if self.in_portal {
             self.in_portal = false;
             self.ticks_in_portal += 1;

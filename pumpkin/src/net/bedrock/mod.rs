@@ -223,17 +223,13 @@ impl BedrockClient {
         packet.write_packet(&mut packet_payload)?;
 
         // TODO
-        self.network_writer
-            .lock()
-            .await
-            .write_game_packet(
-                P::PACKET_ID as u16,
-                SubClient::Main,
-                SubClient::Main,
-                packet_payload.into(),
-                write,
-            )
-            .await
+        self.network_writer.lock().await.write_game_packet(
+            P::PACKET_ID as u16,
+            SubClient::Main,
+            SubClient::Main,
+            &packet_payload,
+            write,
+        )
     }
 
     pub async fn send_offline_packet<P: BClientPacket>(
@@ -406,7 +402,7 @@ impl BedrockClient {
                 Self::handle_ack(&Ack::read(reader)?);
             }
             RAKNET_NACK => {
-                dbg!("received nack, client is missing packets");
+                log::debug!("received nack, client is missing packets");
             }
             0x80..0x8d => {
                 self.handle_frame_set(server, FrameSet::read(reader)?).await;
@@ -418,7 +414,7 @@ impl BedrockClient {
         Ok(())
     }
 
-    fn handle_ack(_ack: &Ack) {}
+    const fn handle_ack(_ack: &Ack) {}
 
     async fn handle_frame_set(self: &Arc<Self>, server: &Arc<Server>, frame_set: FrameSet) {
         // TODO: Send all ACKs in short intervals in batches
@@ -581,7 +577,6 @@ impl BedrockClient {
                     .lock()
                     .await
                     .get_game_packet(payload)
-                    .await
                     .map_err(|e| Error::other(e.to_string()))?;
 
                 self.handle_game_packet(server, game_packet).await?;

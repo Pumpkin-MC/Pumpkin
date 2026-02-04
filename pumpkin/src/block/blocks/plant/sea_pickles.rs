@@ -15,7 +15,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
-use rand::Rng;
+use rand::RngExt;
 
 type SeaPickleProperties = pumpkin_data::block_properties::SeaPickleLikeProperties;
 

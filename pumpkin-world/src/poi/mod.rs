@@ -36,6 +36,7 @@ pub struct PoiEntry {
 }
 
 impl PoiEntry {
+    #[must_use]
     pub fn new_portal(pos: BlockPos) -> Self {
         Self {
             x: pos.0.x,
@@ -46,7 +47,8 @@ impl PoiEntry {
         }
     }
 
-    pub fn pos(&self) -> BlockPos {
+    #[must_use]
+    pub const fn pos(&self) -> BlockPos {
         BlockPos(Vector3::new(self.x, self.y, self.z))
     }
 }
@@ -81,16 +83,17 @@ pub struct PoiRegion {
 }
 
 impl PoiRegion {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    fn pos_key(pos: &BlockPos) -> (i32, i32, i32) {
+    const fn pos_key(pos: &BlockPos) -> (i32, i32, i32) {
         (pos.0.x, pos.0.y, pos.0.z)
     }
 
     /// Get chunk index in MCA file (0-1023)
-    fn chunk_index(chunk_x: i32, chunk_z: i32) -> usize {
+    const fn chunk_index(chunk_x: i32, chunk_z: i32) -> usize {
         let local_x = chunk_x & 31;
         let local_z = chunk_z & 31;
         ((local_z << 5) | local_x) as usize
@@ -123,11 +126,13 @@ impl PoiRegion {
         false
     }
 
+    #[must_use]
     pub fn get_all(&self) -> Vec<&PoiEntry> {
         self.entries.values().collect()
     }
 
-    pub fn is_dirty(&self) -> bool {
+    #[must_use]
+    pub const fn is_dirty(&self) -> bool {
         self.dirty
     }
 
@@ -351,7 +356,7 @@ impl PoiRegion {
                     }
                 }
                 Err(e) => {
-                    log::warn!("Failed to parse POI chunk at index {}: {}", index, e);
+                    log::warn!("Failed to parse POI chunk at index {index}: {e}");
                 }
             }
         }
@@ -365,11 +370,12 @@ impl PoiRegion {
 pub struct PoiStorage {
     /// Path to the poi folder
     folder: PathBuf,
-    /// Loaded regions, keyed by (region_x, region_z)
+    /// Loaded regions, keyed by (`region_x`, `region_z`)
     regions: HashMap<(i32, i32), PoiRegion>,
 }
 
 impl PoiStorage {
+    #[must_use]
     pub fn new(world_folder: &Path) -> Self {
         Self {
             folder: world_folder.join("poi"),
@@ -377,14 +383,14 @@ impl PoiStorage {
         }
     }
 
-    fn region_coords(pos: &BlockPos) -> (i32, i32) {
+    const fn region_coords(pos: &BlockPos) -> (i32, i32) {
         let chunk_x = pos.0.x >> 4;
         let chunk_z = pos.0.z >> 4;
         (chunk_x >> 5, chunk_z >> 5)
     }
 
     fn region_path(&self, rx: i32, rz: i32) -> PathBuf {
-        self.folder.join(format!("r.{}.{}.mca", rx, rz))
+        self.folder.join(format!("r.{rx}.{rz}.mca"))
     }
 
     fn get_or_load_region(&mut self, rx: i32, rz: i32) -> &mut PoiRegion {
@@ -392,7 +398,7 @@ impl PoiStorage {
             let path = self.region_path(rx, rz);
             let region = PoiRegion::load(&path).unwrap_or_else(|e| {
                 if path.exists() {
-                    log::warn!("Failed to load POI region {:?}: {}", path, e);
+                    log::warn!("Failed to load POI region {}: {}", path.display(), e);
                 }
                 PoiRegion::new()
             });
@@ -424,6 +430,7 @@ impl PoiStorage {
     }
 
     /// Get all POI positions within a square radius (for portal search)
+    #[expect(clippy::similar_names)]
     pub fn get_in_square(
         &mut self,
         center: BlockPos,
@@ -471,14 +478,14 @@ impl PoiStorage {
         let mut saved = 0;
         for ((rx, rz), region) in &mut self.regions {
             if region.is_dirty() {
-                let path = self.folder.join(format!("r.{}.{}.mca", rx, rz));
+                let path = self.folder.join(format!("r.{rx}.{rz}.mca"));
                 region.save(&path)?;
                 saved += 1;
             }
         }
 
         if saved > 0 {
-            log::info!("Saved {} POI region(s)", saved);
+            log::info!("Saved {saved} POI region(s)");
         }
         Ok(())
     }
@@ -501,7 +508,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_poi_entry() {
+    fn poi_entry() {
         let entry = PoiEntry::new_portal(BlockPos(Vector3::new(100, 64, 200)));
         assert_eq!(entry.x, 100);
         assert_eq!(entry.y, 64);
@@ -510,7 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn test_poi_region() {
+    fn poi_region() {
         let mut region = PoiRegion::new();
         region.add(PoiEntry::new_portal(BlockPos(Vector3::new(100, 64, 200))));
         region.add(PoiEntry::new_portal(BlockPos(Vector3::new(101, 64, 200))));
@@ -523,7 +530,7 @@ mod tests {
     }
 
     #[test]
-    fn test_poi_storage_mca() {
+    fn poi_storage_mca() {
         let dir = std::env::temp_dir().join("pumpkin_poi_mca_test");
         let _ = std::fs::remove_dir_all(&dir);
 

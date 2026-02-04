@@ -31,7 +31,7 @@ impl BitSet {
             let long = read.get_i64_be()?;
             array.push(long);
         }
-        Ok(BitSet(array.into_boxed_slice()))
+        Ok(Self(array.into_boxed_slice()))
     }
 }
 

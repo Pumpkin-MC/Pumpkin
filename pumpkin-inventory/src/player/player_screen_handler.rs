@@ -31,11 +31,12 @@ impl PlayerScreenHandler {
         EquipmentSlot::FEET,
     ];
 
+    #[must_use]
     pub fn is_in_hotbar(slot: u8) -> bool {
         (36..=45).contains(&slot)
     }
 
-    pub async fn get_slot(&self, slot: usize) -> Arc<dyn Slot> {
+    pub fn get_slot(&self, slot: usize) -> Arc<dyn Slot> {
         self.behaviour.slots[slot].clone()
     }
 
@@ -47,7 +48,7 @@ impl PlayerScreenHandler {
         let crafting_inventory: Arc<dyn RecipeInputInventory> =
             Arc::new(CraftingInventory::new(2, 2));
 
-        let mut player_screen_handler = PlayerScreenHandler {
+        let mut player_screen_handler = Self {
             behaviour: ScreenHandlerBehaviour::new(sync_id, window_type),
             crafting_inventory: crafting_inventory.clone(),
         };
@@ -140,7 +141,6 @@ impl ScreenHandler for PlayerScreenHandler {
                 } else if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
                     && self
                         .get_slot((8 - equipment_slot.get_entity_slot_id()) as usize)
-                        .await
                         .get_cloned_stack()
                         .await
                         .is_empty()
@@ -159,7 +159,7 @@ impl ScreenHandler for PlayerScreenHandler {
                     result
                 } else if matches!(equipment_slot, EquipmentSlot::OffHand(_))
                     && slot_index != 45
-                    && self.get_slot(45).await.get_cloned_stack().await.is_empty()
+                    && self.get_slot(45).get_cloned_stack().await.is_empty()
                 {
                     // Into empty offhand slot (45)
                     let index = 45;

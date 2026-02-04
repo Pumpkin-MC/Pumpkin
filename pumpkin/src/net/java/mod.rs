@@ -57,7 +57,6 @@ pub mod config;
 pub mod handshake;
 pub mod login;
 pub mod play;
-pub mod remapper;
 pub mod status;
 
 use crate::entity::player::Player;

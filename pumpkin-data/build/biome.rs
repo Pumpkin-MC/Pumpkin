@@ -111,7 +111,7 @@ enum BiomeTree {
     Branch {
         parameters: [ParameterRange; 7],
         #[serde(rename = "subTree")]
-        nodes: Box<[BiomeTree]>,
+        nodes: Box<[Self]>,
     },
 }
 
@@ -126,7 +126,7 @@ impl BiomeTree {
                         .unwrap()
                         .to_shouty_snake_case()
                 );
-                let parameters = parameters.map(|range| range.into_token_stream());
+                let parameters = parameters.map(ParameterRange::into_token_stream);
                 quote! {
                     BiomeTree::Leaf {
                         parameters: [#(#parameters),*],
@@ -137,9 +137,9 @@ impl BiomeTree {
             Self::Branch { parameters, nodes } => {
                 let nodes = nodes
                     .into_iter()
-                    .map(|node| node.into_token_stream())
+                    .map(Self::into_token_stream)
                     .collect::<Vec<_>>();
-                let parameters = parameters.map(|range| range.into_token_stream());
+                let parameters = parameters.map(ParameterRange::into_token_stream);
                 quote! {
                     BiomeTree::Branch {
                         parameters: [#(#parameters),*],
@@ -172,7 +172,7 @@ pub(crate) fn build() -> TokenStream {
     let mut name_to_type = TokenStream::new();
     let mut id_to_type = TokenStream::new();
 
-    for (name, biome) in biomes.into_iter() {
+    for (name, biome) in biomes {
         // let full_name = format!("minecraft:{name}");
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let has_precipitation = biome.has_precipitation;
@@ -190,44 +190,44 @@ pub(crate) fn build() -> TokenStream {
             .spawners
             .monster
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
         let ambient: Vec<_> = biome
             .spawners
             .ambient
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
         let axolotls: Vec<_> = biome
             .spawners
             .axolotls
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
         let creature: Vec<_> = biome
             .spawners
             .creature
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
-        let misc: Vec<_> = biome.spawners.misc.iter().map(|s| s.to_tokens()).collect();
+        let misc: Vec<_> = biome.spawners.misc.iter().map(Spawner::to_tokens).collect();
         let underground_water_creature: Vec<_> = biome
             .spawners
             .underground_water_creature
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
         let water_ambient: Vec<_> = biome
             .spawners
             .water_ambient
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
         let water_creature: Vec<_> = biome
             .spawners
             .water_creature
             .iter()
-            .map(|s| s.to_tokens())
+            .map(Spawner::to_tokens)
             .collect();
 
         let spawners = quote! {
@@ -305,6 +305,18 @@ pub(crate) fn build() -> TokenStream {
             pub creature_spawn_probability: f32,
             pub spawners: SpawnGroups,
             pub spawn_costs: phf::Map<&'static str, SpawnCosts>,
+        }
+
+        impl PartialEq<u8> for Biome {
+            fn eq(&self, other: &u8) -> bool {
+                self.id == *other
+            }
+        }
+
+        impl PartialEq<Biome> for u8 {
+            fn eq(&self, other: &Biome) -> bool {
+                *self == other.id
+            }
         }
 
         #[derive(Debug)]

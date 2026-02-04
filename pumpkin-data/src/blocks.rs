@@ -18,9 +18,9 @@ use std::hash::{Hash, Hasher};
 pub struct Block {
     /// The numeric ID used for internal registry mapping.
     pub id: u16,
-    /// The unique namespaced ID (e.g., "diamond_ore").
+    /// The unique namespaced ID (e.g., "`diamond_ore`").
     pub name: &'static str,
-    /// The key used for client-side localization (e.g., "block.minecraft.diamond_ore").
+    /// The key used for client-side localization (e.g., "`block.minecraft.diamond_ore`").
     pub translation_key: &'static str,
     /// How hard the block is to break. A value of -1.0 indicates an unbreakable block (e.g., Bedrock).
     pub hardness: f32,
@@ -91,17 +91,22 @@ impl Taggable for Block {
 
 impl ToResourceLocation for &'static Block {
     fn to_resource_location(&self) -> ResourceLocation {
-        ResourceLocation::vanilla(self.name)
+        format!("minecraft:{}", self.name)
     }
 }
 
 impl FromResourceLocation for &'static Block {
     fn from_resource_location(resource_location: &ResourceLocation) -> Option<Self> {
-        Block::from_registry_key(&resource_location.path)
+        Block::from_registry_key(
+            resource_location
+                .strip_prefix(resource_location)
+                .unwrap_or(resource_location),
+        )
     }
 }
 
 impl Block {
+    #[must_use]
     pub fn is_waterlogged(&self, state_id: u16) -> bool {
         self.properties(state_id).is_some_and(|properties| {
             properties
@@ -109,6 +114,16 @@ impl Block {
                 .into_iter()
                 .any(|(key, value)| key == "waterlogged" && value == "true")
         })
+    }
+
+    /// Returns whether this block is solid (based on default state)
+    pub fn is_solid(&self) -> bool {
+        self.default_state.is_solid()
+    }
+
+    /// Returns whether this block is air (based on default state)
+    pub fn is_air(&self) -> bool {
+        self.default_state.is_air()
     }
 }
 

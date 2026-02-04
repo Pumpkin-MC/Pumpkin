@@ -13,7 +13,7 @@ use pumpkin_protocol::{
     Property, java::client::login::CLoginPluginRequest, java::server::login::SLoginPluginResponse,
     ser::NetworkReadExt,
 };
-use rand::Rng;
+use rand::RngExt;
 use sha2::Sha256;
 use thiserror::Error;
 

@@ -1,16 +1,16 @@
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::CTransfer;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::color::{Color, NamedColor};
 
 use crate::command::CommandResult;
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::simple::SimpleArgConsumer;
 use crate::command::args::{Arg, FindArgDefaultName};
-use crate::command::dispatcher::CommandError::{InvalidConsumption, InvalidRequirement};
+use crate::command::dispatcher::CommandError::{self, InvalidConsumption, InvalidRequirement};
 use crate::command::tree::builder::{argument, argument_default_name, require};
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
+use crate::entity::EntityBase;
 
 const NAMES: [&str; 1] = ["transfer"];
 
@@ -20,7 +20,7 @@ const ARG_HOSTNAME: &str = "hostname";
 
 const ARG_PLAYERS: &str = "players";
 
-fn port_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn port_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("port")
         .min(1)
@@ -45,13 +45,9 @@ impl CommandExecutor for TargetSelfExecutor {
                 Err(_) => 25565,
                 Ok(Ok(count)) => count,
                 Ok(Err(_)) => {
-                    sender
-                        .send_message(
-                            TextComponent::text("Port must be between 1 and 65535.")
-                                .color(Color::Named(NamedColor::Red)),
-                        )
-                        .await;
-                    return Ok(());
+                    return Err(InvalidConsumption(Some(
+                        "Port must be between 1 and 65535.".into(),
+                    )));
                 }
             };
 
@@ -62,7 +58,7 @@ impl CommandExecutor for TargetSelfExecutor {
                     .client
                     .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
                     .await;
-                Ok(())
+                Ok(1)
             } else {
                 Err(InvalidRequirement)
             }
@@ -83,24 +79,28 @@ impl CommandExecutor for TargetPlayerExecutor {
             let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {
                 return Err(InvalidConsumption(Some(ARG_HOSTNAME.into())));
             };
+            let hostname = *hostname;
 
             let port = match port_consumer().find_arg_default_name(args) {
                 Err(_) => 25565,
                 Ok(Ok(count)) => count,
                 Ok(Err(_)) => {
-                    sender
-                        .send_message(
-                            TextComponent::text("Port must be between 1 and 65535.")
-                                .color(Color::Named(NamedColor::Red)),
-                        )
-                        .await;
-                    return Ok(());
+                    return Err(InvalidConsumption(Some(
+                        "Port must be between 1 and 65535.".into(),
+                    )));
                 }
             };
 
             let Some(Arg::Players(players)) = args.get(ARG_PLAYERS) else {
                 return Err(InvalidConsumption(Some(ARG_PLAYERS.into())));
             };
+
+            if players.is_empty() {
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.transfer.error.no_players",
+                    [],
+                )));
+            }
 
             for p in players {
                 p.client
@@ -112,7 +112,31 @@ impl CommandExecutor for TargetPlayerExecutor {
                 );
             }
 
-            Ok(())
+            if players.len() == 1 {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.transfer.success.single",
+                        [
+                            players[0].get_display_name().await,
+                            TextComponent::text(hostname.to_owned()),
+                            TextComponent::text(port.to_string()),
+                        ],
+                    ))
+                    .await;
+            } else {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.transfer.success.multiple",
+                        [
+                            TextComponent::text(players.len().to_string()),
+                            TextComponent::text(hostname.to_owned()),
+                            TextComponent::text(port.to_string()),
+                        ],
+                    ))
+                    .await;
+            }
+
+            Ok(players.len() as i32)
         })
     }
 }

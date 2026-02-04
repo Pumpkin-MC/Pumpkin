@@ -16,7 +16,7 @@ impl Default for LevelTime {
 
 impl LevelTime {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             world_age: 0,
             time_of_day: 0,
@@ -24,7 +24,7 @@ impl LevelTime {
         }
     }
 
-    pub fn tick_time(&mut self, advance_time: bool, advance_weather: bool) {
+    pub const fn tick_time(&mut self, advance_time: bool, advance_weather: bool) {
         self.world_age += 1;
         if advance_weather {
             self.rain_time += 1;
@@ -43,11 +43,11 @@ impl LevelTime {
             .await;
     }
 
-    pub fn add_time(&mut self, time: i64) {
+    pub const fn add_time(&mut self, time: i64) {
         self.time_of_day += time;
     }
 
-    pub fn set_time(&mut self, time: i64) {
+    pub const fn set_time(&mut self, time: i64) {
         self.time_of_day = time;
     }
 
@@ -67,7 +67,7 @@ impl LevelTime {
     }
 
     #[must_use]
-    pub fn is_night(&self) -> bool {
+    pub const fn is_night(&self) -> bool {
         (self.time_of_day % 24000) >= 12000 && (self.time_of_day % 24000) <= 23999
     }
 }

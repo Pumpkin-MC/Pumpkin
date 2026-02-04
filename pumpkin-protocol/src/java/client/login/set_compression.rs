@@ -19,7 +19,8 @@ pub struct CSetCompression {
 }
 
 impl CSetCompression {
-    pub fn new(threshold: VarInt) -> Self {
+    #[must_use]
+    pub const fn new(threshold: VarInt) -> Self {
         Self { threshold }
     }
 }

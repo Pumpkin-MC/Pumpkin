@@ -68,7 +68,7 @@ impl DarkOakTrunkPlacer {
             let pos = BlockPos::new(x, current_y, z);
             // TODO: support multiple chunks
             let state = GenerationCache::get_block_state(chunk, &pos.0);
-            if !TreeFeature::is_air_or_leaves(state.to_state(), state.to_block()) {
+            if !TreeFeature::is_air_or_leaves(state.to_state(), state.to_block_id()) {
                 continue;
             }
             if placer.try_place(chunk, &pos, trunk_block) {

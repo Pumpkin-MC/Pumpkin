@@ -10,7 +10,7 @@ use crate::{
 
 pub mod deserializer;
 use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
-use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
+use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
 pub mod serializer;
 
@@ -71,7 +71,6 @@ pub trait NetworkReadExt {
     fn get_var_ulong(&mut self) -> Result<VarULong, ReadingError>;
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
     fn get_string(&mut self) -> Result<String, ReadingError>;
-    fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError>;
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError>;
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
@@ -171,17 +170,6 @@ impl<R: Read> NetworkReadExt for R {
         self.get_string_bounded(i32::MAX as usize)
     }
 
-    fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError> {
-        let resource_location = self.get_string_bounded(ResourceLocation::MAX_SIZE.get())?;
-        match resource_location.split_once(":") {
-            Some((namespace, path)) => Ok(ResourceLocation {
-                namespace: namespace.to_string(),
-                path: path.to_string(),
-            }),
-            None => Err(ReadingError::Incomplete("ResourceLocation".to_string())),
-        }
-    }
-
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError> {
         let mut bytes = [0u8; 16];
         self.read_exact(&mut bytes)
@@ -245,7 +233,6 @@ pub trait NetworkWriteExt {
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
-    fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError>;
     fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError>;
 
     fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError> {
@@ -366,10 +353,6 @@ impl<W: Write> NetworkWriteExt for W {
         self.write_i64_be(pos.as_long())
     }
 
-    fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError> {
-        self.write_string_bounded(&data.to_string(), ResourceLocation::MAX_SIZE.get())
-    }
-
     fn write_bitset(&mut self, data: &BitSet) -> Result<(), WritingError> {
         data.encode(self)
     }
@@ -421,7 +404,7 @@ mod test {
     };
 
     #[test]
-    fn test_i32_reserialize() {
+    fn i32_reserialize() {
         #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
         struct Foo {
             bar: i32,
@@ -439,7 +422,7 @@ mod test {
     }
 
     #[test]
-    fn test_varint_reserialize() {
+    fn varint_reserialize() {
         #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
         struct Foo {
             bar: VarInt,
@@ -457,7 +440,7 @@ mod test {
     }
 
     #[test]
-    fn test_char_reserialize() {
+    fn char_reserialize() {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct CharStruct {
             c: char,
@@ -502,7 +485,7 @@ mod test {
     }
 
     #[test]
-    fn test_i128_reserialize() {
+    fn i128_reserialize() {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct I128Struct {
             val: i128,
@@ -536,7 +519,7 @@ mod test {
     }
 
     #[test]
-    fn test_u128_reserialize() {
+    fn u128_reserialize() {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct U128Struct {
             val: u128,
@@ -557,10 +540,15 @@ mod test {
     }
 
     #[test]
-    fn test_unit_reserialize() {
+    fn unit_reserialize() {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct UnitStruct;
-
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct StructWithUnit {
+            a: i32,
+            b: UnitStruct,
+            c: i32,
+        }
         let original = UnitStruct;
         let mut bytes = Vec::new();
         let mut ser = serializer::Serializer::new(&mut bytes);
@@ -571,13 +559,6 @@ mod test {
         let deserialized: UnitStruct =
             UnitStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
         assert_eq!(original, deserialized);
-
-        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
-        struct StructWithUnit {
-            a: i32,
-            b: UnitStruct,
-            c: i32,
-        }
 
         let original_with_unit = StructWithUnit {
             a: 1,
@@ -602,7 +583,7 @@ mod test {
     }
 
     #[test]
-    fn test_enum_reserialize() {
+    fn enum_reserialize() {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         enum MyEnum {
             A,
@@ -645,7 +626,7 @@ mod test {
         let mut expected_bytes_c = vec![0x02];
         expected_bytes_c.extend_from_slice(&456i32.to_be_bytes());
         expected_bytes_c.push(0x05); // VarInt for string length 5
-        expected_bytes_c.extend_from_slice("hello".as_bytes());
+        expected_bytes_c.extend_from_slice(b"hello");
         assert_eq!(bytes_c, expected_bytes_c);
         let de_cursor_c = Cursor::new(bytes_c);
         let deserialized_c: MyEnum =
@@ -654,7 +635,7 @@ mod test {
     }
 
     #[test]
-    fn test_tuple_struct_reserialize() {
+    fn tuple_struct_reserialize() {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct MyTupleStruct(i32, String);
 
@@ -666,7 +647,7 @@ mod test {
         let mut expected_bytes = Vec::new();
         expected_bytes.extend_from_slice(&789i32.to_be_bytes());
         expected_bytes.push(0x05); // VarInt for string length 5
-        expected_bytes.extend_from_slice("world".as_bytes());
+        expected_bytes.extend_from_slice(b"world");
         assert_eq!(bytes, expected_bytes);
 
         let de_cursor = Cursor::new(bytes);
@@ -676,7 +657,7 @@ mod test {
     }
 
     #[test]
-    fn test_map_reserialize() {
+    fn map_reserialize() {
         use std::collections::HashMap;
 
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]

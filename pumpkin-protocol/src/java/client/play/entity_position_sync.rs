@@ -32,7 +32,8 @@ pub struct CEntityPositionSync {
 }
 
 impl CEntityPositionSync {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         entity_id: VarInt,
         position: Vector3<f64>,
         delta: Vector3<f64>,

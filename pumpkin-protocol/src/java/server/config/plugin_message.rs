@@ -7,7 +7,7 @@ use pumpkin_util::resource_location::ResourceLocation;
 use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
 
 /// The maximum allowed size for a plugin message payload (1 MiB).
-const MAX_PAYLOAD_SIZE: usize = 1048576;
+const MAX_PAYLOAD_SIZE: usize = 1_048_576;
 
 /// A packet used for custom communication between the client and server.
 ///
@@ -26,7 +26,7 @@ impl ServerPacket for SPluginMessage {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
         Ok(Self {
-            channel: read.get_resource_location()?,
+            channel: read.get_string()?,
             data: read.read_remaining_to_boxed_slice(MAX_PAYLOAD_SIZE)?,
         })
     }

@@ -12,7 +12,7 @@ pub struct Serializer<W: Write> {
 }
 
 impl<W: Write> Serializer<W> {
-    pub fn new(w: W) -> Self {
+    pub const fn new(w: W) -> Self {
         Self { write: w }
     }
 }
@@ -45,7 +45,7 @@ impl<W: Write> ser::SerializeSeq for NonPrefixedSeqSerializer<'_, W> {
     type Error = WritingError;
 
     fn serialize_element<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<(), Self::Error> {
-        value.serialize(&mut *self.wrapped).map(|_| ())
+        value.serialize(&mut *self.wrapped)
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {

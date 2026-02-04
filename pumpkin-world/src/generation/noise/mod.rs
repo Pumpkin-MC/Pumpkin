@@ -3,8 +3,8 @@ pub mod ore_sampler;
 pub mod perlin;
 pub mod router;
 
-use pumpkin_data::{Block, BlockState};
-use pumpkin_util::math::{floor_div, floor_mod};
+use pumpkin_data::{Block, BlockState, chunk_gen_settings::GenerationShapeConfig};
+use pumpkin_util::math::{floor_div, floor_mod, vector3::Vector3};
 
 use crate::generation::{
     noise::{
@@ -25,11 +25,10 @@ use super::{
             WrapperData,
         },
         chunk_noise_router::ChunkNoiseRouter,
-        density_function::{IndexToNoisePos, NoisePos, UnblendedNoisePos},
+        density_function::IndexToNoisePos,
         proto_noise_router::ProtoNoiseRouter,
         surface_height_sampler::SurfaceHeightEstimateSampler,
     },
-    settings::GenerationShapeConfig,
 };
 
 pub const LAVA_BLOCK: Block = Block::LAVA;
@@ -46,13 +45,14 @@ impl BlockStateSampler {
     pub fn sample(
         &mut self,
         router: &mut ChunkNoiseRouter,
-        pos: &impl NoisePos,
+        random_config: &GlobalRandomConfig,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         match self {
             Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
-            Self::Ore(ore) => ore.sample(router, pos, sample_options),
+            Self::Ore(ore) => ore.sample(router, random_config, pos, sample_options),
         }
     }
 }
@@ -62,19 +62,23 @@ pub struct ChainedBlockStateSampler {
 }
 
 impl ChainedBlockStateSampler {
-    pub fn new(samplers: Box<[BlockStateSampler]>) -> Self {
+    #[must_use]
+    pub const fn new(samplers: Box<[BlockStateSampler]>) -> Self {
         Self { samplers }
     }
 
     fn sample(
         &mut self,
         router: &mut ChunkNoiseRouter,
-        pos: &impl NoisePos,
+        random_config: &GlobalRandomConfig,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
-        for sampler in self.samplers.iter_mut() {
-            if let Some(state) = sampler.sample(router, pos, sample_options, height_estimator) {
+        for sampler in &mut self.samplers {
+            if let Some(state) =
+                sampler.sample(router, random_config, pos, sample_options, height_estimator)
+            {
                 return Some(state);
             }
         }
@@ -95,7 +99,7 @@ impl IndexToNoisePos for InterpolationIndexMapper {
         &self,
         index: usize,
         sample_data: Option<&mut ChunkNoiseFunctionSampleOptions>,
-    ) -> impl NoisePos + 'static {
+    ) -> Vector3<i32> {
         if let Some(sample_data) = sample_data {
             sample_data.cache_result_unique_id += 1;
             sample_data.fill_index = index;
@@ -104,7 +108,7 @@ impl IndexToNoisePos for InterpolationIndexMapper {
         let y = (index as i32 + self.minimum_cell_y) * self.vertical_cell_block_count;
 
         // TODO: Change this when Blender is implemented
-        UnblendedNoisePos::new(self.x, y, self.z)
+        Vector3::new(self.x, y, self.z)
     }
 }
 
@@ -122,7 +126,7 @@ impl IndexToNoisePos for ChunkIndexMapper {
         &self,
         index: usize,
         sample_options: Option<&mut ChunkNoiseFunctionSampleOptions>,
-    ) -> impl NoisePos + 'static {
+    ) -> Vector3<i32> {
         let cell_z_position = floor_mod(index, self.horizontal_cell_block_count);
         let xy_portion = floor_div(index, self.horizontal_cell_block_count);
         let cell_x_position = floor_mod(xy_portion, self.horizontal_cell_block_count);
@@ -138,7 +142,7 @@ impl IndexToNoisePos for ChunkIndexMapper {
         }
 
         // TODO: Change this when Blender is implemented
-        UnblendedNoisePos::new(
+        Vector3::new(
             self.start_x + cell_x_position as i32,
             self.start_y + cell_y_position as i32,
             self.start_z + cell_z_position as i32,
@@ -163,6 +167,7 @@ pub struct ChunkNoiseGenerator<'a> {
 
 impl<'a> ChunkNoiseGenerator<'a> {
     #[expect(clippy::too_many_arguments)]
+    #[must_use]
     pub fn new(
         noise_router_base: &'a ProtoNoiseRouter,
         random_config: &GlobalRandomConfig,
@@ -223,10 +228,9 @@ impl<'a> ChunkNoiseGenerator<'a> {
         };
 
         let samplers: Box<[BlockStateSampler]> = if ore_veins {
-            let ore_sampler = OreVeinSampler::new(random_config.ore_random_deriver.clone());
             Box::new([
                 BlockStateSampler::Aquifer(aquifer_sampler),
-                BlockStateSampler::Ore(ore_sampler),
+                BlockStateSampler::Ore(OreVeinSampler),
             ])
         } else {
             Box::new([BlockStateSampler::Aquifer(aquifer_sampler)])
@@ -367,6 +371,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
     #[expect(clippy::too_many_arguments)]
     pub fn sample_block_state(
         &mut self,
+        random_config: &GlobalRandomConfig,
         start_x: i32,
         start_y: i32,
         start_z: i32,
@@ -376,7 +381,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         //TODO: Fix this when Blender is added
-        let pos = UnblendedNoisePos::new(start_x + cell_x, start_y + cell_y, start_z + cell_z);
+        let pos = Vector3::new(start_x + cell_x, start_y + cell_y, start_z + cell_z);
 
         let options = ChunkNoiseFunctionSampleOptions::new(
             false,
@@ -392,28 +397,37 @@ impl<'a> ChunkNoiseGenerator<'a> {
             0,
         );
 
-        self.state_sampler
-            .sample(&mut self.router, &pos, &options, height_estimator)
+        self.state_sampler.sample(
+            &mut self.router,
+            random_config,
+            &pos,
+            &options,
+            height_estimator,
+        )
     }
 
     #[inline]
+    #[must_use]
     pub fn horizontal_cell_block_count(&self) -> u8 {
         self.generation_shape.horizontal_cell_block_count()
     }
 
     #[inline]
+    #[must_use]
     pub fn vertical_cell_block_count(&self) -> u8 {
         self.generation_shape.vertical_cell_block_count()
     }
 
-    /// Aka bottom_y
+    /// Aka `bottom_y`
     #[inline]
-    pub fn min_y(&self) -> i8 {
+    #[must_use]
+    pub const fn min_y(&self) -> i8 {
         self.generation_shape.min_y
     }
 
     #[inline]
-    pub fn height(&self) -> u16 {
+    #[must_use]
+    pub const fn height(&self) -> u16 {
         self.generation_shape.height
     }
 }

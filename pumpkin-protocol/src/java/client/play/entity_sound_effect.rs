@@ -12,7 +12,7 @@ use crate::{IdOr, SoundEvent, VarInt};
 #[derive(Serialize)]
 #[java_packet(PLAY_SOUND_ENTITY)]
 pub struct CEntitySoundEffect {
-    /// The sound to play. Can be a hardcoded ID or a custom SoundEvent
+    /// The sound to play. Can be a hardcoded ID or a custom `SoundEvent`
     /// (Resource Location).
     pub sound_event: IdOr<SoundEvent>,
     /// The category of the sound (e.g., Master, Music, Weather, Players).
@@ -30,7 +30,8 @@ pub struct CEntitySoundEffect {
 }
 
 impl CEntitySoundEffect {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         sound_event: IdOr<SoundEvent>,
         sound_category: SoundCategory,
         entity_id: VarInt,

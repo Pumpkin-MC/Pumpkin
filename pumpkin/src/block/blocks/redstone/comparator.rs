@@ -272,9 +272,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                 let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
 
                 // Note: self.get_attached_itemframe_level is assumed to be an async method
-                let itemframe_level = self
-                    .get_attached_itemframe_level(world, facing, source_pos)
-                    .await;
+                let itemframe_level = Self::get_attached_itemframe_level(world, facing, source_pos);
                 let block_level = if let Some(pumpkin_block) =
                     world.block_registry.get_pumpkin_block(source_block.id)
                 {
@@ -345,15 +343,13 @@ impl ComparatorBlock {
         }
     }
 
-    async fn get_attached_itemframe_level(
-        &self,
+    fn get_attached_itemframe_level(
         world: &World,
         facing: HorizontalFacing,
         pos: BlockPos,
     ) -> Option<u8> {
         let mut itemframes = world
             .get_entities_at_box(&BoundingBox::from_block(&pos))
-            .await
             .into_iter()
             .filter(|entity| {
                 entity.get_entity().entity_type == &EntityType::ITEM_FRAME

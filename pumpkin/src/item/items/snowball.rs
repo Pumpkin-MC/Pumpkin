@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::entity::Entity;
 use crate::entity::player::Player;
-use crate::entity::projectile::ThrownItemEntity;
+use crate::entity::projectile::snowball::SnowballEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -36,10 +36,17 @@ impl ItemBehaviour for SnowBallItem {
                 )
                 .await;
             let entity = Entity::new(world.clone(), position, &EntityType::SNOWBALL);
-            let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);
+            let snowball = SnowballEntity::new_shot(entity, &player.living_entity.entity).await;
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();
-            snowball.set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
+            snowball.thrown.set_velocity_from(
+                &player.living_entity.entity,
+                pitch,
+                yaw,
+                0.0,
+                POWER,
+                1.0,
+            );
             world.spawn_entity(Arc::new(snowball)).await;
         })
     }

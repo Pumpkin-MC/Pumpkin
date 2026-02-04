@@ -56,10 +56,15 @@ impl BedrockClient {
         .await;
 
         let old_view_distance = {
-            let mut config = player.config.write().await;
-            let old_view_distance = config.view_distance;
-            config.view_distance = NonZero::new(view_distance as u8).unwrap();
-            old_view_distance
+            let current_config = player.config.load();
+            let old_vd = current_config.view_distance;
+            let mut new_config = (**current_config).clone();
+
+            new_config.view_distance =
+                NonZero::new(view_distance as u8).expect("View distance must be > 0");
+            player.config.store(std::sync::Arc::new(new_config));
+
+            old_vd
         };
 
         if old_view_distance.get() != view_distance as u8 {
@@ -149,10 +154,10 @@ impl BedrockClient {
                     None => event.message.clone(),
                 };
 
-                let decorated_message = &TextComponent::chat_decorated(
-                    config.chat.format.clone(),
-                    gameprofile.name.clone(),
-                    message.clone(),
+                let decorated_message = TextComponent::chat_decorated(
+                    &config.chat.format,
+                    &gameprofile.name,
+                    &message,
                 );
 
                 let entity = &player.living_entity.entity;
@@ -161,7 +166,7 @@ impl BedrockClient {
                     //world.broadcast_secure_player_chat(player, &message, decorated_message).await;
                 } else {
                     let je_packet = CSystemChatMessage::new(
-                        decorated_message,
+                        &decorated_message,
                         false,
                     );
 

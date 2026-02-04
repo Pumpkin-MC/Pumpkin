@@ -60,7 +60,7 @@ impl ArgumentConsumer for EntityArgumentConsumer {
 
         Box::pin(async move {
             // todo: command context
-            let entities = server.select_entities(&entity_selector, Some(sender)).await;
+            let entities = server.select_entities(&entity_selector, Some(sender));
 
             entities.into_iter().next().map(Arg::Entity)
         })

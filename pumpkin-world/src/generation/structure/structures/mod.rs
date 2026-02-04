@@ -9,6 +9,8 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl, get_carver_seed, xoroshiro128::Xoroshiro},
 };
 
+use crate::generation::structure::structures::stronghold::PieceWeight;
+use crate::generation::structure::structures::stronghold::StrongholdPieceType;
 use crate::{
     ProtoChunk,
     generation::{
@@ -46,10 +48,16 @@ pub trait StructurePieceBase: Send + Sync {
     /// Places the blocks for this piece into the chunk.
     fn place(&mut self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, seed: i64);
 
+    #[expect(clippy::too_many_arguments)]
     fn fill_openings(
         &self,
         _start: &StructurePiece,
         _random: &mut RandomGenerator,
+        // TODO: this is only for Stronghold and should not be here
+        _weights: &mut Vec<PieceWeight>,
+        _last_piece_type: &mut Option<StrongholdPieceType>,
+        _has_portal_room: &mut bool,
+
         _collector: &mut StructurePiecesCollector,
         _pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
@@ -65,7 +73,12 @@ pub struct StructurePiece {
 }
 
 impl StructurePiece {
-    pub fn new(r#type: StructurePieceType, bounding_box: BlockBox, chain_length: u32) -> Self {
+    #[must_use]
+    pub const fn new(
+        r#type: StructurePieceType,
+        bounding_box: BlockBox,
+        chain_length: u32,
+    ) -> Self {
         Self {
             r#type,
             bounding_box,
@@ -74,11 +87,11 @@ impl StructurePiece {
         }
     }
 
-    pub fn set_facing(&mut self, facing: Option<BlockDirection>) {
+    pub const fn set_facing(&mut self, facing: Option<BlockDirection>) {
         self.facing = facing;
     }
 
-    fn offset_pos(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
+    const fn offset_pos(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
         Vector3::new(
             self.apply_x_transform(x, z),
             self.apply_y_transform(y),
@@ -86,31 +99,29 @@ impl StructurePiece {
         )
     }
 
-    fn apply_x_transform(&self, x: i32, z: i32) -> i32 {
+    const fn apply_x_transform(&self, x: i32, z: i32) -> i32 {
         match self.facing {
             None => x,
-            Some(BlockDirection::North) | Some(BlockDirection::South) => {
-                self.bounding_box.min.x + x
-            }
+            Some(BlockDirection::North | BlockDirection::South) => self.bounding_box.min.x + x,
             Some(BlockDirection::West) => self.bounding_box.max.x - z,
             Some(BlockDirection::East) => self.bounding_box.min.x + z,
             _ => x,
         }
     }
 
-    fn apply_y_transform(&self, y: i32) -> i32 {
+    const fn apply_y_transform(&self, y: i32) -> i32 {
         match self.facing {
             None => y,
             Some(_) => y + self.bounding_box.min.y,
         }
     }
 
-    fn apply_z_transform(&self, x: i32, z: i32) -> i32 {
+    const fn apply_z_transform(&self, x: i32, z: i32) -> i32 {
         match self.facing {
             None => z,
             Some(BlockDirection::North) => self.bounding_box.max.z - z,
             Some(BlockDirection::South) => self.bounding_box.min.z + z,
-            Some(BlockDirection::West) | Some(BlockDirection::East) => self.bounding_box.min.z + x,
+            Some(BlockDirection::West | BlockDirection::East) => self.bounding_box.min.z + x,
             _ => z,
         }
     }
@@ -298,6 +309,7 @@ impl StructurePiece {
         block_pos.y < sea_level_at_pos
     }
 
+    #[must_use]
     pub fn get_block_at(
         &self,
         chunk: &ProtoChunk,
@@ -309,7 +321,7 @@ impl StructurePiece {
         let block_pos = self.offset_pos(x, y, z);
 
         if !box_limit.contains_pos(&block_pos) {
-            log::warn!("Structure out of bounds");
+            log::debug!("Structure out of bounds");
             return Block::AIR.default_state;
         }
 
@@ -329,7 +341,7 @@ impl StructurePiece {
 
         // Bounds and logic checks
         if !box_limit.contains_pos(&block_pos) {
-            log::warn!("Structure out of bounds");
+            log::debug!("Structure out of bounds");
             return;
         }
 
@@ -357,9 +369,9 @@ impl StructurePiece {
     pub fn get_random_horizontal_direction(random: &mut impl RandomImpl) -> BlockDirection {
         match random.next_bounded_i32(4) {
             0 => BlockDirection::North,
-            1 => BlockDirection::South,
-            2 => BlockDirection::West,
-            _ => BlockDirection::East,
+            1 => BlockDirection::East,
+            2 => BlockDirection::South,
+            _ => BlockDirection::West,
         }
     }
 }
@@ -392,6 +404,7 @@ pub struct StructurePiecesCollector {
 }
 
 impl StructurePiecesCollector {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             pieces: Vec::new(),
@@ -404,20 +417,17 @@ impl StructurePiecesCollector {
         self.cached_box = None;
     }
 
-    #[expect(clippy::borrowed_box)]
-    pub fn get_intersecting(
-        &self,
-        box_to_check: &BlockBox,
-    ) -> Option<&Box<dyn StructurePieceBase>> {
+    #[must_use]
+    pub fn get_intersecting(&self, box_to_check: &BlockBox) -> Option<&dyn StructurePieceBase> {
         self.pieces
             .iter()
-            .find(|&piece| {
+            .find(|piece| {
                 piece
                     .get_structure_piece()
                     .bounding_box
                     .intersects(box_to_check)
             })
-            .map(|v| v as _)
+            .map(|v| v.as_ref() as &dyn StructurePieceBase)
     }
 
     /// Iterates over all pieces and generates them if they intersect the current chunk.
@@ -438,7 +448,7 @@ impl StructurePiecesCollector {
             chunk_z + 15,
         );
 
-        for piece in self.pieces.iter_mut() {
+        for piece in &mut self.pieces {
             if piece.bounding_box().intersects(&chunk_box) {
                 piece.place(chunk, random, seed);
             }
@@ -446,7 +456,7 @@ impl StructurePiecesCollector {
     }
 
     pub fn shift(&mut self, y_offset: i32) {
-        for piece in self.pieces.iter_mut() {
+        for piece in &mut self.pieces {
             piece.translate(0, y_offset, 0);
         }
         self.cached_box = None;
@@ -489,12 +499,13 @@ impl StructurePiecesCollector {
         bbox
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.pieces.is_empty()
     }
 
     pub fn clear(&mut self) {
-        self.pieces.clear()
+        self.pieces.clear();
     }
 }
 
@@ -505,6 +516,7 @@ pub struct StructurePosition {
 }
 
 impl StructurePosition {
+    #[must_use]
     pub fn get_bounding_box(&self) -> BlockBox {
         self.collector.lock().unwrap().get_bounding_box()
     }
@@ -526,6 +538,7 @@ pub struct StructureGeneratorContext {
     pub min_y: i32,
 }
 
+#[must_use]
 pub fn create_chunk_random(seed: i64, chunk_x: i32, chunk_z: i32) -> RandomGenerator {
     let mut random: RandomGenerator = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed as u64));
     let carver_seed = get_carver_seed(&mut random, seed as u64, chunk_x, chunk_z);
@@ -537,6 +550,6 @@ pub enum StructureInstance {
     /// This chunk is the "owner" of the structure.
     Start(StructurePosition),
     /// This chunk just contains a piece of a structure starting elsewhere.
-    /// Stores the BlockPos of the 'Start' so you can look it up.
+    /// Stores the `BlockPos` of the 'Start' so you can look it up.
     Reference(BlockPos),
 }

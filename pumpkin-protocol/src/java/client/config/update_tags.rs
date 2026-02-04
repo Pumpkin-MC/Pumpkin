@@ -8,7 +8,6 @@ use pumpkin_data::{
     tag::{RegistryKey, get_registry_key_tags},
 };
 use pumpkin_macros::java_packet;
-use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::version::MinecraftVersion;
 
 #[java_packet(CONFIG_UPDATE_TAGS)]
@@ -17,7 +16,8 @@ pub struct CUpdateTags<'a> {
 }
 
 impl<'a> CUpdateTags<'a> {
-    pub fn new(tags: &'a [RegistryKey]) -> Self {
+    #[must_use]
+    pub const fn new(tags: &'a [RegistryKey]) -> Self {
         Self { tags }
     }
 }
@@ -30,9 +30,7 @@ impl ClientPacket for CUpdateTags<'_> {
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list(self.tags, |p, registry_key| {
-            p.write_resource_location(&ResourceLocation::vanilla(
-                registry_key.identifier_string(),
-            ))?;
+            p.write_string(&format!("minecraft:{}", registry_key.identifier_string(),))?;
 
             let values = get_registry_key_tags(*version, *registry_key).unwrap();
             p.write_var_int(&values.len().try_into().map_err(|_| {

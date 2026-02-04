@@ -23,7 +23,8 @@ pub struct CChangeDifficulty {
 }
 
 impl CChangeDifficulty {
-    pub fn new(difficulty: u8, locked: bool) -> Self {
+    #[must_use]
+    pub const fn new(difficulty: u8, locked: bool) -> Self {
         Self { difficulty, locked }
     }
 }

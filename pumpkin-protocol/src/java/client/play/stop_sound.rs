@@ -15,7 +15,8 @@ pub struct CStopSound {
 }
 
 impl CStopSound {
-    pub fn new(sound_id: Option<ResourceLocation>, category: Option<SoundCategory>) -> Self {
+    #[must_use]
+    pub const fn new(sound_id: Option<ResourceLocation>, category: Option<SoundCategory>) -> Self {
         Self { sound_id, category }
     }
 }
@@ -26,18 +27,17 @@ impl ClientPacket for CStopSound {
         write: impl Write,
         _version: &MinecraftVersion,
     ) -> Result<(), WritingError> {
-        let mut write = write;
-
         const NO_CATEGORY_NO_SOUND: u8 = 0;
         const CATEGORY_ONLY: u8 = 1;
         const SOUND_ONLY: u8 = 2;
         const CATEGORY_AND_SOUND: u8 = 3;
+        let mut write = write;
 
         match (self.category, &self.sound_id) {
             (Some(category), Some(sound_id)) => {
                 write.write_u8(CATEGORY_AND_SOUND)?;
                 write.write_var_int(&VarInt(category as i32))?;
-                write.write_resource_location(sound_id)
+                write.write_string(sound_id)
             }
             (Some(category), None) => {
                 write.write_u8(CATEGORY_ONLY)?;
@@ -45,7 +45,7 @@ impl ClientPacket for CStopSound {
             }
             (None, Some(sound_id)) => {
                 write.write_u8(SOUND_ONLY)?;
-                write.write_resource_location(sound_id)
+                write.write_string(sound_id)
             }
             (None, None) => write.write_u8(NO_CATEGORY_NO_SOUND),
         }

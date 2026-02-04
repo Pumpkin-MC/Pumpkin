@@ -22,7 +22,7 @@ pub struct Worldborder {
 
 impl Worldborder {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         x: f64,
         z: f64,
         diameter: f64,

@@ -11,7 +11,8 @@ pub struct CSetCursorItem<'a> {
 }
 
 impl<'a> CSetCursorItem<'a> {
-    pub fn new(stack: &'a ItemStackSerializer<'a>) -> Self {
+    #[must_use]
+    pub const fn new(stack: &'a ItemStackSerializer<'a>) -> Self {
         Self { stack }
     }
 }

@@ -14,7 +14,7 @@ use super::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
     chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
     density_function::{
-        IndexToNoisePos, NoiseFunctionComponentRange, NoisePos, PassThrough,
+        IndexToNoisePos, NoiseFunctionComponentRange, PassThrough,
         StaticIndependentChunkNoiseFunctionComponentImpl, Wrapper,
         math::{Binary, Clamp, Constant, Linear, Unary},
         misc::{ClampedYGradient, EndIsland, RangeChoice, WeirdScaled},
@@ -22,6 +22,7 @@ use super::{
         spline::{Spline, SplineFunction, SplinePoint, SplineValue},
     },
 };
+use pumpkin_util::math::vector3::Vector3;
 
 #[enum_dispatch(
     StaticIndependentChunkNoiseFunctionComponentImpl,
@@ -62,12 +63,14 @@ pub struct DoublePerlinNoiseBuilder<'a> {
 }
 
 impl<'a> DoublePerlinNoiseBuilder<'a> {
-    pub fn new(rand: &'a GlobalRandomConfig) -> Self {
+    #[must_use]
+    pub const fn new(rand: &'a GlobalRandomConfig) -> Self {
         Self {
             random_config: rand,
         }
     }
 
+    #[must_use]
     pub fn get_noise_sampler_for_id(&self, id: &str) -> DoublePerlinNoiseSampler {
         let parameters = DoublePerlinNoiseParameters::id_to_parameters(id)
             .unwrap_or_else(|| panic!("Unknown noise id: {id}"));
@@ -77,7 +80,7 @@ impl<'a> DoublePerlinNoiseBuilder<'a> {
             .random_config
             .base_random_deriver
             .split_string(parameters.id());
-        DoublePerlinNoiseSampler::new(&mut random, parameters, false)
+        DoublePerlinNoiseSampler::from_params(&mut random, parameters, false)
     }
 }
 
@@ -136,6 +139,7 @@ fn build_spline_recursive(spline_repr: &SplineRepr) -> SplineValue {
 }
 
 impl ProtoNoiseRouters {
+    #[must_use]
     pub fn generate_proto_stack(
         base_stack: &[BaseNoiseFunctionComponent],
         random_config: &GlobalRandomConfig,
@@ -424,6 +428,7 @@ impl ProtoNoiseRouters {
         stack.into()
     }
 
+    #[must_use]
     pub fn generate(base: &BaseNoiseRouters, random_config: &GlobalRandomConfig) -> Self {
         let noise_stack =
             Self::generate_proto_stack(base.noise.full_component_stack, random_config);

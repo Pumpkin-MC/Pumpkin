@@ -49,6 +49,7 @@ pub mod slabs;
 pub mod slime;
 pub mod snow;
 pub mod spawner;
+pub mod sponge;
 pub mod stairs;
 pub mod tnt;
 pub mod torches;

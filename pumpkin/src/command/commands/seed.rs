@@ -26,7 +26,7 @@ impl CommandExecutor for Executor {
                     player.living_entity.entity.world.load().level.seed.0
                 }
                 // TODO: Maybe ask player for world, or get the current world
-                _ => match server.worlds.read().await.first() {
+                _ => match server.worlds.load().first() {
                     Some(world) => world.level.seed.0,
                     None => {
                         return Err(CommandError::CommandFailed(TextComponent::text(
@@ -34,24 +34,25 @@ impl CommandExecutor for Executor {
                         )));
                     }
                 },
-            };
-            let seed = (seed as i64).to_string();
+            } as i64;
+            let seed_string = seed.to_string();
 
             sender
                 .send_message(TextComponent::translate(
                     "commands.seed.success",
-                    [TextComponent::text(seed.clone())
+                    [TextComponent::text(seed_string.clone())
                         .hover_event(HoverEvent::show_text(TextComponent::translate(
                             Cow::from("chat.copy.click"),
                             [],
                         )))
                         .click_event(ClickEvent::CopyToClipboard {
-                            value: Cow::from(seed),
+                            value: Cow::from(seed_string),
                         })
                         .color_named(NamedColor::Green)],
                 ))
                 .await;
-            Ok(())
+
+            Ok(seed.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
         })
     }
 }

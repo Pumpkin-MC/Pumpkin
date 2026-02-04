@@ -1,4 +1,7 @@
-use pumpkin_data::Block;
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{BlockProperties, HorizontalFacing, LadderLikeProperties},
+};
 use pumpkin_util::{
     BlockDirection,
     math::block_box::BlockBox,
@@ -194,10 +197,12 @@ impl StructurePieceBase for LibraryPiece {
             // }
 
             // // Ladder
-            // let ladder = Block::LADDER.default_state.with("facing", "south");
-            // for y in 1..=7 {
-            //     inner.add_block(chunk, &ladder, 10, y, 13, &box_limit);
-            // }
+            let mut props = LadderLikeProperties::default(&Block::LADDER);
+            props.facing = HorizontalFacing::South;
+            let ladder = BlockState::from_id(props.to_state_id(&Block::LADDER));
+            for y in 1..=7 {
+                inner.add_block(chunk, ladder, 10, y, 13, &box_limit);
+            }
 
             // // Chandelier (The central structure)
             // let f_e = Block::OAK_FENCE.default_state.with("east", "true");

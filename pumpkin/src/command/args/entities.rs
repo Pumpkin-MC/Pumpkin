@@ -43,7 +43,7 @@ pub enum ComparableValueCondition<T> {
     Between(T, T),
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EntityFilterSort {
     Arbitrary,
     Nearest,
@@ -130,7 +130,8 @@ pub struct TargetSelector {
 
 impl TargetSelector {
     /// Creates a new target selector with the specified type and default conditions.
-    fn new(selector_type: EntitySelectorType) -> Self {
+    #[must_use]
+    pub fn new(selector_type: EntitySelectorType) -> Self {
         let mut filter = Vec::new();
         match selector_type {
             EntitySelectorType::Source => filter.push(EntityFilter::Limit(1)),
@@ -272,7 +273,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
         Box::pin(async move {
             // todo: command context
             // This is the required asynchronous operation.
-            let entities = server.select_entities(&entity_selector, Some(sender)).await;
+            let entities = server.select_entities(&entity_selector, Some(sender));
 
             Some(Arg::Entities(entities))
         })

@@ -32,8 +32,8 @@ pub mod query;
 pub mod ser;
 pub mod serial;
 
-pub const MAX_PACKET_SIZE: u64 = 2097152;
-pub const MAX_PACKET_DATA_SIZE: usize = 8388608;
+pub const MAX_PACKET_SIZE: u64 = 2_097_152;
+pub const MAX_PACKET_DATA_SIZE: usize = 8_388_608;
 
 pub type FixedBitSet = Box<[u8]>;
 
@@ -50,7 +50,7 @@ pub type CompressionThreshold = usize;
 /// increase CPU usage.
 pub type CompressionLevel = u32;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ConnectionState {
     HandShake,
     Status,
@@ -143,7 +143,7 @@ impl<'de, T: Deserialize<'de>> Visitor<'de> for IdOrVisitor<T> {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum IdOr<T> {
     Id(u16),
     Value(T),
@@ -155,11 +155,12 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for IdOr<T> {
     }
 }
 
+#[expect(clippy::trait_duplication_in_bounds)]
 impl<T: Serialize> Serialize for IdOr<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            IdOr::Id(id) => VarInt::from(*id + 1).serialize(serializer),
-            IdOr::Value(value) => {
+            Self::Id(id) => VarInt::from(*id + 1).serialize(serializer),
+            Self::Value(value) => {
                 #[derive(Serialize)]
                 struct NetworkRepr<T: Serialize> {
                     zero_id: VarInt,
@@ -189,7 +190,7 @@ pub struct StreamDecryptor<R: AsyncRead + Unpin> {
 }
 
 impl<R: AsyncRead + Unpin> StreamDecryptor<R> {
-    pub fn new(cipher: Aes128Cfb8Dec, stream: R) -> Self {
+    pub const fn new(cipher: Aes128Cfb8Dec, stream: R) -> Self {
         Self {
             cipher,
             read: stream,
@@ -212,7 +213,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for StreamDecryptor<R> {
         // Read the raw data
         let internal_poll = read.poll_read(cx, buf);
 
-        if matches!(internal_poll, Poll::Ready(Ok(_))) {
+        if matches!(internal_poll, Poll::Ready(Ok(()))) {
             // Decrypt the raw data in-place, note that our block size is 1 byte, so this is always safe
             for block in buf.filled_mut()[original_fill..].chunks_mut(Aes128Cfb8Dec::block_size()) {
                 cipher.decrypt_block_mut(block.into());
@@ -275,10 +276,9 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
                     if total_written == 0 {
                         //If we didn't write anything, return pending
                         return Poll::Pending;
-                    } else {
-                        // Otherwise, we actually did write something
-                        return Poll::Ready(Ok(total_written));
                     }
+                    // Otherwise, we actually did write something
+                    return Poll::Ready(Ok(total_written));
                 }
                 Poll::Ready(result) => {
                     ref_self.last_unwritten_encrypted_byte = None;
@@ -448,21 +448,22 @@ pub enum PositionFlag {
 }
 
 impl PositionFlag {
-    fn get_mask(&self) -> i32 {
+    const fn get_mask(&self) -> i32 {
         match self {
-            PositionFlag::X => 1 << 0,
-            PositionFlag::Y => 1 << 1,
-            PositionFlag::Z => 1 << 2,
-            PositionFlag::YRot => 1 << 3,
-            PositionFlag::XRot => 1 << 4,
-            PositionFlag::DeltaX => 1 << 5,
-            PositionFlag::DeltaY => 1 << 6,
-            PositionFlag::DeltaZ => 1 << 7,
-            PositionFlag::RotateDelta => 1 << 8,
+            Self::X => 1 << 0,
+            Self::Y => 1 << 1,
+            Self::Z => 1 << 2,
+            Self::YRot => 1 << 3,
+            Self::XRot => 1 << 4,
+            Self::DeltaX => 1 << 5,
+            Self::DeltaY => 1 << 6,
+            Self::DeltaZ => 1 << 7,
+            Self::RotateDelta => 1 << 8,
         }
     }
 
-    pub fn get_bitfield(flags: &[PositionFlag]) -> i32 {
+    #[must_use]
+    pub fn get_bitfield(flags: &[Self]) -> i32 {
         flags.iter().fold(0, |acc, flag| acc | flag.get_mask())
     }
 }
@@ -475,8 +476,8 @@ pub enum Label {
 impl Serialize for Label {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            Label::BuiltIn(link_type) => link_type.serialize(serializer),
-            Label::TextComponent(component) => component.serialize(serializer),
+            Self::BuiltIn(link_type) => link_type.serialize(serializer),
+            Self::TextComponent(component) => component.serialize(serializer),
         }
     }
 }
@@ -489,7 +490,8 @@ pub struct Link<'a> {
 }
 
 impl<'a> Link<'a> {
-    pub fn new(label: Label, url: &'a String) -> Self {
+    #[must_use]
+    pub const fn new(label: Label, url: &'a String) -> Self {
         Self {
             is_built_in: match label {
                 Label::BuiltIn(_) => true,
@@ -524,7 +526,6 @@ impl Serialize for LinkType {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_util::resource_location::ResourceLocation;
     use serde::{Deserialize, Serialize};
 
     use crate::{
@@ -533,7 +534,7 @@ mod test {
     };
 
     #[test]
-    fn test_serde_id_or_id() {
+    fn serde_id_or_id() {
         let mut buf = Vec::new();
 
         let id = IdOr::<SoundEvent>::Id(0);
@@ -546,10 +547,10 @@ mod test {
     }
 
     #[test]
-    fn test_serde_id_or_value() {
+    fn serde_id_or_value() {
         let mut buf = Vec::new();
         let event = SoundEvent {
-            sound_name: ResourceLocation::vanilla("test"),
+            sound_name: "test".to_string(),
             range: Some(1.0),
         };
 

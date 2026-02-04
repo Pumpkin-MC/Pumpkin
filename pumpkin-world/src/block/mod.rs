@@ -4,7 +4,7 @@ pub mod viewer;
 
 use std::collections::HashMap;
 
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockState, chunk_gen_settings::BlockBlueprint};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub use state::RawBlockState;
 
@@ -38,16 +38,19 @@ fn block_to_string<S: Serializer>(block: &'static Block, serializer: S) -> Resul
 }
 
 impl BlockStateCodec {
+    #[must_use]
     pub fn get_state(&self) -> &'static BlockState {
         let state_id = self.get_state_id();
         BlockState::from_id(state_id)
     }
 
-    pub fn get_block(&self) -> &'static Block {
+    #[must_use]
+    pub const fn get_block(&self) -> &'static Block {
         self.name
     }
 
     /// Prefer this over `get_state` when the only the state ID is needed
+    #[must_use]
     pub fn get_state_id(&self) -> BlockStateId {
         let block = self.name;
 
@@ -66,6 +69,23 @@ impl BlockStateCodec {
     }
 }
 
+#[must_use]
+pub fn to_state_id_from_blueprint(print: &BlockBlueprint) -> BlockStateId {
+    let block = Block::from_name(print.name)
+        .unwrap_or_else(|| panic!("Invalid block name in blueprint: {}", print.name));
+
+    match print.properties {
+        Some(props) => block.from_properties(props).to_state_id(block),
+        None => block.default_state.id,
+    }
+}
+
+/// Helper to get the full BlockState reference from the blueprint
+#[must_use]
+pub fn to_state_from_blueprint(print: &BlockBlueprint) -> &'static BlockState {
+    BlockState::from_id(to_state_id_from_blueprint(print))
+}
+
 #[cfg(test)]
 mod test {
     use pumpkin_data::Block;
@@ -73,10 +93,11 @@ mod test {
     use crate::chunk::palette::BLOCK_NETWORK_MAX_BITS;
 
     #[test]
-    fn test_proper_network_bits_per_entry() {
+    fn proper_network_bits_per_entry() {
         let id_to_test = 1 << BLOCK_NETWORK_MAX_BITS;
-        if Block::from_state_id(id_to_test) != &Block::AIR {
-            panic!("We need to update our constants!");
-        }
+        assert!(
+            Block::from_state_id(id_to_test) == &Block::AIR,
+            "We need to update our constants!"
+        );
     }
 }

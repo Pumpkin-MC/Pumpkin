@@ -26,12 +26,13 @@ pub struct SConfigResourcePack {
     /// The unique identifier of the resource pack this response refers to.
     #[serde(with = "uuid::serde::compact")]
     pub uuid: uuid::Uuid,
-    /// The status code of the operation, mapped to [ResourcePackResponseResult].
+    /// The status code of the operation, mapped to [`ResourcePackResponseResult`].
     result: VarInt,
 }
 
 impl SConfigResourcePack {
-    pub fn response_result(&self) -> ResourcePackResponseResult {
+    #[must_use]
+    pub const fn response_result(&self) -> ResourcePackResponseResult {
         match self.result.0 {
             0 => ResourcePackResponseResult::DownloadSuccess,
             1 => ResourcePackResponseResult::Declined,

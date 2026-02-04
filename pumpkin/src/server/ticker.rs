@@ -5,26 +5,12 @@ use std::{
 };
 use tokio::time::sleep;
 
-pub struct Ticker {
-    last_tick: Instant,
-}
-
-impl Default for Ticker {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub struct Ticker;
 
 impl Ticker {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            last_tick: Instant::now(),
-        }
-    }
-
     /// IMPORTANT: Run this in a new thread/tokio task.
-    pub async fn run(&mut self, server: &Arc<Server>) {
+    pub async fn run(server: &Arc<Server>) {
+        let mut last_tick = Instant::now();
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let tick_start_time = Instant::now();
             let manager = &server.tick_rate_manager;
@@ -54,7 +40,7 @@ impl Ticker {
 
             // Sleep logic remains the same
             let now = Instant::now();
-            let elapsed = now.duration_since(self.last_tick);
+            let elapsed = now.duration_since(last_tick);
 
             let tick_interval = if manager.is_sprinting() {
                 Duration::ZERO
@@ -68,7 +54,7 @@ impl Ticker {
                 sleep(sleep_time).await;
             }
 
-            self.last_tick = Instant::now();
+            last_tick = Instant::now();
         }
         log::debug!("Ticker stopped");
     }

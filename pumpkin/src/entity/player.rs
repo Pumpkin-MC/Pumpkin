@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
+use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use log::warn;
@@ -166,7 +167,7 @@ impl ChunkManager {
 
     /// Gets the current world for chunk loading.
     #[must_use]
-    pub fn world(&self) -> &Arc<World> {
+    pub const fn world(&self) -> &Arc<World> {
         &self.world
     }
 
@@ -193,53 +194,49 @@ impl ChunkManager {
         center: Vector2<i32>,
         mut view_distance: u8,
         level: &Arc<Level>,
+        loading_chunks: &[Vector2<i32>],
+        unloading_chunks: &[Vector2<i32>],
     ) {
-        view_distance += 1;
+        view_distance += 1; // Margin for loading
         let old_center = self.center;
         let old_view_distance = self.view_distance;
 
         {
             let mut lock = level.chunk_loading.lock().unwrap();
-            lock.add_ticket(
-                center,
-                ChunkLoading::get_level_from_view_distance(view_distance),
-            );
+            let new_level = ChunkLoading::get_level_from_view_distance(view_distance);
+            lock.add_ticket(center, new_level);
 
             if old_center != center || old_view_distance != view_distance {
-                lock.remove_ticket(
-                    old_center,
-                    ChunkLoading::get_level_from_view_distance(old_view_distance),
-                );
+                let old_level = ChunkLoading::get_level_from_view_distance(old_view_distance);
+                // Don't remove if it would be the same ticket
+                if old_center != center || old_level != new_level {
+                    lock.remove_ticket(old_center, old_level);
+                }
             }
             lock.send_change();
         };
 
-        let view_distance_i32 = i32::from(view_distance);
-
-        self.chunk_sent.retain(|pos| {
-            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
-        });
-
-        let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
-        for node in &self.chunk_queue {
-            let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
-            if dst <= view_distance_i32 {
-                new_queue.push(HeapNode(dst, node.1, node.2.clone()));
-            }
-        }
-
-        self.chunk_queue = new_queue;
         self.center = center;
         self.view_distance = view_distance;
+        let view_distance_i32 = i32::from(view_distance);
 
-        for dx in (-view_distance_i32)..=view_distance_i32 {
-            for dy in (-view_distance_i32)..=view_distance_i32 {
-                let new_pos = center.add_raw(dx, dy);
-                if !self.chunk_sent.contains(&new_pos)
-                    && let Some(chunk) = level.loaded_chunks.get(&new_pos)
-                {
-                    self.push_chunk(new_pos, chunk.value().clone());
-                }
+        self.chunk_sent
+            .retain(|pos| !unloading_chunks.contains(pos));
+
+        let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
+        for node in self.chunk_queue.drain() {
+            let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
+            if dst <= view_distance_i32 {
+                new_queue.push(HeapNode(dst, node.1, node.2));
+            }
+        }
+        self.chunk_queue = new_queue;
+
+        for pos in loading_chunks {
+            if !self.chunk_sent.contains(pos)
+                && let Some(chunk) = level.loaded_chunks.get(pos)
+            {
+                self.push_chunk(*pos, chunk.value().clone());
             }
         }
     }
@@ -318,9 +315,10 @@ impl ChunkManager {
 
     pub fn next_entity(&mut self) -> Box<[SyncEntityChunk]> {
         let chunk_size = self.entity_chunk_queue.len().min(self.chunks_per_tick);
-        let chunks: Vec<Arc<RwLock<ChunkEntityData>>> = self
+
+        let chunks: Box<[Arc<RwLock<ChunkEntityData>>]> = self
             .entity_chunk_queue
-            .drain(0..chunk_size)
+            .drain(..chunk_size)
             .map(|(_, chunk)| chunk)
             .collect();
 
@@ -332,7 +330,7 @@ impl ChunkManager {
             BatchState::Waiting => unreachable!(),
         }
 
-        chunks.into_boxed_slice()
+        chunks
     }
 }
 
@@ -351,7 +349,7 @@ pub struct Player {
     /// The player's `EnderChest` inventory.
     pub ender_chest_inventory: Arc<EnderChestInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
-    pub config: RwLock<PlayerConfig>,
+    pub config: ArcSwap<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
     pub gamemode: AtomicCell<GameMode>,
     /// The player's previous gamemode
@@ -473,7 +471,7 @@ impl Player {
 
         Self {
             living_entity,
-            config: RwLock::new(config),
+            config: ArcSwap::new(Arc::new(config)),
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
@@ -563,11 +561,11 @@ impl Player {
         self.client.spawn_task(task)
     }
 
-    pub fn inventory(&self) -> &Arc<PlayerInventory> {
+    pub const fn inventory(&self) -> &Arc<PlayerInventory> {
         &self.inventory
     }
 
-    pub fn ender_chest_inventory(&self) -> &Arc<EnderChestInventory> {
+    pub const fn ender_chest_inventory(&self) -> &Arc<EnderChestInventory> {
         &self.ender_chest_inventory
     }
 
@@ -594,7 +592,7 @@ impl Player {
         // Decrement the value of watched chunks
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
-        level.clean_entity_chunks(&chunks_to_clean).await;
+        level.clean_entity_chunks(&chunks_to_clean);
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
@@ -604,8 +602,6 @@ impl Player {
             "world", // TODO: Add world names
             level.loaded_chunk_count(),
         );
-
-        level.clean_up_log().await;
 
         //self.world().level.list_cached();
     }
@@ -657,7 +653,7 @@ impl Player {
         // Only reduce attack damage if in cooldown
         // TODO: Enchantments are reduced in the same way, just without the square.
         if attack_cooldown_progress < 1.0 {
-            damage_multiplier = 0.2 + attack_cooldown_progress.powi(2) * 0.8;
+            damage_multiplier = attack_cooldown_progress.powi(2).mul_add(0.8, 0.2);
         }
         // Modify the added damage based on the multiplier.
         let mut damage = base_damage + add_damage * damage_multiplier;
@@ -676,8 +672,8 @@ impl Player {
                 damage as f32,
                 DamageType::PLAYER_ATTACK,
                 None,
-                Some(&self.living_entity.entity),
-                Some(&self.living_entity.entity),
+                Some(self),
+                Some(self),
             )
             .await
         {
@@ -1550,8 +1546,6 @@ impl Player {
                         ability_value |= 1 << (ability as u32);
                     }
                 };
-                dbg!(abilities.allow_flying);
-                dbg!(abilities.flying);
 
                 // Base Permissions
                 set_ability(Ability::MayFly, abilities.allow_flying);
@@ -1629,7 +1623,7 @@ impl Player {
     /// Sets the player's difficulty level.
     pub async fn send_difficulty_update(&self) {
         let world = self.world();
-        let level_info = world.level_info.read().await;
+        let level_info = world.level_info.load();
         self.client
             .enqueue_packet(&CChangeDifficulty::new(
                 level_info.difficulty as u8,
@@ -1699,8 +1693,8 @@ impl Player {
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.load_full();
-        let yaw = yaw.unwrap_or(new_world.level_info.read().await.spawn_yaw);
-        let pitch = pitch.unwrap_or(new_world.level_info.read().await.spawn_pitch);
+        let yaw = yaw.unwrap_or(new_world.level_info.load().spawn_yaw);
+        let pitch = pitch.unwrap_or(new_world.level_info.load().spawn_pitch);
 
         let server = new_world.server.upgrade().unwrap();
 
@@ -1724,9 +1718,12 @@ impl Player {
                 let new_world = event.new_world;
 
                 self.set_client_loaded(false);
-                let uuid = self.gameprofile.id;
                 let player = current_world.remove_player(self, false).await.unwrap();
-                new_world.players.write().await.insert(uuid, player.clone());
+               new_world.players.rcu(|current_list| {
+                    let mut new_list = (**current_list).clone();
+                    new_list.push(player.clone());
+                    new_list
+                });
                 self.unload_watched_chunks(&current_world).await;
 
                 self.chunk_manager.lock().await.change_world(&current_world.level, new_world.clone());
@@ -1743,7 +1740,7 @@ impl Player {
                 self.client
                     .send_packet_now(&CRespawn::new(
                         (new_world.dimension.id).into(),
-                        ResourceLocation::from(new_world.dimension.minecraft_name),
+                        new_world.dimension.minecraft_name.to_string(),
                         biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
@@ -1908,14 +1905,7 @@ impl Player {
         self.set_client_loaded(false);
         let block_pos = self.position().to_block_pos();
 
-        let keep_inventory = {
-            self.world()
-                .level_info
-                .read()
-                .await
-                .game_rules
-                .keep_inventory
-        };
+        let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
 
         if !keep_inventory {
             for item in &self.inventory().main_inventory {
@@ -1937,13 +1927,17 @@ impl Player {
             .await;
     }
 
-    pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) {
+    pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) -> bool {
         // We could send the same gamemode without any problems. But why waste bandwidth?
-        assert_ne!(
-            self.gamemode.load(),
-            gamemode,
-            "Attempt to set the gamemode to the already current gamemode"
-        );
+        // assert_ne!(
+        //    self.gamemode.load(),
+        //    gamemode,
+        //    "Attempt to set the gamemode to the already current gamemode"
+        // );
+        // Why are we panicking if the gamemodes are the same? Vanilla just exits early.
+        if self.gamemode.load() == gamemode {
+            return false;
+        }
         let server = self.world().server.upgrade().unwrap();
         send_cancellable! {{
             server;
@@ -1972,6 +1966,17 @@ impl Player {
                     self.get_entity().set_on_fire(false).await;
                 }
 
+                // Stop elytra flight and reset sneaking when switching to spectator mode
+                if gamemode == GameMode::Spectator {
+                    let entity = self.get_entity();
+                    if entity.fall_flying.load(Ordering::Relaxed) {
+                        entity.set_fall_flying(false).await;
+                    }
+                    if entity.sneaking.load(Ordering::Relaxed) {
+                        entity.set_sneaking(false).await;
+                    }
+                }
+
                 self.living_entity.entity.invulnerable.store(
                     matches!(gamemode, GameMode::Creative | GameMode::Spectator),
                     Ordering::Relaxed,
@@ -1994,13 +1999,19 @@ impl Player {
                         GameEvent::ChangeGameMode,
                         gamemode as i32 as f32,
                     )).await;
+
+                true
+            }
+
+            'cancelled: {
+                false
             }
         }}
     }
 
     /// Send the player's skin layers and used hand to all players.
     pub async fn send_client_information(&self) {
-        let config = self.config.read().await;
+        let config = self.config.load();
         self.living_entity
             .entity
             .send_meta_data(&[
@@ -2037,7 +2048,7 @@ impl Player {
                 .has_effect(&StatusEffect::CONDUIT_POWER)
                 .await
         {
-            speed *= 1.0 + (self.get_haste_amplifier().await + 1) as f32 * 0.2;
+            speed *= ((self.get_haste_amplifier().await + 1) as f32).mul_add(0.2, 1.0);
         }
         // Fatigue
         if let Some(fatigue) = self
@@ -2108,9 +2119,10 @@ impl Player {
         let l = 0.02 * rand::random::<f64>();
 
         let velocity = Vector3::new(
-            -yaw_sin * pitch_cos * 0.3 + horizontal_offset.cos() * l,
-            -pitch_sin * 0.3 + 0.1 + (rand::random::<f64>() - rand::random::<f64>()) * 0.1,
-            yaw_cos * pitch_cos * 0.3 + horizontal_offset.sin() * l,
+            (-yaw_sin * pitch_cos).mul_add(0.3, horizontal_offset.cos() * l),
+            (rand::random::<f64>() - rand::random::<f64>())
+                .mul_add(0.1, (-pitch_sin).mul_add(0.3, 0.1)),
+            (yaw_cos * pitch_cos).mul_add(0.3, horizontal_offset.sin() * l),
         );
 
         // TODO: Merge stacks together
@@ -2270,7 +2282,7 @@ impl Player {
             .await;
     }
 
-    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
         let effect_id = VarInt(i32::from(effect_type.id));
         self.client
             .enqueue_packet(
@@ -2280,13 +2292,14 @@ impl Player {
                 ),
             )
             .await;
-        self.living_entity.remove_effect(effect_type).await;
+
+        self.living_entity.remove_effect(effect_type).await
 
         // TODO broadcast metadata
     }
 
-    pub async fn remove_all_effect(&self) -> u8 {
-        let mut count = 0;
+    pub async fn remove_all_effects(&self) -> bool {
+        let mut succeeded = false;
         let mut effect_list = vec![];
         for effect in self.living_entity.active_effects.lock().await.keys() {
             effect_list.push(*effect);
@@ -2299,14 +2312,15 @@ impl Player {
                     ),
                 )
                 .await;
-            count += 1;
+            succeeded = true;
         }
-        //Need to remove effect after because the player effect are lock in the for before
+
+        // Need to remove effects afterward here because there would be a deadlock if this is done in the for loop.
         for effect in effect_list {
             self.living_entity.remove_effect(effect).await;
         }
 
-        count
+        succeeded
     }
 
     /// Add experience levels to the player.
@@ -2661,7 +2675,7 @@ impl NBTStorage for Player {
 
             nbt.put_string(
                 "Dimension",
-                ResourceLocation::from(self.world().dimension.minecraft_name).to_string(),
+                self.world().dimension.minecraft_name.to_string(),
             );
         })
     }
@@ -3043,7 +3057,7 @@ impl Default for Abilities {
 }
 
 impl Abilities {
-    pub fn set_for_gamemode(&mut self, gamemode: GameMode) {
+    pub const fn set_for_gamemode(&mut self, gamemode: GameMode) {
         match gamemode {
             GameMode::Creative => {
                 // self.flying = false; // Start not flying
@@ -3135,7 +3149,7 @@ impl Default for ChatSession {
 
 impl ChatSession {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         session_id: Uuid,
         expires_at: i64,
         public_key: Box<[u8]>,

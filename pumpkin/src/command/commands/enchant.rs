@@ -141,12 +141,12 @@ impl CommandExecutor for Executor {
                 );
                 sender.send_message(msg).await;
             }
-            Ok(())
+            Ok(success)
         })
     }
 }
 
-fn enchantment_level_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn enchantment_level_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("level")
         .min(0)

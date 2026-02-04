@@ -18,7 +18,8 @@ pub struct CPlayDisconnect<'a> {
 }
 
 impl<'a> CPlayDisconnect<'a> {
-    pub fn new(reason: &'a TextComponent) -> Self {
+    #[must_use]
+    pub const fn new(reason: &'a TextComponent) -> Self {
         Self { reason }
     }
 }

@@ -10,7 +10,8 @@ pub struct CSetBorderCenter {
 }
 
 impl CSetBorderCenter {
-    pub fn new(x: f64, z: f64) -> Self {
+    #[must_use]
+    pub const fn new(x: f64, z: f64) -> Self {
         Self { x, z }
     }
 }

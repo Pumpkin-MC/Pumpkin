@@ -20,7 +20,7 @@ use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, item::ItemStack, tick::TickPriority, world::BlockFlags};
-use rand::Rng;
+use rand::RngExt;
 
 #[pumpkin_block("minecraft:composter")]
 pub struct ComposterBlock;

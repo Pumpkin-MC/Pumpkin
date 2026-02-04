@@ -1,4 +1,7 @@
-use pumpkin_data::Block;
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{BlockProperties, HorizontalFacing, OakStairsLikeProperties},
+};
 use pumpkin_util::{
     BlockDirection,
     math::block_box::BlockBox,
@@ -11,7 +14,10 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
+            stronghold::{
+                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                StrongholdPieceType,
+            },
         },
     },
 };
@@ -64,11 +70,24 @@ impl StructurePieceBase for StairsPiece {
         &self,
         start: &StructurePiece,
         random: &mut RandomGenerator,
+        weights: &mut Vec<PieceWeight>,
+        last_piece_type: &mut Option<StrongholdPieceType>,
+        _has_portal_room: &mut bool,
+
         collector: &mut StructurePiecesCollector,
         pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
-        self.piece
-            .fill_forward_opening(start, collector, random, 1, 1, pieces_to_process, None);
+        self.piece.fill_forward_opening(
+            start,
+            collector,
+            random,
+            weights,
+            last_piece_type,
+            1,
+            1,
+            pieces_to_process,
+            None,
+        );
     }
 
     fn place(&mut self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, _seed: i64) {
@@ -99,7 +118,9 @@ impl StructurePieceBase for StairsPiece {
         p.generate_entrance(chunk, &box_limit, EntranceType::Opening, 1, 1, 7);
 
         // 4. Stairs Generation
-        let stair_state = Block::COBBLESTONE_STAIRS.default_state;
+        let mut props = OakStairsLikeProperties::default(&Block::COBBLESTONE_STAIRS);
+        props.facing = HorizontalFacing::South;
+        let stair_state = BlockState::from_id(props.to_state_id(&Block::COBBLESTONE_STAIRS));
 
         let stone_bricks = Block::STONE_BRICKS.default_state;
 

@@ -1,13 +1,12 @@
-use std::collections::HashSet;
-
 use pumpkin_util::math::position::BlockPos;
+use rustc_hash::FxHashSet;
 
 use crate::tick::{MAX_TICK_DELAY, OrderedTick, ScheduledTick};
 
 #[derive(Clone)]
 pub struct ChunkTickScheduler<T> {
     tick_queue: [Vec<OrderedTick<T>>; MAX_TICK_DELAY],
-    queued_ticks: HashSet<(BlockPos, T)>,
+    queued_ticks: FxHashSet<(BlockPos, T)>,
     offset: usize,
 }
 
@@ -40,6 +39,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         self.queued_ticks.contains(&(pos, value))
     }
 
+    #[must_use]
     pub fn to_vec(&self) -> Vec<ScheduledTick<&'a T>> {
         let mut res = Vec::new();
         for i in 0..MAX_TICK_DELAY {
@@ -78,7 +78,7 @@ impl<T> Default for ChunkTickScheduler<T> {
     fn default() -> Self {
         Self {
             tick_queue: std::array::from_fn(|_| Vec::new()),
-            queued_ticks: HashSet::new(),
+            queued_ticks: FxHashSet::default(),
             offset: 0,
         }
     }

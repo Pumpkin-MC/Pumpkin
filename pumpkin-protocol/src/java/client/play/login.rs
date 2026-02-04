@@ -2,7 +2,7 @@ use pumpkin_data::packet::clientbound::PLAY_LOGIN;
 use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
 
 use pumpkin_macros::java_packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
@@ -12,14 +12,14 @@ use crate::VarInt;
 /// This is one of the largest and most important packets in the protocol. It
 /// initializes the player's world view, dimension settings, and local game
 /// rules. Once received, the client begins rendering the world.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[java_packet(PLAY_LOGIN)]
-pub struct CLogin<'a> {
+pub struct CLogin {
     /// The unique ID assigned to the player for the current session.
     pub entity_id: i32,
     pub is_hardcore: bool,
     /// A list of all dimensions present on the server (e.g., overworld, nether, end).
-    pub dimension_names: &'a [ResourceLocation],
+    pub dimension_names: Vec<ResourceLocation>,
     pub max_players: VarInt,
     /// The number of chunks the client will render in each direction.
     pub view_distance: VarInt,
@@ -52,12 +52,14 @@ pub struct CLogin<'a> {
     pub enforce_secure_chat: bool,
 }
 
-impl<'a> CLogin<'a> {
+impl CLogin {
     #[expect(clippy::too_many_arguments)]
-    pub fn new(
+    #[expect(clippy::fn_params_excessive_bools)]
+    #[must_use]
+    pub const fn new(
         entity_id: i32,
         is_hardcore: bool,
-        dimension_names: &'a [ResourceLocation],
+        dimension_names: Vec<ResourceLocation>,
         max_players: VarInt,
         view_distance: VarInt,
         simulated_distance: VarInt,

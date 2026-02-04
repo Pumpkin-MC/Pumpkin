@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection, BlockState, FacingExt,
@@ -14,7 +14,8 @@ use pumpkin_world::{
     block::entities::{has_block_block_entity, piston::PistonBlockEntity},
     world::BlockFlags,
 };
-use rand::Rng;
+use rand::RngExt;
+use rustc_hash::FxHashMap;
 
 use crate::{
     block::{
@@ -377,7 +378,7 @@ async fn move_piston(
         return false;
     }
 
-    let mut moved_blocks_map: HashMap<BlockPos, &BlockState> = HashMap::new();
+    let mut moved_blocks_map: FxHashMap<BlockPos, &BlockState> = FxHashMap::default();
     let moved_blocks: Vec<BlockPos> = handler.moved_blocks;
 
     let mut moved_block_states: Vec<&BlockState> = Vec::new();

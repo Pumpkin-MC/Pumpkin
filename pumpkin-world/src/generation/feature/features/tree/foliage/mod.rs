@@ -85,7 +85,7 @@ impl FoliagePlacer {
         giant_trunk: bool,
         foliage_provider: &BlockState,
     ) {
-        let i = if giant_trunk { 1 } else { 0 };
+        let i = i32::from(giant_trunk);
 
         for x in -radius..=(radius + i) {
             for z in -radius..=(radius + i) {
@@ -132,7 +132,7 @@ impl FoliagePlacer {
         block_state: &BlockState,
     ) {
         let block = GenerationCache::get_block_state(chunk, &pos.0);
-        if !TreeFeature::can_replace(block.to_state(), block.to_block()) {
+        if !TreeFeature::can_replace(block.to_state(), block.to_block_id()) {
             return;
         }
         chunk.set_block_state(&pos.0, block_state);
@@ -179,7 +179,7 @@ impl FoliageType {
         foliage_provider: &BlockState,
     ) {
         match self {
-            FoliageType::Blob(blob) => blob.generate(
+            Self::Blob(blob) => blob.generate(
                 chunk,
                 random,
                 node,
@@ -188,7 +188,7 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::Spruce(spruce) => spruce.generate(
+            Self::Spruce(spruce) => spruce.generate(
                 chunk,
                 random,
                 node,
@@ -197,7 +197,7 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::Pine(pine) => pine.generate(
+            Self::Pine(pine) => pine.generate(
                 chunk,
                 random,
                 node,
@@ -206,7 +206,7 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::Acacia(acacia) => acacia.generate(
+            Self::Acacia(acacia) => acacia.generate(
                 chunk,
                 random,
                 node,
@@ -215,7 +215,7 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::Bush(bush) => bush.generate(
+            Self::Bush(bush) => bush.generate(
                 chunk,
                 random,
                 node,
@@ -224,7 +224,7 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::Fancy(fancy) => fancy.generate(
+            Self::Fancy(fancy) => fancy.generate(
                 chunk,
                 random,
                 node,
@@ -233,7 +233,7 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::Jungle(jungle) => jungle.generate(
+            Self::Jungle(jungle) => jungle.generate(
                 chunk,
                 random,
                 node,
@@ -242,7 +242,7 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::MegaPine(mega_pine) => mega_pine.generate(
+            Self::MegaPine(mega_pine) => mega_pine.generate(
                 chunk,
                 random,
                 node,
@@ -251,7 +251,7 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::DarkOak(dark_oak) => dark_oak.generate(
+            Self::DarkOak(dark_oak) => dark_oak.generate(
                 chunk,
                 random,
                 node,
@@ -260,7 +260,7 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::RandomSpread(random_spread) => random_spread.generate(
+            Self::RandomSpread(random_spread) => random_spread.generate(
                 chunk,
                 random,
                 node,
@@ -269,7 +269,7 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            FoliageType::Cherry(cherry) => cherry.generate(
+            Self::Cherry(cherry) => cherry.generate(
                 chunk,
                 random,
                 node,
@@ -283,19 +283,19 @@ impl FoliageType {
 
     pub fn get_random_height(&self, random: &mut RandomGenerator, trunk_height: i32) -> i32 {
         match self {
-            FoliageType::Blob(blob) => blob.get_random_height(random),
-            FoliageType::Spruce(spruce) => spruce.get_random_height(random, trunk_height),
-            FoliageType::Pine(pine) => pine.get_random_height(random, trunk_height),
-            FoliageType::Acacia(acacia) => acacia.get_random_height(random),
-            FoliageType::Bush(bush) => bush.get_random_height(random),
-            FoliageType::Fancy(fancy) => fancy.get_random_height(random),
-            FoliageType::Jungle(jungle) => jungle.get_random_height(random, trunk_height),
-            FoliageType::MegaPine(mega_pine) => mega_pine.get_random_height(random, trunk_height),
-            FoliageType::DarkOak(dark_oak) => dark_oak.get_random_height(random),
-            FoliageType::RandomSpread(random_spread) => {
+            Self::Blob(blob) => blob.get_random_height(random),
+            Self::Spruce(spruce) => spruce.get_random_height(random, trunk_height),
+            Self::Pine(pine) => pine.get_random_height(random, trunk_height),
+            Self::Acacia(acacia) => acacia.get_random_height(random),
+            Self::Bush(bush) => bush.get_random_height(random),
+            Self::Fancy(fancy) => fancy.get_random_height(random),
+            Self::Jungle(jungle) => jungle.get_random_height(random, trunk_height),
+            Self::MegaPine(mega_pine) => mega_pine.get_random_height(random, trunk_height),
+            Self::DarkOak(dark_oak) => dark_oak.get_random_height(random),
+            Self::RandomSpread(random_spread) => {
                 random_spread.get_random_height(random, trunk_height)
             }
-            FoliageType::Cherry(cherry) => cherry.get_random_height(random),
+            Self::Cherry(cherry) => cherry.get_random_height(random),
         }
     }
 }

@@ -41,14 +41,14 @@ impl CommandExecutor for Executor {
             let count = count.unwrap_or(Ok(0))?;
             let (world, pos) = match sender {
                 CommandSender::Console | CommandSender::Rcon(_) => {
-                    let guard = server.worlds.read().await;
+                    let guard = server.worlds.load();
                     let world = guard
                         .first()
                         .cloned()
                         .ok_or(CommandError::InvalidRequirement)?;
                     // default position for spawning a player, in this case for particle
                     let pos = {
-                        let info = &world.level_info.read().await;
+                        let info = &world.level_info.load();
                         // default position for spawning a player, in this case for mob
                         pos.unwrap_or(Vector3::new(
                             f64::from(info.spawn_x) + 0.5,
@@ -80,7 +80,8 @@ impl CommandExecutor for Executor {
                 ))
                 .await;
 
-            Ok(())
+            // TODO: Add `viewers` arguments and change the logic for this result
+            Ok(1)
         })
     }
 }

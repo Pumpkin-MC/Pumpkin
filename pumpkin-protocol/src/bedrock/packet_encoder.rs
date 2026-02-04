@@ -5,7 +5,6 @@ use std::{
     task::{Context, Poll},
 };
 
-use bytes::Bytes;
 use thiserror::Error;
 use tokio::{io::AsyncWrite, net::UdpSocket};
 
@@ -22,10 +21,11 @@ pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
 }
 
 impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
+    #[must_use]
     pub fn upgrade(self, cipher: Aes128Cfb8Enc) -> Self {
         match self {
             Self::None(stream) => Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream))),
-            _ => panic!("Cannot upgrade a stream that already has a cipher!"),
+            Self::Encrypt(_) => panic!("Cannot upgrade a stream that already has a cipher!"),
         }
     }
 }
@@ -76,7 +76,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
 }
 
 /// Encoder: Server -> Client
-/// Supports ZLib endecoding/compression
+/// Supports `ZLib` endecoding/compression
 /// Supports Aes128 Encryption
 pub struct UDPNetworkEncoder {
     // compression and compression threshold
@@ -90,16 +90,20 @@ impl Default for UDPNetworkEncoder {
 }
 
 impl UDPNetworkEncoder {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self { compression: None }
     }
 
-    pub fn set_compression(&mut self, compression_info: (CompressionThreshold, CompressionLevel)) {
+    pub const fn set_compression(
+        &mut self,
+        compression_info: (CompressionThreshold, CompressionLevel),
+    ) {
         self.compression = Some(compression_info);
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
-    pub fn set_encryption(&mut self, _key: &[u8; 16]) {
+    pub const fn set_encryption(&mut self, _key: &[u8; 16]) {
         // if matches!(self.writer, EncryptionWriter::Encrypt(_)) {
         //     panic!("Cannot upgrade a stream that already has a cipher!");
         // }
@@ -107,12 +111,12 @@ impl UDPNetworkEncoder {
         // take_mut::take(&mut self.writer, |encoder| encoder.upgrade(cipher));
     }
 
-    pub async fn write_game_packet(
+    pub fn write_game_packet(
         &mut self,
         packet_id: u16,
         sub_client_sender: SubClient,
         sub_client_target: SubClient,
-        packet_payload: Bytes,
+        packet_payload: &[u8],
         mut writer: impl Write,
     ) -> Result<(), Error> {
         // Game Packet ID
@@ -128,7 +132,7 @@ impl UDPNetworkEncoder {
         // Gamepacket ID (10 bits) << 4 (offset by 2 bits for target + 2 bits for sender)
         // SubClient Sender ID (2 bits) << 2 (offset by 2 bits for target)
         // SubClient Target ID (2 bits)
-        let header_value: u32 = packet_id as u32
+        let header_value: u32 = u32::from(packet_id)
             | ((sub_client_sender as u32) << 10)
             | ((sub_client_target as u32) << 12);
 
@@ -158,7 +162,7 @@ impl UDPNetworkEncoder {
             .unwrap();
 
         // 5. Write the payload
-        writer.write_all(&packet_payload)
+        writer.write_all(packet_payload)
     }
 
     pub async fn write_packet(

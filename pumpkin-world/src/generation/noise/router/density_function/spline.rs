@@ -1,4 +1,4 @@
-use pumpkin_util::math::lerp;
+use pumpkin_util::math::{lerp, vector3::Vector3};
 
 use crate::generation::noise::router::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
@@ -6,7 +6,7 @@ use crate::generation::noise::router::{
     proto_noise_router::ProtoNoiseFunctionComponent,
 };
 
-use super::{NoiseFunctionComponentRange, NoisePos};
+use super::NoiseFunctionComponentRange;
 
 #[derive(Clone)]
 pub enum SplineValue {
@@ -18,7 +18,7 @@ impl SplineValue {
     #[inline]
     fn sample(
         &self,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
@@ -45,7 +45,7 @@ pub struct SplinePoint {
 }
 
 impl SplinePoint {
-    pub fn new(location: f32, value: SplineValue, derivative: f32) -> Self {
+    pub const fn new(location: f32, value: SplineValue, derivative: f32) -> Self {
         Self {
             location,
             value,
@@ -74,7 +74,7 @@ pub struct Spline {
 }
 
 impl Spline {
-    pub fn new(input_index: usize, points: Box<[SplinePoint]>) -> Self {
+    pub const fn new(input_index: usize, points: Box<[SplinePoint]>) -> Self {
         Self {
             input_index,
             points,
@@ -151,7 +151,7 @@ impl Spline {
 
     fn sample(
         &self,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
@@ -224,7 +224,7 @@ impl StaticChunkNoiseFunctionComponentImpl for SplineFunction {
     fn sample(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         self.spline.sample(pos, component_stack, sample_options) as f64
