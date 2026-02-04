@@ -19,7 +19,7 @@ use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::player::player_chat::PlayerChatEvent;
-use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
+use crate::plugin::player::player_command_preprocess::PlayerCommandPreprocessEvent;
 use crate::plugin::player::player_animation::PlayerAnimationEvent;
 use crate::plugin::player::player_armor_stand_manipulate::PlayerArmorStandManipulateEvent;
 use crate::plugin::player::player_bucket_entity::PlayerBucketEntityEvent;
@@ -566,15 +566,16 @@ impl JavaClient {
         let server_clone = server.clone();
         send_cancellable! {{
             server;
-            PlayerCommandSendEvent {
+            PlayerCommandPreprocessEvent {
                 player: player.clone(),
-                command: command.command.clone(),
+                command: format!("/{}", command.command),
                 cancelled: false
             };
 
             'after: {
                 let command = event.command;
-                let command_clone = command.clone();
+                let command_stripped = command.strip_prefix('/').unwrap_or(&command).to_string();
+                let command_clone = command_stripped.clone();
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
                 server.spawn_task(async move {
@@ -591,7 +592,7 @@ impl JavaClient {
                     log::info!(
                         "Player ({}): executed command /{}",
                         player.gameprofile.name,
-                        command
+                        command_stripped
                     );
                 }
             }
