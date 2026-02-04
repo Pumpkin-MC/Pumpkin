@@ -47,6 +47,7 @@ pub mod player_shear_entity;
 pub mod player_spawn_location;
 pub mod player_statistic_increment;
 pub mod player_velocity;
+pub mod player_harvest_block;
 pub mod player_swap_hand_items;
 pub mod player_teleport;
 pub mod player_toggle_flight;
