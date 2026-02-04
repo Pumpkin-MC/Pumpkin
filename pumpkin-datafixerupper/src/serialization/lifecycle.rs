@@ -7,7 +7,7 @@ pub enum Lifecycle {
     /// Represents something experimental.
     Experimental,
     /// Represents something deprecated. The `u32` with this lifecycle represents the *date* from which it was marked to be deprecated.
-    /// 
+    ///
     /// If the number is smaller, it was deprecated earlier, whereas if it is bigger, it was deprecated later.
     Deprecated(u32),
 }
@@ -24,7 +24,11 @@ impl Lifecycle {
             (Self::Experimental, _) | (_, Self::Experimental) => Self::Experimental,
 
             (d1 @ Self::Deprecated(s1), d2 @ Self::Deprecated(s2)) => {
-                if s1 < s2 { d1 } else { d2 }
+                if s1 < s2 {
+                    d1
+                } else {
+                    d2
+                }
             }
 
             (d @ Self::Deprecated(_), _) | (_, d @ Self::Deprecated(_)) => d,
@@ -40,14 +44,16 @@ mod test {
 
     #[test]
     fn add_lifecycles() {
-        assert_eq!(Lifecycle::Stable.add(Lifecycle::Stable),
-            Lifecycle::Stable);
+        assert_eq!(Lifecycle::Stable.add(Lifecycle::Stable), Lifecycle::Stable);
 
-        
-        assert_eq!(Lifecycle::Experimental.add(Lifecycle::Deprecated(10)),
-            Lifecycle::Experimental);
-        
-        assert_eq!(Lifecycle::Deprecated(10).add(Lifecycle::Deprecated(15)),
-            Lifecycle::Deprecated(10));
+        assert_eq!(
+            Lifecycle::Experimental.add(Lifecycle::Deprecated(10)),
+            Lifecycle::Experimental
+        );
+
+        assert_eq!(
+            Lifecycle::Deprecated(10).add(Lifecycle::Deprecated(15)),
+            Lifecycle::Deprecated(10)
+        );
     }
 }
