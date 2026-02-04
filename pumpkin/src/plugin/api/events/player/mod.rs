@@ -18,6 +18,7 @@ pub mod player_bed_leave;
 pub mod player_bucket_empty;
 pub mod player_bucket_fill;
 pub mod player_bucket_entity;
+pub mod player_changed_main_hand;
 pub mod player_move;
 pub mod player_teleport;
 
