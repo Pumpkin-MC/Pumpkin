@@ -1,6 +1,12 @@
-use crate::{entity::EntityBaseFuture, server::Server};
+use crate::{
+    entity::EntityBaseFuture,
+    plugin::player::player_pickup_arrow::PlayerPickupArrowEvent,
+    server::Server,
+};
 use core::f32;
-use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_data::{
+    Item, damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData,
+};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{CTakeItemEntity, Metadata},
@@ -17,7 +23,6 @@ use std::sync::{
     },
 };
 use tokio::sync::Mutex;
-
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
@@ -416,6 +421,30 @@ impl EntityBase for ItemEntity {
                 || player.living_entity.health.load() <= 0.0
             {
                 return;
+            }
+
+            let (item_stack_snapshot, item_id, item_count) = {
+                let stack = self.item_stack.lock().await;
+                (stack.clone(), stack.item.id, stack.item_count)
+            };
+
+            if item_id == Item::ARROW.id
+                || item_id == Item::SPECTRAL_ARROW.id
+                || item_id == Item::TIPPED_ARROW.id
+            {
+                if let Some(server) = player.world().server.upgrade() {
+                    let event = PlayerPickupArrowEvent::new(
+                        player.clone(),
+                        self.entity.entity_uuid,
+                        self.entity.entity_uuid,
+                        item_stack_snapshot.clone(),
+                        item_count as i32,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                }
             }
 
             if player
