@@ -48,6 +48,7 @@ mod screen;
 mod sound;
 mod sound_category;
 mod spawn_egg;
+mod structures;
 mod tag;
 mod tracked_data;
 mod world_event;
@@ -84,6 +85,7 @@ pub fn main() {
         (spawn_egg::build, "spawn_egg.rs"),
         (block::build, "block.rs"),
         (item::build, "item.rs"),
+        (structures::build, "structures.rs"),
         (chunk_gen_settings::build, "chunk_gen_settings.rs"),
         (fluid::build, "fluid.rs"),
         (entity_status::build, "entity_status.rs"),
