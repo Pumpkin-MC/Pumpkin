@@ -84,6 +84,7 @@ use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
+use crate::plugin::player::player_drop_item::PlayerDropItemEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
@@ -2113,9 +2114,32 @@ impl Player {
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
+        let item_uuid = Uuid::new_v4();
+        self.spawn_dropped_item_with_uuid(item_uuid, item_stack)
+            .await;
+    }
+
+    pub async fn drop_item_with_event(&self, item_stack: ItemStack) -> bool {
+        let Some(server) = self.world().server.upgrade() else {
+            return false;
+        };
+
+        let item_uuid = Uuid::new_v4();
+        let event = PlayerDropItemEvent::new(self.clone(), item_uuid, item_stack);
+        let event = server.plugin_manager.fire(event).await;
+        if event.cancelled || event.item_stack.is_empty() {
+            return false;
+        }
+
+        self.spawn_dropped_item_with_uuid(item_uuid, event.item_stack)
+            .await;
+        true
+    }
+
+    async fn spawn_dropped_item_with_uuid(&self, item_uuid: Uuid, item_stack: ItemStack) {
         let item_pos = self.living_entity.entity.pos.load()
             + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
-        let entity = Entity::new(self.world(), item_pos, &EntityType::ITEM);
+        let entity = Entity::from_uuid(item_uuid, self.world(), item_pos, &EntityType::ITEM);
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
         let yaw = f64::from(self.living_entity.entity.yaw.load()).to_radians();
@@ -2145,22 +2169,30 @@ impl Player {
         let binding = self.inventory.held_item();
         let mut item_stack = binding.lock().await;
 
-        if !item_stack.is_empty() {
-            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            self.drop_item(item_stack.copy_with_count(drop_amount))
-                .await;
-            item_stack.decrement(drop_amount);
-            let selected_slot = self.inventory.get_selected_slot();
-            let inv: Arc<dyn Inventory> = self.inventory.clone();
-            let screen_binding = self.current_screen_handler.lock().await;
-            let mut screen_handler = screen_binding.lock().await;
-            let slot_index = screen_handler
-                .get_slot_index(&inv, selected_slot as usize)
-                .await;
+        if item_stack.is_empty() {
+            return;
+        }
 
-            if let Some(slot_index) = slot_index {
-                screen_handler.set_received_stack(slot_index, item_stack.clone());
-            }
+        let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
+        let drop_stack = item_stack.copy_with_count(drop_amount);
+        drop(item_stack);
+
+        if !self.drop_item_with_event(drop_stack).await {
+            return;
+        }
+
+        let mut item_stack = binding.lock().await;
+        item_stack.decrement(drop_amount);
+        let selected_slot = self.inventory.get_selected_slot();
+        let inv: Arc<dyn Inventory> = self.inventory.clone();
+        let screen_binding = self.current_screen_handler.lock().await;
+        let mut screen_handler = screen_binding.lock().await;
+        let slot_index = screen_handler
+            .get_slot_index(&inv, selected_slot as usize)
+            .await;
+
+        if let Some(slot_index) = slot_index {
+            screen_handler.set_received_stack(slot_index, item_stack.clone());
         }
     }
 
