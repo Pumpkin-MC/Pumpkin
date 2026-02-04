@@ -25,7 +25,7 @@ use crate::{
     command::CommandSender,
     entity::{EntityBase, player::Player},
     net::{DisconnectReason, bedrock::BedrockClient},
-    plugin::player::{player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent},
+    plugin::player::{player_chat::PlayerChatEvent, player_command_preprocess::PlayerCommandPreprocessEvent},
     server::{Server, seasonal_events},
     world::chunker::{self},
 };
@@ -189,15 +189,16 @@ impl BedrockClient {
         let server_clone: Arc<Server> = server.clone();
         send_cancellable! {{
             server;
-            PlayerCommandSendEvent {
+            PlayerCommandPreprocessEvent {
                 player: player.clone(),
-                command: command.command.clone(),
+                command: format!("/{}", command.command),
                 cancelled: false
             };
 
             'after: {
                 let command = event.command;
-                let command_clone = command.clone();
+                let command_stripped = command.strip_prefix('/').unwrap_or(&command).to_string();
+                let command_clone = command_stripped.clone();
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
                 server.spawn_task(async move {
@@ -215,7 +216,7 @@ impl BedrockClient {
                     info!(
                         "Player ({}): executed command /{}",
                         player.gameprofile.name,
-                        command
+                        command_stripped
                     );
                 }
             }

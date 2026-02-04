@@ -1,8 +1,10 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use pumpkin_protocol::java::client::play::{CCommands, ProtoNode, ProtoNodeType};
 
 use crate::entity::player::Player;
+use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 
 use super::{
     dispatcher::CommandDispatcher,
@@ -15,9 +17,35 @@ pub async fn send_c_commands_packet(
     dispatcher: &CommandDispatcher,
 ) {
     let cmd_src = super::CommandSender::Player(player.clone());
+    let mut allowed_commands = Vec::new();
+
+    for key in dispatcher.commands.keys() {
+        let Some(permission) = dispatcher.permissions.get(key) else {
+            continue;
+        };
+
+        if !cmd_src.has_permission(server, permission.as_str()).await {
+            continue;
+        }
+
+        allowed_commands.push(key.clone());
+    }
+
+    let event = PlayerCommandSendEvent::new(player.clone(), allowed_commands);
+    let event = server.plugin_manager.fire(event).await;
+    let allowed_set: HashSet<&str> = event
+        .commands
+        .iter()
+        .map(|command| command.as_str())
+        .collect();
+
     let mut first_level = Vec::new();
 
     for key in dispatcher.commands.keys() {
+        if !allowed_set.contains(key.as_str()) {
+            continue;
+        }
+
         let Ok(tree) = dispatcher.get_tree(key) else {
             continue;
         };
