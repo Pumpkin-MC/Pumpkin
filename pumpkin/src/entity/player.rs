@@ -90,6 +90,8 @@ use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_item_break::PlayerItemBreakEvent;
 use crate::plugin::player::player_item_damage::PlayerItemDamageEvent;
 use crate::plugin::player::player_item_mend::PlayerItemMendEvent;
+use crate::plugin::player::player_kick::PlayerKickEvent;
+use crate::plugin::player::player_level_change::PlayerLevelChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
@@ -2007,7 +2009,27 @@ impl Player {
     }
 
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
-        self.client.kick(reason, message).await;
+        let mut kick_message = message.clone();
+        let mut leave_message = message.clone();
+        let cause = "UNKNOWN".to_string();
+
+        if let Some(server) = self.world().server.upgrade() {
+            let event = PlayerKickEvent::new(
+                self.clone(),
+                kick_message,
+                leave_message,
+                cause,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
+            }
+            kick_message = event.reason;
+            leave_message = event.leave_message;
+        }
+
+        let _ = leave_message;
+        self.client.kick(reason, kick_message).await;
     }
 
     /// Updates the last action time to now. Call this on player actions like movement, chat, etc.
@@ -2421,6 +2443,7 @@ impl Player {
     /// Sets the player's experience level and notifies the client.
     pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
         // TODO: These should be atomic together, not isolated; make a struct containing these. can cause ABA issues
+        let old_level = self.experience_level.load(Ordering::Relaxed);
         self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress.clamp(0.0, 1.0));
         self.experience_points.store(points, Ordering::Relaxed);
@@ -2434,6 +2457,16 @@ impl Player {
                 level.into(),
             ))
             .await;
+
+        if old_level != level {
+            if let Some(server) = self.world().server.upgrade() {
+                let event = PlayerLevelChangeEvent::new(self.clone(), old_level, level);
+                server
+                    .plugin_manager
+                    .fire::<PlayerLevelChangeEvent>(event)
+                    .await;
+            }
+        }
     }
 
     /// Sets the player's experience level directly.
