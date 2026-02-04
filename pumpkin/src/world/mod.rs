@@ -2637,11 +2637,11 @@ impl World {
 
             if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await {
                 let neighbor_state = self.get_block_state(&neighbor_pos).await;
-                let new_light = light_level.saturating_sub(neighbor_state.opacity.max(1));
+                let opacity = neighbor_state.opacity.max(1);
+                let new_light = light_level.saturating_sub(opacity);
 
+                // Only propagate if new light is brighter than current light
                 if new_light > neighbor_light {
-                    // TODO: Add shape checking for non-trivial blocks
-
                     self.set_block_light_level(&neighbor_pos, new_light)
                         .await
                         .unwrap();
@@ -2659,34 +2659,44 @@ impl World {
         pos: &BlockPos,
         removed_light_level: u8,
     ) {
-        for dir in BlockDirection::all() {
-            let neighbor_pos = pos.offset(dir.to_offset());
+        // Check what the current light level actually is at this position
+        let current_level = self.get_block_light_level(pos).await.unwrap_or(0);
+        
+        // Only propagate decrease if this position hasn't already been reset to 0
+        // This prevents positions that were intentionally set to 0 from propagating light
+        if current_level == 0 && removed_light_level > 0 {
+            // This position was already darkened, so we propagate the darkness to neighbors
+            for dir in BlockDirection::all() {
+                let neighbor_pos = pos.offset(dir.to_offset());
 
-            if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await {
-                if neighbor_light == 0 {
-                    continue; // Skip if already 0
-                }
-
-                let neighbor_state = self.get_block_state(&neighbor_pos).await;
-                let opacity = neighbor_state.opacity.max(1);
-
-                let expected_from_removed_source = removed_light_level.saturating_sub(opacity);
-
-                if neighbor_light <= expected_from_removed_source {
-                    let neighbor_luminance = neighbor_state.luminance;
-
-                    self.set_block_light_level(&neighbor_pos, 0).await.unwrap();
-
-                    if neighbor_luminance == 0 {
-                        self.queue_block_light_decrease(neighbor_pos, neighbor_light);
-                    } else {
-                        self.set_block_light_level(&neighbor_pos, neighbor_luminance)
-                            .await
-                            .unwrap();
-                        self.queue_block_light_increase(neighbor_pos, neighbor_luminance);
+                if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await {
+                    if neighbor_light == 0 {
+                        continue; // Skip if already 0
                     }
-                } else {
-                    self.queue_block_light_increase(neighbor_pos, neighbor_light);
+
+                    let neighbor_state = self.get_block_state(&neighbor_pos).await;
+                    let opacity = neighbor_state.opacity.max(1);
+
+                    let expected_from_removed_source = removed_light_level.saturating_sub(opacity);
+
+                    if neighbor_light <= expected_from_removed_source {
+                        let neighbor_luminance = neighbor_state.luminance;
+
+                        if neighbor_luminance == 0 {
+                            // No self-emission, darken it completely and continue propagation
+                            self.set_block_light_level(&neighbor_pos, 0).await.unwrap();
+                            self.queue_block_light_decrease(neighbor_pos, neighbor_light);
+                        } else {
+                            // Has self-emission, set to its own light and re-propagate from it
+                            self.set_block_light_level(&neighbor_pos, neighbor_luminance)
+                                .await
+                                .unwrap();
+                            self.queue_block_light_increase(neighbor_pos, neighbor_luminance);
+                        }
+                    } else {
+                        // This neighbor has brighter light from another source, re-propagate from it
+                        self.queue_block_light_increase(neighbor_pos, neighbor_light);
+                    }
                 }
             }
         }
@@ -2699,12 +2709,11 @@ impl World {
 
         // Handle light decrease (removing light source or placing opaque block)
         if expected_light < current_light {
-            self.set_block_light_level(&pos, 0).await.unwrap();
+            // Set to expected value immediately, then queue decrease to darken neighbors
+            self.set_block_light_level(&pos, expected_light).await.unwrap();
             self.queue_block_light_decrease(pos, current_light);
-        }
-
-        // Handle light increase (placing light source)
-        if expected_light > 0 {
+        } else if expected_light > current_light {
+            // Handle light increase (placing light source)
             self.set_block_light_level(&pos, expected_light)
                 .await
                 .unwrap();
@@ -2713,8 +2722,11 @@ impl World {
 
         //TODO check sky light updates
 
-        // Always check neighbors - even non-emissive blocks can affect light propagation
-        self.check_neighbors_light_updates(pos, expected_light).await;
+        // Only check neighbors if we didn't trigger a decrease
+        // Decrease propagation handles re-validating neighbors
+        if expected_light >= current_light {
+            self.check_neighbors_light_updates(pos, expected_light).await;
+        }
     }
 
     pub async fn check_neighbors_light_updates(self: &Arc<Self>, pos: BlockPos, current_light: u8) {
@@ -2912,8 +2924,16 @@ impl World {
         
         self.check_block_light_updates(*position).await;
         self.perform_block_light_updates().await;
+        
+        // After all light propagation, ensure the changed position has the correct final value
+        // This prevents neighbors from incorrectly re-lighting the position that was changed
+        let final_state = self.get_block_state(position).await;
+        let final_expected_light = final_state.luminance;
+        self.set_block_light_level(position, final_expected_light).await.unwrap();
 
-        // Send light update to all players who have this chunk loaded
+        // TODO: Light update packets should be batched and sent less frequently
+        // Vanilla Minecraft doesn't send light updates on every block change
+        // Instead, it batches them or sends them when chunks are marked dirty
         // let chunk = self.level.get_chunk(chunk_coordinate).await;
         // if let Ok(chunk_data) = tokio::time::timeout(std::time::Duration::from_secs(1), chunk.read()).await {
         //     let packet = CLightUpdate(&*chunk_data);

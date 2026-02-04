@@ -2,7 +2,7 @@ use crate::chunk_system::generation_cache::Cache;
 use crate::chunk_system::chunk_state::Chunk;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::lighting::storage::get_sky_light;
+use crate::lighting::storage::{get_sky_light, set_sky_light};
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -12,6 +12,7 @@ use std::collections::{VecDeque, HashSet, HashMap};
 pub struct SkyLightEngine {
     pub(crate) queue: VecDeque<BlockPos>,
     visited: HashSet<BlockPos>,
+    decrease_queue: VecDeque<(BlockPos, u8)>,
 }
 
 impl SkyLightEngine {
@@ -19,6 +20,7 @@ impl SkyLightEngine {
         Self {
             queue: VecDeque::new(),
             visited: HashSet::new(),
+            decrease_queue: VecDeque::new(),
         }
     }
 
@@ -42,10 +44,12 @@ impl SkyLightEngine {
         self.queue.reserve(estimate);
         self.visited.reserve(estimate);
 
-        let start_x = center_x * 16;
-        let start_z = center_z * 16;
-        let end_x = start_x + 16;
-        let end_z = start_z + 16;
+        // Process center chunk + 1-block margin on each side to initialize edge lighting
+        // This eliminates the need for expensive boundary seeding with thousands of lock acquisitions
+        let start_x = center_x * 16 - 1;
+        let start_z = center_z * 16 - 1;
+        let end_x = start_x + 18; // 16 + 2 for margins
+        let end_z = start_z + 18;
 
         // Initialize direct sky light for center chunk using heightmap/top-y to avoid
         // scanning the full column. We still set full sky light for air above the
@@ -195,9 +199,22 @@ impl SkyLightEngine {
             }
         }
         
-        // Add edge blocks from neighboring chunks to the queue to ensure proper
-        // light propagation across chunk boundaries
-        self.seed_boundary_lights(cache, center_x, center_z, min_y, max_y);
+        // Pre-cache block opacity for the entire working region to avoid repeated lookups
+        // This significantly reduces lock acquisitions and block state queries during BFS
+        let mut opacity_cache: HashMap<BlockPos, u8> = HashMap::new();
+        let cache_margin = 2; // Cache slightly beyond our immediate needs
+        for y in min_y..max_y {
+            for z in (start_z - cache_margin)..(end_z + cache_margin) {
+                for x in (start_x - cache_margin)..(end_x + cache_margin) {
+                    let pos = BlockPos(Vector3::new(x, y, z));
+                    let state = cache.get_block_state(&Vector3::new(x, y, z));
+                    let opacity = state.to_state().opacity;
+                    if opacity > 0 {
+                        opacity_cache.insert(pos, opacity);
+                    }
+                }
+            }
+        }
 
         // Horizontal spread (BFS) with batched updates
         // Propagate light horizontally using flood fill
@@ -224,10 +241,12 @@ impl SkyLightEngine {
                 // Read from shadow cache first, then fall back to actual storage
                 let neighbor_level = shadow_cache.get(&neighbor_pos).copied()
                     .unwrap_or_else(|| get_sky_light(cache, neighbor_pos));
-                let state = cache.get_block_state(&neighbor_pos.0);
+                
+                // Get opacity from cache, or compute if not cached (distant positions)
+                let opacity = opacity_cache.get(&neighbor_pos).copied()
+                    .unwrap_or_else(|| cache.get_block_state(&neighbor_pos.0).to_state().opacity)
+                    .max(1);
 
-                // Calculate light reduction based on block opacity
-                let opacity = state.to_state().opacity.max(1);
                 let new_level = level.saturating_sub(opacity);
 
                 // Only update if the new light level is brighter than current
@@ -254,6 +273,158 @@ impl SkyLightEngine {
         // Apply any remaining updates
         if !pending_updates.is_empty() {
             self.apply_batched_updates(cache, &mut pending_updates);
+        }
+        
+        // Process any light decrease operations to handle removed light sources
+        self.process_decrease_queue(cache);
+    }
+
+    /// Validates lighting and fixes any incorrect light values
+    pub fn validate_light(&mut self, cache: &mut Cache) {
+        let center_x = cache.x + (cache.size / 2);
+        let center_z = cache.z + (cache.size / 2);
+        let min_y = cache.bottom_y() as i32;
+        let height = cache.height() as i32;
+        let max_y = min_y + height;
+        
+        let start_x = center_x * 16;
+        let start_z = center_z * 16;
+        let end_x = start_x + 16;
+        let end_z = start_z + 16;
+        
+        // Scan center chunk for invalid lighting
+        for y in min_y..max_y {
+            for z in start_z..end_z {
+                for x in start_x..end_x {
+                    let pos = BlockPos(Vector3::new(x, y, z));
+                    let current_light = get_sky_light(cache, pos);
+                    
+                    if current_light == 0 {
+                        continue;
+                    }
+                    
+                    // For sky light, check if this position should have sky visibility
+                    let mut max_neighbor_light = 0u8;
+                    
+                    for face in BlockDirection::all() {
+                        let offset = face.to_offset();
+                        let neighbor_pos = BlockPos(Vector3::new(x, y, z) + offset);
+                        let neighbor_light = get_sky_light(cache, neighbor_pos);
+                        let neighbor_state = cache.get_block_state(&neighbor_pos.0);
+                        let opacity = neighbor_state.to_state().opacity.max(1);
+                        
+                        let propagated = neighbor_light.saturating_sub(opacity);
+                        max_neighbor_light = max_neighbor_light.max(propagated);
+                    }
+                    
+                    // If current light is higher than justified, queue for removal
+                    if current_light > max_neighbor_light && current_light < 15 {
+                        // Don't remove full sky light (15) as it's from direct sky access
+                        self.decrease_queue.push_back((pos, current_light));
+                        set_sky_light(cache, pos, 0);
+                    }
+                }
+            }
+        }
+        
+        // Process the decrease queue
+        if !self.decrease_queue.is_empty() {
+            self.process_decrease_queue(cache);
+        }
+    }
+
+    /// Process light decrease queue to properly remove light when sources are removed
+    fn process_decrease_queue(&mut self, cache: &mut Cache) {
+        let mut pending_updates: HashMap<(i32, i32), Vec<(BlockPos, u8)>> = HashMap::new();
+        let mut relight_queue: Vec<(BlockPos, u8)> = Vec::new();
+        
+        while let Some((pos, removed_level)) = self.decrease_queue.pop_front() {
+            for face in BlockDirection::all() {
+                let offset = face.to_offset();
+                let neighbor_pos = BlockPos(pos.0 + offset);
+                let neighbor_level = get_sky_light(cache, neighbor_pos);
+                
+                if neighbor_level == 0 {
+                    continue;
+                }
+                
+                let state = cache.get_block_state(&neighbor_pos.0);
+                let opacity = state.to_state().opacity.max(1);
+                let expected_from_removed = removed_level.saturating_sub(opacity);
+                
+                // If this neighbor was lit by the removed source, darken it
+                if neighbor_level <= expected_from_removed {
+                    let chunk_x = neighbor_pos.0.x >> 4;
+                    let chunk_z = neighbor_pos.0.z >> 4;
+                    pending_updates.entry((chunk_x, chunk_z))
+                        .or_insert_with(Vec::new)
+                        .push((neighbor_pos, 0));
+                    self.decrease_queue.push_back((neighbor_pos, neighbor_level));
+                } else {
+                    // This neighbor has a brighter source, re-propagate from it
+                    relight_queue.push((neighbor_pos, neighbor_level));
+                }
+            }
+        }
+        
+        // Apply all darkness updates
+        if !pending_updates.is_empty() {
+            self.apply_batched_updates(cache, &mut pending_updates);
+        }
+        
+        // Re-propagate from remaining light sources
+        for (pos, _level) in relight_queue {
+            self.queue.push_back(pos);
+            self.visited.clear(); // Reset visited for re-propagation
+        }
+        
+        // Re-run propagation if we have sources to relight from
+        if !self.queue.is_empty() {
+            let mut pending_updates: HashMap<(i32, i32), Vec<(BlockPos, u8)>> = HashMap::new();
+            let mut shadow_cache: HashMap<BlockPos, u8> = HashMap::new();
+            
+            while let Some(pos) = self.queue.pop_front() {
+                let level = shadow_cache.get(&pos).copied().unwrap_or_else(|| get_sky_light(cache, pos));
+                if level <= 1 {
+                    continue;
+                }
+                
+                for face in BlockDirection::all() {
+                    let offset = face.to_offset();
+                    let neighbor_pos = BlockPos(pos.0 + offset);
+                    
+                    if self.visited.contains(&neighbor_pos) {
+                        continue;
+                    }
+                    
+                    let neighbor_level = shadow_cache.get(&neighbor_pos).copied()
+                        .unwrap_or_else(|| get_sky_light(cache, neighbor_pos));
+                    let state = cache.get_block_state(&neighbor_pos.0);
+                    let opacity = state.to_state().opacity.max(1);
+                    let new_level = level.saturating_sub(opacity);
+                    
+                    if new_level > neighbor_level {
+                        let chunk_x = neighbor_pos.0.x >> 4;
+                        let chunk_z = neighbor_pos.0.z >> 4;
+                        pending_updates.entry((chunk_x, chunk_z))
+                            .or_insert_with(Vec::new)
+                            .push((neighbor_pos, new_level));
+                        shadow_cache.insert(neighbor_pos, new_level);
+                        
+                        if new_level > 1 && self.visited.insert(neighbor_pos) {
+                            self.queue.push_back(neighbor_pos);
+                        }
+                    }
+                }
+                
+                if pending_updates.values().map(|v| v.len()).sum::<usize>() >= 256 {
+                    self.apply_batched_updates(cache, &mut pending_updates);
+                }
+            }
+            
+            if !pending_updates.is_empty() {
+                self.apply_batched_updates(cache, &mut pending_updates);
+            }
         }
     }
 
@@ -293,54 +464,6 @@ impl SkyLightEngine {
                             c.light.sky_light[section_y].set(x, y, z, level);
                         }
                     }
-                }
-            }
-        }
-    }
-
-    /// Seeds the light propagation queue with blocks at chunk boundaries
-    /// to ensure light properly propagates across chunk edges
-    fn seed_boundary_lights(&mut self, cache: &mut Cache, center_x: i32, center_z: i32, min_y: i32, max_y: i32) {
-        let start_x = center_x * 16;
-        let start_z = center_z * 16;
-        let end_x = start_x + 16;
-        let end_z = start_z + 16;
-        
-        // Check all four edges of the center chunk
-        for y in min_y..max_y {
-            // West edge (x = start_x - 1)
-            for z in start_z..end_z {
-                let pos = BlockPos(Vector3::new(start_x - 1, y, z));
-                let level = get_sky_light(cache, pos);
-                if level > 1 && self.visited.insert(pos) {
-                    self.queue.push_back(pos);
-                }
-            }
-            
-            // East edge (x = end_x)
-            for z in start_z..end_z {
-                let pos = BlockPos(Vector3::new(end_x, y, z));
-                let level = get_sky_light(cache, pos);
-                if level > 1 && self.visited.insert(pos) {
-                    self.queue.push_back(pos);
-                }
-            }
-            
-            // North edge (z = start_z - 1)
-            for x in start_x..end_x {
-                let pos = BlockPos(Vector3::new(x, y, start_z - 1));
-                let level = get_sky_light(cache, pos);
-                if level > 1 && self.visited.insert(pos) {
-                    self.queue.push_back(pos);
-                }
-            }
-            
-            // South edge (z = end_z)
-            for x in start_x..end_x {
-                let pos = BlockPos(Vector3::new(x, y, end_z));
-                let level = get_sky_light(cache, pos);
-                if level > 1 && self.visited.insert(pos) {
-                    self.queue.push_back(pos);
                 }
             }
         }
