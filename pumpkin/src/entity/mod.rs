@@ -29,8 +29,8 @@ use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot
 use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{
-        CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
-        CUpdateEntityRot, Metadata,
+        CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSetPassengers,
+        CSpawnEntity, CUpdateEntityRot, Metadata,
     },
 };
 use pumpkin_util::math::vector3::Axis;
@@ -2101,6 +2101,28 @@ impl Entity {
     pub async fn has_vehicle(&self) -> bool {
         let vehicle = self.vehicle.lock().await;
         vehicle.is_some()
+    }
+
+    pub async fn add_passenger(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+    ) {
+        let passenger_entity = passenger.get_entity();
+        *passenger_entity.vehicle.lock().await = Some(vehicle);
+
+        let mut passengers = self.passengers.lock().await;
+        passengers.push(passenger);
+
+        let passenger_ids: Vec<VarInt> = passengers
+            .iter()
+            .map(|p| VarInt(p.get_entity().entity_id))
+            .collect();
+
+        let world = self.world.load();
+        world
+            .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
+            .await;
     }
 
     pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
