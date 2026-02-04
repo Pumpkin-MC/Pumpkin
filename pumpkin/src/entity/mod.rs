@@ -76,6 +76,7 @@ pub mod projectile;
 pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
+pub mod vehicle;
 
 mod combat;
 pub mod predicate;
