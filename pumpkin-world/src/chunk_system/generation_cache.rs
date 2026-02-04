@@ -3,7 +3,7 @@ use crate::block::RawBlockState;
 use crate::chunk::ChunkHeightmapType;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
-use crate::generation::settings::GenerationSettings;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{BlockStateId, GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
 use pumpkin_data::biome::Biome;
