@@ -2,6 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 pub mod block;
+pub mod entity;
 pub mod player;
 pub mod server;
 pub mod world;
