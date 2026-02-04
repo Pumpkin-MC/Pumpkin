@@ -92,6 +92,41 @@ impl Color {
             Self::Rgb(color) => text.truecolor(color.red, color.green, color.blue),
         }
     }
+
+    #[must_use]
+    pub const fn from_legacy_code(code: char) -> Option<Self> {
+        let named = match code.to_ascii_lowercase() {
+            '0' => NamedColor::Black,
+            '1' => NamedColor::DarkBlue,
+            '2' => NamedColor::DarkGreen,
+            '3' => NamedColor::DarkAqua,
+            '4' => NamedColor::DarkRed,
+            '5' => NamedColor::DarkPurple,
+            '6' => NamedColor::Gold,
+            '7' => NamedColor::Gray,
+            '8' => NamedColor::DarkGray,
+            '9' => NamedColor::Blue,
+            'a' => NamedColor::Green,
+            'b' => NamedColor::Aqua,
+            'c' => NamedColor::Red,
+            'd' => NamedColor::LightPurple,
+            'e' => NamedColor::Yellow,
+            'f' => NamedColor::White,
+            _ => return None,
+        };
+        Some(Self::Named(named))
+    }
+
+    #[must_use]
+    pub fn from_hex_str(hex: &str) -> Option<Self> {
+        if hex.len() != 6 {
+            return None;
+        }
+        let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+        let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+        let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+        Some(Self::Rgb(RGBColor::new(r, g, b)))
+    }
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, Eq, Hash, PartialEq)]

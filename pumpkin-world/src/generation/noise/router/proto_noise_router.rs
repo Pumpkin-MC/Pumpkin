@@ -14,7 +14,7 @@ use super::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
     chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
     density_function::{
-        IndexToNoisePos, NoiseFunctionComponentRange, NoisePos, PassThrough,
+        IndexToNoisePos, NoiseFunctionComponentRange, PassThrough,
         StaticIndependentChunkNoiseFunctionComponentImpl, Wrapper,
         math::{Binary, Clamp, Constant, Linear, Unary},
         misc::{ClampedYGradient, EndIsland, RangeChoice, WeirdScaled},
@@ -22,6 +22,7 @@ use super::{
         spline::{Spline, SplineFunction, SplinePoint, SplineValue},
     },
 };
+use pumpkin_util::math::vector3::Vector3;
 
 #[enum_dispatch(
     StaticIndependentChunkNoiseFunctionComponentImpl,
@@ -79,7 +80,7 @@ impl<'a> DoublePerlinNoiseBuilder<'a> {
             .random_config
             .base_random_deriver
             .split_string(parameters.id());
-        DoublePerlinNoiseSampler::new(&mut random, parameters, false)
+        DoublePerlinNoiseSampler::from_params(&mut random, parameters, false)
     }
 }
 

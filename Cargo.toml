@@ -27,6 +27,9 @@ separated_literal_suffix = "deny"
 semicolon_outside_block = "deny"
 redundant_test_prefix = "deny"
 non_zero_suggestions = "deny"
+dbg_macro = "deny"
+rc_buffer = "deny"
+verbose_file_reads = "deny"
 string_lit_chars_any = "deny"
 use_self = "deny"
 useless_let_if_seq = "deny"
@@ -115,7 +118,7 @@ console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = "1.10.0"
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = "0.8.21"
-crossfire = { version= "3.0.2", features = ["compat"]}
+crossfire = { version= "3.0.3", features = ["compat"]}
 dashmap = "6.1"
 ecdsa = "0.16.9"
 enum_dispatch = "0.3.13"

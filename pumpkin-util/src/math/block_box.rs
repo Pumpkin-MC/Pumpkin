@@ -145,10 +145,12 @@ impl BlockBox {
 
     #[must_use]
     pub const fn intersects(&self, other: &Self) -> bool {
-        self.min.x < other.max.x
-            && self.max.x > other.min.x
-            && self.min.y < other.max.y
-            && self.max.y > other.min.y
+        self.max.x >= other.min.x
+            && self.min.x <= other.max.x
+            && self.max.z >= other.min.z
+            && self.min.z <= other.max.z
+            && self.max.y >= other.min.y
+            && self.min.y <= other.max.y
     }
 
     #[must_use]

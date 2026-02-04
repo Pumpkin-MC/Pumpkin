@@ -1,8 +1,9 @@
 use pumpkin_data::packet::serverbound::PLAY_MOVE_PLAYER_POS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
+use serde::{Deserialize, Serialize};
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[java_packet(PLAY_MOVE_PLAYER_POS)]
 pub struct SPlayerPosition {
     pub position: Vector3<f64>,

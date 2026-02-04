@@ -11,6 +11,7 @@ use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
 use crate::generation::biome_coords;
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
@@ -18,7 +19,6 @@ use std::pin::Pin;
 use crate::generation::height_limit::HeightLimitView;
 
 use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
-use crate::generation::settings::{GenerationSettings, gen_settings_from_dimension};
 use crate::level::{Level, SyncChunk};
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{BlockStateId, GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
@@ -803,8 +803,8 @@ impl Chunk {
 
                 for z in 0..4 {
                     for x in 0..4 {
-                        let biome = proto_chunk.get_biome(x as i32, absolute_biome_y, z as i32);
-                        section.biomes.set(x, relative_y, z, biome.id);
+                        let biome = proto_chunk.get_biome_id(x as i32, absolute_biome_y, z as i32);
+                        section.biomes.set(x, relative_y, z, biome);
                     }
                 }
             }
@@ -935,6 +935,20 @@ impl GenerationCache for Cache {
             .then(|| self.chunks[(dx * self.size + dz) as usize].get_proto_chunk())
     }
 
+    fn try_get_proto_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk> {
+        let dx = chunk_x - self.x;
+        let dz = chunk_z - self.z;
+
+        if dx < 0 || dx >= self.size || dz < 0 || dz >= self.size {
+            return None;
+        }
+
+        match &self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Proto(chunk) => Some(chunk),
+            Chunk::Level(_) => None,
+        }
+    }
+
     fn get_center_chunk(&self) -> &ProtoChunk {
         let mid = ((self.size * self.size) >> 1) as usize;
         self.chunks[mid].get_proto_chunk()
@@ -983,7 +997,7 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::error!(
+            log::debug!(
                 "illegal get_block_state {pos:?} cache pos ({}, {}) size {}",
                 self.x,
                 self.z,
@@ -1011,7 +1025,7 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::error!(
+            log::debug!(
                 "illegal set_block_state {pos:?} cache pos ({}, {}) size {}",
                 self.x,
                 self.z,
@@ -1131,7 +1145,7 @@ impl GenerationCache for Cache {
                 )
                 .unwrap()
             }
-            Chunk::Proto(data) => data.get_biome_for_terrain_gen(x, y, z),
+            Chunk::Proto(data) => data.get_terrain_gen_biome(x, y, z),
         }
     }
 
@@ -1755,7 +1769,7 @@ impl GenerationSchedule {
             thread::current().name().unwrap_or("unknown")
         );
 
-        let settings = gen_settings_from_dimension(&level.world_gen.dimension);
+        let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
         while let Ok((pos, mut cache, stage)) = recv.recv() {
             // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
             cache.advance(

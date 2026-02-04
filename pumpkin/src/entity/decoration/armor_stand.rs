@@ -9,6 +9,7 @@ use pumpkin_data::{
     data_component_impl::{EquipmentSlot, EquipmentType},
     entity::EntityStatus,
     item::Item,
+    particle::Particle,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
@@ -213,6 +214,26 @@ impl ArmorStandEntity {
 
         // TODO: Implement equipment slots and make them drop all of their stored items.
     }
+
+    /// Spawns break particles at the armor stand's position.
+    // TODO: use oak plank block particles like vanilla (requires block state data in particle system)
+    async fn spawn_break_particles(&self, entity: &Entity) {
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        let width = entity.width();
+        let height = entity.height();
+
+        // Spawn particles similar to vanilla: 10 particles with offset based on entity size
+        world
+            .spawn_particle(
+                Vector3::new(pos.x, pos.y + f64::from(height) * 0.6666, pos.z),
+                Vector3::new(width / 4.0, height / 4.0, width / 4.0),
+                0.05,
+                10,
+                Particle::Poof,
+            )
+            .await;
+    }
 }
 
 impl NBTStorage for ArmorStandEntity {
@@ -346,20 +367,14 @@ impl EntityBase for ArmorStandEntity {
 
             let Some(source) = source else { return false };
 
-            // TODO: source is not giving the real player or wrong stuff cause .is_creative() is false even tho the player is in creative.
             if let Some(player) = source.get_player() {
                 if !player.abilities.lock().await.allow_modify_world {
                     return false;
                 } else if player.is_creative() {
-                    world
-                        .play_sound(
-                            Sound::EntityArmorStandBreak,
-                            SoundCategory::Neutral,
-                            &entity.block_pos.load().to_f64(),
-                        )
-                        .await;
-                    self.break_and_drop_items().await;
-                    entity.kill(caller).await;
+                    // In creative mode, instant break without dropping items
+                    self.spawn_break_particles(entity).await;
+                    self.on_break(entity).await;
+                    entity.remove().await;
                     return true;
                 }
             }

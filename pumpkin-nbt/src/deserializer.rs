@@ -51,7 +51,6 @@ macro_rules! define_get_number_be {
 impl<R: Read + Seek> NbtReadHelper<R> {
     pub fn skip_bytes(&mut self, count: i64) -> Result<()> {
         self.reader
-            .by_ref()
             .seek(SeekFrom::Current(count))
             .map_err(Error::Incomplete)?;
         Ok(())

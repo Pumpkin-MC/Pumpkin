@@ -1,9 +1,11 @@
 use itertools::Itertools;
 use pumpkin_data::fluid::{Fluid, FluidState};
-use pumpkin_data::{Block, BlockDirection, BlockState, tag::Taggable};
+use pumpkin_data::tag::{RegistryKey, get_tag_ids};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
 
+use crate::block::RawBlockState;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{block::BlockStateCodec, world::BlockRegistryExt};
 
@@ -128,8 +130,10 @@ pub struct MatchingBlockTagPredicate {
 
 impl MatchingBlockTagPredicate {
     pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
-        let block = self.offset.get_block(chunk, pos);
-        block.is_tagged_with(&self.tag).unwrap()
+        let block = self.offset.get_raw(chunk, pos);
+        get_tag_ids(RegistryKey::Block, &self.tag)
+            .unwrap()
+            .contains(&block.to_block_id())
     }
 }
 
@@ -267,6 +271,11 @@ impl OffsetBlocksBlockPredicate {
         }
         *pos
     }
+    pub fn get_raw<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> RawBlockState {
+        let pos = self.get(pos);
+        GenerationCache::get_block_state(chunk, &pos.0)
+    }
+
     pub fn get_block<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> &'static Block {
         let pos = self.get(pos);
         GenerationCache::get_block_state(chunk, &pos.0).to_block()

@@ -7,15 +7,15 @@ use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
-use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::position::BlockPos;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::ops::{BitAnd, BitOr};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use thiserror::Error;
 
 pub mod format;
@@ -77,7 +77,7 @@ pub struct ChunkData {
     pub z: i32,
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
-    pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
+    pub block_entities: FxHashMap<BlockPos, Arc<dyn BlockEntity>>,
     pub light_engine: ChunkLight,
     pub status: ChunkStatus,
     pub dirty: bool,
@@ -89,7 +89,7 @@ pub struct ChunkEntityData {
     pub x: i32,
     /// Chunk Z
     pub z: i32,
-    pub data: HashMap<uuid::Uuid, NbtCompound>,
+    pub data: FxHashMap<uuid::Uuid, NbtCompound>,
 
     pub dirty: bool,
 }
@@ -536,7 +536,7 @@ impl ChunkData {
             let pos = BlockPos::new(x as i32, y, z as i32);
             let state_id = self.section.get_block_absolute_y(x, y, z).unwrap();
             let block_state = BlockState::from_id(state_id);
-            let block = Block::from_state_id(state_id);
+            let block = Block::get_raw_id_from_state_id(state_id);
 
             if !block_state.is_air() && !has_found[ChunkHeightmapType::WorldSurface as usize] {
                 heightmaps.set(ChunkHeightmapType::WorldSurface, pos, self.section.min_y);
@@ -544,8 +544,7 @@ impl ChunkData {
             }
 
             let is_motion_blocking = blocks_movement(block_state, block)
-                || Fluid::from_registry_key(block.registry_key())
-                    .is_some_and(|fluid| !fluid.states.is_empty());
+                || Fluid::from_id(block).is_some_and(|fluid| !fluid.states.is_empty());
 
             if !has_found[ChunkHeightmapType::MotionBlocking as usize] && is_motion_blocking {
                 heightmaps.set(ChunkHeightmapType::MotionBlocking, pos, self.section.min_y);
@@ -554,7 +553,7 @@ impl ChunkData {
 
             if !has_found[ChunkHeightmapType::MotionBlockingNoLeaves as usize]
                 && is_motion_blocking
-                && !block.has_tag(&MINECRAFT_LEAVES)
+                && !MINECRAFT_LEAVES.1.contains(&block)
             {
                 heightmaps.set(
                     ChunkHeightmapType::MotionBlockingNoLeaves,

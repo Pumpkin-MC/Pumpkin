@@ -203,16 +203,15 @@ impl ChunkManager {
 
         {
             let mut lock = level.chunk_loading.lock().unwrap();
-            lock.add_ticket(
-                center,
-                ChunkLoading::get_level_from_view_distance(view_distance),
-            );
+            let new_level = ChunkLoading::get_level_from_view_distance(view_distance);
+            lock.add_ticket(center, new_level);
 
             if old_center != center || old_view_distance != view_distance {
-                lock.remove_ticket(
-                    old_center,
-                    ChunkLoading::get_level_from_view_distance(old_view_distance),
-                );
+                let old_level = ChunkLoading::get_level_from_view_distance(old_view_distance);
+                // Don't remove if it would be the same ticket
+                if old_center != center || old_level != new_level {
+                    lock.remove_ticket(old_center, old_level);
+                }
             }
             lock.send_change();
         };
@@ -604,8 +603,6 @@ impl Player {
             level.loaded_chunk_count(),
         );
 
-        level.clean_up_log().await;
-
         //self.world().level.list_cached();
     }
 
@@ -675,8 +672,8 @@ impl Player {
                 damage as f32,
                 DamageType::PLAYER_ATTACK,
                 None,
-                Some(&self.living_entity.entity),
-                Some(&self.living_entity.entity),
+                Some(self),
+                Some(self),
             )
             .await
         {
@@ -1743,7 +1740,7 @@ impl Player {
                 self.client
                     .send_packet_now(&CRespawn::new(
                         (new_world.dimension.id).into(),
-                        ResourceLocation::from(new_world.dimension.minecraft_name),
+                        new_world.dimension.minecraft_name.to_string(),
                         biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
@@ -1930,13 +1927,17 @@ impl Player {
             .await;
     }
 
-    pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) {
+    pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) -> bool {
         // We could send the same gamemode without any problems. But why waste bandwidth?
-        assert_ne!(
-            self.gamemode.load(),
-            gamemode,
-            "Attempt to set the gamemode to the already current gamemode"
-        );
+        // assert_ne!(
+        //    self.gamemode.load(),
+        //    gamemode,
+        //    "Attempt to set the gamemode to the already current gamemode"
+        // );
+        // Why are we panicking if the gamemodes are the same? Vanilla just exits early.
+        if self.gamemode.load() == gamemode {
+            return false;
+        }
         let server = self.world().server.upgrade().unwrap();
         send_cancellable! {{
             server;
@@ -1965,6 +1966,17 @@ impl Player {
                     self.get_entity().set_on_fire(false).await;
                 }
 
+                // Stop elytra flight and reset sneaking when switching to spectator mode
+                if gamemode == GameMode::Spectator {
+                    let entity = self.get_entity();
+                    if entity.fall_flying.load(Ordering::Relaxed) {
+                        entity.set_fall_flying(false).await;
+                    }
+                    if entity.sneaking.load(Ordering::Relaxed) {
+                        entity.set_sneaking(false).await;
+                    }
+                }
+
                 self.living_entity.entity.invulnerable.store(
                     matches!(gamemode, GameMode::Creative | GameMode::Spectator),
                     Ordering::Relaxed,
@@ -1987,6 +1999,12 @@ impl Player {
                         GameEvent::ChangeGameMode,
                         gamemode as i32 as f32,
                     )).await;
+
+                true
+            }
+
+            'cancelled: {
+                false
             }
         }}
     }
@@ -2264,7 +2282,7 @@ impl Player {
             .await;
     }
 
-    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
         let effect_id = VarInt(i32::from(effect_type.id));
         self.client
             .enqueue_packet(
@@ -2274,13 +2292,14 @@ impl Player {
                 ),
             )
             .await;
-        self.living_entity.remove_effect(effect_type).await;
+
+        self.living_entity.remove_effect(effect_type).await
 
         // TODO broadcast metadata
     }
 
-    pub async fn remove_all_effect(&self) -> u8 {
-        let mut count = 0;
+    pub async fn remove_all_effects(&self) -> bool {
+        let mut succeeded = false;
         let mut effect_list = vec![];
         for effect in self.living_entity.active_effects.lock().await.keys() {
             effect_list.push(*effect);
@@ -2293,14 +2312,15 @@ impl Player {
                     ),
                 )
                 .await;
-            count += 1;
+            succeeded = true;
         }
-        //Need to remove effect after because the player effect are lock in the for before
+
+        // Need to remove effects afterward here because there would be a deadlock if this is done in the for loop.
         for effect in effect_list {
             self.living_entity.remove_effect(effect).await;
         }
 
-        count
+        succeeded
     }
 
     /// Add experience levels to the player.
@@ -2655,7 +2675,7 @@ impl NBTStorage for Player {
 
             nbt.put_string(
                 "Dimension",
-                ResourceLocation::from(self.world().dimension.minecraft_name).to_string(),
+                self.world().dimension.minecraft_name.to_string(),
             );
         })
     }

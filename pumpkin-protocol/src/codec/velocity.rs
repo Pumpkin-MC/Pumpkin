@@ -1,10 +1,16 @@
+use std::fmt::Formatter;
+
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     VarInt,
-    ser::{NetworkWriteExt, WritingError},
+    ser::{NetworkWriteExt, ReadingError, WritingError},
 };
-use serde::{Serialize, ser::Serializer};
+use serde::{
+    Deserializer, Serialize,
+    de::{self, Visitor},
+    ser::Serializer,
+};
 
 #[derive(Clone, Copy)]
 pub struct Velocity(pub Vector3<f64>);
@@ -58,6 +64,52 @@ impl Velocity {
 
         Ok(())
     }
+
+    pub fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, ReadingError> {
+        let mut low_16 = [0u8; 2];
+        reader
+            .read_exact(&mut low_16)
+            .map_err(|e| ReadingError::Message(e.to_string()))?;
+
+        if low_16[0] == 0 && low_16[1] == 0 {
+            return Ok(Self(Vector3::new(0.0, 0.0, 0.0)));
+        }
+
+        let mut mid_32 = [0u8; 4];
+        reader
+            .read_exact(&mut mid_32)
+            .map_err(|e| ReadingError::Message(e.to_string()))?;
+
+        let low = u16::from_le_bytes(low_16) as i64;
+        let mid = i32::from_be_bytes(mid_32) as i64;
+        let packed_data = low | (mid << 16);
+
+        let header = packed_data & 0x07;
+        let is_extended = (header & 4) != 0;
+
+        let scale_factor = if is_extended {
+            let scale_tail = VarInt::decode(reader)?;
+            ((scale_tail.0 as i64) << 2) | (header & 3)
+        } else {
+            header & 3
+        };
+
+        if scale_factor == 0 && !is_extended {
+            return Ok(Self(Vector3::new(0.0, 0.0, 0.0)));
+        }
+
+        let q_x = (packed_data >> 3) & 0x7FFF;
+        let q_y = (packed_data >> 18) & 0x7FFF;
+        let q_z = (packed_data >> 33) & 0x7FFF;
+
+        let scale = scale_factor as f64;
+
+        Ok(Self(Vector3::new(
+            from_long(q_x, scale),
+            from_long(q_y, scale),
+            from_long(q_z, scale),
+        )))
+    }
 }
 
 const MAX_VELOCITY_CLAMP: f64 = 1.717_986_918_3E10;
@@ -79,10 +131,43 @@ fn to_long(value: f64) -> i64 {
     ((value.mul_add(0.5, 0.5) * MAX_15_BIT_VALUE).round() as i64).clamp(0, 32766)
 }
 
+fn from_long(quantized: i64, scale: f64) -> f64 {
+    // Reverse: ((v * 0.5 + 0.5) * 32766) -> v
+    let normalized = (quantized as f64 / MAX_15_BIT_VALUE) - 0.5;
+    (normalized / 0.5) * scale
+}
+
 impl Serialize for Velocity {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::new();
         self.write(&mut buf).unwrap();
         serializer.serialize_bytes(&buf)
+    }
+}
+
+impl<'de> de::Deserialize<'de> for Velocity {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct VelocityVisitor;
+
+        impl Visitor<'_> for VelocityVisitor {
+            type Value = Velocity;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("a byte array representing bit-packed velocity")
+            }
+
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                let mut cursor = std::io::Cursor::new(v);
+                Velocity::read(&mut cursor).map_err(de::Error::custom)
+            }
+        }
+
+        deserializer.deserialize_bytes(VelocityVisitor)
     }
 }

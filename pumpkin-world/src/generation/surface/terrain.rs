@@ -153,7 +153,7 @@ impl SurfaceTerrainBuilder {
                 for y in (chunk.bottom_y() as i32..=elevation_y).rev() {
                     let pos = Vector3::new(global_x, y, global_z);
                     let block_id = chunk.get_block_state(&pos).to_block_id();
-                    if block_id == Block::get_raw_id_from_state_id(chunk.default_block.id) {
+                    if block_id == chunk.default_block.id {
                         break;
                     }
 
@@ -239,7 +239,7 @@ impl SurfaceTerrainBuilder {
                 let pos = Vector3::new(x, y, z);
                 let block_state = chunk.get_block_state(&pos);
                 if (block_state.to_state().is_air() && y < top_block && rand.next_f64() > 0.01)
-                    || (block_state.to_block() == &WATER_BLOCK
+                    || (block_state.to_block_id() == WATER_BLOCK
                         && y > bottom_block
                         && y < sea_level
                         && bottom_block != 0

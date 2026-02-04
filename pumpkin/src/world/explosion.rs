@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use rustc_hash::FxHashMap;
 
 use crate::{
     block::{ExplodeArgs, drop_loot},
@@ -23,13 +23,14 @@ impl Explosion {
     async fn get_blocks_to_destroy(
         &self,
         world: &World,
-    ) -> HashMap<BlockPos, (&'static Block, &'static BlockState)> {
-        // The hashmap will prevent position duplicates.
-        let mut map = HashMap::new();
+    ) -> FxHashMap<BlockPos, (&'static Block, &'static BlockState)> {
+        // Somethings are not vanilla here but make it way faster
+        let mut map = FxHashMap::default();
+        let random_val = rand::random::<f32>();
         for x in 0..16 {
             for y in 0..16 {
                 'block2: for z in 0..16 {
-                    if x != 0 && x != 15 && z != 0 && z != 15 && y != 0 && y != 15 {
+                    if x > 0 && x < 15 && y > 0 && y < 15 && z > 0 && z < 15 {
                         continue;
                     }
 
@@ -46,7 +47,7 @@ impl Explosion {
                     let mut pos_y = self.pos.y + 0.0625;
                     let mut pos_z = self.pos.z;
 
-                    let mut h = self.power * rand::random::<f32>().mul_add(0.6, 0.7);
+                    let mut h = self.power * random_val.mul_add(0.6, 0.7);
                     while h > 0.0 {
                         let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
                         let (block, state) = world.get_block_and_state(&block_pos).await;
@@ -61,10 +62,9 @@ impl Explosion {
                             let resistance =
                                 fluid_state.blast_resistance.max(block.blast_resistance);
                             h -= resistance * 0.3;
-                        }
-
-                        if h > 0.0 {
-                            map.insert(block_pos, (block, state));
+                            if h > 0.0 {
+                                map.insert(block_pos, (block, state));
+                            }
                         }
                         pos_x += x * 0.3;
                         pos_y += y * 0.3;
@@ -82,12 +82,9 @@ impl Explosion {
         let blocks = self.get_blocks_to_destroy(world).await;
         // TODO: Entity damage, fire
         for (pos, (block, state)) in &blocks {
-            if state.is_air() {
-                continue;
-            }
-            let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
-
             world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;
+
+            let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
             if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
                 let params = LootContextParameters {

@@ -38,10 +38,8 @@ impl KeyStore {
     }
 
     fn generate_private_key() -> RsaPrivateKey {
-        // Found out that OsRng is faster than rand::thread_rng here
         let mut rng = rand::rng();
 
-        // let pub_key = RsaPublicKey::from(&priv_key);
         RsaPrivateKey::new(&mut rng, 1024).expect("Failed to generate a key")
     }
 

@@ -47,7 +47,7 @@ impl CommandExecutor for Executor {
 
             sender.send_message(msg).await;
 
-            Ok(())
+            Ok(target_count as i32)
         })
     }
 }
@@ -72,7 +72,7 @@ impl CommandExecutor for SelfExecutor {
                 ))
                 .await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }

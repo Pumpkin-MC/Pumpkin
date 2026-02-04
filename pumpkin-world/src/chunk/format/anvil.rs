@@ -351,7 +351,6 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         log::trace!("Writing in place: {}", path.display());
 
         let file = tokio::fs::OpenOptions::new()
-            .read(false)
             .write(true)
             .create(true)
             .truncate(false)
@@ -450,13 +449,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         let temp_path = path.with_extension("tmp");
         log::trace!("Writing tmp file to disk: {temp_path:?}");
 
-        let file = tokio::fs::OpenOptions::new()
-            .read(false)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&temp_path)
-            .await?;
+        let file = tokio::fs::File::create(&temp_path).await?;
 
         let mut write = BufWriter::new(file);
 

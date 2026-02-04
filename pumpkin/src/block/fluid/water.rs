@@ -87,8 +87,8 @@ impl FlowingFluid for FlowingWater {
         5
     }
 
-    fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
-        // TODO: add game rule check for water conversion
-        true
+    /// Determines if water can convert to source blocks based on game rules.
+    fn can_convert_to_source(&self, world: &Arc<World>) -> bool {
+        world.level_info.load().game_rules.water_source_conversion
     }
 }

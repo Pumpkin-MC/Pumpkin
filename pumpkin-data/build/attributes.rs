@@ -30,12 +30,12 @@ pub(crate) fn build() -> TokenStream {
         let id_lit = LitInt::new(&raw_value.id.to_string(), Span::call_site());
         let default_value_lit = raw_value.default_value;
 
-        constant_defs.push(quote! {
+        constant_defs.push(quote!(
             pub const #constant_ident: Self = Self {
                 id: #id_lit,
                 default_value: #default_value_lit,
             };
-        });
+        ));
     }
 
     quote! {

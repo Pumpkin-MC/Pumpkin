@@ -113,7 +113,7 @@ impl CommandExecutor for RotateToRotationExecutor {
             rotate_entity(target.clone(), yaw, yaw_rel, pitch, pitch_rel).await;
             send_success_message(sender, target.as_ref()).await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }
@@ -143,7 +143,7 @@ impl CommandExecutor for RotateFacingLocationExecutor {
             rotate_entity(target.clone(), yaw, false, pitch, false).await;
             send_success_message(sender, target.as_ref()).await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }
@@ -176,7 +176,7 @@ impl CommandExecutor for RotateFacingEntityExecutor {
             rotate_entity(target.clone(), yaw, false, pitch, false).await;
             send_success_message(sender, target.as_ref()).await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }
@@ -210,7 +210,7 @@ impl CommandExecutor for RotateFacingEntityNoAnchorExecutor {
             rotate_entity(target.clone(), yaw, false, pitch, false).await;
             send_success_message(sender, target.as_ref()).await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }

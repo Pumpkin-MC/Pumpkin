@@ -498,6 +498,11 @@ impl Server {
         }}
     }
 
+    /// Gets the current difficulty of the server.
+    pub fn get_difficulty(&self) -> Difficulty {
+        self.level_info.load().difficulty
+    }
+
     /// Sets the difficulty of the server.
     ///
     /// This function updates the difficulty level of the server and broadcasts the change to all players.
@@ -513,9 +518,9 @@ impl Server {
     /// # Note
     ///
     /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
-    pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: Option<bool>) {
+    pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
         let current_info = self.level_info.load();
-        if current_info.difficulty_locked && !force_update.unwrap_or_default() {
+        if current_info.difficulty_locked && !force_update {
             return;
         }
 
@@ -583,6 +588,20 @@ impl Server {
         }
 
         players
+    }
+
+    pub fn for_each_player<F>(&self, mut f: F)
+    where
+        F: FnMut(&Arc<Player>),
+    {
+        let worlds = self.worlds.load();
+
+        for world in worlds.iter() {
+            let players = world.players.load();
+            for player in players.iter() {
+                f(player);
+            }
+        }
     }
 
     /// Returns a random player from any of the worlds, or `None` if all worlds are empty.

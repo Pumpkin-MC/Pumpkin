@@ -1,5 +1,7 @@
-use pumpkin_data::{Block, BlockState, tag::Taggable};
+use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use serde::Deserialize;
+
+use crate::block::RawBlockState;
 
 #[derive(Deserialize)]
 pub struct TagMatchRuleTest {
@@ -7,9 +9,8 @@ pub struct TagMatchRuleTest {
 }
 
 impl TagMatchRuleTest {
-    pub fn test(&self, state: &BlockState) -> bool {
-        Block::from_state_id(state.id)
-            .is_tagged_with(&self.tag)
-            .unwrap()
+    pub fn test(&self, state: &RawBlockState) -> bool {
+        let values = get_tag_ids(RegistryKey::Block, &self.tag).unwrap();
+        values.contains(&state.to_block_id())
     }
 }

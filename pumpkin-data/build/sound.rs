@@ -38,6 +38,14 @@ pub(crate) fn build() -> TokenStream {
         })
         .collect::<TokenStream>();
 
+    let variants_list = sound
+        .iter()
+        .map(|sound| {
+            let name = format_ident!("{}", sound.to_pascal_case());
+            quote! { Self::#name, }
+        })
+        .collect::<TokenStream>();
+
     quote! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         #[repr(u16)]
@@ -57,6 +65,10 @@ pub(crate) fn build() -> TokenStream {
                 match self {
                     #type_to_name
                 }
+            }
+
+            pub fn slice() -> &'static [Self] {
+                &[#variants_list]
             }
         }
     }

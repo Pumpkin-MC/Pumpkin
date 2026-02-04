@@ -307,6 +307,18 @@ pub(crate) fn build() -> TokenStream {
             pub spawn_costs: phf::Map<&'static str, SpawnCosts>,
         }
 
+        impl PartialEq<u8> for Biome {
+            fn eq(&self, other: &u8) -> bool {
+                self.id == *other
+            }
+        }
+
+        impl PartialEq<Biome> for u8 {
+            fn eq(&self, other: &Biome) -> bool {
+                *self == other.id
+            }
+        }
+
         #[derive(Debug)]
         pub struct SpawnGroups {
             pub monster: &'static [Spawner],

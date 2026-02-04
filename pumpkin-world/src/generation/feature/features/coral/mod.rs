@@ -2,8 +2,7 @@ use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties},
-    tag,
-    tag::{RegistryKey, Taggable, get_tag_values},
+    tag::{self, RegistryKey, get_tag_ids},
 };
 use pumpkin_util::{
     math::position::BlockPos,
@@ -23,11 +22,11 @@ impl CoralFeature {
         state: &BlockState,
         pos: BlockPos,
     ) -> bool {
-        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block();
-        let above_block = GenerationCache::get_block_state(chunk, &pos.up().0).to_block();
+        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
+        let above_block = GenerationCache::get_block_state(chunk, &pos.up().0).to_block_id();
 
-        if block != &Block::WATER && !block.has_tag(&tag::Block::MINECRAFT_CORALS)
-            || above_block != &Block::WATER
+        if block != Block::WATER && !&tag::Block::MINECRAFT_CORALS.1.contains(&block)
+            || above_block != Block::WATER
         {
             return false;
         }
@@ -48,7 +47,7 @@ impl CoralFeature {
         for dir in BlockDirection::horizontal() {
             let dir_pos = pos.offset(dir.to_offset());
             if random.next_f32() >= 0.2
-                || GenerationCache::get_block_state(chunk, &dir_pos.0).to_block() != &Block::WATER
+                || GenerationCache::get_block_state(chunk, &dir_pos.0).to_block_id() != Block::WATER
             {
                 continue;
             }
@@ -84,8 +83,8 @@ impl CoralFeature {
     }
 
     pub fn get_random_tag_entry_block(tag: &str, random: &mut RandomGenerator) -> &'static Block {
-        let values = get_tag_values(RegistryKey::Block, tag).unwrap();
+        let values = get_tag_ids(RegistryKey::Block, tag).unwrap();
         let value = values[random.next_bounded_i32(values.len() as i32) as usize];
-        Block::from_name(value).unwrap()
+        Block::from_id(value)
     }
 }

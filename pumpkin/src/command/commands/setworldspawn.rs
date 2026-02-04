@@ -99,20 +99,17 @@ async fn setworldspawn(
     block_pos: BlockPos,
     yaw: f32,
     pitch: f32,
-) -> Result<(), CommandError> {
+) -> Result<i32, CommandError> {
     let Some(world) = sender.world() else {
         return Err(CommandError::CommandFailed(TextComponent::text(
             "Failed to get world.",
         )));
     };
     if world.dimension != Dimension::OVERWORLD && world.dimension != Dimension::OVERWORLD_CAVES {
-        sender
-            .send_message(TextComponent::translate(
-                "commands.setworldspawn.failure.not_overworld",
-                [],
-            ))
-            .await;
-        return Ok(());
+        return Err(CommandError::CommandFailed(TextComponent::translate(
+            "commands.setworldspawn.failure.not_overworld",
+            [],
+        )));
     }
 
     let current_info = server.level_info.load();
@@ -141,7 +138,7 @@ async fn setworldspawn(
         ))
         .await;
 
-    Ok(())
+    Ok(1)
 }
 
 #[must_use]

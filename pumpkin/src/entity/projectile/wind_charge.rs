@@ -103,7 +103,7 @@ impl EntityBase for WindChargeEntity {
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            self.thrown_item_entity.tick(caller, server).await;
+            self.thrown_item_entity.process_tick(caller, server).await;
 
             if self.get_deflect_cooldown() > 0 {
                 self.set_deflect_cooldown(self.get_deflect_cooldown() - 1);

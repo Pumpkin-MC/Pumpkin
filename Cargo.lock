@@ -38,12 +38,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "allocator-api2"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
-
-[[package]]
 name = "anes"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -636,9 +630,9 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "crossfire"
-version = "3.0.2"
+version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e1ff29ef3add47897a4dab381889ccf8dedcedec4e2c8feed37efcf22a6392b"
+checksum = "cf9c756fd351d7bc1f95698a33a90ce39c8f7458335cc7e95132d3d36124902a"
 dependencies = [
  "crossbeam-utils",
  "futures-core",
@@ -965,12 +959,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
-name = "foldhash"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
-
-[[package]]
 name = "form_urlencoded"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1169,7 +1157,7 @@ version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
- "foldhash 0.1.5",
+ "foldhash",
 ]
 
 [[package]]
@@ -1177,11 +1165,6 @@ name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
-dependencies = [
- "allocator-api2",
- "equivalent",
- "foldhash 0.2.0",
-]
 
 [[package]]
 name = "hdrhistogram"
@@ -1620,15 +1603,6 @@ name = "log"
 version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
-
-[[package]]
-name = "lru"
-version = "0.16.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1dc47f592c06f33f8e3aea9591776ec7c9f9e4124778ff8a3c3b87159f7e593"
-dependencies = [
- "hashbrown 0.16.1",
-]
 
 [[package]]
 name = "lz4-java-wrc"
@@ -2158,7 +2132,6 @@ dependencies = [
  "bytes",
  "console-subscriber",
  "crossbeam",
- "dashmap",
  "flate2",
  "futures",
  "hmac 0.13.0-rc.4",
@@ -2182,7 +2155,6 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2 0.11.0-rc.4",
- "signature 2.2.0",
  "simplelog",
  "tempfile",
  "thiserror",
@@ -2253,7 +2225,6 @@ name = "pumpkin-macros"
 version = "0.1.0-dev+1.21.11"
 dependencies = [
  "proc-macro-error2",
- "proc-macro2",
  "pumpkin-data",
  "quote",
  "syn",
@@ -2333,7 +2304,6 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "log",
- "lru",
  "lz4-java-wrc",
  "num-derive",
  "num-traits",
@@ -2352,7 +2322,6 @@ dependencies = [
  "slotmap",
  "temp-dir",
  "thiserror",
- "thread_local",
  "tokio",
  "tokio-util",
  "uuid",
@@ -2386,7 +2355,7 @@ dependencies = [
 [[package]]
 name = "rand"
 version = "0.10.0-rc.8"
-source = "git+https://github.com/rust-random/rand#47455a0b004d5992d2a3d23ecf244f1edea27f40"
+source = "git+https://github.com/rust-random/rand#a4c9a8e565fa310de423e3ba89593b647b721e8c"
 dependencies = [
  "chacha20",
  "getrandom 0.4.0-rc.1",

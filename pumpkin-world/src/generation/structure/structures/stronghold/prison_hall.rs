@@ -1,4 +1,7 @@
-use pumpkin_data::Block;
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{BlockProperties, OakFenceLikeProperties},
+};
 use pumpkin_util::{
     BlockDirection,
     math::block_box::BlockBox,
@@ -11,7 +14,10 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
+            stronghold::{
+                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                StrongholdPieceType,
+            },
         },
     },
 };
@@ -65,12 +71,25 @@ impl StructurePieceBase for PrisonHallPiece {
         &self,
         start: &StructurePiece,
         random: &mut RandomGenerator,
+        weights: &mut Vec<PieceWeight>,
+        last_piece_type: &mut Option<StrongholdPieceType>,
+        _has_portal_room: &mut bool,
+
         collector: &mut StructurePiecesCollector,
         pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
         // Prison hall usually only has one forward exit
-        self.piece
-            .fill_forward_opening(start, collector, random, 1, 1, pieces_to_process, None);
+        self.piece.fill_forward_opening(
+            start,
+            collector,
+            random,
+            weights,
+            last_piece_type,
+            1,
+            1,
+            pieces_to_process,
+            None,
+        );
     }
 
     fn place(&mut self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, _seed: i64) {
@@ -157,23 +176,33 @@ impl StructurePieceBase for PrisonHallPiece {
         );
 
         // 5. Iron Bars with Directional Properties
-        // let bars_ns = Block::IRON_BARS.default_state.with("north", "true").with("south", "true");
-        // let bars_nse = bars_ns.with("east", "true");
-        // let bars_we = Block::IRON_BARS.default_state.with("west", "true").with("east", "true");
+        let mut props = OakFenceLikeProperties::default(&Block::IRON_BARS);
 
-        // for i in 1..=3 {
-        //     inner.add_block(chunk, &bars_ns, 4, i, 4, &box_limit);
-        //     inner.add_block(chunk, &bars_nse, 4, i, 5, &box_limit);
-        //     inner.add_block(chunk, &bars_ns, 4, i, 6, &box_limit);
+        // North-South facing bars
+        props.north = true;
+        props.south = true;
+        let bar_ns = BlockState::from_id(props.to_state_id(&Block::IRON_BARS));
+        props.east = true;
+        let bar_nse = BlockState::from_id(props.to_state_id(&Block::IRON_BARS));
+        // West-East facing bars
+        props.north = false;
+        props.south = false;
+        props.west = true;
+        let bar_we = BlockState::from_id(props.to_state_id(&Block::IRON_BARS));
 
-        //     inner.add_block(chunk, &bars_we, 5, i, 5, &box_limit);
-        //     inner.add_block(chunk, &bars_we, 6, i, 5, &box_limit);
-        //     inner.add_block(chunk, &bars_we, 7, i, 5, &box_limit);
-        // }
+        for i in 1..=3 {
+            inner.add_block(chunk, bar_ns, 4, i, 4, &box_limit);
+            inner.add_block(chunk, bar_nse, 4, i, 5, &box_limit);
+            inner.add_block(chunk, bar_ns, 4, i, 6, &box_limit);
+
+            inner.add_block(chunk, bar_we, 5, i, 5, &box_limit);
+            inner.add_block(chunk, bar_we, 6, i, 5, &box_limit);
+            inner.add_block(chunk, bar_we, 7, i, 5, &box_limit);
+        }
 
         // // Top bars above the doors
-        // inner.add_block(chunk, &bars_ns, 4, 3, 2, &box_limit);
-        // inner.add_block(chunk, &bars_ns, 4, 3, 8, &box_limit);
+        inner.add_block(chunk, bar_ns, 4, 3, 2, &box_limit);
+        inner.add_block(chunk, bar_ns, 4, 3, 8, &box_limit);
 
         // // 6. Iron Doors (2-block high structure)
         // let door_bottom = Block::IRON_DOOR.default_state.with("facing", "west").with("half", "lower");

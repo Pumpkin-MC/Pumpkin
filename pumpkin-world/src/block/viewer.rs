@@ -47,7 +47,7 @@ impl ViewerCountTracker {
     pub async fn update_viewer_count<T>(
         &self,
         entity: &T,
-        world: Arc<dyn SimpleWorld>,
+        world: &Arc<dyn SimpleWorld>,
         position: &BlockPos,
     ) where
         T: BlockEntity + ViewerCountListener + 'static,
@@ -57,12 +57,12 @@ impl ViewerCountTracker {
         if old != current {
             match (old, current) {
                 (n, 0) if n > 0 => {
-                    entity.on_container_close(&world, position).await;
+                    entity.on_container_close(world, position).await;
                     // TODO: world.emitGameEvent(player, GameEvent.CONTAINER_CLOSE, pos);
                     // TODO: this.maxBlockInteractionRange = 0.0;
                 }
                 (0, n) if n > 0 => {
-                    entity.on_container_open(&world, position).await;
+                    entity.on_container_open(world, position).await;
                     // TODO: world.emitGameEvent(player, GameEvent.CONTAINER_OPEN, pos);
                     // TODO: scheduleBlockTick(world, pos, state);
                 }
@@ -70,7 +70,7 @@ impl ViewerCountTracker {
             }
 
             entity
-                .on_viewer_count_update(&world, position, old, current)
+                .on_viewer_count_update(world, position, old, current)
                 .await;
         }
 

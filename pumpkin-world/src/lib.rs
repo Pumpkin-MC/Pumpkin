@@ -1,5 +1,6 @@
-use generation::settings::GenerationSettings;
-use pumpkin_data::{BlockState, dimension::Dimension};
+use pumpkin_data::{
+    Block, BlockState, chunk_gen_settings::GenerationSettings, dimension::Dimension,
+};
 use pumpkin_util::math::vector2::Vector2;
 
 pub mod biome;
@@ -45,7 +46,7 @@ macro_rules! global_path {
 // TODO: is there a way to do in-file benches?
 pub use generation::{
     GlobalRandomConfig, noise::router::proto_noise_router::ProtoNoiseRouters,
-    proto_chunk::ProtoChunk, settings::GENERATION_SETTINGS, settings::GeneratorSetting,
+    proto_chunk::ProtoChunk,
 };
 
 use crate::generation::{
@@ -78,7 +79,10 @@ pub fn bench_create_and_populate_noise(
     let generation_shape = &settings.shape;
     let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
     let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-        FluidLevel::new(settings.sea_level, settings.default_fluid.name),
+        FluidLevel::new(
+            settings.sea_level,
+            Block::from_registry_key(settings.default_fluid.name).unwrap(),
+        ),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
     ));
 
@@ -116,7 +120,11 @@ pub fn bench_create_and_populate_noise(
     let mut surface_height_estimate_sampler =
         SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
-    chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
+    chunk.populate_noise(
+        &mut noise_sampler,
+        random_config,
+        &mut surface_height_estimate_sampler,
+    );
 }
 
 pub fn bench_create_and_populate_biome(
@@ -201,7 +209,10 @@ pub fn bench_create_and_populate_noise_with_surface(
 
     // Noise sampler
     let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-        FluidLevel::new(settings.sea_level, settings.default_fluid.name),
+        FluidLevel::new(
+            settings.sea_level,
+            Block::from_registry_key(settings.default_fluid.name).unwrap(),
+        ),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
     ));
 
@@ -230,7 +241,11 @@ pub fn bench_create_and_populate_noise_with_surface(
         SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
     chunk.populate_biomes(Dimension::OVERWORLD, &mut multi_noise_sampler);
-    chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
+    chunk.populate_noise(
+        &mut noise_sampler,
+        random_config,
+        &mut surface_height_estimate_sampler,
+    );
     chunk.build_surface(
         settings,
         random_config,

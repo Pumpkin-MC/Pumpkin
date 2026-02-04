@@ -285,6 +285,109 @@ impl TextComponent {
     }
 
     #[must_use]
+    pub fn from_legacy_string(input: &str) -> Self {
+        let mut root = Self::text("");
+        let parts: Vec<&str> = input.split('§').collect();
+
+        if !parts[0].is_empty() {
+            root = root.add_child(Self::text(parts[0].to_string()));
+        }
+
+        let mut current_color: Option<Color> = None;
+        let mut bold = false;
+        let mut italic = false;
+        let mut underlined = false;
+        let mut strikethrough = false;
+        let mut obfuscated = false;
+
+        let mut i = 1;
+        while i < parts.len() {
+            let part = parts[i];
+            if part.is_empty() {
+                i += 1;
+                continue;
+            }
+
+            let mut chars = part.chars();
+            let code = chars.next().unwrap_or(' ').to_ascii_lowercase();
+            let remainder = &part[1..];
+
+            match code {
+                'x' if i + 6 < parts.len() => {
+                    let mut hex = String::new();
+                    for j in 1..=6 {
+                        if let Some(c) = parts[i + j].chars().next() {
+                            hex.push(c);
+                        }
+                    }
+                    current_color = Color::from_hex_str(&hex);
+
+                    i += 6;
+
+                    let last_part = parts[i];
+                    if last_part.len() > 1 {
+                        let mut child = Self::text(last_part[1..].to_string());
+                        if let Some(c) = current_color {
+                            child = child.color(c);
+                        }
+                        root = root.add_child(child);
+                    }
+                    i += 1;
+                    continue;
+                }
+                '0'..='9' | 'a'..='f' => {
+                    current_color = Color::from_legacy_code(code);
+                    bold = false;
+                    italic = false;
+                    underlined = false;
+                    strikethrough = false;
+                    obfuscated = false;
+                }
+                'l' => bold = true,
+                'o' => italic = true,
+                'n' => underlined = true,
+                'm' => strikethrough = true,
+                'k' => obfuscated = true,
+                'r' => {
+                    current_color = None;
+                    bold = false;
+                    italic = false;
+                    underlined = false;
+                    strikethrough = false;
+                    obfuscated = false;
+                }
+                _ => {}
+            }
+
+            if !remainder.is_empty() {
+                let mut child = Self::text(remainder.to_string());
+                if let Some(c) = current_color {
+                    child = child.color(c);
+                }
+                if bold {
+                    child = child.bold();
+                }
+                if italic {
+                    child = child.italic();
+                }
+                if underlined {
+                    child = child.underlined();
+                }
+                if strikethrough {
+                    child = child.strikethrough();
+                }
+                if obfuscated {
+                    child = child.obfuscated();
+                }
+                root = root.add_child(child);
+            }
+            i += 1;
+        }
+
+        root
+    }
+
+    #[must_use]
     pub fn add_child(mut self, child: Self) -> Self {
         self.0.extra.push(child.0);
         self
