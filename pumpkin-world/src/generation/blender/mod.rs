@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock};
 use enum_dispatch::enum_dispatch;
 use pumpkin_data::chunk::OFFSET;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::random::{xoroshiro128::Xoroshiro, RandomGenerator};
+use pumpkin_util::random::{RandomGenerator, xoroshiro128::Xoroshiro};
 
 use crate::generation::carver::CarvingStage;
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
