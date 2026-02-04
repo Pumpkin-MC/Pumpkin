@@ -730,9 +730,10 @@ impl Player {
             return;
         }
 
+        player_attack_sound(&pos, &world, attack_type).await;
+
         if victim.get_living_entity().is_some() {
             let mut knockback_strength = 1.0;
-            player_attack_sound(&pos, &world, attack_type).await;
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
