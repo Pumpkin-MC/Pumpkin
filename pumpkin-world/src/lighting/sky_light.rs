@@ -5,6 +5,7 @@ use crate::lighting::storage::{get_sky_light, set_sky_light};
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::HeightMap;
 use std::collections::VecDeque;
 
 pub struct SkyLightEngine {
@@ -30,35 +31,53 @@ impl SkyLightEngine {
         let height = cache.height() as i32;
         let max_y = min_y + height;
 
+        // Reserve queue capacity upfront to avoid repeated reallocations.
+        // Up to one quarter of blocks in the column set initially as an estimate.
+        self.queue.clear();
+        let estimate = ((16 * 16 * height) / 4).max(1) as usize;
+        self.queue.reserve(estimate);
+
         let start_x = center_x * 16;
         let start_z = center_z * 16;
         let end_x = start_x + 16;
         let end_z = start_z + 16;
 
-        // Initialize direct sky light for center chunk
-        // Sky light starts at 15 at the top and only decreases when passing through opaque blocks
+        // Initialize direct sky light for center chunk using heightmap/top-y to avoid
+        // scanning the full column. We still set full sky light for air above the
+        // top block within this cache region, then scan downward from the top block.
         for z in start_z..end_z {
             for x in start_x..end_x {
-                let mut light: i32 = 15;
+                let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
 
-                // Iterate top-down through the column
-                for y in (min_y..max_y).rev() {
-                    let pos_vec = Vector3::new(x, y, z);
-                    let state = cache.get_block_state(&pos_vec);
-                    let opacity = state.to_state().opacity;
-
-                    // Sky light passes through transparent blocks (opacity=0) without attenuation
-                    // Only opaque blocks reduce the light level
-                    if opacity > 0 {
-                        light = light.saturating_sub(opacity as i32);
-                        if light <= 0 {
-                            break; // No more light propagates below
-                        }
+                // If there's air above the top block within our region, set them to full light.
+                if top_y < max_y {
+                    for y in top_y..max_y {
+                        let pos_vec = Vector3::new(x, y, z);
+                        set_sky_light(cache, BlockPos(pos_vec), 15);
+                        self.queue.push_back(BlockPos(pos_vec));
                     }
+                }
 
-                    // Set the light value and add to queue for horizontal propagation
-                    set_sky_light(cache, BlockPos(pos_vec), light as u8);
-                    self.queue.push_back(BlockPos(pos_vec));
+                // Now scan downward from the top block (top_y - 1) down to min_y,
+                // attenuating light when encountering opaque blocks.
+                let mut light: i32 = 15;
+                let start_y = (top_y - 1).min(max_y - 1);
+                if start_y >= min_y {
+                    for y in (min_y..=start_y).rev() {
+                        let pos_vec = Vector3::new(x, y, z);
+                        let state = cache.get_block_state(&pos_vec);
+                        let opacity = state.to_state().opacity;
+
+                        if opacity > 0 {
+                            light = light.saturating_sub(opacity as i32);
+                            if light <= 0 {
+                                break;
+                            }
+                        }
+
+                        set_sky_light(cache, BlockPos(pos_vec), light as u8);
+                        self.queue.push_back(BlockPos(pos_vec));
+                    }
                 }
             }
         }
