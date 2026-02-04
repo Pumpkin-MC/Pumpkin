@@ -37,6 +37,8 @@ pub mod player_changed_main_hand;
 pub mod player_register_channel;
 pub mod player_unregister_channel;
 pub mod player_move;
+pub mod player_resource_pack_status;
+pub mod player_respawn;
 pub mod player_swap_hand_items;
 pub mod player_teleport;
 pub mod player_toggle_flight;
