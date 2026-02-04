@@ -10,6 +10,8 @@ use crate::generation::settings::GenerationSettings;
 use pumpkin_data::chunk::OFFSET;
 use pumpkin_util::random::{RandomGenerator, xoroshiro128::Xoroshiro};
 
+type CarvingMaskFn = Arc<dyn Fn(i32, i32, i32) -> bool + Send + Sync + 'static>;
+
 static SHIFT_NOISE: LazyLock<DoublePerlinNoiseSampler> = LazyLock::new(|| {
     let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(42));
     DoublePerlinNoiseSampler::from_params(&mut random, &OFFSET, false)
@@ -44,10 +46,7 @@ pub trait BlenderImpl {
     fn get_biome_supplier(&self) {}
 }
 
-pub fn apply_carving_mask_filter<T: GenerationCache>(
-    cache: &mut T,
-    settings: &GenerationSettings,
-) {
+pub fn apply_carving_mask_filter<T: GenerationCache>(cache: &mut T, settings: &GenerationSettings) {
     if settings.debug_disable_blending {
         return;
     }
@@ -59,9 +58,7 @@ pub fn apply_carving_mask_filter<T: GenerationCache>(
     }
 }
 
-fn build_additional_mask<T: GenerationCache>(
-    cache: &T,
-) -> Option<Arc<dyn Fn(i32, i32, i32) -> bool + Send + Sync + 'static>> {
+fn build_additional_mask<T: GenerationCache>(cache: &T) -> Option<CarvingMaskFn> {
     #[derive(Clone, Copy)]
     struct OldChunkBounds {
         center_y: f64,

@@ -35,10 +35,10 @@ impl Carver for CaveCarver {
 
     fn carve<T: crate::generation::proto_chunk::GenerationCache>(
         &self,
-        context: &mut CarverContext<'_, T>,
+        context: &mut CarverContext<'_, '_, T>,
     ) {
         let range = 4;
-        let max_tunnel_length = ((range * 2 - 1) * 16) as i32;
+        let max_tunnel_length = (range * 2 - 1) * 16;
         let mut cave_count = context.random.next_bounded_i32(self.get_cave_bound());
         cave_count = context.random.next_bounded_i32(cave_count + 1);
         cave_count = context.random.next_bounded_i32(cave_count + 1);
@@ -109,9 +109,10 @@ impl Carver for CaveCarver {
                         .random
                         .next_bounded_i32((max_tunnel_length / 4).max(1));
 
+                let tunnel_seed = context.random.next_i64();
                 self.create_tunnel(
                     context,
-                    context.random.next_i64(),
+                    tunnel_seed,
                     x as f64,
                     y,
                     z as f64,
@@ -162,8 +163,8 @@ impl CaveTunnelState {
         steep: bool,
         rand: &mut RandomGenerator,
     ) -> (f64, f64) {
-        let radius = 1.5
-            + (std::f64::consts::PI * step as f64 / end_step as f64).sin() * thickness as f64;
+        let radius =
+            1.5 + (std::f64::consts::PI * step as f64 / end_step as f64).sin() * thickness as f64;
         let vertical_radius = radius * y_scale;
         let y_cos = self.vertical_angle.cos();
         self.x += (self.horizontal_angle.cos() * y_cos) as f64;
@@ -209,9 +210,10 @@ impl CaveCarver {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_room<T: crate::generation::proto_chunk::GenerationCache>(
         &self,
-        context: &mut CarverContext<'_, T>,
+        context: &mut CarverContext<'_, '_, T>,
         center_x: f64,
         center_y: f64,
         center_z: f64,
@@ -235,7 +237,7 @@ impl CaveCarver {
     #[allow(clippy::too_many_arguments)]
     fn create_tunnel<T: crate::generation::proto_chunk::GenerationCache>(
         &self,
-        context: &mut CarverContext<'_, T>,
+        context: &mut CarverContext<'_, '_, T>,
         seed: i64,
         x: f64,
         y: f64,
@@ -321,9 +323,10 @@ impl CaveCarver {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn carve_ellipsoid<T: crate::generation::proto_chunk::GenerationCache>(
         &self,
-        context: &mut CarverContext<'_, T>,
+        context: &mut CarverContext<'_, '_, T>,
         center_x: f64,
         center_y: f64,
         center_z: f64,

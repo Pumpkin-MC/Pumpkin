@@ -46,7 +46,7 @@ impl Carver for RavineCarver {
 
     fn carve<T: crate::generation::proto_chunk::GenerationCache>(
         &self,
-        context: &mut CarverContext<'_, T>,
+        context: &mut CarverContext<'_, '_, T>,
     ) {
         let range = 4;
         let max_tunnel_length = (range * 2 - 1) * 16;
@@ -68,16 +68,17 @@ impl Carver for RavineCarver {
         let thickness = shape
             .map(|config| config.thickness.get(context.random))
             .unwrap_or(1.0);
-        let tunnel_length = (max_tunnel_length as f64 * distance_factor) as i32;
+        let tunnel_length = (max_tunnel_length as f64 * f64::from(distance_factor)) as i32;
         let floor_level = self
             .floor_level
             .as_ref()
             .map(|provider| provider.get(context.random) as f64)
             .unwrap_or(-1.0);
 
+        let tunnel_seed = context.random.next_i64();
         self.create_tunnel(
             context,
-            context.random.next_i64(),
+            tunnel_seed,
             x,
             y,
             z,
@@ -123,9 +124,9 @@ impl RavineTunnelState {
         y_scale: f64,
         rand: &mut RandomGenerator,
     ) -> (f64, f64) {
-        let mut horizontal_radius = 1.5
-            + (std::f64::consts::PI * step as f64 / end_step as f64).sin() * thickness as f64;
-        let mut vertical_radius = horizontal_radius * y_scale;
+        let horizontal_radius =
+            1.5 + (std::f64::consts::PI * step as f64 / end_step as f64).sin() * thickness as f64;
+        let vertical_radius = horizontal_radius * y_scale;
         let y_cos = self.vertical_angle.cos();
         let y_sin = self.vertical_angle.sin();
         self.x += (self.horizontal_angle.cos() * y_cos) as f64;
@@ -146,7 +147,7 @@ impl RavineCarver {
     #[allow(clippy::too_many_arguments)]
     fn create_tunnel<T: crate::generation::proto_chunk::GenerationCache>(
         &self,
-        context: &mut CarverContext<'_, T>,
+        context: &mut CarverContext<'_, '_, T>,
         seed: i64,
         x: f64,
         y: f64,
@@ -205,7 +206,7 @@ impl RavineCarver {
 
     fn init_width_factors<T: crate::generation::proto_chunk::GenerationCache>(
         &self,
-        context: &CarverContext<'_, T>,
+        context: &CarverContext<'_, '_, T>,
         random: &mut RandomGenerator,
     ) -> Vec<f32> {
         let depth = context.height as usize;
@@ -217,11 +218,11 @@ impl RavineCarver {
             .map(|config| config.width_smoothness)
             .unwrap_or(1);
 
-        for index in 0..depth {
+        for (index, factor) in factors.iter_mut().enumerate() {
             if index == 0 || random.next_bounded_i32(width_smoothness.max(1)) == 0 {
                 current = 1.0 + random.next_f32() * random.next_f32();
             }
-            factors[index] = current * current;
+            *factor = current * current;
         }
 
         factors
@@ -243,9 +244,10 @@ impl RavineCarver {
         factor as f64 * radius * random_factor as f64
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn carve_ellipsoid<T: crate::generation::proto_chunk::GenerationCache>(
         &self,
-        context: &mut CarverContext<'_, T>,
+        context: &mut CarverContext<'_, '_, T>,
         center_x: f64,
         center_y: f64,
         center_z: f64,

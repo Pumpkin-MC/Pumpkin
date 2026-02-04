@@ -218,10 +218,8 @@ impl ChunkHeightmaps {
             //0b0000_0000_0111_1111_...
             !(Self::HEIGHTMAP_ENTRY_MASK << (Self::HEIGHTMAP_LONG_BITS - Self::HEIGHTMAP_BITS))
         } else {
-            !(
-                Self::HEIGHTMAP_ENTRY_MASK
-                    << (Self::HEIGHTMAP_LONG_BITS - packed_array_bit_start_idx - Self::HEIGHTMAP_BITS)
-            )
+            !(Self::HEIGHTMAP_ENTRY_MASK
+                << (Self::HEIGHTMAP_LONG_BITS - packed_array_bit_start_idx - Self::HEIGHTMAP_BITS))
         }
     }
 
@@ -239,16 +237,18 @@ impl ChunkHeightmaps {
     #[inline]
     fn heightmap_height_bits(adjust_height: usize, packed_array_bit_start_idx: u32) -> i64 {
         let height_bit_bytes = adjust_height
-            .wrapping_shl(Self::HEIGHTMAP_LONG_BITS - Self::HEIGHTMAP_BITS - packed_array_bit_start_idx)
+            .wrapping_shl(
+                Self::HEIGHTMAP_LONG_BITS - Self::HEIGHTMAP_BITS - packed_array_bit_start_idx,
+            )
             .to_ne_bytes();
         i64::from_ne_bytes(height_bit_bytes)
     }
 
     #[inline]
     fn heightmap_unpack_height(packed_value: i64, packed_array_bit_start_idx: u32) -> i32 {
-        u64::from_ne_bytes(packed_value.to_ne_bytes())
-            .wrapping_shr(Self::HEIGHTMAP_LONG_BITS - (packed_array_bit_start_idx + Self::HEIGHTMAP_BITS))
-            as i32
+        u64::from_ne_bytes(packed_value.to_ne_bytes()).wrapping_shr(
+            Self::HEIGHTMAP_LONG_BITS - (packed_array_bit_start_idx + Self::HEIGHTMAP_BITS),
+        ) as i32
     }
 
     pub fn set(&mut self, heightmap: ChunkHeightmapType, pos: BlockPos, min_y: i32) {

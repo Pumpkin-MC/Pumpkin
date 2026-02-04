@@ -721,7 +721,6 @@ impl WorldAquiferSampler {
             &mut should_schedule_fluid_update,
         )
     }
-
 }
 
 impl AquiferSamplerImpl for WorldAquiferSampler {
@@ -789,15 +788,14 @@ impl AquiferSampler {
         density: f64,
     ) -> Option<&'static BlockState> {
         let mut should_schedule_fluid_update = false;
-        let result = self.apply_with_density_and_schedule(
+        self.apply_with_density_and_schedule(
             router,
             pos,
             sample_options,
             height_estimator,
             density,
             &mut should_schedule_fluid_update,
-        );
-        result
+        )
     }
 
     #[inline]
@@ -2824,8 +2822,16 @@ mod random_positions_and_hypot {
 
         for ((x, y, z, sample), result) in values {
             let pos = UnblendedNoisePos::new(x, y, z);
+            let mut should_schedule_fluid_update = false;
             assert_eq!(
-                aquifer.apply_internal(&mut router, &pos, &env, &mut height_estimator, sample),
+                aquifer.apply_internal(
+                    &mut router,
+                    &pos,
+                    &env,
+                    &mut height_estimator,
+                    sample,
+                    &mut should_schedule_fluid_update,
+                ),
                 result.map(|r| r.to_state())
             );
         }

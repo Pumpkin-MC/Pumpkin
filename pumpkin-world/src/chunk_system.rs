@@ -861,7 +861,7 @@ impl Chunk {
             fluid_ticks: Default::default(),
             block_entities: Default::default(),
             status: proto_chunk.stage.into(),
-            post_processing_positions: proto_chunk.post_processing_positions.clone(),
+            post_processing_positions: proto_chunk.post_processing_positions().clone(),
             blending_data: proto_chunk.blending_data.clone(),
             carving_mask_air: proto_chunk
                 .carving_mask_data(crate::generation::carver::CarvingStage::Air)
@@ -1156,9 +1156,7 @@ impl GenerationCache for Cache {
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
-            Chunk::Level(_data) => {
-                0
-            }
+            Chunk::Level(_data) => 0,
             Chunk::Proto(data) => data.ocean_floor_height_exclusive(x, z),
         }
     }
@@ -1169,15 +1167,13 @@ impl GenerationCache for Cache {
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
-            Chunk::Level(data) => {
-                Biome::from_id(
-                    data.blocking_read()
-                        .section
-                        .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
-                        .unwrap_or(0),
-                )
-                .unwrap()
-            }
+            Chunk::Level(data) => Biome::from_id(
+                data.blocking_read()
+                    .section
+                    .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
+                    .unwrap_or(0),
+            )
+            .unwrap(),
             Chunk::Proto(data) => data.get_terrain_gen_biome(x, y, z),
         }
     }

@@ -1,9 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    io::Cursor,
-    path::PathBuf,
-    pin::Pin,
-};
+use std::{collections::HashMap, io::Cursor, path::PathBuf, pin::Pin};
 
 use bytes::Bytes;
 use futures::future::join_all;
@@ -22,7 +17,7 @@ use crate::{
     level::LevelFolder,
     tick::{ScheduledTick, scheduler::ChunkTickScheduler},
 };
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -166,25 +161,24 @@ impl ChunkData {
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
         let section = ChunkSections::new(sub_chunks.into_boxed_slice(), min_y);
 
-        let (carving_mask_air, carving_mask_liquid) = if let Some(mask) =
-            chunk_data.carving_mask.take()
-        {
-            let boxed = mask.into_boxed_slice();
-            (boxed.clone(), boxed)
-        } else {
-            (
-                chunk_data
-                    .carving_mask_air
-                    .take()
-                    .map(|mask| mask.into_boxed_slice())
-                    .unwrap_or_default(),
-                chunk_data
-                    .carving_mask_liquid
-                    .take()
-                    .map(|mask| mask.into_boxed_slice())
-                    .unwrap_or_default(),
-            )
-        };
+        let (carving_mask_air, carving_mask_liquid) =
+            if let Some(mask) = chunk_data.carving_mask.take() {
+                let boxed = mask.into_boxed_slice();
+                (boxed.clone(), boxed)
+            } else {
+                (
+                    chunk_data
+                        .carving_mask_air
+                        .take()
+                        .map(|mask| mask.into_boxed_slice())
+                        .unwrap_or_default(),
+                    chunk_data
+                        .carving_mask_liquid
+                        .take()
+                        .map(|mask| mask.into_boxed_slice())
+                        .unwrap_or_default(),
+                )
+            };
 
         Ok(Self {
             section,
@@ -198,7 +192,7 @@ impl ChunkData {
             post_processing_positions: chunk_data
                 .post_processing
                 .into_iter()
-                .map(|pos| BlockPos::new(pos.x, pos.y, pos.z))
+                .map(|pos| BlockPos::new(i32::from(pos.x), i32::from(pos.y), i32::from(pos.z)))
                 .collect(),
             blending_data: chunk_data.blending_data,
             carving_mask_air,
@@ -540,7 +534,11 @@ struct ChunkNbt {
         skip_serializing_if = "Option::is_none"
     )]
     carving_mask_liquid: Option<Vec<i64>>,
-    #[serde(rename = "blending_data", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "blending_data",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     blending_data: Option<NbtCompound>,
     #[serde(rename = "block_entities")]
     block_entities: Vec<NbtCompound>,

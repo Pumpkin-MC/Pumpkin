@@ -8,6 +8,18 @@ pub struct CarvingMask {
     additional_mask: Option<AdditionalCarvingMask>,
 }
 
+impl Clone for CarvingMask {
+    fn clone(&self) -> Self {
+        Self {
+            min_y: self.min_y,
+            height: self.height,
+            mask: self.mask.clone(),
+            column_mask: self.column_mask,
+            additional_mask: None,
+        }
+    }
+}
+
 impl CarvingMask {
     #[must_use]
     pub fn new(height: u16, min_y: i8) -> Self {
@@ -57,10 +69,10 @@ impl CarvingMask {
 
     #[must_use]
     pub fn get(&self, offset_x: i32, y: i32, offset_z: i32) -> bool {
-        if let Some(mask) = &self.additional_mask {
-            if mask(offset_x, y, offset_z) {
-                return true;
-            }
+        if let Some(mask) = &self.additional_mask
+            && mask(offset_x, y, offset_z)
+        {
+            return true;
         }
         if !self.in_range(y) {
             return false;
@@ -76,7 +88,7 @@ impl CarvingMask {
 
     #[must_use]
     pub fn to_long_array(&self) -> Box<[i64]> {
-        let longs = (self.mask.len() + 63) / 64;
+        let longs = self.mask.len().div_ceil(64);
         let mut words = vec![0u64; longs];
         for (index, masked) in self.mask.iter().enumerate() {
             if *masked {
@@ -105,7 +117,6 @@ impl CarvingMask {
         mask
     }
 
-    #[must_use]
     pub fn marked_columns(&self) -> impl Iterator<Item = (i32, i32)> + '_ {
         self.column_mask
             .iter()

@@ -3,7 +3,7 @@ mod mask;
 
 use std::{collections::HashMap, sync::LazyLock};
 
-use pumpkin_data::{Block, BlockState, tag};
+use pumpkin_data::{Block, BlockState, dimension::Dimension, tag};
 use pumpkin_util::{
     math::{float_provider::FloatProvider, vector2::Vector2, vector3::Vector3},
     random::{RandomGenerator, get_large_feature_seed, legacy_rand::LegacyRand},
@@ -12,7 +12,6 @@ use serde::Deserialize;
 
 use crate::{
     block::BlockStateCodec,
-    dimension::Dimension,
     generation::biome_coords,
     generation::{
         GlobalRandomConfig,
@@ -79,7 +78,7 @@ pub struct CarverDebugSettings {
     pub barrier_state: BlockStateCodec,
 }
 
-pub struct CarverContext<'a, T: GenerationCache> {
+pub struct CarverContext<'a, 'b, T: GenerationCache> {
     pub cache: &'a mut T,
     pub chunk_pos: Vector2<i32>,
     pub carver_chunk_pos: Vector2<i32>,
@@ -91,16 +90,16 @@ pub struct CarverContext<'a, T: GenerationCache> {
     pub lava_level: i32,
     pub air_mask: &'a mut CarvingMask,
     pub liquid_mask: &'a mut CarvingMask,
-    pub aquifer_sampler: &'a mut CarverAquiferSampler<'a>,
+    pub aquifer_sampler: &'a mut CarverAquiferSampler<'b>,
     pub debug_settings: Option<&'a CarverDebugSettings>,
     pub debug_enabled: bool,
     pub nether_carver: bool,
     pub surface_rules: &'a GenerationSettings,
-    pub surface_context: &'a mut MaterialRuleContext<'a>,
-    pub surface_height_estimator: &'a mut SurfaceHeightEstimateSampler<'a>,
+    pub surface_context: &'a mut MaterialRuleContext<'b>,
+    pub surface_height_estimator: &'a mut SurfaceHeightEstimateSampler<'b>,
 }
 
-impl<'a, T: GenerationCache> CarverContext<'a, T> {
+impl<'a, 'b, T: GenerationCache> CarverContext<'a, 'b, T> {
     fn is_masked(&self, offset_x: i32, y: i32, offset_z: i32) -> bool {
         self.air_mask.get(offset_x, y, offset_z) || self.liquid_mask.get(offset_x, y, offset_z)
     }
@@ -135,7 +134,7 @@ struct CarverSetup<'a> {
     noise_biome_sampler: NoiseBiomeSampler<'a>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 enum CarverSelection {
     Overworld,
     Nether,
@@ -143,7 +142,7 @@ enum CarverSelection {
 
 pub trait Carver {
     fn should_carve(&self, random: &mut RandomGenerator) -> bool;
-    fn carve<T: GenerationCache>(&self, context: &mut CarverContext<'_, T>);
+    fn carve<T: GenerationCache>(&self, context: &mut CarverContext<'_, '_, T>);
 }
 
 #[derive(Deserialize)]
@@ -164,35 +163,41 @@ pub static CONFIGURED_CARVERS: LazyLock<HashMap<String, ConfiguredCarver>> = Laz
     )
 });
 
-static DEFAULT_DEBUG_SETTINGS: LazyLock<CarverDebugSettings> = LazyLock::new(|| CarverDebugSettings {
-    debug_mode: false,
-    air_state: BlockStateCodec {
-        name: Block::ACACIA_BUTTON,
-        properties: None,
-    },
-    water_state: BlockStateCodec {
-        name: Block::CANDLE,
-        properties: None,
-    },
-    lava_state: BlockStateCodec {
-        name: Block::ORANGE_STAINED_GLASS,
-        properties: None,
-    },
-    barrier_state: BlockStateCodec {
-        name: Block::GLASS,
-        properties: None,
-    },
-});
+static DEFAULT_DEBUG_SETTINGS: LazyLock<CarverDebugSettings> =
+    LazyLock::new(|| CarverDebugSettings {
+        debug_mode: false,
+        air_state: BlockStateCodec {
+            name: &Block::ACACIA_BUTTON,
+            properties: None,
+        },
+        water_state: BlockStateCodec {
+            name: &Block::CANDLE,
+            properties: None,
+        },
+        lava_state: BlockStateCodec {
+            name: &Block::ORANGE_STAINED_GLASS,
+            properties: None,
+        },
+        barrier_state: BlockStateCodec {
+            name: &Block::GLASS,
+            properties: None,
+        },
+    });
 
 const OVERWORLD_CARVER_TAG: &str = "overworld_carver";
 const NETHER_CARVER_TAG: &str = "nether_carver";
 
-fn resolve_debug_settings<'a>(
-    config: &'a CarverConfig,
+fn resolve_debug_settings(
+    config: &CarverConfig,
     debug_enabled: bool,
-) -> Option<&'a CarverDebugSettings> {
+) -> Option<&CarverDebugSettings> {
     if debug_enabled {
-        Some(config.debug_settings.as_ref().unwrap_or(&DEFAULT_DEBUG_SETTINGS))
+        Some(
+            config
+                .debug_settings
+                .as_ref()
+                .unwrap_or(&DEFAULT_DEBUG_SETTINGS),
+        )
     } else {
         None
     }
@@ -217,8 +222,13 @@ fn is_replaceable(block_id: u16, replaceable_tag: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn has_fluid_state(state: &'static BlockState) -> bool {
+    let block = Block::from_state_id(state.id);
+    state.is_liquid() || block.is_waterlogged(state.id)
+}
+
 fn carve_block<T: GenerationCache>(
-    context: &mut CarverContext<'_, T>,
+    context: &mut CarverContext<'_, '_, T>,
     pos: Vector3<i32>,
     replaceable_tag: &str,
     _is_surface: bool,
@@ -262,27 +272,30 @@ fn carve_block<T: GenerationCache>(
             sampler.sample_carve_state(&pos)
         };
         should_schedule_fluid = context.aquifer_sampler.should_schedule_fluid_update();
-        let Some(state) = sampled_state else {
-            if context.debug_enabled {
-                if let Some(settings) = debug_settings {
-                    used_barrier_state = true;
-                    (settings.barrier_state.get_state(), CarveKind::Air)
+        match sampled_state {
+            Some(state) => {
+                let block = Block::from_state_id(state.id);
+                let carved_kind = if block == &Block::LAVA {
+                    CarveKind::Lava
+                } else if block == &Block::WATER {
+                    CarveKind::Water
+                } else {
+                    CarveKind::Air
+                };
+                (state, carved_kind)
+            }
+            None => {
+                if context.debug_enabled {
+                    if let Some(settings) = debug_settings {
+                        used_barrier_state = true;
+                        (settings.barrier_state.get_state(), CarveKind::Air)
+                    } else {
+                        return None;
+                    }
                 } else {
                     return None;
                 }
-            } else {
-                return None;
             }
-        };
-        if used_barrier_state {
-            (state, CarveKind::Air)
-        } else {
-            let carved_kind = match Block::from_state_id(state.id) {
-                Block::LAVA => CarveKind::Lava,
-                Block::WATER => CarveKind::Water,
-                _ => CarveKind::Air,
-            };
-            (state, carved_kind)
         }
     };
 
@@ -301,7 +314,7 @@ fn carve_block<T: GenerationCache>(
     };
 
     context.cache.set_block_state(&pos, carved_state);
-    if should_schedule_fluid && !carved_state.fluid_state.is_empty {
+    if should_schedule_fluid && has_fluid_state(carved_state) {
         context.cache.mark_pos_for_postprocessing(&pos);
     }
     if *surface_flag && !context.nether_carver {
@@ -311,7 +324,7 @@ fn carve_block<T: GenerationCache>(
             context.surface_rules,
             context.surface_context,
             context.surface_height_estimator,
-            !carved_state.fluid_state.is_empty,
+            has_fluid_state(carved_state),
         );
     }
     Some(match carved_kind {
@@ -343,7 +356,7 @@ fn set_waterlogged_state(state: &'static BlockState, waterlogged: bool) -> &'sta
 }
 
 fn take_carving_masks<T: GenerationCache>(cache: &mut T) -> (CarvingMask, CarvingMask) {
-    let (mut air_mask, mut liquid_mask) = {
+    let (air_mask, liquid_mask) = {
         let chunk = cache.get_center_chunk_mut();
         (
             chunk.take_carving_mask(CarvingStage::Air),
@@ -418,7 +431,12 @@ fn build_noise_biome_sampler<'a>(
 ) -> NoiseBiomeSampler<'a> {
     let (start_biome_x, start_biome_z, horizontal_biome_end) =
         chunk_biome_sampling(settings, chunk_x, chunk_z);
-    NoiseBiomeSampler::new(noise_router, start_biome_x, start_biome_z, horizontal_biome_end)
+    NoiseBiomeSampler::new(
+        noise_router,
+        start_biome_x,
+        start_biome_z,
+        horizontal_biome_end,
+    )
 }
 
 fn build_aquifer_sampler<'a>(
@@ -485,22 +503,23 @@ fn build_carver_setup<'a, T: GenerationCache>(
     }
 }
 
-fn run_carver<T: GenerationCache, C: Carver>(
+fn run_carver<'a, 'b, T: GenerationCache, C: Carver>(
     carver: &C,
-    config: &CarverConfig,
+    config: &'a CarverConfig,
     settings: &GenerationSettings,
-    context: &mut CarverContext<'_, T>,
+    context: &mut CarverContext<'a, 'b, T>,
     min_y: i8,
     height: u16,
 ) {
     context.debug_enabled = is_debug_enabled(settings, config);
     context.lava_level = config.lava_level.get_y(min_y as i16, height);
     context.debug_settings = resolve_debug_settings(config, context.debug_enabled);
-    if carver.should_carve(&mut context.random) {
+    if carver.should_carve(context.random) {
         carver.carve(context);
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn carve_dimension<T: GenerationCache>(
     cache: &mut T,
     settings: &GenerationSettings,
@@ -551,77 +570,79 @@ fn carve_dimension<T: GenerationCache>(
                 let carver_seed = get_large_feature_seed(carver_seed_base, neighbor_x, neighbor_z);
                 let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(carver_seed));
 
-            let upgrading = cache.get_center_chunk().is_upgrading();
-            let mut context = CarverContext {
-                cache,
-                chunk_pos: setup.chunk_pos,
-                carver_chunk_pos: neighbor_chunk_pos,
-                random: &mut random,
-                min_y: setup.min_y,
-                height: setup.height,
-                upgrading,
-                sea_level: setup.sea_level,
-                lava_level: setup.base_lava_level,
-                air_mask: &mut setup.air_mask,
-                liquid_mask: &mut setup.liquid_mask,
-                aquifer_sampler: &mut setup.aquifer_sampler,
-                debug_settings: None,
-                debug_enabled: settings.debug_carvers,
-                nether_carver: selection == CarverSelection::Nether,
-                surface_rules: settings,
-                surface_context: &mut setup.surface_context,
-                surface_height_estimator: &mut setup.surface_height_estimator,
-            };
+                let upgrading = cache.get_center_chunk().is_upgrading();
+                let mut context = CarverContext {
+                    cache,
+                    chunk_pos: setup.chunk_pos,
+                    carver_chunk_pos: neighbor_chunk_pos,
+                    random: &mut random,
+                    min_y: setup.min_y,
+                    height: setup.height,
+                    upgrading,
+                    sea_level: setup.sea_level,
+                    lava_level: setup.base_lava_level,
+                    air_mask: &mut setup.air_mask,
+                    liquid_mask: &mut setup.liquid_mask,
+                    aquifer_sampler: &mut setup.aquifer_sampler,
+                    debug_settings: None,
+                    debug_enabled: settings.debug_carvers,
+                    nether_carver: selection == CarverSelection::Nether,
+                    surface_rules: settings,
+                    surface_context: &mut setup.surface_context,
+                    surface_height_estimator: &mut setup.surface_height_estimator,
+                };
 
-            match (selection, configured) {
-                (CarverSelection::Overworld, ConfiguredCarver::Cave(carver)) => {
-                    if !should_use_carver(&carver.config, required_tag) {
-                        continue;
+                match (selection, configured) {
+                    (CarverSelection::Overworld, ConfiguredCarver::Cave(carver)) => {
+                        if !should_use_carver(&carver.config, required_tag) {
+                            continue;
+                        }
+                        run_carver(
+                            carver,
+                            &carver.config,
+                            settings,
+                            &mut context,
+                            setup.min_y,
+                            setup.height,
+                        );
                     }
-                    run_carver(
-                        carver,
-                        &carver.config,
-                        settings,
-                        &mut context,
-                        setup.min_y,
-                        setup.height,
-                    );
-                }
-                (CarverSelection::Overworld, ConfiguredCarver::Canyon(carver)) => {
-                    if !should_use_carver(&carver.config, required_tag) {
-                        continue;
+                    (CarverSelection::Overworld, ConfiguredCarver::Canyon(carver)) => {
+                        if !should_use_carver(&carver.config, required_tag) {
+                            continue;
+                        }
+                        run_carver(
+                            carver,
+                            &carver.config,
+                            settings,
+                            &mut context,
+                            setup.min_y,
+                            setup.height,
+                        );
                     }
-                    run_carver(
-                        carver,
-                        &carver.config,
-                        settings,
-                        &mut context,
-                        setup.min_y,
-                        setup.height,
-                    );
-                }
-                (CarverSelection::Nether, ConfiguredCarver::NetherCave(carver)) => {
-                    if !should_use_carver(&carver.config, required_tag) {
-                        continue;
+                    (CarverSelection::Nether, ConfiguredCarver::NetherCave(carver)) => {
+                        if !should_use_carver(&carver.config, required_tag) {
+                            continue;
+                        }
+                        run_carver(
+                            carver,
+                            &carver.config,
+                            settings,
+                            &mut context,
+                            setup.min_y,
+                            setup.height,
+                        );
                     }
-                    run_carver(
-                        carver,
-                        &carver.config,
-                        settings,
-                        &mut context,
-                        setup.min_y,
-                        setup.height,
-                    );
+                    _ => {}
                 }
-                _ => {}
-            }
             }
         }
     }
 
     let carved_columns = setup.air_mask.marked_columns_union(&setup.liquid_mask);
     let CarverSetup {
-        air_mask, liquid_mask, ..
+        air_mask,
+        liquid_mask,
+        ..
     } = setup;
     let chunk = cache.get_center_chunk_mut();
     chunk.store_carving_mask(CarvingStage::Air, air_mask);
@@ -669,15 +690,15 @@ pub fn carve_nether<T: GenerationCache>(
     )
 }
 
-fn create_aquifer_sampler(
+fn create_aquifer_sampler<'a>(
     settings: &GenerationSettings,
     chunk_x: i32,
     chunk_z: i32,
     min_y: i8,
     height: u16,
     random_config: &GlobalRandomConfig,
-    noise_router: &ProtoNoiseRouters,
-) -> CarverAquiferSampler<'_> {
+    noise_router: &'a ProtoNoiseRouters,
+) -> CarverAquiferSampler<'a> {
     let start_x = chunk_pos::start_block_x(chunk_x);
     let start_z = chunk_pos::start_block_z(chunk_z);
     let sampler = if settings.debug_disable_fluid_generation {
@@ -829,7 +850,7 @@ impl<'a> CarverAquiferSampler<'a> {
             surface_height_estimator,
         ) {
             cache.set_block_state(&below, top_state);
-            if !top_state.fluid_state.is_empty {
+            if has_fluid_state(top_state) {
                 cache.mark_pos_for_postprocessing(&below);
             }
         }
@@ -837,7 +858,7 @@ impl<'a> CarverAquiferSampler<'a> {
 }
 
 pub fn carve_sphere<T: GenerationCache>(
-    context: &mut CarverContext<'_, T>,
+    context: &mut CarverContext<'_, '_, T>,
     replaceable_tag: &str,
     center_x: f64,
     center_y: f64,
@@ -847,10 +868,8 @@ pub fn carve_sphere<T: GenerationCache>(
     let start_x = chunk_pos::start_block_x(context.chunk_pos.x);
     let start_z = chunk_pos::start_block_z(context.chunk_pos.y);
     let min_y = context.min_y as i32 + 1;
-    let max_y = context.min_y as i32
-        + context.height as i32
-        - 1
-        - if context.upgrading { 0 } else { 7 };
+    let max_y =
+        context.min_y as i32 + context.height as i32 - 1 - if context.upgrading { 0 } else { 7 };
 
     let min_x = (center_x - radius).floor() as i32;
     let max_x = (center_x + radius).ceil() as i32;
@@ -861,7 +880,7 @@ pub fn carve_sphere<T: GenerationCache>(
 
     for x in min_x..=max_x {
         let local_x = x - start_x;
-        if local_x < 0 || local_x >= 16 {
+        if !(0..16).contains(&local_x) {
             continue;
         }
         let dx = (x as f64 + 0.5 - center_x) / radius;
@@ -871,7 +890,7 @@ pub fn carve_sphere<T: GenerationCache>(
         }
         for z in min_z..=max_z {
             let local_z = z - start_z;
-            if local_z < 0 || local_z >= 16 {
+            if !(0..16).contains(&local_z) {
                 continue;
             }
             let dz = (z as f64 + 0.5 - center_z) / radius;
@@ -899,10 +918,9 @@ pub fn carve_sphere<T: GenerationCache>(
                     replaceable_tag,
                     is_surface,
                     &mut surface_flag,
-                ) {
-                    if stage == CarvingStage::Liquid {
-                        context.mark_mask(stage, local_x, y, local_z);
-                    }
+                ) && stage == CarvingStage::Liquid
+                {
+                    context.mark_mask(stage, local_x, y, local_z);
                 }
             }
         }
@@ -910,7 +928,7 @@ pub fn carve_sphere<T: GenerationCache>(
 }
 
 pub fn carve_ellipsoid<T: GenerationCache>(
-    context: &mut CarverContext<'_, T>,
+    context: &mut CarverContext<'_, '_, T>,
     replaceable_tag: &str,
     center_x: f64,
     center_y: f64,
@@ -921,10 +939,8 @@ pub fn carve_ellipsoid<T: GenerationCache>(
     let start_x = chunk_pos::start_block_x(context.chunk_pos.x);
     let start_z = chunk_pos::start_block_z(context.chunk_pos.y);
     let min_y = context.min_y as i32 + 1;
-    let max_y = context.min_y as i32
-        + context.height as i32
-        - 1
-        - if context.upgrading { 0 } else { 7 };
+    let max_y =
+        context.min_y as i32 + context.height as i32 - 1 - if context.upgrading { 0 } else { 7 };
 
     let min_x = (center_x - horizontal_radius).floor() as i32;
     let max_x = (center_x + horizontal_radius).ceil() as i32;
@@ -935,7 +951,7 @@ pub fn carve_ellipsoid<T: GenerationCache>(
 
     for x in min_x..=max_x {
         let local_x = x - start_x;
-        if local_x < 0 || local_x >= 16 {
+        if !(0..16).contains(&local_x) {
             continue;
         }
         let dx = (x as f64 + 0.5 - center_x) / horizontal_radius;
@@ -945,7 +961,7 @@ pub fn carve_ellipsoid<T: GenerationCache>(
         }
         for z in min_z..=max_z {
             let local_z = z - start_z;
-            if local_z < 0 || local_z >= 16 {
+            if !(0..16).contains(&local_z) {
                 continue;
             }
             let dz = (z as f64 + 0.5 - center_z) / horizontal_radius;
@@ -973,18 +989,18 @@ pub fn carve_ellipsoid<T: GenerationCache>(
                     replaceable_tag,
                     is_surface,
                     &mut surface_flag,
-                ) {
-                    if stage == CarvingStage::Liquid {
-                        context.mark_mask(stage, local_x, y, local_z);
-                    }
+                ) && stage == CarvingStage::Liquid
+                {
+                    context.mark_mask(stage, local_x, y, local_z);
                 }
             }
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn carve_ellipsoid_skip<T: GenerationCache, F: Fn(f64, f64, f64) -> bool>(
-    context: &mut CarverContext<'_, T>,
+    context: &mut CarverContext<'_, '_, T>,
     replaceable_tag: &str,
     center_x: f64,
     center_y: f64,
@@ -996,10 +1012,8 @@ pub fn carve_ellipsoid_skip<T: GenerationCache, F: Fn(f64, f64, f64) -> bool>(
     let start_x = chunk_pos::start_block_x(context.chunk_pos.x);
     let start_z = chunk_pos::start_block_z(context.chunk_pos.y);
     let min_y = context.min_y as i32 + 1;
-    let max_y = context.min_y as i32
-        + context.height as i32
-        - 1
-        - if context.upgrading { 0 } else { 7 };
+    let max_y =
+        context.min_y as i32 + context.height as i32 - 1 - if context.upgrading { 0 } else { 7 };
 
     let min_x = (center_x - horizontal_radius).floor() as i32;
     let max_x = (center_x + horizontal_radius).ceil() as i32;
@@ -1010,7 +1024,7 @@ pub fn carve_ellipsoid_skip<T: GenerationCache, F: Fn(f64, f64, f64) -> bool>(
 
     for x in min_x..=max_x {
         let local_x = x - start_x;
-        if local_x < 0 || local_x >= 16 {
+        if !(0..16).contains(&local_x) {
             continue;
         }
         let dx = (x as f64 + 0.5 - center_x) / horizontal_radius;
@@ -1020,7 +1034,7 @@ pub fn carve_ellipsoid_skip<T: GenerationCache, F: Fn(f64, f64, f64) -> bool>(
         }
         for z in min_z..=max_z {
             let local_z = z - start_z;
-            if local_z < 0 || local_z >= 16 {
+            if !(0..16).contains(&local_z) {
                 continue;
             }
             let dz = (z as f64 + 0.5 - center_z) / horizontal_radius;
@@ -1051,18 +1065,18 @@ pub fn carve_ellipsoid_skip<T: GenerationCache, F: Fn(f64, f64, f64) -> bool>(
                     replaceable_tag,
                     is_surface,
                     &mut surface_flag,
-                ) {
-                    if stage == CarvingStage::Liquid {
-                        context.mark_mask(stage, local_x, y, local_z);
-                    }
+                ) && stage == CarvingStage::Liquid
+                {
+                    context.mark_mask(stage, local_x, y, local_z);
                 }
             }
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn carve_ellipsoid_skip_with_y<T: GenerationCache, F: Fn(f64, f64, f64, i32) -> bool>(
-    context: &mut CarverContext<'_, T>,
+    context: &mut CarverContext<'_, '_, T>,
     replaceable_tag: &str,
     center_x: f64,
     center_y: f64,
@@ -1074,10 +1088,8 @@ pub fn carve_ellipsoid_skip_with_y<T: GenerationCache, F: Fn(f64, f64, f64, i32)
     let start_x = chunk_pos::start_block_x(context.chunk_pos.x);
     let start_z = chunk_pos::start_block_z(context.chunk_pos.y);
     let min_y = context.min_y as i32 + 1;
-    let max_y = context.min_y as i32
-        + context.height as i32
-        - 1
-        - if context.upgrading { 0 } else { 7 };
+    let max_y =
+        context.min_y as i32 + context.height as i32 - 1 - if context.upgrading { 0 } else { 7 };
 
     let min_x = (center_x - horizontal_radius).floor() as i32;
     let max_x = (center_x + horizontal_radius).ceil() as i32;
@@ -1088,7 +1100,7 @@ pub fn carve_ellipsoid_skip_with_y<T: GenerationCache, F: Fn(f64, f64, f64, i32)
 
     for x in min_x..=max_x {
         let local_x = x - start_x;
-        if local_x < 0 || local_x >= 16 {
+        if !(0..16).contains(&local_x) {
             continue;
         }
         let dx = (x as f64 + 0.5 - center_x) / horizontal_radius;
@@ -1098,7 +1110,7 @@ pub fn carve_ellipsoid_skip_with_y<T: GenerationCache, F: Fn(f64, f64, f64, i32)
         }
         for z in min_z..=max_z {
             let local_z = z - start_z;
-            if local_z < 0 || local_z >= 16 {
+            if !(0..16).contains(&local_z) {
                 continue;
             }
             let dz = (z as f64 + 0.5 - center_z) / horizontal_radius;
@@ -1129,10 +1141,9 @@ pub fn carve_ellipsoid_skip_with_y<T: GenerationCache, F: Fn(f64, f64, f64, i32)
                     replaceable_tag,
                     is_surface,
                     &mut surface_flag,
-                ) {
-                    if stage == CarvingStage::Liquid {
-                        context.mark_mask(stage, local_x, y, local_z);
-                    }
+                ) && stage == CarvingStage::Liquid
+                {
+                    context.mark_mask(stage, local_x, y, local_z);
                 }
             }
         }
