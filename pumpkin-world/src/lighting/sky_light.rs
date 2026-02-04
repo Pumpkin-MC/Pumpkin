@@ -1,21 +1,24 @@
 use crate::chunk_system::generation_cache::Cache;
+use crate::chunk_system::chunk_state::Chunk;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::lighting::storage::{get_sky_light, set_sky_light};
+use crate::lighting::storage::get_sky_light;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::HeightMap;
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashSet, HashMap};
 
 pub struct SkyLightEngine {
     pub(crate) queue: VecDeque<BlockPos>,
+    visited: HashSet<BlockPos>,
 }
 
 impl SkyLightEngine {
     pub fn new() -> Self {
         Self {
             queue: VecDeque::new(),
+            visited: HashSet::new(),
         }
     }
 
@@ -34,8 +37,10 @@ impl SkyLightEngine {
         // Reserve queue capacity upfront to avoid repeated reallocations.
         // Up to one quarter of blocks in the column set initially as an estimate.
         self.queue.clear();
+        self.visited.clear();
         let estimate = ((16 * 16 * height) / 4).max(1) as usize;
         self.queue.reserve(estimate);
+        self.visited.reserve(estimate);
 
         let start_x = center_x * 16;
         let start_z = center_z * 16;
@@ -49,12 +54,63 @@ impl SkyLightEngine {
             for x in start_x..end_x {
                 let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
 
+                // Precompute chunk/ local coords once for this column
+                let chunk_x = x >> 4;
+                let chunk_z = z >> 4;
+                let rel_x = chunk_x - cache.x;
+                let rel_z = chunk_z - cache.z;
+                if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
+                    continue;
+                }
+                let idx = (rel_x * cache.size + rel_z) as usize;
+                let local_x = (x & 15) as usize;
+                let local_z = (z & 15) as usize;
+                let bottom = cache.bottom_y() as i32;
+
                 // If there's air above the top block within our region, set them to full light.
                 if top_y < max_y {
-                    for y in top_y..max_y {
-                        let pos_vec = Vector3::new(x, y, z);
-                        set_sky_light(cache, BlockPos(pos_vec), 15);
-                        self.queue.push_back(BlockPos(pos_vec));
+                    let mut y = top_y;
+                    while y < max_y {
+                        let section = ((y - bottom) >> 4) as usize;
+                        let section_end_y = ((section as i32 + 1) << 4) + bottom;
+                        let end = section_end_y.min(max_y);
+
+                        match &mut cache.chunks[idx] {
+                            Chunk::Proto(c) => {
+                                if section < c.light.sky_light.len() {
+                                    for yy in y..end {
+                                        let local_y = (yy & 15) as usize;
+                                        let cur = c.light.sky_light[section].get(local_x, local_y, local_z);
+                                        if cur != 15 {
+                                            c.light.sky_light[section].set(local_x, local_y, local_z, 15);
+                                            let pos = BlockPos(Vector3::new(x, yy, z));
+                                            if self.visited.insert(pos) {
+                                                self.queue.push_back(pos);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Chunk::Level(c) => {
+                                let mut write = c.blocking_write();
+                                if section < write.light_engine.sky_light.len() {
+                                    for yy in y..end {
+                                        let local_y = (yy & 15) as usize;
+                                        let cur = write.light_engine.sky_light[section].get(local_x, local_y, local_z);
+                                        if cur != 15 {
+                                            write.light_engine.sky_light[section].set(local_x, local_y, local_z, 15);
+                                            write.dirty = true;
+                                            let pos = BlockPos(Vector3::new(x, yy, z));
+                                            if self.visited.insert(pos) {
+                                                self.queue.push_back(pos);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        y = end;
                     }
                 }
 
@@ -63,20 +119,77 @@ impl SkyLightEngine {
                 let mut light: i32 = 15;
                 let start_y = (top_y - 1).min(max_y - 1);
                 if start_y >= min_y {
-                    for y in (min_y..=start_y).rev() {
-                        let pos_vec = Vector3::new(x, y, z);
-                        let state = cache.get_block_state(&pos_vec);
-                        let opacity = state.to_state().opacity;
+                    let mut y = start_y;
+                    'down: while y >= min_y {
+                        let section = ((y - bottom) >> 4) as usize;
+                        let section_start_y = (section as i32 * 16) + bottom;
+                        let start = section_start_y.max(min_y);
 
-                        if opacity > 0 {
-                            light = light.saturating_sub(opacity as i32);
-                            if light <= 0 {
-                                break;
+                        // Precompute opacities for this section range to avoid borrowing cache
+                        // while holding a mutable reference to the chunk.
+                        let mut opacities: Vec<u8> = Vec::new();
+                        opacities.reserve((y - start + 1) as usize);
+                        for yy in start..=y {
+                            let pos_vec = Vector3::new(x, yy, z);
+                            let state = cache.get_block_state(&pos_vec);
+                            opacities.push(state.to_state().opacity);
+                        }
+
+                        match &mut cache.chunks[idx] {
+                            Chunk::Proto(c) => {
+                                if section < c.light.sky_light.len() {
+                                    // iterate opacities in reverse (from y down to start)
+                                    for (i, &opacity) in opacities.iter().enumerate().rev() {
+                                        let yy = start + i as i32;
+                                        if opacity > 0 {
+                                            light = light.saturating_sub(opacity as i32);
+                                            if light <= 0 {
+                                                break 'down;
+                                            }
+                                        }
+                                        let local_y = (yy & 15) as usize;
+                                        let cur = c.light.sky_light[section].get(local_x, local_y, local_z);
+                                        if cur != (light as u8) {
+                                            c.light.sky_light[section].set(local_x, local_y, local_z, light as u8);
+                                            let pos = BlockPos(Vector3::new(x, yy, z));
+                                            if self.visited.insert(pos) {
+                                                self.queue.push_back(pos);
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    break 'down;
+                                }
+                            }
+                            Chunk::Level(c) => {
+                                let mut write = c.blocking_write();
+                                if section < write.light_engine.sky_light.len() {
+                                    for (i, &opacity) in opacities.iter().enumerate().rev() {
+                                        let yy = start + i as i32;
+                                        if opacity > 0 {
+                                            light = light.saturating_sub(opacity as i32);
+                                            if light <= 0 {
+                                                break 'down;
+                                            }
+                                        }
+                                        let local_y = (yy & 15) as usize;
+                                        let cur = write.light_engine.sky_light[section].get(local_x, local_y, local_z);
+                                        if cur != (light as u8) {
+                                            write.light_engine.sky_light[section].set(local_x, local_y, local_z, light as u8);
+                                            write.dirty = true;
+                                            let pos = BlockPos(Vector3::new(x, yy, z));
+                                            if self.visited.insert(pos) {
+                                                self.queue.push_back(pos);
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    break 'down;
+                                }
                             }
                         }
 
-                        set_sky_light(cache, BlockPos(pos_vec), light as u8);
-                        self.queue.push_back(BlockPos(pos_vec));
+                        y = start - 1;
                     }
                 }
             }
@@ -86,10 +199,15 @@ impl SkyLightEngine {
         // light propagation across chunk boundaries
         self.seed_boundary_lights(cache, center_x, center_z, min_y, max_y);
 
-        // Horizontal spread (BFS)
+        // Horizontal spread (BFS) with batched updates
         // Propagate light horizontally using flood fill
+        // Collect updates per chunk to minimize lock contention
+        let mut pending_updates: HashMap<(i32, i32), Vec<(BlockPos, u8)>> = HashMap::new();
+        let mut shadow_cache: HashMap<BlockPos, u8> = HashMap::new();
+        
         while let Some(pos) = self.queue.pop_front() {
-            let level = get_sky_light(cache, pos);
+            // Read from shadow cache first, then fall back to actual storage
+            let level = shadow_cache.get(&pos).copied().unwrap_or_else(|| get_sky_light(cache, pos));
             if level <= 1 {
                 continue;
             } // Light level 0 and 1 don't propagate further
@@ -97,7 +215,15 @@ impl SkyLightEngine {
             for face in BlockDirection::all() {
                 let offset = face.to_offset();
                 let neighbor_pos = BlockPos(pos.0 + offset);
-                let neighbor_level = get_sky_light(cache, neighbor_pos);
+                
+                // Skip if already visited
+                if self.visited.contains(&neighbor_pos) {
+                    continue;
+                }
+                
+                // Read from shadow cache first, then fall back to actual storage
+                let neighbor_level = shadow_cache.get(&neighbor_pos).copied()
+                    .unwrap_or_else(|| get_sky_light(cache, neighbor_pos));
                 let state = cache.get_block_state(&neighbor_pos.0);
 
                 // Calculate light reduction based on block opacity
@@ -106,9 +232,66 @@ impl SkyLightEngine {
 
                 // Only update if the new light level is brighter than current
                 if new_level > neighbor_level {
-                    set_sky_light(cache, neighbor_pos, new_level);
-                    if new_level > 1 {
+                    let chunk_x = neighbor_pos.0.x >> 4;
+                    let chunk_z = neighbor_pos.0.z >> 4;
+                    pending_updates.entry((chunk_x, chunk_z))
+                        .or_insert_with(Vec::new)
+                        .push((neighbor_pos, new_level));
+                    shadow_cache.insert(neighbor_pos, new_level);
+                    
+                    if new_level > 1 && self.visited.insert(neighbor_pos) {
                         self.queue.push_back(neighbor_pos);
+                    }
+                }
+            }
+            
+            // Apply batched updates every 256 blocks to balance memory and lock overhead
+            if pending_updates.values().map(|v| v.len()).sum::<usize>() >= 256 {
+                self.apply_batched_updates(cache, &mut pending_updates);
+            }
+        }
+        
+        // Apply any remaining updates
+        if !pending_updates.is_empty() {
+            self.apply_batched_updates(cache, &mut pending_updates);
+        }
+    }
+
+    /// Applies batched light updates for a set of chunks
+    fn apply_batched_updates(&mut self, cache: &mut Cache, pending_updates: &mut HashMap<(i32, i32), Vec<(BlockPos, u8)>>) {
+        let bottom_y = cache.bottom_y() as i32;
+        
+        for ((chunk_x, chunk_z), updates) in pending_updates.drain() {
+            let rel_x = chunk_x - cache.x;
+            let rel_z = chunk_z - cache.z;
+            if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
+                continue;
+            }
+            let idx = (rel_x * cache.size + rel_z) as usize;
+            
+            match &mut cache.chunks[idx] {
+                Chunk::Level(c) => {
+                    let mut write = c.blocking_write();
+                    for (pos, level) in updates {
+                        let section_y = ((pos.0.y - bottom_y) >> 4) as usize;
+                        if section_y < write.light_engine.sky_light.len() {
+                            let x = (pos.0.x & 15) as usize;
+                            let y = (pos.0.y & 15) as usize;
+                            let z = (pos.0.z & 15) as usize;
+                            write.light_engine.sky_light[section_y].set(x, y, z, level);
+                            write.dirty = true;
+                        }
+                    }
+                }
+                Chunk::Proto(c) => {
+                    for (pos, level) in updates {
+                        let section_y = ((pos.0.y - bottom_y) >> 4) as usize;
+                        if section_y < c.light.sky_light.len() {
+                            let x = (pos.0.x & 15) as usize;
+                            let y = (pos.0.y & 15) as usize;
+                            let z = (pos.0.z & 15) as usize;
+                            c.light.sky_light[section_y].set(x, y, z, level);
+                        }
                     }
                 }
             }
@@ -129,7 +312,7 @@ impl SkyLightEngine {
             for z in start_z..end_z {
                 let pos = BlockPos(Vector3::new(start_x - 1, y, z));
                 let level = get_sky_light(cache, pos);
-                if level > 1 {
+                if level > 1 && self.visited.insert(pos) {
                     self.queue.push_back(pos);
                 }
             }
@@ -138,7 +321,7 @@ impl SkyLightEngine {
             for z in start_z..end_z {
                 let pos = BlockPos(Vector3::new(end_x, y, z));
                 let level = get_sky_light(cache, pos);
-                if level > 1 {
+                if level > 1 && self.visited.insert(pos) {
                     self.queue.push_back(pos);
                 }
             }
@@ -147,7 +330,7 @@ impl SkyLightEngine {
             for x in start_x..end_x {
                 let pos = BlockPos(Vector3::new(x, y, start_z - 1));
                 let level = get_sky_light(cache, pos);
-                if level > 1 {
+                if level > 1 && self.visited.insert(pos) {
                     self.queue.push_back(pos);
                 }
             }
@@ -156,7 +339,7 @@ impl SkyLightEngine {
             for x in start_x..end_x {
                 let pos = BlockPos(Vector3::new(x, y, end_z));
                 let level = get_sky_light(cache, pos);
-                if level > 1 {
+                if level > 1 && self.visited.insert(pos) {
                     self.queue.push_back(pos);
                 }
             }
