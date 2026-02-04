@@ -19,6 +19,7 @@ use crate::block::{
     BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
     OnEntityCollisionArgs, OnScheduledTickArgs, PlacedArgs,
 };
+use crate::plugin::block::block_burn::BlockBurnEvent;
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 
@@ -124,10 +125,36 @@ impl FireBlock {
                 let mut fire_props = FireProperties::from_state_id(state_id, &Block::FIRE);
                 fire_props.age = EnumVariants::from_index(new_age);
                 let new_state_id = fire_props.to_state_id(&Block::FIRE);
+                if let Some(server) = world.server.upgrade() {
+                    let event = BlockBurnEvent {
+                        igniting_block: &Block::FIRE,
+                        block,
+                        block_pos: *pos,
+                        world_uuid: world.uuid,
+                        cancelled: false,
+                    };
+                    let event = server.plugin_manager.fire::<BlockBurnEvent>(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                }
                 world
                     .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
                     .await;
             } else {
+                if let Some(server) = world.server.upgrade() {
+                    let event = BlockBurnEvent {
+                        igniting_block: &Block::FIRE,
+                        block,
+                        block_pos: *pos,
+                        world_uuid: world.uuid,
+                        cancelled: false,
+                    };
+                    let event = server.plugin_manager.fire::<BlockBurnEvent>(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                }
                 world
                     .set_block_state(
                         pos,
@@ -389,6 +416,23 @@ impl BlockBehaviour for FireBlock {
                                     new_fire_props.age = EnumVariants::from_index(new_age);
 
                                     //TODO drop items for burned blocks
+                                    if let Some(server) = world.server.upgrade() {
+                                        let burned_block = world.get_block(&offset_pos).await;
+                                        let event = BlockBurnEvent {
+                                            igniting_block: &Block::FIRE,
+                                            block: burned_block,
+                                            block_pos: offset_pos,
+                                            world_uuid: world.uuid,
+                                            cancelled: false,
+                                        };
+                                        let event = server
+                                            .plugin_manager
+                                            .fire::<BlockBurnEvent>(event)
+                                            .await;
+                                        if event.cancelled {
+                                            continue;
+                                        }
+                                    }
                                     world
                                         .set_block_state(
                                             &offset_pos,
