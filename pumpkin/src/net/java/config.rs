@@ -6,6 +6,7 @@ use crate::{
         PlayerConfig, can_not_join,
         java::{JavaClient, PacketHandlerResult},
     },
+    plugin::player::player_resource_pack_status::PlayerResourcePackStatusEvent,
     server::Server,
 };
 use core::str;
@@ -82,21 +83,24 @@ impl JavaClient {
                 uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
 
             if packet.uuid == expected_uuid {
-                match packet.response_result() {
+                let status = match packet.response_result() {
                     ResourcePackResponseResult::DownloadSuccess => {
                         trace!(
                             "Client {} successfully downloaded the resource pack",
                             self.id
                         );
+                        "SUCCESSFULLY_LOADED"
                     }
                     ResourcePackResponseResult::DownloadFail => {
                         warn!(
                             "Client {} failed to downloaded the resource pack. Is it available on the internet?",
                             self.id
                         );
+                        "FAILED_DOWNLOAD"
                     }
                     ResourcePackResponseResult::Downloaded => {
                         trace!("Client {} already has the resource pack", self.id);
+                        "DOWNLOADED"
                     }
                     ResourcePackResponseResult::Accepted => {
                         trace!("Client {} accepted the resource pack", self.id);
@@ -106,24 +110,41 @@ impl JavaClient {
                     }
                     ResourcePackResponseResult::Declined => {
                         trace!("Client {} declined the resource pack", self.id);
+                        "DECLINED"
                     }
                     ResourcePackResponseResult::InvalidUrl => {
                         warn!(
                             "Client {} reported that the resource pack URL is invalid!",
                             self.id
                         );
+                        "INVALID_URL"
                     }
                     ResourcePackResponseResult::ReloadFailed => {
                         trace!("Client {} failed to reload the resource pack", self.id);
+                        "FAILED_RELOAD"
                     }
                     ResourcePackResponseResult::Discarded => {
                         trace!("Client {} discarded the resource pack", self.id);
+                        "DISCARDED"
                     }
                     ResourcePackResponseResult::Unknown(result) => {
                         warn!(
                             "Client {} responded with a bad result: {}!",
                             self.id, result
                         );
+                        "FAILED_DOWNLOAD"
+                    }
+                };
+
+                if let Some(profile) = self.gameprofile.lock().await.clone() {
+                    if let Some(player) = server.get_player_by_uuid(profile.id) {
+                        let event = PlayerResourcePackStatusEvent::new(
+                            player,
+                            packet.uuid,
+                            resource_config.sha1.clone(),
+                            status.to_string(),
+                        );
+                        server.plugin_manager.fire(event).await;
                     }
                 }
             } else {
