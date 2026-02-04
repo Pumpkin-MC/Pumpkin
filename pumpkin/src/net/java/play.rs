@@ -33,6 +33,7 @@ use crate::plugin::player::player_interact_event::{InteractAction, PlayerInterac
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
 use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
 use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
+use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -58,10 +59,10 @@ use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
     SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
     SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SCustomPayload,
-    SInteract, SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
-    SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
-    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
-    SUpdateSign, SUseItem, SUseItemOn, Status,
+    SEditBook, SInteract, SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities,
+    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
+    SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -70,6 +71,7 @@ use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
@@ -1422,6 +1424,46 @@ impl JavaClient {
                 );
                 let _ = server.plugin_manager.fire(event).await;
             }
+        }
+    }
+
+    pub async fn handle_edit_book(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        edit_book: SEditBook,
+    ) {
+        let slot = edit_book.slot.0;
+        if slot < 0 {
+            return;
+        }
+
+        let slot_index = slot as usize;
+        if slot_index >= PlayerInventory::MAIN_SIZE {
+            return;
+        }
+
+        let is_signing = edit_book.title.is_some();
+        let mut event = PlayerEditBookEvent::new(
+            player.clone(),
+            slot,
+            edit_book.pages,
+            edit_book.title,
+            is_signing,
+        );
+        event = server.plugin_manager.fire(event).await;
+        if event.cancelled {
+            return;
+        }
+
+        let item_key = if event.is_signing {
+            "written_book"
+        } else {
+            "writable_book"
+        };
+        if let Some(item) = Item::from_registry_key(item_key) {
+            let new_stack = ItemStack::new(1, item);
+            player.inventory.set_stack(slot_index, new_stack).await;
         }
     }
 
