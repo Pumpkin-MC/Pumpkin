@@ -42,6 +42,7 @@ impl CommandExecutor for Executor {
                     )
                     .await;
             }
+
             let text = match (category, sound) {
                 (Ok(c), Ok(s)) => TextComponent::translate(
                     "commands.stopsound.success.source.sound",
@@ -64,7 +65,7 @@ impl CommandExecutor for Executor {
             };
             sender.send_message(text).await;
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }

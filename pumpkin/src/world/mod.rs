@@ -328,6 +328,13 @@ impl World {
         .await;
     }
 
+    pub fn get_difficulty(&self, difficulty: Difficulty) {
+        let current_info = self.level_info.load();
+        let mut new_info = (**current_info).clone();
+        new_info.difficulty = difficulty;
+        self.level_info.store(Arc::new(new_info));
+    }
+
     pub fn set_difficulty(&self, difficulty: Difficulty) {
         let current_info = self.level_info.load();
         let mut new_info = (**current_info).clone();
