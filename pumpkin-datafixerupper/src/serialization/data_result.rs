@@ -3,7 +3,7 @@ use crate::serialization::lifecycle::Lifecycle;
 // TODO: maybe use pub(crate) for certain functions? (certain functions here are not used outside the library)
 // TODO: when codecs are implemented, add doc examples
 
-/// A result that can either represent a successful result, or a``
+/// A result that can either represent a successful result, or a
 /// *partial* or no result with an error.
 ///
 /// *The types of a `DataResult` should not be used; this is an implementation detail.* Instead, stick to using the
@@ -44,7 +44,6 @@ impl<R> DataResult<R> {
     pub const fn add_lifecycle(&mut self, added_lifecycle: Lifecycle) {
         self.set_lifecycle(self.lifecycle().add(added_lifecycle));
     }
-
 
     /// Returns a *successful* `DataResult` with an experimental lifecycle.
     #[inline]
@@ -113,7 +112,6 @@ impl<R> DataResult<R> {
         }
     }
 
-
     /// Tries to get a complete result from this `DataResult`. If no such result exists, this returns [`None`] (even for partial results).
     ///
     /// To allow partial results, use [`DataResult::into_result_or_partial`].
@@ -177,7 +175,7 @@ impl<R> DataResult<R> {
                 partial_result,
                 lifecycle,
                 message,
-            } => DataResult::error_any_with_lifecycle(message, partial_result.map(op), lifecycle)
+            } => DataResult::error_any_with_lifecycle(message, partial_result.map(op), lifecycle),
         }
     }
 
@@ -293,7 +291,7 @@ impl<R> DataResult<R> {
                 message,
                 lifecycle,
                 partial_result,
-            } => Self::error_any_with_lifecycle(f(message), partial_result, lifecycle)
+            } => Self::error_any_with_lifecycle(f(message), partial_result, lifecycle),
         }
     }
 
