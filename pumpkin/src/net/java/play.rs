@@ -28,6 +28,8 @@ use crate::plugin::player::player_interact_event::{InteractAction, PlayerInterac
 use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
 use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
 use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
+use crate::plugin::player::player_interact_entity::PlayerInteractEntityEvent;
+use crate::plugin::player::player_interact_at_entity::PlayerInteractAtEntityEvent;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
@@ -1293,7 +1295,45 @@ impl JavaClient {
                 // TODO: split this up
                 let world = player.world();
                 let entity = world.get_player_by_id(entity_id.0);
+                let hand = interact.hand.and_then(|h| Hand::try_from(h.0).ok());
+                let hand_name = match hand {
+                    Some(Hand::Left) => "OFF_HAND",
+                    _ => "HAND",
+                }
+                .to_string();
+                let clicked_position = interact
+                    .target_position
+                    .unwrap_or_else(|| Vector3::new(0.0, 0.0, 0.0));
                 if let Some(entity) = entity {
+                    let entity_uuid = entity.living_entity.entity.entity_uuid;
+                    let entity_type = format!(
+                        "minecraft:{}",
+                        entity.living_entity.entity.entity_type.resource_name
+                    );
+                    if matches!(action, ActionType::InteractAt) {
+                        let event = PlayerInteractAtEntityEvent::new(
+                            player.clone(),
+                            entity_uuid,
+                            entity_type.clone(),
+                            hand_name.clone(),
+                            clicked_position,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                    }
+                    let event = PlayerInteractEntityEvent::new(
+                        player.clone(),
+                        entity_uuid,
+                        entity_type,
+                        hand_name.clone(),
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+
                     let held = player.inventory.held_item();
                     let mut stack = held.lock().await;
                     server
@@ -1304,6 +1344,35 @@ impl JavaClient {
                 }
 
                 if let Some(entity) = world.get_entity_by_id(entity_id.0) {
+                    let entity_uuid = entity.get_entity().entity_uuid;
+                    let entity_type = format!(
+                        "minecraft:{}",
+                        entity.get_entity().entity_type.resource_name
+                    );
+                    if matches!(action, ActionType::InteractAt) {
+                        let event = PlayerInteractAtEntityEvent::new(
+                            player.clone(),
+                            entity_uuid,
+                            entity_type.clone(),
+                            hand_name.clone(),
+                            clicked_position,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                    }
+                    let event = PlayerInteractEntityEvent::new(
+                        player.clone(),
+                        entity_uuid,
+                        entity_type,
+                        hand_name.clone(),
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+
                     let held = player.inventory.held_item();
                     let item_key = {
                         let item_guard = held.lock().await;
