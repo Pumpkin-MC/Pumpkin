@@ -84,6 +84,7 @@ use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
+use crate::plugin::player::player_drop_item::PlayerDropItemEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
@@ -2238,9 +2239,32 @@ impl Player {
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
+        let item_uuid = Uuid::new_v4();
+        self.spawn_dropped_item_with_uuid(item_uuid, item_stack)
+            .await;
+    }
+
+    pub async fn drop_item_with_event(&self, item_stack: ItemStack) -> bool {
+        let Some(server) = self.world().server.upgrade() else {
+            return false;
+        };
+
+        let item_uuid = Uuid::new_v4();
+        let event = PlayerDropItemEvent::new(self.clone(), item_uuid, item_stack);
+        let event = server.plugin_manager.fire(event).await;
+        if event.cancelled || event.item_stack.is_empty() {
+            return false;
+        }
+
+        self.spawn_dropped_item_with_uuid(item_uuid, event.item_stack)
+            .await;
+        true
+    }
+
+    async fn spawn_dropped_item_with_uuid(&self, item_uuid: Uuid, item_stack: ItemStack) {
         let item_pos = self.living_entity.entity.pos.load()
             + Vector3::new(0.0, self.living_entity.entity.get_eye_height() - 0.3, 0.0);
-        let entity = Entity::new(self.world(), item_pos, &EntityType::ITEM);
+        let entity = Entity::from_uuid(item_uuid, self.world(), item_pos, &EntityType::ITEM);
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
         let yaw = f64::from(self.living_entity.entity.yaw.load()).to_radians();
@@ -2266,24 +2290,28 @@ impl Player {
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
         // Do not hold both item stack and screen handler locks at the same time.
-        let (dropped_stack, updated_stack, selected_slot) = {
+        let (dropped_stack, drop_amount) = {
             let binding = self.inventory.held_item();
-            let mut item_stack = binding.lock().await;
-
+            let item_stack = binding.lock().await;
             if item_stack.is_empty() {
                 return;
             }
 
             let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
             let dropped_stack = item_stack.copy_with_count(drop_amount);
-            item_stack.decrement(drop_amount);
-            let updated_stack = item_stack.clone();
-            let selected_slot = self.inventory.get_selected_slot();
-
-            (dropped_stack, updated_stack, selected_slot)
+            (dropped_stack, drop_amount)
         };
 
-        self.drop_item(dropped_stack).await;
+        if !self.drop_item_with_event(dropped_stack).await {
+            return;
+        }
+
+        let (updated_stack, selected_slot) = {
+            let binding = self.inventory.held_item();
+            let mut item_stack = binding.lock().await;
+            item_stack.decrement(drop_amount);
+            (item_stack.clone(), self.inventory.get_selected_slot())
+        };
 
         let inv: Arc<dyn Inventory> = self.inventory.clone();
         let screen_binding = self.current_screen_handler.lock().await;
