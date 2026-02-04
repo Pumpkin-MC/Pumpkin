@@ -26,7 +26,10 @@ use crate::{
     net::ClientPlatform,
     plugin::{
         block::block_break::BlockBreakEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent},
+        player::{
+            player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
+            player_respawn::PlayerRespawnEvent, player_spawn_location::PlayerSpawnLocationEvent,
+        },
     },
     server::Server,
 };
@@ -1524,7 +1527,16 @@ impl World {
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
-        let velocity = player.living_entity.entity.velocity.load();
+        let mut position = position;
+        if let Some(server) = self.server.upgrade() {
+            let event = PlayerSpawnLocationEvent::new(player.clone(), position, self.uuid);
+            let event = server.plugin_manager.fire(event).await;
+            if event.world_uuid == self.uuid {
+                position = event.spawn_position;
+            }
+        }
+
+        let _velocity = player.living_entity.entity.velocity.load();
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
