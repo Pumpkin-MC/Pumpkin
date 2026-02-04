@@ -45,10 +45,10 @@ use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
     SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
     SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
-    SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
-    SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
-    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
-    SUpdateSign, SUseItem, SUseItemOn, Status,
+    SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities,
+    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
+    SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
@@ -785,6 +785,20 @@ impl JavaClient {
         }
     }
 
+    pub async fn handle_move_vehicle(&self, player: &Arc<Player>, packet: SMoveVehicle) {
+        let entity = player.get_entity();
+        let vehicle = entity.vehicle.lock().await;
+        if let Some(vehicle) = vehicle.as_ref() {
+            let vehicle_entity = vehicle.get_entity();
+            vehicle_entity.set_pos(Vector3::new(packet.x, packet.y, packet.z));
+            vehicle_entity.set_rotation(packet.yaw, packet.pitch);
+        }
+    }
+
+    pub async fn handle_paddle_boat(&self, _player: &Arc<Player>, _packet: SPaddleBoat) {
+        // TODO: update boat paddle metadata
+    }
+
     pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {
         player.update_last_action_time();
         let Ok(hand) = Hand::try_from(swing_arm.hand.0) else {
@@ -1172,7 +1186,7 @@ impl JavaClient {
 
     pub async fn handle_interact(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         interact: SInteract,
         server: &Arc<Server>,
     ) {
@@ -1248,14 +1262,19 @@ impl JavaClient {
                 }
             }
             ActionType::Interact | ActionType::InteractAt => {
-                // TODO: split this up
-                let entity = player.world().get_player_by_id(entity_id.0);
-                if let Some(entity) = entity {
+                let world = player.world();
+                if let Some(entity) = world.get_entity_by_id(entity_id.0) {
+                    if entity.interact(entity.clone(), player).await {
+                        return;
+                    }
+                }
+
+                if let Some(target_player) = world.get_player_by_id(entity_id.0) {
                     let held = player.inventory.held_item();
                     let mut stack = held.lock().await;
                     server
                         .item_registry
-                        .use_on_entity(&mut stack, player, entity)
+                        .use_on_entity(&mut stack, player, target_player)
                         .await;
                 }
             }

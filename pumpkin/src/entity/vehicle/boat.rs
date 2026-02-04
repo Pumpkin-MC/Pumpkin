@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use crossbeam::atomic::AtomicCell;
 
 use crate::entity::item::ItemEntity;
+use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
 use crate::server::Server;
 use pumpkin_data::damage::DamageType;
@@ -181,6 +182,28 @@ impl EntityBase for BoatEntity {
                     self.kill_and_drop_self().await;
                 }
             }
+
+            true
+        })
+    }
+
+    fn interact<'a>(
+        &'a self,
+        entity_self: Arc<dyn EntityBase>,
+        player: &'a Arc<Player>,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            if player.living_entity.entity.sneaking.load(Ordering::Relaxed) {
+                return false;
+            }
+
+            if player.living_entity.entity.has_vehicle().await {
+                return false;
+            }
+
+            self.entity
+                .add_passenger(entity_self, player.clone() as Arc<dyn EntityBase>)
+                .await;
 
             true
         })
