@@ -121,7 +121,7 @@ where
         nbt.put_int("z", self.position.0.z);
         nbt.put_int("t", self.delay as i32);
         nbt.put_int("p", self.priority as i32);
-        nbt.put_string("i", self.value.to_resource_location().to_string());
+        nbt.put_string("i", self.value.to_resource_location());
         nbt.serialize(serializer)
     }
 }

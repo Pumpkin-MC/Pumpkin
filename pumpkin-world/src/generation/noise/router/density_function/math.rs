@@ -1,4 +1,5 @@
 use pumpkin_data::noise_router::{BinaryData, BinaryOperation, ClampData, LinearData, UnaryData};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::generation::noise::router::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
@@ -6,8 +7,7 @@ use crate::generation::noise::router::{
 };
 
 use super::{
-    IndexToNoisePos, NoiseFunctionComponentRange, NoisePos,
-    StaticIndependentChunkNoiseFunctionComponentImpl,
+    IndexToNoisePos, NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl,
 };
 
 #[derive(Clone)]
@@ -34,7 +34,7 @@ impl NoiseFunctionComponentRange for Constant {
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for Constant {
-    fn sample(&self, _pos: &impl NoisePos) -> f64 {
+    fn sample(&self, _pos: &Vector3<i32>) -> f64 {
         self.value
     }
 
@@ -67,7 +67,7 @@ impl StaticChunkNoiseFunctionComponentImpl for Linear {
     fn sample(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         let input_density = ChunkNoiseFunctionComponent::sample_from_stack(
@@ -120,7 +120,7 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
     fn sample(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         let input1_density = ChunkNoiseFunctionComponent::sample_from_stack(
@@ -296,7 +296,7 @@ impl StaticChunkNoiseFunctionComponentImpl for Unary {
     fn sample(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         let input_density = ChunkNoiseFunctionComponent::sample_from_stack(
@@ -370,7 +370,7 @@ impl StaticChunkNoiseFunctionComponentImpl for Clamp {
     fn sample(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         let input_density = ChunkNoiseFunctionComponent::sample_from_stack(

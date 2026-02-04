@@ -6,7 +6,6 @@ use crate::command::{
     },
     tree::{CommandTree, builder::argument},
 };
-use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["stopsound"];
@@ -37,12 +36,13 @@ impl CommandExecutor for Executor {
                         sound
                             .as_ref()
                             .cloned()
-                            .map(|s| ResourceLocation::vanilla(s.to_name()))
+                            .map(|s| format!("minecraft:{}", s.to_name()))
                             .ok(),
                         category.as_ref().map(|s| **s).ok(),
                     )
                     .await;
             }
+
             let text = match (category, sound) {
                 (Ok(c), Ok(s)) => TextComponent::translate(
                     "commands.stopsound.success.source.sound",
@@ -65,7 +65,7 @@ impl CommandExecutor for Executor {
             };
             sender.send_message(text).await;
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }

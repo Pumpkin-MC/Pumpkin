@@ -22,6 +22,7 @@ pub mod text;
 pub mod translation;
 pub mod version;
 pub mod world_seed;
+pub mod y_offset;
 
 pub mod jwt;
 
