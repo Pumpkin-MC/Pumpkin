@@ -46,6 +46,7 @@ impl ItemBehaviour for FlintAndSteelItem {
                 location,
                 face,
                 block,
+                "FLINT_AND_STEEL",
             )
             .await;
 
