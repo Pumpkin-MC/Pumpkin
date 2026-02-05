@@ -3040,7 +3040,13 @@ impl World {
         flags: BlockFlags,
     ) -> Option<u16> {
         let (broken_block, broken_block_state) = self.get_block_and_state_id(position).await;
-        let event = BlockBreakEvent::new(cause.clone(), broken_block, *position, 0, false);
+        let event = BlockBreakEvent::new(
+            cause.clone(),
+            broken_block,
+            *position,
+            0,
+            !flags.contains(BlockFlags::SKIP_DROPS),
+        );
 
         let event = self
             .server
@@ -3051,6 +3057,12 @@ impl World {
             .await;
 
         if !event.cancelled {
+            let mut flags = flags;
+            if event.drop {
+                flags.remove(BlockFlags::SKIP_DROPS);
+            } else {
+                flags.insert(BlockFlags::SKIP_DROPS);
+            }
             let new_state_id = if broken_block
                 .properties(broken_block_state)
                 .and_then(|properties| {
