@@ -105,7 +105,7 @@ impl ViewerCountListener for ChestBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockEnderChestOpen).await;
+            self.play_sound(world, Sound::BlockChestOpen).await;
         })
     }
 
@@ -115,7 +115,7 @@ impl ViewerCountListener for ChestBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockEnderChestClose).await;
+            self.play_sound(world, Sound::BlockChestClose).await;
         })
     }
 
