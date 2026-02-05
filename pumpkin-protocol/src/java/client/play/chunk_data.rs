@@ -32,7 +32,7 @@ impl ClientPacket for CChunkData<'_> {
         // Chunk Z
         write.write_i32_be(self.0.z)?;
 
-        let heightmaps = &self.0.heightmap;
+        let heightmaps = &self.0.heightmap.lock().unwrap();
         write.write_var_int(&VarInt(3))?; // Map size
 
         let mut write_heightmap = |index: i32, data: &[i64]| -> Result<(), WritingError> {
@@ -50,7 +50,7 @@ impl ClientPacket for CChunkData<'_> {
 
         {
             let mut blocks_and_biomes_buf = Vec::new();
-            for section in &self.0.section.sections {
+            for section in self.0.section.sections.lock().unwrap().iter() {
                 // Block count
                 let non_empty_block_count = section.block_states.non_air_block_count() as i16;
                 blocks_and_biomes_buf.write_i16_be(non_empty_block_count)?;
@@ -119,8 +119,9 @@ impl ClientPacket for CChunkData<'_> {
             write.write_slice(&blocks_and_biomes_buf)?;
         };
 
-        write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
-        for block_entity in self.0.block_entities.values() {
+        let block_entities = self.0.block_entities.lock().unwrap();
+        write.write_var_int(&VarInt(block_entities.len() as i32))?;
+        for block_entity in block_entities.values() {
             let pos = block_entity.get_position();
             let local_xz = ((get_local_cord(pos.0.x) & 0xF) << 4) | (get_local_cord(pos.0.z) & 0xF);
 

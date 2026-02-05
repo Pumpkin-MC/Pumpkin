@@ -20,6 +20,7 @@ pub mod registry;
 #[path = "generated/screen.rs"]
 pub mod screen;
 
+
 #[rustfmt::skip]
 #[path = "generated/particle.rs"]
 pub mod particle;
@@ -170,6 +171,10 @@ pub mod fuels;
 pub mod effect;
 
 #[rustfmt::skip]
+#[path = "generated/structures.rs"]
+pub mod structures;
+
+#[rustfmt::skip]
 #[path = "generated/potion.rs"]
 pub mod potion;
 
@@ -193,3 +198,7 @@ pub use block_state::BlockState;
 pub use block_state::BlockStateRef;
 pub use blocks::Block;
 pub use collision_shape::CollisionShape;
+
+#[rustfmt::skip]
+#[path = "generated/chunk_gen_settings.rs"]
+pub mod chunk_gen_settings;

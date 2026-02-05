@@ -26,7 +26,7 @@ impl ServerPacket for SPluginMessage {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
         Ok(Self {
-            channel: read.get_resource_location()?,
+            channel: read.get_string()?,
             data: read.read_remaining_to_boxed_slice(MAX_PAYLOAD_SIZE)?,
         })
     }

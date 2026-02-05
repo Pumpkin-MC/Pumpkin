@@ -7,6 +7,7 @@ use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
 use end_portal::EndPortalBlockEntity;
 use furnace::FurnaceBlockEntity;
+use furnace_like_block_entity::ExperienceContainer;
 use piston::PistonBlockEntity;
 use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
@@ -55,7 +56,7 @@ pub trait BlockEntity: Send + Sync {
         Self: Sized;
     fn tick<'a>(
         &'a self,
-        _world: Arc<dyn SimpleWorld>,
+        _world: &'a Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {})
     }
@@ -113,6 +114,9 @@ pub trait BlockEntity: Send + Sync {
 
     fn as_any(&self) -> &dyn Any;
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
+        None
+    }
+    fn to_experience_container(self: Arc<Self>) -> Option<Arc<dyn ExperienceContainer>> {
         None
     }
 }

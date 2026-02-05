@@ -11,7 +11,9 @@ pub mod time;
 
 use crate::block::RandomTickArgs;
 use crate::world::loot::LootContextParameters;
-use crate::{block::BlockEvent, entity::item::ItemEntity};
+use crate::{
+    block::BlockEvent, entity::experience_orb::ExperienceOrbEntity, entity::item::ItemEntity,
+};
 use crate::{
     block::{
         self,
@@ -35,6 +37,7 @@ use crossbeam::queue::SegQueue;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
@@ -123,7 +126,6 @@ use rand::{RngExt, rng};
 use scoreboard::Scoreboard;
 use time::LevelTime;
 use tokio::sync::Mutex;
-use tokio::sync::RwLock;
 
 pub mod border;
 pub mod bossbar;
@@ -135,7 +137,6 @@ pub mod weather;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
-use pumpkin_world::generation::settings::gen_settings_from_dimension;
 use uuid::Uuid;
 use weather::Weather;
 
@@ -217,7 +218,7 @@ impl World {
         server: Weak<Server>,
     ) -> Self {
         // TODO
-        let generation_settings = gen_settings_from_dimension(&dimension);
+        let generation_settings = GenerationSettings::from_dimension(&dimension);
 
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(&level.level_folder.root_folder);
@@ -270,20 +271,20 @@ impl World {
         if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load() {
             let old_chunk = old_chunk.to_vec2_i32();
             let chunk = self.level.get_entity_chunk(old_chunk).await;
-            let mut chunk = chunk.write().await;
             chunk.mark_dirty(true);
+            let mut data = chunk.data.lock().await;
             if old_chunk == current_chunk_coordinate {
-                chunk.data.insert(uuid, nbt);
+                data.insert(uuid, nbt);
                 return;
             }
 
             // The chunk has changed, lets remove the entity from the old chunk
-            chunk.data.remove(&uuid);
+            data.remove(&uuid);
         }
         // We did not continue, so lets save data in a new chunk
         let chunk = self.level.get_entity_chunk(current_chunk_coordinate).await;
-        let mut chunk = chunk.write().await;
-        chunk.data.insert(uuid, nbt);
+        let mut data = chunk.data.lock().await;
+        data.insert(uuid, nbt);
         chunk.mark_dirty(true);
     }
 
@@ -292,16 +293,13 @@ impl World {
         if let Some(old_chunk) = entity.first_loaded_chunk_position.load() {
             let old_chunk = old_chunk.to_vec2_i32();
             let chunk = self.level.get_entity_chunk(old_chunk).await;
-            let mut chunk = chunk.write().await;
             chunk.mark_dirty(true);
             if old_chunk == current_chunk_coordinate {
-                chunk.data.remove(&entity.entity_uuid);
-                drop(chunk);
+                chunk.data.lock().await.remove(&entity.entity_uuid);
             } else {
                 let chunk = self.level.get_entity_chunk(current_chunk_coordinate).await;
-                let mut chunk = chunk.write().await;
                 // The chunk has changed, lets remove the entity from the old chunk
-                chunk.data.remove(&entity.entity_uuid);
+                chunk.data.lock().await.remove(&entity.entity_uuid);
                 chunk.mark_dirty(true);
             }
         }
@@ -324,6 +322,13 @@ impl World {
             VarInt(i32::from(effect_type.id)),
         ))
         .await;
+    }
+
+    pub fn get_difficulty(&self, difficulty: Difficulty) {
+        let current_info = self.level_info.load();
+        let mut new_info = (**current_info).clone();
+        new_info.difficulty = difficulty;
+        self.level_info.store(Arc::new(new_info));
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
@@ -768,11 +773,8 @@ impl World {
             }
         }
 
-        let mut spawning_chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)> =
-            spawning_chunks_map.into_iter().collect();
-
         let mut spawn_state =
-            SpawnState::new(spawning_chunks.len() as i32, &self.entities, self).await; // TODO store it
+            SpawnState::new(spawning_chunks_map.len() as i32, &self.entities, self).await; // TODO store it
 
         // TODO gamerule this.spawnEnemies || this.spawnFriendlies
         let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
@@ -785,7 +787,8 @@ impl World {
             );
 
         // log::debug!("spawning list size {}", spawn_list.len());
-
+        let mut spawning_chunks: Vec<(Vector2<i32>, Arc<ChunkData>)> =
+            spawning_chunks_map.into_iter().collect();
         spawning_chunks.shuffle(&mut rng());
 
         // TODO i think it can be multithread
@@ -794,9 +797,10 @@ impl World {
                 .await;
         }
 
+        let world: Arc<dyn SimpleWorld> = self.clone();
+
         for block_entity in tick_data.block_entities {
-            let world: Arc<dyn SimpleWorld> = self.clone();
-            block_entity.tick(world).await;
+            block_entity.tick(&world).await;
         }
     }
 
@@ -1091,7 +1095,7 @@ impl World {
     pub async fn tick_spawning_chunk(
         self: &Arc<Self>,
         chunk_pos: Vector2<i32>,
-        chunk: &Arc<RwLock<ChunkData>>,
+        chunk: &Arc<ChunkData>,
         spawn_list: &Vec<&'static MobCategory>,
         spawn_state: &mut SpawnState,
     ) {
@@ -1103,7 +1107,7 @@ impl World {
             let delta = Vector3::new(rand_value & 15, rand_value >> 16 & 15, rand_value >> 8 & 15);
             let random_pos = Vector3::new(
                 chunk_pos.x << 4,
-                chunk.read().await.heightmap.get(
+                chunk.heightmap.lock().unwrap().get(
                     MotionBlocking,
                     chunk_pos.x << 4,
                     chunk_pos.y << 4,
@@ -1166,9 +1170,9 @@ impl World {
         let chunk_pos = Vector2::new(x >> 4, z >> 4);
         let chunk = self.level.get_chunk(chunk_pos).await;
         chunk
-            .read()
-            .await
             .heightmap
+            .lock()
+            .unwrap()
             .get(MotionBlocking, x, z, self.min_y)
     }
 
@@ -2105,9 +2109,7 @@ impl World {
                 let Some((chunk, _first_load)) = recv_result else {
                     break;
                 };
-                let tmp_chunk = chunk.read().await;
-                let position = Vector2::new(tmp_chunk.x, tmp_chunk.z);
-                drop(tmp_chunk);
+                let position = Vector2::new(chunk.x, chunk.z);
 
                 let chunk = if level.is_chunk_watched(&position) {
                     chunk
@@ -2118,7 +2120,7 @@ impl World {
                     );
                     let mut ids_to_remove = Vec::new();
 
-                    for (uuid, entity_nbt) in &chunk.read().await.data {
+                    for (uuid, entity_nbt) in chunk.data.lock().await.iter() {
                         let Some(id) = entity_nbt.get_string("id") else {
                             log::warn!("Entity has no ID");
                             continue;
@@ -2143,22 +2145,21 @@ impl World {
                         if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load() {
                             let old_chunk = old_chunk.to_vec2_i32();
                             let chunk = world.level.get_entity_chunk(old_chunk).await;
-                            let mut chunk = chunk.write().await;
                             chunk.mark_dirty(true);
                             let base_entity = entity.get_entity();
                             let current_chunk_coordinate =
                                 base_entity.block_pos.load().chunk_position();
 
+                            let mut data = chunk.data.lock().await;
                             if old_chunk == current_chunk_coordinate {
-                                chunk.data.insert(*uuid, nbt);
+                                data.insert(*uuid, nbt);
                                 return;
                             }
 
                             // The chunk has changed, lets remove the entity from the old chunk
-                            chunk.data.remove(uuid);
+                            data.remove(uuid);
                         }
-                        let mut chunk = chunk.write().await;
-                        chunk.data.insert(*uuid, nbt);
+                        chunk.data.lock().await.insert(*uuid, nbt);
                         chunk.mark_dirty(true);
                     }
 
@@ -2180,11 +2181,10 @@ impl World {
                     continue 'main;
                 };
 
-                let entity_chunk = chunk.read().await;
                 // Add all new Entities to the world
                 let mut entities_to_add: Vec<Arc<dyn EntityBase>> = Vec::new();
 
-                for (uuid, entity_nbt) in &entity_chunk.data {
+                for (uuid, entity_nbt) in chunk.data.lock().await.iter() {
                     let Some(id) = entity_nbt.get_string("id") else {
                         log::warn!("Entity has no ID");
                         continue;
@@ -2544,10 +2544,9 @@ impl World {
         let chunk_coordinate = base_entity.block_pos.load().chunk_position();
         let chunk = self.level.get_entity_chunk(chunk_coordinate).await;
         {
-            let mut chunk = chunk.write().await;
             let mut nbt = NbtCompound::new();
             entity.write_nbt(&mut nbt).await;
-            chunk.data.insert(base_entity.entity_uuid, nbt);
+            chunk.data.lock().await.insert(base_entity.entity_uuid, nbt);
             chunk.mark_dirty(true);
         };
 
@@ -2719,10 +2718,7 @@ impl World {
     pub async fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.level.get_chunk(chunk_coordinate).await;
-        let Ok(chunk) = tokio::time::timeout(std::time::Duration::from_secs(1), chunk.read()).await
-        else {
-            panic!("Timed out while waiting to acquire chunk read lock")
-        };
+
         let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
         // +1 since block light has 1 section padding on both top and bottom
         if section_index + 1 >= chunk.light_engine.block_light.len() {
@@ -2735,30 +2731,28 @@ impl World {
         ))
     }
 
+    #[expect(clippy::unused_async)]
     pub async fn set_block_light_level(
         &self,
-        position: &BlockPos,
-        light_level: u8,
+        _position: &BlockPos,
+        _light_level: u8,
     ) -> Result<(), String> {
-        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        let chunk = self.level.get_chunk(chunk_coordinate).await;
-        let Ok(mut chunk) =
-            tokio::time::timeout(std::time::Duration::from_secs(1), chunk.write()).await
-        else {
-            panic!("Timed out while waiting to acquire chunk write lock")
-        };
-        let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
-        if section_index >= chunk.light_engine.block_light.len() {
-            return Err("Invalid section index".to_string());
-        }
-        let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
-        chunk.light_engine.block_light[section_index + 1].set(
-            relative.x as usize,
-            relative_y,
-            relative.z as usize,
-            light_level,
-        );
-        chunk.mark_dirty(true);
+        // TODO
+        // let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        // let chunk = self.level.get_chunk(chunk_coordinate).await;
+
+        // let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+        // if section_index >= chunk.light_engine.block_light.len() {
+        //     return Err("Invalid section index".to_string());
+        // }
+        // let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
+        // // chunk.light_engine.block_light[section_index + 1].set(
+        // //     relative.x as usize,
+        // //     relative_y,
+        // //     relative.z as usize,
+        // //     light_level,
+        // // );
+        // chunk.mark_dirty(true);
         Ok(())
     }
 
@@ -2772,11 +2766,7 @@ impl World {
     ) -> BlockStateId {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.level.get_chunk(chunk_coordinate).await;
-        let Ok(mut chunk) =
-            tokio::time::timeout(std::time::Duration::from_secs(1), chunk.write()).await
-        else {
-            panic!("Timed out while waiting to acquire chunk write lock")
-        };
+
         let replaced_block_state_id = chunk.section.set_block_absolute_y(
             relative.x as usize,
             relative.y,
@@ -3001,13 +2991,16 @@ impl World {
 
     pub async fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
         let height = EntityType::ITEM.dimension[1] / 2.0;
-        let pos = Vector3::new(
-            f64::from(pos.0.x) + 0.5 + rand::rng().random_range(-0.25..0.25),
-            f64::from(pos.0.y) + 0.5 + rand::rng().random_range(-0.25..0.25) - f64::from(height),
-            f64::from(pos.0.z) + 0.5 + rand::rng().random_range(-0.25..0.25),
-        );
+        let spawn_pos = {
+            let mut r = rand::rng();
+            Vector3::new(
+                f64::from(pos.0.x) + 0.5 + r.random_range(-0.25..0.25),
+                f64::from(pos.0.y) + 0.5 + r.random_range(-0.25..0.25) - f64::from(height),
+                f64::from(pos.0.z) + 0.5 + r.random_range(-0.25..0.25),
+            )
+        };
 
-        let entity = Entity::new(self.clone(), pos, &EntityType::ITEM);
+        let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
         let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
         self.spawn_entity(item_entity).await;
     }
@@ -3315,15 +3308,12 @@ impl World {
 
     pub async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk = self.level.get_chunk(block_pos.chunk_position()).await;
-        let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
-
-        chunk.block_entities.get(block_pos).cloned()
+        chunk.block_entities.lock().unwrap().get(block_pos).cloned()
     }
 
     pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk = self.level.get_chunk(block_pos.chunk_position()).await;
-        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
         if let Some(nbt) = &block_entity_nbt {
@@ -3337,21 +3327,23 @@ impl World {
             .await;
         }
 
-        chunk.block_entities.insert(block_pos, block_entity);
+        chunk
+            .block_entities
+            .lock()
+            .unwrap()
+            .insert(block_pos, block_entity);
         chunk.mark_dirty(true);
     }
 
     pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
         let chunk = self.level.get_chunk(block_pos.chunk_position()).await;
-        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
-        chunk.block_entities.remove(block_pos);
+        chunk.block_entities.lock().unwrap().remove(block_pos);
         chunk.mark_dirty(true);
     }
 
     pub async fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk = self.level.get_chunk(block_pos.chunk_position()).await;
-        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
         if let Some(nbt) = &block_entity_nbt {
@@ -3680,6 +3672,16 @@ impl pumpkin_world::world::SimpleWorld for World {
     ) -> WorldFuture<'a, ()> {
         Box::pin(async move {
             Self::scatter_inventory(&self, position, inventory).await;
+        })
+    }
+
+    fn spawn_experience_orbs(
+        self: Arc<Self>,
+        position: Vector3<f64>,
+        amount: u32,
+    ) -> WorldFuture<'static, ()> {
+        Box::pin(async move {
+            ExperienceOrbEntity::spawn(&self, position, amount).await;
         })
     }
 }

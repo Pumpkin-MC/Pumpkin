@@ -35,7 +35,7 @@ impl<D: Send, E: error::Error> LoadedData<D, E> {
 
 pub trait Dirtiable {
     fn is_dirty(&self) -> bool;
-    fn mark_dirty(&mut self, flag: bool);
+    fn mark_dirty(&self, flag: bool);
 }
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -84,8 +84,6 @@ where
 
     /// Tells the `ChunkIO` that no more chunks are loaded in memory
     fn clear_watched_chunks(&self) -> BoxFuture<'_, ()>;
-
-    fn clean_up_log(&self) -> BoxFuture<'_, ()>;
 
     /// Ensure that all ongoing operations are finished
     fn block_and_await_ongoing_tasks(&self) -> BoxFuture<'_, ()>;
