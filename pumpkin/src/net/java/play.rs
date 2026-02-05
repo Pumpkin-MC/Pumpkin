@@ -1278,10 +1278,10 @@ impl JavaClient {
             }
             ActionType::Interact | ActionType::InteractAt => {
                 let world = player.world();
-                if let Some(entity) = world.get_entity_by_id(entity_id.0) {
-                    if entity.interact(entity.clone(), player).await {
-                        return;
-                    }
+                if let Some(entity) = world.get_entity_by_id(entity_id.0)
+                    && entity.interact(entity.clone(), player).await
+                {
+                    return;
                 }
 
                 if let Some(target_player) = world.get_player_by_id(entity_id.0) {

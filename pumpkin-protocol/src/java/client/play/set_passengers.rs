@@ -12,6 +12,7 @@ pub struct CSetPassengers<'a> {
 }
 
 impl<'a> CSetPassengers<'a> {
+    #[must_use]
     pub const fn new(entity_id: VarInt, passengers: &'a [VarInt]) -> Self {
         Self {
             entity_id,
