@@ -215,4 +215,13 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
             cache: FxHashMap::default(),
         }
     }
+
+    pub fn into_cache(self) -> FxHashMap<u64, i32> {
+        self.cache
+    }
+
+    pub fn with_cache(mut self, cache: FxHashMap<u64, i32>) -> Self {
+        self.cache = cache;
+        self
+    }
 }

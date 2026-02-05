@@ -148,6 +148,8 @@ pub struct ProtoChunk {
     pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
     structure_starts: FxHashMap<StructureKeys, StructureInstance>,
 
+    surface_height_cache: Option<FxHashMap<u64, i32>>,
+
     // Height of the chunk for indexing
     height: u16,
     bottom_y: i8,
@@ -206,6 +208,7 @@ impl ProtoChunk {
             flat_motion_blocking_height_map: default_heightmap.clone(),
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
             structure_starts: FxHashMap::default(),
+            surface_height_cache: None,
             height,
             bottom_y: dimension.min_y as i8,
             stage: StagedChunkEnum::Empty,
@@ -554,6 +557,8 @@ impl ProtoChunk {
             &mut surface_height_estimate_sampler,
         );
 
+        self.surface_height_cache = Some(surface_height_estimate_sampler.into_cache());
+
         self.stage = StagedChunkEnum::Noise;
     }
 
@@ -586,6 +591,10 @@ impl ProtoChunk {
             &noise_router.surface_estimator,
             &surface_config,
         );
+
+        if let Some(cache) = self.surface_height_cache.take() {
+            surface_height_estimate_sampler = surface_height_estimate_sampler.with_cache(cache);
+        }
 
         self.build_surface(
             settings,
