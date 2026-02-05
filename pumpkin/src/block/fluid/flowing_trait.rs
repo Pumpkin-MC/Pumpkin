@@ -166,8 +166,31 @@ pub trait FlowingFluid: Send + Sync {
 
             // Try to flow down first
             if is_hole {
+                let mut target_pos = below_pos;
+                if let Some(server) = world.server.upgrade() {
+                    let source_block = world.get_block(block_pos).await;
+                    let to_block = world.get_block(&target_pos).await;
+                    let event = crate::plugin::block::block_from_to::BlockFromToEvent::new(
+                        source_block,
+                        *block_pos,
+                        to_block,
+                        target_pos,
+                        BlockDirection::Down,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                    target_pos = event.to_pos;
+                    let target_state = world.get_block_state(&target_pos).await;
+                    let target_block = Block::from_state_id(target_state.id);
+                    if !physics::can_be_replaced(target_state, target_block, fluid) {
+                        return;
+                    }
+                }
                 let falling_props = self.get_flowing(fluid, Level::L8, true);
-                self.spread_to(world, fluid, &below_pos, falling_props.to_state_id(fluid))
+                self.spread_to(world, fluid, &target_pos, falling_props.to_state_id(fluid))
                     .await;
 
                 // Check if we should also spread to sides
@@ -508,7 +531,49 @@ pub trait FlowingFluid: Send + Sync {
             for &(direction, state_id) in spread_dirs.iter().take(count) {
                 let side_pos = block_pos.offset(direction.to_offset());
 
-                self.spread_to(world, fluid, &side_pos, state_id).await;
+                // Re-verify the target position is still replaceable right before spreading
+                let side_state = world.get_block_state(&side_pos).await;
+                let side_block = Block::from_state_id(side_state.id);
+
+                if !physics::can_be_replaced(side_state, side_block, fluid) {
+                    continue;
+                }
+
+                let mut target_pos = side_pos;
+                if let Some(server) = world.server.upgrade() {
+                    let source_block = world.get_block(block_pos).await;
+                    let to_block = world.get_block(&target_pos).await;
+                    let event = crate::plugin::block::block_from_to::BlockFromToEvent::new(
+                        source_block,
+                        *block_pos,
+                        to_block,
+                        target_pos,
+                        direction,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        continue;
+                    }
+                    target_pos = event.to_pos;
+                    let target_state = world.get_block_state(&target_pos).await;
+                    let target_block = Block::from_state_id(target_state.id);
+                    if !physics::can_be_replaced(target_state, target_block, fluid) {
+                        continue;
+                    }
+                }
+
+                let final_state_id = if target_pos == side_pos {
+                    state_id
+                } else {
+                    let Some(new_props) = self.get_new_liquid(world, fluid, &target_pos).await else {
+                        continue;
+                    };
+                    new_props.to_state_id(fluid)
+                };
+
+                self.spread_to(world, fluid, &target_pos, final_state_id)
+                    .await;
             }
         }
     }
