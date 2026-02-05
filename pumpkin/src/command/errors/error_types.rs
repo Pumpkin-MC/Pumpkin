@@ -146,7 +146,7 @@ impl<const N: usize> AnyCommandErrorType for CommandErrorType<N> {
 
 // Ease-of-use Implementations:
 
-/// Generates a specific implemention for `CommandErrorType<N>` with two methods to create
+/// Generates a specific implementation for `CommandErrorType<N>` with two methods to create
 /// an error without using a slice. Instead, they take a specific number of
 /// arguments. Each `impl` is given a specific value of `N` and some argument names.
 macro_rules! error_type_no_arg_slice_impl {
