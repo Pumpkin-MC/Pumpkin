@@ -1,15 +1,24 @@
 use indexmap::IndexMap;
 use proc_macro2::{Literal, TokenStream};
-use quote::quote;
+use quote::{format_ident, quote};
 use serde_json::Value;
 use std::fs;
 
+use crate::version::MinecraftVersion;
+
+const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
+
 pub(crate) fn build() -> TokenStream {
-    println!("cargo:rerun-if-changed=../assets/registry/1_21_4_synced_registries.json");
-    println!("cargo:rerun-if-changed=../assets/registry/1_21_5_synced_registries.json");
-    println!("cargo:rerun-if-changed=../assets/registry/1_21_6_synced_registries.json");
-    println!("cargo:rerun-if-changed=../assets/registry/1_21_9_synced_registries.json");
-    println!("cargo:rerun-if-changed=../assets/registry/1_21_11_synced_registries.json");
+    let assets = [
+        (MinecraftVersion::V_1_21_4, "1_21_4_synced_registries.json"),
+        (MinecraftVersion::V_1_21_5, "1_21_5_synced_registries.json"),
+        (MinecraftVersion::V_1_21_6, "1_21_6_synced_registries.json"),
+        (MinecraftVersion::V_1_21_9, "1_21_9_synced_registries.json"),
+        (
+            MinecraftVersion::V_1_21_11,
+            "1_21_11_synced_registries.json",
+        ),
+    ];
 
     let process_version = |path: &str| -> TokenStream {
         let json_str = fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"));
@@ -55,11 +64,32 @@ pub(crate) fn build() -> TokenStream {
         quote! { &[#(#reg_tokens),*] }
     };
 
-    let v1_21_4_registries = process_version("../assets/registry/1_21_4_synced_registries.json");
-    let v1_21_5_registries = process_version("../assets/registry/1_21_5_synced_registries.json");
-    let v1_21_6_registries = process_version("../assets/registry/1_21_6_synced_registries.json");
-    let v1_21_9_registries = process_version("../assets/registry/1_21_9_synced_registries.json");
-    let v1_21_11_registries = process_version("../assets/registry/1_21_11_synced_registries.json");
+    let mut static_values = TokenStream::new();
+    let mut match_arms = TokenStream::new();
+    let mut latest_registry = None;
+
+    for (ver, file) in assets {
+        let path = format!("../assets/registry/{file}");
+        println!("cargo:rerun-if-changed={path}");
+
+        let registries = process_version(&path);
+
+        let ident = format_ident!("REGISTRY_{ver:?}");
+
+        static_values.extend(quote! {
+            pub static #ident: &[StaticRegistry] = #registries;
+        });
+
+        match_arms.extend(quote! {
+            #ver => #ident,
+        });
+
+        if ver == LATEST_VERSION {
+            latest_registry = Some(ident);
+        }
+    }
+
+    let latest_registry = latest_registry.unwrap();
 
     quote! {
         use pumpkin_util::resource_location::ResourceLocation;
@@ -85,21 +115,13 @@ pub(crate) fn build() -> TokenStream {
             pub registry_entries: Vec<RegistryEntryData>,
         }
 
-        pub static REGISTRIES_1_21_4: &[StaticRegistry] = #v1_21_4_registries;
-        pub static REGISTRIES_1_21_5: &[StaticRegistry] = #v1_21_5_registries;
-        pub static REGISTRIES_1_21_6: &[StaticRegistry] = #v1_21_6_registries;
-        pub static REGISTRIES_1_21_9: &[StaticRegistry] = #v1_21_9_registries;
-        pub static REGISTRIES_1_21_11: &[StaticRegistry] = #v1_21_11_registries;
+        #static_values
 
         impl Registry {
             pub fn get_synced(version: MinecraftVersion) -> Vec<Self> {
                 let static_regs = match version {
-                    MinecraftVersion::V_1_21_4 => REGISTRIES_1_21_4,
-                    MinecraftVersion::V_1_21_5 => REGISTRIES_1_21_5,
-                    MinecraftVersion::V_1_21_6 => REGISTRIES_1_21_6,
-                    MinecraftVersion::V_1_21_7 => REGISTRIES_1_21_9,
-                    MinecraftVersion::V_1_21_9 => REGISTRIES_1_21_9,
-                    _ => REGISTRIES_1_21_11,
+                    #match_arms
+                    _ => #latest_registry,
                 };
 
                 static_regs.iter().map(|static_reg| {

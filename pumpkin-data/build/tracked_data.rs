@@ -2,95 +2,39 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::{collections::BTreeMap, fs};
 
+use crate::version::MinecraftVersion;
+
+const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
+
 pub(crate) fn build() -> TokenStream {
-    // 1. Track files
-    println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_4_tracked_data.json");
-    println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_5_tracked_data.json");
-    println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_6_tracked_data.json");
-    println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_7_tracked_data.json");
-    println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_11_tracked_data.json");
+    let assets = [
+        (MinecraftVersion::V_1_21_4, "1_21_4_tracked_data.json"),
+        (MinecraftVersion::V_1_21_5, "1_21_5_tracked_data.json"),
+        (MinecraftVersion::V_1_21_6, "1_21_6_tracked_data.json"),
+        (MinecraftVersion::V_1_21_7, "1_21_7_tracked_data.json"),
+        (MinecraftVersion::V_1_21_11, "1_21_11_tracked_data.json"),
+    ];
 
-    let data_4: BTreeMap<String, u8> = serde_json::from_str(
-        &fs::read_to_string("../assets/tracked_data/1_21_4_tracked_data.json")
-            .expect("1.21.4 data missing"),
-    )
-    .unwrap();
+    let mut versions = BTreeMap::new();
+    for (ver, file) in assets {
+        let path = format!("../assets/tracked_data/{file}");
+        println!("cargo:rerun-if-changed={path}");
 
-    let data_5: BTreeMap<String, u8> = serde_json::from_str(
-        &fs::read_to_string("../assets/tracked_data/1_21_5_tracked_data.json")
-            .expect("1.21.5 data missing"),
-    )
-    .unwrap();
+        let content = fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("Failed to read JSON file: {path} {e}"));
+        let parsed: BTreeMap<String, u8> = serde_json::from_str(&content)
+            .unwrap_or_else(|e| panic!("Failed to parse {path}: {e}"));
 
-    let data_6: BTreeMap<String, u8> = serde_json::from_str(
-        &fs::read_to_string("../assets/tracked_data/1_21_6_tracked_data.json")
-            .expect("1.21.6 data missing"),
-    )
-    .unwrap();
-
-    let data_7: BTreeMap<String, u8> = serde_json::from_str(
-        &fs::read_to_string("../assets/tracked_data/1_21_7_tracked_data.json")
-            .expect("1.21.7 data missing"),
-    )
-    .unwrap();
-
-    let data_11: BTreeMap<String, u8> = serde_json::from_str(
-        &fs::read_to_string("../assets/tracked_data/1_21_11_tracked_data.json")
-            .expect("1.21.11 data missing"),
-    )
-    .unwrap();
-
-    let mut constants = TokenStream::new();
-
-    for (name, id_11) in &data_11 {
-        let ident = format_ident!("DATA_{}", name.to_uppercase());
-
-        // 255 as an 'Invalid' marker
-        let id_4 = data_4.get(name).copied().unwrap_or(255);
-        let id_5 = data_5.get(name).copied().unwrap_or(255);
-        let id_6 = data_6.get(name).copied().unwrap_or(255);
-        let id_7 = data_7.get(name).copied().unwrap_or(255);
-
-        constants.extend(quote! {
-            pub const #ident: TrackedId = TrackedId {
-                latest: #id_11,
-                v1_21_4: #id_4,
-                v1_21_5: #id_5,
-                v1_21_6: #id_6,
-                v1_21_7: #id_7,
-            };
-        });
+        versions.insert(ver, parsed);
     }
+
+    let tracked_data_struct = generate_struct(&versions);
+    let constants = generate_consts(&versions);
 
     quote! {
         use pumpkin_util::version::MinecraftVersion;
 
-        #[derive(Copy, Clone, Debug)]
-        pub struct TrackedId {
-            pub latest: u8,
-            pub v1_21_4: u8,
-            pub v1_21_5: u8,
-            pub v1_21_6: u8,
-            pub v1_21_7: u8,
-        }
-
-        impl TrackedId {
-            pub fn get(&self, version: &MinecraftVersion) -> u8 {
-                match version {
-                    MinecraftVersion::V_1_21_4 => self.v1_21_4,
-                    MinecraftVersion::V_1_21_5 => self.v1_21_5,
-                    MinecraftVersion::V_1_21_6 => self.v1_21_6,
-                    MinecraftVersion::V_1_21_7 => self.v1_21_7,
-                    _ => self.latest,
-                }
-            }
-        }
-
-        impl From<TrackedId> for u8 {
-            fn from(id: TrackedId) -> u8 {
-                id.latest
-            }
-        }
+        #tracked_data_struct
 
         pub struct TrackedData;
 
@@ -98,4 +42,72 @@ pub(crate) fn build() -> TokenStream {
             #constants
         }
     }
+}
+
+fn generate_struct<T>(versions: &BTreeMap<MinecraftVersion, T>) -> TokenStream {
+    // Build struct fields
+    let mut struct_fields = TokenStream::new();
+    for ver in versions.keys() {
+        let ident = ver.to_field_ident();
+        struct_fields.extend(quote! {
+            pub #ident: u8,
+        });
+    }
+
+    let latest_field_ident = LATEST_VERSION.to_field_ident();
+
+    // Build match arms
+    let mut match_arms = TokenStream::new();
+    for ver in versions.keys() {
+        let ident = ver.to_field_ident();
+        match_arms.extend(quote! {
+            #ver => self.#ident,
+        });
+    }
+
+    quote! {
+        pub struct TrackedId {
+            #struct_fields
+        }
+
+        impl TrackedId {
+            pub fn get(&self, version: &MinecraftVersion) -> u8 {
+                match version {
+                    #match_arms
+                    _ => self.#latest_field_ident,
+                }
+            }
+        }
+
+        impl From<TrackedId> for u8 {
+            fn from(id: TrackedId) -> u8 {
+                id.#latest_field_ident
+            }
+        }
+    }
+}
+
+fn generate_consts(versions: &BTreeMap<MinecraftVersion, BTreeMap<String, u8>>) -> TokenStream {
+    let mut constants = TokenStream::new();
+
+    let latest_data = versions.get(&LATEST_VERSION).unwrap();
+    for name in latest_data.keys() {
+        let ident = format_ident!("DATA_{}", name.to_uppercase());
+
+        let mut fields = TokenStream::new();
+        for (ver, data) in versions.iter() {
+            let field_ident = ver.to_field_ident();
+            // 255 as an 'Invalid' marker
+            let id = data.get(name).copied().unwrap_or(255);
+            fields.extend(quote! {
+                #field_ident: #id,
+            });
+        }
+
+        constants.extend(quote! {
+            pub const #ident: TrackedId = TrackedId { #fields };
+        });
+    }
+
+    constants
 }

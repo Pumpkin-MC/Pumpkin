@@ -51,6 +51,7 @@ mod spawn_egg;
 mod structures;
 mod tag;
 mod tracked_data;
+mod version;
 mod world_event;
 
 pub const OUT_DIR: &str = "src/generated";
