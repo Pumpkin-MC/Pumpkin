@@ -1,5 +1,7 @@
 mod cave;
 mod mask;
+#[cfg(test)]
+mod test;
 
 use std::{collections::HashMap, sync::LazyLock};
 
@@ -879,7 +881,7 @@ pub fn carve_sphere<T: GenerationCache>(
                 if y <= min_y || y > max_y {
                     continue;
                 }
-                let dy = (y as f64 + 0.5 - center_y) / radius;
+                let dy = (y as f64 - 0.5 - center_y) / radius;
                 if dx2 + dy * dy + dz2 >= 1.0 {
                     continue;
                 }
@@ -950,7 +952,7 @@ pub fn carve_ellipsoid<T: GenerationCache>(
                 if y <= min_y || y > max_y {
                     continue;
                 }
-                let dy = (y as f64 + 0.5 - center_y) / vertical_radius;
+                let dy = (y as f64 - 0.5 - center_y) / vertical_radius;
                 if dx2 + dy * dy + dz2 >= 1.0 {
                     continue;
                 }
@@ -1023,7 +1025,7 @@ pub fn carve_ellipsoid_skip<T: GenerationCache, F: Fn(f64, f64, f64) -> bool>(
                 if y <= min_y || y > max_y {
                     continue;
                 }
-                let dy = (y as f64 + 0.5 - center_y) / vertical_radius;
+                let dy = (y as f64 - 0.5 - center_y) / vertical_radius;
                 if dx2 + dy * dy + dz2 >= 1.0 {
                     continue;
                 }
@@ -1099,7 +1101,7 @@ pub fn carve_ellipsoid_skip_with_y<T: GenerationCache, F: Fn(f64, f64, f64, i32)
                 if y <= min_y || y > max_y {
                     continue;
                 }
-                let dy = (y as f64 + 0.5 - center_y) / vertical_radius;
+                let dy = (y as f64 - 0.5 - center_y) / vertical_radius;
                 if dx2 + dy * dy + dz2 >= 1.0 {
                     continue;
                 }

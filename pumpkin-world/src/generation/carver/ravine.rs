@@ -1,3 +1,5 @@
+// TODO: Vanilla uses Mth.sin/Mth.cos (65536-entry lookup table) while Pumpkin
+// uses standard f32::sin/f32::cos. This causes slight tunnel path divergence.
 use std::collections::HashMap;
 
 use pumpkin_util::{
@@ -254,15 +256,12 @@ impl RavineCarver {
         horizontal_radius: f64,
         vertical_radius: f64,
         width_factors: &[f32],
-        floor_level: f64,
+        _floor_level: f64,
     ) {
         let min_y = context.min_y as i32;
         let skip_checker = |dx: f64, dy: f64, dz: f64, y: i32| -> bool {
             let index = (y - min_y) as usize;
             if index == 0 || index >= width_factors.len() {
-                return true;
-            }
-            if dy <= floor_level {
                 return true;
             }
             (dx * dx + dz * dz) * width_factors[index - 1] as f64 + dy * dy / 6.0 >= 1.0
@@ -280,7 +279,7 @@ impl RavineCarver {
     }
 }
 
-fn can_reach(
+pub(crate) fn can_reach(
     chunk_pos: pumpkin_util::math::vector2::Vector2<i32>,
     x: f64,
     z: f64,

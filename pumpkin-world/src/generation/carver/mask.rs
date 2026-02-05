@@ -52,7 +52,7 @@ impl CarvingMask {
         y >= self.min_y as i32 && y < self.min_y as i32 + self.height as i32
     }
 
-    fn get_index(&self, offset_x: i32, y: i32, offset_z: i32) -> usize {
+    pub(crate) fn get_index(&self, offset_x: i32, y: i32, offset_z: i32) -> usize {
         (offset_x & 0xF | (offset_z & 0xF) << 4 | (y - self.min_y as i32) << 8) as usize
     }
 

@@ -1,3 +1,5 @@
+// TODO: Vanilla uses Mth.sin/Mth.cos (65536-entry lookup table) while Pumpkin
+// uses standard f32::sin/f32::cos. This causes slight tunnel path divergence.
 use std::collections::HashMap;
 
 use pumpkin_util::{
@@ -182,7 +184,7 @@ impl CaveTunnelState {
 }
 
 impl CaveCarver {
-    fn get_cave_bound(&self) -> i32 {
+    pub(crate) fn get_cave_bound(&self) -> i32 {
         if self.config.replaceable.contains("nether") {
             10
         } else {
@@ -190,7 +192,7 @@ impl CaveCarver {
         }
     }
 
-    fn get_thickness(&self, random: &mut RandomGenerator) -> f32 {
+    pub(crate) fn get_thickness(&self, random: &mut RandomGenerator) -> f32 {
         let mut thickness = random.next_f32() * 2.0 + random.next_f32();
         if self.config.replaceable.contains("nether") {
             thickness *= 2.0;
@@ -202,7 +204,7 @@ impl CaveCarver {
         thickness
     }
 
-    fn get_y_scale(&self) -> f64 {
+    pub(crate) fn get_y_scale(&self) -> f64 {
         if self.config.replaceable.contains("nether") {
             5.0
         } else {
@@ -354,7 +356,7 @@ impl CaveCarver {
     }
 }
 
-fn can_reach(
+pub(crate) fn can_reach(
     chunk_pos: pumpkin_util::math::vector2::Vector2<i32>,
     x: f64,
     z: f64,
