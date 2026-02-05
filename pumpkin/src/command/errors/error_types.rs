@@ -1,130 +1,192 @@
 // These are akin to the translatable built-in exceptions in Minecraft.
 
-pub const READER_EXPECTED_START_QUOTE: SimpleCommandErrorType =
-    SimpleCommandErrorType::new("parsing.quote.expected.start");
-pub const READER_EXPECTED_END_QUOTE: SimpleCommandErrorType =
-    SimpleCommandErrorType::new("parsing.quote.expected.end");
-pub const READER_INVALID_ESCAPE: DynamicCommandErrorType<1> =
-    DynamicCommandErrorType::new("parsing.quote.escape");
-pub const READER_INVALID_BOOL: DynamicCommandErrorType<1> =
-    DynamicCommandErrorType::new("parsing.bool.invalid");
-pub const READER_EXPECTED_BOOL: SimpleCommandErrorType =
-    SimpleCommandErrorType::new("parsing.bool.expected");
-pub const READER_INVALID_INT: DynamicCommandErrorType<1> =
-    DynamicCommandErrorType::new("parsing.int.invalid");
-pub const READER_EXPECTED_INT: SimpleCommandErrorType =
-    SimpleCommandErrorType::new("parsing.int.expected");
-pub const READER_INVALID_LONG: DynamicCommandErrorType<1> =
-    DynamicCommandErrorType::new("parsing.long.invalid");
-pub const READER_EXPECTED_LONG: SimpleCommandErrorType =
-    SimpleCommandErrorType::new("parsing.long.expected");
-pub const READER_INVALID_DOUBLE: DynamicCommandErrorType<1> =
-    DynamicCommandErrorType::new("parsing.double.invalid");
-pub const READER_EXPECTED_DOUBLE: SimpleCommandErrorType =
-    SimpleCommandErrorType::new("parsing.double.expected");
-pub const READER_INVALID_FLOAT: DynamicCommandErrorType<1> =
-    DynamicCommandErrorType::new("parsing.float.invalid");
-pub const READER_EXPECTED_FLOAT: SimpleCommandErrorType =
-    SimpleCommandErrorType::new("parsing.float.expected");
-pub const READER_EXPECTED_SYMBOL: DynamicCommandErrorType<1> =
-    DynamicCommandErrorType::new("parsing.expected");
+pub const READER_EXPECTED_START_QUOTE: CommandErrorType<0> =
+    CommandErrorType::new("parsing.quote.expected.start");
+pub const READER_EXPECTED_END_QUOTE: CommandErrorType<0> =
+    CommandErrorType::new("parsing.quote.expected.end");
+pub const READER_INVALID_ESCAPE: CommandErrorType<1> =
+    CommandErrorType::new("parsing.quote.escape");
+pub const READER_INVALID_BOOL: CommandErrorType<1> = CommandErrorType::new("parsing.bool.invalid");
+pub const READER_EXPECTED_BOOL: CommandErrorType<0> =
+    CommandErrorType::new("parsing.bool.expected");
+pub const READER_INVALID_INT: CommandErrorType<1> = CommandErrorType::new("parsing.int.invalid");
+pub const READER_EXPECTED_INT: CommandErrorType<0> = CommandErrorType::new("parsing.int.expected");
+pub const READER_INVALID_LONG: CommandErrorType<1> = CommandErrorType::new("parsing.long.invalid");
+pub const READER_EXPECTED_LONG: CommandErrorType<0> =
+    CommandErrorType::new("parsing.long.expected");
+pub const READER_INVALID_DOUBLE: CommandErrorType<1> =
+    CommandErrorType::new("parsing.double.invalid");
+pub const READER_EXPECTED_DOUBLE: CommandErrorType<0> =
+    CommandErrorType::new("parsing.double.expected");
+pub const READER_INVALID_FLOAT: CommandErrorType<1> =
+    CommandErrorType::new("parsing.float.invalid");
+pub const READER_EXPECTED_FLOAT: CommandErrorType<0> =
+    CommandErrorType::new("parsing.float.expected");
+pub const READER_EXPECTED_SYMBOL: CommandErrorType<1> = CommandErrorType::new("parsing.expected");
 
-pub const LITERAL_INCORRECT: DynamicCommandErrorType<1> =
-    DynamicCommandErrorType::new("argument.literal.incorrect");
+pub const LITERAL_INCORRECT: CommandErrorType<1> =
+    CommandErrorType::new("argument.literal.incorrect");
 
-pub const DOUBLE_TOO_LOW: DynamicCommandErrorType<2> =
-    DynamicCommandErrorType::new("argument.double.low");
-pub const DOUBLE_TOO_HIGH: DynamicCommandErrorType<2> =
-    DynamicCommandErrorType::new("argument.double.big");
-pub const FLOAT_TOO_LOW: DynamicCommandErrorType<2> =
-    DynamicCommandErrorType::new("argument.float.low");
-pub const FLOAT_TOO_HIGH: DynamicCommandErrorType<2> =
-    DynamicCommandErrorType::new("argument.float.big");
-pub const INTEGER_TOO_LOW: DynamicCommandErrorType<2> =
-    DynamicCommandErrorType::new("argument.integer.low");
-pub const INTEGER_TOO_HIGH: DynamicCommandErrorType<2> =
-    DynamicCommandErrorType::new("argument.integer.big");
-pub const LONG_TOO_LOW: DynamicCommandErrorType<2> =
-    DynamicCommandErrorType::new("argument.long.low");
-pub const LONG_TOO_HIGH: DynamicCommandErrorType<2> =
-    DynamicCommandErrorType::new("argument.long.big");
+pub const DOUBLE_TOO_LOW: CommandErrorType<2> = CommandErrorType::new("argument.double.low");
+pub const DOUBLE_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new("argument.double.big");
+pub const FLOAT_TOO_LOW: CommandErrorType<2> = CommandErrorType::new("argument.float.low");
+pub const FLOAT_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new("argument.float.big");
+pub const INTEGER_TOO_LOW: CommandErrorType<2> = CommandErrorType::new("argument.integer.low");
+pub const INTEGER_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new("argument.integer.big");
+pub const LONG_TOO_LOW: CommandErrorType<2> = CommandErrorType::new("argument.long.low");
+pub const LONG_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new("argument.long.big");
 
-pub const DISPATCHER_UNKNOWN_COMMAND: SimpleCommandErrorType =
-    SimpleCommandErrorType::new("command.unknown.command");
-pub const DISPATCHER_UNKNOWN_ARGUMENT: SimpleCommandErrorType =
-    SimpleCommandErrorType::new("command.unknown.argument");
-pub const DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR: SimpleCommandErrorType =
-    SimpleCommandErrorType::new("command.expected.separator");
-pub const DISPATCHER_PARSE_EXCEPTION: DynamicCommandErrorType<1> =
-    DynamicCommandErrorType::new("command.exception");
+pub const DISPATCHER_UNKNOWN_COMMAND: CommandErrorType<0> =
+    CommandErrorType::new("command.unknown.command");
+pub const DISPATCHER_UNKNOWN_ARGUMENT: CommandErrorType<0> =
+    CommandErrorType::new("command.unknown.argument");
+pub const DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR: CommandErrorType<0> =
+    CommandErrorType::new("command.expected.separator");
+pub const DISPATCHER_PARSE_EXCEPTION: CommandErrorType<1> =
+    CommandErrorType::new("command.exception");
 
-use crate::command::errors::command_syntax_error::{CommandSyntaxError, ContextProvider};
+use crate::command::errors::{
+    command_syntax_error::{CommandSyntaxError, ContextProvider},
+    error_types::sealed::Sealed,
+};
 use pumpkin_util::text::TextComponent;
 
-/// A command error type that does not require any translation arguments.
-#[derive(Debug, Clone, Copy)]
-pub struct SimpleCommandErrorType {
+/// A command error that requires **exactly** `N` translation arguments.
+///
+/// **Comparison with Brigadier**:
+/// - [`CommandErrorType<0>`] = `SimpleCommandExceptionType` (**default**)
+/// - [`CommandErrorType<1>`] = `DynamicCommandExceptionType`
+/// - [`CommandErrorType<2>`] = `Dynamic2CommandExceptionType`
+/// - [`CommandErrorType<3>`] = `Dynamic3CommandExceptionType`
+/// - [`CommandErrorType<4>`] = `Dynamic4CommandExceptionType`
+/// - `CommandErrorType<N>` = `DynamicNCommandExceptionType`
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CommandErrorType<const N: usize> {
     pub translation_key: &'static str,
 }
 
-/// A command error that requires no translation arguments.
-impl SimpleCommandErrorType {
-    /// Creates a non-dynamic simple command error type,
-    /// from only a translation string.
+impl<const N: usize> CommandErrorType<N> {
+    /// Creates an error type from a given translation string.
     #[must_use]
     pub const fn new(translation_key: &'static str) -> Self {
         Self { translation_key }
     }
 
+    /// Creates an error without context from itself and from a slice of `N` arguments.
     #[must_use]
-    pub fn instance_without_context(&self) -> CommandSyntaxError {
-        CommandSyntaxError::new_without_context(TextComponent::translate(self.translation_key, []))
-    }
-
-    #[must_use]
-    pub fn instance_with_context<C>(&self, context_provider: &C) -> CommandSyntaxError
-    where
-        C: ContextProvider,
-    {
-        CommandSyntaxError::new_with_context(
-            TextComponent::translate(self.translation_key, []),
-            context_provider,
+    pub fn create_without_context_args_slice(
+        &'static self,
+        args: &[TextComponent; N],
+    ) -> CommandSyntaxError {
+        CommandSyntaxError::create_without_context(
+            self,
+            TextComponent::translate(self.translation_key, args),
         )
     }
-}
 
-/// A command error that requires **exactly** [`N`] translation arguments.
-#[derive(Debug, Clone, Copy)]
-pub struct DynamicCommandErrorType<const N: usize> {
-    pub translation_key: &'static str,
-}
-
-impl<const N: usize> DynamicCommandErrorType<N> {
-    /// Creates a dynamic error type from a given translation string.
-    #[must_use]
-    pub const fn new(translation_key: &'static str) -> Self {
-        Self { translation_key }
-    }
-
-    #[must_use]
-    pub fn instance_without_context(&self, args: &[TextComponent; N]) -> CommandSyntaxError {
-        CommandSyntaxError::new_without_context(TextComponent::translate(
-            self.translation_key,
-            args,
-        ))
-    }
-
-    pub fn instance_with_context<C>(
-        &self,
+    /// Creates an error with context from itself and from a slice of `N` arguments.
+    pub fn create_args_slice<C>(
+        &'static self,
         context_provider: &C,
         args: &[TextComponent; N],
     ) -> CommandSyntaxError
     where
         C: ContextProvider,
     {
-        CommandSyntaxError::new_with_context(
+        CommandSyntaxError::create(
+            self,
             TextComponent::translate(self.translation_key, args),
             context_provider,
         )
     }
 }
+
+// Prevent other crates from using this trait
+// Thus, we can effectively 'seal' our trait meant
+// only for `CommandErrorType<N>`.
+mod sealed {
+    /// Private trait to ensure only `CommandErrorType<N>` can implement `AnyCommandErrorType`.
+    pub trait Sealed {}
+}
+
+/// A trait which is only implemented by [`CommandErrorType<N>`] types.
+/// 
+/// It exposes the common properties of such types, while making
+/// it more dynamic to access its properties, like the translation
+/// key and the number of arguments (at runtime).
+pub trait AnyCommandErrorType: Sealed + std::fmt::Debug {
+    /// Returns the underlying translation key of this specific error type.
+    fn translation_key(&self) -> &'static str;
+
+    /// Returns the number of arguments supported by this error type.
+    fn argument_count(&self) -> usize;
+}
+
+impl Eq for dyn AnyCommandErrorType {}
+
+impl PartialEq for dyn AnyCommandErrorType {
+    fn eq(&self, other: &Self) -> bool {
+        self.translation_key() == other.translation_key()
+            && self.argument_count() == other.argument_count()
+    }
+}
+
+// Implement the private trait for our types.
+impl<const N: usize> Sealed for CommandErrorType<N> {}
+
+impl<const N: usize> AnyCommandErrorType for CommandErrorType<N> {
+    fn translation_key(&self) -> &'static str {
+        self.translation_key
+    }
+
+    fn argument_count(&self) -> usize {
+        N
+    }
+}
+
+// Ease-of-use Implementations:
+
+/// Generates a specific implemention for `CommandErrorType<N>` with two methods to create
+/// an error without using a slice. Instead, they take a specific number of
+/// arguments. Each `impl` is given a specific value of `N` and some argument names.
+macro_rules! error_type_no_arg_slice_impl {
+    (N = $N: literal => $($arg:ident),* | $doc: expr) => {
+        impl CommandErrorType<$N> {
+            /// Creates an error without context from this error type
+            #[doc = $doc]
+            #[must_use]
+            pub fn create_without_context(
+                &'static self,
+                $($arg: TextComponent),*
+            ) -> CommandSyntaxError {
+                self.create_without_context_args_slice(&[
+                    $($arg),*
+                ])
+            }
+
+            /// Creates an error with context from this error type
+            #[doc = $doc]
+            #[must_use]
+            pub fn create<C>(
+                &'static self,
+                context_provider: &C,
+                $($arg: TextComponent),*
+            ) -> CommandSyntaxError
+            where
+                C: ContextProvider,
+            {
+                self.create_args_slice(context_provider, &[
+                    $($arg),*
+                ])
+            }
+        }
+    };
+}
+
+// Implementations are defined below:
+
+error_type_no_arg_slice_impl!(N = 0 =>                        | "without taking any translation arguments.");
+error_type_no_arg_slice_impl!(N = 1 => arg1                   | "by taking 1 translation argument.");
+error_type_no_arg_slice_impl!(N = 2 => arg1, arg2             | "by taking 2 translation arguments.");
+error_type_no_arg_slice_impl!(N = 3 => arg1, arg2, arg3       | "by taking 3 translation arguments.");
+error_type_no_arg_slice_impl!(N = 4 => arg1, arg2, arg3, arg4 | "by taking 4 translation arguments.");

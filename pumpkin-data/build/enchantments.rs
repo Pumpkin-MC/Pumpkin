@@ -80,7 +80,7 @@ pub(crate) fn build() -> TokenStream {
         let max_level = enchantment.max_level;
         let slots = enchantment.slots;
         let slots = slots.iter().map(AttributeModifierSlot::to_tokens);
-        let Translate { translate, with: _ } = &enchantment.description.0.content else {
+        let Translate { translate, with: _ } = &*enchantment.description.0.content else {
             panic!()
         };
         let translate = translate.to_string();
