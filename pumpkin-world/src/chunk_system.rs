@@ -795,34 +795,39 @@ impl Chunk {
         let proto_biome_height = biome_coords::from_block(proto_chunk.height());
         let biome_min_y = biome_coords::from_block(dimension.min_y);
 
-        for y_offset in 0..proto_biome_height {
-            let section_index = y_offset as usize / 4;
-            let relative_y = y_offset as usize % 4;
+        {
+            let mut sections_guard = sections.sections.lock().unwrap();
 
-            if let Some(section) = sections.sections.lock().unwrap().get_mut(section_index) {
-                let absolute_biome_y = biome_min_y + y_offset as i32;
+            for y_offset in 0..proto_biome_height {
+                let section_index = y_offset as usize / 4;
+                let relative_y = y_offset as usize % 4;
 
-                for z in 0..4 {
-                    for x in 0..4 {
-                        let biome = proto_chunk.get_biome_id(x as i32, absolute_biome_y, z as i32);
-                        section.biomes.set(x, relative_y, z, biome);
+                if let Some(section) = sections_guard.get_mut(section_index) {
+                    let absolute_biome_y = biome_min_y + y_offset as i32;
+
+                    for z in 0..4 {
+                        for x in 0..4 {
+                            let biome =
+                                proto_chunk.get_biome_id(x as i32, absolute_biome_y, z as i32);
+                            section.biomes.set(x, relative_y, z, biome);
+                        }
                     }
                 }
             }
-        }
 
-        let proto_block_height = proto_chunk.height();
+            let proto_block_height = proto_chunk.height();
 
-        for y_offset in 0..proto_block_height {
-            let section_index = (y_offset as usize) / 16;
-            let relative_y = (y_offset as usize) % 16;
+            for y_offset in 0..proto_block_height {
+                let section_index = (y_offset as usize) / 16;
+                let relative_y = (y_offset as usize) % 16;
 
-            if let Some(section) = sections.sections.lock().unwrap().get_mut(section_index) {
-                for z in 0..16 {
-                    for x in 0..16 {
-                        let block =
-                            proto_chunk.get_block_state_raw(x as i32, y_offset as i32, z as i32);
-                        section.block_states.set(x, relative_y, z, block);
+                if let Some(section) = sections_guard.get_mut(section_index) {
+                    for z in 0..16 {
+                        for x in 0..16 {
+                            let block = proto_chunk
+                                .get_block_state_raw(x as i32, y_offset as i32, z as i32);
+                            section.block_states.set(x, relative_y, z, block);
+                        }
                     }
                 }
             }
