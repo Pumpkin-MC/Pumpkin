@@ -6,9 +6,6 @@ use crate::serialization::lifecycle::Lifecycle;
 /// A result that can either represent a successful result, or a
 /// *partial* or no result with an error.
 ///
-/// *The types of a `DataResult` should not be used; this is an implementation detail.* Instead, stick to using the
-/// provided functions that work on any `DataResult`.
-///
 /// `R` is the type of result stored.
 #[derive(Debug)]
 pub enum DataResult<R> {

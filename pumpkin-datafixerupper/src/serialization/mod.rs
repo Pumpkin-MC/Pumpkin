@@ -12,3 +12,36 @@ pub enum Number {
     Float(f32),
     Double(f64),
 }
+
+impl From<Number> for i64 {
+    fn from(num: Number) -> Self {
+        match num {
+            Number::Byte(b) => b as Self,
+            Number::Short(s) => s as Self,
+            Number::Int(i) => i as Self,
+            Number::Long(l) => l,
+            Number::Float(f) => f as Self,
+            Number::Double(d) => d as Self,
+        }
+    }
+}
+
+impl From<Number> for i32 {
+    fn from(num: Number) -> Self {
+        match num {
+            Number::Byte(b) => b as Self,
+            Number::Short(s) => s as Self,
+            Number::Int(i) => i,
+            Number::Long(l) => l as Self,
+            Number::Float(f) => f as Self,
+            Number::Double(d) => d as Self,
+        }
+    }
+}
+
+impl From<Number> for i8 {
+    fn from(num: Number) -> Self {
+        // Similar to Java, we will first convert the number to an `i32`, and then to an `i8`.
+        i32::from(num) as Self
+    }
+}
