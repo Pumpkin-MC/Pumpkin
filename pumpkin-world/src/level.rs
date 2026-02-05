@@ -91,6 +91,8 @@ pub struct Level {
     pub shut_down_chunk_system: AtomicBool,
     pub should_save: AtomicBool,
     pub should_unload: AtomicBool,
+    /// Number of ticks between autosave checks. If 0, autosave is disabled.
+    pub autosave_ticks: u64,
 
     gen_entity_request_tx: Sender<Vector2<i32>>,
     pending_entity_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncEntityChunk>>>>,
@@ -192,6 +194,7 @@ impl Level {
             shut_down_chunk_system: AtomicBool::new(false),
             should_save: AtomicBool::new(false),
             should_unload: AtomicBool::new(false),
+            autosave_ticks: level_config.autosave_ticks,
             gen_entity_request_tx,
             pending_entity_generations: pending_entity_generations.clone(),
             level_channel: level_channel.clone(),

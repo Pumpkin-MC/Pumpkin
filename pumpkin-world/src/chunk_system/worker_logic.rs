@@ -12,7 +12,6 @@ use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
-use std::thread;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 
 pub enum RecvChunk {

@@ -588,7 +588,7 @@ impl GenerationSchedule {
     }
 
     fn work(mut self, level: Arc<Level>) {
-        log::info!(
+        log::debug!(
             "schedule thread start id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")

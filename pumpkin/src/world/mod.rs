@@ -704,13 +704,22 @@ impl World {
         // Auto-save logic
         if level_time.world_age % 100 == 0 {
             self.level.should_unload.store(true, Relaxed);
-            if level_time.world_age % 300 != 0 {
+            // If autosave is configured and this tick will trigger an autosave, don't double notify
+            if self.level.autosave_ticks == 0 {
                 self.level.level_channel.notify();
+            } else {
+                let autosave = self.level.autosave_ticks as i64;
+                if autosave == 0 || level_time.world_age % autosave != 0 {
+                    self.level.level_channel.notify();
+                }
             }
         }
-        if level_time.world_age % 300 == 0 {
-            self.level.should_save.store(true, Relaxed);
-            self.level.level_channel.notify();
+        if self.level.autosave_ticks > 0 {
+            let autosave = self.level.autosave_ticks as i64;
+            if autosave > 0 && level_time.world_age % autosave == 0 {
+                self.level.should_save.store(true, Relaxed);
+                self.level.level_channel.notify();
+            }
         }
 
         let mut weather = self.weather.lock().await;
