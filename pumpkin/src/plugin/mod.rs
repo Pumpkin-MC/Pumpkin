@@ -16,6 +16,8 @@ pub mod loader;
 
 use crate::{LOGGER_IMPL, server::Server};
 pub use api::*;
+use crate::plugin::server::plugin_disable::PluginDisableEvent;
+use crate::plugin::server::plugin_enable::PluginEnableEvent;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -402,6 +404,13 @@ impl PluginManager {
                                 .insert(plugin_name.clone(), PluginState::Loaded);
                             state_notify.notify_waiters();
 
+                            let enable_event = PluginEnableEvent::new(plugin_name.clone());
+                            let _ = context
+                                .server
+                                .plugin_manager
+                                .fire::<PluginEnableEvent>(enable_event)
+                                .await;
+
                             info!("Loaded {} ({})", metadata.name, metadata.version);
                         }
                         Err(e) => {
@@ -535,6 +544,14 @@ impl PluginManager {
                 .position(|p| p.metadata.name == name)
                 .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?
         };
+
+        let disable_event = PluginDisableEvent::new(name.to_string());
+        if let Some(server) = self.server.read().await.clone() {
+            let _ = server
+                .plugin_manager
+                .fire::<PluginDisableEvent>(disable_event)
+                .await;
+        }
 
         let mut plugin = {
             let mut plugins = self.plugins.write().await;
