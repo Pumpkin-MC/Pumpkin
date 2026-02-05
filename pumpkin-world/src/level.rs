@@ -272,7 +272,8 @@ impl Level {
     }
 
     pub async fn shutdown(&self) {
-        log::info!("Saving level...");
+        let world_id = self.level_folder.root_folder.display();
+        log::info!("Saving level ({})...", world_id);
         self.cancel_token.cancel();
         self.shut_down_chunk_system.store(true, Ordering::Relaxed);
         self.level_channel.notify();
@@ -285,7 +286,7 @@ impl Level {
             lock.drain(..).collect::<Vec<_>>()
         };
 
-        log::info!("Joining {} synchronous threads...", handles.len());
+        log::info!("Joining {} synchronous threads for {}...", handles.len(), world_id);
         let join_task = tokio::task::spawn_blocking(move || {
             for handle in handles {
                 // Attempt to join. If a thread is stuck, this block stays alive.
@@ -296,7 +297,7 @@ impl Level {
         match timeout(Duration::from_secs(3), join_task).await {
             Ok(task_result) => {
                 task_result.unwrap();
-                log::info!("All threads joined successfully.");
+                log::info!("All threads joined successfully for {}.", world_id);
             }
             Err(_) => {
                 log::warn!(
@@ -305,11 +306,11 @@ impl Level {
             }
         }
 
-        log::debug!("Awaiting remaining async tasks...");
+        log::debug!("Awaiting remaining async tasks for {}...", world_id);
         self.tasks.wait().await;
         self.chunk_system_tasks.wait().await;
 
-        log::info!("Flushing savers to disk...");
+        log::info!("Flushing savers to disk for {}...", world_id);
         self.chunk_saver.block_and_await_ongoing_tasks().await;
         self.entity_saver.block_and_await_ongoing_tasks().await;
 

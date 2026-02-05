@@ -9,7 +9,7 @@ pub struct ChunkHolder {
     pub occupied: NodeKey,
     pub occupied_by: EdgeKey,
     pub public: bool,
-    pub tasks: [NodeKey; 9],
+    pub tasks: [NodeKey; 10],
 }
 
 impl Default for ChunkHolder {
@@ -21,7 +21,7 @@ impl Default for ChunkHolder {
             occupied: NodeKey::null(),
             occupied_by: EdgeKey::null(),
             public: false,
-            tasks: [NodeKey::null(); 9],
+            tasks: [NodeKey::null(); 10],
         }
     }
 }

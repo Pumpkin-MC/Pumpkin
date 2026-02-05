@@ -354,12 +354,15 @@ impl Cache {
             ),
             StagedChunkEnum::Features => {
                 ProtoChunk::generate_features_and_structure(self, block_registry, random_config);
+            }
+            StagedChunkEnum::Lighting => {
                 let mut engine = crate::lighting::LightEngine::new();
                 engine.initialize_light(self);
+                self.chunks[mid].get_proto_chunk_mut().stage = StagedChunkEnum::Lighting;
             }
             StagedChunkEnum::Full => {
                 let chunk = self.chunks[mid].get_proto_chunk_mut();
-                debug_assert_eq!(chunk.stage, StagedChunkEnum::Features);
+                debug_assert_eq!(chunk.stage, StagedChunkEnum::Lighting);
                 chunk.stage = StagedChunkEnum::Full;
                 self.chunks[mid].upgrade_to_level_chunk(&dimension);
             }

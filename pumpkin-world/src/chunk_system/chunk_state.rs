@@ -23,8 +23,10 @@ pub enum StagedChunkEnum {
     Noise,
     /// Chunk with surface built, ready for features and structures
     Surface, // SURFACE CARVERS
-    /// Chunk with features and structures, ready for finalization
-    Features, // FEATURES INITIALIZE_LIGHT LIGHT SPAWN
+    /// Chunk with features and structures, ready for lighting
+    Features, // FEATURES SPAWN
+    /// Chunk with lighting calculated, ready for finalization
+    Lighting, // INITIALIZE_LIGHT LIGHT
     /// Fully generated chunk
     Full,
 }
@@ -39,7 +41,8 @@ impl From<u8> for StagedChunkEnum {
             5 => Self::Noise,
             6 => Self::Surface,
             7 => Self::Features,
-            8 => Self::Full,
+            8 => Self::Lighting,
+            9 => Self::Full,
             _ => panic!(),
         }
     }
@@ -56,9 +59,9 @@ impl From<ChunkStatus> for StagedChunkEnum {
             ChunkStatus::Surface => Self::Surface,
             ChunkStatus::Carvers => Self::Surface,
             ChunkStatus::Features => Self::Features,
-            ChunkStatus::InitializeLight => Self::Features,
-            ChunkStatus::Light => Self::Features,
             ChunkStatus::Spawn => Self::Features,
+            ChunkStatus::InitializeLight => Self::Lighting,
+            ChunkStatus::Light => Self::Lighting,
             ChunkStatus::Full => Self::Full,
         }
     }
@@ -74,6 +77,7 @@ impl From<StagedChunkEnum> for ChunkStatus {
             StagedChunkEnum::Noise => Self::Noise,
             StagedChunkEnum::Surface => Self::Surface,
             StagedChunkEnum::Features => Self::Features,
+            StagedChunkEnum::Lighting => Self::Light,
             StagedChunkEnum::Full => Self::Full,
             _ => panic!(),
         }
@@ -92,7 +96,7 @@ impl StagedChunkEnum {
             Self::None
         }
     }
-    pub const FULL_DEPENDENCIES: &'static [Self] = &[Self::Full, Self::Features, Self::Surface];
+    pub const FULL_DEPENDENCIES: &'static [Self] = &[Self::Full, Self::Lighting, Self::Features, Self::Surface];
     pub const FULL_RADIUS: i32 = 2;
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
@@ -104,6 +108,7 @@ impl StagedChunkEnum {
             Self::Noise => 0,
             Self::Surface => 0,
             Self::Features => 1,
+            Self::Lighting => 1,
             Self::Full => 1,
             _ => panic!(),
         }
@@ -118,6 +123,7 @@ impl StagedChunkEnum {
             Self::Noise => 0,
             Self::Surface => 0,
             Self::Features => 1,
+            Self::Lighting => 1,
             Self::Full => 0,
             _ => panic!(),
         }
@@ -132,7 +138,8 @@ impl StagedChunkEnum {
             Self::Noise => &[Self::StructureReferences],
             Self::Surface => &[Self::Noise],
             Self::Features => &[Self::Surface, Self::Surface],
-            Self::Full => &[Self::Features, Self::Features],
+            Self::Lighting => &[Self::Features, Self::Features],
+            Self::Full => &[Self::Lighting, Self::Lighting],
             _ => panic!(),
         }
     }
@@ -147,7 +154,7 @@ impl Chunk {
     pub fn get_stage_id(&self) -> u8 {
         match self {
             Self::Proto(data) => data.stage_id(),
-            Self::Level(_) => 8,
+            Self::Level(_) => 9,
         }
     }
     pub fn get_proto_chunk_mut(&mut self) -> &mut ProtoChunk {
