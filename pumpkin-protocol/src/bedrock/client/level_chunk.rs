@@ -26,7 +26,7 @@ impl PacketWrite for CLevelChunk<'_> {
         VarInt(self.chunk.z).write(writer)?;
 
         VarInt(self.dimension).write(writer)?;
-        let sub_chunk_count = self.chunk.section.sections.len() as u32;
+        let sub_chunk_count = self.chunk.section.sections.lock().unwrap().len() as u32;
         assert_eq!(sub_chunk_count, 24);
         VarUInt(sub_chunk_count).write(writer)?;
         self.cache_enabled.write(writer)?;
@@ -37,7 +37,15 @@ impl PacketWrite for CLevelChunk<'_> {
         let min_y = (self.chunk.section.min_y >> 4) as i8;
 
         // Blocks
-        for (i, sub_chunk) in self.chunk.section.sections.iter().enumerate() {
+        for (i, sub_chunk) in self
+            .chunk
+            .section
+            .sections
+            .lock()
+            .unwrap()
+            .iter()
+            .enumerate()
+        {
             // Version 9
             // [version:byte][num_storages:byte][sub_chunk_index:byte][block storage1]...[blockStorageN]
             let y = i as i8 + min_y;
