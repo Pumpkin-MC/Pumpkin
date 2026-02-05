@@ -55,13 +55,31 @@ trait CropBlockBase: PlantBlockBase {
         if age < self.max_age() {
             let f = get_available_moisture(world, pos, block).await;
             if rand::rng().random_range(0..=(25.0 / f).floor() as i64) == 0 {
-                world
-                    .set_block_state(
-                        pos,
-                        self.state_with_age(block, state, age + 1),
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
+                let new_state_id = self.state_with_age(block, state, age + 1);
+                if let Some(server) = world.server.upgrade() {
+                    let event = crate::plugin::block::block_grow::BlockGrowEvent::new(
+                        block,
+                        block,
+                        *pos,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                    let final_state_id = if event.new_block != block {
+                        event.new_block.default_state.id
+                    } else {
+                        new_state_id
+                    };
+                    world
+                        .set_block_state(pos, final_state_id, BlockFlags::NOTIFY_NEIGHBORS)
+                        .await;
+                } else {
+                    world
+                        .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
+                        .await;
+                }
             }
         }
     }
