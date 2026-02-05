@@ -29,7 +29,7 @@ pub struct BoatEntity {
 }
 
 impl BoatEntity {
-    pub fn new(entity: Entity) -> Self {
+    pub const fn new(entity: Entity) -> Self {
         Self {
             entity,
             damage_wobble_ticks: AtomicI32::new(0),
@@ -61,7 +61,7 @@ impl BoatEntity {
             .await;
     }
 
-    fn entity_to_item(entity_type: &EntityType) -> &'static Item {
+    const fn entity_to_item(entity_type: &EntityType) -> &'static Item {
         match entity_type.id {
             val if val == EntityType::OAK_BOAT.id => &Item::OAK_BOAT,
             val if val == EntityType::OAK_CHEST_BOAT.id => &Item::OAK_CHEST_BOAT,
@@ -260,7 +260,7 @@ impl EntityBase for BoatEntity {
         })
     }
 
-    fn set_paddle_state<'a>(&'a self, left: bool, right: bool) -> EntityBaseFuture<'a, ()> {
+    fn set_paddle_state(&self, left: bool, right: bool) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             self.set_paddles(left, right).await;
         })

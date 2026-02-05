@@ -46,7 +46,7 @@ impl BoatItem {
     }
 
     /// Gets entity dimensions for the boat type
-    fn get_entity_dimensions(entity_type: &EntityType) -> EntityDimensions {
+    const fn get_entity_dimensions(entity_type: &EntityType) -> EntityDimensions {
         EntityDimensions::new(
             entity_type.dimension[0],
             entity_type.dimension[1],
@@ -120,22 +120,11 @@ impl ItemBehaviour for BoatItem {
             // Calculate hit position - center of the block top or water surface
             // TODO: Vanilla uses exact raycast intersection point (hitResult.getPos()),
             // Pumpkin's raycast only returns block positions.
-            let hit_state_id = world.get_block_state_id(&hit_pos).await;
-            let hit_vec = if Fluid::from_state_id(hit_state_id).is_some() {
-                // Place on water surface (top of the fluid block)
-                Vector3::new(
-                    f64::from(hit_pos.0.x) + 0.5,
-                    f64::from(hit_pos.0.y) + 1.0,
-                    f64::from(hit_pos.0.z) + 0.5,
-                )
-            } else {
-                // Place on top of solid block
-                Vector3::new(
-                    f64::from(hit_pos.0.x) + 0.5,
-                    f64::from(hit_pos.0.y) + 1.0,
-                    f64::from(hit_pos.0.z) + 0.5,
-                )
-            };
+            let hit_vec = Vector3::new(
+                f64::from(hit_pos.0.x) + 0.5,
+                f64::from(hit_pos.0.y) + 1.0,
+                f64::from(hit_pos.0.z) + 0.5,
+            );
 
             // Vanilla: Check for entities in the path that would block placement
             // Get player's rotation vector stretched by 5.0 and expanded by 1.0
