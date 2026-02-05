@@ -12,6 +12,7 @@ pub(crate) fn build() -> TokenStream {
         (MinecraftVersion::V_1_21_5, "1_21_5_tracked_data.json"),
         (MinecraftVersion::V_1_21_6, "1_21_6_tracked_data.json"),
         (MinecraftVersion::V_1_21_7, "1_21_7_tracked_data.json"),
+        (MinecraftVersion::V_1_21_9, "1_21_9_tracked_data.json"),
         (MinecraftVersion::V_1_21_11, "1_21_11_tracked_data.json"),
     ];
 

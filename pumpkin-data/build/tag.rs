@@ -77,6 +77,7 @@ pub(crate) fn build() -> TokenStream {
         (MinecraftVersion::V_1_21_4, "1_21_4_tags.json"),
         (MinecraftVersion::V_1_21_5, "1_21_5_tags.json"),
         (MinecraftVersion::V_1_21_6, "1_21_6_tags.json"),
+        (MinecraftVersion::V_1_21_7, "1_21_7_tags.json"),
         (MinecraftVersion::V_1_21_9, "1_21_9_tags.json"),
         (MinecraftVersion::V_1_21_11, "1_21_11_tags.json"),
     ];

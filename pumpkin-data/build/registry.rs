@@ -13,6 +13,7 @@ pub(crate) fn build() -> TokenStream {
         (MinecraftVersion::V_1_21_4, "1_21_4_synced_registries.json"),
         (MinecraftVersion::V_1_21_5, "1_21_5_synced_registries.json"),
         (MinecraftVersion::V_1_21_6, "1_21_6_synced_registries.json"),
+        (MinecraftVersion::V_1_21_7, "1_21_7_synced_registries.json"),
         (MinecraftVersion::V_1_21_9, "1_21_9_synced_registries.json"),
         (
             MinecraftVersion::V_1_21_11,
