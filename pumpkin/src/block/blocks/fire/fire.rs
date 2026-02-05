@@ -138,7 +138,7 @@ impl FireBlock {
             }
 
             if block == &Block::TNT {
-                TNTBlock::prime(world, pos).await;
+                let _ = TNTBlock::prime(world, pos, "FIRE".to_string(), None).await;
             }
         }
     }

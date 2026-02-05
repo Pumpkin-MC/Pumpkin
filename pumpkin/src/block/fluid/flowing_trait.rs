@@ -1,5 +1,6 @@
 use super::{pathfinder, physics};
 use crate::{block::BlockFuture, world::World};
+use crate::plugin::block::fluid_level_change::FluidLevelChangeEvent;
 use pumpkin_data::{
     Block, BlockDirection,
     fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
@@ -103,9 +104,15 @@ pub trait FlowingFluid: Send + Sync {
                     let new_state_id = new_state.to_state_id(fluid);
 
                     if new_state_id != current_block_state_id {
-                        world
-                            .set_block_state(block_pos, new_state_id, BlockFlags::NOTIFY_ALL)
-                            .await;
+                        if let Some(target_state_id) =
+                            fire_fluid_level_change(world, block_pos, new_state_id).await
+                        {
+                            world
+                                .set_block_state(block_pos, target_state_id, BlockFlags::NOTIFY_ALL)
+                                .await;
+                        } else {
+                            return;
+                        }
 
                         // Schedule next tick for this position
                         let tick_delay = self.get_flow_speed(world);
@@ -123,13 +130,21 @@ pub trait FlowingFluid: Send + Sync {
                     state_for_spreading = new_state;
                 } else {
                     if !waterlogged {
-                        world
-                            .set_block_state(
-                                block_pos,
-                                Block::AIR.default_state.id,
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
+                        if let Some(target_state_id) = fire_fluid_level_change(
+                            world,
+                            block_pos,
+                            Block::AIR.default_state.id,
+                        )
+                        .await
+                        {
+                            world
+                                .set_block_state(
+                                    block_pos,
+                                    target_state_id,
+                                    BlockFlags::NOTIFY_ALL,
+                                )
+                                .await;
+                        }
                     }
                     return; // Don't spread if fluid is gone
                 }
@@ -347,9 +362,15 @@ pub trait FlowingFluid: Send + Sync {
                     if should_convert {
                         let source_props = self.get_source(fluid, false);
                         let source_state_id = source_props.to_state_id(fluid);
-                        world
-                            .set_block_state(pos, source_state_id, BlockFlags::NOTIFY_ALL)
-                            .await;
+                        if let Some(target_state_id) =
+                            fire_fluid_level_change(world, pos, source_state_id).await
+                        {
+                            world
+                                .set_block_state(pos, target_state_id, BlockFlags::NOTIFY_ALL)
+                                .await;
+                        } else {
+                            return;
+                        }
 
                         // Sources don't need ticks
                         return;
@@ -373,9 +394,13 @@ pub trait FlowingFluid: Send + Sync {
                 }
             }
 
-            world
-                .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
-                .await;
+            if let Some(target_state_id) = fire_fluid_level_change(world, pos, state_id).await {
+                world
+                    .set_block_state(pos, target_state_id, BlockFlags::NOTIFY_ALL)
+                    .await;
+            } else {
+                return;
+            }
 
             // Check for infinite source formation after placing new fluid
             if self.can_convert_to_source(world) {
@@ -386,9 +411,15 @@ pub trait FlowingFluid: Send + Sync {
                 if should_convert {
                     let source_props = self.get_source(fluid, false);
                     let source_state_id = source_props.to_state_id(fluid);
-                    world
-                        .set_block_state(pos, source_state_id, BlockFlags::NOTIFY_ALL)
-                        .await;
+                    if let Some(target_state_id) =
+                        fire_fluid_level_change(world, pos, source_state_id).await
+                    {
+                        world
+                            .set_block_state(pos, target_state_id, BlockFlags::NOTIFY_ALL)
+                            .await;
+                    } else {
+                        return;
+                    }
 
                     // Sources don't need ticks
                     return;
@@ -511,5 +542,24 @@ pub trait FlowingFluid: Send + Sync {
                 self.spread_to(world, fluid, &side_pos, state_id).await;
             }
         }
+    }
+}
+
+async fn fire_fluid_level_change(
+    world: &Arc<World>,
+    pos: &BlockPos,
+    new_state_id: BlockStateId,
+) -> Option<BlockStateId> {
+    let Some(server) = world.server.upgrade() else {
+        return Some(new_state_id);
+    };
+
+    let block = world.get_block(pos).await;
+    let event = FluidLevelChangeEvent::new(block, *pos, world.uuid, new_state_id);
+    let event = server.plugin_manager.fire(event).await;
+    if event.cancelled {
+        None
+    } else {
+        Some(event.new_state_id)
     }
 }

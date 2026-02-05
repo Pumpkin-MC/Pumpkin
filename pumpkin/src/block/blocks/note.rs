@@ -20,6 +20,7 @@ use crate::{
     block::{BlockBehaviour, OnSyncedBlockEventArgs},
     world::World,
 };
+use crate::plugin::block::note_play::NotePlayEvent;
 
 use super::redstone::block_receives_redstone_power;
 
@@ -124,10 +125,26 @@ impl BlockBehaviour for NoteBlock {
         Box::pin(async move {
             let block_state = args.world.get_block_state(args.position).await;
             let note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
-            let instrument = note_props.instrument;
+            let mut instrument = note_props.instrument;
+            let mut note = note_props.note.to_index() as u8;
+            if let Some(server) = args.world.server.upgrade() {
+                let event = NotePlayEvent::new(
+                    args.block,
+                    *args.position,
+                    args.world.uuid,
+                    instrument,
+                    note,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return false;
+                }
+                instrument = event.instrument;
+                note = event.note.min(24);
+            }
             let pitch = if is_base_block(instrument) {
                 // checks if can be pitched
-                Self::get_note_pitch(note_props.note.to_index())
+                Self::get_note_pitch(note.into())
             } else {
                 1.0 // default pitch
             };

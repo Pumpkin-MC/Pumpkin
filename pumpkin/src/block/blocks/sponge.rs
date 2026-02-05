@@ -10,6 +10,7 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use crate::plugin::block::sponge_absorb::SpongeAbsorbEvent;
 
 #[pumpkin_block("minecraft:sponge")]
 pub struct SpongeBlock;
@@ -67,6 +68,18 @@ impl SpongeBlock {
         if water_blocks.is_empty() {
             false
         } else {
+            if let Some(server) = world.server.upgrade() {
+                let event =
+                    SpongeAbsorbEvent::new(&Block::SPONGE, *position, world.uuid, water_blocks);
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return false;
+                }
+                water_blocks = event.blocks;
+            }
+            if water_blocks.is_empty() {
+                return false;
+            }
             for water_pos in &water_blocks {
                 world
                     .set_block_state(water_pos, 0, BlockFlags::NOTIFY_ALL)
