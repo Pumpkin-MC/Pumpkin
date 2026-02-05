@@ -846,6 +846,7 @@ impl World {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     #[instrument(skip(self), fields(loaded_chunks_length = tracing::field::Empty, num_tasks = tracing::field::Empty))]
     /// Calculate Block-, Fluid- and Randomticks and write into the `tick_data` field
     pub async fn calculate_tick_data(&self) {
@@ -887,13 +888,19 @@ impl World {
 
         async {
             for chunk in cloned_chunks.drain(..) {
-                if worker_pool.is_empty() {
-                    let filled = set.join_next().await.unwrap().unwrap();
-                    worker_pool.push(filled);
-                }
+                let mut batch = if let Some(batch) = worker_pool.pop() {
+                    batch
+                } else {
+                    let mut filled: TickBatch = set.join_next().await.unwrap().unwrap();
 
-                let mut batch = worker_pool.pop().unwrap();
-                batch.clear();
+                    block_ticks.append(&mut filled.block_ticks);
+                    fluid_ticks.append(&mut filled.fluid_ticks);
+                    random_ticks.append(&mut filled.random_ticks);
+                    block_entities.append(&mut filled.block_entities);
+
+                    filled
+                };
+
                 set.spawn(async move {
                     let mut rng = SmallRng::from_rng(&mut rand::rng());
                     let mut chunk = chunk.write().await;
