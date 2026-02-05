@@ -30,7 +30,8 @@ impl ClientPacket for CLightUpdate<'_> {
 
         // Light masks include sections from -1 (below world) to num_sections (above world)
         // This means we need to account for 2 extra sections in the bitset
-        let num_sections = self.0.light_engine.sky_light.len();
+        let light_engine = self.0.light_engine.lock().unwrap();
+        let num_sections = light_engine.sky_light.len();
 
         let mut sky_light_empty_mask = 0u64;
         let mut block_light_empty_mask = 0u64;
@@ -41,13 +42,13 @@ impl ClientPacket for CLightUpdate<'_> {
         for section_index in 0..num_sections {
             let bit_index = section_index;
 
-            if let LightContainer::Full(_) = &self.0.light_engine.sky_light[section_index] {
+            if let LightContainer::Full(_) = &light_engine.sky_light[section_index] {
                 sky_light_mask |= 1 << bit_index;
             } else {
                 sky_light_empty_mask |= 1 << bit_index;
             }
 
-            if let LightContainer::Full(_) = &self.0.light_engine.block_light[section_index] {
+            if let LightContainer::Full(_) = &light_engine.block_light[section_index] {
                 block_light_mask |= 1 << bit_index;
             } else {
                 block_light_empty_mask |= 1 << bit_index;
@@ -72,12 +73,12 @@ impl ClientPacket for CLightUpdate<'_> {
         // Write Sky Light arrays
         write.write_var_int(&VarInt(sky_light_mask.count_ones() as i32))?;
         for section_index in 0..num_sections {
-            if let LightContainer::Full(data) = &self.0.light_engine.sky_light[section_index] {
+            if let LightContainer::Full(data) = &light_engine.sky_light[section_index] {
                 // Ensure network nibble ordering matches client expectations
                 // by swapping high/low nibbles per byte.
                 write.write_var_int(&light_data_size)?;
                 let mut swapped = Vec::with_capacity(data.len());
-                for b in data {
+                for &b in data.iter() {
                     swapped.push(b.rotate_right(4));
                 }
                 write.write_slice(&swapped)?;
@@ -87,10 +88,10 @@ impl ClientPacket for CLightUpdate<'_> {
         // Write Block Light arrays
         write.write_var_int(&VarInt(block_light_mask.count_ones() as i32))?;
         for section_index in 0..num_sections {
-            if let LightContainer::Full(data) = &self.0.light_engine.block_light[section_index] {
+            if let LightContainer::Full(data) = &light_engine.block_light[section_index] {
                 write.write_var_int(&light_data_size)?;
                 let mut swapped = Vec::with_capacity(data.len());
-                for b in data {
+                for &b in data.iter() {
                     swapped.push(b.rotate_right(4));
                 }
                 write.write_slice(&swapped)?;

@@ -35,7 +35,7 @@ impl<D: Send, E: error::Error> LoadedData<D, E> {
 
 pub trait Dirtiable {
     fn is_dirty(&self) -> bool;
-    fn mark_dirty(&mut self, flag: bool);
+    fn mark_dirty(&self, flag: bool);
 }
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

@@ -11,7 +11,6 @@ pub struct Packets {
 }
 
 pub(crate) fn build() -> TokenStream {
-    // 1. Track the JSON assets for rebuilds
     println!("cargo:rerun-if-changed=../assets/packet/1_21_7_packets.json");
     println!("cargo:rerun-if-changed=../assets/packet/1_21_11_packets.json");
 

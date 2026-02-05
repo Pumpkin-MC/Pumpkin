@@ -163,15 +163,11 @@ impl GenerationCache for Cache {
             return RawBlockState::AIR;
         }
         match &self.chunks[(dx * self.size + dz) as usize] {
-            Chunk::Level(data) => {
-                let chunk = data.blocking_read();
-                RawBlockState(
-                    chunk
-                        .section
-                        .get_block_absolute_y((pos.x & 15) as usize, pos.y, (pos.z & 15) as usize)
-                        .unwrap_or(0),
-                )
-            }
+            Chunk::Level(data) => RawBlockState(
+                data.section
+                    .get_block_absolute_y((pos.x & 15) as usize, pos.y, (pos.z & 15) as usize)
+                    .unwrap_or(0),
+            ),
             Chunk::Proto(data) => data.get_block_state(pos),
         }
     }
@@ -192,8 +188,7 @@ impl GenerationCache for Cache {
         }
         match &mut self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(data) => {
-                let mut chunk = data.blocking_write();
-                chunk.section.set_block_absolute_y(
+                data.section.set_block_absolute_y(
                     (pos.x & 15) as usize,
                     pos.y,
                     (pos.z & 15) as usize,
@@ -226,13 +221,10 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let chunk = data.blocking_read();
-                chunk.heightmap.get(
-                    ChunkHeightmapType::MotionBlocking,
-                    x,
-                    z,
-                    chunk.section.min_y,
-                )
+                let heightmap = data.heightmap.lock().unwrap();
+                let min_y = data.section.min_y;
+
+                heightmap.get(ChunkHeightmapType::MotionBlocking, x, z, min_y)
             }
             Chunk::Proto(data) => data.top_motion_blocking_block_height_exclusive(x, z),
         }
@@ -245,13 +237,9 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let chunk = data.blocking_read();
-                chunk.heightmap.get(
-                    ChunkHeightmapType::MotionBlockingNoLeaves,
-                    x,
-                    z,
-                    chunk.section.min_y,
-                )
+                let heightmap = data.heightmap.lock().unwrap();
+                let min_y = data.section.min_y;
+                heightmap.get(ChunkHeightmapType::MotionBlockingNoLeaves, x, z, min_y)
             }
             Chunk::Proto(data) => data.top_motion_blocking_block_no_leaves_height_exclusive(x, z),
         }
@@ -264,10 +252,9 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let chunk = data.blocking_read();
-                chunk
-                    .heightmap
-                    .get(ChunkHeightmapType::WorldSurface, x, z, chunk.section.min_y) // can we return this?
+                let heightmap = data.heightmap.lock().unwrap();
+                let min_y = data.section.min_y;
+                heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y) // can we return this?
             }
             Chunk::Proto(data) => data.top_block_height_exclusive(x, z),
         }
@@ -295,8 +282,7 @@ impl GenerationCache for Cache {
             Chunk::Level(data) => {
                 // Could this happen?
                 Biome::from_id(
-                    data.blocking_read()
-                        .section
+                    data.section
                         .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
                         .unwrap_or(0),
                 )

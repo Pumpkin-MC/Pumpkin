@@ -1,5 +1,7 @@
 use std::sync::{Arc, atomic::Ordering};
 
+use pumpkin_macros::pumpkin_block;
+
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs,
@@ -16,7 +18,6 @@ use pumpkin_data::{
     tag::Taggable,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
-use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_world::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,

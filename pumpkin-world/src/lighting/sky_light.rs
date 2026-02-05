@@ -8,6 +8,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::HeightMap;
 use std::collections::{VecDeque, HashSet, HashMap};
+use std::sync::atomic::Ordering::Relaxed;
 
 pub struct SkyLightEngine {
     pub(crate) queue: VecDeque<BlockPos>,
@@ -96,20 +97,33 @@ impl SkyLightEngine {
                                 }
                             }
                             Chunk::Level(c) => {
-                                let mut write = c.blocking_write();
-                                if section < write.light_engine.sky_light.len() {
+                                let mut light_engine = c.light_engine.lock().unwrap();
+                                let mut changed = false;
+                                let section_idx = section as usize;
+
+                                if section_idx < light_engine.sky_light.len() {
                                     for yy in y..end {
                                         let local_y = (yy & 15) as usize;
-                                        let cur = write.light_engine.sky_light[section].get(local_x, local_y, local_z);
+                                        
+                                        // Access the specific section
+                                        let light_section = &mut light_engine.sky_light[section_idx];
+                                        let cur = light_section.get(local_x, local_y, local_z);
+                                        
                                         if cur != 15 {
-                                            write.light_engine.sky_light[section].set(local_x, local_y, local_z, 15);
-                                            write.dirty = true;
+                                            light_section.set(local_x, local_y, local_z, 15);
+                                            changed = true;
+                                            
                                             let pos = BlockPos(Vector3::new(x, yy, z));
                                             if self.visited.insert(pos) {
                                                 self.queue.push_back(pos);
                                             }
                                         }
                                     }
+                                }
+                                
+                                // If any block light changed, mark the chunk as dirty
+                                if changed {
+                                    c.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
                                 }
                             }
                         }
@@ -165,21 +179,31 @@ impl SkyLightEngine {
                                 }
                             }
                             Chunk::Level(c) => {
-                                let mut write = c.blocking_write();
-                                if section < write.light_engine.sky_light.len() {
+                                let mut light_engine = c.light_engine.lock().unwrap();
+                                let mut changed = false;
+                                let section_idx = section as usize;
+
+                                if section_idx < light_engine.sky_light.len() {
                                     for (i, &opacity) in opacities.iter().enumerate().rev() {
                                         let yy = start + i as i32;
                                         if opacity > 0 {
                                             light = light.saturating_sub(opacity as i32);
                                             if light <= 0 {
+                                                // Break out of the loop
                                                 break 'down;
                                             }
                                         }
+                                        
                                         let local_y = (yy & 15) as usize;
-                                        let cur = write.light_engine.sky_light[section].get(local_x, local_y, local_z);
+                                        
+                                        // Access the container from the locked engine
+                                        let light_section = &mut light_engine.sky_light[section_idx];
+                                        let cur = light_section.get(local_x, local_y, local_z);
+                                        
                                         if cur != (light as u8) {
-                                            write.light_engine.sky_light[section].set(local_x, local_y, local_z, light as u8);
-                                            write.dirty = true;
+                                            light_section.set(local_x, local_y, local_z, light as u8);
+                                            changed = true;
+                                            
                                             let pos = BlockPos(Vector3::new(x, yy, z));
                                             if self.visited.insert(pos) {
                                                 self.queue.push_back(pos);
@@ -188,6 +212,11 @@ impl SkyLightEngine {
                                     }
                                 } else {
                                     break 'down;
+                                }
+
+                                // Mark dirty if any light levels were updated
+                                if changed {
+                                    c.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
                                 }
                             }
                         }
@@ -441,16 +470,23 @@ impl SkyLightEngine {
             
             match &mut cache.chunks[idx] {
                 Chunk::Level(c) => {
-                    let mut write = c.blocking_write();
+                    let mut light_engine = c.light_engine.lock().unwrap();
+                    let mut changed = false;
+
                     for (pos, level) in updates {
                         let section_y = ((pos.0.y - bottom_y) >> 4) as usize;
-                        if section_y < write.light_engine.sky_light.len() {
+                        if section_y < light_engine.sky_light.len() {
                             let x = (pos.0.x & 15) as usize;
                             let y = (pos.0.y & 15) as usize;
                             let z = (pos.0.z & 15) as usize;
-                            write.light_engine.sky_light[section_y].set(x, y, z, level);
-                            write.dirty = true;
+                            
+                            light_engine.sky_light[section_y].set(x, y, z, level);
+                            changed = true;
                         }
+                    }
+                    
+                    if changed {
+                        c.dirty.store(true, Relaxed);
                     }
                 }
                 Chunk::Proto(c) => {

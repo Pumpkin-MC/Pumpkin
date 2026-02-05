@@ -1,13 +1,14 @@
-use crate::chunk::{ChunkData, ChunkSections, SubChunk};
+use crate::chunk::{ChunkData, ChunkSections};
 use crate::generation::biome_coords;
 use pumpkin_data::dimension::Dimension;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use crate::ProtoChunk;
 use crate::level::SyncChunk;
-use tokio::sync::RwLock;
 
 use pumpkin_data::chunk::ChunkStatus;
+use std::sync::Mutex;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -173,10 +174,7 @@ impl Chunk {
         let proto_chunk = self.get_proto_chunk();
 
         let total_sections = dimension.height as usize / 16;
-        let mut sections = ChunkSections::new(
-            vec![SubChunk::default(); total_sections].into_boxed_slice(),
-            dimension.min_y,
-        );
+        let sections = ChunkSections::new(total_sections, dimension.min_y);
 
         let proto_biome_height = biome_coords::from_block(proto_chunk.height());
         let biome_min_y = biome_coords::from_block(dimension.min_y);
@@ -185,13 +183,18 @@ impl Chunk {
             let section_index = y_offset as usize / 4;
             let relative_y = y_offset as usize % 4;
 
-            if let Some(section) = sections.sections.get_mut(section_index) {
+            if let Some(section) = sections
+                .biome_sections
+                .write()
+                .unwrap()
+                .get_mut(section_index)
+            {
                 let absolute_biome_y = biome_min_y + y_offset as i32;
 
                 for z in 0..4 {
                     for x in 0..4 {
                         let biome = proto_chunk.get_biome_id(x as i32, absolute_biome_y, z as i32);
-                        section.biomes.set(x, relative_y, z, biome);
+                        section.set(x, relative_y, z, biome);
                     }
                 }
             }
@@ -203,31 +206,36 @@ impl Chunk {
             let section_index = (y_offset as usize) / 16;
             let relative_y = (y_offset as usize) % 16;
 
-            if let Some(section) = sections.sections.get_mut(section_index) {
+            if let Some(section) = sections
+                .block_sections
+                .write()
+                .unwrap()
+                .get_mut(section_index)
+            {
                 for z in 0..16 {
                     for x in 0..16 {
                         let block =
                             proto_chunk.get_block_state_raw(x as i32, y_offset as i32, z as i32);
-                        section.block_states.set(x, relative_y, z, block);
+                        section.set(x, relative_y, z, block);
                     }
                 }
             }
         }
 
         let mut chunk = ChunkData {
-            light_engine: proto_chunk.light.clone(),
+            light_engine: Mutex::new(proto_chunk.light.clone()),
             section: sections,
             heightmap: Default::default(),
             x: proto_chunk.x,
             z: proto_chunk.z,
-            dirty: true,
+            dirty: AtomicBool::new(true),
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),
             block_entities: Default::default(),
             status: proto_chunk.stage.into(),
         };
 
-        chunk.heightmap = chunk.calculate_heightmap();
-        *self = Self::Level(Arc::new(RwLock::new(chunk)));
+        chunk.heightmap = Mutex::new(chunk.calculate_heightmap());
+        *self = Self::Level(Arc::new(chunk));
     }
 }

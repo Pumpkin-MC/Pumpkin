@@ -146,22 +146,28 @@ impl GenerationSchedule {
     fn apply_lighting_override(&self, chunk: &SyncChunk) {
         match self.lighting_config {
             LightingEngineConfig::Full => {
-                let mut chunk = chunk.blocking_write();
-                for section in chunk.light_engine.block_light.iter_mut() {
+                let mut engine = chunk.light_engine.lock().unwrap();
+            
+                for section in engine.block_light.iter_mut() {
                     section.fill(15);
                 }
-                for section in chunk.light_engine.sky_light.iter_mut() {
+                for section in engine.sky_light.iter_mut() {
                     section.fill(15);
                 }
+
+                chunk.dirty.store(true, Relaxed);
             }
             LightingEngineConfig::Dark => {
-                let mut chunk = chunk.blocking_write();
-                for section in chunk.light_engine.block_light.iter_mut() {
+                let mut engine = chunk.light_engine.lock().unwrap();
+            
+                for section in engine.block_light.iter_mut() {
                     section.fill(0);
                 }
-                for section in chunk.light_engine.sky_light.iter_mut() {
+                for section in engine.sky_light.iter_mut() {
                     section.fill(0);
                 }
+
+                chunk.dirty.store(true, Relaxed);
             }
             _ => {}
         }
@@ -414,8 +420,7 @@ impl GenerationSchedule {
                 match chunk {
                     Chunk::Level(sync_chunk) => {
                         // Only save level chunks that are marked dirty
-                        let dirty = sync_chunk.blocking_read().dirty;
-                        if dirty {
+                        if sync_chunk.dirty.load(Relaxed) {
                             chunks.push((*pos, Chunk::Level(sync_chunk.clone())));
                         }
                     }

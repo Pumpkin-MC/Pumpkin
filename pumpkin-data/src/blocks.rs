@@ -99,7 +99,7 @@ impl FromResourceLocation for &'static Block {
     fn from_resource_location(resource_location: &ResourceLocation) -> Option<Self> {
         Block::from_registry_key(
             resource_location
-                .strip_prefix(resource_location)
+                .strip_prefix("minecraft:")
                 .unwrap_or(resource_location),
         )
     }

@@ -7,6 +7,7 @@ use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::collections::{VecDeque, HashSet, HashMap};
+use std::sync::atomic::Ordering::Relaxed;
 
 pub struct BlockLightEngine {
     pub(crate) queue: VecDeque<BlockPos>,
@@ -306,33 +307,47 @@ impl BlockLightEngine {
         for ((chunk_x, chunk_z), updates) in pending_updates.drain() {
             let rel_x = chunk_x - cache.x;
             let rel_z = chunk_z - cache.z;
+            
+            // Bounds check
             if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
                 continue;
             }
+            
             let idx = (rel_x * cache.size + rel_z) as usize;
             
             match &mut cache.chunks[idx] {
                 Chunk::Level(c) => {
-                    let mut write = c.blocking_write();
+                    // Lock once per chunk update batch
+                    let mut light_engine = c.light_engine.lock().unwrap();
+                    let mut changed = false;
+
                     for (pos, level) in updates {
                         let section_y = ((pos.0.y - bottom_y) >> 4) as usize;
-                        if section_y < write.light_engine.block_light.len() {
+                        // Using .get_mut() or checking bounds on the engine
+                        if let Some(section) = light_engine.block_light.get_mut(section_y) {
                             let x = (pos.0.x & 15) as usize;
                             let y = (pos.0.y & 15) as usize;
                             let z = (pos.0.z & 15) as usize;
-                            write.light_engine.block_light[section_y].set(x, y, z, level);
-                            write.dirty = true;
+                            
+                            section.set(x, y, z, level);
+                            changed = true;
                         }
+                    }
+
+                    // Store dirty flag only if we actually changed something
+                    if changed {
+                        c.dirty.store(true, Relaxed);
                     }
                 }
                 Chunk::Proto(c) => {
+                    // ProtoChunks are typically owned locally, no locks needed
                     for (pos, level) in updates {
                         let section_y = ((pos.0.y - bottom_y) >> 4) as usize;
-                        if section_y < c.light.block_light.len() {
+                        if let Some(section) = c.light.block_light.get_mut(section_y) {
                             let x = (pos.0.x & 15) as usize;
                             let y = (pos.0.y & 15) as usize;
                             let z = (pos.0.z & 15) as usize;
-                            c.light.block_light[section_y].set(x, y, z, level);
+                            section.set(x, y, z, level);
                         }
                     }
                 }

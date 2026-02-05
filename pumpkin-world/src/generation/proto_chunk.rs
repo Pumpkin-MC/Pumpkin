@@ -234,8 +234,7 @@ impl ProtoChunk {
         }
     }
 
-    #[must_use]
-    pub fn from_chunk_data(
+    pub async fn from_chunk_data(
         chunk_data: &ChunkData,
         dimension: &Dimension,
         default_block: &'static BlockState,
@@ -248,11 +247,16 @@ impl ProtoChunk {
             default_block,
             biome_mixer_seed,
         );
-        proto_chunk.light = chunk_data.light_engine.clone();
+        proto_chunk.light = chunk_data.light_engine.lock().unwrap().clone();
 
-        for (section_y, section) in chunk_data.section.sections.iter().enumerate() {
-            // 1. Calculate the base Y for this section
-            let section_base_y = section_y as i32 * 16;
+        let section_data = &chunk_data.section;
+        let heightmap_data = chunk_data.heightmap.lock().unwrap();
+
+        let block_sections_guard = section_data.block_sections.read().unwrap();
+        let biome_sections_guard = section_data.biome_sections.read().unwrap();
+
+        for (section_idx, block_palette) in block_sections_guard.iter().enumerate() {
+            let section_base_y = section_idx as i32 * 16;
 
             if section_base_y >= proto_chunk.height() as i32 {
                 continue;
@@ -261,64 +265,60 @@ impl ProtoChunk {
             for x in 0..16 {
                 for y in 0..16 {
                     for z in 0..16 {
-                        let block_state_id = section.block_states.get(x, y, z);
+                        let block_state_id = block_palette.get(x, y, z);
                         let block_state = BlockState::from_id(block_state_id);
-
-                        let absolute_y = section_base_y + y as i32 + chunk_data.section.min_y;
+                        let absolute_y = section_base_y + y as i32 + section_data.min_y;
 
                         proto_chunk.set_block_state(x as i32, absolute_y, z as i32, block_state);
                     }
                 }
             }
 
-            for x in 0..4 {
-                for y in 0..4 {
-                    for z in 0..4 {
-                        let biome_id = section.biomes.get(x, y, z);
+            if let Some(biome_palette) = biome_sections_guard.get(section_idx) {
+                for x in 0..4 {
+                    for y in 0..4 {
+                        for z in 0..4 {
+                            let biome_id = biome_palette.get(x, y, z);
 
-                        let relative_y_block = section_base_y + (y as i32 * 4);
+                            let biome_y_idx = (section_idx * 4) + y;
 
-                        let biome_y_idx = biome_coords::from_block(relative_y_block);
+                            let index = proto_chunk.local_biome_pos_to_biome_index(
+                                x as i32,
+                                biome_y_idx as i32,
+                                z as i32,
+                            );
 
-                        let index = proto_chunk.local_biome_pos_to_biome_index(
-                            x as i32,
-                            biome_y_idx,
-                            z as i32,
-                        );
-
-                        proto_chunk.flat_biome_map[index] = biome_id;
+                            proto_chunk.flat_biome_map[index] = biome_id;
+                        }
                     }
                 }
             }
         }
+        drop(block_sections_guard);
+        drop(biome_sections_guard);
 
         for z in 0..16 {
             for x in 0..16 {
-                let motion_blocking_height = chunk_data.heightmap.get(
+                let index = ((z << 4) + x) as usize;
+
+                proto_chunk.flat_motion_blocking_height_map[index] = heightmap_data.get(
                     ChunkHeightmapType::MotionBlocking,
                     x,
                     z,
-                    chunk_data.section.min_y,
-                );
-                let index = ((z << 4) + x) as usize;
-                proto_chunk.flat_motion_blocking_height_map[index] = motion_blocking_height as i16;
+                    section_data.min_y,
+                ) as i16;
 
-                let motion_blocking_no_leaves_height = chunk_data.heightmap.get(
+                proto_chunk.flat_motion_blocking_no_leaves_height_map[index] = heightmap_data.get(
                     ChunkHeightmapType::MotionBlockingNoLeaves,
                     x,
                     z,
-                    chunk_data.section.min_y,
-                );
-                proto_chunk.flat_motion_blocking_no_leaves_height_map[index] =
-                    motion_blocking_no_leaves_height as i16;
+                    section_data.min_y,
+                )
+                    as i16;
 
-                let world_surface_height = chunk_data.heightmap.get(
-                    ChunkHeightmapType::WorldSurface,
-                    x,
-                    z,
-                    chunk_data.section.min_y,
-                );
-                proto_chunk.flat_surface_height_map[index] = world_surface_height as i16;
+                proto_chunk.flat_surface_height_map[index] =
+                    heightmap_data.get(ChunkHeightmapType::WorldSurface, x, z, section_data.min_y)
+                        as i16;
             }
         }
 

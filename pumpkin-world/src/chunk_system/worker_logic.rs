@@ -27,10 +27,12 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConf
     if *config != LightingEngineConfig::Default {
         return false;
     }
+
+    let engine = chunk.light_engine.lock().expect("Mutex poisoned");
     
     // Check if all light sections are uniformly filled (all 0xFF) or empty (all 0x00)
     // This indicates the chunk was generated/saved with full or dark mode
-    let all_sky_uniform = chunk.light_engine.sky_light.iter().all(|lc| {
+    let all_sky_uniform = engine.sky_light.iter().all(|lc| {
         match lc {
             LightContainer::Full(data) => data.iter().all(|b| *b == 0xFF || *b == 0x00),
             LightContainer::Empty(0) | LightContainer::Empty(15) => true,
@@ -38,7 +40,7 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConf
         }
     });
     
-    let all_block_uniform = chunk.light_engine.block_light.iter().all(|lc| {
+    let all_block_uniform = engine.block_light.iter().all(|lc| {
         match lc {
             LightContainer::Full(data) => data.iter().all(|b| *b == 0xFF || *b == 0x00),
             LightContainer::Empty(0) | LightContainer::Empty(15) => true,
@@ -60,57 +62,46 @@ pub async fn io_read_work(
     let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
     let dimension = &level.world_gen.dimension;
     let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
-    loop {
-        let pos = match tokio::select! {
-            biased;
-            _ = level.cancel_token.cancelled() => None,
-            res = recv.recv() => match res {
-                Ok(p) => Some(p),
-                Err(_) => None,
-            }
-        } {
-            Some(p) => p,
-            None => break,
-        };
 
+    // Cleaner loop and async recv
+    while let Ok(pos) = recv.recv().await {
+        // Lock handling
         tokio::task::block_in_place(|| {
             let mut data = lock.0.lock().unwrap();
             while data.contains_key(&pos) {
                 data = lock.1.wait(data).unwrap();
             }
         });
+
         level
             .chunk_saver
             .fetch_chunks(&level.level_folder, &[pos], t_send.clone())
             .await;
-        let data = match tokio::select! {
-            biased;
-            _ = level.cancel_token.cancelled() => None,
-            res = t_recv.recv() => res,
-        } {
+
+        let data = match t_recv.recv().await {
             Some(res) => res,
             None => break,
         };
+
         match data {
             Loaded(chunk) => {
-                if chunk.read().await.status == ChunkStatus::Full {
-                    let read_guard = chunk.read().await;
-                    let needs_relight = needs_relighting(&read_guard, &level.lighting_config);
-                    
+                if chunk.status == ChunkStatus::Full {
+                    // Relighting check
+                    let needs_relight = needs_relighting(&chunk, &level.lighting_config);
+
                     if needs_relight {
-                        // Chunk has uniform lighting but server is in default mode
-                        // Need to run through Lighting stage to recalculate lighting
                         log::debug!("Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting");
+                        
+                        // Create ProtoChunk using the async method
                         let mut proto = ProtoChunk::from_chunk_data(
-                            &*read_guard,
+                            &chunk,
                             dimension,
                             level.world_gen.default_block,
                             biome_mixer_seed,
-                        );
-                        
-                        // Clear all lighting data before recalculation
-                        // The lighting engine expects to start from 0 (dark)
-                        // If we don't clear it, the old lighting will propagate incorrectly.
+                        )
+                        .await; 
+
+                        // Clear all lighting data
                         let section_count = proto.light.sky_light.len();
                         proto.light.sky_light = (0..section_count)
                             .map(|_| {
@@ -124,29 +115,33 @@ pub async fn io_read_work(
                         proto.light.block_light = (0..section_count)
                             .map(|_| LightContainer::new_filled(0))
                             .collect();
-                        
-                        // Set stage to Features so scheduler will run Lighting -> Full
+
+                        // Set stage to Features
                         proto.stage = StagedChunkEnum::Features;
-                        drop(read_guard);
-                        
+
                         if send.send((pos, RecvChunk::IO(Chunk::Proto(Box::new(proto))))).is_err() {
                             break;
                         }
                     } else {
-                        // Chunk is fully generated with proper lighting, send it as-is
-                        drop(read_guard);
-                        if send.send((pos, RecvChunk::IO(Chunk::Level(chunk)))).is_err() {
+                        // Send fully valid chunk
+                        if send
+                            .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
+                            .is_err()
+                        {
                             break;
                         }
                     }
                 } else {
-                    // debug!("io read thread receive proto chunk {pos:?}",);
-                    let val = RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
-                        &*chunk.read().await,
-                        dimension,
-                        level.world_gen.default_block,
-                        biome_mixer_seed,
-                    ))));
+                    // Standard ProtoChunk handling for non-full chunks
+                    let val = RecvChunk::IO(Chunk::Proto(Box::new(
+                        ProtoChunk::from_chunk_data(
+                            &chunk,
+                            dimension,
+                            level.world_gen.default_block,
+                            biome_mixer_seed,
+                        )
+                        .await,
+                    )));
                     if send.send((pos, val)).is_err() {
                         break;
                     }
@@ -158,6 +153,8 @@ pub async fn io_read_work(
                 log::warn!("chunk data read error pos: {pos:?}. regenerating");
             }
         }
+
+        // Final send for missing/error cases (regenerate)
         if send
             .send((
                 pos,

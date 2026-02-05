@@ -40,11 +40,12 @@ pub fn get_block_light(cache: &Cache, pos: BlockPos) -> u8 {
 
     match chunk {
         Chunk::Level(c) => {
-            let read = c.blocking_read();
-            if section_y >= read.light_engine.block_light.len() {
+            let light_engine = c.light_engine.lock().unwrap();
+            
+            if section_y >= light_engine.block_light.len() {
                 return 0;
             }
-            read.light_engine.block_light[section_y].get(x, y, z)
+            light_engine.block_light[section_y].get(x, y, z)
         }
         Chunk::Proto(c) => {
             if section_y >= c.light.block_light.len() {
@@ -73,10 +74,12 @@ pub fn set_block_light(cache: &mut Cache, pos: BlockPos, level: u8) {
 
     match chunk {
         Chunk::Level(c) => {
-            let mut write = c.blocking_write();
-            if section_y < write.light_engine.block_light.len() {
-                write.light_engine.block_light[section_y].set(x, y, z, level);
-                write.dirty = true;
+            let mut light_engine = c.light_engine.lock().unwrap();
+            
+            if section_y < light_engine.block_light.len() {
+                light_engine.block_light[section_y].set(x, y, z, level);
+                
+                c.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
             }
         }
         Chunk::Proto(c) => {
@@ -106,11 +109,12 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
 
     match chunk {
         Chunk::Level(c) => {
-            let read = c.blocking_read();
-            if section_y >= read.light_engine.sky_light.len() {
+            let light_engine = c.light_engine.lock().unwrap();
+            
+            if section_y >= light_engine.sky_light.len() {
                 return 0;
             }
-            read.light_engine.sky_light[section_y].get(x, y, z)
+            light_engine.sky_light[section_y].get(x, y, z)
         }
         Chunk::Proto(c) => {
             if section_y >= c.light.sky_light.len() {
@@ -139,10 +143,12 @@ pub fn set_sky_light(cache: &mut Cache, pos: BlockPos, level: u8) {
 
     match chunk {
         Chunk::Level(c) => {
-            let mut write = c.blocking_write();
-            if section_y < write.light_engine.sky_light.len() {
-                write.light_engine.sky_light[section_y].set(x, y, z, level);
-                write.dirty = true;
+            let mut light_engine = c.light_engine.lock().unwrap();
+            
+            if section_y < light_engine.sky_light.len() {
+                light_engine.sky_light[section_y].set(x, y, z, level);
+                
+                c.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
             }
         }
         Chunk::Proto(c) => {

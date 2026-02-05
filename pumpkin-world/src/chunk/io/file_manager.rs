@@ -148,7 +148,7 @@ where
     S: ChunkSerializer<Data = P, WriteBackend = PathBuf>,
     S::ChunkConfig: Send + Sync,
 {
-    type Data = Arc<RwLock<S::Data>>;
+    type Data = Arc<S::Data>;
 
     fn watch_chunks<'a>(
         &'a self,
@@ -237,14 +237,13 @@ where
                         }
                     };
 
-                    // Intermediate channel for wrapping the data with the Arc<RwLock>
                     let (send, mut recv) =
                         mpsc::channel::<LoadedData<S::Data, ChunkReadingError>>(1);
 
                     let intermediary = async move {
                         // Note: 'task_stream' is captured and moved here
                         while let Some(data) = recv.recv().await {
-                            let wrapped_data = data.map_loaded(|data| Arc::new(RwLock::new(data)));
+                            let wrapped_data = data.map_loaded(|data| Arc::new(data));
                             if task_stream.send(wrapped_data).await.is_err() {
                                 // Stream is closed, so stop unneeded computation and io
                                 return;
@@ -313,14 +312,11 @@ where
                     let update_tasks = chunk_locks.into_iter().map(|chunk_lock| {
                         let chunk_serializer = chunk_serializer.clone();
                         async move {
-                            let mut chunk = chunk_lock.write().await;
+                            let chunk = chunk_lock;
                             let chunk_is_dirty = chunk.is_dirty();
                             // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
                             // updating what we will write here
                             chunk.mark_dirty(false);
-                            // It is important that we keep the lock after we mark the chunk as clean so no one else
-                            // can modify it
-                            let chunk = chunk.downgrade();
 
                             // We only need to update the chunk if it is dirty
                             if chunk_is_dirty {

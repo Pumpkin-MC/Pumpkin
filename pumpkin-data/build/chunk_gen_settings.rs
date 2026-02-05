@@ -1,17 +1,14 @@
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
-use std::{
-    collections::{BTreeMap, HashMap},
-    fs,
-};
+use std::{collections::BTreeMap, fs};
 
 #[derive(Deserialize)]
 pub struct BlockStateCodecStruct {
     #[serde(rename = "Name")]
     pub name: String,
     #[serde(rename = "Properties")]
-    pub properties: Option<HashMap<String, String>>,
+    pub properties: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Deserialize)]
