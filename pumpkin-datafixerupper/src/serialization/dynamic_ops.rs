@@ -103,7 +103,7 @@ pub trait DynamicOps {
         input: &'a Self::Value,
     ) -> DataResult<impl Iterator<Item = &'a Self::Value>>;
 
-    /// Gets a `Vec<u8>` from a generic value represented by this `DynamicOps`.
+    /// Gets a `Vec<i8>` from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getByteBuffer()` function in `DynamicOps`.
     fn get_bytes(&self, input: &Self::Value) -> DataResult<Vec<i8>>
     where
