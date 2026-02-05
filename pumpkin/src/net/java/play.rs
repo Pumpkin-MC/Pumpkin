@@ -1376,8 +1376,36 @@ impl JavaClient {
                     );
                     if !state.is_air() {
                         let speed = block::calc_block_breaking(player, state, block).await;
+                        let item_stack = player.inventory.held_item().lock().await.clone();
+                        let block_damage_event = crate::plugin::block::block_damage::BlockDamageEvent::new(
+                            player.clone(),
+                            block,
+                            position,
+                            item_stack,
+                            speed >= 1.0,
+                        );
+                        let block_damage_event =
+                            server.plugin_manager.fire(block_damage_event).await;
+                        if block_damage_event.cancelled {
+                            self.update_sequence(player, player_action.sequence.0);
+                            return;
+                        }
                         // Instant break
-                        if speed >= 1.0 {
+                        if block_damage_event.insta_break {
+                            let block_break_event =
+                                crate::plugin::block::block_break::BlockBreakEvent::new(
+                                    Some(player.clone()),
+                                    block,
+                                    position,
+                                    0,
+                                    true,
+                                );
+                            let block_break_event =
+                                server.plugin_manager.fire(block_break_event).await;
+                            if block_break_event.cancelled {
+                                self.update_sequence(player, player_action.sequence.0);
+                                return;
+                            }
                             let broken_state = world.get_block_state(&position).await;
                             world
                                 .break_block(
@@ -1419,6 +1447,20 @@ impl JavaClient {
                         .load()
                         .set_block_breaking(entity, player_action.position, -1)
                         .await;
+                    if let Some(server) = entity.world.load().server.upgrade() {
+                        let world = entity.world.load_full();
+                        let (block, _state) =
+                            world.get_block_and_state(&player_action.position).await;
+                        let item_stack = player.inventory.held_item().lock().await.clone();
+                        let event =
+                            crate::plugin::block::block_damage_abort::BlockDamageAbortEvent::new(
+                                player.clone(),
+                                block,
+                                player_action.position,
+                                item_stack,
+                            );
+                        let _ = server.plugin_manager.fire(event).await;
+                    }
                     self.update_sequence(player, player_action.sequence.0);
                 }
                 Status::FinishedDigging => {
