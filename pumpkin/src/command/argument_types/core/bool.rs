@@ -21,18 +21,23 @@ impl ArgumentType<bool> for BoolArgumentType {
 mod test {
     use crate::command::{
         argument_types::{argument_type::ArgumentType, core::bool::BoolArgumentType},
+        errors::error_types,
         string_reader::StringReader,
     };
 
     #[test]
     fn parse_test() {
         let mut reader = StringReader::new("true");
-        assert_parse_ok_reset!(BoolArgumentType, reader, true);
+        assert_parse_ok_reset!(&mut reader, BoolArgumentType, true);
 
         reader = StringReader::new("false");
-        assert_parse_ok_reset!(BoolArgumentType, reader, false);
+        assert_parse_ok_reset!(&mut reader, BoolArgumentType, false);
 
         reader = StringReader::new("1");
-        assert_parse_err_reset!(BoolArgumentType, reader);
+        assert_parse_err_reset!(
+            &mut reader,
+            BoolArgumentType,
+            &error_types::READER_INVALID_BOOL
+        );
     }
 }

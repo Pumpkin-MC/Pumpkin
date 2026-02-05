@@ -35,3 +35,92 @@ impl ArgumentType<String> for StringArgumentType {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::command::{
+        argument_types::{argument_type::ArgumentType, core::string::StringArgumentType},
+        errors::error_types,
+        string_reader::StringReader,
+    };
+
+    #[test]
+    fn parse_single_quoted() {
+        let mut reader = StringReader::new("'single-quoted string!'");
+
+        assert_parse_ok_reset!(
+            &mut reader,
+            StringArgumentType::QuotablePhrase,
+            "single-quoted string!".to_owned()
+        );
+
+        assert_parse_ok_reset!(&mut reader, StringArgumentType::SingleWord, "".to_owned());
+
+        assert_parse_ok_reset!(
+            &mut reader,
+            StringArgumentType::GreedyPhrase,
+            "'single-quoted string!'".to_owned()
+        );
+    }
+
+    #[test]
+    fn parse_double_quoted() {
+        let mut reader = StringReader::new("\"double-quoted string!\"");
+
+        assert_parse_ok_reset!(
+            &mut reader,
+            StringArgumentType::QuotablePhrase,
+            "double-quoted string!".to_owned()
+        );
+
+        assert_parse_ok_reset!(&mut reader, StringArgumentType::SingleWord, "".to_owned());
+
+        assert_parse_ok_reset!(
+            &mut reader,
+            StringArgumentType::GreedyPhrase,
+            "\"double-quoted string!\"".to_owned()
+        );
+    }
+
+    #[test]
+    fn parse_identifier() {
+        let mut reader = StringReader::new(".i_AM_an-1den+ifier.");
+
+        assert_parse_ok_reset!(
+            &mut reader,
+            StringArgumentType::QuotablePhrase,
+            ".i_AM_an-1den+ifier.".to_owned()
+        );
+
+        assert_parse_ok_reset!(
+            &mut reader,
+            StringArgumentType::SingleWord,
+            ".i_AM_an-1den+ifier.".to_owned()
+        );
+
+        assert_parse_ok_reset!(
+            &mut reader,
+            StringArgumentType::GreedyPhrase,
+            ".i_AM_an-1den+ifier.".to_owned()
+        );
+    }
+
+    #[test]
+    fn quoted_incorrectly() {
+        let mut reader = StringReader::new("'incorrect\"");
+
+        assert_parse_err_reset!(
+            &mut reader,
+            StringArgumentType::QuotablePhrase,
+            &error_types::READER_EXPECTED_END_QUOTE
+        );
+
+        assert_parse_ok_reset!(&mut reader, StringArgumentType::SingleWord, String::new());
+
+        assert_parse_ok_reset!(
+            &mut reader,
+            StringArgumentType::GreedyPhrase,
+            "'incorrect\"".to_owned()
+        );
+    }
+}

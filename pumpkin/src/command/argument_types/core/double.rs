@@ -21,8 +21,8 @@ impl ArgumentType<f64> for DoubleArgumentType {
             result,
             self.min,
             self.max,
-            error_types::DOUBLE_TOO_LOW,
-            error_types::DOUBLE_TOO_HIGH,
+            &error_types::DOUBLE_TOO_LOW,
+            &error_types::DOUBLE_TOO_HIGH,
         )
     }
 
@@ -57,5 +57,48 @@ impl DoubleArgumentType {
     #[must_use]
     pub const fn new(min: f64, max: f64) -> Self {
         Self { min, max }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::command::{
+        argument_types::{argument_type::ArgumentType, core::double::DoubleArgumentType},
+        errors::error_types,
+        string_reader::StringReader,
+    };
+
+    #[test]
+    fn parse_test() {
+        let mut reader = StringReader::new("-1234.56");
+
+        assert_parse_ok_reset!(&mut reader, DoubleArgumentType::any());
+
+        assert_parse_ok_reset!(&mut reader, DoubleArgumentType::with_min(-1240.0));
+
+        assert_parse_err_reset!(
+            &mut reader,
+            DoubleArgumentType::with_min(-1230.0),
+            &error_types::DOUBLE_TOO_LOW
+        );
+
+        assert_parse_ok_reset!(&mut reader, DoubleArgumentType::with_max(-1230.0));
+        assert_parse_err_reset!(
+            &mut reader,
+            DoubleArgumentType::with_max(-1240.0),
+            &error_types::DOUBLE_TOO_HIGH
+        );
+
+        assert_parse_ok_reset!(&mut reader, DoubleArgumentType::new(-1235.0, -1230.0));
+        assert_parse_err_reset!(
+            &mut reader,
+            DoubleArgumentType::new(-1240.0, -1235.0),
+            &error_types::DOUBLE_TOO_HIGH
+        );
+        assert_parse_err_reset!(
+            &mut reader,
+            DoubleArgumentType::new(-1230.0, -1225.0),
+            &error_types::DOUBLE_TOO_LOW
+        );
     }
 }

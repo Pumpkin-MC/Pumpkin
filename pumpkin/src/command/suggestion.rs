@@ -27,6 +27,12 @@ impl From<String> for SuggestionText {
     }
 }
 
+impl From<&str> for SuggestionText {
+    fn from(text: &str) -> Self {
+        Self::Text(text.to_owned())
+    }
+}
+
 impl From<i32> for SuggestionText {
     fn from(text: i32) -> Self {
         Self::Integer {
@@ -274,5 +280,173 @@ impl Suggestions {
         texts.sort_by(|a, b| a.text.cmp(&b.text));
 
         Self::new(range, texts)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::command::{
+        context::string_range::StringRange,
+        suggestion::{Suggestion, Suggestions},
+    };
+
+    #[test]
+    fn apply_insertion_start() {
+        let suggestion = Suggestion::without_tooltip(StringRange::at(0), "Pumpkin once said: ");
+        assert_eq!(
+            suggestion.apply("'Server is now running'"),
+            "Pumpkin once said: 'Server is now running'".to_owned()
+        )
+    }
+
+    #[test]
+    fn apply_insertion_middle() {
+        let suggestion = Suggestion::without_tooltip(StringRange::at(6), "Efficient, ");
+        assert_eq!(
+            suggestion.apply("Fast, and User-Friendly"),
+            "Fast, Efficient, and User-Friendly".to_owned()
+        )
+    }
+
+    #[test]
+    fn apply_insertion_end() {
+        let suggestion = Suggestion::without_tooltip(StringRange::at(10), " has stopped");
+        assert_eq!(
+            suggestion.apply("The server"),
+            "The server has stopped".to_owned()
+        )
+    }
+
+    #[test]
+    fn apply_replacement_start() {
+        let suggestion = Suggestion::without_tooltip(StringRange::between(0, 5), "Goodbye");
+        assert_eq!(
+            suggestion.apply("Hello world!"),
+            "Goodbye world!".to_owned()
+        )
+    }
+
+    #[test]
+    fn apply_replacement_middle() {
+        let suggestion = Suggestion::without_tooltip(StringRange::between(6, 11), "melon");
+        assert_eq!(suggestion.apply("Hello world!"), "Hello melon!".to_owned())
+    }
+
+    #[test]
+    fn apply_replacement_end() {
+        let suggestion = Suggestion::without_tooltip(StringRange::between(13, 23), "fruit.");
+        assert_eq!(
+            suggestion.apply("Pumpkin is a vegetable."),
+            "Pumpkin is a fruit.".to_owned()
+        )
+    }
+
+    #[test]
+    fn apply_replacement_everything() {
+        let suggestion =
+            Suggestion::without_tooltip(StringRange::between(0, 36), "This is a phrase.");
+        assert_eq!(
+            suggestion.apply("I'm not related to the other phrase."),
+            "This is a phrase.".to_owned()
+        )
+    }
+
+    #[test]
+    fn expand_unchanged() {
+        let suggestion = Suggestion::without_tooltip(StringRange::at(1), "oo");
+        assert_eq!(suggestion.expand("f", StringRange::at(1)), suggestion)
+    }
+
+    #[test]
+    fn expand_left() {
+        let suggestion = Suggestion::without_tooltip(StringRange::at(1), "oo");
+        assert_eq!(
+            suggestion.expand("f", StringRange::between(0, 1)),
+            Suggestion::without_tooltip(StringRange::between(0, 1), "foo")
+        )
+    }
+
+    #[test]
+    fn expand_right() {
+        let suggestion = Suggestion::without_tooltip(StringRange::at(0), "ba");
+        assert_eq!(
+            suggestion.expand("r", StringRange::between(0, 1)),
+            Suggestion::without_tooltip(StringRange::between(0, 1), "bar")
+        )
+    }
+
+    #[test]
+    fn expand_both() {
+        let suggestion = Suggestion::without_tooltip(
+            StringRange::at(30),
+            "sheared to make a Carved Pumpkin and can be ",
+        );
+        assert_eq!(
+            suggestion.expand(
+                "A block called Pumpkin can be crafted into its seeds which can be planted",
+                StringRange::between(0, 52)
+            ),
+            Suggestion::without_tooltip(
+                StringRange::between(0, 52),
+                "A block called Pumpkin can be sheared to make a Carved Pumpkin and can be crafted into its seeds"
+            )
+        )
+    }
+
+    #[test]
+    fn expand_replacement() {
+        let suggestion = Suggestion::without_tooltip(StringRange::between(6, 11), "everyone");
+        assert_eq!(
+            suggestion.expand("Hello world!", StringRange::between(0, 12)),
+            Suggestion::without_tooltip(StringRange::between(0, 12), "Hello everyone!")
+        )
+    }
+
+    #[test]
+    fn merge_empty() {
+        let merged = Suggestions::merge("foo b", &[]);
+        assert!(merged.is_empty())
+    }
+
+    #[test]
+    fn merge_single() {
+        let suggestions = Suggestions::new(
+            StringRange::at(5),
+            vec![Suggestion::without_tooltip(StringRange::at(5), "ar")],
+        );
+        let merged = Suggestions::merge("foo b", &[suggestions.clone()]);
+        assert_eq!(merged, suggestions);
+    }
+
+    #[test]
+    fn merge_multiple() {
+        let a = Suggestions::new(
+            StringRange::at(5),
+            vec![
+                Suggestion::without_tooltip(StringRange::at(5), "ar"),
+                Suggestion::without_tooltip(StringRange::at(5), "az"),
+                Suggestion::without_tooltip(StringRange::at(5), "ars"),
+            ],
+        );
+        let b = Suggestions::new(
+            StringRange::between(4, 5),
+            vec![
+                Suggestion::without_tooltip(StringRange::between(4, 5), "foo"),
+                Suggestion::without_tooltip(StringRange::between(4, 5), "qux"),
+                Suggestion::without_tooltip(StringRange::between(4, 5), "BAR"),
+            ],
+        );
+        let merged = Suggestions::merge("foo b", &[a, b]);
+        assert_eq!(
+            &merged.suggestions,
+            &[
+                Suggestion::without_tooltip(StringRange::between(4, 5), "BAR"),
+                Suggestion::without_tooltip(StringRange::between(4, 5), "bar"),
+                Suggestion::without_tooltip(StringRange::between(4, 5), "bars"),
+                Suggestion::without_tooltip(StringRange::between(4, 5), "baz"),
+                Suggestion::without_tooltip(StringRange::between(4, 5), "foo"),
+                Suggestion::without_tooltip(StringRange::between(4, 5), "qux"),
+            ]
+        );
     }
 }

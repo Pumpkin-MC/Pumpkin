@@ -21,8 +21,8 @@ impl ArgumentType<i64> for LongArgumentType {
             result,
             self.min,
             self.max,
-            error_types::LONG_TOO_LOW,
-            error_types::LONG_TOO_HIGH,
+            &error_types::LONG_TOO_LOW,
+            &error_types::LONG_TOO_HIGH,
         )
     }
 
@@ -64,6 +64,7 @@ impl LongArgumentType {
 mod test {
     use crate::command::{
         argument_types::{argument_type::ArgumentType, core::long::LongArgumentType},
+        errors::error_types,
         string_reader::StringReader,
     };
 
@@ -71,24 +72,48 @@ mod test {
     fn parse_test() {
         let mut reader = StringReader::new("123");
 
-        assert_parse_ok_reset!(LongArgumentType::any(), reader, 123);
+        assert_parse_ok_reset!(&mut reader, LongArgumentType::any(), 123);
 
-        assert_parse_ok_reset!(LongArgumentType::with_min(120), reader, 123);
-        assert_parse_err_reset!(LongArgumentType::with_min(130), reader);
+        assert_parse_ok_reset!(&mut reader, LongArgumentType::with_min(120), 123);
+        assert_parse_err_reset!(
+            &mut reader,
+            LongArgumentType::with_min(130),
+            &error_types::LONG_TOO_LOW
+        );
 
-        assert_parse_ok_reset!(LongArgumentType::with_max(200), reader, 123);
-        assert_parse_err_reset!(LongArgumentType::with_max(100), reader);
+        assert_parse_ok_reset!(&mut reader, LongArgumentType::with_max(200), 123);
+        assert_parse_err_reset!(
+            &mut reader,
+            LongArgumentType::with_max(100),
+            &error_types::LONG_TOO_HIGH
+        );
 
-        assert_parse_ok_reset!(LongArgumentType::new(100, 125), reader, 123);
-        assert_parse_err_reset!(LongArgumentType::new(100, 120), reader);
-        assert_parse_err_reset!(LongArgumentType::new(125, 150), reader);
+        assert_parse_ok_reset!(&mut reader, LongArgumentType::new(100, 125), 123);
+        assert_parse_err_reset!(
+            &mut reader,
+            LongArgumentType::new(100, 120),
+            &error_types::LONG_TOO_HIGH
+        );
+        assert_parse_err_reset!(
+            &mut reader,
+            LongArgumentType::new(125, 150),
+            &error_types::LONG_TOO_LOW
+        );
 
         // 5_000_000_000_000_000_000 fits into an i64.
         reader = StringReader::new("5000000000000000000");
-        assert_parse_ok_reset!(LongArgumentType::any(), reader, 5_000_000_000_000_000_000);
+        assert_parse_ok_reset!(
+            &mut reader,
+            LongArgumentType::any(),
+            5_000_000_000_000_000_000
+        );
 
         // 10_000_000_000_000_000_000 does not fit into an i64.
         reader = StringReader::new("10000000000000000000");
-        assert_parse_err_reset!(LongArgumentType::any(), reader);
+        assert_parse_err_reset!(
+            &mut reader,
+            LongArgumentType::any(),
+            &error_types::READER_INVALID_LONG
+        );
     }
 }
