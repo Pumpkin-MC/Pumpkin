@@ -813,6 +813,16 @@ impl JavaClient {
         if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
             player.get_entity().set_sneaking(sneak).await;
         }
+
+        if sneak {
+            let vehicle = player.get_entity().vehicle.lock().await.clone();
+            if let Some(vehicle) = vehicle {
+                vehicle
+                    .get_entity()
+                    .remove_passenger(player.entity_id())
+                    .await;
+            }
+        }
     }
 
     pub async fn handle_move_vehicle(&self, player: &Arc<Player>, packet: SMoveVehicle) {
@@ -825,8 +835,13 @@ impl JavaClient {
         }
     }
 
-    pub async fn handle_paddle_boat(&self, _player: &Arc<Player>, _packet: SPaddleBoat) {
-        // TODO: update boat paddle metadata
+    pub async fn handle_paddle_boat(&self, player: &Arc<Player>, packet: SPaddleBoat) {
+        let vehicle = player.get_entity().vehicle.lock().await.clone();
+        if let Some(vehicle) = vehicle {
+            vehicle
+                .set_paddle_state(packet.left_paddle, packet.right_paddle)
+                .await;
+        }
     }
 
     pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {

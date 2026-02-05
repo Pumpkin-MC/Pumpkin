@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crossbeam::atomic::AtomicCell;
 
@@ -23,6 +23,9 @@ pub struct BoatEntity {
     damage_wobble_ticks: AtomicI32,
     damage_wobble_side: AtomicI32,
     damage_wobble_strength: AtomicCell<f32>,
+    ticks_underwater: AtomicCell<f32>,
+    left_paddle_moving: AtomicBool,
+    right_paddle_moving: AtomicBool,
 }
 
 impl BoatEntity {
@@ -32,7 +35,30 @@ impl BoatEntity {
             damage_wobble_ticks: AtomicI32::new(0),
             damage_wobble_side: AtomicI32::new(1),
             damage_wobble_strength: AtomicCell::new(0.0),
+            ticks_underwater: AtomicCell::new(0.0),
+            left_paddle_moving: AtomicBool::new(false),
+            right_paddle_moving: AtomicBool::new(false),
         }
+    }
+
+    pub async fn set_paddles(&self, left: bool, right: bool) {
+        self.left_paddle_moving.store(left, Ordering::Relaxed);
+        self.right_paddle_moving.store(right, Ordering::Relaxed);
+
+        self.entity
+            .send_meta_data(&[
+                Metadata::new(
+                    TrackedData::DATA_LEFT_PADDLE_MOVING,
+                    MetaDataType::Boolean,
+                    left,
+                ),
+                Metadata::new(
+                    TrackedData::DATA_RIGHT_PADDLE_MOVING,
+                    MetaDataType::Boolean,
+                    right,
+                ),
+            ])
+            .await;
     }
 
     fn entity_to_item(entity_type: &EntityType) -> &'static Item {
@@ -129,6 +155,13 @@ impl EntityBase for BoatEntity {
             if strength > 0.0 {
                 self.damage_wobble_strength.store(strength - 1.0);
             }
+
+            let underwater = self.ticks_underwater.load();
+            if self.entity.touching_water.load(Ordering::Relaxed) {
+                self.ticks_underwater.store((underwater + 1.0).min(60.0));
+            } else if underwater > 0.0 {
+                self.ticks_underwater.store((underwater - 1.0).max(0.0));
+            }
         })
     }
 
@@ -161,7 +194,8 @@ impl EntityBase for BoatEntity {
             }
 
             let current_side = self.damage_wobble_side.load(Ordering::Relaxed);
-            self.damage_wobble_side.store(-current_side, Ordering::Relaxed);
+            self.damage_wobble_side
+                .store(-current_side, Ordering::Relaxed);
             self.damage_wobble_ticks.store(10, Ordering::Relaxed);
             self.entity.velocity_dirty.store(true, Ordering::SeqCst);
 
@@ -197,6 +231,14 @@ impl EntityBase for BoatEntity {
                 return false;
             }
 
+            if self.ticks_underwater.load() >= 60.0 {
+                return false;
+            }
+
+            if self.entity.passengers.lock().await.len() >= 2 {
+                return false;
+            }
+
             if player.living_entity.entity.has_vehicle().await {
                 return false;
             }
@@ -215,6 +257,12 @@ impl EntityBase for BoatEntity {
                 .await;
 
             true
+        })
+    }
+
+    fn set_paddle_state<'a>(&'a self, left: bool, right: bool) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.set_paddles(left, right).await;
         })
     }
 
