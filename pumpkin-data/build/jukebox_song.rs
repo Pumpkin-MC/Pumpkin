@@ -1,9 +1,9 @@
 use heck::ToPascalCase;
-use std::collections::BTreeMap;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fs;
 
 #[derive(Deserialize)]
