@@ -41,9 +41,9 @@ impl FlowingLava {
             let neighbor_pos = block_pos.offset(dir.to_offset());
             if world.get_block(&neighbor_pos).await == &Block::WATER {
                 let block = if is_still {
-                    Block::OBSIDIAN
+                    Block::from_id(Block::OBSIDIAN.id)
                 } else {
-                    Block::COBBLESTONE
+                    Block::from_id(Block::COBBLESTONE.id)
                 };
                 if let Some(server) = world.server.upgrade() {
                     let event = crate::plugin::block::block_form::BlockFormEvent::new(

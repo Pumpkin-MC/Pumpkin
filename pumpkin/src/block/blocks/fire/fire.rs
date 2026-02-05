@@ -356,7 +356,7 @@ impl BlockBehaviour for FireBlock {
                 })
                 .await
             {
-                if Self::should_fade(world, pos, block).await {
+                if Self::should_fade(world, pos, Block::from_id(block.id)).await {
                     world
                         .set_block_state(
                             pos,
@@ -385,7 +385,7 @@ impl BlockBehaviour for FireBlock {
             if !Self.are_blocks_around_flammable(world.as_ref(), pos).await {
                 let block_below_state = world.get_block_state(&pos.down()).await;
                 if block_below_state.is_side_solid(BlockDirection::Up) {
-                    if Self::should_fade(world, pos, block).await {
+                    if Self::should_fade(world, pos, Block::from_id(block.id)).await {
                         world
                             .set_block_state(
                                 pos,
@@ -402,7 +402,7 @@ impl BlockBehaviour for FireBlock {
                 && rand::rng().random_range(0..4) == 0
                 && !Self::is_flammable(world.get_block_state(&pos.down()).await)
             {
-                if Self::should_fade(world, pos, block).await {
+                if Self::should_fade(world, pos, Block::from_id(block.id)).await {
                     world
                         .set_block_state(
                             pos,

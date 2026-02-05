@@ -351,10 +351,12 @@ impl BlockBehaviour for BedBlock {
 
             if let Some(server) = args.world.server.upgrade() {
                 let bed_position = bed_head_pos.to_f64().add_raw(0.5, 0.0, 0.5);
-                let event = PlayerBedEnterEvent::new(args.player.clone(), bed_position);
-                let event = server.plugin_manager.fire(event).await;
-                if event.cancelled {
-                    return BlockActionResult::SuccessServer;
+                if let Some(player_arc) = args.player.as_arc() {
+                    let event = PlayerBedEnterEvent::new(player_arc, bed_position);
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return BlockActionResult::SuccessServer;
+                    }
                 }
             }
 

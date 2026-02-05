@@ -1613,7 +1613,7 @@ impl World {
             }
         }
 
-        let _velocity = player.living_entity.entity.velocity.load();
+        let velocity = player.living_entity.entity.velocity.load();
 
         debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
@@ -2122,10 +2122,8 @@ impl World {
 
             if respawn_world_uuid != respawn_world.uuid {
                 let worlds = server.worlds.load();
-                if let Some(found) = worlds
-                    .iter()
-                    .find(|w| w.uuid == respawn_world_uuid)
-                    .cloned()
+<<<<<<< HEAD
+                if let Some(found) = worlds.iter().find(|w| w.uuid == respawn_world_uuid).cloned()
                 {
                     if found.uuid != respawn_world.uuid {
                         // Move player to the new respawn world chosen by the event.
@@ -3034,7 +3032,7 @@ impl World {
                     false,
                 );
                 match cause {
-                    Some(player) => {
+                    Some(ref player) => {
                         self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
                             .await;
                     }

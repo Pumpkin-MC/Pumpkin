@@ -49,7 +49,8 @@ use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, Equippabl
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockDirection, BlockState, translation};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt, translation};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
@@ -891,7 +892,7 @@ impl JavaClient {
             )
             .await;
 
-        let event = if let Some((hit_pos, _hit_dir)) = hit_result {
+        let event = if let Some((hit_pos, hit_dir)) = hit_result {
             let item_key = {
                 let item_guard = item.lock().await;
                 format!("minecraft:{}", item_guard.get_item().registry_key)
@@ -903,7 +904,7 @@ impl JavaClient {
                 item_key,
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
-                Some(face),
+                Some(hit_dir),
             )
         } else {
             let item_key = {
@@ -1845,9 +1846,11 @@ impl JavaClient {
         // Set the flying ability
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
         if abilities.flying != flying {
-            if let Some(server) = player.world().server.upgrade() {
+            if let Some(server) = player.world().server.upgrade()
+                && let Some(player_arc) = player.as_arc()
+            {
                 let event = crate::plugin::player::player_toggle_flight::PlayerToggleFlightEvent::new(
-                    player.clone(),
+                    player_arc,
                     flying,
                 );
                 let event = server.plugin_manager.fire(event).await;
@@ -2064,10 +2067,12 @@ impl JavaClient {
             sign_data.line_3,
             sign_data.line_4,
         ];
-        if let Some(server) = world.server.upgrade() {
+        if let Some(server) = world.server.upgrade()
+            && let Some(player_arc) = player.as_arc()
+        {
             let block = world.get_block(&sign_data.location).await;
             let event = SignChangeEvent::new(
-                player.clone(),
+                player_arc,
                 block,
                 sign_data.location,
                 lines,
@@ -2131,7 +2136,7 @@ impl JavaClient {
             )
             .await;
 
-        let event = if let Some((hit_pos, _hit_dir)) = hit_result {
+        let event = if let Some((hit_pos, hit_dir)) = hit_result {
             let item_key = {
                 let item_guard = item_in_hand.lock().await;
                 format!("minecraft:{}", item_guard.get_item().registry_key)
@@ -2143,7 +2148,7 @@ impl JavaClient {
                 item_key,
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
-                Some(face),
+                Some(hit_dir),
             )
         } else {
             let item_key = {
@@ -2221,8 +2226,10 @@ impl JavaClient {
             return;
         }
         let previous_slot = player.inventory.get_selected_slot() as i32;
-        if let Some(server) = player.world().server.upgrade() {
-            let event = PlayerItemHeldEvent::new(player.clone(), previous_slot, slot as i32);
+        if let Some(server) = player.world().server.upgrade()
+            && let Some(player_arc) = player.as_arc()
+        {
+            let event = PlayerItemHeldEvent::new(player_arc, previous_slot, slot as i32);
             let event = server.plugin_manager.fire(event).await;
             if event.cancelled {
                 player
@@ -2548,9 +2555,11 @@ impl JavaClient {
             return Ok(false);
         }
 
-        if let Some(server) = world.server.upgrade() {
+        if let Some(server) = world.server.upgrade()
+            && let Some(player_arc) = player.as_arc()
+        {
             let can_build_event = BlockCanBuildEvent {
-                player: player.clone(),
+                player: player_arc.clone(),
                 block_to_build: block,
                 buildable: true,
                 block: clicked_block,
@@ -2566,7 +2575,7 @@ impl JavaClient {
             }
 
             let event = BlockPlaceEvent {
-                player: player.clone(),
+                player: player_arc.clone(),
                 block_placed: block,
                 block_placed_against: clicked_block,
                 position: final_block_pos,
@@ -2590,7 +2599,7 @@ impl JavaClient {
             }
             if multi_positions.len() > 1 {
                 let multi_event = crate::plugin::block::block_multi_place::BlockMultiPlaceEvent::new(
-                    player.clone(),
+                    player_arc,
                     block,
                     multi_positions,
                 );

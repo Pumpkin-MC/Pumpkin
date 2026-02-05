@@ -69,9 +69,14 @@ impl BlockBehaviour for BambooBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let lock = args.item_stack.lock().await;
-            if lock.get_item() == &Item::BONE_MEAL {
-                bone_meal(Arc::clone(args.world), args.position, args.player.clone()).await;
+            let is_bone_meal = {
+                let lock = args.item_stack.lock().await;
+                lock.get_item() == &Item::BONE_MEAL
+            };
+            if is_bone_meal {
+                if let Some(player_arc) = args.player.as_arc() {
+                    bone_meal(Arc::clone(args.world), args.position, player_arc).await;
+                }
                 return BlockActionResult::Success;
             }
             BlockActionResult::Pass

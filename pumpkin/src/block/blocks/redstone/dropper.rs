@@ -10,7 +10,7 @@ use crate::entity::item::ItemEntity;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{FacingExt, translation};
+use pumpkin_data::{Block, FacingExt, translation};
 use pumpkin_inventory::generic_container_screen_handler::create_generic_3x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -208,8 +208,9 @@ impl BlockBehaviour for DropperBlock {
                     );
                     let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade()
                     {
+                        let event_block = Block::from_id(args.block.id);
                         let event = crate::plugin::block::block_dispense::BlockDispenseEvent::new(
-                            args.block,
+                            event_block,
                             *args.position,
                             drop_item,
                             velocity,

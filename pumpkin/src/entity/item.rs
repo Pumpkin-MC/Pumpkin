@@ -5,7 +5,7 @@ use crate::{
 };
 use core::f32;
 use pumpkin_data::{
-    Item, damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData,
+    damage::DamageType, item::Item, meta_data_type::MetaDataType, tracked_data::TrackedData,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,

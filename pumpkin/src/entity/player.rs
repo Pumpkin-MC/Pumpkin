@@ -789,6 +789,7 @@ impl Player {
         let slot_index = self.inventory.get_selected_slot() as usize;
         let stack_arc = self.inventory.held_item();
         let server = self.world().server.upgrade();
+        let player_arc = self.as_arc();
 
         let current_stack = {
             let stack = stack_arc.lock().await;
@@ -799,8 +800,8 @@ impl Player {
         };
 
         let mut damage = amount;
-        if let Some(server) = &server {
-            let event = PlayerItemDamageEvent::new(self.clone(), current_stack, damage);
+        if let (Some(server), Some(player_arc)) = (&server, player_arc.clone()) {
+            let event = PlayerItemDamageEvent::new(player_arc, current_stack, damage);
             let event = server.plugin_manager.fire(event).await;
             if event.cancelled {
                 return false;
@@ -830,8 +831,10 @@ impl Player {
 
         if let Some(updated_stack) = updated_stack {
             self.sync_hand_slot(slot_index, updated_stack).await;
-            if let (Some(server), Some(broken_item)) = (server, broken_item) {
-                let event = PlayerItemBreakEvent::new(self.clone(), broken_item);
+            if let (Some(server), Some(broken_item), Some(player_arc)) =
+                (server, broken_item, player_arc)
+            {
+                let event = PlayerItemBreakEvent::new(player_arc, broken_item);
                 server
                     .plugin_manager
                     .fire::<PlayerItemBreakEvent>(event)
@@ -2013,9 +2016,11 @@ impl Player {
         let mut leave_message = message.clone();
         let cause = "UNKNOWN".to_string();
 
-        if let Some(server) = self.world().server.upgrade() {
+        if let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.as_arc()
+        {
             let event = PlayerKickEvent::new(
-                self.clone(),
+                player_arc,
                 kick_message,
                 leave_message,
                 cause,
@@ -2035,6 +2040,11 @@ impl Player {
     /// Updates the last action time to now. Call this on player actions like movement, chat, etc.
     pub fn update_last_action_time(&self) {
         self.last_action_time.store(std::time::Instant::now());
+    }
+
+    #[must_use]
+    pub fn as_arc(&self) -> Option<Arc<Self>> {
+        self.world().get_player_by_uuid(self.gameprofile.id)
     }
 
     pub fn can_food_heal(&self) -> bool {
@@ -2317,9 +2327,12 @@ impl Player {
         let Some(server) = self.world().server.upgrade() else {
             return false;
         };
+        let Some(player_arc) = self.as_arc() else {
+            return false;
+        };
 
         let item_uuid = Uuid::new_v4();
-        let event = PlayerDropItemEvent::new(self.clone(), item_uuid, item_stack);
+        let event = PlayerDropItemEvent::new(player_arc, item_uuid, item_stack);
         let event = server.plugin_manager.fire(event).await;
         if event.cancelled || event.item_stack.is_empty() {
             return false;
@@ -2459,8 +2472,10 @@ impl Player {
             .await;
 
         if old_level != level {
-            if let Some(server) = self.world().server.upgrade() {
-                let event = PlayerLevelChangeEvent::new(self.clone(), old_level, level);
+            if let Some(server) = self.world().server.upgrade()
+                && let Some(player_arc) = self.as_arc()
+            {
+                let event = PlayerLevelChangeEvent::new(player_arc, old_level, level);
                 server
                     .plugin_manager
                     .fire::<PlayerLevelChangeEvent>(event)
@@ -2602,8 +2617,10 @@ impl Player {
     /// Add experience points to the player.
     pub async fn add_experience_points(&self, added_points: i32) {
         let mut added_points = added_points;
-        if let Some(server) = self.world().server.upgrade() {
-            let event = PlayerExpChangeEvent::new(self.clone(), added_points);
+        if let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.as_arc()
+        {
+            let event = PlayerExpChangeEvent::new(player_arc, added_points);
             let event = server.plugin_manager.fire(event).await;
             added_points = event.amount;
         }
@@ -2679,13 +2696,15 @@ impl Player {
             return xp;
         }
 
-        if let Some(server) = self.world().server.upgrade() {
+        if let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.as_arc()
+        {
             let item_stack = {
                 let stack = stack.lock().await;
                 stack.clone()
             };
             let event = PlayerItemMendEvent::new(
-                self.clone(),
+                player_arc,
                 item_stack,
                 equipment_slot.clone(),
                 repair_amount,

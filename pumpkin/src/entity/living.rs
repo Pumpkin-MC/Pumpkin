@@ -1055,8 +1055,10 @@ impl LivingEntity {
                     }
                     stack.clone()
                 };
-                if let Some(server) = player.world().server.upgrade() {
-                    let event = PlayerItemDamageEvent::new(player.clone(), snapshot, damage);
+                if let Some(server) = player.world().server.upgrade()
+                    && let Some(player_arc) = player.as_arc()
+                {
+                    let event = PlayerItemDamageEvent::new(player_arc, snapshot, damage);
                     let event = server.plugin_manager.fire(event).await;
                     if event.cancelled {
                         continue;
@@ -1096,8 +1098,10 @@ impl LivingEntity {
                         .await;
                 }
                 if let (Some(player), Some(broken_item)) = (caller.get_player(), broken_item) {
-                    if let Some(server) = player.world().server.upgrade() {
-                        let event = PlayerItemBreakEvent::new(player.clone(), broken_item);
+                    if let Some(server) = player.world().server.upgrade()
+                        && let Some(player_arc) = player.as_arc()
+                    {
+                        let event = PlayerItemBreakEvent::new(player_arc, broken_item);
                         server
                             .plugin_manager
                             .fire::<PlayerItemBreakEvent>(event)
@@ -1455,9 +1459,11 @@ impl EntityBase for LivingEntity {
 
                     let mut cancelled = false;
                     if let Some(player) = caller.get_player() {
-                        if let Some(server) = player.world().server.upgrade() {
+                        if let Some(server) = player.world().server.upgrade()
+                            && let Some(player_arc) = player.as_arc()
+                        {
                             let event =
-                                PlayerItemConsumeEvent::new(player.clone(), item_to_consume, hand);
+                                PlayerItemConsumeEvent::new(player_arc, item_to_consume.clone(), hand);
                             let event = server.plugin_manager.fire(event).await;
                             if event.cancelled {
                                 cancelled = true;
