@@ -2165,6 +2165,59 @@ impl JavaClient {
             return Ok(false);
         }
 
+        if let Some(server) = world.server.upgrade() {
+            let can_build_event = BlockCanBuildEvent {
+                player: player.clone(),
+                block_to_build: block,
+                buildable: true,
+                block: clicked_block,
+                block_pos: final_block_pos,
+                cancelled: false,
+            };
+            let can_build_event = server
+                .plugin_manager
+                .fire::<BlockCanBuildEvent>(can_build_event)
+                .await;
+            if can_build_event.cancelled || !can_build_event.buildable {
+                return Ok(false);
+            }
+
+            let event = BlockPlaceEvent {
+                player: player.clone(),
+                block_placed: block,
+                block_placed_against: clicked_block,
+                position: final_block_pos,
+                can_build: true,
+                cancelled: false,
+            };
+
+            let event = server.plugin_manager.fire::<BlockPlaceEvent>(event).await;
+            if event.cancelled || !event.can_build {
+                return Ok(false);
+            }
+
+            let mut multi_positions = Vec::new();
+            if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_DOORS) {
+                multi_positions.push(final_block_pos);
+                multi_positions.push(final_block_pos.offset(BlockDirection::Up.to_offset()));
+            } else if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
+                let facing = player.living_entity.entity.get_horizontal_facing();
+                multi_positions.push(final_block_pos);
+                multi_positions.push(final_block_pos.offset(facing.to_block_direction().to_offset()));
+            }
+            if multi_positions.len() > 1 {
+                let multi_event = crate::plugin::block::block_multi_place::BlockMultiPlaceEvent::new(
+                    player.clone(),
+                    block,
+                    multi_positions,
+                );
+                let multi_event = server.plugin_manager.fire(multi_event).await;
+                if multi_event.cancelled {
+                    return Ok(false);
+                }
+            }
+        }
+
         let new_state = server
             .block_registry
             .on_place(

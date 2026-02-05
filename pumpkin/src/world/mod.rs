@@ -3203,6 +3203,20 @@ impl World {
             let neighbor_pos = block_pos.offset(direction.to_offset());
             let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos).await;
 
+            if let Some(server) = self.server.upgrade() {
+                let event = crate::plugin::block::block_physics::BlockPhysicsEvent::new(
+                    neighbor_block,
+                    neighbor_pos,
+                    source_block,
+                    *block_pos,
+                    self.uuid,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    continue;
+                }
+            }
+
             if let Some(neighbor_pumpkin_block) =
                 self.block_registry.get_pumpkin_block(neighbor_block.id)
             {
