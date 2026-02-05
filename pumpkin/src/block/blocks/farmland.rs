@@ -8,6 +8,7 @@ use crate::block::OnPlaceArgs;
 use crate::block::OnScheduledTickArgs;
 use crate::block::RandomTickArgs;
 use crate::world::World;
+use crate::plugin::block::moisture_change::MoistureChangeEvent;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
@@ -76,15 +77,28 @@ impl BlockBehaviour for FarmlandBlock {
         Box::pin(async move {
             // TODO: add rain check. Remember to check which one is most optimized.
             if is_water_nearby(args.world, args.position).await {
-                let mut props = FarmlandProperties::default(args.block);
-                props.moisture = Integer0To7::L7;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
+                let state_id = args.world.get_block_state_id(args.position).await;
+                let mut props = FarmlandProperties::from_state_id(state_id, args.block);
+                if props.moisture != Integer0To7::L7 {
+                    props.moisture = Integer0To7::L7;
+                    let mut new_state_id = props.to_state_id(args.block);
+                    if let Some(server) = args.world.server.upgrade() {
+                        let event = MoistureChangeEvent::new(
+                            args.block,
+                            *args.position,
+                            args.world.uuid,
+                            new_state_id,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                        new_state_id = event.new_state_id;
+                    }
+                    args.world
+                        .set_block_state(args.position, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
+                        .await;
+                }
             } else {
                 let state_id = args.world.get_block_state_id(args.position).await;
                 let mut props = FarmlandProperties::from_state_id(state_id, args.block);
@@ -106,12 +120,22 @@ impl BlockBehaviour for FarmlandBlock {
                     }
                 } else {
                     props.moisture = Integer0To7::from_index(props.moisture.to_index() - 1);
+                    let mut new_state_id = props.to_state_id(args.block);
+                    if let Some(server) = args.world.server.upgrade() {
+                        let event = MoistureChangeEvent::new(
+                            args.block,
+                            *args.position,
+                            args.world.uuid,
+                            new_state_id,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                        new_state_id = event.new_state_id;
+                    }
                     args.world
-                        .set_block_state(
-                            args.position,
-                            props.to_state_id(args.block),
-                            BlockFlags::NOTIFY_NEIGHBORS,
-                        )
+                        .set_block_state(args.position, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
                         .await;
                 }
             }

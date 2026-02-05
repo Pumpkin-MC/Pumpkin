@@ -19,6 +19,12 @@ pub mod block_redstone;
 pub mod block_physics;
 pub mod block_spread;
 pub mod block_place;
+pub mod note_play;
+pub mod sign_change;
+pub mod tnt_prime;
+pub mod moisture_change;
+pub mod sponge_absorb;
+pub mod fluid_level_change;
 
 use pumpkin_data::Block;
 
