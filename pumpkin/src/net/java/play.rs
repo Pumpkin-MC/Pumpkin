@@ -38,6 +38,7 @@ use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEve
 use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
 use crate::plugin::player::player_item_held::PlayerItemHeldEvent;
 use crate::plugin::block::block_can_build::BlockCanBuildEvent;
+use crate::plugin::block::sign_change::SignChangeEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -2057,11 +2058,36 @@ impl JavaClient {
             &sign_entity.back_text
         };
 
-        *text.messages.lock().unwrap() = [
+        let mut lines = vec![
             sign_data.line_1,
             sign_data.line_2,
             sign_data.line_3,
             sign_data.line_4,
+        ];
+        if let Some(server) = world.server.upgrade() {
+            let block = world.get_block(&sign_data.location).await;
+            let event = SignChangeEvent::new(
+                player.clone(),
+                block,
+                sign_data.location,
+                lines,
+                sign_data.is_front_text,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
+            }
+            lines = event.lines;
+        }
+
+        if lines.len() < 4 {
+            lines.resize(4, String::new());
+        }
+        *text.messages.lock().unwrap() = [
+            lines[0].clone(),
+            lines[1].clone(),
+            lines[2].clone(),
+            lines[3].clone(),
         ];
         *sign_entity.currently_editing_player.lock().await = None;
         world.update_block_entity(&block_entity).await;
