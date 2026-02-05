@@ -14,6 +14,7 @@ pub mod block_grow;
 pub mod block_ignite;
 pub mod block_piston_extend;
 pub mod block_piston_retract;
+pub mod block_redstone;
 pub mod block_spread;
 pub mod block_place;
 
