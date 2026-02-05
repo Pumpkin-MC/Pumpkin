@@ -261,9 +261,9 @@ pub trait DynamicOps {
         if prefix == self.empty() {
             DataResult::success(value)
         } else {
-            DataResult::error(format!(
+            DataResult::error_partial(format!(
                 "Do not know how to append a primitive value {value} to {prefix}"
-            ))
+            ), value)
         }
     }
 
