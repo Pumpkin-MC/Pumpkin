@@ -25,7 +25,7 @@ use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -297,7 +297,7 @@ impl ChunkManager {
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
         let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
-        let mut chunks = Vec::<Arc<RwLock<ChunkData>>>::with_capacity(chunk_size);
+        let mut chunks = Vec::<Arc<ChunkData>>::with_capacity(chunk_size);
         while chunk_size > 0 {
             chunks.push(self.chunk_queue.pop().unwrap().2);
             chunk_size -= 1;
@@ -316,7 +316,7 @@ impl ChunkManager {
     pub fn next_entity(&mut self) -> Box<[SyncEntityChunk]> {
         let chunk_size = self.entity_chunk_queue.len().min(self.chunks_per_tick);
 
-        let chunks: Box<[Arc<RwLock<ChunkEntityData>>]> = self
+        let chunks: Box<[Arc<ChunkEntityData>]> = self
             .entity_chunk_queue
             .drain(..chunk_size)
             .map(|(_, chunk)| chunk)
@@ -1304,7 +1304,6 @@ impl Player {
                 ClientPlatform::Java(java_client) => {
                     java_client.send_packet_now(&CChunkBatchStart).await;
                     for chunk in chunk_of_chunks {
-                        let chunk = chunk.read().await;
                         // log::debug!("send chunk {:?}", chunk.position);
                         // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
                         // player or something.
@@ -1316,8 +1315,6 @@ impl Player {
                 }
                 ClientPlatform::Bedrock(bedrock_client) => {
                     for chunk in chunk_of_chunks {
-                        let chunk = chunk.read().await;
-
                         bedrock_client
                             .send_game_packet(&CLevelChunk {
                                 dimension: 0,
