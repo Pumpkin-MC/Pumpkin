@@ -5,6 +5,7 @@ pub mod block_damage;
 pub mod block_damage_abort;
 pub mod block_dispense;
 pub mod block_drop_item;
+pub mod block_explode;
 pub mod block_ignite;
 pub mod block_spread;
 pub mod block_place;
