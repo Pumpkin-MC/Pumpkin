@@ -366,7 +366,7 @@ impl From<ReadingError> for PacketDecodeError {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct StatusResponse {
     /// The version on which the server is running. (Optional)
     pub version: Option<Version>,
@@ -379,7 +379,7 @@ pub struct StatusResponse {
     /// Whether players are forced to use secure chat.
     pub enforce_secure_chat: bool,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Version {
     /// The name of the version (e.g. 1.21.4)
     pub name: String,
@@ -387,7 +387,7 @@ pub struct Version {
     pub protocol: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Players {
     /// The maximum player count that the server allows.
     pub max: u32,
@@ -398,7 +398,7 @@ pub struct Players {
     pub sample: Vec<Sample>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Sample {
     /// The player's name.
     pub name: String,
