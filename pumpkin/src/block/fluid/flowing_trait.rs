@@ -150,8 +150,31 @@ pub trait FlowingFluid: Send + Sync {
 
             // Try to flow down first
             if is_hole {
+                let mut target_pos = below_pos;
+                if let Some(server) = world.server.upgrade() {
+                    let source_block = world.get_block(block_pos).await;
+                    let to_block = world.get_block(&target_pos).await;
+                    let event = crate::plugin::block::block_from_to::BlockFromToEvent::new(
+                        source_block,
+                        *block_pos,
+                        to_block,
+                        target_pos,
+                        BlockDirection::Down,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                    target_pos = event.to_pos;
+                    let target_state = world.get_block_state(&target_pos).await;
+                    let target_block = Block::from_state_id(target_state.id);
+                    if !physics::can_be_replaced(target_state, target_block, fluid) {
+                        return;
+                    }
+                }
                 let falling_props = self.get_flowing(fluid, Level::L8, true);
-                self.spread_to(world, fluid, &below_pos, falling_props.to_state_id(fluid))
+                self.spread_to(world, fluid, &target_pos, falling_props.to_state_id(fluid))
                     .await;
 
                 // Check if we should also spread to sides
@@ -533,13 +556,37 @@ pub trait FlowingFluid: Send + Sync {
                     continue;
                 }
 
+                let mut target_pos = side_pos;
+                if let Some(server) = world.server.upgrade() {
+                    let source_block = world.get_block(block_pos).await;
+                    let to_block = world.get_block(&target_pos).await;
+                    let event = crate::plugin::block::block_from_to::BlockFromToEvent::new(
+                        source_block,
+                        *block_pos,
+                        to_block,
+                        target_pos,
+                        direction,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        continue;
+                    }
+                    target_pos = event.to_pos;
+                    let target_state = world.get_block_state(&target_pos).await;
+                    let target_block = Block::from_state_id(target_state.id);
+                    if !physics::can_be_replaced(target_state, target_block, fluid) {
+                        continue;
+                    }
+                }
+
                 // Calculate the new fluid state
                 let level_index = (effective_level as u16).saturating_sub(1);
                 let new_props = self.get_flowing(fluid, Level::from_index(level_index), false);
                 let final_state_id = new_props.to_state_id(fluid);
 
                 // Call spread_to with the calculated fluid state ID
-                self.spread_to(world, fluid, &side_pos, final_state_id)
+                self.spread_to(world, fluid, &target_pos, final_state_id)
                     .await;
             }
         }
