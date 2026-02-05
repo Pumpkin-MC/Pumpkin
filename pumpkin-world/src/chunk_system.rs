@@ -1155,14 +1155,12 @@ impl GenerationCache for Cache {
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
-            Chunk::Level(data) => {
-                Biome::from_id(
-                    data.section
-                        .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
-                        .unwrap_or(0),
-                )
-                .unwrap()
-            }
+            Chunk::Level(data) => Biome::from_id(
+                data.section
+                    .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
+                    .unwrap_or(0),
+            )
+            .unwrap(),
             Chunk::Proto(data) => data.get_terrain_gen_biome(x, y, z),
         }
     }
