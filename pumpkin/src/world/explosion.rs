@@ -204,14 +204,44 @@ impl Explosion {
     /// Returns the removed block count
     pub async fn explode(&self, world: &Arc<World>) -> u32 {
         let blocks = self.get_blocks_to_destroy(world).await;
+        let source_pos = BlockPos::floored(self.pos.x, self.pos.y, self.pos.z);
+        let (source_block, _source_state) = world.get_block_and_state(&source_pos).await;
+        let mut block_positions: Vec<BlockPos> = blocks.keys().cloned().collect();
+        let mut yield_rate = 1.0_f32;
+
+        if let Some(server) = world.server.upgrade() {
+            let event = crate::plugin::block::block_explode::BlockExplodeEvent::new(
+                source_block,
+                source_pos,
+                world.uuid,
+                block_positions,
+                yield_rate,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return 0;
+            }
+            block_positions = event.blocks;
+            yield_rate = event.yield_rate;
+        }
+
         self.damage_entities(world).await;
-        for (pos, (block, state)) in &blocks {
+
+        for pos in &block_positions {
+            let Some((block, state)) = blocks.get(pos) else {
+                continue;
+            };
             world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;
             world.close_container_screens_at(pos).await;
 
             let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
             if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
+                if yield_rate <= 0.0
+                    || (yield_rate < 1.0 && rand::random::<f32>() > yield_rate)
+                {
+                    continue;
+                }
                 let params = LootContextParameters {
                     block_state: Some(state),
                     explosion_radius: Some(self.power),
@@ -230,6 +260,6 @@ impl Explosion {
             }
         }
         // TODO: fire
-        blocks.len() as u32
+        block_positions.len() as u32
     }
 }
