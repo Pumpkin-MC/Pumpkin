@@ -54,7 +54,7 @@ use pumpkin_util::text::TextComponent;
 /// A command error that requires **exactly** `N` translation arguments.
 ///
 /// **Comparison with Brigadier**:
-/// - [`CommandErrorType<0>`] = `SimpleCommandExceptionType` (**default**)
+/// - [`CommandErrorType<0>`] = `SimpleCommandExceptionType`
 /// - [`CommandErrorType<1>`] = `DynamicCommandExceptionType`
 /// - [`CommandErrorType<2>`] = `Dynamic2CommandExceptionType`
 /// - [`CommandErrorType<3>`] = `Dynamic3CommandExceptionType`
