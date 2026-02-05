@@ -12,6 +12,7 @@ use crate::command::{
     tree::{CommandTree, builder::argument},
 };
 use crate::server::Server;
+use crate::plugin::world::spawn_change::SpawnChangeEvent;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::translation;
 use pumpkin_util::{math::position::BlockPos, text::TextComponent};
@@ -114,12 +115,21 @@ async fn setworldspawn(
     }
 
     let current_info = server.level_info.load();
+    let previous_position = BlockPos::new(
+        current_info.spawn_x,
+        current_info.spawn_y,
+        current_info.spawn_z,
+    );
+    let mut new_position = block_pos;
+    let event = SpawnChangeEvent::new(world.clone(), previous_position, new_position);
+    let event = server.plugin_manager.fire(event).await;
+    new_position = event.new_position;
 
     let mut new_info = (**current_info).clone();
 
-    new_info.spawn_x = block_pos.0.x;
-    new_info.spawn_y = block_pos.0.y;
-    new_info.spawn_z = block_pos.0.z;
+    new_info.spawn_x = new_position.0.x;
+    new_info.spawn_y = new_position.0.y;
+    new_info.spawn_z = new_position.0.z;
     new_info.spawn_yaw = yaw;
     new_info.spawn_pitch = pitch;
 
@@ -129,9 +139,9 @@ async fn setworldspawn(
         .send_message(TextComponent::translate(
             translation::COMMANDS_SETWORLDSPAWN_SUCCESS,
             [
-                TextComponent::text(block_pos.0.x.to_string()),
-                TextComponent::text(block_pos.0.y.to_string()),
-                TextComponent::text(block_pos.0.z.to_string()),
+                TextComponent::text(new_position.0.x.to_string()),
+                TextComponent::text(new_position.0.y.to_string()),
+                TextComponent::text(new_position.0.z.to_string()),
                 TextComponent::text(yaw.to_string()),
                 TextComponent::text(pitch.to_string()),
                 TextComponent::text(world.dimension.minecraft_name),
