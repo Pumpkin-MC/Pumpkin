@@ -70,6 +70,22 @@ impl FireBlock {
         false
     }
 
+    async fn should_fade(world: &Arc<World>, pos: &BlockPos, block: &'static Block) -> bool {
+        if let Some(server) = world.server.upgrade() {
+            let event = crate::plugin::block::block_fade::BlockFadeEvent::new(
+                block,
+                &Block::AIR,
+                *pos,
+                world.uuid,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return false;
+            }
+        }
+        true
+    }
+
     pub async fn get_state_for_position(
         &self,
         world: &World,
@@ -128,13 +144,45 @@ impl FireBlock {
                     .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
                     .await;
             } else {
-                world
-                    .set_block_state(
-                        pos,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
+                if let Some(server) = world.server.upgrade() {
+                    let spread_event = crate::plugin::block::block_spread::BlockSpreadEvent {
+                        source_block: &Block::FIRE,
+                        source_pos: *source_pos,
+                        block: &Block::FIRE,
+                        block_pos: *pos,
+                        world_uuid: world.uuid,
+                        cancelled: false,
+                    };
+                    let spread_event = server
+                        .plugin_manager
+                        .fire::<crate::plugin::block::block_spread::BlockSpreadEvent>(
+                            spread_event,
+                        )
+                        .await;
+                    if spread_event.cancelled {
+                        return;
+                    }
+                    let event = BlockBurnEvent {
+                        igniting_block: &Block::FIRE,
+                        block,
+                        block_pos: *pos,
+                        world_uuid: world.uuid,
+                        cancelled: false,
+                    };
+                    let event = server.plugin_manager.fire::<BlockBurnEvent>(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                }
+                if Self::should_fade(world, pos, block).await {
+                    world
+                        .set_block_state(
+                            pos,
+                            Block::AIR.default_state.id,
+                            BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                }
             }
 
             if block == &Block::TNT {
@@ -276,13 +324,15 @@ impl BlockBehaviour for FireBlock {
                 })
                 .await
             {
-                world
-                    .set_block_state(
-                        pos,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
+                if Self::should_fade(world, pos, block).await {
+                    world
+                        .set_block_state(
+                            pos,
+                            Block::AIR.default_state.id,
+                            BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                }
                 return;
             }
             let block_state = world.get_block_state(pos).await;
@@ -303,13 +353,15 @@ impl BlockBehaviour for FireBlock {
             if !Self.are_blocks_around_flammable(world.as_ref(), pos).await {
                 let block_below_state = world.get_block_state(&pos.down()).await;
                 if block_below_state.is_side_solid(BlockDirection::Up) {
-                    world
-                        .set_block_state(
-                            pos,
-                            Block::AIR.default_state.id,
-                            BlockFlags::NOTIFY_NEIGHBORS,
-                        )
-                        .await;
+                    if Self::should_fade(world, pos, block).await {
+                        world
+                            .set_block_state(
+                                pos,
+                                Block::AIR.default_state.id,
+                                BlockFlags::NOTIFY_NEIGHBORS,
+                            )
+                            .await;
+                    }
                 }
                 return;
             }
@@ -318,13 +370,15 @@ impl BlockBehaviour for FireBlock {
                 && rand::rng().random_range(0..4) == 0
                 && !Self::is_flammable(world.get_block_state(&pos.down()).await)
             {
-                world
-                    .set_block_state(
-                        pos,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
+                if Self::should_fade(world, pos, block).await {
+                    world
+                        .set_block_state(
+                            pos,
+                            Block::AIR.default_state.id,
+                            BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                }
                 return;
             }
 
