@@ -1588,29 +1588,12 @@ impl JavaClient {
                     // TODO: do validation
                     // TODO: Config
                     if player.gamemode.load() == GameMode::Creative {
-                        let block_break_event = crate::plugin::block::block_break::BlockBreakEvent::new(
-                            Some(player.clone()),
-                            block,
-                            position,
-                            0,
-                            false,
-                        );
-                        let block_break_event =
-                            server.plugin_manager.fire(block_break_event).await;
-                        if block_break_event.cancelled {
-                            self.update_sequence(player, player_action.sequence.0);
-                            return;
-                        }
                         // Block break & play sound
                         world
                             .break_block(
                                 &position,
                                 Some(player.clone()),
-                                if block_break_event.drop {
-                                    BlockFlags::NOTIFY_NEIGHBORS
-                                } else {
-                                    BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS
-                                },
+                                BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
                             )
                             .await;
                         server
@@ -1642,30 +1625,12 @@ impl JavaClient {
                         }
                         // Instant break
                         if block_damage_event.insta_break {
-                            let block_break_event =
-                                crate::plugin::block::block_break::BlockBreakEvent::new(
-                                    Some(player.clone()),
-                                    block,
-                                    position,
-                                    0,
-                                    true,
-                                );
-                            let block_break_event =
-                                server.plugin_manager.fire(block_break_event).await;
-                            if block_break_event.cancelled {
-                                self.update_sequence(player, player_action.sequence.0);
-                                return;
-                            }
                             let broken_state = world.get_block_state(&position).await;
                             world
                                 .break_block(
                                     &position,
                                     Some(player.clone()),
-                                    if block_break_event.drop {
-                                        BlockFlags::NOTIFY_NEIGHBORS
-                                    } else {
-                                        BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
-                                    },
+                                    BlockFlags::NOTIFY_NEIGHBORS,
                                 )
                                 .await;
                             server
@@ -1740,21 +1705,6 @@ impl JavaClient {
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
 
-                    let block_break_event = crate::plugin::block::block_break::BlockBreakEvent::new(
-                        Some(player.clone()),
-                        block,
-                        location,
-                        0,
-                        block_drop,
-                    );
-                    let block_break_event = server.plugin_manager.fire(block_break_event).await;
-                    if block_break_event.cancelled {
-                        world.set_block_breaking(entity, location, -1).await;
-                        self.update_sequence(player, player_action.sequence.0);
-                        return;
-                    }
-
-                    let block_drop = block_break_event.drop;
                     if block_drop {
                         if let Some(server) = world.server.upgrade() {
                             let tool = player.inventory.held_item().lock().await.clone();
