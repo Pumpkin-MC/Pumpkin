@@ -1,18 +1,40 @@
 use heck::ToPascalCase;
+use indexmap::IndexMap;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::collections::BTreeMap;
+use serde::Deserialize;
+use serde_json::Value;
 use std::fs;
+
+#[derive(Deserialize)]
+struct JukeboxSongData {
+    length_in_seconds: f32,
+    comparator_output: u8,
+}
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/jukebox_song.json");
+    println!("cargo:rerun-if-changed=../assets/registry/1_21_11_synced_registries.json");
 
-    let songs: BTreeMap<String, u32> = serde_json::from_str(
+    let songs: IndexMap<String, u32> = serde_json::from_str(
         &fs::read_to_string("../assets/jukebox_song.json").expect("Missing jukebox_song.json"),
     )
     .expect("Failed to parse jukebox_song.json");
 
-    // Helper to handle numeric keys like "11" -> "Id11"
+    let registries: IndexMap<String, Value> = serde_json::from_str(
+        &fs::read_to_string("../assets/registry/1_21_11_synced_registries.json")
+            .expect("Missing synced_registries.json"),
+    )
+    .expect("Failed to parse synced_registries.json");
+
+    let song_data: IndexMap<String, JukeboxSongData> = serde_json::from_value(
+        registries
+            .get("jukebox_song")
+            .expect("Missing jukebox_song in synced registries")
+            .clone(),
+    )
+    .expect("Failed to parse jukebox_song data");
+
     let make_variant_ident = |name: &str| {
         let pascal = name.to_pascal_case();
         if pascal.chars().next().is_some_and(|c| c.is_ascii_digit()) {
@@ -54,74 +76,26 @@ pub(crate) fn build() -> TokenStream {
         })
         .collect::<TokenStream>();
 
-    // Vanilla song durations in seconds from JukeboxSongs.java
-    let song_lengths: BTreeMap<&str, u32> = [
-        ("13", 178),
-        ("cat", 185),
-        ("blocks", 345),
-        ("chirp", 185),
-        ("far", 174),
-        ("mall", 197),
-        ("mellohi", 96),
-        ("stal", 150),
-        ("strad", 188),
-        ("ward", 251),
-        ("11", 71),
-        ("wait", 238),
-        ("pigstep", 149),
-        ("otherside", 195),
-        ("5", 178),
-        ("relic", 218),
-        ("precipice", 299),
-        ("creator", 176),
-        ("creator_music_box", 73),
-        ("tears", 175),
-        ("lava_chicken", 134),
-    ]
-    .into_iter()
-    .collect();
-
     let type_to_length = songs
         .keys()
         .map(|name| {
             let variant_name = make_variant_ident(name);
-            let length = song_lengths.get(name.as_str()).copied().unwrap_or(0);
+            let length = song_data
+                .get(name)
+                .map(|d| d.length_in_seconds as u32)
+                .unwrap_or(0);
             quote! { Self::#variant_name => #length, }
         })
         .collect::<TokenStream>();
-
-    // Vanilla comparator output values from JukeboxSongs.java
-    let comparator_outputs: BTreeMap<&str, u8> = [
-        ("13", 1),
-        ("cat", 2),
-        ("blocks", 3),
-        ("chirp", 4),
-        ("far", 5),
-        ("mall", 6),
-        ("mellohi", 7),
-        ("stal", 8),
-        ("strad", 9),
-        ("ward", 10),
-        ("11", 11),
-        ("wait", 12),
-        ("pigstep", 13),
-        ("otherside", 14),
-        ("5", 15),
-        ("relic", 14),
-        ("precipice", 13),
-        ("creator", 12),
-        ("creator_music_box", 11),
-        ("tears", 10),
-        ("lava_chicken", 9),
-    ]
-    .into_iter()
-    .collect();
 
     let type_to_comparator = songs
         .keys()
         .map(|name| {
             let variant_name = make_variant_ident(name);
-            let output = comparator_outputs.get(name.as_str()).copied().unwrap_or(0);
+            let output = song_data
+                .get(name)
+                .map(|d| d.comparator_output)
+                .unwrap_or(0);
             quote! { Self::#variant_name => #output, }
         })
         .collect::<TokenStream>();
