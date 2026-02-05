@@ -2953,7 +2953,26 @@ impl World {
                     block_state: Some(BlockState::from_id(broken_state_id)),
                     ..Default::default()
                 };
-                block::drop_loot(self, broken_block, position, true, params).await;
+                let mut stacks = block::collect_loot(broken_block, params);
+                if let Some(player) = cause.clone()
+                    && let Some(server) = self.server.upgrade()
+                {
+                    let event = crate::plugin::block::block_drop_item::BlockDropItemEvent::new(
+                        player,
+                        broken_block,
+                        *position,
+                        stacks,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return Some(new_state_id);
+                    }
+                    stacks = event.items;
+                }
+                for stack in stacks {
+                    self.drop_stack(position, stack).await;
+                }
+                block::drop_experience(self, broken_block, position, true).await;
             }
             return Some(new_state_id);
         }
