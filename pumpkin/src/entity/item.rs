@@ -9,7 +9,7 @@ use std::sync::{
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
-    damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData, Item,
+    damage::DamageType, item::Item, meta_data_type::MetaDataType, tracked_data::TrackedData,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,

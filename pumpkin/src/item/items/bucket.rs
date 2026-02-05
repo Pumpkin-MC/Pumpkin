@@ -193,10 +193,12 @@ impl ItemBehaviour for EmptyBucketItem {
                 &Item::WATER_BUCKET
             };
 
-            if let Some(server) = world.server.upgrade() {
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = player.as_arc()
+            {
                 let position = block_pos.to_f64();
                 let event = PlayerBucketFillEvent::new(
-                    player.clone(),
+                    player_arc,
                     position,
                     block_key(block),
                     Some(direction),
@@ -272,7 +274,9 @@ impl ItemBehaviour for FilledBucketItem {
             }
             let (block, state) = world.get_block_and_state_id(&pos).await;
 
-            if let Some(server) = world.server.upgrade() {
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = player.as_arc()
+            {
                 let target_pos = if waterlogged_check(block, state).is_some()
                     || state == Block::LAVA.default_state.id
                     || state == Block::WATER.default_state.id
@@ -283,7 +287,7 @@ impl ItemBehaviour for FilledBucketItem {
                 };
                 let target_block = world.get_block(&target_pos).await;
                 let event = PlayerBucketEmptyEvent::new(
-                    player.clone(),
+                    player_arc,
                     target_pos.to_f64(),
                     block_key(target_block),
                     Some(direction),

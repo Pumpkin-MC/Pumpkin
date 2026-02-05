@@ -24,6 +24,7 @@ impl Ignition {
     {
         let world = player.world();
         let pos = location.offset(face.to_offset());
+        let igniting_block = Block::from_id(block.id);
 
         if world.get_fluid(&location).await.name != Fluid::EMPTY.name {
             return false;
@@ -33,11 +34,13 @@ impl Ignition {
         let state_id = world.get_block_state_id(&location).await;
 
         if let Some(new_state_id) = can_be_lit(block, state_id) {
-            if let Some(server) = world.server.upgrade() {
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = player.as_arc()
+            {
                 let event = crate::plugin::block::block_ignite::BlockIgniteEvent {
-                    player: player.clone(),
-                    block,
-                    igniting_block: block,
+                    player: player_arc,
+                    block: igniting_block,
+                    igniting_block,
                     block_pos: location,
                     world_uuid: world.uuid,
                     cause: cause.to_string(),
@@ -59,11 +62,14 @@ impl Ignition {
             .get_state_for_position(&world, &fire_block, &pos)
             .await;
         if FireBlockBase::can_place_at(&world, &pos).await {
-            if let Some(server) = world.server.upgrade() {
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = player.as_arc()
+            {
+                let fire_block = Block::from_id(fire_block.id);
                 let event = crate::plugin::block::block_ignite::BlockIgniteEvent {
-                    player: player.clone(),
-                    block: &fire_block,
-                    igniting_block: block,
+                    player: player_arc,
+                    block: fire_block,
+                    igniting_block,
                     block_pos: pos,
                     world_uuid: world.uuid,
                     cause: cause.to_string(),

@@ -83,8 +83,9 @@ impl BlockBehaviour for FarmlandBlock {
                     props.moisture = Integer0To7::L7;
                     let mut new_state_id = props.to_state_id(args.block);
                     if let Some(server) = args.world.server.upgrade() {
+                        let event_block = Block::from_id(args.block.id);
                         let event = MoistureChangeEvent::new(
-                            args.block,
+                            event_block,
                             *args.position,
                             args.world.uuid,
                             new_state_id,
@@ -122,8 +123,9 @@ impl BlockBehaviour for FarmlandBlock {
                     props.moisture = Integer0To7::from_index(props.moisture.to_index() - 1);
                     let mut new_state_id = props.to_state_id(args.block);
                     if let Some(server) = args.world.server.upgrade() {
+                        let event_block = Block::from_id(args.block.id);
                         let event = MoistureChangeEvent::new(
-                            args.block,
+                            event_block,
                             *args.position,
                             args.world.uuid,
                             new_state_id,

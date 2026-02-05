@@ -52,8 +52,9 @@ pub(crate) trait PressurePlate {
         if calc_output != output {
             let mut next_output = calc_output;
             if let Some(server) = world.server.upgrade() {
+                let event_block = Block::from_id(block.id);
                 let event = crate::plugin::block::block_redstone::BlockRedstoneEvent::new(
-                    block,
+                    event_block,
                     *pos,
                     i32::from(output),
                     i32::from(calc_output),

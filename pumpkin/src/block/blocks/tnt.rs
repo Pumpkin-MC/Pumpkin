@@ -11,6 +11,7 @@ use crate::entity::tnt::TNTEntity;
 use crate::plugin::block::tnt_prime::TNTPrimeEvent;
 use crate::world::World;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::Block;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -71,7 +72,7 @@ impl BlockBehaviour for TNTBlock {
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let item = args.item_stack.lock().await.item;
-            if item != &Item::FLINT_AND_STEEL || item == &Item::FIRE_CHARGE {
+            if item != &Item::FLINT_AND_STEEL && item != &Item::FIRE_CHARGE {
                 return BlockActionResult::Pass;
             }
             let world = args.player.world();
@@ -80,8 +81,8 @@ impl BlockBehaviour for TNTBlock {
             } else {
                 "FLINT_AND_STEEL"
             };
-            let _ = Self::prime(&world, args.position, cause.to_string(), Some(args.player.clone()))
-                .await;
+            let player = args.player.as_arc();
+            let _ = Self::prime(&world, args.position, cause.to_string(), player).await;
 
             BlockActionResult::Consume
         })

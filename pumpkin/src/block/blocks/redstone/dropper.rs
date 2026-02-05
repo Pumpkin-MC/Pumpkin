@@ -7,6 +7,7 @@ use crate::block::{
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 
+use pumpkin_data::Block;
 use pumpkin_data::FacingExt;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
@@ -208,8 +209,9 @@ impl BlockBehaviour for DropperBlock {
                     );
                     let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade()
                     {
+                        let event_block = Block::from_id(args.block.id);
                         let event = crate::plugin::block::block_dispense::BlockDispenseEvent::new(
-                            args.block,
+                            event_block,
                             *args.position,
                             drop_item,
                             velocity,
