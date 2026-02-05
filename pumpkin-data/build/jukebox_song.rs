@@ -1,5 +1,5 @@
 use heck::ToPascalCase;
-use indexmap::IndexMap;
+use std::collections::BTreeMap;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
@@ -16,18 +16,18 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/jukebox_song.json");
     println!("cargo:rerun-if-changed=../assets/registry/1_21_11_synced_registries.json");
 
-    let songs: IndexMap<String, u32> = serde_json::from_str(
+    let songs: BTreeMap<String, u32> = serde_json::from_str(
         &fs::read_to_string("../assets/jukebox_song.json").expect("Missing jukebox_song.json"),
     )
     .expect("Failed to parse jukebox_song.json");
 
-    let registries: IndexMap<String, Value> = serde_json::from_str(
+    let registries: BTreeMap<String, Value> = serde_json::from_str(
         &fs::read_to_string("../assets/registry/1_21_11_synced_registries.json")
             .expect("Missing synced_registries.json"),
     )
     .expect("Failed to parse synced_registries.json");
 
-    let song_data: IndexMap<String, JukeboxSongData> = serde_json::from_value(
+    let song_data: BTreeMap<String, JukeboxSongData> = serde_json::from_value(
         registries
             .get("jukebox_song")
             .expect("Missing jukebox_song in synced registries")
