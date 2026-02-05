@@ -10,6 +10,7 @@ pub mod block_fade;
 pub mod block_fertilize;
 pub mod block_form;
 pub mod block_from_to;
+pub mod block_grow;
 pub mod block_ignite;
 pub mod block_spread;
 pub mod block_place;
