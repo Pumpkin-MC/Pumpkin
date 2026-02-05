@@ -286,31 +286,36 @@ impl Level {
             lock.drain(..).collect::<Vec<_>>()
         };
 
-        log::info!("Joining {} synchronous threads for {}...", handles.len(), world_id);
+        let handle_count = handles.len();
+        log::info!("Joining {} threads for {}...", handle_count, world_id);
         let join_task = tokio::task::spawn_blocking(move || {
-            for handle in handles {
-                // Attempt to join. If a thread is stuck, this block stays alive.
-                let _ = handle.join();
+            let mut failed_count = 0;
+            for handle in handles.into_iter() {
+                if handle.join().is_err() {
+                    failed_count += 1;
+                }
             }
+            failed_count
         });
 
         match timeout(Duration::from_secs(3), join_task).await {
-            Ok(task_result) => {
-                task_result.unwrap();
-                log::info!("All threads joined successfully for {}.", world_id);
+            Ok(Ok(failed_count)) => {
+                if failed_count > 0 {
+                    log::warn!("{} threads failed to join properly for {}.", failed_count, world_id);
+                }
+            }
+            Ok(Err(_)) => {
+                log::warn!("Thread join task panicked for {}.", world_id);
             }
             Err(_) => {
-                log::warn!(
-                    "Timed out waiting for synchronous threads to join. Proceeding anyway..."
-                );
+                log::warn!("Timed out waiting for threads to join for {}.", world_id);
             }
         }
 
-        log::debug!("Awaiting remaining async tasks for {}...", world_id);
         self.tasks.wait().await;
         self.chunk_system_tasks.wait().await;
 
-        log::info!("Flushing savers to disk for {}...", world_id);
+        log::info!("Flushing data to disk for {}...", world_id);
         self.chunk_saver.block_and_await_ongoing_tasks().await;
         self.entity_saver.block_and_await_ongoing_tasks().await;
 

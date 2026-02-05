@@ -179,15 +179,11 @@ pub async fn io_read_work(
 }
 
 pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
-    log::info!("io write thread start",);
     loop {
         // Don't check cancel_token here (keep saving chunks)
         let data = match recv.recv().await {
             Ok(d) => d,
-            Err(_) => {
-                log::debug!("io write channel closed, exiting");
-                break;
-            }
+            Err(_) => break,
         };
         // debug!("io write thread receive chunks size {}", data.len());
         let mut vec = Vec::with_capacity(data.len());
@@ -203,11 +199,14 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
             }
         }
         let pos = vec.iter().map(|(pos, _)| *pos).collect_vec();
-        level
+        if let Err(e) = level
             .chunk_saver
             .save_chunks(&level.level_folder, vec)
             .await
-            .unwrap();
+        {
+            log::error!("Failed to save chunks: {:?}", e);
+        }
+
         for i in pos {
             let mut data = lock.0.lock().unwrap();
             match data.entry(i) {
@@ -221,15 +220,13 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                         *rc -= 1;
                     }
                 }
-                Entry::Vacant(_) => panic!(),
+                Entry::Vacant(_) => {
+                    log::warn!("io_write: attempted to release missing lock entry for {:?}", i);
+                    // continue without panicking to avoid crashing on shutdown races
+                }
             }
         }
     }
-    log::info!(
-        "io write thread stop id: {:?} name: {}",
-        thread::current().id(),
-        thread::current().name().unwrap_or("unknown")
-    );
 }
 
 pub fn generation_work(
@@ -237,43 +234,32 @@ pub fn generation_work(
     send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
     level: Arc<Level>,
 ) {
-    log::debug!(
-        "generation thread start id: {:?} name: {}",
-        thread::current().id(),
-        thread::current().name().unwrap_or("unknown")
-    );
-
     let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
-    use std::time::Duration;
     loop {
-        match recv.try_recv() {
-            Ok((pos, mut cache, stage)) => {
-                // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
-                cache.advance(
-                    stage,
-                    level.block_registry.as_ref(),
-                    settings,
-                    &level.world_gen.random_config,
-                    &level.world_gen.terrain_cache,
-                    &level.world_gen.base_router,
-                    level.world_gen.dimension,
-                );
-                if send.send((pos, RecvChunk::Generation(cache))).is_err() {
-                    break;
-                }
-            }
+        // Use blocking recv() instead of try_recv() + sleep loop
+        // This will properly exit when the channel is closed (sender dropped)
+        let (pos, mut cache, stage) = match recv.recv() {
+            Ok(data) => data,
             Err(_) => {
-                if level.cancel_token.is_cancelled() {
-                    break;
-                }
-                thread::sleep(Duration::from_millis(50));
-                continue;
+                log::debug!("generation channel closed, exiting");
+                break;
             }
+        };
+        
+        // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
+        cache.advance(
+            stage,
+            level.block_registry.as_ref(),
+            settings,
+            &level.world_gen.random_config,
+            &level.world_gen.terrain_cache,
+            &level.world_gen.base_router,
+            level.world_gen.dimension,
+        );
+        
+        if send.send((pos, RecvChunk::Generation(cache))).is_err() {
+            log::debug!("generation send failed, receiver dropped");
+            break;
         }
     }
-    log::debug!(
-        "generation thread stop id: {:?} name: {}",
-        thread::current().id(),
-        thread::current().name().unwrap_or("unknown")
-    );
 }

@@ -409,24 +409,28 @@ impl GenerationSchedule {
 
     fn save_all_chunk(&self, save_proto_chunk: bool) {
         let mut chunks = Vec::with_capacity(self.chunk_map.len());
-        for (pos, chunk) in &self.chunk_map {
-            if let Some(chunk) = &chunk.chunk {
+        for (pos, holder) in &self.chunk_map {
+            if let Some(chunk) = &holder.chunk {
                 match chunk {
-                    Chunk::Level(chunk) => {
-                        chunks.push((*pos, Chunk::Level(chunk.clone())));
+                    Chunk::Level(sync_chunk) => {
+                        // Only save level chunks that are marked dirty
+                        let dirty = sync_chunk.blocking_read().dirty;
+                        if dirty {
+                            chunks.push((*pos, Chunk::Level(sync_chunk.clone())));
+                        }
                     }
-                    Chunk::Proto(chunk) => {
+                    Chunk::Proto(proto) => {
                         if save_proto_chunk {
-                            chunks.push((*pos, Chunk::Proto(chunk.clone())));
+                            chunks.push((*pos, Chunk::Proto(proto.clone())));
                         }
                     }
                 }
             }
         }
-        // log::debug!("send {} chunks to io write", chunks.len());
         if chunks.is_empty() {
             return;
         }
+        log::info!("Saving {} chunks...", chunks.len());
         let mut data = self.io_lock.0.lock().unwrap();
         for (pos, _chunk) in &chunks {
             *data.entry(*pos).or_insert(0) += 1;
@@ -598,11 +602,22 @@ impl GenerationSchedule {
                 self.save_all_chunk(false);
             }
             if level.shut_down_chunk_system.load(Relaxed) {
-                // log::debug!("shut down signal");
+                // Save all chunks BEFORE breaking the loop to ensure IO write thread processes them
+                log::info!("Saving chunks before shutdown...");
+                self.save_all_chunk(true);
                 break;
             }
 
             'out2: while let Some(task) = self.queue.pop() {
+                // Check shutdown flag again before processing tasks to avoid IO errors
+                if level.shut_down_chunk_system.load(Relaxed) {
+                    // Don't process any more tasks, just break to save chunks
+                    self.queue.push(task);
+                    log::info!("Shutdown detected during task processing, saving chunks...");
+                    self.save_all_chunk(true);
+                    break 'out2;
+                }
+                
                 if self.resort_work(self.send_level.get()) {
                     self.queue.push(task);
                     break 'out2;
@@ -635,8 +650,10 @@ impl GenerationSchedule {
                         // debug!("send task {:?} {node:?}", task.1);
 
                         if self.io_read.send(node.pos).is_err() {
-                            log::warn!("io thread closed while scheduling; stopping scheduler");
-                            return;
+                            // IO thread closed (likely due to shutdown), save and exit cleanly
+                            log::info!("IO read thread closed, saving remaining chunks...");
+                            self.save_all_chunk(true);
+                            break 'out2;
                         }
                     } else {
                         let occupy = self.graph.nodes.insert(Node::new(
@@ -746,10 +763,11 @@ impl GenerationSchedule {
 
                         self.running_task_count += 1;
                         if self.generate.send((node.pos, cache, node.stage)).is_err() {
-                            // revert running task count increment and stop
+                            // revert running task count increment and exit cleanly with save
                             self.running_task_count = self.running_task_count.saturating_sub(1);
-                            log::warn!("generate thread closed while scheduling; stopping scheduler");
-                            return;
+                            log::info!("Generation thread closed, saving remaining chunks...");
+                            self.save_all_chunk(true);
+                            break 'out2;
                         }
                     }
                 }
@@ -779,7 +797,7 @@ impl GenerationSchedule {
                 }
             }
         }
-        log::info!("waiting for {} generation tasks to finish", self.running_task_count);
+        log::info!("schedule: waiting for {} generation tasks to finish", self.running_task_count);
         let mut wait_iterations = 0;
         let max_wait_iterations = 100; // 5 seconds max wait
         while self.running_task_count > 0 && wait_iterations < max_wait_iterations {
@@ -799,7 +817,7 @@ impl GenerationSchedule {
         }
         
         if self.running_task_count > 0 {
-            log::warn!("Cancelling {} in-flight generation tasks to save loaded chunks", self.running_task_count);
+            log::warn!("Cancelling {} in-flight generation tasks", self.running_task_count);
             // Clear occupy nodes for cancelled tasks
             for (_pos, holder) in &mut self.chunk_map {
                 if !holder.occupied.is_null() {
@@ -814,11 +832,9 @@ impl GenerationSchedule {
             }
             self.running_task_count = 0;
         }
-        log::info!("saving all chunks");
-        self.save_all_chunk(true);
-        log::info!("there are {} chunks to write", self.io_write.len());
         
-        // Drop the io_write sender to signal the write thread to exit after saving
+        // Drop the io_write sender to signal the write thread to exit
+        // Chunks were already saved during loop exit above
         drop(self.io_write);
         
         // Clean up any remaining graph structures
@@ -826,16 +842,7 @@ impl GenerationSchedule {
             log::warn!("Cleaning up {} unreleased nodes from incomplete tasks", self.graph.nodes.len());
             self.graph.nodes.clear();
         }
-        if !self.graph.edges.is_empty() {
-            log::debug!("Cleaning up {} unreleased edges", self.graph.edges.len());
-            self.graph.edges.clear();
-        }
-        
-        log::info!(
-            "schedule thread stop id: {:?} name: {}",
-            thread::current().id(),
-            thread::current().name().unwrap_or("unknown")
-        );
+        self.graph.edges.clear();
     }
 
     fn debug_check(&self) -> bool {
