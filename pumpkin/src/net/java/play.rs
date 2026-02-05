@@ -1377,7 +1377,7 @@ impl JavaClient {
                     if !state.is_air() {
                         let speed = block::calc_block_breaking(player, state, block).await;
                         // Instant break
-                        if speed >= 1.0 {
+                        if block_damage_event.insta_break {
                             let broken_state = world.get_block_state(&position).await;
                             world
                                 .break_block(
@@ -1443,6 +1443,25 @@ impl JavaClient {
                     let (block, state) = world.get_block_and_state(&location).await;
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
+
+                    if block_drop {
+                        if let Some(server) = world.server.upgrade() {
+                            let tool = player.inventory.held_item().lock().await.clone();
+                            let block_key = format!("minecraft:{}", block.name);
+                            let event = crate::plugin::player::player_harvest_block::PlayerHarvestBlockEvent::new(
+                                player.clone(),
+                                location,
+                                block_key,
+                                tool,
+                            );
+                            let event = server.plugin_manager.fire(event).await;
+                            if event.cancelled {
+                                world.set_block_breaking(entity, location, -1).await;
+                                self.update_sequence(player, player_action.sequence.0);
+                                return;
+                            }
+                        }
+                    }
 
                     let new_state = world
                         .break_block(
