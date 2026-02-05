@@ -1,5 +1,7 @@
 use pumpkin_util::text::TextComponent;
 
+use crate::command::errors::error_types::AnyCommandErrorType;
+
 /// A struct detailing the context of a syntax error, including where it happened.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandSyntaxErrorContext {
@@ -21,6 +23,9 @@ impl ContextProvider for CommandSyntaxErrorContext {
 /// A struct detailing a syntax error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandSyntaxError {
+    pub error_type: &'static dyn AnyCommandErrorType,
+    // `TextComponent` is very large so for now we are wrapping it in a `Box`.
+    // No idea if this will change later.
     pub message: TextComponent,
     pub context: Option<CommandSyntaxErrorContext>,
 }
@@ -32,8 +37,12 @@ impl CommandSyntaxError {
     /// This means this error will not print a context to the client, which
     /// includes the string and the location the error was caused.
     #[must_use]
-    pub const fn new_without_context(message: TextComponent) -> Self {
+    pub const fn create_without_context(
+        error_type: &'static dyn AnyCommandErrorType,
+        message: TextComponent,
+    ) -> Self {
         Self {
+            error_type,
             message,
             context: None,
         }
@@ -43,13 +52,23 @@ impl CommandSyntaxError {
     /// which includes the string and the location the error was caused,
     /// along with the error message itself.
     #[must_use]
-    pub fn new_with_context<C>(message: TextComponent, context_provider: &C) -> Self
+    pub fn create<C>(
+        error_type: &'static dyn AnyCommandErrorType,
+        message: TextComponent,
+        context_provider: &C,
+    ) -> Self
     where
         C: ContextProvider,
     {
         Self {
+            error_type,
             message,
             context: Some(context_provider.context()),
         }
+    }
+
+    /// Returns whether this error's type is similar to the provided type.
+    pub fn is(&self, error_type: &'static dyn AnyCommandErrorType) -> bool {
+        self.error_type == error_type
     }
 }

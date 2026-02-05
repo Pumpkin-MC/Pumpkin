@@ -1,8 +1,7 @@
 use crate::command::errors::command_syntax_error::{
     CommandSyntaxError, CommandSyntaxErrorContext, ContextProvider,
 };
-use crate::command::errors::error_types;
-use crate::command::errors::error_types::{DynamicCommandErrorType, SimpleCommandErrorType};
+use crate::command::errors::error_types::{self, CommandErrorType};
 use pumpkin_util::text::TextComponent;
 use std::borrow::Cow;
 use std::str::FromStr;
@@ -167,11 +166,11 @@ impl<'a> StringReader<'a> {
         }
     }
 
-    /// Parses a given type [`T`].
+    /// Parses a given type `T`.
     fn read_and_parse<T: FromStr>(
         &mut self,
-        expected_error_type: SimpleCommandErrorType,
-        invalid_error_type: DynamicCommandErrorType<1>,
+        expected_error_type: &'static CommandErrorType<0>,
+        invalid_error_type: &'static CommandErrorType<1>,
     ) -> Result<T, CommandSyntaxError> {
         let start = self.byte_cursor;
         while let Some(c) = self.peek() {
@@ -183,62 +182,61 @@ impl<'a> StringReader<'a> {
         }
         let result = &self.string[start..self.byte_cursor];
         if result.is_empty() {
-            return Err(expected_error_type.instance_with_context(self));
+            return Err(expected_error_type.create(self));
         }
         if let Ok(value) = result.parse::<T>() {
             Ok(value)
         } else {
             self.byte_cursor = start;
-            Err(invalid_error_type
-                .instance_with_context(self, &[TextComponent::text(result.to_owned())]))
+            Err(invalid_error_type.create(self, TextComponent::text(result.to_owned())))
         }
     }
 
-    /// Parses a [`bool`], resulting in an [`Err`] if unsuccessful.
+    /// Parses a [`bool`], resulting in a [`CommandSyntaxError`] if unsuccessful.
     pub fn read_bool(&mut self) -> Result<bool, CommandSyntaxError> {
         let start = self.byte_cursor;
         let value = self.read_string()?;
         match value.as_str() {
-            "" => Err(error_types::READER_EXPECTED_BOOL.instance_with_context(self)),
+            "" => Err(error_types::READER_EXPECTED_BOOL.create(self)),
             "true" => Ok(true),
             "false" => Ok(false),
             _ => {
                 self.byte_cursor = start;
                 Err(error_types::READER_INVALID_BOOL
-                    .instance_with_context(self, &[TextComponent::text(value.clone())]))
+                    .create(self, TextComponent::text(value.clone())))
             }
         }
     }
 
-    /// Parses a [`i32`], resulting in an [`Err`] if unsuccessful.
+    /// Parses a [`i32`], resulting in a [`CommandSyntaxError`] if unsuccessful.
     pub fn read_int(&mut self) -> Result<i32, CommandSyntaxError> {
         self.read_and_parse(
-            error_types::READER_EXPECTED_INT,
-            error_types::READER_INVALID_INT,
+            &error_types::READER_EXPECTED_INT,
+            &error_types::READER_INVALID_INT,
         )
     }
 
-    /// Parses a [`i64`], resulting in an [`Err`] if unsuccessful.
+    /// Parses a [`i64`], resulting in a [`CommandSyntaxError`] if unsuccessful.
     pub fn read_long(&mut self) -> Result<i64, CommandSyntaxError> {
         self.read_and_parse(
-            error_types::READER_EXPECTED_LONG,
-            error_types::READER_INVALID_LONG,
+            &error_types::READER_EXPECTED_LONG,
+            &error_types::READER_INVALID_LONG,
         )
     }
 
-    /// Parses a [`f32`], resulting in an [`Err`] if unsuccessful.
+    /// Parses a [`f32`], resulting in a [`CommandSyntaxError`] if unsuccessful.
     pub fn read_float(&mut self) -> Result<f32, CommandSyntaxError> {
         self.read_and_parse(
-            error_types::READER_EXPECTED_FLOAT,
-            error_types::READER_INVALID_FLOAT,
+            &error_types::READER_EXPECTED_FLOAT,
+            &error_types::READER_INVALID_FLOAT,
         )
     }
 
-    /// Parses a [`f64`], resulting in an [`Err`] if unsuccessful.
+    /// Parses a [`f64`], resulting in a [`CommandSyntaxError`] if unsuccessful.
     pub fn read_double(&mut self) -> Result<f64, CommandSyntaxError> {
         self.read_and_parse(
-            error_types::READER_EXPECTED_DOUBLE,
-            error_types::READER_INVALID_DOUBLE,
+            &error_types::READER_EXPECTED_DOUBLE,
+            &error_types::READER_INVALID_DOUBLE,
         )
     }
 
@@ -277,7 +275,7 @@ impl<'a> StringReader<'a> {
             self.skip();
             self.read_string_until(next)
         } else {
-            Err(error_types::READER_EXPECTED_START_QUOTE.instance_with_context(self))
+            Err(error_types::READER_EXPECTED_START_QUOTE.create(self))
         }
     }
 
@@ -293,7 +291,7 @@ impl<'a> StringReader<'a> {
                     escaped = false;
                 } else {
                     return Err(error_types::READER_INVALID_ESCAPE
-                        .instance_with_context(self, &[TextComponent::text(c.to_string())]));
+                        .create(self, TextComponent::text(c.to_string())));
                 }
             } else {
                 self.skip();
@@ -306,7 +304,7 @@ impl<'a> StringReader<'a> {
                 }
             }
         }
-        Err(error_types::READER_EXPECTED_END_QUOTE.instance_with_context(self))
+        Err(error_types::READER_EXPECTED_END_QUOTE.create(self))
     }
 
     /// Expects to consume a specific [`char`], or return an [`Err`].
@@ -316,7 +314,7 @@ impl<'a> StringReader<'a> {
             Ok(())
         } else {
             Err(error_types::READER_EXPECTED_SYMBOL
-                .instance_with_context(self, &[TextComponent::text(c.to_string())]))
+                .create(self, TextComponent::text(c.to_string())))
         }
     }
 }
@@ -332,7 +330,7 @@ impl ContextProvider for StringReader<'_> {
 
 #[cfg(test)]
 mod test {
-    use crate::command::string_reader::StringReader;
+    use crate::command::{errors::error_types, string_reader::StringReader};
 
     #[test]
     fn non_parsing_methods() {
@@ -377,7 +375,12 @@ mod test {
         assert_eq!(reader.read_long(), Ok(34));
         reader.skip_whitespace();
 
-        assert!(reader.read_int().is_err());
+        assert!(
+            reader
+                .read_int()
+                .unwrap_err()
+                .is(&error_types::READER_INVALID_INT)
+        );
         reader.skip_whitespace();
         assert_eq!(reader.read_long(), Ok(7890123456));
         reader.skip_whitespace();
@@ -408,6 +411,11 @@ mod test {
         assert_eq!(reader.read_string(), Ok("orange".to_string()));
         reader.skip_whitespace();
 
-        assert!(reader.read_quoted_string().is_err());
+        assert!(
+            reader
+                .read_quoted_string()
+                .unwrap_err()
+                .is(&error_types::READER_EXPECTED_END_QUOTE)
+        );
     }
 }
