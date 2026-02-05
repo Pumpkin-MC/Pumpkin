@@ -86,9 +86,7 @@ impl BoatEntity {
         let world = self.entity.world.load();
         let entity_drops = world.level_info.load().game_rules.entity_drops;
 
-        if entity_drops
-            && let Some(loot_table) = &self.entity.entity_type.loot_table
-        {
+        if entity_drops && let Some(loot_table) = &self.entity.entity_type.loot_table {
             let pos = self.entity.block_pos.load();
             let params = LootContextParameters::default();
             for stack in loot_table.get_loot(params) {
