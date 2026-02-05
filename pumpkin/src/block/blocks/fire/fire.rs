@@ -102,6 +102,7 @@ impl FireBlock {
     pub async fn try_spreading_fire(
         &self,
         world: &Arc<World>,
+        source_pos: &BlockPos,
         pos: &BlockPos,
         spread_factor: i32,
         current_age: u16,
@@ -124,10 +125,70 @@ impl FireBlock {
                 let mut fire_props = FireProperties::from_state_id(state_id, &Block::FIRE);
                 fire_props.age = EnumVariants::from_index(new_age);
                 let new_state_id = fire_props.to_state_id(&Block::FIRE);
+                if let Some(server) = world.server.upgrade() {
+                    let spread_event = crate::plugin::block::block_spread::BlockSpreadEvent {
+                        source_block: &Block::FIRE,
+                        source_pos: *source_pos,
+                        block: &Block::FIRE,
+                        block_pos: *pos,
+                        world_uuid: world.uuid,
+                        cancelled: false,
+                    };
+                    let spread_event = server
+                        .plugin_manager
+                        .fire::<crate::plugin::block::block_spread::BlockSpreadEvent>(
+                            spread_event,
+                        )
+                        .await;
+                    if spread_event.cancelled {
+                        return;
+                    }
+                    let event = BlockBurnEvent {
+                        igniting_block: &Block::FIRE,
+                        block,
+                        block_pos: *pos,
+                        world_uuid: world.uuid,
+                        cancelled: false,
+                    };
+                    let event = server.plugin_manager.fire::<BlockBurnEvent>(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                }
                 world
                     .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
                     .await;
             } else {
+                if let Some(server) = world.server.upgrade() {
+                    let spread_event = crate::plugin::block::block_spread::BlockSpreadEvent {
+                        source_block: &Block::FIRE,
+                        source_pos: *source_pos,
+                        block: &Block::FIRE,
+                        block_pos: *pos,
+                        world_uuid: world.uuid,
+                        cancelled: false,
+                    };
+                    let spread_event = server
+                        .plugin_manager
+                        .fire::<crate::plugin::block::block_spread::BlockSpreadEvent>(
+                            spread_event,
+                        )
+                        .await;
+                    if spread_event.cancelled {
+                        return;
+                    }
+                    let event = BlockBurnEvent {
+                        igniting_block: &Block::FIRE,
+                        block,
+                        block_pos: *pos,
+                        world_uuid: world.uuid,
+                        cancelled: false,
+                    };
+                    let event = server.plugin_manager.fire::<BlockBurnEvent>(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                }
                 world
                     .set_block_state(
                         pos,
@@ -330,6 +391,7 @@ impl BlockBehaviour for FireBlock {
 
             Self.try_spreading_fire(
                 world,
+                pos,
                 &pos.offset(BlockDirection::East.to_offset()),
                 300,
                 age,
@@ -337,6 +399,7 @@ impl BlockBehaviour for FireBlock {
             .await;
             Self.try_spreading_fire(
                 world,
+                pos,
                 &pos.offset(BlockDirection::West.to_offset()),
                 300,
                 age,
@@ -344,6 +407,7 @@ impl BlockBehaviour for FireBlock {
             .await;
             Self.try_spreading_fire(
                 world,
+                pos,
                 &pos.offset(BlockDirection::North.to_offset()),
                 300,
                 age,
@@ -351,15 +415,23 @@ impl BlockBehaviour for FireBlock {
             .await;
             Self.try_spreading_fire(
                 world,
+                pos,
                 &pos.offset(BlockDirection::South.to_offset()),
                 300,
                 age,
             )
             .await;
-            Self.try_spreading_fire(world, &pos.offset(BlockDirection::Up.to_offset()), 250, age)
+            Self.try_spreading_fire(
+                world,
+                pos,
+                &pos.offset(BlockDirection::Up.to_offset()),
+                250,
+                age,
+            )
                 .await;
             Self.try_spreading_fire(
                 world,
+                pos,
                 &pos.offset(BlockDirection::Down.to_offset()),
                 250,
                 age,
@@ -369,11 +441,11 @@ impl BlockBehaviour for FireBlock {
             let difficulty = world.level_info.load().difficulty as i32;
             for l in -1..=1 {
                 for m in -1..=1 {
-                    for n in -1..=4 {
-                        if l != 0 || n != 0 || m != 0 {
-                            let offset_pos = pos.offset(Vector3::new(l, n, m));
-                            let burn_chance = Self.get_burn_chance(world, &offset_pos).await;
-                            if burn_chance > 0 {
+                for n in -1..=4 {
+                    if l != 0 || n != 0 || m != 0 {
+                        let offset_pos = pos.offset(Vector3::new(l, n, m));
+                        let burn_chance = Self.get_burn_chance(world, &offset_pos).await;
+                        if burn_chance > 0 {
                                 let o = 100 + if n > 1 { (n - 1) * 100 } else { 0 };
                                 let p: i32 =
                                     burn_chance + 40 + (difficulty) * 7 / i32::from(age + 30);
@@ -389,6 +461,40 @@ impl BlockBehaviour for FireBlock {
                                     new_fire_props.age = EnumVariants::from_index(new_age);
 
                                     //TODO drop items for burned blocks
+                                    if let Some(server) = world.server.upgrade() {
+                                        let spread_event = crate::plugin::block::block_spread::BlockSpreadEvent {
+                                            source_block: &Block::FIRE,
+                                            source_pos: *pos,
+                                            block: &Block::FIRE,
+                                            block_pos: offset_pos,
+                                            world_uuid: world.uuid,
+                                            cancelled: false,
+                                        };
+                                        let spread_event = server
+                                            .plugin_manager
+                                            .fire::<crate::plugin::block::block_spread::BlockSpreadEvent>(
+                                                spread_event,
+                                            )
+                                            .await;
+                                        if spread_event.cancelled {
+                                            continue;
+                                        }
+                                        let burned_block = world.get_block(&offset_pos).await;
+                                        let event = BlockBurnEvent {
+                                            igniting_block: &Block::FIRE,
+                                            block: burned_block,
+                                            block_pos: offset_pos,
+                                            world_uuid: world.uuid,
+                                            cancelled: false,
+                                        };
+                                        let event = server
+                                            .plugin_manager
+                                            .fire::<BlockBurnEvent>(event)
+                                            .await;
+                                        if event.cancelled {
+                                            continue;
+                                        }
+                                    }
                                     world
                                         .set_block_state(
                                             &offset_pos,
