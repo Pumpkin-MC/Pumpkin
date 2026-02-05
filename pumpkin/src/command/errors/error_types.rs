@@ -110,7 +110,7 @@ mod sealed {
 }
 
 /// A trait which is only implemented by [`CommandErrorType<N>`] types.
-/// 
+///
 /// It exposes the common properties of such types, while making
 /// it more dynamic to access its properties, like the translation
 /// key and the number of arguments (at runtime).
