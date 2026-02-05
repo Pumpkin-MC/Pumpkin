@@ -15,8 +15,11 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::ops::{BitAnd, BitOr};
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 pub mod format;
 pub mod io;
@@ -71,16 +74,16 @@ pub enum CompressionError {
 // Clone to snapshot without blocking writers for long.
 pub struct ChunkData {
     pub section: ChunkSections,
-    /// See <https://minecraft.wiki/w/Heightmap>.
-    pub heightmap: ChunkHeightmaps,
+    /// See `https://minecraft.wiki/w/Heightmap` for more info
+    pub heightmap: std::sync::Mutex<ChunkHeightmaps>,
     pub x: i32,
     pub z: i32,
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
-    pub block_entities: FxHashMap<BlockPos, Arc<dyn BlockEntity>>,
+    pub block_entities: std::sync::Mutex<FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
     pub light_engine: ChunkLight,
     pub status: ChunkStatus,
-    pub dirty: bool,
+    pub dirty: AtomicBool,
     pub post_processing_positions: HashSet<BlockPos>,
     pub blending_data: Option<NbtCompound>,
     /// Stage-specific carving masks; serialization writes the union to match vanilla.
@@ -89,21 +92,24 @@ pub struct ChunkData {
     pub carving_mask_liquid: Box<[i64]>,
 }
 
-#[derive(Clone)]
 pub struct ChunkEntityData {
     /// Chunk X
     pub x: i32,
     /// Chunk Z
     pub z: i32,
-    pub data: FxHashMap<uuid::Uuid, NbtCompound>,
+    pub data: Mutex<FxHashMap<uuid::Uuid, NbtCompound>>,
 
-    pub dirty: bool,
+    pub dirty: AtomicBool,
 }
 
-/// Pure block data for a chunk, stored in 16-block-tall subchunks (currently 24).
-#[derive(Clone)]
+/// Represents pure block data for a chunk.
+/// Subchunks are vertical portions of a chunk. They are 16 blocks tall.
+/// There are currently 24 subchunks per chunk.
+///
+/// A chunk can be:
+/// - Subchunks: 24 separate subchunks are stored.
 pub struct ChunkSections {
-    pub sections: Box<[SubChunk]>,
+    pub sections: std::sync::Mutex<Box<[SubChunk]>>,
     pub min_y: i32,
 }
 
@@ -113,7 +119,7 @@ impl ChunkSections {
     pub fn dump_blocks(&self) -> Vec<u16> {
         // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
-        for section in &self.sections {
+        for section in self.sections.lock().unwrap().iter() {
             section.block_states.for_each(|raw_id| {
                 dump.push(raw_id);
             });
@@ -126,7 +132,7 @@ impl ChunkSections {
     pub fn dump_biomes(&self) -> Vec<u8> {
         // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
-        for section in &self.sections {
+        for section in self.sections.lock().unwrap().iter() {
             section.biomes.for_each(|raw_id| {
                 dump.push(raw_id);
             });
@@ -321,7 +327,7 @@ impl Default for ChunkHeightmaps {
 
 impl ChunkSections {
     #[must_use]
-    pub const fn new(sections: Box<[SubChunk]>, min_y: i32) -> Self {
+    pub const fn new(sections: std::sync::Mutex<Box<[SubChunk]>>, min_y: i32) -> Self {
         Self { sections, min_y }
     }
 
@@ -364,7 +370,7 @@ impl ChunkSections {
 
     /// Returns the replaced block state ID.
     pub fn set_block_absolute_y(
-        &mut self,
+        &self,
         relative_x: usize,
         y: i32,
         relative_z: usize,
@@ -392,6 +398,8 @@ impl ChunkSections {
         let section_index = relative_y / BlockPalette::SIZE;
         let relative_y = relative_y % BlockPalette::SIZE;
         self.sections
+            .lock()
+            .unwrap()
             .get(section_index)
             .map(|section| section.block_states.get(relative_x, relative_y, relative_z))
     }
@@ -399,7 +407,7 @@ impl ChunkSections {
     /// Sets the given block in the chunk, returning the old block state ID.
     #[inline]
     pub fn set_relative_block(
-        &mut self,
+        &self,
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
@@ -412,7 +420,7 @@ impl ChunkSections {
     /// Sets the given block, returning the old block without heightmap updates.
     /// Only use when heightmaps are handled elsewhere.
     pub fn set_block_no_heightmap_update(
-        &mut self,
+        &self,
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,
@@ -423,7 +431,7 @@ impl ChunkSections {
 
         let section_index = relative_y / BlockPalette::SIZE;
         let relative_y = relative_y % BlockPalette::SIZE;
-        if let Some(section) = self.sections.get_mut(section_index) {
+        if let Some(section) = self.sections.lock().unwrap().get_mut(section_index) {
             return section
                 .block_states
                 .set(relative_x, relative_y, relative_z, block_state_id);
@@ -443,7 +451,7 @@ impl ChunkSections {
 
         let section_index = relative_y / BiomePalette::SIZE;
         let relative_y = relative_y % BiomePalette::SIZE;
-        if let Some(section) = self.sections.get_mut(section_index) {
+        if let Some(section) = self.sections.lock().unwrap().get_mut(section_index) {
             section
                 .biomes
                 .set(relative_x, relative_y, relative_z, biome_id);
@@ -461,6 +469,8 @@ impl ChunkSections {
         debug_assert!(scale_x < BiomePalette::SIZE);
         debug_assert!(scale_z < BiomePalette::SIZE);
         self.sections
+            .lock()
+            .unwrap()
             .get(index)
             .map(|section| section.biomes.get(scale_x, scale_y, scale_z))
     }
@@ -543,8 +553,8 @@ impl ChunkData {
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
     }
 
-    pub fn calculate_heightmap(&mut self) -> ChunkHeightmaps {
-        // Heightmaps are rebuilt on demand for fully populated chunk data.
+    //TODO: Tracking heightmaps update.
+    pub fn calculate_heightmap(&self) -> ChunkHeightmaps {
         let highest_non_empty_subchunk = self.get_highest_non_empty_subchunk();
         let mut heightmaps = ChunkHeightmaps::default();
 
@@ -614,13 +624,13 @@ impl ChunkData {
 
     #[must_use]
     pub fn get_highest_non_empty_subchunk(&self) -> usize {
-        self.section
-            .sections
+        let sections = self.section.sections.lock().unwrap();
+        sections
             .iter()
             .enumerate()
             .rev()
             .position(|(_, sub)| !sub.block_states.has_only_air())
-            .map_or(0, |p| self.section.sections.len() - 1 - p)
+            .map_or(0, |p| sections.len() - 1 - p)
     }
 }
 

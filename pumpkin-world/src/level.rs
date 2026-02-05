@@ -40,7 +40,6 @@ use std::{
 use tokio::{
     select,
     sync::{
-        RwLock,
         mpsc::{self, UnboundedReceiver},
         oneshot,
     },
@@ -48,8 +47,8 @@ use tokio::{
 };
 use tokio_util::task::TaskTracker;
 
-pub type SyncChunk = Arc<RwLock<ChunkData>>;
-pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
+pub type SyncChunk = Arc<ChunkData>;
+pub type SyncEntityChunk = Arc<ChunkEntityData>;
 
 /// The `Level` module provides functionality for working with chunks within or outside a Minecraft world.
 ///
@@ -228,12 +227,12 @@ impl Level {
 
                         match rx.recv_timeout(std::time::Duration::from_millis(500)) {
                             Ok(pos) => {
-                                let arc_chunk = Arc::new(RwLock::new(ChunkEntityData {
+                                let arc_chunk = Arc::new(ChunkEntityData {
                                     x: pos.x,
                                     z: pos.y,
-                                    data: FxHashMap::default(),
-                                    dirty: true,
-                                }));
+                                    data: tokio::sync::Mutex::new(FxHashMap::default()),
+                                    dirty: AtomicBool::new(true),
+                                });
 
                                 level_clone
                                     .loaded_entity_chunks
@@ -439,16 +438,14 @@ impl Level {
 
         let r = rand::random::<u32>();
 
-        for chunk_sync in self.loaded_chunks.iter() {
-            let mut chunk = chunk_sync.write().await;
-
+        for chunk in self.loaded_chunks.iter() {
             let chunk_x_base = chunk.x * 16;
             let chunk_z_base = chunk.z * 16;
-            let section_count = chunk.section.sections.len();
+            let section_count = chunk.section.sections.lock().unwrap().len();
 
             ticks
                 .block_entities
-                .extend(chunk.block_entities.values().cloned());
+                .extend(chunk.block_entities.lock().unwrap().values().cloned());
 
             for i in 0..section_count {
                 let y_base = i as i32 * 16;
@@ -476,13 +473,13 @@ impl Level {
                     }
                 }
             }
-
             ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
             ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
         }
 
         ticks.block_ticks.sort_unstable();
         ticks.fluid_ticks.sort_unstable();
+
         ticks
     }
 
@@ -597,9 +594,7 @@ impl Level {
                     while let Some(data) = rx.recv().await {
                         match data {
                             LoadedData::Loaded(chunk) => {
-                                let tmp_chunk = chunk.read().await;
-                                let pos = Vector2::new(tmp_chunk.x, tmp_chunk.z);
-                                drop(tmp_chunk);
+                                let pos = Vector2::new(chunk.x, chunk.z);
                                 level.loaded_entity_chunks.insert(pos, chunk.clone());
                                 let _ = sender.send((chunk, false));
                             }
@@ -664,7 +659,7 @@ impl Level {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.get_chunk(chunk_coordinate).await;
 
-        let Some(id) = chunk.read().await.section.get_block_absolute_y(
+        let Some(id) = chunk.section.get_block_absolute_y(
             relative.x as usize,
             relative.y,
             relative.z as usize,
@@ -678,7 +673,7 @@ impl Level {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.get_chunk(chunk_coordinate).await;
 
-        let Some(id) = chunk.read().await.section.get_rough_biome_absolute_y(
+        let Some(id) = chunk.section.get_rough_biome_absolute_y(
             relative.x as usize,
             relative.y,
             relative.z as usize,
@@ -696,8 +691,6 @@ impl Level {
     ) -> BlockStateId {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.get_chunk(chunk_coordinate).await;
-        let mut chunk = chunk.write().await;
-
         let replaced_block_state_id = chunk.section.set_block_absolute_y(
             relative.x as usize,
             relative.y,
@@ -744,7 +737,7 @@ impl Level {
         }
     }
 
-    pub fn try_get_chunk(&self, coordinates: &Vector2<i32>) -> Option<Arc<RwLock<ChunkData>>> {
+    pub fn try_get_chunk(&self, coordinates: &Vector2<i32>) -> Option<Arc<ChunkData>> {
         self.loaded_chunks
             .get(coordinates)
             .map(|x| x.value().clone())
@@ -753,7 +746,7 @@ impl Level {
     pub fn try_get_entity_chunk(
         &self,
         coordinates: Vector2<i32>,
-    ) -> Option<dashmap::mapref::one::Ref<'_, Vector2<i32>, Arc<RwLock<ChunkEntityData>>>> {
+    ) -> Option<dashmap::mapref::one::Ref<'_, Vector2<i32>, Arc<ChunkEntityData>>> {
         self.loaded_entity_chunks.try_get(&coordinates).try_unwrap()
     }
 
@@ -766,7 +759,6 @@ impl Level {
     ) {
         let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let tick_order = self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
-        let mut chunk = chunk.write().await;
         chunk.block_ticks.schedule_tick(
             &ScheduledTick {
                 delay,
@@ -787,7 +779,6 @@ impl Level {
     ) {
         let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let tick_order = self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
-        let mut chunk = chunk.write().await;
         chunk.fluid_ticks.schedule_tick(
             &ScheduledTick {
                 delay,
@@ -805,7 +796,6 @@ impl Level {
         block: &Block,
     ) -> bool {
         let chunk = self.get_chunk(block_pos.chunk_position()).await;
-        let chunk = chunk.read().await;
         chunk.block_ticks.is_scheduled(*block_pos, block)
     }
 
@@ -815,7 +805,6 @@ impl Level {
         fluid: &Fluid,
     ) -> bool {
         let chunk = self.get_chunk(block_pos.chunk_position()).await;
-        let chunk = chunk.read().await;
         chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
     }
 }

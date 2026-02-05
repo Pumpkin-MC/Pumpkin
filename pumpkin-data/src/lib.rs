@@ -171,6 +171,10 @@ pub mod fuels;
 pub mod effect;
 
 #[rustfmt::skip]
+#[path = "generated/structures.rs"]
+pub mod structures;
+
+#[rustfmt::skip]
 #[path = "generated/potion.rs"]
 pub mod potion;
 
