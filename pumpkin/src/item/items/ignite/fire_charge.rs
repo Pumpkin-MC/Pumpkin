@@ -51,6 +51,7 @@ impl ItemBehaviour for FireChargeItem {
                 location,
                 face,
                 block,
+                "FIRE_CHARGE",
             )
             .await;
         })
