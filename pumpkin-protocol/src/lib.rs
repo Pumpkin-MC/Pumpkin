@@ -526,7 +526,6 @@ impl Serialize for LinkType {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_util::resource_location::ResourceLocation;
     use serde::{Deserialize, Serialize};
 
     use crate::{
@@ -551,7 +550,7 @@ mod test {
     fn serde_id_or_value() {
         let mut buf = Vec::new();
         let event = SoundEvent {
-            sound_name: ResourceLocation::vanilla("test"),
+            sound_name: "test".to_string(),
             range: Some(1.0),
         };
 

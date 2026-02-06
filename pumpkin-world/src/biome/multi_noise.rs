@@ -33,13 +33,15 @@ impl NoiseValuePoint {
 #[cfg(test)]
 mod test {
     use pumpkin_data::{
-        chunk::Biome, dimension::Dimension, noise_router::OVERWORLD_BASE_NOISE_ROUTER,
+        chunk::Biome, chunk_gen_settings::GenerationSettings, dimension::Dimension,
+        noise_router::OVERWORLD_BASE_NOISE_ROUTER,
     };
     use pumpkin_util::read_data_from_file;
 
     use crate::{
-        GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
+        GlobalRandomConfig, ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
+        block::to_state_from_blueprint,
         generation::{
             noise::router::{
                 multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -68,9 +70,8 @@ mod test {
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
 
-        let surface_config = GENERATION_SETTINGS
-            .get(&GeneratorSetting::Overworld)
-            .unwrap();
+        let surface_config = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
+
         let _terrain_cache = TerrainCache::from_random(&random_config);
         // Calculate biome mixer seed
         let biome_mixer_seed = hash_seed(random_config.seed);
@@ -79,7 +80,7 @@ mod test {
             chunk_x,
             chunk_z,
             &Dimension::OVERWORLD,
-            surface_config.default_block.get_state(),
+            to_state_from_blueprint(&surface_config.default_block),
             biome_mixer_seed,
         );
 

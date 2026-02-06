@@ -8,17 +8,18 @@ TODO
 
 use crate::block::RawBlockState;
 use crate::chunk::io::LoadedData::Loaded;
-use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
+use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections};
 use crate::generation::biome_coords;
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
+use std::sync::atomic::AtomicBool;
 
 use crate::generation::height_limit::HeightLimitView;
 
 use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
-use crate::generation::settings::{GenerationSettings, gen_settings_from_dimension};
 use crate::level::{Level, SyncChunk};
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{BlockStateId, GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
@@ -52,7 +53,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use slotmap::{Key, SlotMap, new_key_type};
 use std::sync::atomic::Ordering::{Relaxed, SeqCst};
 use std::thread;
-use tokio::sync::{RwLock, oneshot};
+use tokio::sync::oneshot;
 
 type HashMapType<K, V> = FxHashMap<K, V>;
 type HashSetType<K> = FxHashSet<K>;
@@ -786,10 +787,7 @@ impl Chunk {
         let proto_chunk = self.get_proto_chunk();
 
         let total_sections = dimension.height as usize / 16;
-        let mut sections = ChunkSections::new(
-            vec![SubChunk::default(); total_sections].into_boxed_slice(),
-            dimension.min_y,
-        );
+        let sections = ChunkSections::new(total_sections, dimension.min_y);
 
         let proto_biome_height = biome_coords::from_block(proto_chunk.height());
         let biome_min_y = biome_coords::from_block(dimension.min_y);
@@ -798,13 +796,18 @@ impl Chunk {
             let section_index = y_offset as usize / 4;
             let relative_y = y_offset as usize % 4;
 
-            if let Some(section) = sections.sections.get_mut(section_index) {
+            if let Some(section) = sections
+                .biome_sections
+                .write()
+                .unwrap()
+                .get_mut(section_index)
+            {
                 let absolute_biome_y = biome_min_y + y_offset as i32;
 
                 for z in 0..4 {
                     for x in 0..4 {
                         let biome = proto_chunk.get_biome_id(x as i32, absolute_biome_y, z as i32);
-                        section.biomes.set(x, relative_y, z, biome);
+                        section.set(x, relative_y, z, biome);
                     }
                 }
             }
@@ -816,20 +819,26 @@ impl Chunk {
             let section_index = (y_offset as usize) / 16;
             let relative_y = (y_offset as usize) % 16;
 
-            if let Some(section) = sections.sections.get_mut(section_index) {
+            if let Some(section) = sections
+                .block_sections
+                .write()
+                .unwrap()
+                .get_mut(section_index)
+            {
                 for z in 0..16 {
                     for x in 0..16 {
                         let block =
                             proto_chunk.get_block_state_raw(x as i32, y_offset as i32, z as i32);
-                        section.block_states.set(x, relative_y, z, block);
+                        section.set(x, relative_y, z, block);
                     }
                 }
             }
         }
 
+        let len = sections.count;
         let mut chunk = ChunkData {
             light_engine: ChunkLight {
-                sky_light: (0..sections.sections.len())
+                sky_light: (0..len)
                     .map(|_| {
                         if dimension.has_skylight {
                             // Overworld: Start with full sky light before occlusion
@@ -840,23 +849,21 @@ impl Chunk {
                         }
                     })
                     .collect(),
-                block_light: (0..sections.sections.len())
-                    .map(|_| LightContainer::new_empty(0))
-                    .collect(),
+                block_light: (0..len).map(|_| LightContainer::new_empty(0)).collect(),
             },
             section: sections,
             heightmap: Default::default(),
             x: proto_chunk.x,
             z: proto_chunk.z,
-            dirty: true,
+            dirty: AtomicBool::new(true),
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),
             block_entities: Default::default(),
             status: proto_chunk.stage.into(),
         };
 
-        chunk.heightmap = chunk.calculate_heightmap();
-        *self = Self::Level(Arc::new(RwLock::new(chunk)));
+        chunk.heightmap = Mutex::new(chunk.calculate_heightmap());
+        *self = Self::Level(Arc::new(chunk));
     }
 }
 
@@ -935,6 +942,20 @@ impl GenerationCache for Cache {
             .then(|| self.chunks[(dx * self.size + dz) as usize].get_proto_chunk())
     }
 
+    fn try_get_proto_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk> {
+        let dx = chunk_x - self.x;
+        let dz = chunk_z - self.z;
+
+        if dx < 0 || dx >= self.size || dz < 0 || dz >= self.size {
+            return None;
+        }
+
+        match &self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Proto(chunk) => Some(chunk),
+            Chunk::Level(_) => None,
+        }
+    }
+
     fn get_center_chunk(&self) -> &ProtoChunk {
         let mid = ((self.size * self.size) >> 1) as usize;
         self.chunks[mid].get_proto_chunk()
@@ -992,15 +1013,11 @@ impl GenerationCache for Cache {
             return RawBlockState::AIR;
         }
         match &self.chunks[(dx * self.size + dz) as usize] {
-            Chunk::Level(data) => {
-                let chunk = data.blocking_read();
-                RawBlockState(
-                    chunk
-                        .section
-                        .get_block_absolute_y((pos.x & 15) as usize, pos.y, (pos.z & 15) as usize)
-                        .unwrap_or(0),
-                )
-            }
+            Chunk::Level(data) => RawBlockState(
+                data.section
+                    .get_block_absolute_y((pos.x & 15) as usize, pos.y, (pos.z & 15) as usize)
+                    .unwrap_or(0),
+            ),
             Chunk::Proto(data) => data.get_block_state(pos),
         }
     }
@@ -1021,8 +1038,7 @@ impl GenerationCache for Cache {
         }
         match &mut self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(data) => {
-                let mut chunk = data.blocking_write();
-                chunk.section.set_block_absolute_y(
+                data.section.set_block_absolute_y(
                     (pos.x & 15) as usize,
                     pos.y,
                     (pos.z & 15) as usize,
@@ -1055,13 +1071,10 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let chunk = data.blocking_read();
-                chunk.heightmap.get(
-                    ChunkHeightmapType::MotionBlocking,
-                    x,
-                    z,
-                    chunk.section.min_y,
-                )
+                let heightmap = data.heightmap.lock().unwrap();
+                let min_y = data.section.min_y;
+
+                heightmap.get(ChunkHeightmapType::MotionBlocking, x, z, min_y)
             }
             Chunk::Proto(data) => data.top_motion_blocking_block_height_exclusive(x, z),
         }
@@ -1074,13 +1087,9 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let chunk = data.blocking_read();
-                chunk.heightmap.get(
-                    ChunkHeightmapType::MotionBlockingNoLeaves,
-                    x,
-                    z,
-                    chunk.section.min_y,
-                )
+                let heightmap = data.heightmap.lock().unwrap();
+                let min_y = data.section.min_y;
+                heightmap.get(ChunkHeightmapType::MotionBlockingNoLeaves, x, z, min_y)
             }
             Chunk::Proto(data) => data.top_motion_blocking_block_no_leaves_height_exclusive(x, z),
         }
@@ -1093,10 +1102,9 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let chunk = data.blocking_read();
-                chunk
-                    .heightmap
-                    .get(ChunkHeightmapType::WorldSurface, x, z, chunk.section.min_y) // can we return this?
+                let heightmap = data.heightmap.lock().unwrap();
+                let min_y = data.section.min_y;
+                heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y) // can we return this?
             }
             Chunk::Proto(data) => data.top_block_height_exclusive(x, z),
         }
@@ -1124,8 +1132,7 @@ impl GenerationCache for Cache {
             Chunk::Level(data) => {
                 // Could this happen?
                 Biome::from_id(
-                    data.blocking_read()
-                        .section
+                    data.section
                         .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
                         .unwrap_or(0),
                 )
@@ -1652,7 +1659,7 @@ impl GenerationSchedule {
             };
             match data {
                 Loaded(chunk) => {
-                    if chunk.read().await.status == ChunkStatus::Full {
+                    if chunk.status == ChunkStatus::Full {
                         if send
                             .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
                             .is_err()
@@ -1661,13 +1668,15 @@ impl GenerationSchedule {
                         }
                     } else {
                         // debug!("io read thread receive proto chunk {pos:?}",);
-                        let val =
-                            RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
-                                &*chunk.read().await,
+                        let val = RecvChunk::IO(Chunk::Proto(Box::new(
+                            ProtoChunk::from_chunk_data(
+                                &chunk,
                                 dimension,
                                 level.world_gen.default_block,
                                 biome_mixer_seed,
-                            ))));
+                            )
+                            .await,
+                        )));
                         if send.send((pos, val)).is_err() {
                             break;
                         }
@@ -1755,7 +1764,7 @@ impl GenerationSchedule {
             thread::current().name().unwrap_or("unknown")
         );
 
-        let settings = gen_settings_from_dimension(&level.world_gen.dimension);
+        let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
         while let Ok((pos, mut cache, stage)) = recv.recv() {
             // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
             cache.advance(

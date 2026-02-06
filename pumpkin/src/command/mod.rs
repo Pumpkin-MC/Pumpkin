@@ -179,7 +179,21 @@ impl CommandSender {
     }
 }
 
-pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<(), CommandError>> + Send + 'a>>;
+/// Represents the result of running a command after completion.
+///
+/// If the command **ran successfully**, an [`Ok`] is returned containing an [`i32`].
+/// This represents the 'output value' of the command, which is *homologous* to the
+/// `int` that command executors in vanilla return **upon success**.
+///
+/// **You should choose the successful result as `1` if**:
+/// - you don't know what value to use for a success for your
+///   own commands, or
+/// - you don't understand what this value means, or
+/// - you just simply don't care about this value at all
+///
+/// If the command **fails**, an [`Err`] is returned, containing the [`CommandError`]
+/// that led to this result.
+pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<i32, CommandError>> + Send + 'a>>;
 
 pub trait CommandExecutor: Sync + Send {
     fn execute<'a>(

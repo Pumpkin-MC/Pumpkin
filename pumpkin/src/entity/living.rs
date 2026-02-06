@@ -231,13 +231,19 @@ impl LivingEntity {
         // TODO broadcast metadata
     }
 
-    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
-        self.active_effects.lock().await.remove(&effect_type);
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
+        let succeeded = self
+            .active_effects
+            .lock()
+            .await
+            .remove(&effect_type)
+            .is_some();
         self.entity
             .world
             .load()
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
+        succeeded
     }
 
     pub async fn has_effect(&self, effect: &'static StatusEffect) -> bool {
@@ -910,6 +916,12 @@ impl LivingEntity {
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
+            // Immediately clear all movement/velocity so the dead entity stops being
+            // simulated by physics and doesn't accumulate additional fall_distance.
+            self.entity.velocity.store(Vector3::default());
+            self.entity.velocity_dirty.store(true, SeqCst);
+            self.movement_input.store(Vector3::default());
+            self.jumping.store(false, Relaxed);
             // Plays the death sound
             world
                 .send_entity_status(
@@ -1075,11 +1087,36 @@ impl LivingEntity {
 
     pub async fn reset_state(&self) {
         self.entity.reset_state().await;
-        self.hurt_cooldown.store(0, Relaxed);
+
+        // Restore to maximum health for this entity type
+        let max_health = self.entity.entity_type.max_health.unwrap_or(20.0);
+        self.set_health(max_health).await;
+
+        // Give a short grace period of invulnerability after respawn
+        self.hurt_cooldown.store(20, Relaxed);
         self.last_damage_taken.store(0f32);
+
         self.entity.portal_cooldown.store(0, Relaxed);
         *self.entity.portal_manager.lock().await = None;
+
+        // Clear fall/fire state
         self.fall_distance.store(0f32);
+        self.death_time.store(0, Relaxed);
+        self.entity.extinguish();
+        self.entity.fire_ticks.store(0, Relaxed);
+
+        // Clear velocity and movement input to remove persisted momentum
+        self.entity.velocity.store(Vector3::default());
+        self.entity.velocity_dirty.store(true, SeqCst);
+        self.movement_input.store(Vector3::default());
+        self.jumping.store(false, Relaxed);
+
+        // If this LivingEntity corresponds to a Player, reset their hunger manager
+        let world = self.entity.world.load();
+        if let Some(player) = world.get_player_by_id(self.entity.entity_id) {
+            player.hunger_manager.restart();
+        }
+
         self.dead.store(false, Relaxed);
     }
 }
@@ -1089,7 +1126,13 @@ impl NBTStorage for LivingEntity {
         Box::pin(async move {
             self.entity.write_nbt(nbt).await;
             nbt.put("Health", NbtTag::Float(self.health.load()));
-            nbt.put("fall_distance", NbtTag::Float(self.fall_distance.load()));
+            // Avoid persisting a lethal fall distance when the entity is dead to prevent death loops
+            let fall_distance = if self.dead.load(Relaxed) {
+                0.0
+            } else {
+                self.fall_distance.load()
+            };
+            nbt.put("fall_distance", NbtTag::Float(fall_distance));
             {
                 let effects = self.active_effects.lock().await;
                 if !effects.is_empty() {
@@ -1112,8 +1155,14 @@ impl NBTStorage for LivingEntity {
         Box::pin(async {
             self.entity.read_nbt_non_mut(nbt).await;
             self.health.store(nbt.get_float("Health").unwrap_or(0.0));
-            self.fall_distance
-                .store(nbt.get_float("fall_distance").unwrap_or(0.0));
+            // Load fall distance, but if this entity is currently marked dead ensure we don't restore
+            // a lethal fall distance that would immediately re-kill on spawn.
+            let fd = nbt.get_float("fall_distance").unwrap_or(0.0);
+            if self.dead.load(Relaxed) {
+                self.fall_distance.store(0.0);
+            } else {
+                self.fall_distance.store(fd);
+            }
             {
                 let mut active_effects = self.active_effects.lock().await;
                 let nbt_effects = nbt.get_list("active_effects");
@@ -1254,7 +1303,11 @@ impl EntityBase for LivingEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.entity.tick(caller.clone(), server).await;
-            self.tick_movement(server, caller.clone()).await;
+            // Only tick movement if the entity is alive. This prevents a dead "corpse"
+            // from continuing to be simulated (accumulating fall_distance/velocity).
+            if !self.dead.load(Relaxed) && self.health.load() > 0.0 {
+                self.tick_movement(server, caller.clone()).await;
+            }
             // TODO
             if caller.get_player().is_none() {
                 // self.entity.send_pos_rot().await;

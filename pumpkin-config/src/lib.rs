@@ -201,12 +201,7 @@ pub trait LoadConfiguration {
             merged_config
         } else {
             let content = Self::default();
-            let mut file_content = toml::to_string(&content).unwrap();
-            if !file_content.contains("favicon_path") {
-                file_content.push_str("# favicon_path = \"icon.png\"");
-            }
-
-            if let Err(err) = fs::write(&path, file_content) {
+            if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
                 log::warn!(
                     "Couldn't write default config to {:?}. Reason: {}",
                     path.display(),

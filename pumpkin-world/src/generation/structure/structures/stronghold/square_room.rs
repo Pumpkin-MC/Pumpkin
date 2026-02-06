@@ -1,4 +1,7 @@
-use pumpkin_data::Block;
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{BlockProperties, HorizontalFacing, LadderLikeProperties},
+};
 use pumpkin_util::{
     BlockDirection,
     math::block_box::BlockBox,
@@ -11,7 +14,10 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{StoneBrickRandomizer, StrongholdPiece},
+            stronghold::{
+                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                StrongholdPieceType,
+            },
         },
     },
 };
@@ -48,6 +54,7 @@ impl SquareRoomPiece {
             bounding_box,
         );
         piece.piece.set_facing(Some(orientation));
+        piece.entry_door = EntranceType::get_random(random);
 
         let room_type = random.next_bounded_i32(5) as u32;
 
@@ -68,6 +75,10 @@ impl StructurePieceBase for SquareRoomPiece {
         &self,
         start: &StructurePiece,
         random: &mut RandomGenerator,
+        weights: &mut Vec<PieceWeight>,
+        last_piece_type: &mut Option<StrongholdPieceType>,
+        _has_portal_room: &mut bool,
+
         collector: &mut StructurePiecesCollector,
         pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
@@ -77,6 +88,8 @@ impl StructurePieceBase for SquareRoomPiece {
             start,
             collector,
             random,
+            weights,
+            last_piece_type,
             4, // left_right_offset
             1, // height_offset
             pieces_to_process,
@@ -89,6 +102,8 @@ impl StructurePieceBase for SquareRoomPiece {
             start,
             collector,
             random,
+            weights,
+            last_piece_type,
             1, // height_offset
             4, // left_right_offset
             pieces_to_process,
@@ -100,6 +115,8 @@ impl StructurePieceBase for SquareRoomPiece {
             start,
             collector,
             random,
+            weights,
+            last_piece_type,
             1, // height_offset
             4, // left_right_offset
             pieces_to_process,
@@ -236,13 +253,14 @@ impl StructurePieceBase for SquareRoomPiece {
                 }
 
                 // Ladder
-                //  let ladder = Block::LADDER.default_state.with("facing", "west");
-                //  inner.add_block(chunk, &ladder, 9, 1, 3, &box_limit);
-                //  inner.add_block(chunk, &ladder, 9, 2, 3, &box_limit);
-                //  inner.add_block(chunk, &ladder, 9, 3, 3, &box_limit);
+                let mut props = LadderLikeProperties::default(&Block::LADDER);
+                props.facing = HorizontalFacing::West;
+                let ladder = BlockState::from_id(props.to_state_id(&Block::LADDER));
+                inner.add_block(chunk, ladder, 9, 1, 3, &box_limit);
+                inner.add_block(chunk, ladder, 9, 2, 3, &box_limit);
+                inner.add_block(chunk, ladder, 9, 3, 3, &box_limit);
 
                 // Chest
-                // Note: Ensure you have `LootTables` defined or use a string ID
                 // p.add_chest(chunk, &box_limit, random, 3, 4, 8, LootTables::StrongholdCrossingChest);
                 inner.add_block(chunk, Block::CHEST.default_state, 3, 4, 8, &box_limit);
             }

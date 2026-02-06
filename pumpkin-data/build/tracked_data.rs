@@ -3,7 +3,6 @@ use quote::{format_ident, quote};
 use std::{collections::BTreeMap, fs};
 
 pub(crate) fn build() -> TokenStream {
-    // 1. Track files
     println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_7_tracked_data.json");
     println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_11_tracked_data.json");
 

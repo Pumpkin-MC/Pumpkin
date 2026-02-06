@@ -9,6 +9,8 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl, get_carver_seed, xoroshiro128::Xoroshiro},
 };
 
+use crate::generation::structure::structures::stronghold::PieceWeight;
+use crate::generation::structure::structures::stronghold::StrongholdPieceType;
 use crate::{
     ProtoChunk,
     generation::{
@@ -46,10 +48,16 @@ pub trait StructurePieceBase: Send + Sync {
     /// Places the blocks for this piece into the chunk.
     fn place(&mut self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, seed: i64);
 
+    #[expect(clippy::too_many_arguments)]
     fn fill_openings(
         &self,
         _start: &StructurePiece,
         _random: &mut RandomGenerator,
+        // TODO: this is only for Stronghold and should not be here
+        _weights: &mut Vec<PieceWeight>,
+        _last_piece_type: &mut Option<StrongholdPieceType>,
+        _has_portal_room: &mut bool,
+
         _collector: &mut StructurePiecesCollector,
         _pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
@@ -313,7 +321,7 @@ impl StructurePiece {
         let block_pos = self.offset_pos(x, y, z);
 
         if !box_limit.contains_pos(&block_pos) {
-            log::warn!("Structure out of bounds");
+            log::debug!("Structure out of bounds");
             return Block::AIR.default_state;
         }
 
@@ -333,7 +341,7 @@ impl StructurePiece {
 
         // Bounds and logic checks
         if !box_limit.contains_pos(&block_pos) {
-            log::warn!("Structure out of bounds");
+            log::debug!("Structure out of bounds");
             return;
         }
 
@@ -361,9 +369,9 @@ impl StructurePiece {
     pub fn get_random_horizontal_direction(random: &mut impl RandomImpl) -> BlockDirection {
         match random.next_bounded_i32(4) {
             0 => BlockDirection::North,
-            1 => BlockDirection::South,
-            2 => BlockDirection::West,
-            _ => BlockDirection::East,
+            1 => BlockDirection::East,
+            2 => BlockDirection::South,
+            _ => BlockDirection::West,
         }
     }
 }
@@ -409,21 +417,17 @@ impl StructurePiecesCollector {
         self.cached_box = None;
     }
 
-    #[expect(clippy::borrowed_box)]
     #[must_use]
-    pub fn get_intersecting(
-        &self,
-        box_to_check: &BlockBox,
-    ) -> Option<&Box<dyn StructurePieceBase>> {
+    pub fn get_intersecting(&self, box_to_check: &BlockBox) -> Option<&dyn StructurePieceBase> {
         self.pieces
             .iter()
-            .find(|&piece| {
+            .find(|piece| {
                 piece
                     .get_structure_piece()
                     .bounding_box
                     .intersects(box_to_check)
             })
-            .map(|v| v as _)
+            .map(|v| v.as_ref() as &dyn StructurePieceBase)
     }
 
     /// Iterates over all pieces and generates them if they intersect the current chunk.

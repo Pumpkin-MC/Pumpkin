@@ -9,14 +9,15 @@ use pumpkin_protocol::{
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
 use pumpkin_world::CURRENT_MC_VERSION;
-use std::{fs::File, io::Read, path::Path};
+use std::{
+    fs::{self},
+    path::Path,
+};
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
 
 fn load_icon_from_file<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn error::Error>> {
-    let mut icon_file = File::open(path)?;
-    let mut buf = Vec::new();
-    icon_file.read_to_end(&mut buf)?;
+    let buf = fs::read(path)?;
     if buf.len() >= 24 {
         let width = u32::from_be_bytes([buf[16], buf[17], buf[18], buf[19]]);
         let height = u32::from_be_bytes([buf[20], buf[21], buf[22], buf[23]]);

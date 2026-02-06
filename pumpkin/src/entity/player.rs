@@ -25,7 +25,7 @@ use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -203,16 +203,15 @@ impl ChunkManager {
 
         {
             let mut lock = level.chunk_loading.lock().unwrap();
-            lock.add_ticket(
-                center,
-                ChunkLoading::get_level_from_view_distance(view_distance),
-            );
+            let new_level = ChunkLoading::get_level_from_view_distance(view_distance);
+            lock.add_ticket(center, new_level);
 
             if old_center != center || old_view_distance != view_distance {
-                lock.remove_ticket(
-                    old_center,
-                    ChunkLoading::get_level_from_view_distance(old_view_distance),
-                );
+                let old_level = ChunkLoading::get_level_from_view_distance(old_view_distance);
+                // Don't remove if it would be the same ticket
+                if old_center != center || old_level != new_level {
+                    lock.remove_ticket(old_center, old_level);
+                }
             }
             lock.send_change();
         };
@@ -298,7 +297,7 @@ impl ChunkManager {
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
         let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
-        let mut chunks = Vec::<Arc<RwLock<ChunkData>>>::with_capacity(chunk_size);
+        let mut chunks = Vec::<Arc<ChunkData>>::with_capacity(chunk_size);
         while chunk_size > 0 {
             chunks.push(self.chunk_queue.pop().unwrap().2);
             chunk_size -= 1;
@@ -317,7 +316,7 @@ impl ChunkManager {
     pub fn next_entity(&mut self) -> Box<[SyncEntityChunk]> {
         let chunk_size = self.entity_chunk_queue.len().min(self.chunks_per_tick);
 
-        let chunks: Box<[Arc<RwLock<ChunkEntityData>>]> = self
+        let chunks: Box<[Arc<ChunkEntityData>]> = self
             .entity_chunk_queue
             .drain(..chunk_size)
             .map(|(_, chunk)| chunk)
@@ -603,8 +602,6 @@ impl Player {
             "world", // TODO: Add world names
             level.loaded_chunk_count(),
         );
-
-        level.clean_up_log().await;
 
         //self.world().level.list_cached();
     }
@@ -1307,7 +1304,6 @@ impl Player {
                 ClientPlatform::Java(java_client) => {
                     java_client.send_packet_now(&CChunkBatchStart).await;
                     for chunk in chunk_of_chunks {
-                        let chunk = chunk.read().await;
                         // log::debug!("send chunk {:?}", chunk.position);
                         // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
                         // player or something.
@@ -1319,8 +1315,6 @@ impl Player {
                 }
                 ClientPlatform::Bedrock(bedrock_client) => {
                     for chunk in chunk_of_chunks {
-                        let chunk = chunk.read().await;
-
                         bedrock_client
                             .send_game_packet(&CLevelChunk {
                                 dimension: 0,
@@ -1743,7 +1737,7 @@ impl Player {
                 self.client
                     .send_packet_now(&CRespawn::new(
                         (new_world.dimension.id).into(),
-                        ResourceLocation::from(new_world.dimension.minecraft_name),
+                        new_world.dimension.minecraft_name.to_string(),
                         biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
@@ -1930,13 +1924,17 @@ impl Player {
             .await;
     }
 
-    pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) {
+    pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) -> bool {
         // We could send the same gamemode without any problems. But why waste bandwidth?
-        assert_ne!(
-            self.gamemode.load(),
-            gamemode,
-            "Attempt to set the gamemode to the already current gamemode"
-        );
+        // assert_ne!(
+        //    self.gamemode.load(),
+        //    gamemode,
+        //    "Attempt to set the gamemode to the already current gamemode"
+        // );
+        // Why are we panicking if the gamemodes are the same? Vanilla just exits early.
+        if self.gamemode.load() == gamemode {
+            return false;
+        }
         let server = self.world().server.upgrade().unwrap();
         send_cancellable! {{
             server;
@@ -1965,11 +1963,14 @@ impl Player {
                     self.get_entity().set_on_fire(false).await;
                 }
 
-                // Stop elytra flight when switching to spectator mode
+                // Stop elytra flight and reset sneaking when switching to spectator mode
                 if gamemode == GameMode::Spectator {
                     let entity = self.get_entity();
                     if entity.fall_flying.load(Ordering::Relaxed) {
                         entity.set_fall_flying(false).await;
+                    }
+                    if entity.sneaking.load(Ordering::Relaxed) {
+                        entity.set_sneaking(false).await;
                     }
                 }
 
@@ -1995,6 +1996,12 @@ impl Player {
                         GameEvent::ChangeGameMode,
                         gamemode as i32 as f32,
                     )).await;
+
+                true
+            }
+
+            'cancelled: {
+                false
             }
         }}
     }
@@ -2272,7 +2279,7 @@ impl Player {
             .await;
     }
 
-    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
         let effect_id = VarInt(i32::from(effect_type.id));
         self.client
             .enqueue_packet(
@@ -2282,13 +2289,14 @@ impl Player {
                 ),
             )
             .await;
-        self.living_entity.remove_effect(effect_type).await;
+
+        self.living_entity.remove_effect(effect_type).await
 
         // TODO broadcast metadata
     }
 
-    pub async fn remove_all_effect(&self) -> u8 {
-        let mut count = 0;
+    pub async fn remove_all_effects(&self) -> bool {
+        let mut succeeded = false;
         let mut effect_list = vec![];
         for effect in self.living_entity.active_effects.lock().await.keys() {
             effect_list.push(*effect);
@@ -2301,14 +2309,15 @@ impl Player {
                     ),
                 )
                 .await;
-            count += 1;
+            succeeded = true;
         }
-        //Need to remove effect after because the player effect are lock in the for before
+
+        // Need to remove effects afterward here because there would be a deadlock if this is done in the for loop.
         for effect in effect_list {
             self.living_entity.remove_effect(effect).await;
         }
 
-        count
+        succeeded
     }
 
     /// Add experience levels to the player.
@@ -2663,7 +2672,7 @@ impl NBTStorage for Player {
 
             nbt.put_string(
                 "Dimension",
-                ResourceLocation::from(self.world().dimension.minecraft_name).to_string(),
+                self.world().dimension.minecraft_name.to_string(),
             );
         })
     }
@@ -2700,6 +2709,25 @@ impl NBTStorage for Player {
             self.experience_level.store(level, Ordering::Relaxed);
             self.experience_progress.store(progress);
             self.experience_points.store(points, Ordering::Relaxed);
+
+            // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
+            if let (Some(x), Some(y), Some(z)) = (
+                nbt.get_int("SpawnX"),
+                nbt.get_int("SpawnY"),
+                nbt.get_int("SpawnZ"),
+            ) {
+                let dim = nbt
+                    .get_string("SpawnDimension")
+                    .and_then(|s| Dimension::from_name(s).copied())
+                    .unwrap_or(self.world().dimension);
+                let force = nbt.get_bool("SpawnForced").unwrap_or(false);
+                self.respawn_point.store(Some(RespawnPoint {
+                    dimension: dim,
+                    position: BlockPos(Vector3::new(x, y, z)),
+                    yaw: 0.0,
+                    force,
+                }));
+            }
         })
     }
 }
@@ -3341,6 +3369,16 @@ impl InventoryPlayer for Player {
                 self.world()
                     .play_sound(sound, SoundCategory::Players, &self.position())
                     .await;
+            }
+        })
+    }
+
+    fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()> {
+        Box::pin(async move {
+            log::debug!("Player::award_experience called with amount={amount}");
+            if amount > 0 {
+                log::debug!("Player: adding {amount} experience points");
+                self.add_experience_points(amount).await;
             }
         })
     }
