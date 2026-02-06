@@ -2605,11 +2605,17 @@ impl World {
                 .await;
 
             if fire_event {
-                let msg_comp = TextComponent::translate(
-                    "multiplayer.player.left",
-                    [TextComponent::text(player.gameprofile.name.clone())],
-                )
-                .color_named(NamedColor::Yellow);
+                let msg_comp = if let Some(custom_message) =
+                    player.pending_leave_message.lock().await.take()
+                {
+                    custom_message
+                } else {
+                    TextComponent::translate(
+                        "multiplayer.player.left",
+                        [TextComponent::text(player.gameprofile.name.clone())],
+                    )
+                    .color_named(NamedColor::Yellow)
+                };
                 let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
                 let event = self

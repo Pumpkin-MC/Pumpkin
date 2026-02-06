@@ -5,6 +5,7 @@ use crate::entity::player::Player;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
+use pumpkin_util::Hand;
 
 use crate::entity::Entity;
 use crate::entity::projectile::ThrownItemEntity;
@@ -26,6 +27,7 @@ impl ItemBehaviour for WindChargeItem {
         &'a self,
         _block: &'a Item,
         player: &'a Player,
+        _hand: Hand,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
