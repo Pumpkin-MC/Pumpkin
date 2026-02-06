@@ -2718,7 +2718,7 @@ impl NBTStorage for Player {
             ) {
                 let dim = nbt
                     .get_string("SpawnDimension")
-                    .and_then(|s| Dimension::from_name(&s).copied())
+                    .and_then(|s| Dimension::from_name(s).copied())
                     .unwrap_or(self.world().dimension);
                 let force = nbt.get_bool("SpawnForced").unwrap_or(false);
                 self.respawn_point.store(Some(RespawnPoint {
