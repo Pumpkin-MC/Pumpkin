@@ -1,4 +1,6 @@
 pub mod data_result;
+pub mod decoder;
+pub mod encoder;
 pub mod dynamic_ops;
 pub mod lifecycle;
 pub mod map_like;
