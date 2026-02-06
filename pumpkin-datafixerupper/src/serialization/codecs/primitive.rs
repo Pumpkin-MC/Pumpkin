@@ -4,7 +4,20 @@ use crate::serialization::{
 
 /// Helper macro to generate the struct & encode function for a primitive codec.
 macro_rules! impl_primitive_codec_common {
-    ($name:ident, $prim:ty, $create_func:ident) => {
+    (clone $name:ident, $prim:ty, $create_func:ident) => {
+        pub struct $name;
+        impl Encoder<$prim> for $name {
+            fn encode<T: PartialEq>(
+                &self,
+                input: &$prim,
+                ops: &impl DynamicOps<Value = T>,
+                prefix: T,
+            ) -> DataResult<T> {
+                ops.merge_into_primitive(prefix, ops.$create_func(input.clone()))
+            }
+        }
+    };
+    (reference $name:ident, $prim:ty, $create_func:ident) => {
         pub struct $name;
         impl Encoder<$prim> for $name {
             fn encode<T: PartialEq>(
@@ -20,8 +33,8 @@ macro_rules! impl_primitive_codec_common {
 }
 
 macro_rules! impl_primitive_codec {
-    ($name:ident, $prim:ty, $create_func:ident, $get_func:ident) => {
-        impl_primitive_codec_common!($name, $prim, $create_func);
+    ($mode:ident, $name:ident, $prim:ty, $create_func:ident, $get_func:ident) => {
+        impl_primitive_codec_common!($mode $name, $prim, $create_func);
 
         impl Decoder<$prim> for $name {
             fn decode<T>(
@@ -37,7 +50,7 @@ macro_rules! impl_primitive_codec {
 
 macro_rules! impl_primitive_number_codec {
     ($name:ident, $prim:ty, $create_func:ident) => {
-        impl_primitive_codec_common!($name, $prim, $create_func);
+        impl_primitive_codec_common!(clone $name, $prim, $create_func);
 
         impl Decoder<$prim> for $name {
             fn decode<T>(
@@ -53,7 +66,23 @@ macro_rules! impl_primitive_number_codec {
     };
 }
 
-impl_primitive_codec!(BoolCodec, bool, create_bool, get_bool);
+macro_rules! impl_primitive_iter_codec {
+    ($mode:ident, $name:ident, $prim:ty, $create_func:ident, $get_func:ident) => {
+        impl_primitive_codec_common!($mode $name, &impl Iterator<Value = $prim>, $create_func);
+
+        impl Decoder<$prim> for $name {
+            fn decode<T>(
+                &self,
+                input: T,
+                ops: &impl DynamicOps<Value = T>,
+            ) -> DataResult<($prim, T)> {
+                ops.$get_func(&input).map(|r| (r, ops.empty()))
+            }
+        }
+    };
+}
+
+impl_primitive_codec!(clone, BoolCodec, bool, create_bool, get_bool);
 
 impl_primitive_number_codec!(ByteCodec, i8, create_byte);
 impl_primitive_number_codec!(ShortCodec, i16, create_short);
@@ -62,12 +91,23 @@ impl_primitive_number_codec!(LongCodec, i64, create_long);
 impl_primitive_number_codec!(FloatCodec, f32, create_float);
 impl_primitive_number_codec!(DoubleCodec, f64, create_double);
 
-impl_primitive_codec!(StringCodec, String, create_string, get_string);
+impl_primitive_codec!(reference, StringCodec, String, create_string, get_string);
 
-impl_primitive_codec!(ByteBufferCodec, Vec<i8>, create_byte_buffer, get_bytes);
-
-//impl_primitive_codec!(IntStreamCodec, Vec<i8>, create_bytes);
-//impl_primitive_codec!(LongStreamCodec, Vec<i8>, create_bytes);
+impl_primitive_codec!(
+    clone,
+    ByteBufferCodec,
+    Vec<i8>,
+    create_byte_buffer,
+    get_byte_buffer
+);
+impl_primitive_iter_codec!(clone, IntStreamCodec, i32, create_int_list, get_int_iter);
+impl_primitive_iter_codec!(
+    clone,
+    LongStreamCodec,
+    i64,
+    create_long_list,
+    get_byte_buffer
+);
 
 /// A primitive codec for Java's `boolean` (`bool` in Rust).
 pub const BOOL: BoolCodec = BoolCodec;
@@ -88,5 +128,6 @@ pub const DOUBLE: DoubleCodec = DoubleCodec;
 /// A primitive codec for Java's `String` (also `String` in Rust).
 pub const STRING: StringCodec = StringCodec;
 
-/// A primitive codec for Java's `String` (also `String` in Rust).
+/// A primitive codec for Java's `ByteBuffer`.
+/// Here, this actually stores a [`Vec<i8>`].
 pub const BYTE_BUFFER: ByteBufferCodec = ByteBufferCodec;
