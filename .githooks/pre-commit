@@ -24,9 +24,9 @@ fi
 # 3. Extract write paths from contract
 WRITE_PATHS=$(awk '/\[boundaries\]/,/\[/' "$CONTRACT" | grep -oP '"[^"]*/"' | tr -d '"')
 
-# logs/ is always writable for all agents
+# .claude/sessions/ is always writable for all agents
 WRITE_PATHS="$WRITE_PATHS
-logs/"
+.claude/sessions/"
 
 # 4. Check every changed file against write boundaries
 CHANGED=$(git diff --cached --name-only)
@@ -68,11 +68,11 @@ fi
 
 # 5. Verify session log exists for today
 TODAY=$(date +%Y-%m-%d)
-if ! ls logs/"$TODAY"/*_${AGENT}_* 1>/dev/null 2>&1; then
+if ! ls .claude/sessions/"$TODAY"/*_${AGENT}_* 1>/dev/null 2>&1; then
     echo "╔══════════════════════════════════════════════╗"
     echo "║  ERROR: No session log found for today.      ║"
     echo "║  Agent: $AGENT                               ║"
-    echo "║  Expected: logs/$TODAY/XXX_${AGENT}_*.md     ║"
+    echo "║  Expected: .claude/sessions/$TODAY/XXX_${AGENT}_*.md     ║"
     echo "║                                              ║"
     echo "║  Write your session log before committing.   ║"
     echo "╚══════════════════════════════════════════════╝"

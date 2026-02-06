@@ -12,7 +12,7 @@ read_paths = [
     "pumpkin-data/",
     "specs/world/",
     "specs/data/",
-    "logs/",
+    ".claude/sessions/",
     "contracts/",
 ]
 forbidden_paths = ["pumpkin-protocol/", "pumpkin/src/net/", "pumpkin/src/entity/", "pumpkin/src/item/", "pumpkin/src/server/", "pumpkin/src/plugin/"]

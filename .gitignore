@@ -158,3 +158,6 @@ spigot.yml
 version_history.json
 world_nether/
 world_the_end/
+
+# Agent workspace (session logs, local rules)
+.claude/

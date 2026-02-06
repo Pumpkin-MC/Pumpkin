@@ -28,10 +28,10 @@ fi
 echo "$AGENT" > .current-agent
 
 # Ensure today's log directory exists
-mkdir -p "logs/$TODAY"
+mkdir -p ".claude/sessions/$TODAY"
 
 # Determine next sequence number
-LAST_SEQ=$(ls "logs/$TODAY/" 2>/dev/null | grep -oP '^\d+' | sort -n | tail -1)
+LAST_SEQ=$(ls ".claude/sessions/$TODAY/" 2>/dev/null | grep -oP '^\d+' | sort -n | tail -1)
 NEXT_SEQ=$(printf "%03d" $(( ${LAST_SEQ:-0} + 1 )))
 
 # Calculate yesterday
@@ -48,16 +48,16 @@ echo ""
 echo "  Agent:      $AGENT"
 echo "  Task:       $TASK"
 echo "  Date:       $TODAY"
-echo "  Log file:   logs/$TODAY/${NEXT_SEQ}_${AGENT}_<description>.md"
+echo "  Log file:   .claude/sessions/$TODAY/${NEXT_SEQ}_${AGENT}_<description>.md"
 echo "  Contract:   contracts/${AGENT}.toml"
 echo ""
 echo "  Context to load:"
 echo "  ─────────────────"
 
 # List today's logs
-if ls "logs/$TODAY/"*.md 1>/dev/null 2>&1; then
+if ls ".claude/sessions/$TODAY/"*.md 1>/dev/null 2>&1; then
     echo "  Today's logs:"
-    for f in "logs/$TODAY/"*.md; do
+    for f in ".claude/sessions/$TODAY/"*.md; do
         echo "    ✓ $(basename "$f")"
         CONTEXT_COUNT=$((CONTEXT_COUNT + 1))
     done
@@ -66,9 +66,9 @@ else
 fi
 
 # List yesterday's logs
-if [ "$YESTERDAY" != "none" ] && [ -d "logs/$YESTERDAY" ]; then
+if [ "$YESTERDAY" != "none" ] && [ -d ".claude/sessions/$YESTERDAY" ]; then
     echo "  Yesterday's last 5:"
-    for f in $(ls "logs/$YESTERDAY/"*.md 2>/dev/null | tail -5); do
+    for f in $(ls ".claude/sessions/$YESTERDAY/"*.md 2>/dev/null | tail -5); do
         echo "    ✓ $(basename "$f")"
         CONTEXT_COUNT=$((CONTEXT_COUNT + 1))
     done
@@ -77,8 +77,8 @@ else
 fi
 
 echo "  Decision logs:"
-echo "    ✓ logs/decisions/${AGENT}.md"
-echo "    ✓ logs/decisions/architect.md"
+echo "    ✓ .claude/sessions/decisions/${AGENT}.md"
+echo "    ✓ .claude/sessions/decisions/architect.md"
 CONTEXT_COUNT=$((CONTEXT_COUNT + 2))
 
 echo ""

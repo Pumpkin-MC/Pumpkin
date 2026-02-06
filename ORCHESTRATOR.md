@@ -113,20 +113,16 @@ Pumpkin/
 │   ├── data/                    # MC data dumps (blocks, items, recipes)
 │   ├── world/                   # World gen specs, biome data
 │   └── entity/                  # Entity specs, mob behaviors
-├── logs/
-│   ├── YYYY-MM-DD/
-│   │   ├── 001_agent_description.md
-│   │   └── ...
-│   └── decisions/
-│       ├── architect.md
-│       ├── protocol.md
-│       ├── world.md
-│       ├── entity.md
-│       ├── redstone.md
-│       ├── storage.md
-│       ├── items.md
-│       ├── core.md
-│       └── plugin.md
+├── .claude/                     # gitignored — agent workspace
+│   ├── rules/
+│   │   └── session-protocol.md
+│   └── sessions/
+│       ├── YYYY-MM-DD/
+│       │   ├── 001_agent_description.md
+│       │   └── ...
+│       └── decisions/
+│           ├── architect.md
+│           └── ...
 ├── reference/                   # External reference material
 ├── .githooks/
 │   └── pre-commit
@@ -152,7 +148,7 @@ read_paths = [
     "pumpkin-util/",
     "pumpkin-data/",
     "specs/protocol/",
-    "logs/",
+    ".claude/sessions/",
     "contracts/",
 ]
 forbidden_paths = ["pumpkin/src/entity/", "pumpkin/src/world/", "pumpkin/src/block/blocks/redstone/"]
@@ -182,10 +178,10 @@ must_pass = "cargo test -p pumpkin-protocol"
 │     - What is my write scope?                    │
 │                                                   │
 │  2. READ (mandatory, no exceptions)              │
-│     - logs/{today}/*.md (ALL of them)            │
-│     - logs/{yesterday}/ (last 5 entries)         │
-│     - logs/decisions/{my-agent}.md               │
-│     - logs/decisions/architect.md                │
+│     - .claude/sessions/{today}/*.md (ALL of them)            │
+│     - .claude/sessions/{yesterday}/ (last 5 entries)         │
+│     - .claude/sessions/decisions/{my-agent}.md               │
+│     - .claude/sessions/decisions/architect.md                │
 │     - Any log that mentions my agent by name     │
 │     - contracts/{my-agent}.toml                  │
 │                                                   │
@@ -201,8 +197,8 @@ must_pass = "cargo test -p pumpkin-protocol"
 │     - Run your tests before finishing            │
 │                                                   │
 │  5. LOG (mandatory, no exceptions)               │
-│     - Write logs/{today}/{seq}_{agent}_{desc}.md │
-│     - Update logs/decisions/{agent}.md if needed │
+│     - Write .claude/sessions/{today}/{seq}_{agent}_{desc}.md │
+│     - Update .claude/sessions/decisions/{agent}.md if needed │
 │     - Follow the session log format exactly      │
 │                                                   │
 │  6. COMMIT                                       │
@@ -216,9 +212,9 @@ must_pass = "cargo test -p pumpkin-protocol"
 
 ## SESSION LOG FORMAT
 
-File: `logs/{YYYY-MM-DD}/{SEQ}_{agent}_{short-description}.md`
+File: `.claude/sessions/{YYYY-MM-DD}/{SEQ}_{agent}_{short-description}.md`
 
-Example: `logs/2026-02-06/003_protocol_chunk-packet.md`
+Example: `.claude/sessions/2026-02-06/003_protocol_chunk-packet.md`
 
 ```markdown
 # Session: {agent}-{SEQ}
@@ -227,10 +223,10 @@ Example: `logs/2026-02-06/003_protocol_chunk-packet.md`
 **Task:** {one-line description}
 
 ## Context Loaded
-- Read logs/{today}/ entries {range}
-- Read logs/{yesterday}/ entries {range}
-- Read logs/decisions/{agent}.md ({N} decisions)
-- Read logs/decisions/architect.md ({N} decisions)
+- Read .claude/sessions/{today}/ entries {range}
+- Read .claude/sessions/{yesterday}/ entries {range}
+- Read .claude/sessions/decisions/{agent}.md ({N} decisions)
+- Read .claude/sessions/decisions/architect.md ({N} decisions)
 - {Specific acknowledgments of requests/changes that affect this session}
 
 ## What I Did
@@ -265,7 +261,7 @@ Example: `logs/2026-02-06/003_protocol_chunk-packet.md`
 
 ## DECISIONS LOG FORMAT
 
-File: `logs/decisions/{agent}.md`
+File: `.claude/sessions/decisions/{agent}.md`
 
 ```markdown
 # {Agent} — Decisions
@@ -304,7 +300,7 @@ When agents disagree:
 
 1. Both agents document their position in their session logs
 2. Architect reads both, makes a ruling
-3. Ruling is logged in `logs/decisions/architect.md`
+3. Ruling is logged in `.claude/sessions/decisions/architect.md`
 4. Both agents acknowledge in their next preamble
 5. No agent may relitigate without new evidence
 
