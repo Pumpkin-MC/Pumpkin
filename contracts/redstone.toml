@@ -1,0 +1,34 @@
+[identity]
+name = "redstone"
+responsibility = "Redstone signal propagation, all redstone components (repeaters, comparators, pistons, observers), quasi-connectivity, update ordering, turbo mode"
+
+[boundaries]
+write_paths = ["pumpkin/src/block/blocks/redstone/", "pumpkin/src/block/blocks/piston/"]
+read_paths = [
+    "pumpkin/src/block/",
+    "pumpkin-util/",
+    "pumpkin-data/",
+    "pumpkin/src/world/",
+    "specs/data/",
+    "logs/",
+    "contracts/",
+]
+forbidden_paths = ["pumpkin-protocol/", "pumpkin/src/net/", "pumpkin/src/entity/", "pumpkin/src/item/", "pumpkin/src/server/", "pumpkin/src/plugin/"]
+
+[interfaces]
+implements = ["RedstoneEngine"]
+consumes = ["BlockStateRegistry", "ChunkProvider"]
+
+[specs]
+primary = ["specs/data/"]
+secondary = ["pumpkin/src/block/blocks/redstone/"]
+
+[tests]
+must_pass = "cargo test -p pumpkin --lib block::blocks::redstone"
+
+[notes]
+# Redstone is the hardest subsystem. It is effectively a circuit simulator.
+# Vanilla behavior includes intentional bugs (quasi-connectivity) that players rely on.
+# When in doubt, match vanilla behavior exactly, even if it seems wrong.
+# Pumpkin already has a "turbo" mode (turbo.rs) — understand it before modifying.
+# Current Pumpkin redstone: ~6284 lines across 20+ files. Partially complete.

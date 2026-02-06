@@ -1,0 +1,33 @@
+[identity]
+name = "items"
+responsibility = "Item/block registries, recipes (crafting/smelting/smithing), loot tables, enchantments, inventory management, item behaviors"
+
+[boundaries]
+write_paths = ["pumpkin-inventory/", "pumpkin/src/item/", "pumpkin/src/data/"]
+read_paths = [
+    "pumpkin-inventory/",
+    "pumpkin/src/item/",
+    "pumpkin/src/data/",
+    "pumpkin-util/",
+    "pumpkin-data/",
+    "specs/data/",
+    "logs/",
+    "contracts/",
+]
+forbidden_paths = ["pumpkin-protocol/", "pumpkin/src/net/", "pumpkin/src/entity/", "pumpkin/src/world/", "pumpkin/src/server/", "pumpkin/src/plugin/"]
+
+[interfaces]
+implements = ["RecipeRegistry", "ItemRegistry", "LootTableProvider"]
+consumes = []
+
+[specs]
+primary = ["specs/data/"]
+secondary = ["pumpkin-inventory/", "pumpkin/src/item/"]
+
+[tests]
+must_pass = "cargo test -p pumpkin-inventory"
+
+[notes]
+# Most of this agent's work is loading and indexing declarative data.
+# Recipes, loot tables, and tags are all JSON — parse them, don't hardcode them.
+# pumpkin-data/ already has generated registries — understand those before duplicating.
