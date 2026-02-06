@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::{server::Server, world::portal::end::EndPortal};
 use pumpkin_data::{Block, BlockDirection, item::Item};
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -63,6 +64,7 @@ impl ItemBehaviour for EnderEyeItem {
         &'a self,
         _item: &'a Item,
         player: &'a Player,
+        _hand: Hand,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();

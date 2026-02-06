@@ -8,6 +8,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
+use pumpkin_util::Hand;
 use pumpkin_world::item::ItemStack;
 
 pub struct EggItem;
@@ -25,6 +26,7 @@ impl ItemBehaviour for EggItem {
         &'a self,
         _block: &'a Item,
         player: &'a Player,
+        hand: Hand,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let position = player.position();
@@ -38,7 +40,11 @@ impl ItemBehaviour for EggItem {
                 .await;
 
             // Capture the held item stack and pass it to the thrown egg entity
-            let item_stack: ItemStack = player.inventory.held_item().lock().await.clone();
+            let item_stack: ItemStack = if hand == Hand::Left {
+                player.inventory.off_hand_item().await.lock().await.clone()
+            } else {
+                player.inventory.held_item().lock().await.clone()
+            };
 
             let entity = Entity::new(world.clone(), position, &EntityType::EGG);
             let egg = EggEntity::new_shot(entity, &player.living_entity.entity).await;

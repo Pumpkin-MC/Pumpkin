@@ -11,6 +11,7 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -54,6 +55,7 @@ impl ItemBehaviour for FireworkRocketItem {
         &'a self,
         _item: &'a Item,
         player: &'a Player,
+        _hand: Hand,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {
             if player.get_entity().fall_flying.load(Ordering::Relaxed) {

@@ -15,6 +15,7 @@ use pumpkin_data::{
 };
 use pumpkin_util::{
     GameMode,
+    Hand,
     math::{position::BlockPos, vector3::Vector3},
 };
 use pumpkin_world::{inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags};
@@ -104,9 +105,11 @@ impl ItemBehaviour for EmptyBucketItem {
         &'a self,
         _block: &'a Item,
         player: &'a Player,
+        hand: Hand,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
+            let hand_name = if hand == Hand::Left { "OFF_HAND" } else { "HAND" };
             let (start_pos, end_pos) = get_start_and_end_pos(player);
 
             let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
@@ -166,7 +169,7 @@ impl ItemBehaviour for EmptyBucketItem {
                     block_key(target_block),
                     Some(direction),
                     format!("minecraft:{}", item.registry_key),
-                    "HAND".to_string(),
+                    hand_name.to_string(),
                 );
                 let event = server.plugin_manager.fire(event).await;
                 if event.cancelled {
@@ -228,9 +231,11 @@ impl ItemBehaviour for FilledBucketItem {
         &'a self,
         item: &'a Item,
         player: &'a Player,
+        hand: Hand,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
+            let hand_name = if hand == Hand::Left { "OFF_HAND" } else { "HAND" };
             let (start_pos, end_pos) = get_start_and_end_pos(player);
             let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
                 let state_id = world_inner.get_block_state_id(pos).await;
@@ -276,7 +281,7 @@ impl ItemBehaviour for FilledBucketItem {
                     block_key(target_block),
                     Some(direction),
                     format!("minecraft:{}", item.registry_key),
-                    "HAND".to_string(),
+                    hand_name.to_string(),
                 );
                 let event = server.plugin_manager.fire(event).await;
                 if event.cancelled {

@@ -4,6 +4,7 @@ use crate::server::Server;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -26,10 +27,10 @@ impl ItemRegistry {
         }
     }
 
-    pub async fn on_use(&self, item: &Item, player: &Player) {
+    pub async fn on_use(&self, item: &Item, player: &Player, hand: Hand) {
         let pumpkin_item = self.get_pumpkin_item(item.id);
         if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item.normal_use(item, player).await;
+            pumpkin_item.normal_use(item, player, hand).await;
         }
     }
 

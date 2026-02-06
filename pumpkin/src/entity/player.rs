@@ -415,6 +415,8 @@ pub struct Player {
     pub open_container_pos: AtomicCell<Option<BlockPos>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
+    /// Custom leave message to be used by the leave event after a kick.
+    pub pending_leave_message: Mutex<Option<TextComponent>>,
     /// The player's abilities and special powers.
     ///
     /// This field represents the various abilities that the player possesses, such as flight, invulnerability, and other special effects.
@@ -534,6 +536,7 @@ impl Player {
             packet_sequence: AtomicI32::new(-1),
             start_mining_time: AtomicI32::new(0),
             carried_item: Mutex::new(None),
+            pending_leave_message: Mutex::new(None),
             experience_pick_up_delay: Mutex::new(0),
             teleport_id_count: AtomicI32::new(0),
             mining: AtomicBool::new(false),
@@ -2033,7 +2036,7 @@ impl Player {
             leave_message = event.leave_message;
         }
 
-        let _ = leave_message;
+        *self.pending_leave_message.lock().await = Some(leave_message);
         self.client.kick(reason, kick_message).await;
     }
 

@@ -2213,7 +2213,7 @@ impl JavaClient {
             server;
             event;
             'after: {
-                server.item_registry.on_use(item_for_use, player).await;
+                server.item_registry.on_use(item_for_use, player, hand).await;
             }
         }}
     }

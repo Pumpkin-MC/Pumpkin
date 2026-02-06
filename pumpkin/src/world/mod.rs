@@ -2122,7 +2122,6 @@ impl World {
 
             if respawn_world_uuid != respawn_world.uuid {
                 let worlds = server.worlds.load();
-<<<<<<< HEAD
                 if let Some(found) = worlds.iter().find(|w| w.uuid == respawn_world_uuid).cloned()
                 {
                     if found.uuid != respawn_world.uuid {
@@ -2714,11 +2713,17 @@ impl World {
                 .await;
 
             if fire_event {
-                let msg_comp = TextComponent::translate(
-                    translation::MULTIPLAYER_PLAYER_LEFT,
-                    [TextComponent::text(player.gameprofile.name.clone())],
-                )
-                .color_named(NamedColor::Yellow);
+                let msg_comp = if let Some(custom_message) =
+                    player.pending_leave_message.lock().await.take()
+                {
+                    custom_message
+                } else {
+                    TextComponent::translate(
+                        translation::MULTIPLAYER_PLAYER_LEFT,
+                        [TextComponent::text(player.gameprofile.name.clone())],
+                    )
+                    .color_named(NamedColor::Yellow)
+                };
                 let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
                 let event = self
