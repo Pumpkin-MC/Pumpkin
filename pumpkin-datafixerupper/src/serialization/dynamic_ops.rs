@@ -177,8 +177,8 @@ pub trait DynamicOps {
     }
 
     /// Creates a `long` list that can be represented by this `DynamicOps` using a byte buffer.
-    fn create_long_list(&self, int_iter: impl Iterator<Item = i64>) -> Self::Value {
-        self.create_list(int_iter.map(|l| self.create_long(l)))
+    fn create_long_list(&self, long_iter: impl Iterator<Item = i64>) -> Self::Value {
+        self.create_list(long_iter.map(|l| self.create_long(l)))
     }
 
     /// Merges a value represented by this `DynamicOps` to a list represented by this `DynamicOps`.
