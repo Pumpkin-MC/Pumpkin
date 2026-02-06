@@ -9,7 +9,7 @@ pub struct PluginDisableEvent {
 
 impl PluginDisableEvent {
     #[must_use]
-    pub fn new(plugin_name: String) -> Self {
+    pub const fn new(plugin_name: String) -> Self {
         Self { plugin_name }
     }
 }

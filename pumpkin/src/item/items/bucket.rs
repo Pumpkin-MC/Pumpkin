@@ -101,6 +101,7 @@ fn set_waterlogged(block: &Block, state: u16, waterlogged: bool) -> u16 {
 }
 
 impl ItemBehaviour for EmptyBucketItem {
+    #[expect(clippy::too_many_lines)]
     fn normal_use<'a>(
         &'a self,
         _block: &'a Item,
@@ -227,6 +228,7 @@ impl ItemBehaviour for EmptyBucketItem {
 }
 
 impl ItemBehaviour for FilledBucketItem {
+    #[expect(clippy::too_many_lines)]
     fn normal_use<'a>(
         &'a self,
         item: &'a Item,

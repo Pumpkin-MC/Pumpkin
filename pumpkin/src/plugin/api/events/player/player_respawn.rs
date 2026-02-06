@@ -33,7 +33,7 @@ pub struct PlayerRespawnEvent {
 
 impl PlayerRespawnEvent {
     /// Creates a new instance of `PlayerRespawnEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         respawn_position: Vector3<f64>,
         world_uuid: uuid::Uuid,

@@ -23,16 +23,16 @@ pub struct PlayerBucketEmptyEvent {
     /// The face that was interacted with.
     pub face: Option<BlockDirection>,
 
-    /// The bucket item key (e.g., "minecraft:water_bucket").
+    /// The bucket item key (e.g., "`minecraft:water_bucket`").
     pub bucket_item_key: String,
 
-    /// The hand used ("HAND" or "OFF_HAND").
+    /// The hand used ("HAND" or "`OFF_HAND`").
     pub hand: String,
 }
 
 impl PlayerBucketEmptyEvent {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         position: Vector3<f64>,
         block_key: String,

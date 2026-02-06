@@ -2474,16 +2474,15 @@ impl Player {
             ))
             .await;
 
-        if old_level != level {
-            if let Some(server) = self.world().server.upgrade()
-                && let Some(player_arc) = self.as_arc()
-            {
-                let event = PlayerLevelChangeEvent::new(player_arc, old_level, level);
-                server
-                    .plugin_manager
-                    .fire::<PlayerLevelChangeEvent>(event)
-                    .await;
-            }
+        if old_level != level
+            && let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.as_arc()
+        {
+            let event = PlayerLevelChangeEvent::new(player_arc, old_level, level);
+            server
+                .plugin_manager
+                .fire::<PlayerLevelChangeEvent>(event)
+                .await;
         }
     }
 

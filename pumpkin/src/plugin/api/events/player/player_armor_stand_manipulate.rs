@@ -22,13 +22,13 @@ pub struct PlayerArmorStandManipulateEvent {
     /// The item key currently in the armor stand slot (if known).
     pub armor_stand_item_key: String,
 
-    /// The equipment slot being manipulated (e.g., "HAND", "OFF_HAND").
+    /// The equipment slot being manipulated (e.g., "HAND", "`OFF_HAND`").
     pub slot: String,
 }
 
 impl PlayerArmorStandManipulateEvent {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         armor_stand_uuid: Uuid,
         item_key: String,

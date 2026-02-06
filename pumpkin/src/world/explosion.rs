@@ -206,8 +206,8 @@ impl Explosion {
         let blocks = self.get_blocks_to_destroy(world).await;
         let source_pos = BlockPos::floored(self.pos.x, self.pos.y, self.pos.z);
         let (source_block, _source_state) = world.get_block_and_state(&source_pos).await;
-        let mut block_positions: Vec<BlockPos> = blocks.keys().cloned().collect();
-        let mut yield_rate = 1.0_f32;
+        let mut block_positions: Vec<BlockPos> = blocks.keys().copied().collect();
+        let mut yield_rate = 1.0f32;
 
         if let Some(server) = world.server.upgrade() {
             let event = crate::plugin::block::block_explode::BlockExplodeEvent::new(

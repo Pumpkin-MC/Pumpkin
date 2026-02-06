@@ -26,7 +26,7 @@ pub struct PlayerHarvestBlockEvent {
 
 impl PlayerHarvestBlockEvent {
     /// Creates a new instance of `PlayerHarvestBlockEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         block_pos: BlockPos,
         block_key: String,

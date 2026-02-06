@@ -420,6 +420,7 @@ pub async fn drop_loot(
     drop_experience(world, block, pos, experience).await;
 }
 
+#[must_use]
 pub fn collect_loot(block: &Block, params: LootContextParameters) -> Vec<ItemStack> {
     let mut stacks = Vec::new();
     if let Some(loot_table) = &block.loot_table {

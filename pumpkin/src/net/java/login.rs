@@ -60,7 +60,7 @@ impl JavaClient {
             prelogin_uuid,
             address,
             "ALLOWED".to_string(),
-            "".to_string(),
+            String::new(),
         );
         let prelogin_event = server.plugin_manager.fire(prelogin_event).await;
         if prelogin_event.cancelled || prelogin_event.result != "ALLOWED" {

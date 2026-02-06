@@ -428,22 +428,21 @@ impl EntityBase for ItemEntity {
                 (stack.clone(), stack.item.id, stack.item_count)
             };
 
-            if item_id == Item::ARROW.id
+            if (item_id == Item::ARROW.id
                 || item_id == Item::SPECTRAL_ARROW.id
-                || item_id == Item::TIPPED_ARROW.id
+                || item_id == Item::TIPPED_ARROW.id)
+                && let Some(server) = player.world().server.upgrade()
             {
-                if let Some(server) = player.world().server.upgrade() {
-                    let event = PlayerPickupArrowEvent::new(
-                        player.clone(),
-                        self.entity.entity_uuid,
-                        self.entity.entity_uuid,
-                        item_stack_snapshot.clone(),
-                        item_count as i32,
-                    );
-                    let event = server.plugin_manager.fire(event).await;
-                    if event.cancelled {
-                        return;
-                    }
+                let event = PlayerPickupArrowEvent::new(
+                    player.clone(),
+                    self.entity.entity_uuid,
+                    self.entity.entity_uuid,
+                    item_stack_snapshot.clone(),
+                    item_count as i32,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
                 }
             }
 

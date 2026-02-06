@@ -546,7 +546,8 @@ impl PluginManager {
         };
 
         let disable_event = PluginDisableEvent::new(name.to_string());
-        if let Some(server) = self.server.read().await.clone() {
+        let server_opt = self.server.read().await.clone();
+        if let Some(server) = server_opt {
             let _ = server
                 .plugin_manager
                 .fire::<PluginDisableEvent>(disable_event)

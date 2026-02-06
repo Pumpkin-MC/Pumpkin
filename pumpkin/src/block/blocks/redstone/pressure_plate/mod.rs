@@ -50,8 +50,7 @@ pub(crate) trait PressurePlate {
         let calc_output = self.calculate_redstone_output(world, block, pos).await;
         let has_output = calc_output > 0;
         if calc_output != output {
-            let mut next_output = calc_output;
-            if let Some(server) = world.server.upgrade() {
+            let next_output = if let Some(server) = world.server.upgrade() {
                 let event_block = Block::from_id(block.id);
                 let event = crate::plugin::block::block_redstone::BlockRedstoneEvent::new(
                     event_block,
@@ -64,8 +63,10 @@ pub(crate) trait PressurePlate {
                 if event.cancelled {
                     return;
                 }
-                next_output = event.new_current.clamp(0, 15) as u8;
-            }
+                event.new_current.clamp(0, 15) as u8
+            } else {
+                calc_output
+            };
             let state = self.set_redstone_output(block, state, next_output);
             world
                 .set_block_state(pos, state, BlockFlags::NOTIFY_LISTENERS)

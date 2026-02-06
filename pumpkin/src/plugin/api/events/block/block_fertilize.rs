@@ -27,7 +27,7 @@ pub struct BlockFertilizeEvent {
 impl BlockFertilizeEvent {
     /// Creates a new `BlockFertilizeEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         block: &'static Block,
         block_pos: BlockPos,

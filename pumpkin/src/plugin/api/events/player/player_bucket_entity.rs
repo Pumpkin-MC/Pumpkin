@@ -25,13 +25,13 @@ pub struct PlayerBucketEntityEvent {
     /// The resulting bucket item (if any).
     pub entity_bucket_key: String,
 
-    /// The hand used ("HAND" or "OFF_HAND").
+    /// The hand used ("HAND" or "`OFF_HAND`").
     pub hand: String,
 }
 
 impl PlayerBucketEntityEvent {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         entity_uuid: Uuid,
         entity_type: String,

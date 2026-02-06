@@ -24,7 +24,7 @@ pub struct BlockMultiPlaceEvent {
 impl BlockMultiPlaceEvent {
     /// Creates a new `BlockMultiPlaceEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         block_placed: &'static Block,
         positions: Vec<BlockPos>,

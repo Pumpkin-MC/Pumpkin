@@ -29,7 +29,7 @@ pub struct PlayerStatisticIncrementEvent {
 
 impl PlayerStatisticIncrementEvent {
     /// Creates a new instance of `PlayerStatisticIncrementEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         statistic: String,
         initial_value: i32,

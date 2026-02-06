@@ -501,15 +501,15 @@ impl Entity {
     pub async fn set_velocity(&self, velocity: Vector3<f64>) {
         let mut velocity = velocity;
         let world = self.world.load();
-        if let Some(player) = world.get_player_by_id(self.entity_id) {
-            if let Some(server) = world.server.upgrade() {
-                let event = PlayerVelocityEvent::new(player, velocity);
-                let event = server.plugin_manager.fire(event).await;
-                if event.cancelled {
-                    return;
-                }
-                velocity = event.velocity;
+        if let Some(player) = world.get_player_by_id(self.entity_id)
+            && let Some(server) = world.server.upgrade()
+        {
+            let event = PlayerVelocityEvent::new(player, velocity);
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
             }
+            velocity = event.velocity;
         }
         self.velocity.store(velocity);
         self.send_velocity().await;
@@ -1411,6 +1411,7 @@ impl Entity {
         self.velocity.store(velo);
     }
 
+    #[expect(clippy::too_many_lines)]
     async fn tick_portal(&self, caller: &Arc<dyn EntityBase>) {
         if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
             self.portal_cooldown.fetch_sub(1, Ordering::Relaxed);
@@ -1485,48 +1486,47 @@ impl Entity {
                 };
 
                 let current_world = self.world.load();
-                if let Some(server) = current_world.server.upgrade() {
-                    if let Some(player) = current_world.get_player_by_id(self.entity_id) {
-                        let from_position = player.position();
-                        let cause = if dest_world.dimension == Dimension::THE_END
-                            || current_world.dimension == Dimension::THE_END
-                        {
-                            "END_PORTAL"
-                        } else if dest_world.dimension == Dimension::THE_NETHER
-                            || current_world.dimension == Dimension::THE_NETHER
-                        {
-                            "NETHER_PORTAL"
-                        } else {
-                            "UNKNOWN"
-                        };
+                if let Some(server) = current_world.server.upgrade()
+                    && let Some(player) = current_world.get_player_by_id(self.entity_id)
+                {
+                    let from_position = player.position();
+                    let cause = if dest_world.dimension == Dimension::THE_END
+                        || current_world.dimension == Dimension::THE_END
+                    {
+                        "END_PORTAL"
+                    } else if dest_world.dimension == Dimension::THE_NETHER
+                        || current_world.dimension == Dimension::THE_NETHER
+                    {
+                        "NETHER_PORTAL"
+                    } else {
+                        "UNKNOWN"
+                    };
 
-                        let event = PlayerPortalEvent::new(
-                            player,
-                            from_position,
-                            current_world.uuid,
-                            teleport_pos,
-                            dest_world.uuid,
-                            cause.to_string(),
-                            128,
-                            true,
-                            16,
-                        );
-                        let event = server.plugin_manager.fire(event).await;
-                        if event.cancelled {
-                            return;
-                        }
+                    let event = PlayerPortalEvent::new(
+                        player,
+                        from_position,
+                        current_world.uuid,
+                        teleport_pos,
+                        dest_world.uuid,
+                        cause.to_string(),
+                        128,
+                        true,
+                        16,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
 
-                        teleport_pos = event.to_position;
-                        if event.to_world_uuid != dest_world.uuid {
-                            if let Some(found) = server
-                                .worlds
-                                .load()
-                                .iter()
-                                .find(|w| w.uuid == event.to_world_uuid)
-                            {
-                                dest_world = found.clone();
-                            }
-                        }
+                    teleport_pos = event.to_position;
+                    if event.to_world_uuid != dest_world.uuid
+                        && let Some(found) = server
+                            .worlds
+                            .load()
+                            .iter()
+                            .find(|w| w.uuid == event.to_world_uuid)
+                    {
+                        dest_world = found.clone();
                     }
                 }
 

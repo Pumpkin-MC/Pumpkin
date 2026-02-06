@@ -30,7 +30,7 @@ pub struct BlockPistonRetractEvent {
 impl BlockPistonRetractEvent {
     /// Creates a new `BlockPistonRetractEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         block: &'static Block,
         block_pos: BlockPos,
         direction: BlockDirection,

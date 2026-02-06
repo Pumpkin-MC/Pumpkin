@@ -116,22 +116,14 @@ pub trait FlowingFluid: Send + Sync {
                     // Use the new state for spreading
                     state_for_spreading = new_state;
                 } else {
-                    if !waterlogged {
-                        if let Some(target_state_id) = fire_fluid_level_change(
-                            world,
-                            block_pos,
-                            Block::AIR.default_state.id,
-                        )
-                        .await
-                        {
-                            world
-                                .set_block_state(
-                                    block_pos,
-                                    target_state_id,
-                                    BlockFlags::NOTIFY_ALL,
-                                )
-                                .await;
-                        }
+                    if !waterlogged
+                        && let Some(target_state_id) =
+                            fire_fluid_level_change(world, block_pos, Block::AIR.default_state.id)
+                                .await
+                    {
+                        world
+                            .set_block_state(block_pos, target_state_id, BlockFlags::NOTIFY_ALL)
+                            .await;
                     }
                     return; // Don't spread if fluid is gone
                 }

@@ -892,25 +892,21 @@ impl JavaClient {
             )
             .await;
 
+        let item_key = {
+            let item_guard = item.lock().await;
+            format!("minecraft:{}", item_guard.get_item().registry_key)
+        };
         let event = if let Some((hit_pos, hit_dir)) = hit_result {
-            let item_key = {
-                let item_guard = item.lock().await;
-                format!("minecraft:{}", item_guard.get_item().registry_key)
-            };
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickBlock,
                 &item,
-                item_key,
+                item_key.clone(),
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
                 Some(hit_dir),
             )
         } else {
-            let item_key = {
-                let item_guard = item.lock().await;
-                format!("minecraft:{}", item_guard.get_item().registry_key)
-            };
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickAir,
@@ -1214,11 +1210,9 @@ impl JavaClient {
                 chunker::update_position(player).await;
             }
 
-            if main_hand_changed {
-                if let Some(server) = player.world().server.upgrade() {
-                    let event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
-                    let _ = server.plugin_manager.fire(event).await;
-                }
+            if main_hand_changed && let Some(server) = player.world().server.upgrade() {
+                let event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
+                let _ = server.plugin_manager.fire(event).await;
             }
 
             if update_settings {
@@ -1266,6 +1260,7 @@ impl JavaClient {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_interact(
         &self,
         player: &Arc<Player>,
@@ -1707,22 +1702,20 @@ impl JavaClient {
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
 
-                    if block_drop {
-                        if let Some(server) = world.server.upgrade() {
-                            let tool = player.inventory.held_item().lock().await.clone();
-                            let block_key = format!("minecraft:{}", block.name);
-                            let event = crate::plugin::player::player_harvest_block::PlayerHarvestBlockEvent::new(
+                    if block_drop && let Some(server) = world.server.upgrade() {
+                        let tool = player.inventory.held_item().lock().await.clone();
+                        let block_key = format!("minecraft:{}", block.name);
+                        let event = crate::plugin::player::player_harvest_block::PlayerHarvestBlockEvent::new(
                                 player.clone(),
                                 location,
                                 block_key,
                                 tool,
                             );
-                            let event = server.plugin_manager.fire(event).await;
-                            if event.cancelled {
-                                world.set_block_breaking(entity, location, -1).await;
-                                self.update_sequence(player, player_action.sequence.0);
-                                return;
-                            }
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            world.set_block_breaking(entity, location, -1).await;
+                            self.update_sequence(player, player_action.sequence.0);
+                            return;
                         }
                     }
 
@@ -1845,18 +1838,16 @@ impl JavaClient {
 
         // Set the flying ability
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
-        if abilities.flying != flying {
-            if let Some(server) = player.world().server.upgrade()
-                && let Some(player_arc) = player.as_arc()
-            {
-                let event = crate::plugin::player::player_toggle_flight::PlayerToggleFlightEvent::new(
-                    player_arc,
-                    flying,
-                );
-                let event = server.plugin_manager.fire(event).await;
-                if event.cancelled {
-                    return;
-                }
+        if abilities.flying != flying
+            && let Some(server) = player.world().server.upgrade()
+            && let Some(player_arc) = player.as_arc()
+        {
+            let event = crate::plugin::player::player_toggle_flight::PlayerToggleFlightEvent::new(
+                player_arc, flying,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
             }
         }
         if flying {
@@ -2098,6 +2089,7 @@ impl JavaClient {
         world.update_block_entity(&block_entity).await;
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_use_item(
         &self,
         player: &Arc<Player>,
@@ -2136,25 +2128,21 @@ impl JavaClient {
             )
             .await;
 
+        let item_key = {
+            let item_guard = item_in_hand.lock().await;
+            format!("minecraft:{}", item_guard.get_item().registry_key)
+        };
         let event = if let Some((hit_pos, hit_dir)) = hit_result {
-            let item_key = {
-                let item_guard = item_in_hand.lock().await;
-                format!("minecraft:{}", item_guard.get_item().registry_key)
-            };
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickBlock,
                 &item_in_hand,
-                item_key,
+                item_key.clone(),
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
                 Some(hit_dir),
             )
         } else {
-            let item_key = {
-                let item_guard = item_in_hand.lock().await;
-                format!("minecraft:{}", item_guard.get_item().registry_key)
-            };
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickAir,

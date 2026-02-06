@@ -67,10 +67,10 @@ trait CropBlockBase: PlantBlockBase {
                     if event.cancelled {
                         return;
                     }
-                    let final_state_id = if event.new_block != block {
-                        event.new_block.default_state.id
-                    } else {
+                    let final_state_id = if event.new_block == block {
                         new_state_id
+                    } else {
+                        event.new_block.default_state.id
                     };
                     world
                         .set_block_state(pos, final_state_id, BlockFlags::NOTIFY_NEIGHBORS)

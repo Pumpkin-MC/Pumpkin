@@ -16,12 +16,10 @@ impl JavaClient {
             status_guard.status_response.clone()
         };
 
-        let mut max_players = 0;
-        let mut num_players = 0;
-        if let Some(players) = &status_response.players {
-            max_players = players.max;
-            num_players = players.online;
-        }
+        let (max_players, num_players) = status_response
+            .players
+            .as_ref()
+            .map_or((0, 0), |players| (players.max, players.online));
 
         let event = ServerListPingEvent::new(
             status_response.description.clone(),
