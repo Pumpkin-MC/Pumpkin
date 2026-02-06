@@ -722,6 +722,44 @@ impl GenerationSchedule {
                             }
                         }
 
+                        // Pre-check that all required holders have their `chunk` present.
+                        // If any are missing, requeue the task to avoid partially consuming chunks
+                        // and causing inconsistent state.
+                        let mut missing_chunk = false;
+                        for dx in -write_radius..=write_radius {
+                            for dy in -write_radius..=write_radius {
+                                let new_pos = node.pos.add_raw(dx, dy);
+                                if !self.chunk_map.contains_key(&new_pos) {
+                                    self.chunk_map.insert(new_pos, ChunkHolder::default());
+                                }
+                                let holder = self.chunk_map.get(&new_pos).unwrap();
+                                if holder.chunk.is_none() {
+                                    missing_chunk = true;
+                                    break;
+                                }
+                            }
+                            if missing_chunk {
+                                break;
+                            }
+                        }
+
+                        if missing_chunk {
+                            // Requeue for later when chunks arrive
+                            if let Some(n) = self.graph.nodes.get_mut(task.1) {
+                                n.in_queue = true;
+                            }
+                            self.queue.push(TaskHeapNode(
+                                Self::calc_priority(
+                                    &self.last_level,
+                                    &self.last_high_priority,
+                                    node.pos,
+                                    node.stage,
+                                ),
+                                task.1,
+                            ));
+                            continue;
+                        }
+
                         for dx in -write_radius..=write_radius {
                             for dy in -write_radius..=write_radius {
                                 let new_pos = node.pos.add_raw(dx, dy);
