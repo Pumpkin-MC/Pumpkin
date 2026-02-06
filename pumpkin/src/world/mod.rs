@@ -2047,7 +2047,6 @@ impl World {
 
             if respawn_world_uuid != respawn_world.uuid {
                 let worlds = server.worlds.load();
-<<<<<<< HEAD
                 if let Some(found) = worlds.iter().find(|w| w.uuid == respawn_world_uuid).cloned()
                 {
                     if found.uuid != respawn_world.uuid {
