@@ -10,7 +10,9 @@ use crate::{
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
-            stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
+            desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator,
+            jungle_temple::JungleTempleGenerator, stronghold::StrongholdGenerator,
+            swamp_hut::SwampHutGenerator,
         },
     },
 };
@@ -47,6 +49,15 @@ pub fn try_generate_structure(
         }
         StructureKeys::Stronghold => {
             StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
+        }
+        StructureKeys::DesertPyramid => {
+            DesertPyramidGenerator::get_structure_position(&DesertPyramidGenerator, context)
+        }
+        StructureKeys::JunglePyramid => {
+            JungleTempleGenerator::get_structure_position(&JungleTempleGenerator, context)
+        }
+        StructureKeys::Igloo => {
+            IglooGenerator::get_structure_position(&IglooGenerator, context)
         }
         // TODO: Implement other structure types
         _ => None,
