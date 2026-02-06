@@ -50,11 +50,15 @@ impl VarUInt {
         Ok(())
     }
 
-    // TODO: Validate that the first byte will not overflow a i32
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
+            // On the 5th byte (i=4), only the lower 4 bits are valid (bits 28-31 of u32).
+            // Upper bits would overflow the u32 representation.
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0xF0 != 0 {
+                return Err(ReadingError::TooLarge("VarUInt".to_string()));
+            }
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -75,6 +79,10 @@ impl VarUInt {
                     ReadingError::Incomplete(err.to_string())
                 }
             })?;
+            // On the 5th byte (i=4), only the lower 4 bits are valid (bits 28-31 of u32).
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0xF0 != 0 {
+                return Err(ReadingError::TooLarge("VarUInt".to_string()));
+            }
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -167,6 +175,10 @@ impl<'de> Deserialize<'de> for VarUInt {
                 let mut val = 0;
                 for i in 0..VarUInt::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
+                        // On the 5th byte (i=4), only the lower 4 bits are valid.
+                        if i == VarUInt::MAX_SIZE.get() - 1 && byte & 0xF0 != 0 {
+                            return Err(serde::de::Error::custom("VarUInt was too large"));
+                        }
                         val |= (u32::from(byte) & 0b0111_1111) << (i * 7);
                         if byte & 0b1000_0000 == 0 {
                             return Ok(VarUInt(val));
@@ -175,7 +187,7 @@ impl<'de> Deserialize<'de> for VarUInt {
                         break;
                     }
                 }
-                Err(serde::de::Error::custom("VarInt was too large"))
+                Err(serde::de::Error::custom("VarUInt was too large"))
             }
         }
 
