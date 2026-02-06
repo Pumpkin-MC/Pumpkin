@@ -1488,10 +1488,9 @@ impl EntityBase for LivingEntity {
                             } else {
                                 player.inventory.held_item()
                             };
-                            stack
-                                .lock()
-                                .await
-                                .decrement_unless_creative(player.gamemode.load(), 1);
+                            let mut stack = stack.lock().await;
+                            *stack = item_to_consume.clone();
+                            stack.decrement_unless_creative(player.gamemode.load(), 1);
                         }
                     }
 

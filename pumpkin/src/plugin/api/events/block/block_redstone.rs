@@ -14,6 +14,9 @@ pub struct BlockRedstoneEvent {
     /// The position of the block.
     pub block_pos: BlockPos,
 
+    /// The world UUID where the redstone change occurs.
+    pub world_uuid: uuid::Uuid,
+
     /// The old redstone current.
     pub old_current: i32,
 
@@ -27,12 +30,14 @@ impl BlockRedstoneEvent {
     pub const fn new(
         block: &'static Block,
         block_pos: BlockPos,
+        world_uuid: uuid::Uuid,
         old_current: i32,
         new_current: i32,
     ) -> Self {
         Self {
             block,
             block_pos,
+            world_uuid,
             old_current,
             new_current,
             cancelled: false,

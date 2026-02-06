@@ -56,6 +56,7 @@ pub(crate) trait PressurePlate {
                 let event = crate::plugin::block::block_redstone::BlockRedstoneEvent::new(
                     event_block,
                     *pos,
+                    world.uuid,
                     i32::from(output),
                     i32::from(calc_output),
                 );
