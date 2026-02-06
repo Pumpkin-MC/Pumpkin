@@ -29,12 +29,12 @@ pub trait DynamicOps {
 
     /// Returns how an empty list is represented by this `DynamicOps`.
     fn empty_list(&self) -> Self::Value {
-        self.create_list(&vec![])
+        self.create_list(vec![])
     }
 
     /// Returns how an empty map is represented by this `DynamicOps`.
     fn empty_map(&self) -> Self::Value {
-        self.create_map(&HashMap::new())
+        self.create_map(HashMap::new())
     }
 
     /// Returns how a generic number is represented by this `DynamicOps`.
@@ -69,12 +69,12 @@ pub trait DynamicOps {
     fn create_string(&self, data: &String) -> Self::Value;
 
     /// Returns how a list is represented by this `DynamicOps`.
-    fn create_list<I>(&self, values: &I) -> Self::Value
+    fn create_list<I>(&self, values: I) -> Self::Value
     where
         I: IntoIterator<Item = Self::Value>;
 
     /// Returns how a map is represented by this `DynamicOps`.
-    fn create_map<I>(&self, entries: &I) -> Self::Value
+    fn create_map<I>(&self, entries: I) -> Self::Value
     where
         I: IntoIterator<Item = (Self::Value, Self::Value)>;
 
@@ -129,21 +129,24 @@ pub trait DynamicOps {
     }
 
     /// Creates a byte list that can be represented by this `DynamicOps` using a byte buffer.
-    fn create_byte_buffer(&self, buffer: &Vec<i8>) -> Self::Value {
-        self.create_list(&buffer.iter().map(|b| self.create_byte(*b)))
+    fn create_byte_buffer(&self, buffer: Vec<i8>) -> Self::Value {
+        self.create_list(buffer.iter().map(|b| self.create_byte(*b)))
     }
 
-    /// Gets an `int` (`i32` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
+    /// Gets a [`Vec<i32>`] from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getIntStream()` function in `DynamicOps`.
-    fn get_int_iter(&self, input: &Self::Value) -> DataResult<impl Iterator<Item = i32>> {
+    fn get_int_list(&self, input: &Self::Value) -> DataResult<Vec<i32>> {
         self.get_iter(input).flat_map(|mut iter| {
             // Check if all elements in this value are numbers.
             let all_numbers = iter.all(|e| self.get_number(e).is_success());
             if all_numbers {
-                DataResult::success(iter.map(|e| {
-                    let num = self.get_number(e).unwrap();
-                    num.into()
-                }))
+                DataResult::success(
+                    iter.map(|e| {
+                        let num = self.get_number(e).unwrap();
+                        num.into()
+                    })
+                    .collect(),
+                )
             } else {
                 DataResult::error(format!("Some elements are not ints: {input}"))
             }
@@ -151,21 +154,24 @@ pub trait DynamicOps {
     }
 
     /// Creates an `int` list that can be represented by this `DynamicOps` using a byte buffer.
-    fn create_int_list(&self, int_iter: &impl Iterator<Item = i32>) -> Self::Value {
-        self.create_list(&int_iter.map(|i| self.create_int(i)))
+    fn create_int_list(&self, vec: Vec<i32>) -> Self::Value {
+        self.create_list(vec.into_iter().map(|i| self.create_int(i)))
     }
 
-    /// Gets a `long` (`i32` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
-    /// This is the equivalent of DFU's `getIntStream()` function in `DynamicOps`.
-    fn get_long_iter(&self, input: &Self::Value) -> DataResult<impl Iterator<Item = i64>> {
+    /// Gets a `long` (`i64` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
+    /// This is the equivalent of DFU's `getLongStream()` function in `DynamicOps`.
+    fn get_long_list(&self, input: &Self::Value) -> DataResult<Vec<i64>> {
         self.get_iter(input).flat_map(|mut iter| {
             // Check if all elements in this value are numbers.
             let all_numbers = iter.all(|e| self.get_number(e).is_success());
             if all_numbers {
-                DataResult::success(iter.map(|e| {
-                    let num = self.get_number(e).unwrap();
-                    num.into()
-                }))
+                DataResult::success(
+                    iter.map(|e| {
+                        let num = self.get_number(e).unwrap();
+                        num.into()
+                    })
+                    .collect(),
+                )
             } else {
                 DataResult::error(format!("Some elements are not longs: {input}"))
             }
@@ -173,8 +179,8 @@ pub trait DynamicOps {
     }
 
     /// Creates a `long` list that can be represented by this `DynamicOps` using a byte buffer.
-    fn create_long_list(&self, long_iter: &impl Iterator<Item = i64>) -> Self::Value {
-        self.create_list(long_iter.map(|l| self.create_long(l)))
+    fn create_long_list(&self, vec: Vec<i64>) -> Self::Value {
+        self.create_list(vec.into_iter().map(|l| self.create_long(l)))
     }
 
     /// Merges a value represented by this `DynamicOps` to a list represented by this `DynamicOps`.
@@ -337,8 +343,7 @@ where {
     /// Converts a list represented by this `DynamicOps` to another list represented by another `DynamicOps`.
     fn convert_list<U>(&self, out_ops: &impl DynamicOps<Value = U>, input: &Self::Value) -> U {
         out_ops.create_list(
-            &self
-                .get_iter(input)
+            self.get_iter(input)
                 .into_result()
                 .into_iter()
                 .flatten()
@@ -349,8 +354,7 @@ where {
     /// Converts a map represented by this `DynamicOps` to another map represented by another `DynamicOps`.
     fn convert_map<U>(&self, out_ops: &impl DynamicOps<Value = U>, input: &Self::Value) -> U {
         out_ops.create_map(
-            &self
-                .get_map_iter(input)
+            self.get_map_iter(input)
                 .into_result()
                 .into_iter()
                 .flatten()
