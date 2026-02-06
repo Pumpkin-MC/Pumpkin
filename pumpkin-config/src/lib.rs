@@ -1,8 +1,8 @@
 use fun::FunConfig;
 use logging::LoggingConfig;
 use pumpkin_util::world_seed::Seed;
-use pumpkin_util::{random, Difficulty, GameMode, PermissionLvl};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use pumpkin_util::{Difficulty, GameMode, PermissionLvl, random};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
