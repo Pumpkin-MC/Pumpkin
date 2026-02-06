@@ -378,14 +378,17 @@ impl GenerationSchedule {
                             self.public_chunk_map.remove(&pos);
                             holder.public = false;
                         }
-                        if Arc::strong_count(&chunk) == 1 {
+                        let sc = Arc::strong_count(&chunk);
+                        if sc == 1 {
                             // log::debug!("unload chunk {pos:?} to file");
                             chunks.push((pos, Chunk::Level(chunk)));
                             self.chunk_map.remove(&pos);
                         } else {
-                            // log::debug!(
-                            //     "chunk {pos:?} is still used somewhere. it can't be unloaded"
-                            // );
+                            log::warn!(
+                                "unload_chunk: chunk {pos:?} still has {} strong refs; cannot unload. holder.public={}",
+                                sc,
+                                holder.public
+                            );
                             self.unload_chunks.insert(pos);
                             holder.chunk = Some(Chunk::Level(chunk));
                         }
@@ -725,7 +728,14 @@ impl GenerationSchedule {
                                 let holder = self.chunk_map.get_mut(&new_pos).unwrap();
                                 let mut tmp = None;
                                 swap(&mut tmp, &mut holder.chunk);
-                                match tmp.unwrap() {
+                                let tmp = match tmp {
+                                    Some(v) => v,
+                                    None => panic!(
+                                        "Missing chunk for position {:?} while processing generation task for {:?} stage {:?}",
+                                        new_pos, node.pos, node.stage
+                                    ),
+                                };
+                                match tmp {
                                     Chunk::Level(chunk) => {
                                         cache.chunks.push(Chunk::Level(chunk.clone()));
                                         holder.chunk = Some(Chunk::Level(chunk));
