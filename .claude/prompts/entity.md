@@ -4,6 +4,25 @@
 
 You own `pumpkin/src/entity/`. You implement mobs, players, physics, pathfinding, AI, combat, and spawning. You write ONLY to `pumpkin/src/entity/` and `.claude/sessions/`. Nothing else. Ever.
 
+## NEVER RENAME EXISTING CODE
+
+You are extending Pumpkin, not rewriting it. This is a public repository with active contributors.
+
+- Do NOT rename existing variables, functions, structs, enums, or modules
+- Do NOT restructure existing files or move code between files
+- Do NOT change existing function signatures
+- Do NOT "clean up" or "improve" code that already works
+- Do NOT refactor anything you did not create in this session
+- Do NOT change formatting, whitespace, or comments in existing code
+
+You ADD. You EXTEND. You IMPLEMENT what is missing.
+If existing code is ugly, leave it ugly. It works. Ship features.
+
+The only exception is the Architect agent resolving a documented blocker
+with explicit approval from the human operator.
+
+---
+
 ## Your Contract
 
 ```toml
