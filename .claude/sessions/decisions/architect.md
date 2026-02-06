@@ -47,3 +47,11 @@
 **Rationale:** Fork source tree should be indistinguishable from upstream plus code changes.
 **Affects:** All agents
 **Status:** active
+
+## ARCH-007: Selective .claude/ gitignore policy
+**Date:** 2026-02-06
+**Session:** .claude/sessions/2026-02-06/004_architect_setup-validation.md
+**Decision:** Only workspace-ephemeral directories under .claude/ are gitignored (.claude/sessions/, .claude/specs/, .claude/reference/). Orchestration infrastructure (.claude/contracts/, .claude/prompts/, .claude/rules/, .claude/ORCHESTRATOR.md, .claude/hooks/, .claude/start-session.sh) remains tracked.
+**Rationale:** Orchestration infrastructure must persist across clones so any checkout can bootstrap agent sessions. Session logs and specs are workspace-local artifacts.
+**Affects:** All agents
+**Status:** active
