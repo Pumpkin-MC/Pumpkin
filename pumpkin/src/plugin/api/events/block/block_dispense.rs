@@ -16,6 +16,9 @@ pub struct BlockDispenseEvent {
     /// The position of the block that is dispensing.
     pub block_position: BlockPos,
 
+    /// The world UUID where the dispense occurs.
+    pub world_uuid: uuid::Uuid,
+
     /// The item being dispensed.
     pub item_stack: ItemStack,
 
@@ -29,12 +32,14 @@ impl BlockDispenseEvent {
     pub const fn new(
         block: &'static Block,
         block_position: BlockPos,
+        world_uuid: uuid::Uuid,
         item_stack: ItemStack,
         velocity: Vector3<f64>,
     ) -> Self {
         Self {
             block,
             block_position,
+            world_uuid,
             item_stack,
             velocity,
             cancelled: false,

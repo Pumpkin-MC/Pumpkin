@@ -129,65 +129,29 @@ impl ItemBehaviour for EmptyBucketItem {
             };
 
             let (block, state) = world.get_block_and_state_id(&block_pos).await;
+            let mut target_pos = block_pos;
+            let mut target_block = block;
+            let mut target_state = state;
+            let mut take_source_fluid = false;
 
-            if block
-                .properties(state)
-                .and_then(|properties| {
-                    properties
-                        .to_props()
-                        .into_iter()
-                        .find(|p| p.0 == "waterlogged")
-                        .map(|(_, value)| value == "true")
-                })
-                .unwrap_or(false)
-            {
-                let state_id = set_waterlogged(block, state, false);
-                world
-                    .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
-                    .await;
-                world
-                    .schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal)
-                    .await;
-            } else if state == Block::LAVA.default_state.id
-                || state == Block::WATER.default_state.id
-            {
-                world
-                    .break_block(&block_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
-                    .await;
-                world
-                    .set_block_state(
-                        &block_pos,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
+            if waterlogged_check(block, state) == Some(true) {
+                // Take water from the waterlogged clicked block.
+            } else if state == Block::LAVA.default_state.id || state == Block::WATER.default_state.id {
+                // Take the source fluid directly from the clicked block.
+                take_source_fluid = true;
             } else {
-                let (block, state) = world
-                    .get_block_and_state_id(&block_pos.offset(direction.to_offset()))
-                    .await;
-                if waterlogged_check(block, state).is_some() {
-                    let state_id = set_waterlogged(block, state, false);
-                    world
-                        .set_block_state(
-                            &block_pos.offset(direction.to_offset()),
-                            state_id,
-                            BlockFlags::NOTIFY_NEIGHBORS,
-                        )
-                        .await;
-                    world
-                        .schedule_fluid_tick(
-                            &Fluid::WATER,
-                            block_pos.offset(direction.to_offset()),
-                            5,
-                            TickPriority::Normal,
-                        )
-                        .await;
+                let adjacent_pos = block_pos.offset(direction.to_offset());
+                let (adjacent_block, adjacent_state) = world.get_block_and_state_id(&adjacent_pos).await;
+                if waterlogged_check(adjacent_block, adjacent_state) == Some(true) {
+                    target_pos = adjacent_pos;
+                    target_block = adjacent_block;
+                    target_state = adjacent_state;
                 } else {
                     return;
                 }
             }
 
-            let item = if state == Block::LAVA.default_state.id {
+            let item = if take_source_fluid && state == Block::LAVA.default_state.id {
                 &Item::LAVA_BUCKET
             } else {
                 &Item::WATER_BUCKET
@@ -196,11 +160,10 @@ impl ItemBehaviour for EmptyBucketItem {
             if let Some(server) = world.server.upgrade()
                 && let Some(player_arc) = player.as_arc()
             {
-                let position = block_pos.to_f64();
                 let event = PlayerBucketFillEvent::new(
                     player_arc,
-                    position,
-                    block_key(block),
+                    target_pos.to_f64(),
+                    block_key(target_block),
                     Some(direction),
                     format!("minecraft:{}", item.registry_key),
                     "HAND".to_string(),
@@ -209,6 +172,27 @@ impl ItemBehaviour for EmptyBucketItem {
                 if event.cancelled {
                     return;
                 }
+            }
+
+            if take_source_fluid {
+                world
+                    .break_block(&target_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
+                    .await;
+                world
+                    .set_block_state(
+                        &target_pos,
+                        Block::AIR.default_state.id,
+                        BlockFlags::NOTIFY_NEIGHBORS,
+                    )
+                    .await;
+            } else {
+                let state_id = set_waterlogged(target_block, target_state, false);
+                world
+                    .set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
+                    .await;
+                world
+                    .schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal)
+                    .await;
             }
 
             if player.gamemode.load() == GameMode::Creative {

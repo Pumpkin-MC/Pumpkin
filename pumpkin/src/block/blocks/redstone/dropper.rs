@@ -213,6 +213,7 @@ impl BlockBehaviour for DropperBlock {
                         let event = crate::plugin::block::block_dispense::BlockDispenseEvent::new(
                             event_block,
                             *args.position,
+                            args.world.uuid,
                             drop_item,
                             velocity,
                         );
