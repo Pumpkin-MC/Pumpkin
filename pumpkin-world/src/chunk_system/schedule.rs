@@ -438,7 +438,11 @@ impl GenerationSchedule {
         if chunks.is_empty() {
             return;
         }
-        log::info!("Saving {} chunks...", chunks.len());
+        log::info!(
+            "Saving {} chunks (collected from {} holders)...",
+            chunks.len(),
+            self.chunk_map.len()
+        );
         let mut data = self.io_lock.0.lock().unwrap();
         for (pos, _chunk) in &chunks {
             *data.entry(*pos).or_insert(0) += 1;
@@ -560,12 +564,22 @@ impl GenerationSchedule {
                                 chunk.stage_id()
                             };
                             if holder.current_stage as u8 != expected_stage {
+                                let old_stage = holder.current_stage;
                                 log::warn!(
                                     "receive_chunk: stage mismatch at {:?}: holder {} expected {}",
                                     new_pos,
-                                    holder.current_stage as u8,
+                                    old_stage as u8,
                                     expected_stage
                                 );
+                                // Drop any task nodes that belong to stages above the expected one
+                                // to keep the graph consistent and avoid leaked/in-flight tasks.
+                                for i in (expected_stage as usize + 1)..=(old_stage as usize) {
+                                    let task = holder.tasks[i];
+                                    if !task.is_null() {
+                                        self.drop_node(task);
+                                        holder.tasks[i] = NodeKey::null();
+                                    }
+                                }
                                 // Align holder to the expected stage to continue safely.
                                 holder.current_stage = StagedChunkEnum::from(expected_stage);
                             }
