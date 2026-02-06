@@ -1,8 +1,8 @@
 use fun::FunConfig;
 use logging::LoggingConfig;
 use pumpkin_util::world_seed::Seed;
-use pumpkin_util::{Difficulty, GameMode, PermissionLvl, random};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use pumpkin_util::{random, Difficulty, GameMode, PermissionLvl};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -38,80 +38,128 @@ use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
 use world::LevelConfig;
 
-/// The idea is that Pumpkin should very customizable.
-/// You can enable or disable features depending on your needs.
+/// Advanced configuration for optional and feature-specific server settings.
 ///
-/// This also allows you get some performance or resource boosts.
-/// Important: The configuration should match vanilla by default.
+/// Allows enabling/disabling features, customizing behaviour, and
+/// tweaking performance or experimental options.
+///
+/// `Important`: The configuration should match vanilla by default.
 #[derive(Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct AdvancedConfiguration {
+    /// Logging-related configuration such as log levels and output behaviour.
     pub logging: LoggingConfig,
+
+    /// Resource pack configuration, including enforcement and pack metadata.
     pub resource_pack: ResourcePackConfig,
+
+    /// World and level-related settings beyond basic configuration.
     pub world: LevelConfig,
+
+    /// Networking-related features such as compression, authentication, and LAN broadcast.
     pub networking: NetworkingConfig,
+
+    /// Command system configuration, including availability and permissions.
     pub commands: CommandsConfig,
+
+    /// Chat-related features such as formatting, filtering, and message behaviour.
     pub chat: ChatConfig,
+
+    /// Player-vs-player rules and mechanics.
     pub pvp: PVPConfig,
+
+    /// Server links configuration exposed to clients.
     pub server_links: ServerLinksConfig,
+
+    /// Persistent player data handling and storage behaviour.
     pub player_data: PlayerDataConfig,
+
+    /// Optional fun and experimental features.
     pub fun: FunConfig,
 }
 
+/// Basic configuration for core server settings.
+///
+/// Covers edition support, world, networking, gameplay rules, and security options.
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct BasicConfiguration {
-    // Whether Java Edition Client's are Accepted
+    /// Whether Java Edition Clients are Accepted.
     pub java_edition: bool,
-    /// The address and port to which the Java Edition server will bind
+
+    /// The address and port to which the Java Edition server will bind.
     pub java_edition_address: SocketAddr,
-    // Whether Bedrock Edition Client's are Accepted
+
+    /// Whether Bedrock Edition Clients are Accepted.
     pub bedrock_edition: bool,
-    // Whether Bedrock Edition Client's are Accepted
+
+    /// Whether Bedrock Edition Clients are Accepted.
     pub bedrock_edition_address: SocketAddr,
-    /// The seed for world generation.
+
+    /// The seed for the world generation.
     pub seed: Seed,
+
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
     pub max_players: u32,
+
     /// The maximum view distance for players.
     pub view_distance: NonZeroU8,
+
     /// The maximum simulated view distance.
     pub simulation_distance: NonZeroU8,
+
     /// The default game difficulty.
     pub default_difficulty: Difficulty,
-    /// The op level assigned by the /op command
+
+    /// The op level assigned by the /op command.
     pub op_permission_level: PermissionLvl,
+
     /// Whether the Nether dimension is enabled.
     pub allow_nether: bool,
+
     /// Whether the End dimension is enabled.
     pub allow_end: bool,
+
     /// Whether the server is in hardcore mode.
     pub hardcore: bool,
+
     /// Whether online mode is enabled. Requires valid Minecraft accounts.
     pub online_mode: bool,
+
     /// Whether packet encryption is enabled. Required when online mode is enabled.
     pub encryption: bool,
+
     /// Message of the Day; the server's description displayed on the status screen.
     pub motd: String,
+
     /// The server's ticks per second.
     pub tps: f32,
+
     /// The default gamemode for players.
     pub default_gamemode: GameMode,
-    /// If the server force the gamemode on join
+
+    /// If the server forces the gamemode on-join.
     pub force_gamemode: bool,
-    /// Whether to remove IPs from logs or not
+
+    /// Whether to remove IPs from logs or not.
     pub scrub_ips: bool,
-    /// Whether to use a server favicon
+
+    /// Whether to use a server favicon.
     pub use_favicon: bool,
-    /// Path to server favicon
+
+    /// Path to server favicon.
     pub favicon_path: String,
-    /// The default level name
+
+    /// The default level name.
     pub default_level_name: String,
-    /// Whether chat messages should be signed or not
+
+    /// Whether chat messages should be signed or not.
     pub allow_chat_reports: bool,
-    /// Whether to enable the whitelist
+
+    /// Whether to enable the whitelist.
     pub white_list: bool,
-    /// Whether to enforce the whitelist
+
+    /// Whether to enforce the whitelist.
     pub enforce_whitelist: bool,
 }
 
@@ -149,15 +197,24 @@ impl Default for BasicConfiguration {
 }
 
 impl BasicConfiguration {
+    /// Returns the path to the server's default world folder.
     #[must_use]
     pub fn get_world_path(&self) -> PathBuf {
         PathBuf::from(&self.default_level_name)
     }
 }
 
+/// Trait for loading and validating configuration from a TOML file.
+///
+/// Provides default implementations for loading, merging with defaults,
+/// and writing missing values back to disk. Also requires validation logic.
 pub trait LoadConfiguration {
+    /// Load configuration from the given directory.
+    ///
+    /// Creates the directory if it doesn't exist, reads the TOML file,
+    /// merges it with defaults, writes missing fields, and validates the result.
     #[must_use]
-    // Logger is may not ready
+    // NOTE: Logger may not be ready.
     #[expect(clippy::print_stdout)]
     fn load(config_dir: &Path) -> Self
     where
@@ -217,6 +274,9 @@ pub trait LoadConfiguration {
         config
     }
 
+    /// Merge a parsed TOML value with the default configuration.
+    ///
+    /// Returns the merged configuration and a flag indicating if any values were filled.
     #[must_use]
     fn merge_with_default_toml(parsed_toml: toml::Value) -> (Self, bool)
     where
@@ -236,6 +296,9 @@ pub trait LoadConfiguration {
         (config, changed)
     }
 
+    /// Merge two TOML values recursively.
+    ///
+    /// Base is treated as default; overlay overwrites values.
     #[must_use]
     fn merge_toml_values(base: toml::Value, overlay: toml::Value) -> (toml::Value, bool) {
         match (base, overlay) {
@@ -267,8 +330,10 @@ pub trait LoadConfiguration {
         }
     }
 
+    /// Returns the path to the configuration file relative to the config directory.
     fn get_path() -> &'static Path;
 
+    /// Validates the configuration after loading or merging.
     fn validate(&self);
 }
 
