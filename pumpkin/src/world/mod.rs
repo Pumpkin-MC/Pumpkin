@@ -2186,7 +2186,7 @@ impl World {
 
                 for (uuid, entity_nbt) in chunk.data.lock().await.iter() {
                     let Some(id) = entity_nbt.get_string("id") else {
-                        log::warn!("Entity has no ID");
+                        log::debug!("Entity has no ID");
                         continue;
                     };
                     let Some(entity_type) =
@@ -2777,12 +2777,12 @@ impl World {
             return block_state_id;
         }
         chunk.mark_dirty(true);
+        drop(chunk);
 
         self.unsent_block_changes
             .lock()
             .await
             .insert(*position, block_state_id);
-        drop(chunk);
 
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);
@@ -3337,8 +3337,15 @@ impl World {
 
     pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
         let chunk = self.level.get_chunk(block_pos.chunk_position()).await;
-        chunk.block_entities.lock().unwrap().remove(block_pos);
-        chunk.mark_dirty(true);
+        if chunk
+            .block_entities
+            .lock()
+            .unwrap()
+            .remove(block_pos)
+            .is_some()
+        {
+            chunk.mark_dirty(true);
+        }
     }
 
     pub async fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {

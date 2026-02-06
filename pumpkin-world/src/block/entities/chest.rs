@@ -105,7 +105,7 @@ impl ViewerCountListener for ChestBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockEnderChestOpen).await;
+            self.play_sound(world, Sound::BlockChestOpen).await;
         })
     }
 
@@ -115,7 +115,7 @@ impl ViewerCountListener for ChestBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockEnderChestClose).await;
+            self.play_sound(world, Sound::BlockChestClose).await;
         })
     }
 
@@ -137,6 +137,11 @@ impl ChestBlockEntity {
     pub const INVENTORY_SIZE: usize = 27;
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:chest";
+
+    /// Returns the number of players currently viewing this chest
+    pub fn get_viewer_count(&self) -> u16 {
+        self.viewers.get_viewer_count()
+    }
 
     #[must_use]
     pub fn new(position: BlockPos) -> Self {

@@ -441,7 +441,7 @@ impl Level {
         for chunk in self.loaded_chunks.iter() {
             let chunk_x_base = chunk.x * 16;
             let chunk_z_base = chunk.z * 16;
-            let section_count = chunk.section.sections.lock().unwrap().len();
+            let section_count = chunk.section.count;
 
             ticks
                 .block_entities

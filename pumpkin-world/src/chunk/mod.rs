@@ -15,8 +15,8 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::ops::{BitAnd, BitOr};
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -102,7 +102,9 @@ pub struct ChunkEntityData {
 /// A chunk can be:
 /// - Subchunks: 24 separate subchunks are stored.
 pub struct ChunkSections {
-    pub sections: std::sync::Mutex<Box<[SubChunk]>>,
+    pub count: usize,
+    pub block_sections: RwLock<Box<[BlockPalette]>>,
+    pub biome_sections: RwLock<Box<[BiomePalette]>>,
     pub min_y: i32,
 }
 
@@ -112,8 +114,8 @@ impl ChunkSections {
     pub fn dump_blocks(&self) -> Vec<u16> {
         // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
-        for section in self.sections.lock().unwrap().iter() {
-            section.block_states.for_each(|raw_id| {
+        for section in self.block_sections.read().unwrap().iter() {
+            section.for_each(|raw_id| {
                 dump.push(raw_id);
             });
         }
@@ -125,19 +127,13 @@ impl ChunkSections {
     pub fn dump_biomes(&self) -> Vec<u8> {
         // TODO: this is not optimal, we could use rust iters
         let mut dump = Vec::new();
-        for section in self.sections.lock().unwrap().iter() {
-            section.biomes.for_each(|raw_id| {
+        for section in self.biome_sections.read().unwrap().iter() {
+            section.for_each(|raw_id| {
                 dump.push(raw_id);
             });
         }
         dump
     }
-}
-
-#[derive(Default, Clone)]
-pub struct SubChunk {
-    pub block_states: BlockPalette,
-    pub biomes: BiomePalette,
 }
 
 #[derive(Default, Clone)]
@@ -292,8 +288,16 @@ impl Default for ChunkHeightmaps {
 
 impl ChunkSections {
     #[must_use]
-    pub const fn new(sections: std::sync::Mutex<Box<[SubChunk]>>, min_y: i32) -> Self {
-        Self { sections, min_y }
+    pub fn new(num_sections: usize, min_y: i32) -> Self {
+        let block_sections = vec![BlockPalette::default(); num_sections].into_boxed_slice();
+        let biome_sections = vec![BiomePalette::default(); num_sections].into_boxed_slice();
+
+        Self {
+            count: num_sections,
+            block_sections: RwLock::new(block_sections),
+            biome_sections: RwLock::new(biome_sections),
+            min_y,
+        }
     }
 
     #[must_use]
@@ -362,11 +366,11 @@ impl ChunkSections {
 
         let section_index = relative_y / BlockPalette::SIZE;
         let relative_y = relative_y % BlockPalette::SIZE;
-        self.sections
-            .lock()
+        self.block_sections
+            .read()
             .unwrap()
             .get(section_index)
-            .map(|section| section.block_states.get(relative_x, relative_y, relative_z))
+            .map(|section| section.get(relative_x, relative_y, relative_z))
     }
 
     /// Sets the given block in the chunk, returning the old block state ID
@@ -399,10 +403,8 @@ impl ChunkSections {
 
         let section_index = relative_y / BlockPalette::SIZE;
         let relative_y = relative_y % BlockPalette::SIZE;
-        if let Some(section) = self.sections.lock().unwrap().get_mut(section_index) {
-            return section
-                .block_states
-                .set(relative_x, relative_y, relative_z, block_state_id);
+        if let Some(section) = self.block_sections.write().unwrap().get_mut(section_index) {
+            return section.set(relative_x, relative_y, relative_z, block_state_id);
         }
         0
     }
@@ -419,10 +421,8 @@ impl ChunkSections {
 
         let section_index = relative_y / BiomePalette::SIZE;
         let relative_y = relative_y % BiomePalette::SIZE;
-        if let Some(section) = self.sections.lock().unwrap().get_mut(section_index) {
-            section
-                .biomes
-                .set(relative_x, relative_y, relative_z, biome_id);
+        if let Some(section) = self.biome_sections.write().unwrap().get_mut(section_index) {
+            section.set(relative_x, relative_y, relative_z, biome_id);
         }
     }
 
@@ -436,11 +436,11 @@ impl ChunkSections {
     ) -> Option<u8> {
         debug_assert!(scale_x < BiomePalette::SIZE);
         debug_assert!(scale_z < BiomePalette::SIZE);
-        self.sections
-            .lock()
+        self.biome_sections
+            .read()
             .unwrap()
             .get(index)
-            .map(|section| section.biomes.get(scale_x, scale_y, scale_z))
+            .map(|section| section.get(scale_x, scale_y, scale_z))
     }
 
     #[must_use]
@@ -582,13 +582,15 @@ impl ChunkData {
 
     #[must_use]
     pub fn get_highest_non_empty_subchunk(&self) -> usize {
-        let sections = self.section.sections.lock().unwrap();
-        sections
+        self.section
+            .block_sections
+            .read()
+            .unwrap()
             .iter()
             .enumerate()
             .rev()
-            .position(|(_, sub)| !sub.block_states.has_only_air())
-            .map_or(0, |p| sections.len() - 1 - p)
+            .find(|(_, sub)| !sub.has_only_air())
+            .map_or(0, |(idx, _)| idx)
     }
 }
 
