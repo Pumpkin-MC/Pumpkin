@@ -57,7 +57,8 @@ impl CommandExecutor for Executor {
                     (player.world(), pos)
                 }
                 CommandSender::CommandBlock(c, w) => {
-                    (w.clone(), c.get_position().to_centered_f64())
+                    let pos = pos.unwrap_or(c.get_position().to_centered_f64());
+                    (w.clone(), pos)
                 }
             };
             let entity = from_type(entity_type, pos, &world, Uuid::new_v4()).await;
