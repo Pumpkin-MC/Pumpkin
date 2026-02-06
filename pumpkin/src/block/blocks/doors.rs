@@ -23,8 +23,8 @@ use crate::block::CanPlaceAtArgs;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::NormalUseArgs;
 use crate::block::OnNeighborUpdateArgs;
-use crate::block::OnStateReplacedArgs;
 use crate::block::OnPlaceArgs;
+use crate::block::OnStateReplacedArgs;
 use crate::block::PlacedArgs;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
@@ -346,7 +346,11 @@ impl BlockBehaviour for DoorBlock {
             };
 
             args.world
-                .break_block(&other_half_pos, None, BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL)
+                .break_block(
+                    &other_half_pos,
+                    None,
+                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL,
+                )
                 .await;
         })
     }
