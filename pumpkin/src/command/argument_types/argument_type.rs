@@ -6,15 +6,15 @@ use crate::command::{
 pub trait ArgumentType<T> {
     /// Parses a `T` by using a [`StringReader`]. Call this only if you have no source.
     ///
-    /// Errors should be propogated using the `?` operator, which will
-    /// replicate Brigadier's behaviour of exceptions.
+    /// Errors should be propagated using the `?` operator, which will
+    /// replicate Brigadier's behavior of exceptions.
     fn parse(&self, reader: &mut StringReader) -> Result<T, CommandSyntaxError>;
 
     /// Parses a `T` by using a [`StringReader`],
     /// along with a particular source of type `S`.
     ///
-    /// Errors should be propogated using the `?` operator, which will
-    /// replicate Brigadier's behaviour of exceptions.
+    /// Errors should be propagated using the `?` operator, which will
+    /// replicate Brigadier's behavior of exceptions.
     fn parse_with_source<S>(
         &self,
         reader: &mut StringReader,
