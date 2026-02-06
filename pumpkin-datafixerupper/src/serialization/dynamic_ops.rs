@@ -22,7 +22,7 @@ macro_rules! create_numbers_impl {
 /// A trait describing methods to read and write a specific format (like NBT or JSON).
 /// The [`Value`] of this trait is the type that can be used to represent anything in this format.
 pub trait DynamicOps {
-    type Value;
+    type Value: PartialEq + Display + Clone;
 
     /// Returns how an empty value is represented by this `DynamicOps`.
     fn empty(&self) -> Self::Value;
@@ -78,6 +78,11 @@ pub trait DynamicOps {
     where
         I: IntoIterator<Item = (Self::Value, Self::Value)>;
 
+    /// Tries to get a `bool` represented by this `DynamicOps`.
+    fn get_bool(&self, input: &Self::Value) -> DataResult<bool> {
+        self.get_number(input).map(|n| i8::from(n) != 0)
+    }
+
     /// Tries to get a number represented by this `DynamicOps`.
     fn get_number(&self, input: &Self::Value) -> DataResult<Number>;
 
@@ -105,10 +110,7 @@ pub trait DynamicOps {
 
     /// Gets a `Vec<i8>` from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getByteBuffer()` function in `DynamicOps`.
-    fn get_bytes(&self, input: &Self::Value) -> DataResult<Vec<i8>>
-    where
-        Self::Value: Display,
-    {
+    fn get_bytes(&self, input: &Self::Value) -> DataResult<Vec<i8>> {
         self.get_iter(input).flat_map(|mut iter| {
             // Check if all elements in this value are numbers.
             let all_numbers = iter.all(|e| self.get_number(e).is_success());
@@ -133,10 +135,7 @@ pub trait DynamicOps {
 
     /// Gets an `int` (`i32` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getIntStream()` function in `DynamicOps`.
-    fn get_int_iter(&self, input: &Self::Value) -> DataResult<impl Iterator<Item = i32>>
-    where
-        Self::Value: Display,
-    {
+    fn get_int_iter(&self, input: &Self::Value) -> DataResult<impl Iterator<Item = i32>> {
         self.get_iter(input).flat_map(|mut iter| {
             // Check if all elements in this value are numbers.
             let all_numbers = iter.all(|e| self.get_number(e).is_success());
@@ -158,10 +157,7 @@ pub trait DynamicOps {
 
     /// Gets a `long` (`i32` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getIntStream()` function in `DynamicOps`.
-    fn get_long_iter(&self, input: &Self::Value) -> DataResult<impl Iterator<Item = i64>>
-    where
-        Self::Value: Display,
-    {
+    fn get_long_iter(&self, input: &Self::Value) -> DataResult<impl Iterator<Item = i64>> {
         self.get_iter(input).flat_map(|mut iter| {
             // Check if all elements in this value are numbers.
             let all_numbers = iter.all(|e| self.get_number(e).is_success());
@@ -256,7 +252,7 @@ pub trait DynamicOps {
         value: Self::Value,
     ) -> DataResult<Self::Value>
     where
-        <Self as DynamicOps>::Value: PartialEq + Display,
+        <Self as DynamicOps>::Value: PartialEq,
     {
         if prefix == self.empty() {
             DataResult::success(value)
@@ -275,10 +271,7 @@ pub trait DynamicOps {
 
     /// Tries to get a value from a value represented by this `DynamicOps` using a key.
     /// Only works for values that can be [`MapLike`]-viewed.
-    fn get_element<'a>(&'a self, input: &'a Self::Value, key: &str) -> DataResult<&'a Self::Value>
-    where
-        Self::Value: Display,
-    {
+    fn get_element<'a>(&'a self, input: &'a Self::Value, key: &str) -> DataResult<&'a Self::Value> {
         self.get_element_generic(input, self.create_string(key.to_string()))
     }
 
@@ -289,9 +282,7 @@ pub trait DynamicOps {
         input: &'a Self::Value,
         key: Self::Value,
     ) -> DataResult<&'a Self::Value>
-    where
-        Self::Value: Display,
-    {
+where {
         self.get_map(input).flat_map(|map| {
             map.get(&key).map_or_else(
                 || DataResult::error(format!("No element {key} in the map")),
@@ -318,7 +309,6 @@ pub trait DynamicOps {
     /// - Otherwise, this simply returns `input`.
     fn update_element<F>(&self, input: Self::Value, key: &str, f: F) -> Self::Value
     where
-        Self::Value: Display + Clone,
         F: FnOnce(&Self::Value) -> Self::Value,
     {
         self.get_element(&input, key)
@@ -333,7 +323,6 @@ pub trait DynamicOps {
     /// - Otherwise, this simply returns `input`.
     fn update_element_generic<F>(&self, input: Self::Value, key: Self::Value, f: F) -> Self::Value
     where
-        Self::Value: Display + Clone,
         F: FnOnce(&Self::Value) -> Self::Value,
     {
         self.get_element_generic(&input, key.clone())
