@@ -26,32 +26,25 @@ impl PacketWrite for CLevelChunk<'_> {
         VarInt(self.chunk.z).write(writer)?;
 
         VarInt(self.dimension).write(writer)?;
-        let sub_chunk_count = self.chunk.section.sections.lock().unwrap().len() as u32;
-        assert_eq!(sub_chunk_count, 24);
+        let sub_chunk_count = self.chunk.section.count as u32;
+        debug_assert_eq!(sub_chunk_count, 24);
         VarUInt(sub_chunk_count).write(writer)?;
         self.cache_enabled.write(writer)?;
 
         let mut chunk_data = Vec::new();
         let data_write = &mut chunk_data;
 
-        let min_y = (self.chunk.section.min_y >> 4) as i8;
+        let block_sections = self.chunk.section.block_sections.read().unwrap();
+        let min_y_section = (self.chunk.section.min_y >> 4) as i8;
 
-        // Blocks
-        for (i, sub_chunk) in self
-            .chunk
-            .section
-            .sections
-            .lock()
-            .unwrap()
-            .iter()
-            .enumerate()
-        {
-            // Version 9
-            // [version:byte][num_storages:byte][sub_chunk_index:byte][block storage1]...[blockStorageN]
-            let y = i as i8 + min_y;
+        for (i, block_palette) in block_sections.iter().enumerate() {
+            // Version 9: [version:byte][num_storages:byte][sub_chunk_index:byte]
+            let y = (i as i8) + min_y_section;
             let num_storages = 1;
-            data_write.write_all(&[VERSION, num_storages, y as _])?;
-            let network_repr = sub_chunk.block_states.convert_be_network();
+            data_write.write_all(&[VERSION, num_storages, y as u8])?;
+
+            let network_repr = block_palette.convert_be_network();
+
             (network_repr.bits_per_entry << 1 | 1).write(data_write)?;
 
             for data in network_repr.packed_data {
@@ -72,14 +65,14 @@ impl PacketWrite for CLevelChunk<'_> {
             }
         }
 
-        // Biomes
-        for i in 0..sub_chunk_count {
+        for i in 0..self.chunk.section.count {
             let num_storages = 1;
-            let y = i as i8 + min_y;
-            data_write.write_all(&[VERSION, num_storages, y as _])?;
+            let y = (i as i8) + min_y_section;
+            data_write.write_all(&[VERSION, num_storages, y as u8])?;
 
             for _ in 0..num_storages {
                 1u8.write(data_write)?;
+                // TODO
                 VarInt(0).write(data_write)?;
             }
         }

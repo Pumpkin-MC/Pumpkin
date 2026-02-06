@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 #[derive(Deserialize)]
 pub struct StructureSetStruct {
@@ -245,11 +245,11 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/structures.json");
     println!("cargo:rerun-if-changed=../assets/structure_set.json");
 
-    let structures_json: HashMap<String, StructureStruct> =
+    let structures_json: BTreeMap<String, StructureStruct> =
         serde_json::from_str(&fs::read_to_string("../assets/structures.json").unwrap())
             .expect("Failed to parse structures.json");
 
-    let structure_sets_json: HashMap<String, StructureSetStruct> =
+    let structure_sets_json: BTreeMap<String, StructureSetStruct> =
         serde_json::from_str(&fs::read_to_string("../assets/structure_set.json").unwrap())
             .expect("Failed to parse structure_set.json");
 
