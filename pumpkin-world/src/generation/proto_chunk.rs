@@ -229,18 +229,20 @@ impl ProtoChunk {
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data.heightmap.lock().unwrap();
 
-        for (section_y, section) in section_data.sections.lock().unwrap().iter().enumerate() {
-            let section_base_y = section_y as i32 * 16;
+        let block_sections_guard = section_data.block_sections.read().unwrap();
+        let biome_sections_guard = section_data.biome_sections.read().unwrap();
+
+        for (section_idx, block_palette) in block_sections_guard.iter().enumerate() {
+            let section_base_y = section_idx as i32 * 16;
 
             if section_base_y >= proto_chunk.height() as i32 {
                 continue;
             }
 
-            // --- Block States ---
             for x in 0..16 {
                 for y in 0..16 {
                     for z in 0..16 {
-                        let block_state_id = section.block_states.get(x, y, z);
+                        let block_state_id = block_palette.get(x, y, z);
                         let block_state = BlockState::from_id(block_state_id);
                         let absolute_y = section_base_y + y as i32 + section_data.min_y;
 
@@ -249,26 +251,29 @@ impl ProtoChunk {
                 }
             }
 
-            // --- Biomes ---
-            for x in 0..4 {
-                for y in 0..4 {
-                    for z in 0..4 {
-                        let biome_id = section.biomes.get(x, y, z);
-                        let relative_y_block = section_base_y + (y as i32 * 4);
-                        let biome_y_idx = biome_coords::from_block(relative_y_block);
-                        let index = proto_chunk.local_biome_pos_to_biome_index(
-                            x as i32,
-                            biome_y_idx,
-                            z as i32,
-                        );
+            if let Some(biome_palette) = biome_sections_guard.get(section_idx) {
+                for x in 0..4 {
+                    for y in 0..4 {
+                        for z in 0..4 {
+                            let biome_id = biome_palette.get(x, y, z);
 
-                        proto_chunk.flat_biome_map[index] = biome_id;
+                            let biome_y_idx = (section_idx * 4) + y;
+
+                            let index = proto_chunk.local_biome_pos_to_biome_index(
+                                x as i32,
+                                biome_y_idx as i32,
+                                z as i32,
+                            );
+
+                            proto_chunk.flat_biome_map[index] = biome_id;
+                        }
                     }
                 }
             }
         }
+        drop(block_sections_guard);
+        drop(biome_sections_guard);
 
-        // --- Heightmaps ---
         for z in 0..16 {
             for x in 0..16 {
                 let index = ((z << 4) + x) as usize;
