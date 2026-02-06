@@ -29,12 +29,12 @@ pub trait DynamicOps {
 
     /// Returns how an empty list is represented by this `DynamicOps`.
     fn empty_list(&self) -> Self::Value {
-        self.create_list(vec![])
+        self.create_list(&vec![])
     }
 
     /// Returns how an empty map is represented by this `DynamicOps`.
     fn empty_map(&self) -> Self::Value {
-        self.create_map(HashMap::new())
+        self.create_map(&HashMap::new())
     }
 
     /// Returns how a generic number is represented by this `DynamicOps`.
@@ -66,15 +66,15 @@ pub trait DynamicOps {
     }
 
     /// Returns how a string is represented by this `DynamicOps`.
-    fn create_string(&self, data: String) -> Self::Value;
+    fn create_string(&self, data: &String) -> Self::Value;
 
     /// Returns how a list is represented by this `DynamicOps`.
-    fn create_list<I>(&self, values: I) -> Self::Value
+    fn create_list<I>(&self, values: &I) -> Self::Value
     where
         I: IntoIterator<Item = Self::Value>;
 
     /// Returns how a map is represented by this `DynamicOps`.
-    fn create_map<I>(&self, entries: I) -> Self::Value
+    fn create_map<I>(&self, entries: &I) -> Self::Value
     where
         I: IntoIterator<Item = (Self::Value, Self::Value)>;
 
@@ -110,7 +110,7 @@ pub trait DynamicOps {
 
     /// Gets a `Vec<i8>` from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getByteBuffer()` function in `DynamicOps`.
-    fn get_bytes(&self, input: &Self::Value) -> DataResult<Vec<i8>> {
+    fn get_byte_buffer(&self, input: &Self::Value) -> DataResult<Vec<i8>> {
         self.get_iter(input).flat_map(|mut iter| {
             // Check if all elements in this value are numbers.
             let all_numbers = iter.all(|e| self.get_number(e).is_success());
@@ -129,8 +129,8 @@ pub trait DynamicOps {
     }
 
     /// Creates a byte list that can be represented by this `DynamicOps` using a byte buffer.
-    fn create_byte_list(&self, buffer: Vec<i8>) -> Self::Value {
-        self.create_list(buffer.iter().map(|b| self.create_byte(*b)))
+    fn create_byte_buffer(&self, buffer: &Vec<i8>) -> Self::Value {
+        self.create_list(&buffer.iter().map(|b| self.create_byte(*b)))
     }
 
     /// Gets an `int` (`i32` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
@@ -151,8 +151,8 @@ pub trait DynamicOps {
     }
 
     /// Creates an `int` list that can be represented by this `DynamicOps` using a byte buffer.
-    fn create_int_list(&self, int_iter: impl Iterator<Item = i32>) -> Self::Value {
-        self.create_list(int_iter.map(|i| self.create_int(i)))
+    fn create_int_list(&self, int_iter: &impl Iterator<Item = i32>) -> Self::Value {
+        self.create_list(&int_iter.map(|i| self.create_int(i)))
     }
 
     /// Gets a `long` (`i32` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
@@ -173,8 +173,8 @@ pub trait DynamicOps {
     }
 
     /// Creates a `long` list that can be represented by this `DynamicOps` using a byte buffer.
-    fn create_long_list(&self, int_iter: impl Iterator<Item = i64>) -> Self::Value {
-        self.create_list(int_iter.map(|l| self.create_long(l)))
+    fn create_long_list(&self, long_iter: &impl Iterator<Item = i64>) -> Self::Value {
+        self.create_list(long_iter.map(|l| self.create_long(l)))
     }
 
     /// Merges a value represented by this `DynamicOps` to a list represented by this `DynamicOps`.
@@ -272,7 +272,7 @@ pub trait DynamicOps {
     /// Tries to get a value from a value represented by this `DynamicOps` using a key.
     /// Only works for values that can be [`MapLike`]-viewed.
     fn get_element<'a>(&'a self, input: &'a Self::Value, key: &str) -> DataResult<&'a Self::Value> {
-        self.get_element_generic(input, self.create_string(key.to_string()))
+        self.get_element_generic(input, self.create_string(&key.to_string()))
     }
 
     /// Tries to get a value from a value represented by this `DynamicOps` using a key also represented by this `DynamicOps`.
@@ -298,7 +298,7 @@ where {
     where
         Self::Value: Clone,
     {
-        self.merge_into_map(input, self.create_string(key.to_owned()), value)
+        self.merge_into_map(input, self.create_string(&key.to_owned()), value)
             .into_result()
             .unwrap_or(input.clone())
     }
@@ -337,7 +337,8 @@ where {
     /// Converts a list represented by this `DynamicOps` to another list represented by another `DynamicOps`.
     fn convert_list<U>(&self, out_ops: &impl DynamicOps<Value = U>, input: &Self::Value) -> U {
         out_ops.create_list(
-            self.get_iter(input)
+            &self
+                .get_iter(input)
                 .into_result()
                 .into_iter()
                 .flatten()
@@ -348,7 +349,8 @@ where {
     /// Converts a map represented by this `DynamicOps` to another map represented by another `DynamicOps`.
     fn convert_map<U>(&self, out_ops: &impl DynamicOps<Value = U>, input: &Self::Value) -> U {
         out_ops.create_map(
-            self.get_map_iter(input)
+            &self
+                .get_map_iter(input)
                 .into_result()
                 .into_iter()
                 .flatten()

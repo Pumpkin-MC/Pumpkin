@@ -42,7 +42,12 @@ where
     E: Encoder<A>,
     D: Decoder<A>,
 {
-    fn encode<T: PartialEq>(&self, input: &A, ops: &impl DynamicOps<Value = T>, prefix: T) -> DataResult<T> {
+    fn encode<T: PartialEq>(
+        &self,
+        input: &A,
+        ops: &impl DynamicOps<Value = T>,
+        prefix: T,
+    ) -> DataResult<T> {
         self.encoder.encode(input, ops, prefix)
     }
 }
@@ -53,7 +58,11 @@ where
     E: Encoder<A>,
     D: Decoder<A>,
 {
-    fn decode<T: PartialEq>(&self, input: T, ops: &impl DynamicOps<Value = T>) -> DataResult<(A, T)> {
+    fn decode<T: PartialEq>(
+        &self,
+        input: T,
+        ops: &impl DynamicOps<Value = T>,
+    ) -> DataResult<(A, T)> {
         self.decoder.decode(input, ops)
     }
 }
