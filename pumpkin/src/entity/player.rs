@@ -2709,6 +2709,25 @@ impl NBTStorage for Player {
             self.experience_level.store(level, Ordering::Relaxed);
             self.experience_progress.store(progress);
             self.experience_points.store(points, Ordering::Relaxed);
+
+            // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
+            if let (Some(x), Some(y), Some(z)) = (
+                nbt.get_int("SpawnX"),
+                nbt.get_int("SpawnY"),
+                nbt.get_int("SpawnZ"),
+            ) {
+                let dim = nbt
+                    .get_string("SpawnDimension")
+                    .and_then(|s| Dimension::from_name(s).copied())
+                    .unwrap_or(self.world().dimension);
+                let force = nbt.get_bool("SpawnForced").unwrap_or(false);
+                self.respawn_point.store(Some(RespawnPoint {
+                    dimension: dim,
+                    position: BlockPos(Vector3::new(x, y, z)),
+                    yaw: 0.0,
+                    force,
+                }));
+            }
         })
     }
 }
