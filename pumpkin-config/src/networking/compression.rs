@@ -1,11 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// Configuration for packet compression.
+///
+/// Controls whether network packet compression is enabled and the compression parameters.
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
-/// Packet compression
 pub struct CompressionConfig {
     /// Whether compression is enabled.
     pub enabled: bool,
+
+    /// Detailed compression settings.
     #[serde(flatten)]
     pub info: CompressionInfo,
 }
@@ -19,15 +23,18 @@ impl Default for CompressionConfig {
     }
 }
 
+/// Detailed information for packet compression settings.
+///
+/// Can also be used independently of the config.
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
-/// We have this in a separate struct so we can use it outside of the config.
 pub struct CompressionInfo {
-    /// The compression threshold used when compression is enabled.
+    /// The compression threshold in bytes.
+    /// Packets smaller than this will not be compressed.
     pub threshold: u32,
-    /// A value between `0..9`.
-    /// `1` = Optimize for the best speed of encoding.
-    /// `9` = Optimize for the size of data being encoded.
+
+    /// Compression level, between `0..9`.
+    /// `1` = optimize for speed, `9` = optimize for size.
     pub level: u32,
 }
 
