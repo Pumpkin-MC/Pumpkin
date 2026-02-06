@@ -1,14 +1,19 @@
 use serde::{Deserialize, Serialize};
 
+/// Configuration for LAN broadcast of the server.
+///
+/// Controls whether the server is discoverable on the local network, and optional MOTD and port settings.
 #[derive(Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct LANBroadcastConfig {
+    /// Whether LAN broadcast is enabled.
     pub enabled: bool,
-    // We use an extra `motd` because this only supports one line,
-    // but we use the server `motd` without new lines as the default.
+
+    /// Optional one-line Message of the Day (MOTD) for LAN clients.
+    /// Defaults to the server MOTD with newlines removed.
     pub motd: Option<String>,
-    // Allow users to specify port so that the port is predictable.
-    // There are many reasons why the port might need to be predictable.
-    // One reason is Docker containers, where specific ports need to be allowed.
+
+    /// Optional port for LAN broadcast.
+    /// Useful for predictable ports in environments like Docker containers.
     pub port: Option<u16>,
 }
