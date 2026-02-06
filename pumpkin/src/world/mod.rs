@@ -97,8 +97,8 @@ use pumpkin_protocol::{
 use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{
-        CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage,
-        CExplosion, CRespawn, CSetBlockDestroyStage, CWorldEvent,
+        CAcknowledgeBlockChange, CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData,
+        CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage, CWorldEvent,
     },
 };
 use pumpkin_util::resource_location::ResourceLocation;
@@ -628,6 +628,15 @@ impl World {
         let entity_elapsed = entity_start.elapsed();
 
         self.flush_block_updates().await;
+        for player in players.iter() {
+            let seq = player.packet_sequence.swap(-1, Ordering::Relaxed);
+            if seq != -1 {
+                player
+                    .client
+                    .enqueue_packet(&CAcknowledgeBlockChange::new(seq.into()))
+                    .await;
+            }
+        }
         //self.level.chunk_loading.lock().unwrap().send_change();
 
         let total_elapsed = start.elapsed();
