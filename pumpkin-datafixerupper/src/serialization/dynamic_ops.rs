@@ -151,13 +151,13 @@ pub trait DynamicOps {
         })
     }
 
-    /// Creates an `int` list that can be represented by this `DynamicOps` using a byte buffer.
+    /// Creates an `int` list that can be represented by this `DynamicOps` using an iterator.
     fn create_int_list(&self, int_iter: impl Iterator<Item = i32>) -> Self::Value {
         self.create_list(int_iter.map(|i| self.create_int(i)))
     }
 
-    /// Gets a `long` (`i32` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
-    /// This is the equivalent of DFU's `getIntStream()` function in `DynamicOps`.
+    /// Gets a `long` (`i64` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
+    /// This is the equivalent of DFU's `getLongStream()` function in `DynamicOps`.
     fn get_long_iter(&self, input: &Self::Value) -> DataResult<impl Iterator<Item = i64>>
     where
         Self::Value: Display,
@@ -176,7 +176,7 @@ pub trait DynamicOps {
         })
     }
 
-    /// Creates a `long` list that can be represented by this `DynamicOps` using a byte buffer.
+    /// Creates a `long` list that can be represented by this `DynamicOps` using an iterator.
     fn create_long_list(&self, long_iter: impl Iterator<Item = i64>) -> Self::Value {
         self.create_list(long_iter.map(|l| self.create_long(l)))
     }
