@@ -1,0 +1,34 @@
+[identity]
+name = "entity"
+responsibility = "All entities: players, mobs, items on ground. Physics, collision, pathfinding, AI, combat, spawning/despawning, effects, experience"
+
+[boundaries]
+write_paths = ["pumpkin/src/entity/"]
+read_paths = [
+    "pumpkin/src/entity/",
+    "pumpkin-util/",
+    "pumpkin-data/",
+    "pumpkin/src/block/",
+    "pumpkin/src/world/",
+    "specs/entity/",
+    "specs/data/",
+    ".claude/sessions/",
+    "contracts/",
+]
+forbidden_paths = ["pumpkin-protocol/", "pumpkin/src/net/", "pumpkin/src/item/", "pumpkin/src/server/", "pumpkin/src/plugin/", "pumpkin/src/command/"]
+
+[interfaces]
+implements = ["EntityTracker", "EntityPhysics", "MobAI"]
+consumes = ["ChunkProvider", "BlockStateRegistry"]
+
+[specs]
+primary = ["specs/entity/"]
+secondary = ["pumpkin/src/entity/"]
+
+[tests]
+must_pass = "cargo test -p pumpkin --lib entity"
+
+[notes]
+# Entity AI uses a goal-selector pattern (see pumpkin/src/entity/ai/)
+# Pathfinding is in pumpkin/src/entity/ai/path/
+# Combat mechanics are in pumpkin/src/entity/combat.rs

@@ -39,3 +39,11 @@
 **Rationale:** Session logs are the agent team's private workspace. They don't belong in PRs. `.gitignore` already blocks `logs/` at all depths, so we use `sessions/` as the name.
 **Affects:** All agents
 **Status:** active
+
+## ARCH-006: All orchestration lives under .claude/
+**Date:** 2026-02-06
+**Session:** .claude/sessions/2026-02-06/003_architect_consolidate-claude.md
+**Decision:** Every orchestration file lives under .claude/. Pumpkin source tree root has zero orchestration artifacts.
+**Rationale:** Fork source tree should be indistinguishable from upstream plus code changes.
+**Affects:** All agents
+**Status:** active
