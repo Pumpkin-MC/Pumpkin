@@ -328,7 +328,11 @@ impl JavaClient {
                         .await;
                 }
 
-                if !player.abilities.lock().await.flying {
+                // Only process fall damage if player is alive
+                if !player.abilities.lock().await.flying 
+                    && player.living_entity.health.load() > 0.0 
+                    && !player.living_entity.dead.load(Ordering::Relaxed) 
+                {
                     player.living_entity
                         .fall(
                             player.clone(),
@@ -460,7 +464,11 @@ impl JavaClient {
                         &CHeadRot::new(entity_id.into(), yaw as u8),
                     )
                     .await;
-                if !player.abilities.lock().await.flying {
+                // Only process fall damage if player is alive
+                if !player.abilities.lock().await.flying 
+                    && player.living_entity.health.load() > 0.0 
+                    && !player.living_entity.dead.load(Ordering::Relaxed) 
+                {
                     player.living_entity
                         .fall(
                             player.clone(),

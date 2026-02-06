@@ -99,6 +99,7 @@ use pumpkin_protocol::{
     java::client::play::{
         CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage,
         CWorldEvent,
+        CChunkBatchStart, CChunkData, CChunkBatchEnd,
     },
 };
 use pumpkin_util::resource_location::ResourceLocation;
@@ -2005,10 +2006,10 @@ impl World {
             (self.as_ref(), position)
         };
 
-        // Send respawn packet with target dimension
+        // Send respawn packet with target dimension (using send_packet_now to ensure proper order)
         player
             .client
-            .enqueue_packet(&CRespawn::new(
+            .send_packet_now(&CRespawn::new(
                 (target_world.dimension.id).into(),
                 ResourceLocation::from(target_world.dimension.minecraft_name),
                 biome::hash_seed(target_world.level.seed.0),
@@ -2020,6 +2021,24 @@ impl World {
                 VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                 target_world.sea_level.into(),
                 data_kept,
+            ))
+            .await;
+
+        // Inform the client of the default spawn position so the client doesn't
+        // fall back to (0, 2, 0) while the world reloads (fixes rubberbanding).
+        // This must be sent after the CRespawn packet for proper client positioning.
+        let spawn_block_pos = BlockPos(Vector3::new(
+            position.x.round() as i32,
+            position.y.round() as i32,
+            position.z.round() as i32,
+        ));
+        player
+            .client
+            .send_packet_now(&CPlayerSpawnPosition::new(
+                spawn_block_pos,
+                yaw,
+                pitch,
+                target_world.dimension.minecraft_name.to_string(),
             ))
             .await;
 
@@ -2047,7 +2066,18 @@ impl World {
             .send_world_info(player, position, yaw, pitch)
             .await;
 
-        // Send teleport packet AFTER chunks are loaded (same order as initial spawn)
+        // Ensure at least the center chunk is sent synchronously before teleport.
+        if let crate::net::ClientPlatform::Java(java_client) = &player.client {
+            let center_chunk = player.living_entity.entity.chunk_pos.load();
+            let chunk = target_world.level.get_chunk(center_chunk).await;
+            java_client.send_packet_now(&CChunkBatchStart).await;
+            java_client.send_packet_now(&CChunkData(&chunk)).await;
+            java_client
+                .send_packet_now(&CChunkBatchEnd::new(1u16))
+                .await;
+        }
+
+        // Send teleport packet after at least the center chunk was delivered
         player.request_teleport(position, yaw, pitch).await;
     }
 
