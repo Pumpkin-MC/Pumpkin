@@ -22,7 +22,11 @@ pub struct PlayerSwapHandItemsEvent {
 
 impl PlayerSwapHandItemsEvent {
     /// Creates a new instance of `PlayerSwapHandItemsEvent`.
-    pub const fn new(player: Arc<Player>, main_hand_item: ItemStack, off_hand_item: ItemStack) -> Self {
+    pub const fn new(
+        player: Arc<Player>,
+        main_hand_item: ItemStack,
+        off_hand_item: ItemStack,
+    ) -> Self {
         Self {
             player,
             main_hand_item,

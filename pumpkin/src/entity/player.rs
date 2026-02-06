@@ -1905,12 +1905,7 @@ impl Player {
         if let Some(server) = self.world().server.upgrade()
             && let Some(player_arc) = self.as_arc()
         {
-            let event = PlayerKickEvent::new(
-                player_arc,
-                kick_message,
-                leave_message,
-                cause,
-            );
+            let event = PlayerKickEvent::new(player_arc, kick_message, leave_message, cause);
             let event = server.plugin_manager.fire(event).await;
             if event.cancelled {
                 return;
@@ -2509,11 +2504,7 @@ impl Player {
         self.set_experience(new_level, progress, new_points).await;
     }
 
-    pub async fn apply_mending_from_xp(
-        &self,
-        mut xp: i32,
-        orb_uuid: Option<uuid::Uuid>,
-    ) -> i32 {
+    pub async fn apply_mending_from_xp(&self, mut xp: i32, orb_uuid: Option<uuid::Uuid>) -> i32 {
         if xp <= 0 {
             return xp;
         }

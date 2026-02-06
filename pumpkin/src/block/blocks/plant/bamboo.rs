@@ -253,7 +253,11 @@ async fn count_bamboo_above(world: Arc<World>, pos: &BlockPos) -> usize {
     bamboo_count
 }
 
-async fn bone_meal(world: Arc<World>, position: &BlockPos, player: Arc<crate::entity::player::Player>) {
+async fn bone_meal(
+    world: Arc<World>,
+    position: &BlockPos,
+    player: Arc<crate::entity::player::Player>,
+) {
     let mut bamboo_above = count_bamboo_above(Arc::clone(&world), position).await;
     let bamboo_below = count_bamboo_below(Arc::clone(&world), position).await;
     let mut new_height = bamboo_above + bamboo_below + 1;
@@ -281,10 +285,7 @@ async fn bone_meal(world: Arc<World>, position: &BlockPos, player: Arc<crate::en
         if let Some(server) = world.server.upgrade() {
             let block = world.get_block(position).await;
             let event = crate::plugin::block::block_fertilize::BlockFertilizeEvent::new(
-                player,
-                block,
-                *position,
-                potential,
+                player, block, *position, potential,
             );
             let event = server.plugin_manager.fire(event).await;
             if event.cancelled || event.blocks.is_empty() {

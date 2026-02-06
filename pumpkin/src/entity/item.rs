@@ -19,7 +19,10 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::{entity::EntityBaseFuture, plugin::player::player_pickup_arrow::PlayerPickupArrowEvent, server::Server};
+use crate::{
+    entity::EntityBaseFuture, plugin::player::player_pickup_arrow::PlayerPickupArrowEvent,
+    server::Server,
+};
 
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 

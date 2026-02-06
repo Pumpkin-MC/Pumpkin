@@ -1,4 +1,4 @@
-use pumpkin_macros::{cancellable, Event};
+use pumpkin_macros::{Event, cancellable};
 use std::sync::Arc;
 
 use crate::entity::player::Player;

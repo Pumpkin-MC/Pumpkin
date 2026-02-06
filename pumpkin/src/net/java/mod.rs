@@ -11,8 +11,8 @@ use pumpkin_protocol::java::server::play::{
     SCookieResponse as SPCookieResponse, SCustomPayload, SEditBook, SInteract, SKeepAlive,
     SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand,
     SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
-    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-    SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
+    SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{

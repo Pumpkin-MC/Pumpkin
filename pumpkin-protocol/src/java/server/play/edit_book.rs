@@ -25,9 +25,8 @@ impl ServerPacket for SEditBook {
         let mut read = read;
         let slot = read.get_var_int()?;
         let page_count = read.get_var_int()?;
-        let count = usize::try_from(page_count.0).map_err(|_| {
-            ReadingError::Message("Invalid edit book page count".to_string())
-        })?;
+        let count = usize::try_from(page_count.0)
+            .map_err(|_| ReadingError::Message("Invalid edit book page count".to_string()))?;
         if count > MAX_PAGE_COUNT {
             return Err(ReadingError::Message("Too many book pages".to_string()));
         }

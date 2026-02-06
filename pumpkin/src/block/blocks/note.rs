@@ -16,11 +16,11 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
+use crate::plugin::block::note_play::NotePlayEvent;
 use crate::{
     block::{BlockBehaviour, OnSyncedBlockEventArgs},
     world::World,
 };
-use crate::plugin::block::note_play::NotePlayEvent;
 
 use super::redstone::block_receives_redstone_power;
 

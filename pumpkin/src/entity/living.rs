@@ -1409,8 +1409,11 @@ impl EntityBase for LivingEntity {
                         if let Some(server) = player.world().server.upgrade()
                             && let Some(player_arc) = player.as_arc()
                         {
-                            let event =
-                                PlayerItemConsumeEvent::new(player_arc, item_to_consume.clone(), hand);
+                            let event = PlayerItemConsumeEvent::new(
+                                player_arc,
+                                item_to_consume.clone(),
+                                hand,
+                            );
                             let event = server.plugin_manager.fire(event).await;
                             if event.cancelled {
                                 cancelled = true;

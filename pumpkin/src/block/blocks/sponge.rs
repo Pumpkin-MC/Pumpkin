@@ -4,13 +4,13 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 use crate::block::{BlockBehaviour, BlockFuture, OnNeighborUpdateArgs, PlacedArgs};
+use crate::plugin::block::sponge_absorb::SpongeAbsorbEvent;
 use pumpkin_data::Block;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
-use crate::plugin::block::sponge_absorb::SpongeAbsorbEvent;
 
 #[pumpkin_block("minecraft:sponge")]
 pub struct SpongeBlock;
