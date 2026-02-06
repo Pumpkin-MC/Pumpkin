@@ -25,7 +25,7 @@ pub struct PlayerKickEvent {
 
 impl PlayerKickEvent {
     /// Creates a new instance of `PlayerKickEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         reason: TextComponent,
         leave_message: TextComponent,

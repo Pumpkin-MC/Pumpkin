@@ -33,7 +33,7 @@ pub struct PlayerFishEvent {
 
 impl PlayerFishEvent {
     /// Creates a new instance of `PlayerFishEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         caught_uuid: Option<uuid::Uuid>,
         hook_uuid: uuid::Uuid,

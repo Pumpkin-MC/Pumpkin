@@ -12,7 +12,7 @@ pub struct ServiceRegisterEvent {
 
 impl ServiceRegisterEvent {
     #[must_use]
-    pub fn new(plugin_name: String, service_name: String) -> Self {
+    pub const fn new(plugin_name: String, service_name: String) -> Self {
         Self {
             plugin_name,
             service_name,

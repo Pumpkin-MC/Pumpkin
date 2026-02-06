@@ -26,7 +26,7 @@ pub struct PlayerEggThrowEvent {
 
 impl PlayerEggThrowEvent {
     /// Creates a new instance of `PlayerEggThrowEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         egg_uuid: uuid::Uuid,
         hatching: bool,

@@ -28,7 +28,7 @@ pub struct BlockDropItemEvent {
 impl BlockDropItemEvent {
     /// Creates a new `BlockDropItemEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         block: &'static Block,
         block_position: BlockPos,

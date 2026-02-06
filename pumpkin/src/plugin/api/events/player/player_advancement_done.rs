@@ -11,7 +11,7 @@ pub struct PlayerAdvancementDoneEvent {
     /// The player who completed the advancement.
     pub player: Arc<Player>,
 
-    /// Namespaced advancement key, e.g. "minecraft:story/mine_diamond".
+    /// Namespaced advancement key, e.g. "`minecraft:story/mine_diamond`".
     pub advancement_key: String,
 }
 

@@ -36,7 +36,7 @@ pub async fn send_c_commands_packet(
     let allowed_set: HashSet<&str> = event
         .commands
         .iter()
-        .map(|command| command.as_str())
+        .map(std::string::String::as_str)
         .collect();
 
     let mut first_level = Vec::new();

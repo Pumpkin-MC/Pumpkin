@@ -11,7 +11,7 @@ pub struct PlayerAnimationEvent {
     /// The player who performed the animation.
     pub player: Arc<Player>,
 
-    /// Animation type, e.g. "ARM_SWING".
+    /// Animation type, e.g. "`ARM_SWING`".
     pub animation_type: String,
 }
 

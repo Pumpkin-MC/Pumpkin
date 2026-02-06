@@ -27,7 +27,7 @@ pub struct BlockExplodeEvent {
 impl BlockExplodeEvent {
     /// Creates a new `BlockExplodeEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         block: &'static Block,
         block_position: BlockPos,
         world_uuid: uuid::Uuid,

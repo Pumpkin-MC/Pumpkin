@@ -1056,14 +1056,12 @@ impl LivingEntity {
                     None
                 } else {
                     let before = stack.clone();
-                    if stack.damage_item_with_context(damage, true) {
+                    stack.damage_item_with_context(damage, true).then(|| {
                         if stack.is_empty() {
                             broken_item = Some(before);
                         }
-                        Some(stack.clone())
-                    } else {
-                        None
-                    }
+                        stack.clone()
+                    })
                 }
             };
 
@@ -1077,16 +1075,15 @@ impl LivingEntity {
                         ))
                         .await;
                 }
-                if let (Some(player), Some(broken_item)) = (caller.get_player(), broken_item) {
-                    if let Some(server) = player.world().server.upgrade()
-                        && let Some(player_arc) = player.as_arc()
-                    {
-                        let event = PlayerItemBreakEvent::new(player_arc, broken_item);
-                        server
-                            .plugin_manager
-                            .fire::<PlayerItemBreakEvent>(event)
-                            .await;
-                    }
+                if let (Some(player), Some(broken_item)) = (caller.get_player(), broken_item)
+                    && let Some(server) = player.world().server.upgrade()
+                    && let Some(player_arc) = player.as_arc()
+                {
+                    let event = PlayerItemBreakEvent::new(player_arc, broken_item);
+                    server
+                        .plugin_manager
+                        .fire::<PlayerItemBreakEvent>(event)
+                        .await;
                 }
             }
         }
@@ -1264,8 +1261,7 @@ impl EntityBase for LivingEntity {
             }
 
             let world = self.entity.world.load();
-            let mut effective_amount = amount;
-            if let Some(server) = world.server.upgrade() {
+            let effective_amount = if let Some(server) = world.server.upgrade() {
                 let event = crate::plugin::entity::entity_damage::EntityDamageEvent::new(
                     self.entity.entity_uuid,
                     amount,
@@ -1281,8 +1277,10 @@ impl EntityBase for LivingEntity {
                 if event.damage <= 0.0 {
                     return false;
                 }
-                effective_amount = event.damage;
-            }
+                event.damage
+            } else {
+                amount
+            };
 
             let last_damage = self.last_damage_taken.load();
             let play_sound;
@@ -1405,21 +1403,17 @@ impl EntityBase for LivingEntity {
                     };
 
                     let mut cancelled = false;
-                    if let Some(player) = caller.get_player() {
-                        if let Some(server) = player.world().server.upgrade()
-                            && let Some(player_arc) = player.as_arc()
-                        {
-                            let event = PlayerItemConsumeEvent::new(
-                                player_arc,
-                                item_to_consume.clone(),
-                                hand,
-                            );
-                            let event = server.plugin_manager.fire(event).await;
-                            if event.cancelled {
-                                cancelled = true;
-                            } else {
-                                item_to_consume = event.item_stack;
-                            }
+                    if let Some(player) = caller.get_player()
+                        && let Some(server) = player.world().server.upgrade()
+                        && let Some(player_arc) = player.as_arc()
+                    {
+                        let event =
+                            PlayerItemConsumeEvent::new(player_arc, item_to_consume.clone(), hand);
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            cancelled = true;
+                        } else {
+                            item_to_consume = event.item_stack;
                         }
                     }
 

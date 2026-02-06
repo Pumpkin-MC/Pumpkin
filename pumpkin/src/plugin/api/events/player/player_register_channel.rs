@@ -17,7 +17,7 @@ pub struct PlayerRegisterChannelEvent {
 
 impl PlayerRegisterChannelEvent {
     /// Creates a new instance of `PlayerRegisterChannelEvent`.
-    pub fn new(player: Arc<Player>, channel: String) -> Self {
+    pub const fn new(player: Arc<Player>, channel: String) -> Self {
         Self { player, channel }
     }
 }

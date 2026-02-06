@@ -30,7 +30,7 @@ pub struct TNTPrimeEvent {
 impl TNTPrimeEvent {
     /// Creates a new `TNTPrimeEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         player: Option<Arc<Player>>,
         block: &'static Block,
         block_pos: BlockPos,

@@ -28,7 +28,7 @@ pub struct PlayerShearEntityEvent {
 
 impl PlayerShearEntityEvent {
     /// Creates a new instance of `PlayerShearEntityEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         entity_uuid: uuid::Uuid,
         entity_type: String,

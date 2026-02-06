@@ -25,7 +25,7 @@ pub struct PlayerPreLoginEvent {
 
 impl PlayerPreLoginEvent {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         name: String,
         player_uuid: Uuid,
         address: String,

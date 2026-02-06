@@ -18,7 +18,7 @@ pub struct PlayerRecipeDiscoverEvent {
 
 impl PlayerRecipeDiscoverEvent {
     /// Creates a new instance of `PlayerRecipeDiscoverEvent`.
-    pub fn new(player: Arc<Player>, recipe_key: String) -> Self {
+    pub const fn new(player: Arc<Player>, recipe_key: String) -> Self {
         Self {
             player,
             recipe_key,

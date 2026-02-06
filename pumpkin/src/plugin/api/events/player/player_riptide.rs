@@ -22,7 +22,7 @@ pub struct PlayerRiptideEvent {
 
 impl PlayerRiptideEvent {
     /// Creates a new instance of `PlayerRiptideEvent`.
-    pub fn new(player: Arc<Player>, item_stack: ItemStack, velocity: Vector3<f64>) -> Self {
+    pub const fn new(player: Arc<Player>, item_stack: ItemStack, velocity: Vector3<f64>) -> Self {
         Self {
             player,
             item_stack,

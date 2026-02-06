@@ -23,7 +23,7 @@ pub struct PlayerResourcePackStatusEvent {
 
 impl PlayerResourcePackStatusEvent {
     /// Creates a new instance of `PlayerResourcePackStatusEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         pack_uuid: uuid::Uuid,
         pack_hash: String,

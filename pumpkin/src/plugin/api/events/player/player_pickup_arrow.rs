@@ -28,7 +28,7 @@ pub struct PlayerPickupArrowEvent {
 
 impl PlayerPickupArrowEvent {
     /// Creates a new instance of `PlayerPickupArrowEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         arrow_uuid: uuid::Uuid,
         item_uuid: uuid::Uuid,
