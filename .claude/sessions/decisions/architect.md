@@ -32,13 +32,13 @@
 **Affects:** All agents
 **Status:** active
 
-## ARCH-005: Session logs live in .claude/sessions/ (gitignored)
-**Date:** 2026-02-06
+## ARCH-005: Session logs live in .claude/sessions/ (TRACKED)
+**Date:** 2026-02-06 (revised 2026-02-07)
 **Session:** .claude/sessions/2026-02-06/002_architect_restructure-sessions.md
-**Decision:** All session logs and decision logs live in `.claude/sessions/`. This directory is gitignored. Project infrastructure (ORCHESTRATOR.md, contracts/, specs/) stays at root, tracked.
-**Rationale:** Session logs are the agent team's private workspace. They don't belong in PRs. `.gitignore` already blocks `logs/` at all depths, so we use `sessions/` as the name.
+**Decision:** All session logs and decision logs live in `.claude/sessions/`. ~~This directory is gitignored.~~ REVISED: .claude/sessions/ is now tracked and committed. Agents must commit their session logs.
+**Rationale:** Gitignoring sessions meant agent logs never reached the repo. Other agents in separate sessions could not read them. Logs must be committed to fulfill read-before-write.
 **Affects:** All agents
-**Status:** active
+**Status:** active (revised)
 
 ## ARCH-006: All orchestration lives under .claude/
 **Date:** 2026-02-06
@@ -48,10 +48,38 @@
 **Affects:** All agents
 **Status:** active
 
-## ARCH-007: Selective .claude/ gitignore policy
-**Date:** 2026-02-06
+## ARCH-007: All .claude/ is tracked
+**Date:** 2026-02-06 (revised 2026-02-07)
 **Session:** .claude/sessions/2026-02-06/004_architect_setup-validation.md
-**Decision:** Only workspace-ephemeral directories under .claude/ are gitignored (.claude/sessions/, .claude/specs/, .claude/reference/). Orchestration infrastructure (.claude/contracts/, .claude/prompts/, .claude/rules/, .claude/ORCHESTRATOR.md, .claude/hooks/, .claude/start-session.sh) remains tracked.
-**Rationale:** Orchestration infrastructure must persist across clones so any checkout can bootstrap agent sessions. Session logs and specs are workspace-local artifacts.
+**Decision:** ~~Only workspace-ephemeral directories under .claude/ are gitignored.~~ REVISED: Nothing under .claude/ is gitignored. Everything is tracked and committed: sessions, decisions, specs, prompts, contracts, reference.
+**Rationale:** Gitignoring sessions broke the entire read-before-write protocol. Agents could not read each other's logs across separate sessions. The whole point of the log system is cross-session visibility.
 **Affects:** All agents
+**Status:** active (revised)
+
+## ARCH-008: Navigator::is_idle() fix ownership
+**Date:** 2026-02-07
+**Decision:** This is a pre-existing bug in the Pumpkin codebase. Navigator lives in entity scope. Entity agent is authorized to fix Navigator::is_idle() to return correct state based on whether a path is active, but MUST NOT rename or restructure the Navigator struct. Fix the return value only.
+**Rationale:** Entity's goal system (ENT-001 through ENT-003) depends on Navigator cycling correctly. WanderAround cannot hand off to other goals if is_idle() is stuck on false.
+**Affects:** Entity
 **Status:** active
+
+## ARCH-009: Anvil deduplication — Storage provides, WorldGen consumes
+**Date:** 2026-02-07
+**Decision:** Storage's `pumpkin_nbt::anvil::RegionFile` is the canonical Anvil implementation. WorldGen should adopt it for region file I/O rather than maintaining a duplicate. WorldGen may wrap it with chunk-level convenience methods in pumpkin-world/ but must not fork or reimplement the Anvil logic.
+**Rationale:** Storage session 001 produced a clean 420-line Anvil implementation with 17 tests. Duplicating this in pumpkin-world/ violates single-ownership. Shared interface through pumpkin-nbt/ crate dependency.
+**Affects:** Storage, WorldGen
+**Status:** active — WorldGen must acknowledge before adopting
+
+## ARCH-010: Enderman teleportation is Entity scope
+**Date:** 2026-02-07
+**Decision:** Enderman teleportation is an entity behavior, not a world-level mechanic. Entity agent implements it using block query traits from pumpkin-util/. If Entity needs a "find valid teleport position" helper that queries world state, it requests the trait signature from Architect.
+**Rationale:** Teleportation is mob AI (entity decides when/why to teleport). Block validity checking uses existing world query interfaces. No new world-level system needed.
+**Affects:** Entity
+**Status:** active
+
+## ARCH-011: NEVER RENAME existing Pumpkin code
+**Date:** 2026-02-07
+**Decision:** No agent may rename, restructure, or modify existing Pumpkin variables, functions, structs, enums, modules, or file organization. Agents ADD and EXTEND only. This applies to all code that existed before our fork. The only exception is Architect resolving a documented blocker with explicit human operator approval.
+**Rationale:** This is a public fork intended for upstream PRs. Renaming existing code breaks other contributors' work, creates unnecessary merge conflicts with upstream, and exceeds our mandate. We are here to complete missing features, not rewrite what works.
+**Affects:** All agents
+**Status:** active — NON-NEGOTIABLE
