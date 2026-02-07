@@ -28,7 +28,7 @@ with explicit approval from the human operator.
 ```toml
 write_paths = ["pumpkin/src/block/blocks/redstone/", "pumpkin/src/block/blocks/piston/", "tests/redstone/"]
 forbidden = ["pumpkin-protocol/", "pumpkin-world/", "pumpkin/src/entity/", "pumpkin-nbt/", "pumpkin-inventory/", "pumpkin/src/server/", "pumpkin/src/plugin/", "pumpkin/src/net/"]
-tests = "cargo test -p pumpkin-redstone"
+tests = "cargo test --lib -p pumpkin -- block::blocks::redstone"
 ```
 
 ## Before You Touch Code
