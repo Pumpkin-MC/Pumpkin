@@ -93,3 +93,15 @@ in `mcdata-1.21.4.zip` — agents extract locally as needed.
 loot tables, mob drops, worldgen, and tags without guessing.
 **Affects**: Items, Entity, WorldGen, Storage, Redstone
 **Status**: COMMITTED
+
+## ARCH-013: PrismarineJS + Bukkit API Reference Data
+
+**Decision**: Added two new data sources to `.claude/specs/data/`:
+1. **PrismarineJS 1.21.4** — Entity hitboxes (width/height), food values (hunger/saturation), tool-material mining speeds, status effects. Full zip includes blocks, items, recipes, enchantments, biomes, particles. Source: github.com/PrismarineJS/minecraft-data
+2. **Bukkit/Spigot API Reference** — Curated summary of 318 events across 11 packages (block, entity, player, inventory, world, server, etc.), key interfaces (Player, World, Block, ItemStack, JavaPlugin, BukkitScheduler), plugin lifecycle. Scraped from hub.spigotmc.org/javadocs/bukkit/
+
+**Rationale**: Agents need behavioral data (hitboxes, food values, mining speeds) that misode/mcmeta doesn't provide. Plugin agent needs Bukkit API surface knowledge for compatibility layer design.
+
+**Affects**: Entity (hitboxes, metadata), Items (foods, materials), Core (plugin API), all agents (Bukkit event mapping)
+
+**Status**: COMMITTED (527fef50bcd3)
