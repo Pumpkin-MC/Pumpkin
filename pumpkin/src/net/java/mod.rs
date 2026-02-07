@@ -684,7 +684,16 @@ impl JavaClient {
                     .await;
             }
             id if id == SCustomPayload::PACKET_ID => {
-                // TODO: this fixes Failed to handle player packet id for now
+                let payload_packet = SCustomPayload::read(payload)?;
+                server
+                    .plugin_manager
+                    .fire(
+                        crate::plugin::api::events::server::custom_payload::CustomPayloadEvent::new(
+                            payload_packet.channel,
+                            payload_packet.data,
+                        ),
+                    )
+                    .await;
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);
