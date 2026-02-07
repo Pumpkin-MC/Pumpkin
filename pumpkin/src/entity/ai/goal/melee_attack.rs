@@ -1,7 +1,7 @@
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
 use crate::entity::ai::goal::GoalFuture;
-use crate::entity::ai::path::NavigatorGoal;
+use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
 use pumpkin_util::math::vector3::Vector3;
@@ -20,6 +20,7 @@ pub struct MeleeAttackGoal {
     #[expect(dead_code)]
     attack_interval_ticks: i32,
     last_update_time: i64,
+    last_target_position: Option<Vector3<f64>>,
 }
 
 impl MeleeAttackGoal {
@@ -27,13 +28,14 @@ impl MeleeAttackGoal {
     pub fn new(speed: f64, pause_when_mob_idle: bool) -> Self {
         Self {
             goal_control: Controls::MOVE | Controls::LOOK,
-            speed,
+            speed: speed.max(0.25), // Ensure minimum visible speed
             pause_when_mob_idle,
             target_location: Vector3::new(0.0, 0.0, 0.0),
             update_countdown_ticks: 0,
             cooldown: 0,
             attack_interval_ticks: 20,
             last_update_time: 0,
+            last_target_position: None,
         }
     }
 
@@ -106,11 +108,13 @@ impl Goal for MeleeAttackGoal {
 
             if let Some(target) = mob.get_mob_entity().target.lock().await.as_ref() {
                 let mut navigator = mob.get_mob_entity().navigator.lock().await;
+                let target_pos = target.get_entity().pos.load();
                 navigator.set_progress(NavigatorGoal {
                     current_progress: mob.get_entity().pos.load(),
-                    destination: target.get_entity().pos.load(),
+                    destination: target_pos,
                     speed: self.speed,
                 });
+                self.last_target_position = Some(target_pos);
             }
             self.update_countdown_ticks = 0;
             self.cooldown = 0;
@@ -129,8 +133,7 @@ impl Goal for MeleeAttackGoal {
                 *target = None;
             }
 
-            let mut navigator = mob.get_mob_entity().navigator.lock().await;
-            navigator.cancel();
+            self.last_target_position = None;
         })
     }
 
@@ -140,12 +143,27 @@ impl Goal for MeleeAttackGoal {
             // This code is not Vanilla, tick method needs to be reimplemented
 
             if let Some(target) = mob.get_mob_entity().target.lock().await.as_ref() {
-                let mut navigator = mob.get_mob_entity().navigator.lock().await;
-                navigator.set_progress(NavigatorGoal {
-                    current_progress: mob.get_entity().pos.load(),
-                    destination: target.get_entity().pos.load(),
-                    speed: self.speed,
+                let current_target_pos = target.get_entity().pos.load();
+
+                // Only update navigator if last postion is not set, or target has moved more than 1
+                // block
+                let should_update_nav = self.last_target_position.is_none_or(|last_pos| {
+                    let distance_moved = ((current_target_pos.x - last_pos.x).powi(2)
+                        + (current_target_pos.y - last_pos.y).powi(2)
+                        + (current_target_pos.z - last_pos.z).powi(2))
+                    .sqrt();
+                    distance_moved > 1.0
                 });
+
+                if should_update_nav {
+                    let mut navigator = mob.get_mob_entity().navigator.lock().await;
+                    navigator.set_progress(NavigatorGoal {
+                        current_progress: mob.get_entity().pos.load(),
+                        destination: current_target_pos,
+                        speed: self.speed,
+                    });
+                    self.last_target_position = Some(current_target_pos);
+                }
             }
         })
     }

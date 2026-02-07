@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, NBTStorage, ai::path::Navigator, living::LivingEntity};
+use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
 use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
