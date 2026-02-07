@@ -15,9 +15,9 @@
 //! | Float       | `1.0f` or `1.0F`              |
 //! | Double      | `1.0d` or `1.0D` or `1.0`     |
 //! | String      | `"hello"` or `'hello'` or `hello` |
-//! | ByteArray   | `[B; 1b, 2b, 3b]`            |
-//! | IntArray    | `[I; 1, 2, 3]`               |
-//! | LongArray   | `[L; 1L, 2L, 3L]`            |
+//! | `ByteArray` | `[B; 1b, 2b, 3b]`            |
+//! | `IntArray`  | `[I; 1, 2, 3]`               |
+//! | `LongArray` | `[L; 1L, 2L, 3L]`            |
 //! | List        | `[1, 2, 3]`                   |
 //! | Compound    | `{key: value, key2: value2}`  |
 //!
@@ -127,7 +127,7 @@ struct SnbtParser<'a> {
 }
 
 impl<'a> SnbtParser<'a> {
-    fn new(input: &'a str) -> Self {
+    const fn new(input: &'a str) -> Self {
         Self {
             input: input.as_bytes(),
             pos: 0,
@@ -593,17 +593,17 @@ impl<'a> SnbtParser<'a> {
         }
 
         // Integer (no suffix, no decimal point)
-        if !text.contains('.') {
-            if let Ok(v) = text.parse::<i32>() {
-                return Ok(NbtTag::Int(v));
-            }
+        if !text.contains('.')
+            && let Ok(v) = text.parse::<i32>()
+        {
+            return Ok(NbtTag::Int(v));
         }
 
         // Double (no suffix, has decimal point)
-        if text.contains('.') {
-            if let Ok(v) = text.parse::<f64>() {
-                return Ok(NbtTag::Double(v));
-            }
+        if text.contains('.')
+            && let Ok(v) = text.parse::<f64>()
+        {
+            return Ok(NbtTag::Double(v));
         }
 
         // Fall back to unquoted string

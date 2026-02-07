@@ -22,8 +22,8 @@
 //!
 //! | ID | Method      |
 //! |----|-------------|
-//! | 1  | GZip        |
-//! | 2  | ZLib        |
+//! | 1  | `GZip`      |
+//! | 2  | `ZLib`      |
 //! | 3  | Uncompressed|
 //!
 //! # Example
@@ -67,7 +67,7 @@ pub const DATA_OFFSET: usize = HEADER_SECTORS * SECTOR_BYTES;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CompressionMethod {
-    /// GZip compression (ID 1).
+    /// `GZip` compression (ID 1).
     GZip = 1,
     /// ZLib/Deflate compression (ID 2). This is the default used by vanilla.
     ZLib = 2,
@@ -77,7 +77,7 @@ pub enum CompressionMethod {
 
 impl CompressionMethod {
     /// Parse a compression method from its byte ID.
-    pub fn from_id(id: u8) -> Result<Self, AnvilError> {
+    pub const fn from_id(id: u8) -> Result<Self, AnvilError> {
         match id {
             1 => Ok(Self::GZip),
             2 => Ok(Self::ZLib),
@@ -191,12 +191,12 @@ pub struct ChunkLocation {
 impl ChunkLocation {
     /// Returns `true` if this chunk slot is empty (offset and sector count are both 0).
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.offset == 0 && self.sector_count == 0
     }
 
     /// Decode a location entry from 4 big-endian bytes.
-    fn from_bytes(bytes: [u8; 4]) -> Self {
+    const fn from_bytes(bytes: [u8; 4]) -> Self {
         let offset = ((bytes[0] as u32) << 16) | ((bytes[1] as u32) << 8) | (bytes[2] as u32);
         let sector_count = bytes[3];
         Self {
@@ -206,7 +206,7 @@ impl ChunkLocation {
     }
 
     /// Encode this location entry as 4 big-endian bytes.
-    fn to_bytes(self) -> [u8; 4] {
+    const fn to_bytes(self) -> [u8; 4] {
         [
             ((self.offset >> 16) & 0xFF) as u8,
             ((self.offset >> 8) & 0xFF) as u8,
@@ -244,7 +244,7 @@ impl RegionFile {
         let mut timestamps = [0u32; CHUNK_COUNT];
 
         // Parse location table (first 4096 bytes)
-        for i in 0..CHUNK_COUNT {
+        for (i, location) in locations.iter_mut().enumerate() {
             let base = i * 4;
             let entry_bytes = [
                 bytes[base],
@@ -252,13 +252,13 @@ impl RegionFile {
                 bytes[base + 2],
                 bytes[base + 3],
             ];
-            locations[i] = ChunkLocation::from_bytes(entry_bytes);
+            *location = ChunkLocation::from_bytes(entry_bytes);
         }
 
         // Parse timestamp table (second 4096 bytes)
-        for i in 0..CHUNK_COUNT {
+        for (i, timestamp) in timestamps.iter_mut().enumerate() {
             let base = SECTOR_BYTES + i * 4;
-            timestamps[i] = u32::from_be_bytes([
+            *timestamp = u32::from_be_bytes([
                 bytes[base],
                 bytes[base + 1],
                 bytes[base + 2],
@@ -290,7 +290,7 @@ impl RegionFile {
 
     /// Compute the index into the location/timestamp tables for the given
     /// local chunk coordinates.
-    fn chunk_index(x: u8, z: u8) -> Result<usize, AnvilError> {
+    const fn chunk_index(x: u8, z: u8) -> Result<usize, AnvilError> {
         if x >= REGION_SIZE as u8 || z >= REGION_SIZE as u8 {
             return Err(AnvilError::ChunkOutOfBounds(x, z));
         }
@@ -302,16 +302,16 @@ impl RegionFile {
     /// World chunk (cx, cz) maps to region (cx >> 5, cz >> 5), and local
     /// coordinates are (cx & 31, cz & 31).
     #[must_use]
-    pub fn world_to_local(chunk_x: i32, chunk_z: i32) -> (u8, u8) {
+    pub const fn world_to_local(chunk_x: i32, chunk_z: i32) -> (u8, u8) {
         ((chunk_x & 31) as u8, (chunk_z & 31) as u8)
     }
 
     /// Convert world-space chunk coordinates to the region file coordinates.
     ///
-    /// Returns (region_x, region_z) suitable for constructing the filename
+    /// Returns (`region_x`, `region_z`) suitable for constructing the filename
     /// `r.{region_x}.{region_z}.mca`.
     #[must_use]
-    pub fn chunk_to_region(chunk_x: i32, chunk_z: i32) -> (i32, i32) {
+    pub const fn chunk_to_region(chunk_x: i32, chunk_z: i32) -> (i32, i32) {
         (chunk_x >> 5, chunk_z >> 5)
     }
 
@@ -417,7 +417,7 @@ impl RegionFile {
         let total_with_header = 4 + data_len as usize;
 
         // Calculate sectors needed (round up to SECTOR_BYTES)
-        let sectors_needed = (total_with_header + SECTOR_BYTES - 1) / SECTOR_BYTES;
+        let sectors_needed = total_with_header.div_ceil(SECTOR_BYTES);
         if sectors_needed > 255 {
             return Err(AnvilError::ChunkDataTooLarge {
                 chunk_x: x,
@@ -482,15 +482,15 @@ impl RegionFile {
         new_timestamps[idx] = timestamp;
 
         // Write location table into header
-        for i in 0..CHUNK_COUNT {
-            let bytes = new_locations[i].to_bytes();
+        for (i, loc) in new_locations.iter().enumerate() {
+            let bytes = loc.to_bytes();
             let base = i * 4;
             new_data[base..base + 4].copy_from_slice(&bytes);
         }
 
         // Write timestamp table into header
-        for i in 0..CHUNK_COUNT {
-            let bytes = new_timestamps[i].to_be_bytes();
+        for (i, ts) in new_timestamps.iter().enumerate() {
+            let bytes = ts.to_be_bytes();
             let base = SECTOR_BYTES + i * 4;
             new_data[base..base + 4].copy_from_slice(&bytes);
         }
@@ -533,7 +533,7 @@ impl RegionFile {
         self.locations.iter().filter(|loc| !loc.is_empty()).count()
     }
 
-    /// Iterate over all present chunks, yielding (local_x, local_z) pairs.
+    /// Iterate over all present chunks, yielding (`local_x`, `local_z`) pairs.
     pub fn present_chunks(&self) -> impl Iterator<Item = (u8, u8)> + '_ {
         self.locations.iter().enumerate().filter_map(|(i, loc)| {
             if loc.is_empty() {
