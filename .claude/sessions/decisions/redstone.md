@@ -39,3 +39,19 @@
 **Rationale:** `update_neighbors` is the main multi-direction dispatch that has both source and target positions. Adding `source_position` to `update_neighbor` would require changing all callers across the codebase.
 **Affects:** Redstone, Plugin, Core
 **Status:** active
+
+## RED-006: BlockBurnEvent fires in try_spreading_fire only
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/006_redstone_arch032-event-wiring.md
+**Decision:** BlockBurnEvent fires in `fire.rs::try_spreading_fire` before the flammable block is consumed. The triple-nested spread loop in `on_scheduled_tick` is NOT a burn point — it only targets AIR positions via `get_burn_chance` which returns 0 for non-air blocks.
+**Rationale:** The triple loop places fire at empty spaces near flammable blocks; it doesn't destroy blocks. Only `try_spreading_fire` actually replaces a flammable block with fire/air (the "burn" action).
+**Affects:** Redstone, Plugin
+**Status:** active
+
+## RED-007: BlockFromToEvent deferred — no liquid flow implementation
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/006_redstone_arch032-event-wiring.md
+**Decision:** BlockFromToEvent is not wired. No liquid flow system, dragon egg teleportation, or fluid/ directory exists in Pumpkin. Event struct is ready in plugin/api/events/block/block_from_to.rs.
+**Rationale:** Cannot fire an event when the underlying game mechanic doesn't exist. Will wire when flow logic is implemented.
+**Affects:** Redstone, Core, WorldGen
+**Status:** active

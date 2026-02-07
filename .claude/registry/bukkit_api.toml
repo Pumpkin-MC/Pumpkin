@@ -9,9 +9,9 @@ source_url = "https://hub.spigotmc.org/javadocs/bukkit/"
 total_events = 283
 total_interfaces = 9
 total_enums = 5
-pumpkin_implemented = 32
+pumpkin_implemented = 34
 pumpkin_stub = 1
-pumpkin_missing = 248
+pumpkin_missing = 246
 note = "Bukkit header says 318 but 37 of those are inner enums (DamageCause, SpawnReason, etc.), not events"
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -178,10 +178,10 @@ owner = "world"
 name = "BlockGrowEvent"
 package = "org.bukkit.event.block"
 cancellable = true
-rust_equivalent = ""
-rust_path = ""
+rust_equivalent = "BlockGrowEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_grow.rs"
 fields = [{ name = "newState", java_type = "BlockState", rust_type = "" }]
-status = "missing"
+status = "implemented"
 priority = "medium"
 owner = "world"
 
@@ -274,7 +274,9 @@ owner = "items"
 name = "BlockFadeEvent"
 package = "org.bukkit.event.block"
 cancellable = true
-status = "missing"
+rust_equivalent = "BlockFadeEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_fade.rs"
+status = "implemented"
 owner = "world"
 
 [[events]]
