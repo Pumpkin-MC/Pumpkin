@@ -152,3 +152,46 @@ loot tables, mob drops, worldgen, and tags without guessing.
 **Rationale:** The DTO is a protocol concern — it translates wire formats. Keeping it in pumpkin-protocol/ maintains the single-crate boundary for network serialization. Purely additive module, zero changes to existing code.
 **Affects:** Protocol
 **Status:** active — DEFERRED (Phase 2)
+
+## ARCH-020: PatchBukkit transcode + Storage DTO + LanceDB option
+**Date:** 2026-02-07
+**Decision:** Two-pronged architectural enhancement:
+
+**Prong 1 — PatchBukkit Transcode:** Instead of maintaining a separate Java-bridge repo (JVM embedding + protobuf FFI), transcode PatchBukkit's Bukkit API knowledge into pure Rust. Harvest the event mapping catalog, API surface definitions, and plugin lifecycle from PatchBukkit's proto/Java/Rust layers and encode it as Rust trait impls in pumpkin's plugin system. This eliminates the JVM dependency for servers that only need Rust plugins while preserving Bukkit API compatibility at the type level.
+
+**Prong 2 — Storage DTO with pluggable backends:** Abstract game data access behind a `GameDataStore` trait with two backend implementations:
+1. **TOML/YAML backend** — Human-editable, file-based. For configs, small registries, dev/modding use.
+2. **LanceDB backend** — Embedded columnar DB (no server process). Zero-copy via Apache Arrow IPC. For high-performance queries over large registries (26K+ block states, 1470 recipes, 149 entities, loot tables). DataFusion provides SQL query capability over Arrow RecordBatches.
+
+**Key crates:** `lancedb` v0.21.3+ (embedded), `arrow` v55+ (zero-copy), `datafusion` v51+ (SQL engine)
+
+**Storage DTO trait sketch:**
+```rust
+#[async_trait]
+trait GameDataStore: Send + Sync {
+    async fn blocks(&self) -> &dyn BlockRegistry;
+    async fn items(&self) -> &dyn ItemRegistry;
+    async fn recipes(&self) -> &dyn RecipeRegistry;
+    async fn entities(&self) -> &dyn EntityRegistry;
+    async fn query(&self, sql: &str) -> Result<RecordBatch>; // DataFusion SQL
+}
+```
+
+**LanceDB benefits for Pumpkin:**
+- Embedded (in-process, no daemon) — aligns with self-contained server model
+- Zero-copy Arrow IPC between subsystems (world gen ↔ entity ↔ protocol)
+- Columnar format ideal for batch operations (e.g., "all stone variants in chunk")
+- Built-in versioning for snapshot/rollback of game state
+- DataFusion SQL for admin/plugin queries ("what recipes use iron ingot?")
+
+**Migration path:**
+1. Define `GameDataStore` trait in `pumpkin-util/` or new `pumpkin-store/` crate
+2. Implement TOML/YAML backend first (wraps current pumpkin-data generated arrays)
+3. Implement LanceDB backend (imports same JSON source data into Lance format at build time)
+4. Feature-flag selection: `--features lance-store` vs default TOML
+5. Transcode PatchBukkit proto definitions → Rust DTO structs for the storage layer
+
+**Rationale:** PatchBukkit's JVM bridge is the right design for running actual Java plugins, but for pure-Rust servers the JVM is dead weight. Transcoding the API knowledge into Rust DTOs with a pluggable storage backend gives us: (a) Bukkit-compatible API surface without JVM, (b) zero-copy data access via Arrow, (c) SQL query capability for plugins/admin, (d) human-editable fallback via TOML/YAML.
+
+**Affects:** All agents (new data access pattern), Plugin (API surface), Storage (backend impl), Items (recipe queries), Core (data loading)
+**Status:** PROPOSED — requires human operator approval before implementation

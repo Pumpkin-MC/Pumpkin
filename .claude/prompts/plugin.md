@@ -101,6 +101,31 @@ void setCancelled(boolean cancel); // Rust: Cancellable::set_cancelled()
 3. **Don't expose internals**: The API is a view, not a reference to internal state.
 4. **Bukkit as reference, not gospel**: Use Bukkit's event model as inspiration for what events to offer, not how to implement them.
 
+## PatchBukkit Coordination (Dual-Consumer Pattern)
+
+Your events have **two consumers**, not one:
+
+1. **Native Rust plugins** — use your event traits directly (`EventHandler<T>`, `Payload`, `Cancellable`)
+2. **Java Bukkit/Spigot/Paper plugins** — via [PatchBukkit](https://github.com/AdaWorldAPI/PatchBukkit), a Rust cdylib that embeds a JVM and bridges events over Protocol Buffers
+
+### How PatchBukkit works
+
+- `rust/src/events/handler.rs` — `PatchBukkitEvent` trait: `to_payload() -> Vec<u8>` (serialize to protobuf) + `apply_modifications(bytes)` (deserialize cancellation/field changes from Java side)
+- `proto/patchbukkit/events/` — .proto definitions for each bridged event
+- `rust/src/events/` — `PatchBukkitEventHandler<E>` implements `EventHandler<E>` from pumpkin-api-macros, serializes to protobuf, sends to JVM worker, applies Java plugin's response
+
+### What this means for you
+
+- Every Pumpkin event you define should have a **corresponding .proto message** in PatchBukkit
+- The `PatchBukkitEvent` trait maps 1:1 with your `Payload` trait fields
+- Currently only `PlayerJoinEvent` is wired — every new event you add is a new event PatchBukkit needs
+- When adding events, document the proto schema needed in your session log under "PatchBukkit Proto Needed"
+- Cancellable events are critical: PatchBukkit's `apply_modifications()` reads cancellation state from Java
+
+### You do NOT need to write PatchBukkit code
+
+PatchBukkit lives in a separate repo. Your job is to **define clean, stable event structs** that PatchBukkit can map to protobuf. Keep field types simple (primitives, strings, Vec<u8>) so serialization is straightforward.
+
 ## Reference Data
 
 - `.claude/reference/plugin-data.md` — your agent reference package (event system, API surface, Mindcraft, Bukkit events)
