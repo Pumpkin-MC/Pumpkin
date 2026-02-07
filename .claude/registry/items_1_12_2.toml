@@ -1,0 +1,790 @@
+# .claude/registry/items_1_12_2.toml
+# Items & enchantments registry for MC 1.12.2 (pre-Flattening)
+# Source: PrismarineJS minecraft-data (1.12 base)
+# Date: 2026-02-07
+
+[meta]
+mc_version = "1.12.2"
+source = "PrismarineJS minecraft-data (1.12 base)"
+total_items = 410
+total_enchantments = 30
+total_effects = 27
+total_foods = 31
+delta_vs_1_21_4 = "+1049 items, +12 enchantments in 1.21.4"
+note = "Pre-Flattening: uses numeric IDs. 74 items renamed/removed in The Flattening (1.13)"
+
+# ============================================================================
+# Enchantments (30 entries)
+# ============================================================================
+
+[[enchantments]]
+id = 0
+name = "protection"
+display_name = "Protection"
+max_level = 4
+category = "armor"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 1
+name = "fire_protection"
+display_name = "Fire Protection"
+max_level = 4
+category = "armor"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 2
+name = "feather_falling"
+display_name = "Feather Falling"
+max_level = 4
+category = "armor_feet"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 3
+name = "blast_protection"
+display_name = "Blast Protection"
+max_level = 4
+category = "armor"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 4
+name = "projectile_protection"
+display_name = "Projectile Protection"
+max_level = 4
+category = "armor"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 5
+name = "respiration"
+display_name = "Respiration"
+max_level = 3
+category = "armor_head"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 6
+name = "aqua_affinity"
+display_name = "Aqua Affinity"
+max_level = 1
+category = "armor_head"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 7
+name = "thorns"
+display_name = "Thorns"
+max_level = 3
+category = "armor_chest"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 8
+name = "depth_strider"
+display_name = "Depth Strider"
+max_level = 3
+category = "armor_feet"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 9
+name = "frost_walker"
+display_name = "Frost Walker"
+max_level = 2
+category = "armor_feet"
+treasure_only = true
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 10
+name = "binding_curse"
+display_name = "Curse of Binding"
+max_level = 1
+category = "wearable"
+treasure_only = true
+curse = true
+in_1_21_4 = true
+
+[[enchantments]]
+id = 16
+name = "sharpness"
+display_name = "Sharpness"
+max_level = 5
+category = "weapon"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 17
+name = "smite"
+display_name = "Smite"
+max_level = 5
+category = "weapon"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 18
+name = "bane_of_arthropods"
+display_name = "Bane of Arthropods"
+max_level = 5
+category = "weapon"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 19
+name = "knockback"
+display_name = "Knockback"
+max_level = 2
+category = "weapon"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 20
+name = "fire_aspect"
+display_name = "Fire Aspect"
+max_level = 2
+category = "weapon"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 21
+name = "looting"
+display_name = "Looting"
+max_level = 3
+category = "weapon"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 22
+name = "sweeping"
+display_name = "Sweeping Edge"
+max_level = 3
+category = "weapon"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 32
+name = "efficiency"
+display_name = "Efficiency"
+max_level = 5
+category = "digger"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 33
+name = "silk_touch"
+display_name = "Silk Touch"
+max_level = 1
+category = "digger"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 34
+name = "unbreaking"
+display_name = "Unbreaking"
+max_level = 3
+category = "breakable"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 35
+name = "fortune"
+display_name = "Fortune"
+max_level = 3
+category = "digger"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 48
+name = "power"
+display_name = "Power"
+max_level = 5
+category = "bow"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 49
+name = "punch"
+display_name = "Punch"
+max_level = 2
+category = "bow"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 50
+name = "flame"
+display_name = "Flame"
+max_level = 1
+category = "bow"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 51
+name = "infinity"
+display_name = "Infinity"
+max_level = 1
+category = "bow"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 61
+name = "luck_of_the_sea"
+display_name = "Luck of the Sea"
+max_level = 3
+category = "fishing_rod"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 62
+name = "lure"
+display_name = "Lure"
+max_level = 3
+category = "fishing_rod"
+treasure_only = false
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 70
+name = "mending"
+display_name = "Mending"
+max_level = 1
+category = "breakable"
+treasure_only = true
+curse = false
+in_1_21_4 = true
+
+[[enchantments]]
+id = 71
+name = "vanishing_curse"
+display_name = "Curse of Vanishing"
+max_level = 1
+category = "vanishable"
+treasure_only = true
+curse = true
+in_1_21_4 = true
+
+# ============================================================================
+# Effects (27 entries)
+# ============================================================================
+
+[[effects]]
+id = 1
+name = "Speed"
+display_name = "Speed"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 2
+name = "Slowness"
+display_name = "Slowness"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 3
+name = "Haste"
+display_name = "Haste"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 4
+name = "MiningFatigue"
+display_name = "Mining Fatigue"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 5
+name = "Strength"
+display_name = "Strength"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 6
+name = "InstantHealth"
+display_name = "Instant Health"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 7
+name = "InstantDamage"
+display_name = "Instant Damage"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 8
+name = "JumpBoost"
+display_name = "Jump Boost"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 9
+name = "Nausea"
+display_name = "Nausea"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 10
+name = "Regeneration"
+display_name = "Regeneration"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 11
+name = "Resistance"
+display_name = "Resistance"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 12
+name = "FireResistance"
+display_name = "Fire Resistance"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 13
+name = "WaterBreathing"
+display_name = "Water Breathing"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 14
+name = "Invisibility"
+display_name = "Invisibility"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 15
+name = "Blindness"
+display_name = "Blindness"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 16
+name = "NightVision"
+display_name = "Night Vision"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 17
+name = "Hunger"
+display_name = "Hunger"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 18
+name = "Weakness"
+display_name = "Weakness"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 19
+name = "Poison"
+display_name = "Poison"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 20
+name = "Wither"
+display_name = "Wither"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 21
+name = "HealthBoost"
+display_name = "Health Boost"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 22
+name = "Absorption"
+display_name = "Absorption"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 23
+name = "Saturation"
+display_name = "Saturation"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 24
+name = "Glowing"
+display_name = "Glowing"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 25
+name = "Levitation"
+display_name = "Levitation"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 26
+name = "Luck"
+display_name = "Luck"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 27
+name = "BadLuck"
+display_name = "Bad Luck"
+type = "bad"
+in_1_21_4 = false
+renamed_in_1_21_4 = "Unluck"
+
+# ============================================================================
+# Foods (31 entries)
+# ============================================================================
+
+[[foods]]
+id = 103
+name = "melon_block"
+display_name = "Melon"
+food_points = 2
+saturation = 1.2
+in_1_21_4 = true
+
+[[foods]]
+id = 141
+name = "carrots"
+display_name = "Carrot"
+food_points = 3
+saturation = 3.6
+in_1_21_4 = true
+
+[[foods]]
+id = 142
+name = "potatoes"
+display_name = "Potato"
+food_points = 1
+saturation = 0.6
+in_1_21_4 = true
+
+[[foods]]
+id = 260
+name = "apple"
+display_name = "Apple"
+food_points = 4
+saturation = 2.4
+in_1_21_4 = true
+
+[[foods]]
+id = 282
+name = "mushroom_stew"
+display_name = "Mushroom Stew"
+food_points = 6
+saturation = 7.2
+in_1_21_4 = true
+
+[[foods]]
+id = 297
+name = "bread"
+display_name = "Bread"
+food_points = 5
+saturation = 6.0
+in_1_21_4 = true
+
+[[foods]]
+id = 319
+name = "porkchop"
+display_name = "Raw Porkchop"
+food_points = 3
+saturation = 1.8
+in_1_21_4 = true
+
+[[foods]]
+id = 320
+name = "cooked_porkchop"
+display_name = "Cooked Porkchop"
+food_points = 8
+saturation = 12.8
+in_1_21_4 = true
+
+[[foods]]
+id = 322
+name = "golden_apple"
+display_name = "Golden Apple"
+food_points = 4
+saturation = 9.6
+in_1_21_4 = true
+
+[[foods]]
+id = 349
+name = "fish"
+display_name = "Raw Fish"
+food_points = 2
+saturation = 0.4
+in_1_21_4 = true
+
+[[foods]]
+id = 350
+name = "cooked_fish"
+display_name = "Cooked Fish"
+food_points = 5
+saturation = 6.0
+in_1_21_4 = true
+
+[[foods]]
+id = 354
+name = "cake"
+display_name = "Cake"
+food_points = 2
+saturation = 0.4
+in_1_21_4 = true
+
+[[foods]]
+id = 357
+name = "cookie"
+display_name = "Cookie"
+food_points = 2
+saturation = 0.4
+in_1_21_4 = true
+
+[[foods]]
+id = 363
+name = "beef"
+display_name = "Raw Beef"
+food_points = 3
+saturation = 1.8
+in_1_21_4 = true
+
+[[foods]]
+id = 364
+name = "cooked_beef"
+display_name = "Steak"
+food_points = 8
+saturation = 12.8
+in_1_21_4 = true
+
+[[foods]]
+id = 365
+name = "chicken"
+display_name = "Raw Chicken"
+food_points = 2
+saturation = 1.2
+in_1_21_4 = true
+
+[[foods]]
+id = 366
+name = "cooked_chicken"
+display_name = "Cooked Chicken"
+food_points = 6
+saturation = 7.2
+in_1_21_4 = true
+
+[[foods]]
+id = 367
+name = "rotten_flesh"
+display_name = "Rotten Flesh"
+food_points = 4
+saturation = 0.8
+in_1_21_4 = true
+
+[[foods]]
+id = 375
+name = "spider_eye"
+display_name = "Spider Eye"
+food_points = 2
+saturation = 3.2
+in_1_21_4 = true
+
+[[foods]]
+id = 393
+name = "baked_potato"
+display_name = "Baked Potato"
+food_points = 5
+saturation = 6.0
+in_1_21_4 = true
+
+[[foods]]
+id = 394
+name = "poisonous_potato"
+display_name = "Poisonous Potato"
+food_points = 2
+saturation = 1.2
+in_1_21_4 = true
+
+[[foods]]
+id = 396
+name = "golden_carrot"
+display_name = "Golden Carrot"
+food_points = 6
+saturation = 14.4
+in_1_21_4 = true
+
+[[foods]]
+id = 400
+name = "pumpkin_pie"
+display_name = "Pumpkin Pie"
+food_points = 8
+saturation = 4.8
+in_1_21_4 = true
+
+[[foods]]
+id = 411
+name = "rabbit"
+display_name = "Raw Rabbit"
+food_points = 3
+saturation = 1.8
+in_1_21_4 = true
+
+[[foods]]
+id = 412
+name = "cooked_rabbit"
+display_name = "Cooked Rabbit"
+food_points = 5
+saturation = 6.0
+in_1_21_4 = true
+
+[[foods]]
+id = 413
+name = "rabbit_stew"
+display_name = "Rabbit Stew"
+food_points = 10
+saturation = 12.0
+in_1_21_4 = true
+
+[[foods]]
+id = 423
+name = "mutton"
+display_name = "Raw Mutton"
+food_points = 2
+saturation = 1.2
+in_1_21_4 = true
+
+[[foods]]
+id = 424
+name = "cooked_mutton"
+display_name = "Cooked Mutton"
+food_points = 6
+saturation = 9.6
+in_1_21_4 = true
+
+[[foods]]
+id = 432
+name = "chorus_fruit"
+display_name = "Chorus Fruit"
+food_points = 4
+saturation = 2.4
+in_1_21_4 = true
+
+[[foods]]
+id = 434
+name = "beetroot"
+display_name = "Beetroot"
+food_points = 1
+saturation = 1.2
+in_1_21_4 = true
+
+[[foods]]
+id = 436
+name = "beetroot_soup"
+display_name = "Beetroot Soup"
+food_points = 6
+saturation = 7.2
+in_1_21_4 = true

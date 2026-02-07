@@ -1,0 +1,234 @@
+[
+  {
+    "id": 0,
+    "name": "ambient_entity_effect"
+  },
+  {
+    "id": 1,
+    "name": "angry_villager"
+  },
+  {
+    "id": 2,
+    "name": "barrier"
+  },
+  {
+    "id": 3,
+    "name": "block"
+  },
+  {
+    "id": 4,
+    "name": "bubble"
+  },
+  {
+    "id": 5,
+    "name": "cloud"
+  },
+  {
+    "id": 6,
+    "name": "crit"
+  },
+  {
+    "id": 7,
+    "name": "damage_indicator"
+  },
+  {
+    "id": 8,
+    "name": "dragon_breath"
+  },
+  {
+    "id": 9,
+    "name": "dripping_lava"
+  },
+  {
+    "id": 10,
+    "name": "falling_lava"
+  },
+  {
+    "id": 11,
+    "name": "landing_lava"
+  },
+  {
+    "id": 12,
+    "name": "dripping_water"
+  },
+  {
+    "id": 13,
+    "name": "falling_water"
+  },
+  {
+    "id": 14,
+    "name": "dust"
+  },
+  {
+    "id": 15,
+    "name": "effect"
+  },
+  {
+    "id": 16,
+    "name": "elder_guardian"
+  },
+  {
+    "id": 17,
+    "name": "enchanted_hit"
+  },
+  {
+    "id": 18,
+    "name": "enchant"
+  },
+  {
+    "id": 19,
+    "name": "end_rod"
+  },
+  {
+    "id": 20,
+    "name": "entity_effect"
+  },
+  {
+    "id": 21,
+    "name": "explosion_emitter"
+  },
+  {
+    "id": 22,
+    "name": "explosion"
+  },
+  {
+    "id": 23,
+    "name": "falling_dust"
+  },
+  {
+    "id": 24,
+    "name": "firework"
+  },
+  {
+    "id": 25,
+    "name": "fishing"
+  },
+  {
+    "id": 26,
+    "name": "flame"
+  },
+  {
+    "id": 27,
+    "name": "flash"
+  },
+  {
+    "id": 28,
+    "name": "happy_villager"
+  },
+  {
+    "id": 29,
+    "name": "composter"
+  },
+  {
+    "id": 30,
+    "name": "heart"
+  },
+  {
+    "id": 31,
+    "name": "instant_effect"
+  },
+  {
+    "id": 32,
+    "name": "item"
+  },
+  {
+    "id": 33,
+    "name": "item_slime"
+  },
+  {
+    "id": 34,
+    "name": "item_snowball"
+  },
+  {
+    "id": 35,
+    "name": "large_smoke"
+  },
+  {
+    "id": 36,
+    "name": "lava"
+  },
+  {
+    "id": 37,
+    "name": "mycelium"
+  },
+  {
+    "id": 38,
+    "name": "note"
+  },
+  {
+    "id": 39,
+    "name": "poof"
+  },
+  {
+    "id": 40,
+    "name": "portal"
+  },
+  {
+    "id": 41,
+    "name": "rain"
+  },
+  {
+    "id": 42,
+    "name": "smoke"
+  },
+  {
+    "id": 43,
+    "name": "sneeze"
+  },
+  {
+    "id": 44,
+    "name": "spit"
+  },
+  {
+    "id": 45,
+    "name": "squid_ink"
+  },
+  {
+    "id": 46,
+    "name": "sweep_attack"
+  },
+  {
+    "id": 47,
+    "name": "totem_of_undying"
+  },
+  {
+    "id": 48,
+    "name": "underwater"
+  },
+  {
+    "id": 49,
+    "name": "splash"
+  },
+  {
+    "id": 50,
+    "name": "witch"
+  },
+  {
+    "id": 51,
+    "name": "bubble_pop"
+  },
+  {
+    "id": 52,
+    "name": "current_down"
+  },
+  {
+    "id": 53,
+    "name": "bubble_column_up"
+  },
+  {
+    "id": 54,
+    "name": "nautilus"
+  },
+  {
+    "id": 55,
+    "name": "dolphin"
+  },
+  {
+    "id": 56,
+    "name": "campfire_cosy_smoke"
+  },
+  {
+    "id": 57,
+    "name": "campfire_signal_smoke"
+  }
+]

@@ -1,0 +1,669 @@
+[
+  {
+    "id": 0,
+    "name": "protection",
+    "displayName": "Protection",
+    "maxLevel": 4,
+    "minCost": {
+      "a": 11,
+      "b": -10
+    },
+    "maxCost": {
+      "a": 11,
+      "b": 1
+    },
+    "exclude": [
+      "blast_protection",
+      "fire_protection",
+      "projectile_protection"
+    ],
+    "category": "armor",
+    "weight": 10,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 1,
+    "name": "fire_protection",
+    "displayName": "Fire Protection",
+    "maxLevel": 4,
+    "minCost": {
+      "a": 8,
+      "b": 2
+    },
+    "maxCost": {
+      "a": 8,
+      "b": 10
+    },
+    "exclude": [
+      "blast_protection",
+      "protection",
+      "projectile_protection"
+    ],
+    "category": "armor",
+    "weight": 5,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 2,
+    "name": "feather_falling",
+    "displayName": "Feather Falling",
+    "maxLevel": 4,
+    "minCost": {
+      "a": 6,
+      "b": -1
+    },
+    "maxCost": {
+      "a": 6,
+      "b": 5
+    },
+    "exclude": [],
+    "category": "armor_feet",
+    "weight": 5,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 3,
+    "name": "blast_protection",
+    "displayName": "Blast Protection",
+    "maxLevel": 4,
+    "minCost": {
+      "a": 8,
+      "b": -3
+    },
+    "maxCost": {
+      "a": 8,
+      "b": 5
+    },
+    "exclude": [
+      "fire_protection",
+      "protection",
+      "projectile_protection"
+    ],
+    "category": "armor",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 4,
+    "name": "projectile_protection",
+    "displayName": "Projectile Protection",
+    "maxLevel": 4,
+    "minCost": {
+      "a": 6,
+      "b": -3
+    },
+    "maxCost": {
+      "a": 6,
+      "b": 3
+    },
+    "exclude": [
+      "protection",
+      "blast_protection",
+      "fire_protection"
+    ],
+    "category": "armor",
+    "weight": 5,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 5,
+    "name": "respiration",
+    "displayName": "Respiration",
+    "maxLevel": 3,
+    "minCost": {
+      "a": 10,
+      "b": 0
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 30
+    },
+    "exclude": [],
+    "category": "armor_head",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 6,
+    "name": "aqua_affinity",
+    "displayName": "Aqua Affinity",
+    "maxLevel": 1,
+    "minCost": {
+      "a": 0,
+      "b": 1
+    },
+    "maxCost": {
+      "a": 0,
+      "b": 41
+    },
+    "exclude": [],
+    "category": "armor_head",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 7,
+    "name": "thorns",
+    "displayName": "Thorns",
+    "maxLevel": 3,
+    "minCost": {
+      "a": 20,
+      "b": -10
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 51
+    },
+    "exclude": [],
+    "category": "armor_chest",
+    "weight": 1,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 8,
+    "name": "depth_strider",
+    "displayName": "Depth Strider",
+    "maxLevel": 3,
+    "minCost": {
+      "a": 10,
+      "b": 0
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 15
+    },
+    "exclude": [
+      "frost_walker"
+    ],
+    "category": "armor_feet",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 9,
+    "name": "frost_walker",
+    "displayName": "Frost Walker",
+    "maxLevel": 2,
+    "minCost": {
+      "a": 10,
+      "b": 0
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 15
+    },
+    "exclude": [
+      "depth_strider"
+    ],
+    "category": "armor_feet",
+    "weight": 2,
+    "treasureOnly": true,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 10,
+    "name": "binding_curse",
+    "displayName": "Curse of Binding",
+    "maxLevel": 1,
+    "minCost": {
+      "a": 0,
+      "b": 25
+    },
+    "maxCost": {
+      "a": 0,
+      "b": 50
+    },
+    "exclude": [],
+    "category": "wearable",
+    "weight": 1,
+    "treasureOnly": true,
+    "curse": true,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 16,
+    "name": "sharpness",
+    "displayName": "Sharpness",
+    "maxLevel": 5,
+    "minCost": {
+      "a": 11,
+      "b": -10
+    },
+    "maxCost": {
+      "a": 11,
+      "b": 10
+    },
+    "exclude": [
+      "smite",
+      "bane_of_arthropods"
+    ],
+    "category": "weapon",
+    "weight": 10,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 17,
+    "name": "smite",
+    "displayName": "Smite",
+    "maxLevel": 5,
+    "minCost": {
+      "a": 8,
+      "b": -3
+    },
+    "maxCost": {
+      "a": 8,
+      "b": 17
+    },
+    "exclude": [
+      "sharpness",
+      "bane_of_arthropods"
+    ],
+    "category": "weapon",
+    "weight": 5,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 18,
+    "name": "bane_of_arthropods",
+    "displayName": "Bane of Arthropods",
+    "maxLevel": 5,
+    "minCost": {
+      "a": 8,
+      "b": -3
+    },
+    "maxCost": {
+      "a": 8,
+      "b": 17
+    },
+    "exclude": [
+      "smite",
+      "sharpness"
+    ],
+    "category": "weapon",
+    "weight": 5,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 19,
+    "name": "knockback",
+    "displayName": "Knockback",
+    "maxLevel": 2,
+    "minCost": {
+      "a": 20,
+      "b": -15
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 51
+    },
+    "exclude": [],
+    "category": "weapon",
+    "weight": 5,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 20,
+    "name": "fire_aspect",
+    "displayName": "Fire Aspect",
+    "maxLevel": 2,
+    "minCost": {
+      "a": 20,
+      "b": -10
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 51
+    },
+    "exclude": [],
+    "category": "weapon",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 21,
+    "name": "looting",
+    "displayName": "Looting",
+    "maxLevel": 3,
+    "minCost": {
+      "a": 9,
+      "b": 6
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 51
+    },
+    "exclude": [],
+    "category": "weapon",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 22,
+    "name": "sweeping",
+    "displayName": "Sweeping Edge",
+    "maxLevel": 3,
+    "minCost": {
+      "a": 9,
+      "b": -4
+    },
+    "maxCost": {
+      "a": 9,
+      "b": 11
+    },
+    "exclude": [],
+    "category": "weapon",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 32,
+    "name": "efficiency",
+    "displayName": "Efficiency",
+    "maxLevel": 5,
+    "minCost": {
+      "a": 10,
+      "b": -9
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 51
+    },
+    "exclude": [],
+    "category": "digger",
+    "weight": 10,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 33,
+    "name": "silk_touch",
+    "displayName": "Silk Touch",
+    "maxLevel": 1,
+    "minCost": {
+      "a": 0,
+      "b": 15
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 51
+    },
+    "exclude": [
+      "fortune"
+    ],
+    "category": "digger",
+    "weight": 1,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 34,
+    "name": "unbreaking",
+    "displayName": "Unbreaking",
+    "maxLevel": 3,
+    "minCost": {
+      "a": 8,
+      "b": -3
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 51
+    },
+    "exclude": [],
+    "category": "breakable",
+    "weight": 5,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 35,
+    "name": "fortune",
+    "displayName": "Fortune",
+    "maxLevel": 3,
+    "minCost": {
+      "a": 9,
+      "b": 6
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 51
+    },
+    "exclude": [
+      "silk_touch"
+    ],
+    "category": "digger",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 48,
+    "name": "power",
+    "displayName": "Power",
+    "maxLevel": 5,
+    "minCost": {
+      "a": 10,
+      "b": -9
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 6
+    },
+    "exclude": [],
+    "category": "bow",
+    "weight": 10,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 49,
+    "name": "punch",
+    "displayName": "Punch",
+    "maxLevel": 2,
+    "minCost": {
+      "a": 20,
+      "b": -8
+    },
+    "maxCost": {
+      "a": 20,
+      "b": 17
+    },
+    "exclude": [],
+    "category": "bow",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 50,
+    "name": "flame",
+    "displayName": "Flame",
+    "maxLevel": 1,
+    "minCost": {
+      "a": 0,
+      "b": 20
+    },
+    "maxCost": {
+      "a": 0,
+      "b": 50
+    },
+    "exclude": [],
+    "category": "bow",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 51,
+    "name": "infinity",
+    "displayName": "Infinity",
+    "maxLevel": 1,
+    "minCost": {
+      "a": 0,
+      "b": 20
+    },
+    "maxCost": {
+      "a": 0,
+      "b": 50
+    },
+    "exclude": [
+      "mending"
+    ],
+    "category": "bow",
+    "weight": 1,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 61,
+    "name": "luck_of_the_sea",
+    "displayName": "Luck of the Sea",
+    "maxLevel": 3,
+    "minCost": {
+      "a": 9,
+      "b": 6
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 51
+    },
+    "exclude": [],
+    "category": "fishing_rod",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 62,
+    "name": "lure",
+    "displayName": "Lure",
+    "maxLevel": 3,
+    "minCost": {
+      "a": 9,
+      "b": 6
+    },
+    "maxCost": {
+      "a": 10,
+      "b": 51
+    },
+    "exclude": [],
+    "category": "fishing_rod",
+    "weight": 2,
+    "treasureOnly": false,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 70,
+    "name": "mending",
+    "displayName": "Mending",
+    "maxLevel": 1,
+    "minCost": {
+      "a": 25,
+      "b": 0
+    },
+    "maxCost": {
+      "a": 25,
+      "b": 50
+    },
+    "exclude": [
+      "infinity"
+    ],
+    "category": "breakable",
+    "weight": 2,
+    "treasureOnly": true,
+    "curse": false,
+    "tradeable": true,
+    "discoverable": true
+  },
+  {
+    "id": 71,
+    "name": "vanishing_curse",
+    "displayName": "Curse of Vanishing",
+    "maxLevel": 1,
+    "minCost": {
+      "a": 0,
+      "b": 25
+    },
+    "maxCost": {
+      "a": 0,
+      "b": 50
+    },
+    "exclude": [],
+    "category": "vanishable",
+    "weight": 1,
+    "treasureOnly": true,
+    "curse": true,
+    "tradeable": true,
+    "discoverable": true
+  }
+]

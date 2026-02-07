@@ -8,7 +8,10 @@
 |--------|---------|----------|-------|
 | Mojang vanilla (misode/mcmeta) | 1.21.4 | — | Blocks, recipes, loot tables, worldgen, damage types, tags |
 | PrismarineJS (minecraft-data) | 1.21.4 | — | Entities, foods, effects, materials, enchantments |
-| PrismarineJS (minecraft-data) | 1.16.5 | 754 | Multi-version baseline: 108 entities, 763 blocks, 975 items |
+| PrismarineJS (minecraft-data) | 1.18.2 | 758 | Caves & Cliffs II: 113 entities, 898 blocks, 1100 items |
+| PrismarineJS (minecraft-data) | 1.16.5 | 754 | Nether Update: 108 entities, 763 blocks, 975 items |
+| PrismarineJS (minecraft-data) | 1.14.4 | 498 | Village & Pillage: 102 entities, 676 blocks, 876 items |
+| PrismarineJS (minecraft-data) | 1.12.2 | 340 | Pre-Flattening: 84 entities, 254 blocks, 410 items |
 | Bukkit/Spigot API | 1.21.11 | 774 | 318 events, plugin lifecycle, scheduler |
 | Pumpkin target | 1.21.11 | 772–774 | Current supported range |
 
@@ -32,6 +35,17 @@ Pumpkin currently supports **1.21.7–1.21.11** (protocol 772–774). Only packe
 - **Tier 2:** Back to 1.18 — add chunk format + world height translation
 - **Tier 3 (ViaVersion-scale):** Back to 1.12.2 — full packet rewriting
 
+**Cross-version data matrix:**
+
+| Category | 1.12.2 | 1.14.4 | 1.16.5 | 1.18.2 | 1.21.4 |
+|----------|--------|--------|--------|--------|--------|
+| Entities | 84 | 102 | 108 | 113 | 149 |
+| Blocks | 254 | 676 | 763 | 898 | 1095 |
+| Items | 410 | 876 | 975 | 1100 | 1385 |
+| Effects | 27 | 33 | 33 | 33 | 39 |
+| Enchantments | 30 | 30 | 38 | 38 | 42 |
+| Biomes | 62 | 75 | 79 | 61 | 135 |
+
 All reference packages below are tagged **MC 1.21.4** unless noted.
 
 ---
@@ -47,9 +61,16 @@ The source of truth. Agents grep these to find their backlog.
 | **Items** | `.claude/registry/items.toml` | 1385 items, 42 enchantments, 1370 recipes, 1237 loot tables |
 | **Blocks** | `.claude/registry/blocks.toml` | 1095 blocks (198 types), 135 biomes, 47 structures |
 | | | |
-| *1.16.5 (multi-version baseline)* | | |
+| | | |
+| *Multi-version baselines* | | |
+| **Entities 1.18.2** | `.claude/registry/entities_1_18_2.toml` | 113 entities, 33 effects, 40 foods with delta vs 1.21.4 |
+| **Items 1.18.2** | `.claude/registry/items_1_18_2.toml` | 1100 items, 38 enchantments with delta vs 1.21.4 |
 | **Entities 1.16.5** | `.claude/registry/entities_1_16_5.toml` | 108 entities with delta vs 1.21.4 |
 | **Items 1.16.5** | `.claude/registry/items_1_16_5.toml` | 975 items, 38 enchantments, 33 effects, 40 foods |
+| **Entities 1.14.4** | `.claude/registry/entities_1_14_4.toml` | 102 entities, 33 effects, 39 foods with delta vs 1.21.4 |
+| **Items 1.14.4** | `.claude/registry/items_1_14_4.toml` | 876 items, 30 enchantments with delta vs 1.21.4 |
+| **Entities 1.12.2** | `.claude/registry/entities_1_12_2.toml` | 84 entities (pre-Flattening), 27 effects, 31 foods |
+| **Items 1.12.2** | `.claude/registry/items_1_12_2.toml` | 410 items (pre-Flattening), 30 enchantments |
 
 **How to query your backlog:**
 ```bash
@@ -112,23 +133,18 @@ Detailed briefings with gap analysis. Read YOUR file on session start.
 │       ├── effects.json               # 32+ status effects
 │       ├── foods.json                 # ~50 foods with nutrition
 │       └── materials.json             # Tool mining speed table
+├── 1.18.2/
+│   ├── README.md                      # Version delta analysis (1.18.2 → 1.21.4)
+│   └── prismarine/                    # 13 files: 113 entities, 898 blocks, 1100 items
 ├── 1.16.5/
 │   ├── README.md                      # Version delta analysis (1.16.5 → 1.21.4)
-│   └── prismarine/
-│       ├── entities.json              # 108 entities (vs 149 in 1.21.4)
-│       ├── blocks.json                # 763 blocks (vs 1095)
-│       ├── items.json                 # 975 items (vs 1385)
-│       ├── recipes.json               # 562 recipes (vs 1370)
-│       ├── enchantments.json          # 38 enchantments (vs 42)
-│       ├── effects.json               # 33 effects (vs 39)
-│       ├── foods.json                 # 40 foods
-│       ├── biomes.json                # 79 biomes (vs 135)
-│       ├── materials.json             # Mining speed table
-│       ├── blockLoot.json             # 701 block loot tables
-│       ├── entityLoot.json            # 72 entity loot tables
-│       ├── attributes.json            # 13 entity attributes
-│       ├── particles.json             # 72 particle types
-│       └── sounds.json                # 985 sound events
+│   └── prismarine/                    # 16 files: 108 entities, 763 blocks, 975 items
+├── 1.14.4/
+│   ├── README.md                      # Version delta analysis (1.14.4 → 1.21.4)
+│   └── prismarine/                    # 13 files: 102 entities, 676 blocks, 876 items
+├── 1.12.2/
+│   ├── README.md                      # Version delta analysis (1.12.2 → 1.21.4, pre-Flattening)
+│   └── prismarine/                    # 11 files: 84 entities, 254 blocks, 410 items
 └── bukkit-api/
     ├── BUKKIT-API-REFERENCE.md        # 318 events, plugin lifecycle
     └── bukkit-api-ref.zip             # 23 scraped Javadoc files

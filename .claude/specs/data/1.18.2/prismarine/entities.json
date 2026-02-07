@@ -1,0 +1,1132 @@
+[
+  {
+    "id": 0,
+    "internalId": 0,
+    "name": "area_effect_cloud",
+    "displayName": "Area Effect Cloud",
+    "width": 6,
+    "height": 0.5,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 1,
+    "internalId": 1,
+    "name": "armor_stand",
+    "displayName": "Armor Stand",
+    "width": 0.5,
+    "height": 1.975,
+    "type": "living",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 2,
+    "internalId": 2,
+    "name": "arrow",
+    "displayName": "Arrow",
+    "width": 0.5,
+    "height": 0.5,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 3,
+    "internalId": 3,
+    "name": "axolotl",
+    "displayName": "Axolotl",
+    "width": 0.75,
+    "height": 0.42,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 4,
+    "internalId": 4,
+    "name": "bat",
+    "displayName": "Bat",
+    "width": 0.5,
+    "height": 0.9,
+    "type": "ambient",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 5,
+    "internalId": 5,
+    "name": "bee",
+    "displayName": "Bee",
+    "width": 0.7,
+    "height": 0.6,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 6,
+    "internalId": 6,
+    "name": "blaze",
+    "displayName": "Blaze",
+    "width": 0.6,
+    "height": 1.8,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 7,
+    "internalId": 7,
+    "name": "boat",
+    "displayName": "Boat",
+    "width": 1.375,
+    "height": 0.5625,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 8,
+    "internalId": 8,
+    "name": "cat",
+    "displayName": "Cat",
+    "width": 0.6,
+    "height": 0.7,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 9,
+    "internalId": 9,
+    "name": "cave_spider",
+    "displayName": "Cave Spider",
+    "width": 0.7,
+    "height": 0.5,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 10,
+    "internalId": 10,
+    "name": "chicken",
+    "displayName": "Chicken",
+    "width": 0.4,
+    "height": 0.7,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 11,
+    "internalId": 11,
+    "name": "cod",
+    "displayName": "Cod",
+    "width": 0.5,
+    "height": 0.3,
+    "type": "water_creature",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 12,
+    "internalId": 12,
+    "name": "cow",
+    "displayName": "Cow",
+    "width": 0.9,
+    "height": 1.4,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 13,
+    "internalId": 13,
+    "name": "creeper",
+    "displayName": "Creeper",
+    "width": 0.6,
+    "height": 1.7,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 14,
+    "internalId": 14,
+    "name": "dolphin",
+    "displayName": "Dolphin",
+    "width": 0.9,
+    "height": 0.6,
+    "type": "water_creature",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 15,
+    "internalId": 15,
+    "name": "donkey",
+    "displayName": "Donkey",
+    "width": 1.39648,
+    "height": 1.5,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 16,
+    "internalId": 16,
+    "name": "dragon_fireball",
+    "displayName": "Dragon Fireball",
+    "width": 1,
+    "height": 1,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 17,
+    "internalId": 17,
+    "name": "drowned",
+    "displayName": "Drowned",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 18,
+    "internalId": 18,
+    "name": "elder_guardian",
+    "displayName": "Elder Guardian",
+    "width": 1.9975,
+    "height": 1.9975,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 19,
+    "internalId": 19,
+    "name": "end_crystal",
+    "displayName": "End Crystal",
+    "width": 2,
+    "height": 2,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 20,
+    "internalId": 20,
+    "name": "ender_dragon",
+    "displayName": "Ender Dragon",
+    "width": 16,
+    "height": 8,
+    "type": "mob",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 21,
+    "internalId": 21,
+    "name": "enderman",
+    "displayName": "Enderman",
+    "width": 0.6,
+    "height": 2.9,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 22,
+    "internalId": 22,
+    "name": "endermite",
+    "displayName": "Endermite",
+    "width": 0.4,
+    "height": 0.3,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 23,
+    "internalId": 23,
+    "name": "evoker",
+    "displayName": "Evoker",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 24,
+    "internalId": 24,
+    "name": "evoker_fangs",
+    "displayName": "Evoker Fangs",
+    "width": 0.5,
+    "height": 0.8,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 25,
+    "internalId": 25,
+    "name": "experience_orb",
+    "displayName": "Experience Orb",
+    "width": 0.5,
+    "height": 0.5,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 26,
+    "internalId": 26,
+    "name": "eye_of_ender",
+    "displayName": "Eye of Ender",
+    "width": 0.25,
+    "height": 0.25,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 27,
+    "internalId": 27,
+    "name": "falling_block",
+    "displayName": "Falling Block",
+    "width": 0.98,
+    "height": 0.98,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 28,
+    "internalId": 28,
+    "name": "firework_rocket",
+    "displayName": "Firework Rocket",
+    "width": 0.25,
+    "height": 0.25,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 29,
+    "internalId": 29,
+    "name": "fox",
+    "displayName": "Fox",
+    "width": 0.6,
+    "height": 0.7,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 30,
+    "internalId": 30,
+    "name": "ghast",
+    "displayName": "Ghast",
+    "width": 4,
+    "height": 4,
+    "type": "mob",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 31,
+    "internalId": 31,
+    "name": "giant",
+    "displayName": "Giant",
+    "width": 3.6,
+    "height": 12,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 32,
+    "internalId": 32,
+    "name": "glow_item_frame",
+    "displayName": "Glow Item Frame",
+    "width": 0.5,
+    "height": 0.5,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 33,
+    "internalId": 33,
+    "name": "glow_squid",
+    "displayName": "Glow Squid",
+    "width": 0.8,
+    "height": 0.8,
+    "type": "water_creature",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 34,
+    "internalId": 34,
+    "name": "goat",
+    "displayName": "Goat",
+    "width": 0.9,
+    "height": 1.3,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 35,
+    "internalId": 35,
+    "name": "guardian",
+    "displayName": "Guardian",
+    "width": 0.85,
+    "height": 0.85,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 36,
+    "internalId": 36,
+    "name": "hoglin",
+    "displayName": "Hoglin",
+    "width": 1.39648,
+    "height": 1.4,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 37,
+    "internalId": 37,
+    "name": "horse",
+    "displayName": "Horse",
+    "width": 1.39648,
+    "height": 1.6,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 38,
+    "internalId": 38,
+    "name": "husk",
+    "displayName": "Husk",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 39,
+    "internalId": 39,
+    "name": "illusioner",
+    "displayName": "Illusioner",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 40,
+    "internalId": 40,
+    "name": "iron_golem",
+    "displayName": "Iron Golem",
+    "width": 1.4,
+    "height": 2.7,
+    "type": "mob",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 41,
+    "internalId": 41,
+    "name": "item",
+    "displayName": "Item",
+    "width": 0.25,
+    "height": 0.25,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 42,
+    "internalId": 42,
+    "name": "item_frame",
+    "displayName": "Item Frame",
+    "width": 0.5,
+    "height": 0.5,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 43,
+    "internalId": 43,
+    "name": "fireball",
+    "displayName": "Fireball",
+    "width": 1,
+    "height": 1,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 44,
+    "internalId": 44,
+    "name": "leash_knot",
+    "displayName": "Leash Knot",
+    "width": 0.375,
+    "height": 0.5,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 45,
+    "internalId": 45,
+    "name": "lightning_bolt",
+    "displayName": "Lightning Bolt",
+    "width": 0,
+    "height": 0,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 46,
+    "internalId": 46,
+    "name": "llama",
+    "displayName": "Llama",
+    "width": 0.9,
+    "height": 1.87,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 47,
+    "internalId": 47,
+    "name": "llama_spit",
+    "displayName": "Llama Spit",
+    "width": 0.25,
+    "height": 0.25,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 48,
+    "internalId": 48,
+    "name": "magma_cube",
+    "displayName": "Magma Cube",
+    "width": 2.04,
+    "height": 2.04,
+    "type": "mob",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 49,
+    "internalId": 49,
+    "name": "marker",
+    "displayName": "Marker",
+    "width": 0,
+    "height": 0,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 50,
+    "internalId": 50,
+    "name": "minecart",
+    "displayName": "Minecart",
+    "width": 0.98,
+    "height": 0.7,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 51,
+    "internalId": 51,
+    "name": "chest_minecart",
+    "displayName": "Minecart with Chest",
+    "width": 0.98,
+    "height": 0.7,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 52,
+    "internalId": 52,
+    "name": "command_block_minecart",
+    "displayName": "Minecart with Command Block",
+    "width": 0.98,
+    "height": 0.7,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 53,
+    "internalId": 53,
+    "name": "furnace_minecart",
+    "displayName": "Minecart with Furnace",
+    "width": 0.98,
+    "height": 0.7,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 54,
+    "internalId": 54,
+    "name": "hopper_minecart",
+    "displayName": "Minecart with Hopper",
+    "width": 0.98,
+    "height": 0.7,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 55,
+    "internalId": 55,
+    "name": "spawner_minecart",
+    "displayName": "Minecart with Spawner",
+    "width": 0.98,
+    "height": 0.7,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 56,
+    "internalId": 56,
+    "name": "tnt_minecart",
+    "displayName": "Minecart with TNT",
+    "width": 0.98,
+    "height": 0.7,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 57,
+    "internalId": 57,
+    "name": "mule",
+    "displayName": "Mule",
+    "width": 1.39648,
+    "height": 1.6,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 58,
+    "internalId": 58,
+    "name": "mooshroom",
+    "displayName": "Mooshroom",
+    "width": 0.9,
+    "height": 1.4,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 59,
+    "internalId": 59,
+    "name": "ocelot",
+    "displayName": "Ocelot",
+    "width": 0.6,
+    "height": 0.7,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 60,
+    "internalId": 60,
+    "name": "painting",
+    "displayName": "Painting",
+    "width": 0.5,
+    "height": 0.5,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 61,
+    "internalId": 61,
+    "name": "panda",
+    "displayName": "Panda",
+    "width": 1.3,
+    "height": 1.25,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 62,
+    "internalId": 62,
+    "name": "parrot",
+    "displayName": "Parrot",
+    "width": 0.5,
+    "height": 0.9,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 63,
+    "internalId": 63,
+    "name": "phantom",
+    "displayName": "Phantom",
+    "width": 0.9,
+    "height": 0.5,
+    "type": "mob",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 64,
+    "internalId": 64,
+    "name": "pig",
+    "displayName": "Pig",
+    "width": 0.9,
+    "height": 0.9,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 65,
+    "internalId": 65,
+    "name": "piglin",
+    "displayName": "Piglin",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 66,
+    "internalId": 66,
+    "name": "piglin_brute",
+    "displayName": "Piglin Brute",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 67,
+    "internalId": 67,
+    "name": "pillager",
+    "displayName": "Pillager",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 68,
+    "internalId": 68,
+    "name": "polar_bear",
+    "displayName": "Polar Bear",
+    "width": 1.4,
+    "height": 1.4,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 69,
+    "internalId": 69,
+    "name": "tnt",
+    "displayName": "Primed TNT",
+    "width": 0.98,
+    "height": 0.98,
+    "type": "other",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 70,
+    "internalId": 70,
+    "name": "pufferfish",
+    "displayName": "Pufferfish",
+    "width": 0.7,
+    "height": 0.7,
+    "type": "water_creature",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 71,
+    "internalId": 71,
+    "name": "rabbit",
+    "displayName": "Rabbit",
+    "width": 0.4,
+    "height": 0.5,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 72,
+    "internalId": 72,
+    "name": "ravager",
+    "displayName": "Ravager",
+    "width": 1.95,
+    "height": 2.2,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 73,
+    "internalId": 73,
+    "name": "salmon",
+    "displayName": "Salmon",
+    "width": 0.7,
+    "height": 0.4,
+    "type": "water_creature",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 74,
+    "internalId": 74,
+    "name": "sheep",
+    "displayName": "Sheep",
+    "width": 0.9,
+    "height": 1.3,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 75,
+    "internalId": 75,
+    "name": "shulker",
+    "displayName": "Shulker",
+    "width": 1,
+    "height": 1,
+    "type": "mob",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 76,
+    "internalId": 76,
+    "name": "shulker_bullet",
+    "displayName": "Shulker Bullet",
+    "width": 0.3125,
+    "height": 0.3125,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 77,
+    "internalId": 77,
+    "name": "silverfish",
+    "displayName": "Silverfish",
+    "width": 0.4,
+    "height": 0.3,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 78,
+    "internalId": 78,
+    "name": "skeleton",
+    "displayName": "Skeleton",
+    "width": 0.6,
+    "height": 1.99,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 79,
+    "internalId": 79,
+    "name": "skeleton_horse",
+    "displayName": "Skeleton Horse",
+    "width": 1.39648,
+    "height": 1.6,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 80,
+    "internalId": 80,
+    "name": "slime",
+    "displayName": "Slime",
+    "width": 2.04,
+    "height": 2.04,
+    "type": "mob",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 81,
+    "internalId": 81,
+    "name": "small_fireball",
+    "displayName": "Small Fireball",
+    "width": 0.3125,
+    "height": 0.3125,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 82,
+    "internalId": 82,
+    "name": "snow_golem",
+    "displayName": "Snow Golem",
+    "width": 0.7,
+    "height": 1.9,
+    "type": "mob",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 83,
+    "internalId": 83,
+    "name": "snowball",
+    "displayName": "Snowball",
+    "width": 0.25,
+    "height": 0.25,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 84,
+    "internalId": 84,
+    "name": "spectral_arrow",
+    "displayName": "Spectral Arrow",
+    "width": 0.5,
+    "height": 0.5,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 85,
+    "internalId": 85,
+    "name": "spider",
+    "displayName": "Spider",
+    "width": 1.4,
+    "height": 0.9,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 86,
+    "internalId": 86,
+    "name": "squid",
+    "displayName": "Squid",
+    "width": 0.8,
+    "height": 0.8,
+    "type": "water_creature",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 87,
+    "internalId": 87,
+    "name": "stray",
+    "displayName": "Stray",
+    "width": 0.6,
+    "height": 1.99,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 88,
+    "internalId": 88,
+    "name": "strider",
+    "displayName": "Strider",
+    "width": 0.9,
+    "height": 1.7,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 89,
+    "internalId": 89,
+    "name": "egg",
+    "displayName": "Thrown Egg",
+    "width": 0.25,
+    "height": 0.25,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 90,
+    "internalId": 90,
+    "name": "ender_pearl",
+    "displayName": "Thrown Ender Pearl",
+    "width": 0.25,
+    "height": 0.25,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 91,
+    "internalId": 91,
+    "name": "experience_bottle",
+    "displayName": "Thrown Bottle o' Enchanting",
+    "width": 0.25,
+    "height": 0.25,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 92,
+    "internalId": 92,
+    "name": "potion",
+    "displayName": "Potion",
+    "width": 0.25,
+    "height": 0.25,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 93,
+    "internalId": 93,
+    "name": "trident",
+    "displayName": "Trident",
+    "width": 0.5,
+    "height": 0.5,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 94,
+    "internalId": 94,
+    "name": "trader_llama",
+    "displayName": "Trader Llama",
+    "width": 0.9,
+    "height": 1.87,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 95,
+    "internalId": 95,
+    "name": "tropical_fish",
+    "displayName": "Tropical Fish",
+    "width": 0.5,
+    "height": 0.4,
+    "type": "water_creature",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 96,
+    "internalId": 96,
+    "name": "turtle",
+    "displayName": "Turtle",
+    "width": 1.2,
+    "height": 0.4,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 97,
+    "internalId": 97,
+    "name": "vex",
+    "displayName": "Vex",
+    "width": 0.4,
+    "height": 0.8,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 98,
+    "internalId": 98,
+    "name": "villager",
+    "displayName": "Villager",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "passive",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 99,
+    "internalId": 99,
+    "name": "vindicator",
+    "displayName": "Vindicator",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 100,
+    "internalId": 100,
+    "name": "wandering_trader",
+    "displayName": "Wandering Trader",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "passive",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 101,
+    "internalId": 101,
+    "name": "witch",
+    "displayName": "Witch",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 102,
+    "internalId": 102,
+    "name": "wither",
+    "displayName": "Wither",
+    "width": 0.9,
+    "height": 3.5,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 103,
+    "internalId": 103,
+    "name": "wither_skeleton",
+    "displayName": "Wither Skeleton",
+    "width": 0.7,
+    "height": 2.4,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 104,
+    "internalId": 104,
+    "name": "wither_skull",
+    "displayName": "Wither Skull",
+    "width": 0.3125,
+    "height": 0.3125,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 105,
+    "internalId": 105,
+    "name": "wolf",
+    "displayName": "Wolf",
+    "width": 0.6,
+    "height": 0.85,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 106,
+    "internalId": 106,
+    "name": "zoglin",
+    "displayName": "Zoglin",
+    "width": 1.39648,
+    "height": 1.4,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 107,
+    "internalId": 107,
+    "name": "zombie",
+    "displayName": "Zombie",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 108,
+    "internalId": 108,
+    "name": "zombie_horse",
+    "displayName": "Zombie Horse",
+    "width": 1.39648,
+    "height": 1.6,
+    "type": "animal",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 109,
+    "internalId": 109,
+    "name": "zombie_villager",
+    "displayName": "Zombie Villager",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 110,
+    "internalId": 110,
+    "name": "zombified_piglin",
+    "displayName": "Zombified Piglin",
+    "width": 0.6,
+    "height": 1.95,
+    "type": "hostile",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 111,
+    "internalId": 111,
+    "name": "player",
+    "displayName": "Player",
+    "width": 0.6,
+    "height": 1.8,
+    "type": "player",
+    "category": "UNKNOWN"
+  },
+  {
+    "id": 112,
+    "internalId": 112,
+    "name": "fishing_bobber",
+    "displayName": "Fishing Bobber",
+    "width": 0.25,
+    "height": 0.25,
+    "type": "projectile",
+    "category": "UNKNOWN"
+  }
+]
