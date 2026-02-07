@@ -26,6 +26,7 @@ use crate::{
     net::ClientPlatform,
     plugin::{
         block::block_break::BlockBreakEvent,
+        entity::entity_spawn::EntitySpawnEvent,
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
     },
     server::Server,
@@ -2564,8 +2565,23 @@ impl World {
         removed_player
     }
 
-    pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
+    pub async fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
+
+        // Fire EntitySpawnEvent — if cancelled, skip spawning
+        if let Some(server) = self.server.upgrade() {
+            let event = EntitySpawnEvent::new(
+                base_entity.entity_id,
+                base_entity.entity_type,
+                base_entity.pos.load(),
+                self.clone(),
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
+            }
+        }
+
         self.broadcast_packet_all(&base_entity.create_spawn_packet())
             .await;
         entity.init_data_tracker().await;
