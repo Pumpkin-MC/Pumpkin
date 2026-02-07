@@ -91,6 +91,19 @@ impl BlockBehaviour for LayeredSnowBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if !can_place_at(args.world.as_ref(), args.position).await {
+                // Fire BlockFadeEvent before snow decay (ARCH-023)
+                if let Some(server) = args.world.server.upgrade() {
+                    let event = crate::plugin::api::events::block::block_fade::BlockFadeEvent::new(
+                        &Block::SNOW, // &'static Block for event lifetime
+                        *args.position,
+                        &Block::AIR, // snow fades to air
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                }
+
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
