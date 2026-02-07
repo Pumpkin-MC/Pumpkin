@@ -118,6 +118,9 @@ class Blackboard:
         ada:session:latest:{project}     — Latest session pointer
         ada:broadcast:{project}:{agent}  — Per-agent broadcast channel (sorted set)
         ada:broadcast:{project}:ack:{id} — Broadcast acknowledgements (hash)
+        ada:tasks:{project}:{task_id}    — Individual task record
+        ada:tasks:{project}:board        — Task board (hash: task_id → status JSON)
+        ada:tasks:{project}:queue:{agent}— Per-agent task queue (list)
     """
 
     def __init__(self, project: str, agent_id: str = "orchestrator"):
@@ -166,6 +169,11 @@ class Blackboard:
             state["last_broadcast_seen"] = max(
                 b.get("ts_score", 0.0) for b in broadcasts
             )
+
+        # DI: Check task queue during hydration
+        pending_tasks = await self.get_agent_tasks()
+        if pending_tasks:
+            state["pending_tasks"] = pending_tasks
 
         return state
 
@@ -455,6 +463,196 @@ class Blackboard:
         for i in range(0, len(raw), 2):
             acks[raw[i]] = json.loads(raw[i + 1])
         return acks
+
+    # ── Task Dispatch (Orchestrator) ─────────────────────────────
+
+    async def dispatch_task(self, to_agent: str, task: str,
+                            description: str = "",
+                            context: dict | None = None,
+                            priority: str = "normal",
+                            depends_on: list[str] | None = None) -> str:
+        """
+        Orchestrator dispatches a task to an agent.
+
+        Lifecycle: dispatched → claimed → in_progress → done | failed
+
+        Also broadcasts to the agent so they pick it up via poll/hydrate.
+        Returns the task_id.
+        """
+        task_id = f"task_{_uid()}"
+        record = {
+            "id": task_id,
+            "agent": to_agent,
+            "task": task,
+            "description": description,
+            "context": context or {},
+            "priority": priority,
+            "depends_on": depends_on or [],
+            "status": "dispatched",
+            "dispatched_by": self.agent_id,
+            "dispatched_at": _now(),
+            "claimed_at": None,
+            "completed_at": None,
+            "result": None,
+            "session_id": self.session_id,
+        }
+        payload = json.dumps(record, default=str)
+
+        cmds = [
+            # Store full task record
+            ["SET", f"ada:tasks:{self.project}:{task_id}", payload],
+            # Add to agent's task queue
+            ["LPUSH", f"ada:tasks:{self.project}:queue:{to_agent}", task_id],
+            # Update task board (global view)
+            ["HSET", f"ada:tasks:{self.project}:board", task_id,
+             json.dumps({"agent": to_agent, "task": task, "status": "dispatched",
+                         "priority": priority, "dispatched_at": _now()}, default=str)],
+        ]
+        await self.redis.pipeline(cmds)
+
+        # Also broadcast so the agent wakes up
+        await self.broadcast([to_agent], {
+            "type": "task",
+            "subject": task,
+            "body": {"task_id": task_id, "description": description,
+                     "context": context or {}},
+            "priority": priority,
+        })
+
+        return task_id
+
+    async def dispatch_plan(self, plan: list[dict]) -> list[str]:
+        """
+        Dispatch multiple tasks from a plan.
+
+        plan = [
+            {"agent": "entity", "task": "Implement EntitySpawnEvent", ...},
+            {"agent": "redstone", "task": "Add piston head block state", ...},
+        ]
+
+        Returns list of task_ids.
+        """
+        task_ids = []
+        for item in plan:
+            tid = await self.dispatch_task(
+                to_agent=item["agent"],
+                task=item["task"],
+                description=item.get("description", ""),
+                context=item.get("context"),
+                priority=item.get("priority", "normal"),
+                depends_on=item.get("depends_on"),
+            )
+            task_ids.append(tid)
+        return task_ids
+
+    async def claim_task(self) -> dict | None:
+        """
+        Agent claims the next task from its queue.
+        Pops from queue and updates status to 'claimed'.
+        """
+        task_id = await self.redis.cmd(
+            "RPOP", f"ada:tasks:{self.project}:queue:{self.agent_id}"
+        )
+        if not task_id:
+            return None
+
+        record = await self.redis.get_json(f"ada:tasks:{self.project}:{task_id}")
+        if not record:
+            return None
+
+        record["status"] = "claimed"
+        record["claimed_at"] = _now()
+
+        cmds = [
+            ["SET", f"ada:tasks:{self.project}:{task_id}",
+             json.dumps(record, default=str)],
+            ["HSET", f"ada:tasks:{self.project}:board", task_id,
+             json.dumps({"agent": record["agent"], "task": record["task"],
+                         "status": "claimed", "priority": record["priority"],
+                         "claimed_at": _now()}, default=str)],
+            ["HSET", f"ada:bb:{self.project}:agents", self.agent_id, "working"],
+        ]
+        await self.redis.pipeline(cmds)
+        return record
+
+    async def complete_task(self, task_id: str, result: dict | None = None):
+        """Agent marks a task as done with optional result."""
+        record = await self.redis.get_json(f"ada:tasks:{self.project}:{task_id}")
+        if not record:
+            return
+
+        record["status"] = "done"
+        record["completed_at"] = _now()
+        record["result"] = result or {}
+
+        cmds = [
+            ["SET", f"ada:tasks:{self.project}:{task_id}",
+             json.dumps(record, default=str)],
+            ["HSET", f"ada:tasks:{self.project}:board", task_id,
+             json.dumps({"agent": record["agent"], "task": record["task"],
+                         "status": "done", "priority": record["priority"],
+                         "completed_at": _now()}, default=str)],
+            ["HSET", f"ada:bb:{self.project}:agents", self.agent_id, "idle"],
+        ]
+        await self.redis.pipeline(cmds)
+
+        # Notify the dispatcher
+        await self.broadcast([record["dispatched_by"]], {
+            "type": "task_done",
+            "subject": f"{self.agent_id} completed: {record['task']}",
+            "body": {"task_id": task_id, "result": result or {}},
+            "priority": "normal",
+        })
+
+    async def fail_task(self, task_id: str, reason: str):
+        """Agent marks a task as failed."""
+        record = await self.redis.get_json(f"ada:tasks:{self.project}:{task_id}")
+        if not record:
+            return
+
+        record["status"] = "failed"
+        record["completed_at"] = _now()
+        record["result"] = {"error": reason}
+
+        cmds = [
+            ["SET", f"ada:tasks:{self.project}:{task_id}",
+             json.dumps(record, default=str)],
+            ["HSET", f"ada:tasks:{self.project}:board", task_id,
+             json.dumps({"agent": record["agent"], "task": record["task"],
+                         "status": "failed", "priority": record["priority"],
+                         "failed_at": _now(), "reason": reason[:100]}, default=str)],
+            ["HSET", f"ada:bb:{self.project}:agents", self.agent_id, "idle"],
+        ]
+        await self.redis.pipeline(cmds)
+
+        await self.broadcast([record["dispatched_by"]], {
+            "type": "task_failed",
+            "subject": f"{self.agent_id} failed: {record['task']}",
+            "body": {"task_id": task_id, "reason": reason},
+            "priority": "high",
+        })
+
+    async def get_task_board(self) -> dict[str, dict]:
+        """Get the full task board — all tasks and their statuses."""
+        raw = await self.redis.cmd("HGETALL", f"ada:tasks:{self.project}:board")
+        if not raw:
+            return {}
+        board = {}
+        for i in range(0, len(raw), 2):
+            board[raw[i]] = json.loads(raw[i + 1])
+        return board
+
+    async def get_agent_tasks(self, agent: str | None = None) -> list[str]:
+        """Peek at an agent's pending task queue (non-destructive)."""
+        agent = agent or self.agent_id
+        results = await self.redis.cmd(
+            "LRANGE", f"ada:tasks:{self.project}:queue:{agent}", "0", "-1"
+        )
+        return results or []
+
+    async def get_task(self, task_id: str) -> dict | None:
+        """Get a specific task record."""
+        return await self.redis.get_json(f"ada:tasks:{self.project}:{task_id}")
 
     # ── Convenience ────────────────────────────────────────────
 

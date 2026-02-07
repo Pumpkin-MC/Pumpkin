@@ -272,7 +272,10 @@ gate, sd = Blackboard.collapse_gate([0.9, 0.85, 0.88])
 | `ada:session:{session_id}` | String (JSON) | Session snapshot |
 | `ada:broadcast:pumpkin:{agent}` | Sorted Set | Per-agent broadcast channel (score=timestamp) |
 | `ada:broadcast:pumpkin:ack:{id}` | Hash | Broadcast acknowledgements (agent → ack JSON) |
-| `ada:crown:pumpkin:watermarks` | Hash | Per-agent last-processed broadcast timestamp |
+| `ada:cron:pumpkin:watermarks` | Hash | Per-agent last-processed broadcast timestamp |
+| `ada:tasks:pumpkin:{task_id}` | String (JSON) | Full task record |
+| `ada:tasks:pumpkin:board` | Hash | Task board (task_id → status summary) |
+| `ada:tasks:pumpkin:queue:{agent}` | List | Per-agent pending task queue |
 
 ### Agent Broadcasts
 
@@ -297,12 +300,43 @@ broadcasts = await bb.check_broadcasts(since_ts=last_seen)
 await bb.ack_broadcast(broadcast_id, {"status": "done"})
 ```
 
+### Task Dispatch (Orchestrator)
+
+The Architect acts as orchestrator, dispatching tasks that agents claim and complete.
+
+```python
+# Orchestrator dispatches a task (also broadcasts to wake the agent)
+tid = await bb.dispatch_task(
+    to_agent="entity",
+    task="Implement EntitySpawnEvent",
+    description="Fire event when mob spawns",
+    priority="high",
+    context={"decision": "PLUGIN-001"},
+)
+
+# Agent claims next task from its queue (during hydrate or poll)
+task = await bb.claim_task()
+# ... do work ...
+await bb.complete_task(task["id"], result={"files": ["spawn.rs"], "tests": True})
+
+# Or if blocked:
+await bb.fail_task(task["id"], reason="Missing EntityType enum in pumpkin-util")
+
+# Orchestrator checks progress
+board = await bb.get_task_board()  # All tasks + statuses
+```
+
+Task lifecycle: `dispatched → claimed → done | failed`
+
 CLI via `cron.py`:
 ```bash
-python cron.py status                                    # All agents' broadcast status
-python cron.py poll --agent entity --interval 300        # Poll loop for one agent
-python cron.py send --to entity,redstone --subject "New task" --body '{"x":1}'
-python cron.py send --to all --subject "Rebase needed"   # Broadcast to all agents
+python cron.py status                                    # Broadcasts + task board + agents
+python cron.py board                                     # Task board only
+python cron.py poll --agent entity --interval 300        # Hibernate until work arrives
+python cron.py dispatch --to entity --task "Add mobs" --priority high
+python cron.py send --to entity,redstone --subject "New task"
+python cron.py send --to all --subject "Rebase needed"
+python cron.py plan --file sprint_plan.json              # Dispatch multi-agent plan
 ```
 
 ### Blackboard Skill
