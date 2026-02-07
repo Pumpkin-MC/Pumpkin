@@ -10,16 +10,14 @@ pub struct Seed(pub u64);
 impl From<&str> for Seed {
     fn from(value: &str) -> Self {
         let trimmed = value.trim();
-        let value = if !trimmed.is_empty() {
+        let value = (!trimmed.is_empty()).then(|| {
             let i64_value = trimmed
                 .parse::<i64>()
-                .unwrap_or_else(|_| java_string_hash(trimmed) as i64);
-            Some(i64_value as u64)
-        } else {
-            None
-        };
+                .unwrap_or_else(|_| i64::from(java_string_hash(trimmed)));
+            i64_value as u64
+        });
 
-        Seed(value.unwrap_or_else(|| LegacyRand::from_seed(get_seed()).next_i64() as u64))
+        Self(value.unwrap_or_else(|| LegacyRand::from_seed(get_seed()).next_i64() as u64))
     }
 }
 

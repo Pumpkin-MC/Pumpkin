@@ -38,7 +38,7 @@ impl ExperienceOrbEntity {
         }
     }
 
-    fn round_to_orb_size(value: u32) -> u32 {
+    const fn round_to_orb_size(value: u32) -> u32 {
         if value >= 2477 {
             2477
         } else if value >= 1237 {
@@ -85,6 +85,7 @@ impl EntityBase for ExperienceOrbEntity {
             let no_clip = !self
                 .entity
                 .world
+                .load()
                 .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
                 .await;
             // TODO: isSubmergedIn

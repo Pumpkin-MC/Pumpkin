@@ -10,10 +10,10 @@ use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
 use pumpkin_world::CURRENT_MC_VERSION;
-use rand::Rng;
+use rand::RngExt;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
-use crate::{PLUGIN_MANAGER, SHOULD_STOP, STOP_INTERRUPT, server::Server};
+use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
 pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let socket = Arc::new(
@@ -117,13 +117,12 @@ async fn handle_packet(
                     if packet.is_full_request {
                         // Get 4 players
                         let mut players: Vec<CString> = Vec::new();
-                        for world in server.worlds.read().await.iter() {
+                        for world in server.worlds.load().iter() {
                             let mut world_players = world
                                 .players
-                                .read()
-                                .await
+                                .load()
                                 // Although there is no documented limit, we will limit to 4 players
-                                .values()
+                                .iter()
                                 .take(4 - players.len())
                                 .map(|player| {
                                     CString::new(player.gameprofile.name.as_str()).unwrap()
@@ -137,7 +136,8 @@ async fn handle_packet(
                             }
                         }
 
-                        let plugins = PLUGIN_MANAGER
+                        let plugins = server
+                            .plugin_manager
                             .active_plugins()
                             .await
                             .into_iter()
@@ -151,7 +151,7 @@ async fn handle_packet(
                             version: CString::new(CURRENT_MC_VERSION)?,
                             plugins: CString::new(plugins)?,
                             map: CString::new("world")?, // TODO: Get actual world name
-                            num_players: server.get_player_count().await,
+                            num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,
                             host_port: bound_addr.port(),
                             host_ip: CString::new(bound_addr.ip().to_string())?,
@@ -166,7 +166,7 @@ async fn handle_packet(
                             session_id: packet.session_id,
                             motd: CString::new(server.basic_config.motd.as_str())?,
                             map: CString::new("world")?,
-                            num_players: server.get_player_count().await,
+                            num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,
                             host_port: bound_addr.port(),
                             host_ip: CString::new(bound_addr.ip().to_string())?,

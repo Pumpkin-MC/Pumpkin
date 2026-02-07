@@ -4,7 +4,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
-use rand::Rng;
+use rand::RngExt;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -226,6 +226,7 @@ impl BlockBehaviour for FireBlock {
                     block: &Block::FIRE,
                     state: Block::FIRE.default_state,
                     position: args.position,
+                    direction: None,
                     player: None,
                     use_item_on: None,
                 })
@@ -277,6 +278,7 @@ impl BlockBehaviour for FireBlock {
                     block,
                     state: block.default_state,
                     position: pos,
+                    direction: None,
                     player: None,
                     use_item_on: None,
                 })
@@ -372,6 +374,7 @@ impl BlockBehaviour for FireBlock {
             )
             .await;
 
+            let difficulty = world.level_info.load().difficulty as i32;
             for l in -1..=1 {
                 for m in -1..=1 {
                     for n in -1..=4 {
@@ -380,10 +383,8 @@ impl BlockBehaviour for FireBlock {
                             let burn_chance = Self.get_burn_chance(world, &offset_pos).await;
                             if burn_chance > 0 {
                                 let o = 100 + if n > 1 { (n - 1) * 100 } else { 0 };
-                                let p: i32 = burn_chance
-                                    + 40
-                                    + (world.level_info.read().await.difficulty as i32) * 7
-                                        / i32::from(age + 30);
+                                let p: i32 =
+                                    burn_chance + 40 + (difficulty) * 7 / i32::from(age + 30);
 
                                 if p > 0 && rand::rng().random_range(0..o) <= p {
                                     let new_age =

@@ -5,7 +5,7 @@ use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
 use crate::block::blocks::carved_pumpkin::CarvedPumpkinBlock;
-use crate::block::blocks::chests::ChestBlock;
+use crate::block::blocks::chests::{ChestBlock, CopperChestBlock};
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
@@ -22,6 +22,7 @@ use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::hay::HayBlock;
+use crate::block::blocks::infested::InfestedBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::mangrove_roots::MangroveRootsBlock;
@@ -46,6 +47,7 @@ use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
+use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
 use crate::block::blocks::redstone::comparator::ComparatorBlock;
@@ -68,8 +70,10 @@ use crate::block::blocks::redstone::tripwire::TripwireBlock;
 use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
 use crate::block::blocks::signs::SignBlock;
 use crate::block::blocks::slabs::SlabBlock;
+use crate::block::blocks::slime::SlimeBlock;
 use crate::block::blocks::snow::LayeredSnowBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
+use crate::block::blocks::sponge::{SpongeBlock, WetSpongeBlock};
 use crate::block::blocks::stairs::StairBlock;
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::blocks::torches::TorchBlock;
@@ -86,7 +90,6 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::fluid;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection, BlockState};
@@ -95,7 +98,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -117,6 +120,7 @@ use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::redstone::dispenser::DispenserBlock;
 use crate::block::blocks::redstone::dropper::DropperBlock;
+use crate::block::blocks::shelf::ShelfBlock;
 
 use super::BlockIsReplacing;
 use super::blocks::plant::crop::gourds::attached_stem::AttachedStemBlock;
@@ -159,6 +163,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
+    manager.register(CopperChestBlock);
     manager.register(EnderChestBlock);
     manager.register(CraftingTableBlock);
     manager.register(DirtPathBlock);
@@ -175,6 +180,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(HayBlock);
     manager.register(GrindstoneBlock);
     manager.register(IronBarsBlock);
+    manager.register(InfestedBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
     manager.register(BambooBlock);
@@ -182,6 +188,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BannerBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
+    manager.register(SlimeBlock);
     manager.register(StairBlock);
     manager.register(ShortPlantBlock);
     manager.register(DryVegetationBlock);
@@ -209,7 +216,10 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NetherPortalBlock);
     manager.register(TallPlantBlock);
     manager.register(NoteBlock);
+    manager.register(PowderSnowBlock);
+    manager.register(SpongeBlock);
     manager.register(PumpkinBlock);
+    manager.register(WetSpongeBlock);
     manager.register(CommandBlock);
     manager.register(ComposterBlock);
     manager.register(PressurePlateBlock);
@@ -223,6 +233,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CandleCakeBlock);
     manager.register(SkullBlock);
     manager.register(ChiseledBookshelfBlock);
+    manager.register(ShelfBlock);
     manager.register(LecternBlock);
     manager.register(StemBlock);
     manager.register(AttachedStemBlock);
@@ -279,7 +290,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 }
 
 // ActionResult.java
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum BlockActionResult {
     /// Action was successful | Same as SUCCESS in vanilla
     Success,
@@ -297,15 +308,15 @@ pub enum BlockActionResult {
 
 impl BlockActionResult {
     #[must_use]
-    pub fn consumes_action(&self) -> bool {
+    pub const fn consumes_action(&self) -> bool {
         matches!(self, Self::Consume | Self::Success | Self::SuccessServer)
     }
 }
 
 #[derive(Default)]
 pub struct BlockRegistry {
-    blocks: HashMap<u16, Arc<dyn BlockBehaviour>>,
-    fluids: HashMap<u16, Arc<dyn FluidBehaviour>>,
+    blocks: FxHashMap<u16, Arc<dyn BlockBehaviour>>,
+    fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
 
 impl BlockRegistryExt for BlockRegistry {
@@ -326,6 +337,7 @@ impl BlockRegistryExt for BlockRegistry {
                 state,
                 block_pos,
                 None,
+                None,
             )
             .await
         })
@@ -334,22 +346,20 @@ impl BlockRegistryExt for BlockRegistry {
 
 impl BlockRegistry {
     pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {
-        let names = block.names();
+        let ids = T::ids();
         let val = Arc::new(block);
-        self.blocks.reserve(names.len());
-        for i in names {
-            self.blocks
-                .insert(Block::from_name(i.as_str()).unwrap().id, val.clone());
+        self.blocks.reserve(ids.len());
+        for i in ids {
+            self.blocks.insert(i, val.clone());
         }
     }
 
     pub fn register_fluid<T: FluidBehaviour + BlockMetadata + 'static>(&mut self, fluid: T) {
-        let names = fluid.names();
+        let ids = T::ids();
         let val = Arc::new(fluid);
-        self.fluids.reserve(names.len());
-        for i in names {
-            self.fluids
-                .insert(fluid::get_fluid(i.as_str()).unwrap().id, val.clone());
+        self.fluids.reserve(ids.len());
+        for i in ids {
+            self.fluids.insert(i, val.clone());
         }
     }
 
@@ -501,6 +511,7 @@ impl BlockRegistry {
         block: &Block,
         state: &BlockState,
         position: &BlockPos,
+        direction: Option<BlockDirection>,
         use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block.id);
@@ -513,6 +524,7 @@ impl BlockRegistry {
                     block,
                     state,
                     position,
+                    direction,
                     player,
                     use_item_on,
                 })

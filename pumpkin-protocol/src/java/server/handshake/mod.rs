@@ -5,13 +5,22 @@ use crate::{
     ser::NetworkWriteExt,
 };
 use pumpkin_data::packet::serverbound::HANDSHAKE_INTENTION;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
+use pumpkin_util::version::MinecraftVersion;
 
-#[packet(HANDSHAKE_INTENTION)]
+/// The very first packet sent by the client to initiate a connection
+///
+/// It determines whether the client wants to check the server status (SLP)
+/// or actually login to play.
+#[java_packet(HANDSHAKE_INTENTION)]
 pub struct SHandShake {
+    /// The protocol version of the client (e.g., 767 for 1.21).
     pub protocol_version: VarInt,
-    pub server_address: String, // 255
+    /// The hostname or IP used by the client to connect
+    pub server_address: String,
+    /// The port number used by the client to connect
     pub server_port: u16,
+    /// The state the client wants to transition to (1 for Status, 2 for Login)
     pub next_state: ConnectionState,
 }
 
@@ -34,6 +43,7 @@ impl ClientPacket for SHandShake {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
+        _version: &MinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.protocol_version)?;
         write.write_string(&self.server_address)?;

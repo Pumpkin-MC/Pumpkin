@@ -1,13 +1,13 @@
 use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_TELEPORT_ENTITY;
-use pumpkin_macros::packet;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_macros::java_packet;
+use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
 
 use crate::{ClientPacket, PositionFlag, VarInt, WritingError, ser::NetworkWriteExt};
 
 /// Only used when teleporting a player's vehicle, this packet is sent to the player.
-#[packet(PLAY_TELEPORT_ENTITY)]
+#[java_packet(PLAY_TELEPORT_ENTITY)]
 pub struct CTeleportEntity<'a> {
     pub entity_id: VarInt,
     pub position: Vector3<f64>,
@@ -19,7 +19,8 @@ pub struct CTeleportEntity<'a> {
 }
 
 impl<'a> CTeleportEntity<'a> {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         entity_id: VarInt,
         position: Vector3<f64>,
         delta: Vector3<f64>,
@@ -42,7 +43,11 @@ impl<'a> CTeleportEntity<'a> {
 
 // TODO: Do we need a custom impl?
 impl ClientPacket for CTeleportEntity<'_> {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_var_int(&self.entity_id)?;

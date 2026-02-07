@@ -1,5 +1,6 @@
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -88,6 +89,14 @@ impl LivingEntity {
     #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: u8 = 4;
 
+    const PREVENT_AREA_FALL_DAMAGE_BLOCKS: [&'static Block; 4] = [
+        &Block::COBWEB,
+        &Block::LADDER,
+        &Block::POWDER_SNOW,
+        &Block::SLIME_BLOCK,
+    ];
+    const FALL_DAMAGE_SAFE_DISTANCE: f64 = 1.3;
+
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -135,6 +144,7 @@ impl LivingEntity {
             .collect();
         self.entity
             .world
+            .load()
             .broadcast_packet_except(
                 &[self.entity.entity_uuid],
                 &CSetEquipment::new(self.entity_id().into(), equipment),
@@ -147,6 +157,7 @@ impl LivingEntity {
         // TODO: Only nearby
         self.entity
             .world
+            .load()
             .broadcast_packet_all(&CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
@@ -220,12 +231,19 @@ impl LivingEntity {
         // TODO broadcast metadata
     }
 
-    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
-        self.active_effects.lock().await.remove(&effect_type);
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
+        let succeeded = self
+            .active_effects
+            .lock()
+            .await
+            .remove(&effect_type)
+            .is_some();
         self.entity
             .world
+            .load()
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
+        succeeded
     }
 
     pub async fn has_effect(&self, effect: &'static StatusEffect) -> bool {
@@ -238,16 +256,96 @@ impl LivingEntity {
         effects.get(&effect).cloned()
     }
 
+    pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
+        let block_pos = self.entity.block_pos.load();
+        let block = self.entity.world.load().get_block(&block_pos).await;
+        (
+            block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING),
+            block,
+        )
+    }
+
     // Check if the entity is in water
     pub async fn is_in_water(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
-        self.entity.world.get_block(&block_pos).await == &Block::WATER
+        self.entity.world.load().get_block(&block_pos).await == &Block::WATER
     }
 
     // Check if the entity is in powder snow
     pub async fn is_in_powder_snow(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
-        self.entity.world.get_block(&block_pos).await == &Block::POWDER_SNOW
+        self.entity.world.load().get_block(&block_pos).await == &Block::POWDER_SNOW
+    }
+
+    pub async fn should_prevent_fall_damage(&self) -> bool {
+        let (prevents, block) = self.is_in_fall_damage_resetting().await;
+
+        if block == &Block::SCAFFOLDING && !self.entity.sneaking.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        if block == &Block::WATER {
+            return true;
+        }
+
+        if self.entity.entity_type == &EntityType::PLAYER {
+            if block == &Block::END_GATEWAY || block == &Block::END_PORTAL {
+                return true;
+            }
+
+            if block == &Block::NETHER_PORTAL {
+                let world = self.entity.world.load();
+                let level_info = world.level_info.load();
+
+                return level_info.game_rules.players_nether_portal_default_delay == 0;
+            }
+        }
+
+        prevents
+    }
+
+    pub async fn should_prevent_fall_damage_in_area(&self) -> bool {
+        let world = self.entity.world.load();
+        let block_pos = self.entity.block_pos.load().down();
+        let entity_pos = self.entity.pos.load();
+
+        let min = BlockPos(Vector3::new(
+            block_pos.0.x - 1,
+            block_pos.0.y,
+            block_pos.0.z - 1,
+        ));
+        let max = BlockPos(Vector3::new(
+            block_pos.0.x + 1,
+            block_pos.0.y,
+            block_pos.0.z + 1,
+        ));
+        let pos_iter = BlockPos::iterate(min, max);
+
+        // FIXME: it seems the java server checks all blocks around with a raycast and check if miss or hit,
+        // then added to a collision checker to handle in the tick handler
+        for pos in pos_iter {
+            let block = world.get_block(&pos).await;
+
+            if Self::PREVENT_AREA_FALL_DAMAGE_BLOCKS.contains(&block) {
+                let block_center = Vector3::new(
+                    f64::from(pos.0.x) + 0.5,
+                    f64::from(pos.0.y) + 0.5,
+                    f64::from(pos.0.z) + 0.5,
+                );
+                let distance = entity_pos.squared_distance_to_vec(&block_center);
+
+                return distance.sqrt()
+                    <= Self::FALL_DAMAGE_SAFE_DISTANCE * Self::FALL_DAMAGE_SAFE_DISTANCE;
+            }
+        }
+
+        false
+    }
+
+    pub fn is_immune_to_fall_damage(&self) -> bool {
+        self.entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_FALL_DAMAGE_IMMUNE)
     }
 
     async fn get_effective_gravity(&self, caller: &Arc<dyn EntityBase>) -> f64 {
@@ -399,7 +497,7 @@ impl LivingEntity {
         let levitation = self.get_effect(&StatusEffect::LEVITATION).await;
 
         if let Some(lev) = levitation {
-            velo.y += (0.05 * f64::from(lev.amplifier + 1) - velo.y) * 0.2;
+            velo.y += 0.05f64.mul_add(f64::from(lev.amplifier + 1), -velo.y) * 0.2;
         } else {
             velo.y -= self.get_effective_gravity(&caller).await;
 
@@ -507,6 +605,7 @@ impl LivingEntity {
             && !self
                 .entity
                 .world
+                .load()
                 .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
                 .await
         {
@@ -698,12 +797,13 @@ impl LivingEntity {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance <= 0.0
                 || dont_damage
-                || self.is_in_water().await
-                || self.is_in_powder_snow().await
+                || self.should_prevent_fall_damage().await
+                || self.should_prevent_fall_damage_in_area().await
+                || self.is_immune_to_fall_damage()
             {
                 return;
             }
-            let world = &self.entity.world;
+            let world = self.entity.world.load();
             let block = world
                 .get_block(&self.entity.get_pos_with_y_offset(0.2).await.0)
                 .await;
@@ -711,7 +811,7 @@ impl LivingEntity {
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block
                     .on_landed_upon(OnLandedUponArgs {
-                        world,
+                        world: &world,
                         fall_distance,
                         entity: caller.as_ref(),
                     })
@@ -720,7 +820,8 @@ impl LivingEntity {
                 self.handle_fall_damage(fall_distance, 1.0).await;
             }
         } else if height_difference < 0.0 {
-            let new_fall_distance = if !self.is_in_water().await && !self.is_in_powder_snow().await
+            let new_fall_distance = if !self.should_prevent_fall_damage().await
+                && !self.should_prevent_fall_damage_in_area().await
             {
                 let distance = self.fall_distance.load();
                 distance - (height_difference as f32)
@@ -732,6 +833,10 @@ impl LivingEntity {
     }
 
     pub async fn handle_fall_damage(&self, fall_distance: f32, damage_per_distance: f32) {
+        if self.is_immune_to_fall_damage() {
+            return;
+        }
+
         // TODO: use attributes
         let safe_fall_distance = 3.0;
         let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
@@ -747,7 +852,7 @@ impl LivingEntity {
         }
     }
 
-    fn get_fall_sound(distance: i32) -> Sound {
+    const fn get_fall_sound(distance: i32) -> Sound {
         if distance > 4 {
             Sound::EntityGenericBigFall
         } else {
@@ -802,16 +907,21 @@ impl LivingEntity {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) {
-        let world = &self.entity.world;
+        let world = self.entity.world.load();
         let dyn_self = world
             .get_entity_by_id(self.entity.entity_id)
-            .await
             .expect("Entity not found in world");
         if self
             .dead
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
+            // Immediately clear all movement/velocity so the dead entity stops being
+            // simulated by physics and doesn't accumulate additional fall_distance.
+            self.entity.velocity.store(Vector3::default());
+            self.entity.velocity_dirty.store(true, SeqCst);
+            self.movement_input.store(Vector3::default());
+            self.jumping.store(false, Relaxed);
             // Plays the death sound
             world
                 .send_entity_status(
@@ -839,14 +949,13 @@ impl LivingEntity {
                 world.drop_stack(&block_pos, item).await;
             }
 
-            let show_death_messages =
-                { world.level_info.read().await.game_rules.show_death_messages };
+            let show_death_messages = { world.level_info.load().game_rules.show_death_messages };
             if self.entity.entity_type == &EntityType::PLAYER && show_death_messages {
                 //TODO: KillCredit
                 let death_message =
                     Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
                 if let Some(server) = world.server.upgrade() {
-                    for player in server.get_all_players().await {
+                    for player in server.get_all_players() {
                         player.send_system_message(&death_message).await;
                     }
                 }
@@ -858,7 +967,7 @@ impl LivingEntity {
         if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
             let pos = self.entity.block_pos.load();
             for stack in loot_table.get_loot(params) {
-                self.entity.world.drop_stack(&pos, stack).await;
+                self.entity.world.load().drop_stack(&pos, stack).await;
             }
         }
     }
@@ -891,6 +1000,7 @@ impl LivingEntity {
                 self.set_health(1.0).await;
                 self.entity
                     .world
+                    .load()
                     .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
                     .await;
                 return true;
@@ -977,11 +1087,36 @@ impl LivingEntity {
 
     pub async fn reset_state(&self) {
         self.entity.reset_state().await;
-        self.hurt_cooldown.store(0, Relaxed);
+
+        // Restore to maximum health for this entity type
+        let max_health = self.entity.entity_type.max_health.unwrap_or(20.0);
+        self.set_health(max_health).await;
+
+        // Give a short grace period of invulnerability after respawn
+        self.hurt_cooldown.store(20, Relaxed);
         self.last_damage_taken.store(0f32);
+
         self.entity.portal_cooldown.store(0, Relaxed);
         *self.entity.portal_manager.lock().await = None;
+
+        // Clear fall/fire state
         self.fall_distance.store(0f32);
+        self.death_time.store(0, Relaxed);
+        self.entity.extinguish();
+        self.entity.fire_ticks.store(0, Relaxed);
+
+        // Clear velocity and movement input to remove persisted momentum
+        self.entity.velocity.store(Vector3::default());
+        self.entity.velocity_dirty.store(true, SeqCst);
+        self.movement_input.store(Vector3::default());
+        self.jumping.store(false, Relaxed);
+
+        // If this LivingEntity corresponds to a Player, reset their hunger manager
+        let world = self.entity.world.load();
+        if let Some(player) = world.get_player_by_id(self.entity.entity_id) {
+            player.hunger_manager.restart();
+        }
+
         self.dead.store(false, Relaxed);
     }
 }
@@ -991,7 +1126,13 @@ impl NBTStorage for LivingEntity {
         Box::pin(async move {
             self.entity.write_nbt(nbt).await;
             nbt.put("Health", NbtTag::Float(self.health.load()));
-            nbt.put("fall_distance", NbtTag::Float(self.fall_distance.load()));
+            // Avoid persisting a lethal fall distance when the entity is dead to prevent death loops
+            let fall_distance = if self.dead.load(Relaxed) {
+                0.0
+            } else {
+                self.fall_distance.load()
+            };
+            nbt.put("fall_distance", NbtTag::Float(fall_distance));
             {
                 let effects = self.active_effects.lock().await;
                 if !effects.is_empty() {
@@ -1014,8 +1155,14 @@ impl NBTStorage for LivingEntity {
         Box::pin(async {
             self.entity.read_nbt_non_mut(nbt).await;
             self.health.store(nbt.get_float("Health").unwrap_or(0.0));
-            self.fall_distance
-                .store(nbt.get_float("fall_distance").unwrap_or(0.0));
+            // Load fall distance, but if this entity is currently marked dead ensure we don't restore
+            // a lethal fall distance that would immediately re-kill on spawn.
+            let fd = nbt.get_float("fall_distance").unwrap_or(0.0);
+            if self.dead.load(Relaxed) {
+                self.fall_distance.store(0.0);
+            } else {
+                self.fall_distance.store(fd);
+            }
             {
                 let mut active_effects = self.active_effects.lock().await;
                 let nbt_effects = nbt.get_list("active_effects");
@@ -1069,7 +1216,7 @@ impl EntityBase for LivingEntity {
                 return false; // Fire resistance
             }
 
-            let world = &self.entity.world;
+            let world = self.entity.world.load();
 
             let last_damage = self.last_damage_taken.load();
             let play_sound;
@@ -1096,8 +1243,7 @@ impl EntityBase for LivingEntity {
                     .await;
             }
 
-            self.entity
-                .world
+            world
                 .broadcast_packet_all(&CDamageEvent::new(
                     self.entity.entity_id.into(),
                     damage_type.id.into(),
@@ -1108,8 +1254,7 @@ impl EntityBase for LivingEntity {
                 .await;
 
             if play_sound {
-                self.entity
-                    .world
+                world
                     .play_sound(
                         // Sound::EntityPlayerHurt,
                         Sound::EntityGenericHurt,
@@ -1158,7 +1303,11 @@ impl EntityBase for LivingEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.entity.tick(caller.clone(), server).await;
-            self.tick_movement(server, caller.clone()).await;
+            // Only tick movement if the entity is alive. This prevents a dead "corpse"
+            // from continuing to be simulated (accumulating fall_distance/velocity).
+            if !self.dead.load(Relaxed) && self.health.load() > 0.0 {
+                self.tick_movement(server, caller.clone()).await;
+            }
             // TODO
             if caller.get_player().is_none() {
                 // self.entity.send_pos_rot().await;
@@ -1202,6 +1351,7 @@ impl EntityBase for LivingEntity {
                     // Spawn Death particles
                     self.entity
                         .world
+                        .load()
                         .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
                         .await;
                     self.entity.remove().await;

@@ -1,16 +1,12 @@
 use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnPlaceArgs};
 use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::tag::{self};
 use pumpkin_world::BlockStateId;
 
 pub struct GlazedTerracottaBlock;
 impl BlockMetadata for GlazedTerracottaBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "c:glazed_terracottas").unwrap()
+    fn ids() -> Box<[u16]> {
+        tag::Item::C_GLAZED_TERRACOTTAS.1.into()
     }
 }
 

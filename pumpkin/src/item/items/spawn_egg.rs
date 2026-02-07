@@ -55,7 +55,7 @@ impl ItemBehaviour for SpawnEggItem {
                 // Create rotation like Vanilla
                 let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
 
-                let mob = from_type(entity_type, pos, world, Uuid::new_v4()).await;
+                let mob = from_type(entity_type, pos, &world, Uuid::new_v4()).await;
 
                 // Set the rotation
                 mob.get_entity().set_rotation(yaw, 0.0);

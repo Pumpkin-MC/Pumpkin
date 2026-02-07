@@ -1,6 +1,7 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
 use crate::entity::EntityBase;
+use pumpkin_data::Block;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
@@ -10,19 +11,16 @@ type SkeletonSkullLikeProperties = pumpkin_data::block_properties::SkeletonSkull
 pub struct SkullBlock;
 
 impl BlockMetadata for SkullBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[
-            "skeleton_skull",
-            "player_head",
-            "zombie_head",
-            "creeper_head",
-            "piglin_head",
-            "dragon_head",
+    fn ids() -> Box<[u16]> {
+        [
+            Block::SKELETON_SKULL.id,
+            Block::PLAYER_HEAD.id,
+            Block::ZOMBIE_HEAD.id,
+            Block::CREEPER_HEAD.id,
+            Block::PIGLIN_HEAD.id,
+            Block::DRAGON_HEAD.id,
         ]
+        .into()
     }
 }
 

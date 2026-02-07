@@ -1,5 +1,7 @@
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_LOADED;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
+use serde::{Deserialize, Serialize};
 
-#[packet(PLAY_PLAYER_LOADED)]
+#[derive(Serialize, Deserialize)]
+#[java_packet(PLAY_PLAYER_LOADED)]
 pub struct SPlayerLoaded;

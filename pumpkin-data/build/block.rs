@@ -418,11 +418,11 @@ pub enum PistonBehavior {
 impl PistonBehavior {
     fn to_tokens(&self) -> TokenStream {
         match self {
-            PistonBehavior::Normal => quote! { PistonBehavior::Normal },
-            PistonBehavior::Destroy => quote! { PistonBehavior::Destroy },
-            PistonBehavior::Block => quote! { PistonBehavior::Block },
-            PistonBehavior::Ignore => quote! { PistonBehavior::Ignore },
-            PistonBehavior::PushOnly => quote! { PistonBehavior::PushOnly },
+            Self::Normal => quote! { PistonBehavior::Normal },
+            Self::Destroy => quote! { PistonBehavior::Destroy },
+            Self::Block => quote! { PistonBehavior::Block },
+            Self::Ignore => quote! { PistonBehavior::Ignore },
+            Self::PushOnly => quote! { PistonBehavior::PushOnly },
         }
     }
 }
@@ -447,20 +447,17 @@ impl BlockState {
         let instrument = format_ident!("{}", self.instrument.to_upper_camel_case());
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
         let hardness = self.hardness;
-        let opacity = match self.opacity {
-            Some(opacity) => {
-                let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
-                quote! { #opacity }
-            }
-            None => quote! { 0 },
+        let opacity = if let Some(opacity) = self.opacity {
+            let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
+            quote! { #opacity }
+        } else {
+            quote! { 0 }
         };
-        let block_entity_type = match self.block_entity_type {
-            Some(block_entity_type) => {
-                let block_entity_type =
-                    LitInt::new(&block_entity_type.to_string(), Span::call_site());
-                quote! { #block_entity_type }
-            }
-            None => quote! { u16::MAX },
+        let block_entity_type = if let Some(block_entity_type) = self.block_entity_type {
+            let block_entity_type = LitInt::new(&block_entity_type.to_string(), Span::call_site());
+            quote! { #block_entity_type }
+        } else {
+            quote! { u16::MAX }
         };
 
         let collision_shapes = self
@@ -522,21 +519,19 @@ impl ToTokens for Block {
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
         let jump_velocity_multiplier = &self.jump_velocity_multiplier;
-        let experience = match &self.experience {
-            Some(exp) => {
-                let exp_tokens = exp.to_token_stream();
-                quote! { Some(#exp_tokens) }
-            }
-            None => quote! { None },
+        let experience = if let Some(exp) = &self.experience {
+            let exp_tokens = exp.to_token_stream();
+            quote! { Some(#exp_tokens) }
+        } else {
+            quote! { None }
         };
         // Generate state tokens
-        let states = self.states.iter().map(|state| state.to_tokens());
-        let loot_table = match &self.loot_table {
-            Some(table) => {
-                let table_tokens = table.to_token_stream();
-                quote! { Some(#table_tokens) }
-            }
-            None => quote! { None },
+        let states = self.states.iter().map(BlockState::to_tokens);
+        let loot_table = if let Some(table) = &self.loot_table {
+            let table_tokens = table.to_token_stream();
+            quote! { Some(#table_tokens) }
+        } else {
+            quote! { None }
         };
 
         let default_state_ref: &BlockState = self
@@ -547,12 +542,11 @@ impl ToTokens for Block {
         let mut default_state = default_state_ref.clone();
         default_state.id = default_state_ref.id;
         let default_state = default_state.to_tokens();
-        let flammable = match &self.flammable {
-            Some(flammable) => {
-                let flammable_tokens = flammable.to_token_stream();
-                quote! { Some(#flammable_tokens) }
-            }
-            None => quote! { None },
+        let flammable = if let Some(flammable) = &self.flammable {
+            let flammable_tokens = flammable.to_token_stream();
+            quote! { Some(#flammable_tokens) }
+        } else {
+            quote! { None }
         };
         tokens.extend(quote! {
             Block {
@@ -681,17 +675,6 @@ pub(crate) fn build() -> TokenStream {
     let mut existing_item_ids: std::collections::HashSet<u16> = std::collections::HashSet::new();
 
     for block in blocks_assets.blocks {
-        for state in &block.states {
-            if state.has_random_ticks() {
-                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
-                random_tick_states.push(state_id);
-            }
-            if state.is_air() {
-                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
-                air_states.push(state_id);
-            }
-        }
-
         let mut property_collection = HashSet::new();
         let mut property_mapping = Vec::new();
 
@@ -731,16 +714,6 @@ pub(crate) fn build() -> TokenStream {
             });
         }
 
-        if !property_collection.is_empty() {
-            let mut property_collection_vec: Vec<i32> = property_collection.into_iter().collect();
-            property_collection_vec.sort_unstable();
-
-            property_collection_map
-                .entry(property_collection_vec)
-                .or_insert_with(|| PropertyCollectionData::from_mappings(property_mapping))
-                .add_block(block.name.clone(), block.id);
-        }
-
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
         let name_str = &block.name;
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
@@ -770,20 +743,78 @@ pub(crate) fn build() -> TokenStream {
             name => name,
         };
 
-        let (state_count, id) = *be_blocks.get(be_name).unwrap_or(&(0, 1));
+        let be_state_list = be_blocks.get(be_name);
 
         for (i, state) in block.states.iter().enumerate() {
-            if state_count != 0 {
-                let bedrock_val = if state_count > i as u32 {
-                    id as u16 + i as u16
-                } else {
-                    id as u16
-                };
-                block_state_to_bedrock.push((state.id, bedrock_val));
+            if state.has_random_ticks() {
+                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                random_tick_states.push(state_id);
+            }
+            if state.is_air() {
+                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                air_states.push(state_id);
             }
 
+            let mut matched_be_id = 1;
+
+            if let Some(be_variants) = be_state_list {
+                let mut temp_index = i as u16;
+                let mut java_props_for_this_state = BTreeMap::new();
+
+                for mapping in property_mapping.iter().rev() {
+                    match &mapping.property_type {
+                        PropertyType::Bool => {
+                            let val = temp_index % 2;
+                            temp_index /= 2;
+                            java_props_for_this_state.insert(
+                                mapping.original_name.clone(),
+                                if val == 0 { "true" } else { "false" }.to_string(),
+                            );
+                        }
+                        PropertyType::Enum { name } => {
+                            let enum_info = property_enums.get(name).unwrap();
+                            let count = enum_info.values.len() as u16;
+                            let val_idx = temp_index % count;
+                            temp_index /= count;
+
+                            let raw_val = &enum_info.values[val_idx as usize];
+                            let val_str = if raw_val.starts_with('L') {
+                                raw_val.strip_prefix('L').unwrap().to_string()
+                            } else {
+                                raw_val.clone()
+                            };
+                            java_props_for_this_state
+                                .insert(mapping.original_name.clone(), val_str);
+                        }
+                    }
+                }
+
+                matched_be_id = be_variants
+                    .iter()
+                    .find(|(_, be_props)| {
+                        java_props_for_this_state
+                            .iter()
+                            .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
+                    })
+                    .map_or_else(
+                        || be_variants.first().map_or(1, |(id, _)| *id),
+                        |(id, _)| *id,
+                    );
+            }
+
+            block_state_to_bedrock.push((state.id, matched_be_id));
             raw_id_from_state_id_array.push((state.id, id_lit.clone()));
             state_from_state_id_array.push((const_ident.clone(), i, state.id));
+        }
+
+        if !property_collection.is_empty() {
+            let mut property_collection_vec: Vec<i32> = property_collection.into_iter().collect();
+            property_collection_vec.sort_unstable();
+
+            property_collection_map
+                .entry(property_collection_vec)
+                .or_insert_with(|| PropertyCollectionData::from_mappings(property_mapping))
+                .add_block(block.name.clone(), block.id);
         }
 
         if existing_item_ids.insert(item_id) {
@@ -826,12 +857,16 @@ pub(crate) fn build() -> TokenStream {
     let shapes = blocks_assets
         .shapes
         .iter()
-        .map(|shape| shape.to_token_stream());
+        .map(quote::ToTokens::to_token_stream);
 
     let air_state_ids = quote! { #(#air_states)|* };
 
-    let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
-    let properties = property_enums.values().map(|prop| prop.to_token_stream());
+    let block_props = block_properties
+        .iter()
+        .map(quote::ToTokens::to_token_stream);
+    let properties = property_enums
+        .values()
+        .map(quote::ToTokens::to_token_stream);
 
     let block_entity_types = blocks_assets
         .block_entity_types
@@ -931,9 +966,9 @@ pub(crate) fn build() -> TokenStream {
             #mod_ident::#contains_ident(state_id)
         }
 
-        pub fn blocks_movement(block_state: &BlockState, block: &Block) -> bool {
+        pub fn blocks_movement(block_state: &BlockState, block: u16) -> bool {
             if block_state.is_solid() {
-                return block != &Block::COBWEB && block != &Block::BAMBOO_SAPLING;
+                return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
             }
             false
         }
@@ -947,7 +982,10 @@ pub(crate) fn build() -> TokenStream {
             #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
             #[inline]
             pub fn from_id(id: u16) -> &'static Self {
-                Block::STATE_FROM_STATE_ID[id as usize]
+                // In debug, this avoids the slow range-checking logic
+                unsafe {
+                    Block::STATE_FROM_STATE_ID.get_unchecked(id as usize)
+                }
             }
 
             #[doc = r" Get a block state from a state id and the corresponding block."]
@@ -1004,23 +1042,26 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-             #[doc = r" Get a raw ID from an State ID."]
+            #[doc = r" Get a raw ID from an State ID."]
             #[inline]
-            pub const fn get_raw_id_from_state_id(state_id: u16) -> u16 {
-                if state_id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+           pub fn get_raw_id_from_state_id(state_id: u16) -> u16 {
+                let index = state_id as usize;
+                if index >= Self::RAW_ID_FROM_STATE_ID.len() {
                     0
                 } else {
-                    Self::RAW_ID_FROM_STATE_ID[state_id as usize]
+                    unsafe { *Self::RAW_ID_FROM_STATE_ID.get_unchecked(index) }
                 }
             }
 
             #[doc = r" Get a block from a state id."]
             #[inline]
-            pub const fn from_state_id(id: u16) -> &'static Self {
-                if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+            pub fn from_state_id(id: u16) -> &'static Self {
+                let index = id as usize;
+                if index >= Self::RAW_ID_FROM_STATE_ID.len() {
                     return &Self::AIR;
                 }
-                Self::from_id(Self::RAW_ID_FROM_STATE_ID[id as usize])
+                let raw_id = unsafe { *Self::RAW_ID_FROM_STATE_ID.get_unchecked(index) };
+                Self::from_id(raw_id)
             }
 
             #[doc = r" Try to parse a block from an item id."]
@@ -1130,69 +1171,93 @@ pub(crate) fn build() -> TokenStream {
     }
 }
 
-fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> BTreeMap<String, (u32, u32)> {
-    let mut block_data: BTreeMap<String, (u32, u32)> = BTreeMap::new();
+#[expect(clippy::type_complexity)]
+fn get_be_data_from_nbt<R: Read>(
+    reader: &mut R,
+) -> BTreeMap<String, Vec<(u32, BTreeMap<String, String>)>> {
+    let mut block_data: BTreeMap<String, Vec<(u32, BTreeMap<String, String>)>> = BTreeMap::new();
     let mut current_id = 0;
 
-    while read_byte(reader) == 10 {
+    let read_nbt_string = |reader: &mut R| -> String {
         let len = read_varint(reader);
         let mut buf = vec![0; len as usize];
         reader.read_exact(&mut buf).unwrap();
+        String::from_utf8(buf).unwrap()
+    };
 
-        let mut name = String::new();
-        let mut byte = read_byte(reader);
+    let read_byte_safe = |reader: &mut R| -> Option<u8> {
+        let mut buf = [0; 1];
+        reader.read_exact(&mut buf).is_ok().then(|| buf[0])
+    };
 
-        while byte != 0 {
-            let mut name_buf = vec![0; read_varint(reader) as usize];
-            reader.read_exact(&mut name_buf).unwrap();
-            let cp_name = String::from_utf8(name_buf).unwrap();
+    while let Some(tag_id) = read_byte_safe(reader) {
+        if tag_id != 10 {
+            break;
+        } // Tag_Compound (10) required
 
-            match cp_name.as_str() {
+        // Read Root Name (usually empty string in palette)
+        let _root_name = read_nbt_string(reader);
+
+        let mut block_name = String::new();
+        let mut properties = BTreeMap::new();
+
+        loop {
+            let field_type = read_byte(reader);
+            if field_type == 0 {
+                break;
+            } // Tag_End (0)
+
+            let field_name = read_nbt_string(reader);
+
+            match field_name.as_str() {
                 "name" => {
-                    let mut name_buf = vec![0; read_varint(reader) as usize];
-                    reader.read_exact(&mut name_buf).unwrap();
-                    name = String::from_utf8(name_buf)
-                        .unwrap()
+                    let raw_name = read_nbt_string(reader);
+                    block_name = raw_name
                         .strip_prefix("minecraft:")
-                        .unwrap()
+                        .unwrap_or(&raw_name)
                         .to_string();
                 }
-                "states" => {
-                    let mut byte = read_byte(reader);
-                    while byte != 0 {
-                        let b = &mut vec![0; read_varint(reader) as usize];
-                        reader.read_exact(b).unwrap();
-
-                        match byte {
-                            8 => {
-                                let b = &mut vec![0; read_varint(reader) as usize];
-                                reader.read_exact(b).unwrap();
-                            }
-                            3 => {
-                                read_varint(reader);
-                            }
-                            1 => {
-                                read_byte(reader);
-                            }
-                            _ => panic!("{}", byte),
-                        }
-                        byte = read_byte(reader);
+                "states" => loop {
+                    let prop_type = read_byte(reader);
+                    if prop_type == 0 {
+                        break;
                     }
-                }
+
+                    let prop_key = read_nbt_string(reader);
+
+                    let prop_val = match prop_type {
+                        1 => {
+                            let val = read_byte(reader);
+                            if val == 1 {
+                                "true".to_string()
+                            } else {
+                                "false".to_string()
+                            }
+                        }
+                        3 => read_varint(reader).to_string(),
+                        8 => read_nbt_string(reader),
+                        _ => panic!("Unknown property type {prop_type} for key {prop_key}"),
+                    };
+
+                    properties.insert(prop_key, prop_val);
+                },
                 "version" => {
                     read_varint(reader);
                 }
-                _ => panic!(),
+                _ => panic!("Unexpected root field: {field_name}"),
             }
-            byte = read_byte(reader);
         }
 
-        block_data
-            .entry(name)
-            .and_modify(|(v, _)| *v += 1)
-            .or_insert((1, current_id));
+        if !block_name.is_empty() {
+            block_data
+                .entry(block_name)
+                .or_default()
+                .push((current_id, properties));
+        }
+
         current_id += 1;
     }
+
     block_data
 }
 

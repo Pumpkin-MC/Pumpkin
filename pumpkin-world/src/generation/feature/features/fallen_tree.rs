@@ -9,7 +9,7 @@ pub struct FallenTreeFeature {
 }
 
 impl FallenTreeFeature {
-    pub fn generate(
+    pub const fn generate(
         &self,
         _chunk: &mut ProtoChunk,
         _min_y: i8,

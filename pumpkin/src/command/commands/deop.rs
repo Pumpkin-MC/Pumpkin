@@ -7,7 +7,7 @@ use crate::{
         tree::CommandTree,
         tree::builder::argument,
     },
-    data::{SaveJSONConfiguration, op_data::OPERATOR_CONFIG},
+    data::SaveJSONConfiguration,
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -26,12 +26,13 @@ impl CommandExecutor for Executor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let mut config = OPERATOR_CONFIG.write().await;
+            let mut config = server.data.operator_config.write().await;
 
             let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
                 return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
+            let mut succeeded_deops: i32 = 0;
             for player in targets {
                 if let Some(op_index) = config
                     .ops
@@ -39,13 +40,18 @@ impl CommandExecutor for Executor {
                     .position(|o| o.uuid == player.gameprofile.id)
                 {
                     config.ops.remove(op_index);
+                    config.save();
+                    succeeded_deops += 1;
                 }
-                config.save();
 
                 {
                     let command_dispatcher = server.command_dispatcher.read().await;
                     player
-                        .set_permission_lvl(pumpkin_util::PermissionLvl::Zero, &command_dispatcher)
+                        .set_permission_lvl(
+                            server,
+                            pumpkin_util::PermissionLvl::Zero,
+                            &command_dispatcher,
+                        )
                         .await;
                 };
 
@@ -55,7 +61,15 @@ impl CommandExecutor for Executor {
                 );
                 sender.send_message(msg).await;
             }
-            Ok(())
+
+            if succeeded_deops == 0 {
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.deop.failed",
+                    [],
+                )))
+            } else {
+                Ok(succeeded_deops)
+            }
         })
     }
 }

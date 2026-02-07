@@ -11,7 +11,10 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
+            stronghold::{
+                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                StrongholdPieceType,
+            },
         },
     },
 };
@@ -70,20 +73,49 @@ impl StructurePieceBase for CorridorPiece {
         &self,
         start: &StructurePiece,
         random: &mut RandomGenerator,
+        weights: &mut Vec<PieceWeight>,
+        last_piece_type: &mut Option<StrongholdPieceType>,
+        _has_portal_room: &mut bool,
+
         collector: &mut StructurePiecesCollector,
         pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
-        self.piece
-            .fill_forward_opening(start, collector, random, 1, 1, pieces_to_process, None);
+        self.piece.fill_forward_opening(
+            start,
+            collector,
+            random,
+            weights,
+            last_piece_type,
+            1,
+            1,
+            pieces_to_process,
+            None,
+        );
 
         if self.left_exit {
-            self.piece
-                .fill_nw_opening(start, collector, random, 1, 2, pieces_to_process);
+            self.piece.fill_nw_opening(
+                start,
+                collector,
+                random,
+                weights,
+                last_piece_type,
+                1,
+                2,
+                pieces_to_process,
+            );
         }
 
         if self.right_exit {
-            self.piece
-                .fill_se_opening(start, collector, random, 1, 2, pieces_to_process);
+            self.piece.fill_se_opening(
+                start,
+                collector,
+                random,
+                weights,
+                last_piece_type,
+                1,
+                2,
+                pieces_to_process,
+            );
         }
     }
 
@@ -139,7 +171,8 @@ pub struct SmallCorridorPiece {
 }
 
 impl SmallCorridorPiece {
-    pub fn new(chain_length: u32, bbox: BlockBox, orientation: BlockDirection) -> Self {
+    #[must_use]
+    pub const fn new(chain_length: u32, bbox: BlockBox, orientation: BlockDirection) -> Self {
         let length = match orientation {
             BlockDirection::North | BlockDirection::South => bbox.max.z - bbox.min.z + 1,
             _ => bbox.max.x - bbox.min.x + 1,
@@ -173,7 +206,6 @@ impl SmallCorridorPiece {
         // so it perfectly abuts the intersecting piece.
         if intersecting.bounding_box().min.y == block_box.min.y {
             for j in (1..=2).rev() {
-                // Corresponds to for (int j = 2; j >= 1; --j)
                 block_box = BlockBox::rotated(x, y, z, -1, -1, 0, 5, 5, j, orientation);
 
                 if !intersecting.bounding_box().intersects(&block_box) {

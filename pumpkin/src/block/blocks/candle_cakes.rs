@@ -1,10 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{
-    Block,
-    item::Item,
-    tag::{RegistryKey, get_tag_values},
-};
+use pumpkin_data::{Block, item::Item};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{

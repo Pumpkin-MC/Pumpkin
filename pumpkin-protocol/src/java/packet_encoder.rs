@@ -17,10 +17,11 @@ pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
 }
 
 impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
+    #[must_use]
     pub fn upgrade(self, cipher: Aes128Cfb8Enc) -> Self {
         match self {
             Self::None(stream) => Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream))),
-            _ => panic!("Cannot upgrade a stream that already has a cipher!"),
+            Self::Encrypt(_) => panic!("Cannot upgrade a stream that already has a cipher!"),
         }
     }
 }
@@ -77,7 +78,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
 }
 
 /// Encoder: Server -> Client
-/// Supports ZLib endecoding/compression
+/// Supports `ZLib` endecoding/compression
 /// Supports Aes128 Encryption
 pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
     writer: EncryptionWriter<W>,
@@ -86,14 +87,17 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
 }
 
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
-    pub fn new(writer: W) -> Self {
+    pub const fn new(writer: W) -> Self {
         Self {
             writer: EncryptionWriter::None(writer),
             compression: None,
         }
     }
 
-    pub fn set_compression(&mut self, compression_info: (CompressionThreshold, CompressionLevel)) {
+    pub const fn set_compression(
+        &mut self,
+        compression_info: (CompressionThreshold, CompressionLevel),
+    ) {
         self.compression = Some(compression_info);
     }
 
@@ -114,20 +118,20 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     ///
     /// **Uncompressed:**
     /// |-----------------------|
-    /// | Packet Length (VarInt)|
+    /// | Packet Length (`VarInt`)|
     /// |-----------------------|
-    /// | Packet ID (VarInt)    |
+    /// | Packet ID (`VarInt`)    |
     /// |-----------------------|
     /// | Data (Byte Array)     |
     /// |-----------------------|
     ///
     /// **Compressed:**
     /// |------------------------|
-    /// | Packet Length (VarInt) |
+    /// | Packet Length (`VarInt`) |
     /// |------------------------|
-    /// | Data Length (VarInt)   |
+    /// | Data Length (`VarInt`)   |
     /// |------------------------|
-    /// | Packet ID (VarInt)     |
+    /// | Packet ID (`VarInt`)     |
     /// |------------------------|
     /// | Data (Byte Array)      |
     /// |------------------------|
@@ -275,7 +279,7 @@ mod tests {
 
     use super::*;
     use crate::java::client::status::CStatusResponse;
-    use crate::packet::Packet;
+    use crate::packet::MultiVersionJavaPacket;
     use crate::ser::{NetworkReadExt, NetworkWriteExt};
     use crate::{ClientPacket, ReadingError};
     use aes::Aes128;
@@ -283,12 +287,13 @@ mod tests {
     use cfb8::cipher::AsyncStreamCipher;
     use flate2::read::ZlibDecoder;
     use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
-    use pumpkin_macros::packet;
+    use pumpkin_macros::java_packet;
+    use pumpkin_util::version::MinecraftVersion;
     use serde::Serialize;
 
     /// Define a custom packet for testing maximum packet size
     #[derive(Serialize)]
-    #[packet(STATUS_STATUS_RESPONSE)]
+    #[java_packet(STATUS_STATUS_RESPONSE)]
     pub struct MaxSizePacket {
         data: Vec<u8>,
     }
@@ -338,8 +343,12 @@ mod tests {
 
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
-        writer.write_var_int(&VarInt(T::PACKET_ID)).unwrap();
-        packet.write_packet_data(writer).unwrap();
+        writer
+            .write_var_int(&VarInt(T::PACKET_ID.latest_id))
+            .unwrap();
+        packet
+            .write_packet_data(writer, &MinecraftVersion::V_1_21_11)
+            .unwrap();
 
         encoder.write_packet(packet_buf.into()).await.unwrap();
 
@@ -348,7 +357,7 @@ mod tests {
 
     /// Test encoding without compression and encryption
     #[tokio::test]
-    async fn test_encode_without_compression_and_encryption() {
+    async fn encode_without_compression_and_encryption() {
         // Create a CStatusResponse packet
         let packet =
             CStatusResponse::new(String::from("{\"description\": \"A Minecraft Server\"}"));
@@ -369,19 +378,21 @@ mod tests {
 
         // Read packet ID VarInt
         let decoded_packet_id = decode_varint(&mut buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
 
         // Remaining buffer is the payload
         // We need to obtain the expected payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
 
         assert_eq!(buffer, expected_payload);
     }
 
     /// Test encoding with compression
     #[tokio::test]
-    async fn test_encode_with_compression() {
+    async fn encode_with_compression() {
         // Create a CStatusResponse packet
         let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".to_string());
 
@@ -402,9 +413,11 @@ mod tests {
         // Read data length VarInt (uncompressed data length)
         let data_length = decode_varint(&mut buffer).expect("Failed to decode data length");
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
         let uncompressed_data_length =
-            VarInt(CStatusResponse::PACKET_ID).written_size() + expected_payload.len();
+            VarInt(CStatusResponse::PACKET_ID.latest_id).written_size() + expected_payload.len();
         assert_eq!(data_length as usize, uncompressed_data_length);
 
         // Remaining buffer is the compressed data
@@ -420,7 +433,7 @@ mod tests {
         // Read packet ID VarInt
         let decoded_packet_id =
             decode_varint(&mut decompressed_buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
 
         // Remaining buffer is the payload
         assert_eq!(decompressed_buffer, expected_payload);
@@ -428,7 +441,7 @@ mod tests {
 
     /// Test encoding with encryption
     #[tokio::test]
-    async fn test_encode_with_encryption() {
+    async fn encode_with_encryption() {
         // Create a CStatusResponse packet
         let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".to_string());
 
@@ -454,17 +467,19 @@ mod tests {
 
         // Read packet ID VarInt
         let decoded_packet_id = decode_varint(&mut buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
         assert_eq!(buffer, expected_payload);
     }
 
     /// Test encoding with both compression and encryption
     #[tokio::test]
-    async fn test_encode_with_compression_and_encryption() {
+    async fn encode_with_compression_and_encryption() {
         // Create a CStatusResponse packet
         let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".to_string());
 
@@ -492,9 +507,11 @@ mod tests {
         // Read data length VarInt (uncompressed data length)
         let data_length = decode_varint(&mut buffer).expect("Failed to decode data length");
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
         let uncompressed_data_length =
-            VarInt(CStatusResponse::PACKET_ID).written_size() + expected_payload.len();
+            VarInt(CStatusResponse::PACKET_ID.latest_id).written_size() + expected_payload.len();
         assert_eq!(data_length as usize, uncompressed_data_length);
 
         // Remaining buffer is the compressed data
@@ -510,7 +527,7 @@ mod tests {
         // Read packet ID VarInt
         let decoded_packet_id =
             decode_varint(&mut decompressed_buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
 
         // Remaining buffer is the payload
         assert_eq!(decompressed_buffer, expected_payload);
@@ -518,9 +535,9 @@ mod tests {
 
     /// Test encoding with zero-length payload
     #[tokio::test]
-    async fn test_encode_with_zero_length_payload() {
+    async fn encode_with_zero_length_payload() {
         // Create a CStatusResponse packet with empty payload
-        let packet = CStatusResponse::new(String::from(""));
+        let packet = CStatusResponse::new(String::new());
 
         // Build the packet without compression and encryption
         let packet_bytes = build_packet_with_encoder(&packet, None, None).await;
@@ -538,11 +555,13 @@ mod tests {
 
         // Read packet ID VarInt
         let decoded_packet_id = decode_varint(&mut buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
 
         // Remaining buffer is the payload (empty)
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
 
         assert_eq!(
             buffer.len(),
@@ -554,7 +573,7 @@ mod tests {
 
     /// Test encoding with maximum length payload
     #[tokio::test]
-    async fn test_encode_with_maximum_string_length() {
+    async fn encode_with_maximum_string_length() {
         // Maximum allowed string length is 32767 bytes
         let max_string_length = 32767;
         let payload_str = "A".repeat(max_string_length);
@@ -583,19 +602,21 @@ mod tests {
         // Read packet ID VarInt
         let decoded_packet_id = decode_varint(&mut buffer).expect("Failed to decode packet ID");
         // Assume packet ID is 0 for CStatusResponse
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
 
         assert_eq!(buffer, expected_payload);
     }
 
-    /// Test encoding a packet that exceeds MAX_PACKET_SIZE as usize
+    /// Test encoding a packet that exceeds `MAX_PACKET_SIZE` as usize
     #[tokio::test]
     #[should_panic(expected = "TooLong")]
-    async fn test_encode_packet_exceeding_maximum_size() {
+    async fn encode_packet_exceeding_maximum_size() {
         // Create a custom packet with data exceeding MAX_PACKET_SIZE as usize
         let data_size = MAX_PACKET_SIZE as usize + 1; // Exceed by 1 byte
         let packet = MaxSizePacket::new(data_size);
@@ -607,7 +628,7 @@ mod tests {
 
     /// Test encoding with a small payload that should not be compressed
     #[tokio::test]
-    async fn test_encode_small_payload_no_compression() {
+    async fn encode_small_payload_no_compression() {
         // Create a CStatusResponse packet with small payload
         let packet = CStatusResponse::new(String::from("Hi"));
 
@@ -635,11 +656,13 @@ mod tests {
 
         // Read packet ID VarInt
         let decoded_packet_id = decode_varint(&mut buffer).expect("Failed to decode packet ID");
-        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID);
+        assert_eq!(decoded_packet_id, CStatusResponse::PACKET_ID.latest_id);
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
 
         assert_eq!(buffer, expected_payload);
     }

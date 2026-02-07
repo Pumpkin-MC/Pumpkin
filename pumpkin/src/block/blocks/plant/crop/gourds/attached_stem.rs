@@ -18,15 +18,12 @@ type StemProperties = WheatLikeProperties;
 pub struct AttachedStemBlock;
 
 impl BlockMetadata for AttachedStemBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[
-            Block::ATTACHED_PUMPKIN_STEM.name,
-            Block::ATTACHED_MELON_STEM.name,
+    fn ids() -> Box<[u16]> {
+        [
+            Block::ATTACHED_PUMPKIN_STEM.id,
+            Block::ATTACHED_MELON_STEM.id,
         ]
+        .into()
     }
 }
 

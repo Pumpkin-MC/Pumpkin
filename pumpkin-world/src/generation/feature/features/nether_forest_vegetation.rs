@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, tag, tag::Taggable};
+use pumpkin_data::{Block, tag};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -29,7 +29,10 @@ impl NetherForestVegetationFeature {
     ) -> bool {
         let state = GenerationCache::get_block_state(chunk, &pos.down().0);
 
-        if !state.to_block().has_tag(&tag::Block::MINECRAFT_NYLIUM) {
+        if !tag::Block::MINECRAFT_NYLIUM
+            .1
+            .contains(&state.to_block_id())
+        {
             return false;
         }
         let mut result = false;

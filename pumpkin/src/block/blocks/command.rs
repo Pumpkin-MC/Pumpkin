@@ -127,7 +127,7 @@ impl CommandBlock {
         block_entity: Arc<dyn BlockEntity>,
         command: &str,
     ) {
-        let command_blocks_work = { world.level_info.read().await.game_rules.command_blocks_work };
+        let command_blocks_work = { world.level_info.load().game_rules.command_blocks_work };
         if !command_blocks_work {
             return;
         }
@@ -135,12 +135,6 @@ impl CommandBlock {
         if command.is_empty() {
             command_entity.success_count.store(0, Ordering::Release);
         } else {
-            if command == "Searge" && command_entity.track_output.load(Ordering::Relaxed) {
-                let mut last_output = command_entity.last_output.lock().await;
-                *last_output = "#itzlipofutzli".to_string();
-                return;
-            }
-
             server
                 .command_dispatcher
                 .read()
@@ -164,8 +158,7 @@ impl CommandBlock {
         let mut pos = start;
 
         while i > 0 {
-            let command_blocks_work =
-                { world.level_info.read().await.game_rules.command_blocks_work };
+            let command_blocks_work = { world.level_info.load().game_rules.command_blocks_work };
             if !command_blocks_work {
                 return;
             }
@@ -210,16 +203,13 @@ impl CommandBlock {
 }
 
 impl BlockMetadata for CommandBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[
-            Block::COMMAND_BLOCK.name,
-            Block::CHAIN_COMMAND_BLOCK.name,
-            Block::REPEATING_COMMAND_BLOCK.name,
+    fn ids() -> Box<[u16]> {
+        [
+            Block::COMMAND_BLOCK.id,
+            Block::CHAIN_COMMAND_BLOCK.id,
+            Block::REPEATING_COMMAND_BLOCK.id,
         ]
+        .into()
     }
 }
 
@@ -247,14 +237,8 @@ impl BlockBehaviour for CommandBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let command_blocks_work = {
-                args.world
-                    .level_info
-                    .read()
-                    .await
-                    .game_rules
-                    .command_blocks_work
-            };
+            let command_blocks_work =
+                { args.world.level_info.load().game_rules.command_blocks_work };
             if !command_blocks_work {
                 return;
             }
@@ -281,14 +265,8 @@ impl BlockBehaviour for CommandBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let command_blocks_work = {
-                args.world
-                    .level_info
-                    .read()
-                    .await
-                    .game_rules
-                    .command_blocks_work
-            };
+            let command_blocks_work =
+                { args.world.level_info.load().game_rules.command_blocks_work };
             if !command_blocks_work {
                 return;
             }
@@ -351,7 +329,7 @@ impl BlockBehaviour for CommandBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let send_command_feedback = {
-                let game_rules = &args.world.level_info.read().await.game_rules;
+                let game_rules = &args.world.level_info.load().game_rules;
                 game_rules.send_command_feedback
             };
 

@@ -7,7 +7,7 @@ use crate::{
         tree::CommandTree,
         tree::builder::argument,
     },
-    data::{SaveJSONConfiguration, op_data::OPERATOR_CONFIG},
+    data::SaveJSONConfiguration,
 };
 use CommandError::InvalidConsumption;
 use pumpkin_config::op::Op;
@@ -27,12 +27,13 @@ impl CommandExecutor for Executor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let mut config = OPERATOR_CONFIG.write().await;
+            let mut config = server.data.operator_config.write().await;
 
             let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
                 return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
+            let mut successes: i32 = 0;
             for player in targets {
                 let new_level = server
                     .basic_config
@@ -40,9 +41,6 @@ impl CommandExecutor for Executor {
                     .min(sender.permission_lvl());
 
                 if player.permission_lvl.load() == new_level {
-                    sender
-                        .send_message(TextComponent::translate("commands.op.failed", []))
-                        .await;
                     continue;
                 }
 
@@ -67,7 +65,7 @@ impl CommandExecutor for Executor {
                 {
                     let command_dispatcher = server.command_dispatcher.read().await;
                     player
-                        .set_permission_lvl(new_level, &command_dispatcher)
+                        .set_permission_lvl(server, new_level, &command_dispatcher)
                         .await;
                 };
 
@@ -77,9 +75,18 @@ impl CommandExecutor for Executor {
                         [player.get_display_name().await],
                     ))
                     .await;
+
+                successes += 1;
             }
 
-            Ok(())
+            if successes == 0 {
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.op.failed",
+                    [],
+                )))
+            } else {
+                Ok(successes)
+            }
         })
     }
 }

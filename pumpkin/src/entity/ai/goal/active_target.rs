@@ -7,7 +7,7 @@ use crate::entity::mob::Mob;
 use crate::entity::{EntityBase, mob::MobEntity, player::Player};
 use crate::world::World;
 use pumpkin_data::entity::EntityType;
-use rand::Rng;
+use rand::RngExt;
 use std::sync::Arc;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
@@ -67,24 +67,21 @@ impl ActiveTargetGoal {
         })
     }
 
-    async fn find_closest_target(&mut self, mob: &MobEntity) {
-        let world = &mob.living_entity.entity.world;
+    fn find_closest_target(&mut self, mob: &MobEntity) {
+        let world = mob.living_entity.entity.world.load();
         if self.target_type == &EntityType::PLAYER {
             self.target = world
                 .get_closest_player(
                     mob.living_entity.entity.pos.load(),
                     TrackTargetGoal::get_follow_range(mob).into(),
                 )
-                .await
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
         } else {
-            self.target = world
-                .get_closest_entity(
-                    mob.living_entity.entity.pos.load(),
-                    TrackTargetGoal::get_follow_range(mob).into(),
-                    Some(&[self.target_type]),
-                )
-                .await;
+            self.target = world.get_closest_entity(
+                mob.living_entity.entity.pos.load(),
+                TrackTargetGoal::get_follow_range(mob).into(),
+                Some(&[self.target_type]),
+            );
         }
     }
 }
@@ -97,7 +94,7 @@ impl Goal for ActiveTargetGoal {
             {
                 return false;
             }
-            self.find_closest_target(mob.get_mob_entity()).await;
+            self.find_closest_target(mob.get_mob_entity());
             self.target.is_some()
         })
     }

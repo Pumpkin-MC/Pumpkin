@@ -4,7 +4,7 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::{EntityBase, mob::MobEntity};
-use rand::Rng;
+use rand::RngExt;
 use std::sync::Arc;
 
 const UNSET: i32 = 0;
@@ -44,7 +44,7 @@ impl TrackTargetGoal {
     }
 
     // TODO: get from entity attribute
-    pub fn get_follow_range(_mob: &MobEntity) -> f32 {
+    pub const fn get_follow_range(_mob: &MobEntity) -> f32 {
         32.0
     }
 
@@ -65,8 +65,8 @@ impl TrackTargetGoal {
         }
         let mob_entity = mob.get_mob_entity();
         let target = target.unwrap();
-        let world = &mob_entity.living_entity.entity.world;
-        if !target_predicate.test(world.clone(), Some(&mob_entity.living_entity), target) {
+        let world = mob_entity.living_entity.entity.world.load_full();
+        if !target_predicate.test(world, Some(&mob_entity.living_entity), target) {
             return false;
         } /*else if (!this.mob.isInPositionTargetRange(target.getBlockPos())) {
         return false;

@@ -1,14 +1,14 @@
 use core::f32;
 
-use pumpkin_data::{BlockDirection, BlockState};
+use pumpkin_data::BlockDirection;
 use pumpkin_util::{
     math::{lerp, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
 
-use crate::generation::proto_chunk::GenerationCache;
 use crate::{block::BlockStateCodec, generation::rule::RuleTest, world::BlockRegistryExt};
+use crate::{block::RawBlockState, generation::proto_chunk::GenerationCache};
 
 #[derive(Deserialize)]
 pub struct OreFeature {
@@ -37,7 +37,7 @@ impl OreFeature {
     ) -> bool {
         let f = random.next_f32() * f32::consts::PI;
         let g = self.size as f32 / 8.0f32;
-        let i = ((self.size as f32 / 16.0f32 * 2.0 + 1.0) / 2.0).ceil() as i32;
+        let i = f32::midpoint(self.size as f32 / 16.0f32 * 2.0, 1.0).ceil() as i32;
 
         let d = pos.0.x as f64 + f.sin() as f64 * g as f64;
         let e = pos.0.x as f64 - f.sin() as f64 * g as f64;
@@ -94,7 +94,7 @@ impl OreFeature {
             let e = lerp(f as f64, start_y, end_y);
             let g = lerp(f as f64, start_z, end_z);
             let h = random.next_f64() * j as f64 / 16.0;
-            let l = (((f32::consts::PI * f).sin() + 1.0) * h as f32 + 1.0) / 2.0;
+            let l = f32::midpoint(((f32::consts::PI * f).sin() + 1.0) * h as f32, 1.0);
 
             ds[k as usize * 4] = d;
             ds[k as usize * 4 + 1] = e;
@@ -187,13 +187,7 @@ impl OreFeature {
                         let block_state = GenerationCache::get_block_state(chunk, &pos_vec);
 
                         for target in &self.targets {
-                            if self.should_place(
-                                chunk,
-                                block_state.to_state(),
-                                random,
-                                target,
-                                &mut mutable_pos,
-                            ) {
+                            if self.should_place(chunk, block_state, random, target, &mutable_pos) {
                                 chunk.set_block_state(&pos_vec, target.state.get_state());
                                 placed_blocks_count += 1;
                                 break; // Equivalent to 'continue block11;'
@@ -208,13 +202,13 @@ impl OreFeature {
 
     fn should_place<T: GenerationCache>(
         &self,
-        chunk: &mut T,
-        state: &'static BlockState,
+        chunk: &T,
+        state: RawBlockState,
         random: &mut RandomGenerator,
         target: &OreTarget,
-        pos: &mut BlockPos,
+        pos: &BlockPos,
     ) -> bool {
-        if !target.target.test(state, random) {
+        if !target.target.test(&state, random) {
             return false;
         }
         if Self::should_not_discard(random, self.discard_chance_on_air_exposure) {
@@ -233,7 +227,7 @@ impl OreFeature {
         random.next_f32() >= chance
     }
 
-    fn is_exposed_to_air<T: GenerationCache>(chunk: &mut T, pos: &BlockPos) -> bool {
+    fn is_exposed_to_air<T: GenerationCache>(chunk: &T, pos: &BlockPos) -> bool {
         for dir in BlockDirection::all() {
             if GenerationCache::get_block_state(chunk, &pos.offset(dir.to_offset()).0)
                 .to_state()

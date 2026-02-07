@@ -5,10 +5,6 @@ use std::{
 };
 
 use crate::{
-    data::{
-        banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST,
-        op_data::OPERATOR_CONFIG, whitelist_data::WHITELIST_CONFIG,
-    },
     entity::player::ChatMode,
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
@@ -86,15 +82,10 @@ impl Default for PlayerConfig {
     }
 }
 
-pub enum PacketHandlerState {
-    PacketReady,
-    Stop,
-}
-
 /// This is just a Wrapper for both Java & Bedrock connections
-#[derive(Clone)]
+#[expect(clippy::large_enum_variant)]
 pub enum ClientPlatform {
-    Java(Arc<JavaClient>),
+    Java(JavaClient),
     Bedrock(Arc<BedrockClient>),
 }
 
@@ -119,7 +110,7 @@ impl ClientPlatform {
     /// This function should only be used where you know that the client is java!
     #[inline]
     #[must_use]
-    pub fn java(&self) -> &Arc<JavaClient> {
+    pub fn java(&self) -> &JavaClient {
         if let Self::Java(client) = self {
             return client;
         }
@@ -129,8 +120,8 @@ impl ClientPlatform {
     #[must_use]
     pub fn closed(&self) -> bool {
         match self {
-            Self::Java(java) => java.closed.load(Ordering::Relaxed),
-            Self::Bedrock(bedrock) => bedrock.closed.load(Ordering::Relaxed),
+            Self::Java(java) => java.is_closed(),
+            Self::Bedrock(bedrock) => bedrock.is_closed(),
         }
     }
 
@@ -183,7 +174,7 @@ pub async fn can_not_join(
         "[year]-[month]-[day] at [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
     );
 
-    let mut banned_players = BANNED_PLAYER_LIST.write().await;
+    let mut banned_players = server.data.banned_player_list.write().await;
     if let Some(entry) = banned_players.get_entry(profile) {
         let text = TextComponent::translate(
             "multiplayer.disconnect.banned.reason",
@@ -202,8 +193,8 @@ pub async fn can_not_join(
     drop(banned_players);
 
     if server.white_list.load(Ordering::Relaxed) {
-        let ops = OPERATOR_CONFIG.read().await;
-        let whitelist = WHITELIST_CONFIG.read().await;
+        let ops = server.data.operator_config.read().await;
+        let whitelist = server.data.whitelist_config.read().await;
 
         if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
             return Some(TextComponent::translate(
@@ -213,7 +204,13 @@ pub async fn can_not_join(
         }
     }
 
-    if let Some(entry) = BANNED_IP_LIST.write().await.get_entry(&address.ip()) {
+    if let Some(entry) = server
+        .data
+        .banned_ip_list
+        .write()
+        .await
+        .get_entry(&address.ip())
+    {
         let text = TextComponent::translate(
             "multiplayer.disconnect.banned_ip.reason",
             [TextComponent::text(entry.reason.clone())],
@@ -379,7 +376,7 @@ mod tests {
 
     /// Test case for a standard, valid English name at max length.
     #[test]
-    fn test_valid_max_length_ascii() {
+    fn valid_max_length_ascii() {
         let name = "player_name_1234"; // 16 characters (16 bytes)
         assert!(
             is_valid_player_name(name),
@@ -389,7 +386,7 @@ mod tests {
 
     /// Test case for a short, valid ASCII name.
     #[test]
-    fn test_valid_short_ascii() {
+    fn valid_short_ascii() {
         let name = "GamerX";
         assert!(
             is_valid_player_name(name),
@@ -399,7 +396,7 @@ mod tests {
 
     /// Test case for a name containing allowed punctuation (codepoints 33-126).
     #[test]
-    fn test_valid_with_punctuation() {
+    fn valid_with_punctuation() {
         let name = "!-@#$%.^&*_+-=";
         assert!(
             is_valid_player_name(name),
@@ -409,7 +406,7 @@ mod tests {
 
     /// Test case for allowed high-codepoint Unicode characters (like Chinese/CJK).
     #[test]
-    fn test_valid_unicode_chinese() {
+    fn valid_unicode_chinese() {
         let name = "玩家一号"; // 4 characters, 12 bytes
         assert!(
             is_valid_player_name(name),
@@ -419,7 +416,7 @@ mod tests {
 
     /// Test case for a mix of valid ASCII and Unicode characters.
     #[test]
-    fn test_valid_mixed_chars() {
+    fn valid_mixed_chars() {
         let name = "Player_玩家"; // 9 characters
         assert!(
             is_valid_player_name(name),
@@ -429,7 +426,7 @@ mod tests {
 
     /// Test case for a name that exceeds the 16-byte limit (ASCII).
     #[test]
-    fn test_invalid_length_ascii_over() {
+    fn invalid_length_ascii_over() {
         let name = "this_name_is_too_long"; // 21 characters (21 bytes)
         assert!(
             !is_valid_player_name(name),
@@ -439,7 +436,7 @@ mod tests {
 
     /// Test case for a name that exceeds the 16-byte limit (Unicode).
     #[test]
-    fn test_invalid_length_unicode_over() {
+    fn invalid_length_unicode_over() {
         let name = "超长玩家名称哈哈"; // 8 Chinese characters * 3 bytes/char = 24 bytes
         assert!(
             !is_valid_player_name(name),
@@ -449,7 +446,7 @@ mod tests {
 
     /// Test case for a name containing a standard space (codepoint 32).
     #[test]
-    fn test_invalid_contains_space() {
+    fn invalid_contains_space() {
         let name = "Player Name";
         assert!(
             !is_valid_player_name(name),
@@ -459,7 +456,7 @@ mod tests {
 
     /// Test case for an empty string (length 0, but included for completeness).
     #[test]
-    fn test_invalid_empty_string() {
+    fn invalid_empty_string() {
         let name = "";
         assert!(
             is_valid_player_name(name),
@@ -469,7 +466,7 @@ mod tests {
 
     /// Test case for a name containing a control character (e.g., Null, codepoint 0).
     #[test]
-    fn test_invalid_contains_null() {
+    fn invalid_contains_null() {
         let name = "Player\0Name";
         assert!(
             !is_valid_player_name(name),
@@ -479,7 +476,7 @@ mod tests {
 
     /// Test case for a name containing a newline character (codepoint 10).
     #[test]
-    fn test_invalid_contains_newline() {
+    fn invalid_contains_newline() {
         let name = "Player\nName";
         assert!(
             !is_valid_player_name(name),
@@ -489,7 +486,7 @@ mod tests {
 
     /// Test case for a name containing the DEL control character (codepoint 127).
     #[test]
-    fn test_invalid_contains_del() {
+    fn invalid_contains_del() {
         // DEL character is char::from_u32(127).unwrap()
         let name = format!("Player{}Name", 127u8 as char);
         assert!(

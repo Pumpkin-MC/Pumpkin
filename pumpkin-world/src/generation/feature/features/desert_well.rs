@@ -5,9 +5,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::generation::chunk_noise::WATER_BLOCK;
-use crate::generation::proto_chunk::GenerationCache;
-// TODO: remove .to_state()
+use crate::generation::{noise::WATER_BLOCK, proto_chunk::GenerationCache};
 
 #[derive(Deserialize)]
 pub struct DesertWellFeature;
@@ -31,9 +29,9 @@ impl DesertWellFeature {
         while chunk.is_air(&block_pos.0) && block_pos.0.y > chunk.bottom_y() as i32 + 2 {
             block_pos = block_pos.down();
         }
-        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block();
+        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
         const CAN_GENERATE: Block = Block::SAND;
-        if CAN_GENERATE.id != block.id {
+        if CAN_GENERATE.id != block {
             return false;
         }
 
@@ -61,7 +59,7 @@ impl DesertWellFeature {
 
         chunk.set_block_state(&block_pos.0, WATER_BLOCK.default_state);
 
-        for direction in BlockDirection::horizontal().iter() {
+        for direction in &BlockDirection::horizontal() {
             chunk.set_block_state(
                 &block_pos.0.add(&direction.to_offset()),
                 WATER_BLOCK.default_state,
@@ -71,7 +69,7 @@ impl DesertWellFeature {
         let block_pos2 = &block_pos.0.add(&Vector3::new(0, -1, 0));
         chunk.set_block_state(block_pos2, Self::SAND.default_state);
 
-        for direction2 in BlockDirection::horizontal().iter() {
+        for direction2 in &BlockDirection::horizontal() {
             chunk.set_block_state(
                 &block_pos2.add(&direction2.to_offset()),
                 Self::SAND.default_state,

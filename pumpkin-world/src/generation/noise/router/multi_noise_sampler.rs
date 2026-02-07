@@ -1,4 +1,5 @@
 use pumpkin_data::noise_router::WrapperType;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     biome::multi_noise::{NoiseValuePoint, to_long},
@@ -11,7 +12,7 @@ use super::{
         SampleAction,
     },
     chunk_noise_router::ChunkNoiseFunctionComponent,
-    density_function::{NoiseFunctionComponentRange, PassThrough, UnblendedNoisePos},
+    density_function::{NoiseFunctionComponentRange, PassThrough},
     proto_noise_router::{ProtoMultiNoiseRouter, ProtoNoiseFunctionComponent},
 };
 
@@ -25,7 +26,8 @@ pub struct MultiNoiseSamplerBuilderOptions {
 }
 
 impl MultiNoiseSamplerBuilderOptions {
-    pub fn new(start_biome_x: i32, start_biome_z: i32, horizontal_biome_end: usize) -> Self {
+    #[must_use]
+    pub const fn new(start_biome_x: i32, start_biome_z: i32, horizontal_biome_end: usize) -> Self {
         Self {
             start_biome_x,
             start_biome_z,
@@ -51,7 +53,7 @@ impl<'a> MultiNoiseSampler<'a> {
         let block_y = biome_coords::to_block(biome_y);
         let block_z = biome_coords::to_block(biome_z);
 
-        let pos = UnblendedNoisePos::new(block_x, block_y, block_z);
+        let pos = Vector3::new(block_x, block_y, block_z);
         let sample_options =
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
 
@@ -102,7 +104,7 @@ impl<'a> MultiNoiseSampler<'a> {
     }
 
     pub fn sample_erosion(&mut self, block_x: i32, block_y: i32, block_z: i32) -> f64 {
-        let pos = UnblendedNoisePos::new(block_x, block_y, block_z);
+        let pos = Vector3::new(block_x, block_y, block_z);
         let sample_options =
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
 
@@ -113,6 +115,7 @@ impl<'a> MultiNoiseSampler<'a> {
         )
     }
 
+    #[must_use]
     pub fn generate(
         base: &'a ProtoMultiNoiseRouter,
         build_options: &MultiNoiseSamplerBuilderOptions,
@@ -122,7 +125,7 @@ impl<'a> MultiNoiseSampler<'a> {
         // (Should we traverse the functions and update the indices?)
         let mut component_stack =
             Vec::<ChunkNoiseFunctionComponent>::with_capacity(base.full_component_stack.len());
-        for base_component in base.full_component_stack.iter() {
+        for base_component in &base.full_component_stack {
             let chunk_component = match base_component {
                 ProtoNoiseFunctionComponent::Dependent(dependent) => {
                     ChunkNoiseFunctionComponent::Dependent(dependent)
@@ -176,11 +179,7 @@ impl<'a> MultiNoiseSampler<'a> {
                                     let block_z_position =
                                         biome_coords::to_block(absolute_biome_z_position);
 
-                                    let pos = UnblendedNoisePos::new(
-                                        block_x_position,
-                                        0,
-                                        block_z_position,
-                                    );
+                                    let pos = Vector3::new(block_x_position, 0, block_z_position);
 
                                     //NOTE: Due to our stack invariant, what is on the stack is a
                                     // valid density function
@@ -237,7 +236,7 @@ mod test {
     use super::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions};
 
     #[test]
-    fn test_sample() {
+    fn sample() {
         let seed = 123;
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
@@ -253,11 +252,11 @@ mod test {
             depth: -19774,
             weirdness: 4421,
         };
-        assert_eq!(sampler.sample(123, 123, 123), expected)
+        assert_eq!(sampler.sample(123, 123, 123), expected);
     }
 
     #[test]
-    fn test_sample_2() {
+    fn sample_2() {
         // we use a different seed
         let seed = 13579;
         let random_config = GlobalRandomConfig::new(seed, false);
@@ -274,6 +273,6 @@ mod test {
             depth: -21237,
             weirdness: -5222,
         };
-        assert_eq!(sampler.sample(123, 123, 123), expected)
+        assert_eq!(sampler.sample(123, 123, 123), expected);
     }
 }

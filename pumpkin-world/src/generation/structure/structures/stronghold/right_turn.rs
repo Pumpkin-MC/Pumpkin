@@ -11,7 +11,10 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
+            stronghold::{
+                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                StrongholdPieceType,
+            },
         },
     },
 };
@@ -65,19 +68,37 @@ impl StructurePieceBase for RightTurnPiece {
         &self,
         start: &StructurePiece,
         random: &mut RandomGenerator,
+        weights: &mut Vec<PieceWeight>,
+        last_piece_type: &mut Option<StrongholdPieceType>,
+        _has_portal_room: &mut bool,
+
         collector: &mut StructurePiecesCollector,
         pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
         let facing = self.piece.piece.facing.unwrap_or(BlockDirection::North);
 
-        // For a Right Turn, we swap the logic from the Left Turn:
-        // If facing North/East, we go "South-East", otherwise "North-West"
         if facing == BlockDirection::North || facing == BlockDirection::East {
-            self.piece
-                .fill_se_opening(start, collector, random, 1, 1, pieces_to_process);
+            self.piece.fill_se_opening(
+                start,
+                collector,
+                random,
+                weights,
+                last_piece_type,
+                1,
+                1,
+                pieces_to_process,
+            );
         } else {
-            self.piece
-                .fill_nw_opening(start, collector, random, 1, 1, pieces_to_process);
+            self.piece.fill_nw_opening(
+                start,
+                collector,
+                random,
+                weights,
+                last_piece_type,
+                1,
+                1,
+                pieces_to_process,
+            );
         }
     }
 
@@ -88,7 +109,6 @@ impl StructurePieceBase for RightTurnPiece {
         let inner = &p.piece;
 
         // 1. 5x5x5 Outline (Using randomizer)
-        // Note: Use your existing fill_outline_random for this part
         inner.fill_outline_random(
             0,
             0,

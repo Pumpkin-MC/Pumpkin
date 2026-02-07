@@ -125,7 +125,9 @@ impl RCONClient {
                     let server_clone = server.clone();
                     let output_clone = output.clone();
                     let packet_body = packet.get_body().to_owned();
-                    tokio::spawn(async move {
+
+                    // Wait task complete before send output
+                    let _ = tokio::spawn(async move {
                         server_clone
                             .command_dispatcher
                             .read()
@@ -136,7 +138,8 @@ impl RCONClient {
                                 &packet_body,
                             )
                             .await;
-                    });
+                    })
+                    .await;
 
                     let output = output.lock().await;
                     for line in output.iter() {

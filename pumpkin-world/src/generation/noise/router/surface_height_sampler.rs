@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-
 use pumpkin_data::noise_router::WrapperType;
+use pumpkin_util::math::vector3::Vector3;
+use rustc_hash::FxHashMap;
 
 use crate::generation::{biome_coords, positions::chunk_pos};
 
@@ -10,7 +10,7 @@ use super::{
         SampleAction,
     },
     chunk_noise_router::ChunkNoiseFunctionComponent,
-    density_function::{NoiseFunctionComponentRange, PassThrough, UnblendedNoisePos},
+    density_function::{NoiseFunctionComponentRange, PassThrough},
     proto_noise_router::{ProtoNoiseFunctionComponent, ProtoSurfaceEstimator},
 };
 
@@ -30,7 +30,8 @@ pub struct SurfaceHeightSamplerBuilderOptions {
 }
 
 impl SurfaceHeightSamplerBuilderOptions {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         start_biome_x: i32,
         start_biome_z: i32,
         horizontal_biome_end: usize,
@@ -57,7 +58,7 @@ pub struct SurfaceHeightEstimateSampler<'a> {
     component_stack: Box<[ChunkNoiseFunctionComponent<'a>]>,
 
     // TODO: Can this be a flat map? I think the aquifer sampler samples outside of the chunk
-    cache: HashMap<u64, i32>,
+    cache: FxHashMap<u64, i32>,
 }
 
 impl<'a> SurfaceHeightEstimateSampler<'a> {
@@ -89,7 +90,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
             let mid = low + ((high - low) / 2);
             let stepped_mid = mid - (mid % self.y_level_step_count as i32);
 
-            let pos = UnblendedNoisePos::new(aligned_x, stepped_mid, aligned_z);
+            let pos = Vector3::new(aligned_x, stepped_mid, aligned_z);
             let density = ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut self.component_stack,
                 &pos,
@@ -107,6 +108,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
         result
     }
 
+    #[must_use]
     pub fn generate(
         base: &'a ProtoSurfaceEstimator,
         build_options: &SurfaceHeightSamplerBuilderOptions,
@@ -116,7 +118,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
         // (Should we traverse the functions and update the indices?)
         let mut component_stack =
             Vec::<ChunkNoiseFunctionComponent>::with_capacity(base.full_component_stack.len());
-        for base_component in base.full_component_stack.iter() {
+        for base_component in &base.full_component_stack {
             let chunk_component = match base_component {
                 ProtoNoiseFunctionComponent::Dependent(dependent) => {
                     ChunkNoiseFunctionComponent::Dependent(dependent)
@@ -170,11 +172,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
                                     let block_z_position =
                                         biome_coords::to_block(absolute_biome_z_position);
 
-                                    let pos = UnblendedNoisePos::new(
-                                        block_x_position,
-                                        0,
-                                        block_z_position,
-                                    );
+                                    let pos = Vector3::new(block_x_position, 0, block_z_position);
 
                                     //NOTE: Due to our stack invariant, what is on the stack is a
                                     // valid density function
@@ -214,7 +212,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
             minimum_y: build_options.minimum_y,
             y_level_step_count: build_options.y_level_step_count,
 
-            cache: HashMap::new(),
+            cache: FxHashMap::default(),
         }
     }
 }

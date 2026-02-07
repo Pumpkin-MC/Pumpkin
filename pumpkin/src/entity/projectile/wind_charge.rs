@@ -27,7 +27,7 @@ pub struct WindChargeEntity {
 
 impl WindChargeEntity {
     #[must_use]
-    pub fn new(thrown_item_entity: ThrownItemEntity) -> Self {
+    pub const fn new(thrown_item_entity: ThrownItemEntity) -> Self {
         Self {
             deflect_cooldown: AtomicU8::new(DEFAULT_DEFLECT_COOLDOWN),
             thrown_item_entity,
@@ -45,6 +45,7 @@ impl WindChargeEntity {
     pub async fn create_explosion(&self, position: Vector3<f64>) {
         self.get_entity()
             .world
+            .load()
             .explode(position, EXPLOSION_POWER)
             .await;
     }
@@ -102,7 +103,7 @@ impl EntityBase for WindChargeEntity {
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            self.thrown_item_entity.tick(caller, server).await;
+            self.thrown_item_entity.process_tick(caller, server).await;
 
             if self.get_deflect_cooldown() > 0 {
                 self.set_deflect_cooldown(self.get_deflect_cooldown() - 1);

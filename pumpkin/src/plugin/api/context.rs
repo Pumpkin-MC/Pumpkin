@@ -50,9 +50,9 @@ impl Context {
         server: Arc<Server>,
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
-        permission_manager: Arc<RwLock<PermissionManager>>,
         logger: Arc<OnceLock<LoggerOption>>,
     ) -> Self {
+        let permission_manager = server.permission_manager.clone();
         Self {
             metadata,
             server,
@@ -83,8 +83,9 @@ impl Context {
     ///
     /// # Returns
     /// An optional reference to the player if found, or `None` if not.
-    pub async fn get_player_by_name(&self, player_name: String) -> Option<Arc<Player>> {
-        self.server.get_player_by_name(&player_name).await
+    #[must_use]
+    pub fn get_player_by_name(&self, player_name: &str) -> Option<Arc<Player>> {
+        self.server.get_player_by_name(player_name)
     }
 
     /// Registers a service with the plugin context.
@@ -100,7 +101,7 @@ impl Context {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// context.register_service("my_service", Arc::new(MyService::new())).await;
     /// ```
     pub async fn register_service<N: Into<String>, T: Payload + 'static>(
@@ -131,7 +132,7 @@ impl Context {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// if let Some(service) = context.get_service::<MyService>("my_service").await {
     ///     // Use the service
     /// }
@@ -166,10 +167,15 @@ impl Context {
             dispatcher_lock.register(tree, full_permission_node);
         };
 
-        for world in self.server.worlds.read().await.iter() {
-            for player in world.players.read().await.values() {
+        for world in self.server.worlds.load().iter() {
+            for player in world.players.load().iter() {
                 let command_dispatcher = self.server.command_dispatcher.read().await;
-                client_suggestions::send_c_commands_packet(player, &command_dispatcher).await;
+                client_suggestions::send_c_commands_packet(
+                    player,
+                    &self.server,
+                    &command_dispatcher,
+                )
+                .await;
             }
         }
     }
@@ -184,10 +190,15 @@ impl Context {
             dispatcher_lock.unregister(name);
         };
 
-        for world in self.server.worlds.read().await.iter() {
-            for player in world.players.read().await.values() {
+        for world in self.server.worlds.load().iter() {
+            for player in world.players.load().iter() {
                 let command_dispatcher = self.server.command_dispatcher.read().await;
-                client_suggestions::send_c_commands_packet(player, &command_dispatcher).await;
+                client_suggestions::send_c_commands_packet(
+                    player,
+                    &self.server,
+                    &command_dispatcher,
+                )
+                .await;
             }
         }
     }
@@ -213,7 +224,7 @@ impl Context {
         let permission_manager = self.permission_manager.read().await;
 
         // If the player isn't online, we need to find their op level
-        let player_op_level = (self.server.get_player_by_uuid(*player_uuid).await)
+        let player_op_level = (self.server.get_player_by_uuid(*player_uuid))
             .map_or(PermissionLvl::Zero, |player| player.permission_lvl.load());
 
         permission_manager
@@ -272,7 +283,7 @@ impl Context {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// // Create and register a custom Lua plugin loader
     /// let lua_loader = Arc::new(LuaPluginLoader::new());
     /// context.register_plugin_loader(lua_loader).await;

@@ -35,65 +35,68 @@ pub enum RakReliability {
 }
 
 impl RakReliability {
-    pub fn is_reliable(&self) -> bool {
+    #[must_use]
+    pub const fn is_reliable(&self) -> bool {
         matches!(
             self,
-            RakReliability::Reliable
-                | RakReliability::ReliableOrdered
-                | RakReliability::ReliableSequenced
-                | RakReliability::ReliableWithAckReceipt
-                | RakReliability::ReliableOrderedWithAckReceipt
+            Self::Reliable
+                | Self::ReliableOrdered
+                | Self::ReliableSequenced
+                | Self::ReliableWithAckReceipt
+                | Self::ReliableOrderedWithAckReceipt
         )
     }
 
-    pub fn is_sequenced(&self) -> bool {
+    #[must_use]
+    pub const fn is_sequenced(&self) -> bool {
+        matches!(self, Self::ReliableSequenced | Self::UnreliableSequenced)
+    }
+
+    #[must_use]
+    pub const fn is_ordered(&self) -> bool {
         matches!(
             self,
-            RakReliability::ReliableSequenced | RakReliability::UnreliableSequenced
+            Self::UnreliableSequenced
+                | Self::ReliableOrdered
+                | Self::ReliableSequenced
+                | Self::ReliableOrderedWithAckReceipt
         )
     }
 
-    pub fn is_ordered(&self) -> bool {
+    #[must_use]
+    pub const fn is_order_exclusive(&self) -> bool {
         matches!(
             self,
-            RakReliability::UnreliableSequenced
-                | RakReliability::ReliableOrdered
-                | RakReliability::ReliableSequenced
-                | RakReliability::ReliableOrderedWithAckReceipt
+            Self::ReliableOrdered | Self::ReliableOrderedWithAckReceipt
         )
     }
 
-    pub fn is_order_exclusive(&self) -> bool {
-        matches!(
-            self,
-            RakReliability::ReliableOrdered | RakReliability::ReliableOrderedWithAckReceipt
-        )
-    }
-
-    pub fn from_id(id: u8) -> Option<Self> {
+    #[must_use]
+    pub const fn from_id(id: u8) -> Option<Self> {
         match id {
-            0 => Some(RakReliability::Unreliable),
-            1 => Some(RakReliability::UnreliableSequenced),
-            2 => Some(RakReliability::Reliable),
-            3 => Some(RakReliability::ReliableOrdered),
-            4 => Some(RakReliability::ReliableSequenced),
-            5 => Some(RakReliability::UnreliableWithAckReceipt),
-            6 => Some(RakReliability::ReliableWithAckReceipt),
-            7 => Some(RakReliability::ReliableOrderedWithAckReceipt),
+            0 => Some(Self::Unreliable),
+            1 => Some(Self::UnreliableSequenced),
+            2 => Some(Self::Reliable),
+            3 => Some(Self::ReliableOrdered),
+            4 => Some(Self::ReliableSequenced),
+            5 => Some(Self::UnreliableWithAckReceipt),
+            6 => Some(Self::ReliableWithAckReceipt),
+            7 => Some(Self::ReliableOrderedWithAckReceipt),
             _ => None,
         }
     }
 
-    pub fn to_id(&self) -> u8 {
+    #[must_use]
+    pub const fn to_id(&self) -> u8 {
         match self {
-            RakReliability::Unreliable => 0,
-            RakReliability::UnreliableSequenced => 1,
-            RakReliability::Reliable => 2,
-            RakReliability::ReliableOrdered => 3,
-            RakReliability::ReliableSequenced => 4,
-            RakReliability::UnreliableWithAckReceipt => 5,
-            RakReliability::ReliableWithAckReceipt => 6,
-            RakReliability::ReliableOrderedWithAckReceipt => 7,
+            Self::Unreliable => 0,
+            Self::UnreliableSequenced => 1,
+            Self::Reliable => 2,
+            Self::ReliableOrdered => 3,
+            Self::ReliableSequenced => 4,
+            Self::UnreliableWithAckReceipt => 5,
+            Self::ReliableWithAckReceipt => 6,
+            Self::ReliableOrderedWithAckReceipt => 7,
         }
     }
 }

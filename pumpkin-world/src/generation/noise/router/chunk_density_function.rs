@@ -3,10 +3,10 @@ use std::mem;
 
 use super::{
     chunk_noise_router::{ChunkNoiseFunctionComponent, MutableChunkNoiseFunctionComponentImpl},
-    density_function::{IndexToNoisePos, NoiseFunctionComponentRange, NoisePos},
+    density_function::{IndexToNoisePos, NoiseFunctionComponentRange},
 };
 use enum_dispatch::enum_dispatch;
-use pumpkin_util::math::{lerp, lerp3};
+use pumpkin_util::math::{lerp, lerp3, vector3::Vector3};
 
 use crate::generation::{biome_coords, positions::chunk_pos};
 
@@ -20,16 +20,17 @@ thread_local! {
 fn get_buffer(len: usize) -> Box<[f64]> {
     F64_BUFFER_POOL.with(|pool| {
         let mut buffers = pool.borrow_mut();
-        if let Some(mut buf) = buffers.pop() {
-            if buf.len() != len {
-                buf.resize(len, 0.0);
-            } else {
-                buf.fill(0.0);
-            }
-            buf.into_boxed_slice()
-        } else {
-            vec![0.0; len].into_boxed_slice()
-        }
+        buffers.pop().map_or_else(
+            || vec![0.0; len].into_boxed_slice(),
+            |mut buf| {
+                if buf.len() == len {
+                    buf.fill(0.0);
+                } else {
+                    buf.resize(len, 0.0);
+                }
+                buf.into_boxed_slice()
+            },
+        )
     })
 }
 
@@ -56,6 +57,7 @@ pub struct WrapperData {
 }
 
 impl WrapperData {
+    #[must_use]
     pub fn new(
         cell_x_block_position: usize,
         cell_y_block_position: usize,
@@ -104,7 +106,7 @@ pub enum SampleAction {
 }
 
 pub struct ChunkNoiseFunctionSampleOptions {
-    populating_caches: bool,
+    pub(crate) populating_caches: bool,
     pub(crate) action: SampleAction,
 
     // Global IDs for the `CacheOnce` wrapper
@@ -116,6 +118,7 @@ pub struct ChunkNoiseFunctionSampleOptions {
 }
 
 impl ChunkNoiseFunctionSampleOptions {
+    #[must_use]
     pub const fn new(
         populating_caches: bool,
         action: SampleAction,
@@ -151,6 +154,7 @@ pub struct ChunkNoiseFunctionBuilderOptions {
 }
 
 impl ChunkNoiseFunctionBuilderOptions {
+    #[must_use]
     pub const fn new(
         horizontal_cell_block_count: usize,
         vertical_cell_block_count: usize,
@@ -205,6 +209,7 @@ impl NoiseFunctionComponentRange for DensityInterpolator {
 }
 
 impl DensityInterpolator {
+    #[must_use]
     pub fn new(
         input_index: usize,
         min_value: f64,
@@ -233,7 +238,11 @@ impl DensityInterpolator {
     }
 
     #[inline]
-    pub(crate) fn yz_to_buf_index(&self, cell_y_position: usize, cell_z_position: usize) -> usize {
+    pub(crate) const fn yz_to_buf_index(
+        &self,
+        cell_y_position: usize,
+        cell_z_position: usize,
+    ) -> usize {
         cell_z_position * (self.vertical_cell_count + 1) + cell_y_position
     }
 
@@ -305,7 +314,7 @@ impl MutableChunkNoiseFunctionComponentImpl for DensityInterpolator {
     fn sample(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         match &sample_options.action {
@@ -393,11 +402,11 @@ impl MutableChunkNoiseFunctionComponentImpl for FlatCache {
     fn sample(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
-        let absolute_biome_x_position = biome_coords::from_block(pos.x());
-        let absolute_biome_z_position = biome_coords::from_block(pos.z());
+        let absolute_biome_x_position = biome_coords::from_block(pos.x);
+        let absolute_biome_z_position = biome_coords::from_block(pos.z);
 
         let relative_biome_x_position = absolute_biome_x_position - self.start_biome_x;
         let relative_biome_z_position = absolute_biome_z_position - self.start_biome_z;
@@ -432,6 +441,7 @@ impl Drop for FlatCache {
 }
 
 impl FlatCache {
+    #[must_use]
     pub fn new(
         input_index: usize,
         min_value: f64,
@@ -452,7 +462,12 @@ impl FlatCache {
     }
 
     #[inline]
-    pub fn xz_to_index_const(&self, biome_x_position: usize, biome_z_position: usize) -> usize {
+    #[must_use]
+    pub const fn xz_to_index_const(
+        &self,
+        biome_x_position: usize,
+        biome_z_position: usize,
+    ) -> usize {
         biome_x_position * (self.horizontal_biome_end + 1) + biome_z_position
     }
 }
@@ -483,10 +498,10 @@ impl MutableChunkNoiseFunctionComponentImpl for Cache2D {
     fn sample(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
-        let packed_column = chunk_pos::packed(pos.x() as u64, pos.z() as u64);
+        let packed_column = chunk_pos::packed(pos.x as u64, pos.z as u64);
         if packed_column == self.last_sample_column {
             self.last_sample_result
         } else {
@@ -504,6 +519,7 @@ impl MutableChunkNoiseFunctionComponentImpl for Cache2D {
 }
 
 impl Cache2D {
+    #[must_use]
     pub fn new(input_index: usize, min_value: f64, max_value: f64) -> Self {
         Self {
             input_index,
@@ -545,7 +561,7 @@ impl MutableChunkNoiseFunctionComponentImpl for CacheOnce {
     fn sample(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         match sample_options.action {
@@ -608,6 +624,7 @@ impl MutableChunkNoiseFunctionComponentImpl for CacheOnce {
 }
 
 impl CacheOnce {
+    #[must_use]
     pub fn new(input_index: usize, min_value: f64, max_value: f64) -> Self {
         Self {
             input_index,
@@ -646,7 +663,7 @@ impl MutableChunkNoiseFunctionComponentImpl for CellCache {
     fn sample(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         match &sample_options.action {
@@ -676,6 +693,7 @@ impl MutableChunkNoiseFunctionComponentImpl for CellCache {
 }
 
 impl CellCache {
+    #[must_use]
     pub fn new(
         input_index: usize,
         min_value: f64,

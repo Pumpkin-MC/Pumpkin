@@ -14,7 +14,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
-use rand::Rng;
+use rand::RngExt;
 
 use super::redstone::block_receives_redstone_power;
 
@@ -54,7 +54,7 @@ impl BlockBehaviour for TNTBlock {
                 return BlockActionResult::Pass;
             }
             let world = args.player.world();
-            Self::prime(world, args.position).await;
+            Self::prime(&world, args.position).await;
 
             BlockActionResult::Consume
         })

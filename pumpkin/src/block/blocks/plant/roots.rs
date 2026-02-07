@@ -12,12 +12,8 @@ use crate::block::{
 pub struct RootsBlock;
 
 impl BlockMetadata for RootsBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::WARPED_ROOTS.name, Block::CRIMSON_ROOTS.name]
+    fn ids() -> Box<[u16]> {
+        [Block::WARPED_ROOTS.id, Block::CRIMSON_ROOTS.id].into()
     }
 }
 

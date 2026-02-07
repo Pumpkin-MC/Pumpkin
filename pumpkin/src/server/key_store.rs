@@ -26,8 +26,7 @@ impl KeyStore {
         let public_key_der = public_key
             .to_public_key_der()
             .expect("Failed to encode public key to SPKI DER")
-            .as_bytes()
-            .to_vec()
+            .into_vec()
             .into_boxed_slice();
 
         log::debug!("Created RSA keys, took {}ms", instant.elapsed().as_millis());
@@ -39,10 +38,8 @@ impl KeyStore {
     }
 
     fn generate_private_key() -> RsaPrivateKey {
-        // Found out that OsRng is faster than rand::thread_rng here
         let mut rng = rand::rng();
 
-        // let pub_key = RsaPublicKey::from(&priv_key);
         RsaPrivateKey::new(&mut rng, 1024).expect("Failed to generate a key")
     }
 

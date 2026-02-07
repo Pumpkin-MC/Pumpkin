@@ -7,9 +7,8 @@ use crate::command::tree::RawArgs;
 use crate::server::Server;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 
-pub struct ResourceLocationArgumentConsumer {
-    autocomplete: bool,
-}
+// TODO: Add proper autocomplete
+pub struct ResourceLocationArgumentConsumer;
 
 impl GetClientSideArgParser for ResourceLocationArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType<'_> {
@@ -28,9 +27,6 @@ impl ArgumentConsumer for ResourceLocationArgumentConsumer {
         _server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        if !self.autocomplete {
-            return Box::pin(async move { None });
-        }
         let s_opt: Option<&'a str> = args.pop();
 
         Box::pin(async move { s_opt.map(Arg::ResourceLocation) })
@@ -74,12 +70,5 @@ impl<'a> FindArg<'a> for ResourceLocationArgumentConsumer {
             Some(Arg::ResourceLocation(data)) => Ok(data),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
-    }
-}
-
-impl ResourceLocationArgumentConsumer {
-    #[must_use]
-    pub const fn new(autocomplete: bool) -> Self {
-        Self { autocomplete }
     }
 }

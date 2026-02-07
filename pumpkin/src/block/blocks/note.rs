@@ -33,7 +33,7 @@ impl NoteBlock {
         }
     }
     fn get_note_pitch(note: u16) -> f32 {
-        2.0f32.powf((f32::from(note) - 12.0) / 12.0)
+        ((f32::from(note) - 12.0) / 12.0).exp2()
     }
 
     async fn get_state_with_instrument(
@@ -176,7 +176,7 @@ impl BlockBehaviour for NoteBlock {
     }
 }
 
-fn convert_instrument_to_sound(instrument: Instrument) -> Sound {
+const fn convert_instrument_to_sound(instrument: Instrument) -> Sound {
     match instrument {
         Instrument::Harp => Sound::BlockNoteBlockHarp,
         Instrument::Basedrum => Sound::BlockNoteBlockBasedrum,
@@ -204,7 +204,7 @@ fn convert_instrument_to_sound(instrument: Instrument) -> Sound {
     }
 }
 
-fn is_base_block(instrument: Instrument) -> bool {
+const fn is_base_block(instrument: Instrument) -> bool {
     matches!(
         instrument,
         Instrument::Harp

@@ -40,10 +40,12 @@ impl PerlinNoiseSampler {
     }
 
     #[inline]
+    #[must_use]
     pub fn sample_flat_y(&self, x: f64, y: f64, z: f64) -> f64 {
         self.sample_no_fade(x, y, z, 0.0, 0.0)
     }
 
+    #[must_use]
     pub fn sample_no_fade(&self, x: f64, y: f64, z: f64, y_scale: f64, y_max: f64) -> f64 {
         let true_x = x + self.x_origin;
         let true_y = y + self.y_origin;
@@ -57,15 +59,15 @@ impl PerlinNoiseSampler {
         let y_dec = true_y - y_floor;
         let z_dec = true_z - z_floor;
 
-        let y_noise = if y_scale != 0.0 {
+        let y_noise = if y_scale == 0.0 {
+            0.0
+        } else {
             let raw_y_dec = if y_max >= 0.0 && y_max < y_dec {
                 y_max
             } else {
                 y_dec
             };
             (raw_y_dec / y_scale + 1E-7).floor() * y_scale
-        } else {
-            0.0
         };
 
         self.sample(
@@ -85,16 +87,18 @@ impl PerlinNoiseSampler {
     }
 
     #[inline]
+    #[expect(clippy::suboptimal_flops)]
     fn perlin_fade(value: f64) -> f64 {
         value * value * value * (value * (value * 6.0 - 15.0) + 10.0)
     }
 
     #[inline]
     fn map(&self, input: i32) -> i32 {
-        self.permutation[(input & 0xFF) as usize] as i32
+        i32::from(self.permutation[(input & 0xFF) as usize])
     }
 
     #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::many_single_char_names)]
     fn sample(
         &self,
         x: i32,
@@ -147,7 +151,8 @@ pub struct OctavePerlinNoiseSampler {
 }
 
 impl OctavePerlinNoiseSampler {
-    pub fn max_value(&self) -> f64 {
+    #[must_use]
+    pub const fn max_value(&self) -> f64 {
         self.max_value
     }
 
@@ -156,20 +161,23 @@ impl OctavePerlinNoiseSampler {
             .iter()
             .zip(persistences)
             .map(|(amplitude, persistence)| {
-                if *amplitude != 0.0 {
-                    scale * *amplitude * *persistence
-                } else {
+                if *amplitude == 0.0 {
                     0.0
+                } else {
+                    scale * *amplitude * *persistence
                 }
             })
             .sum()
     }
 
     #[inline]
+    #[must_use]
+    #[expect(clippy::suboptimal_flops)]
     pub fn maintain_precision(value: f64) -> f64 {
-        value - (value / 3.3554432E7 + 0.5).floor() * 3.3554432E7
+        value - (value / 3.355_443_2E7 + 0.5).floor() * 3.355_443_2E7
     }
 
+    #[must_use]
     pub fn calculate_amplitudes(octaves: &[i32]) -> (i32, Vec<f64>) {
         let mut octaves = Vec::from_iter(octaves);
         octaves.sort();
@@ -178,10 +186,7 @@ impl OctavePerlinNoiseSampler {
         let j = **octaves.last().expect("we should have some octaves");
         let k = i + j + 1;
 
-        let mut double_list: Vec<f64> = Vec::with_capacity(k as usize);
-        for _ in 0..k {
-            double_list.push(0.0)
-        }
+        let mut double_list = vec![0.0; k as usize];
 
         for l in octaves {
             double_list[(l + i) as usize] = 1.0;
@@ -213,10 +218,10 @@ impl OctavePerlinNoiseSampler {
             for kx in (0..j as usize).rev() {
                 if kx < i {
                     let e = amplitudes[kx];
-                    if e != 0.0 {
-                        samplers[kx] = Some(PerlinNoiseSampler::new(random));
-                    } else {
+                    if e == 0.0 {
                         random.skip(262);
+                    } else {
+                        samplers[kx] = Some(PerlinNoiseSampler::new(random));
                     }
                 } else {
                     random.skip(262);
@@ -244,13 +249,11 @@ impl OctavePerlinNoiseSampler {
                 result
             })
             .collect();
-        let lacunarities: Vec<f64> = (0..amplitudes.len())
-            .map(|_| {
-                let result = lacunarity;
-                lacunarity *= 2.0;
-                result
-            })
-            .collect();
+        let lacunarities = (0..amplitudes.len()).map(|_| {
+            let result = lacunarity;
+            lacunarity *= 2.0;
+            result
+        });
 
         let max_value = Self::get_total_amplitude_generic(2.0, &persistences, amplitudes);
 
@@ -276,6 +279,7 @@ impl OctavePerlinNoiseSampler {
     }
 
     #[inline]
+    #[must_use]
     pub fn get_total_amplitude(&self, scale: f64) -> f64 {
         self.samplers
             .iter()
@@ -284,6 +288,7 @@ impl OctavePerlinNoiseSampler {
     }
 
     #[inline]
+    #[must_use]
     pub fn sample(&self, x: f64, y: f64, z: f64) -> f64 {
         self.samplers
             .iter()
@@ -312,7 +317,7 @@ mod tests {
     };
 
     #[test]
-    fn test_create_xoroshiro() {
+    fn create_xoroshiro() {
         let mut rand = Xoroshiro::from_seed(513513513);
         assert_eq!(rand.next_i32(), 404174895);
 
@@ -341,7 +346,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_legacy() {
+    fn create_legacy() {
         let mut rand = LegacyRand::from_seed(513513513);
         assert_eq!(rand.next_i32(), -1302745855);
 
@@ -365,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create() {
+    fn create() {
         let mut rand = Xoroshiro::from_seed(111);
         assert_eq!(rand.next_i32(), -1467508761);
 
@@ -394,7 +399,8 @@ mod tests {
     }
 
     #[test]
-    fn test_no_y() {
+    #[expect(clippy::too_many_lines)]
+    fn no_y() {
         let mut rand = Xoroshiro::from_seed(111);
         assert_eq!(rand.next_i32(), -1467508761);
         let sampler = PerlinNoiseSampler::new(&mut rand);
@@ -564,7 +570,7 @@ mod tests {
     }
 
     #[test]
-    fn test_no_y_chunk() {
+    fn no_y_chunk() {
         let expected_data: Vec<(i32, i32, i32, f64)> =
             read_data_from_file!("../../assets/perlin2_7_4.json");
 
@@ -592,7 +598,8 @@ mod tests {
     }
 
     #[test]
-    fn test_no_fade() {
+    #[expect(clippy::too_many_lines)]
+    fn no_fade() {
         let mut rand = Xoroshiro::from_seed(111);
         assert_eq!(rand.next_i32(), -1467508761);
         let sampler = PerlinNoiseSampler::new(&mut rand);
@@ -806,7 +813,7 @@ mod tests {
     }
 
     #[test]
-    fn test_no_fade_chunk() {
+    fn no_fade_chunk() {
         let expected_data: Vec<(i32, i32, i32, f64)> =
             read_data_from_file!("../../assets/perlin_7_4.json");
 
@@ -840,7 +847,7 @@ mod tests {
     }
 
     #[test]
-    fn test_map() {
+    fn map() {
         let expected_data: Vec<i32> = read_data_from_file!("../../assets/perlin_map.json");
         let mut expected_iter = expected_data.iter();
 

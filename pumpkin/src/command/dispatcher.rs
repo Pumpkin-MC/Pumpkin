@@ -1,5 +1,6 @@
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
+use rustc_hash::FxHashMap;
 
 use super::args::ConsumedArgs;
 
@@ -56,8 +57,8 @@ impl CommandError {
 
 #[derive(Default)]
 pub struct CommandDispatcher {
-    pub commands: HashMap<String, Command>,
-    pub permissions: HashMap<String, String>,
+    pub commands: FxHashMap<String, Command>,
+    pub permissions: FxHashMap<String, String>,
 }
 
 /// Stores registered [`CommandTree`]s and dispatches commands to them.
@@ -258,7 +259,7 @@ impl CommandDispatcher {
             )));
         };
 
-        if !src.has_permission(permission.as_str()).await {
+        if !src.has_permission(server, permission.as_str()).await {
             return Err(PermissionDenied);
         }
 
@@ -360,7 +361,7 @@ impl CommandDispatcher {
         raw_args: &mut RawArgs<'a>,
         input: &'a str,
     ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        let mut parsed_args: ConsumedArgs = HashMap::new();
+        //let mut parsed_args: ConsumedArgs = HashMap::new();
 
         for node in path.iter().map(|&i| &tree.nodes[i]) {
             match &node.node_type {
@@ -372,10 +373,10 @@ impl CommandDispatcher {
                         return Ok(None);
                     }
                 }
-                NodeType::Argument { consumer, name } => {
+                NodeType::Argument { consumer, name: _ } => {
                     match consumer.consume(src, server, raw_args).await {
-                        Some(consumed) => {
-                            parsed_args.insert(name, consumed);
+                        Some(_consumed) => {
+                            //parsed_args.insert(name, consumed);
                         }
                         None => {
                             return if raw_args.is_empty() {
@@ -439,12 +440,15 @@ impl CommandDispatcher {
 #[cfg(test)]
 mod test {
     use pumpkin_config::BasicConfiguration;
+    use pumpkin_util::permission::PermissionRegistry;
+    use tokio::sync::RwLock;
 
     use crate::command::{commands::default_dispatcher, tree::CommandTree};
     #[tokio::test]
-    async fn test_dynamic_command() {
+    async fn dynamic_command() {
         let config = BasicConfiguration::default();
-        let mut dispatcher = default_dispatcher(&config).await;
+        let registry = RwLock::new(PermissionRegistry::new());
+        let mut dispatcher = default_dispatcher(&registry, &config).await;
         let tree = CommandTree::new(["test"], "test_desc");
         dispatcher.register(tree, "minecraft:test");
     }

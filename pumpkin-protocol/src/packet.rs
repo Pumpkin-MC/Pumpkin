@@ -1,5 +1,7 @@
 use std::io::{Error, Read, Write};
 
+use pumpkin_data::packet::PacketId;
+use pumpkin_util::version::MinecraftVersion;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
@@ -13,14 +15,22 @@ pub trait Packet {
     const PACKET_ID: VarIntType;
 }
 
-impl<P: Packet + Serialize> ClientPacket for P {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+pub trait MultiVersionJavaPacket {
+    const PACKET_ID: PacketId;
+}
+
+impl<P: MultiVersionJavaPacket + Serialize> ClientPacket for P {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut serializer = serializer::Serializer::new(write);
         self.serialize(&mut serializer)
     }
 }
 
-impl<P: Packet + DeserializeOwned> ServerPacket for P {
+impl<P: MultiVersionJavaPacket + DeserializeOwned> ServerPacket for P {
     fn read(read: impl Read) -> Result<P, ReadingError> {
         let mut deserializer = deserializer::Deserializer::new(read);
         P::deserialize(&mut deserializer)

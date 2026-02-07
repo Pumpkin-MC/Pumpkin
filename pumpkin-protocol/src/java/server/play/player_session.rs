@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_CHAT_SESSION_UPDATE;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 
 use crate::{
     ServerPacket,
@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-#[packet(PLAY_CHAT_SESSION_UPDATE)]
+#[java_packet(PLAY_CHAT_SESSION_UPDATE)]
 pub struct SPlayerSession {
     pub session_id: uuid::Uuid,
     pub expires_at: i64,

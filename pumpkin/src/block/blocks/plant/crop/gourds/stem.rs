@@ -19,7 +19,7 @@ use pumpkin_world::{
     BlockStateId,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::Rng;
+use rand::RngExt;
 
 type StemProperties = WheatLikeProperties;
 type AttachedStemProperties = WallTorchLikeProperties;
@@ -27,12 +27,8 @@ type AttachedStemProperties = WallTorchLikeProperties;
 pub struct StemBlock;
 
 impl BlockMetadata for StemBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::PUMPKIN_STEM.name, Block::MELON_STEM.name]
+    fn ids() -> Box<[u16]> {
+        [Block::PUMPKIN_STEM.id, Block::MELON_STEM.id].into()
     }
 }
 

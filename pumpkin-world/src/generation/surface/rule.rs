@@ -1,42 +1,37 @@
-use pumpkin_data::BlockState;
+use pumpkin_data::{
+    BlockState,
+    chunk_gen_settings::{
+        BlockBlueprint, ConditionMaterialRule, MaterialRule, SequenceMaterialRule,
+    },
+};
 use serde::Deserialize;
 
-use super::{MaterialCondition, MaterialRuleContext};
+use super::MaterialRuleContext;
 use crate::{
-    ProtoChunk, block::BlockStateCodec,
-    generation::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler,
+    ProtoChunk,
+    block::to_state_from_blueprint,
+    generation::{
+        noise::router::surface_height_sampler::SurfaceHeightEstimateSampler,
+        surface::test_condition,
+    },
 };
 
-#[derive(Deserialize)]
-#[serde(tag = "type")]
-pub enum MaterialRule {
-    #[serde(rename = "minecraft:bandlands")]
-    Badlands(BadLandsMaterialRule),
-    #[serde(rename = "minecraft:block")]
-    Block(BlockMaterialRule),
-    #[serde(rename = "minecraft:sequence")]
-    Sequence(SequenceMaterialRule),
-    #[serde(rename = "minecraft:condition")]
-    Condition(ConditionMaterialRule),
-}
-
-impl MaterialRule {
-    pub fn try_apply(
-        &self,
-        chunk: &mut ProtoChunk,
-        context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<&'static BlockState> {
-        match self {
-            MaterialRule::Badlands(badlands) => badlands.try_apply(context),
-            MaterialRule::Block(block) => Some(block.try_apply()),
-            MaterialRule::Sequence(sequence) => {
-                sequence.try_apply(chunk, context, surface_height_estimate_sampler)
-            }
-            MaterialRule::Condition(condition) => {
-                condition.try_apply(chunk, context, surface_height_estimate_sampler)
-            }
+pub fn try_apply_material_rule(
+    rule: &MaterialRule,
+    chunk: &mut ProtoChunk,
+    context: &mut MaterialRuleContext,
+    surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+) -> Option<&'static BlockState> {
+    match rule {
+        MaterialRule::Badlands(_badlands) => Some(BadLandsMaterialRule::try_apply(context)),
+        MaterialRule::Block(block) => Some(BlockMaterialRule::try_apply(&block.result_state)),
+        MaterialRule::Sequence(sequence) => {
+            try_apply_sequence(sequence, chunk, context, surface_height_estimate_sampler)
         }
+        MaterialRule::Condition(condition) => {
+            try_apply_condition(condition, chunk, context, surface_height_estimate_sampler)
+        }
+        MaterialRule::Unsupported => todo!(),
     }
 }
 
@@ -44,68 +39,58 @@ impl MaterialRule {
 pub struct BadLandsMaterialRule;
 
 impl BadLandsMaterialRule {
-    pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<&'static BlockState> {
-        Some(context.terrain_builder.get_terracotta_block(
+    pub fn try_apply(context: &mut MaterialRuleContext) -> &'static BlockState {
+        context.terrain_builder.get_terracotta_block(
             context.block_pos_x,
             context.block_pos_y,
             context.block_pos_z,
-        ))
+        )
     }
 }
 
 #[derive(Deserialize)]
-pub struct BlockMaterialRule {
-    result_state: BlockStateCodec,
-}
+pub struct BlockMaterialRule;
 
 impl BlockMaterialRule {
-    pub fn try_apply(&self) -> &'static BlockState {
-        self.result_state.get_state()
+    pub fn try_apply(blueprint: &BlockBlueprint) -> &'static BlockState {
+        to_state_from_blueprint(blueprint)
     }
 }
 
-#[derive(Deserialize)]
-pub struct SequenceMaterialRule {
-    sequence: Vec<MaterialRule>,
-}
-
-impl SequenceMaterialRule {
-    pub fn try_apply(
-        &self,
-        chunk: &mut ProtoChunk,
-        context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<&'static BlockState> {
-        for seq in &self.sequence {
-            if let Some(state) = seq.try_apply(chunk, context, surface_height_estimate_sampler) {
-                return Some(state);
-            }
-        }
-        None
-    }
-}
-
-#[derive(Deserialize)]
-pub struct ConditionMaterialRule {
-    if_true: MaterialCondition,
-    then_run: Box<MaterialRule>,
-}
-
-impl ConditionMaterialRule {
-    pub fn try_apply(
-        &self,
-        chunk: &mut ProtoChunk,
-        context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<&'static BlockState> {
-        if self
-            .if_true
-            .test(chunk, context, surface_height_estimate_sampler)
+pub fn try_apply_sequence(
+    rule: &SequenceMaterialRule,
+    chunk: &mut ProtoChunk,
+    context: &mut MaterialRuleContext,
+    surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+) -> Option<&'static BlockState> {
+    for seq in rule.sequence {
+        if let Some(state) =
+            try_apply_material_rule(seq, chunk, context, surface_height_estimate_sampler)
         {
-            return self
-                .then_run
-                .try_apply(chunk, context, surface_height_estimate_sampler);
+            return Some(state);
         }
-        None
     }
+    None
+}
+
+pub fn try_apply_condition(
+    rule: &ConditionMaterialRule,
+    chunk: &mut ProtoChunk,
+    context: &mut MaterialRuleContext,
+    surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+) -> Option<&'static BlockState> {
+    if test_condition(
+        &rule.if_true,
+        chunk,
+        context,
+        surface_height_estimate_sampler,
+    ) {
+        return try_apply_material_rule(
+            rule.then_run,
+            chunk,
+            context,
+            surface_height_estimate_sampler,
+        );
+    }
+    None
 }

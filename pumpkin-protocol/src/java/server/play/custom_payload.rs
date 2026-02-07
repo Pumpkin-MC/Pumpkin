@@ -1,7 +1,6 @@
 use pumpkin_data::packet::serverbound::PLAY_CUSTOM_PAYLOAD;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 
-#[packet(PLAY_CUSTOM_PAYLOAD)]
-pub struct SCustomPayload {
-    // TODO
-}
+// TODO
+#[java_packet(PLAY_CUSTOM_PAYLOAD)]
+pub struct SCustomPayload;

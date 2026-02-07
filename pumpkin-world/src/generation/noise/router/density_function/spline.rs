@@ -1,4 +1,4 @@
-use pumpkin_util::math::lerp;
+use pumpkin_util::math::{lerp, vector3::Vector3};
 
 use crate::generation::noise::router::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
@@ -6,7 +6,7 @@ use crate::generation::noise::router::{
     proto_noise_router::ProtoNoiseFunctionComponent,
 };
 
-use super::{NoiseFunctionComponentRange, NoisePos};
+use super::NoiseFunctionComponentRange;
 
 #[derive(Clone)]
 pub enum SplineValue {
@@ -18,7 +18,7 @@ impl SplineValue {
     #[inline]
     fn sample(
         &self,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
@@ -45,7 +45,7 @@ pub struct SplinePoint {
 }
 
 impl SplinePoint {
-    pub fn new(location: f32, value: SplineValue, derivative: f32) -> Self {
+    pub const fn new(location: f32, value: SplineValue, derivative: f32) -> Self {
         Self {
             location,
             value,
@@ -62,23 +62,6 @@ impl SplinePoint {
     }
 }
 
-/// Returns the smallest usize between min..max that does not match the predicate
-fn binary_walk(min: usize, max: usize, pred: impl Fn(usize) -> bool) -> usize {
-    let mut i = max - min;
-    let mut min = min;
-    while i > 0 {
-        let j = i / 2;
-        let k = min + j;
-        if pred(k) {
-            i = j;
-        } else {
-            min = k + 1;
-            i -= j + 1;
-        }
-    }
-    min
-}
-
 pub enum Range {
     In(usize),
     Below,
@@ -91,7 +74,7 @@ pub struct Spline {
 }
 
 impl Spline {
-    pub fn new(input_index: usize, points: Box<[SplinePoint]>) -> Self {
+    pub const fn new(input_index: usize, points: Box<[SplinePoint]>) -> Self {
         Self {
             input_index,
             points,
@@ -166,19 +149,9 @@ impl Spline {
         (min, max)
     }
 
-    fn find_index_for_location(&self, loc: f32) -> Range {
-        let index_greater_than_x =
-            binary_walk(0, self.points.len(), |i| loc < self.points[i].location);
-        if index_greater_than_x == 0 {
-            Range::Below
-        } else {
-            Range::In(index_greater_than_x - 1)
-        }
-    }
-
     fn sample(
         &self,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
@@ -188,50 +161,43 @@ impl Spline {
             sample_options,
         ) as f32;
 
-        match self.find_index_for_location(location) {
-            Range::In(index) => {
-                if index == self.points.len() - 1 {
-                    let last_known_sample =
-                        self.points[index]
-                            .value
-                            .sample(pos, component_stack, sample_options);
-                    self.points[index].sample_outside_range(location, last_known_sample)
-                } else {
-                    let lower_point = &self.points[index];
-                    let upper_point = &self.points[index + 1];
+        let n = self.points.len();
+        let index_greater_than_x = self.points.partition_point(|p| location >= p.location);
 
-                    let lower_value =
-                        lower_point
-                            .value
-                            .sample(pos, component_stack, sample_options);
-                    let upper_value =
-                        upper_point
-                            .value
-                            .sample(pos, component_stack, sample_options);
-
-                    // Use linear interpolation (-ish cuz of derivatives) to derivate a point between two points
-                    let x_scale = (location - lower_point.location)
-                        / (upper_point.location - lower_point.location);
-                    let extrapolated_lower_value = lower_point.derivative
-                        * (upper_point.location - lower_point.location)
-                        - (upper_value - lower_value);
-                    let extrapolated_upper_value = -upper_point.derivative
-                        * (upper_point.location - lower_point.location)
-                        + (upper_value - lower_value);
-
-                    (x_scale * (1f32 - x_scale))
-                        * lerp(x_scale, extrapolated_lower_value, extrapolated_upper_value)
-                        + lerp(x_scale, lower_value, upper_value)
-                }
-            }
-            Range::Below => {
-                let last_known_sample =
-                    self.points[0]
-                        .value
-                        .sample(pos, component_stack, sample_options);
-                self.points[0].sample_outside_range(location, last_known_sample)
-            }
+        if index_greater_than_x == 0 {
+            let point = &self.points[0];
+            let val = point.value.sample(pos, component_stack, sample_options);
+            return point.sample_outside_range(location, val);
         }
+
+        if index_greater_than_x == n {
+            let point = &self.points[n - 1];
+            let val = point.value.sample(pos, component_stack, sample_options);
+            return point.sample_outside_range(location, val);
+        }
+
+        let lower_point = &self.points[index_greater_than_x - 1];
+        let upper_point = &self.points[index_greater_than_x];
+
+        let lower_value = lower_point
+            .value
+            .sample(pos, component_stack, sample_options);
+        let upper_value = upper_point
+            .value
+            .sample(pos, component_stack, sample_options);
+
+        let dist = upper_point.location - lower_point.location;
+        let x_scale = (location - lower_point.location) / dist;
+
+        let delta = upper_value - lower_value;
+        let extrapolated_lower = lower_point.derivative * dist - delta;
+        let extrapolated_upper = -upper_point.derivative * dist + delta;
+
+        let cubic_part =
+            (x_scale * (1.0 - x_scale)) * lerp(x_scale, extrapolated_lower, extrapolated_upper);
+        let linear_part = lerp(x_scale, lower_value, upper_value);
+
+        cubic_part + linear_part
     }
 }
 
@@ -258,7 +224,7 @@ impl StaticChunkNoiseFunctionComponentImpl for SplineFunction {
     fn sample(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         self.spline.sample(pos, component_stack, sample_options) as f64

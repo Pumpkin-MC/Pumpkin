@@ -13,7 +13,7 @@ pub(crate) fn build() -> TokenStream {
     let mut variants = TokenStream::new();
     let mut match_variants = TokenStream::new();
 
-    for (name, parameter) in json.iter() {
+    for (name, parameter) in &json {
         let raw_name = format!("minecraft:{name}");
         let simple_id = name;
         let name = format_ident!("{}", name.to_uppercase());

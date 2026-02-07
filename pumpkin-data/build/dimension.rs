@@ -60,9 +60,10 @@ pub(crate) fn build() -> TokenStream {
                 .to_shouty_snake_case()
         );
 
-        let fixed_time = match dim.fixed_time {
-            Some(t) => quote! { Some(#t) },
-            None => quote! { None },
+        let fixed_time = if let Some(t) = dim.fixed_time {
+            quote! { Some(#t) }
+        } else {
+            quote! { None }
         };
 
         let ambient_light = dim.ambient_light;
@@ -77,7 +78,7 @@ pub(crate) fn build() -> TokenStream {
         let minecraft_name = if name.contains(':') {
             name.clone()
         } else {
-            format!("minecraft:{}", name)
+            format!("minecraft:{name}")
         };
 
         variants.extend(quote! {
@@ -101,7 +102,7 @@ pub(crate) fn build() -> TokenStream {
         });
     }
 
-    quote! {
+    quote!(
         #[derive(Debug, Clone, Copy)]
         pub struct Dimension {
             pub id: u8,
@@ -133,5 +134,5 @@ pub(crate) fn build() -> TokenStream {
             }
        }
         impl Eq for Dimension {}
-    }
+    )
 }

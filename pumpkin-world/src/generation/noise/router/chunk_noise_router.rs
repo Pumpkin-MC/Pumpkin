@@ -1,5 +1,6 @@
 use enum_dispatch::enum_dispatch;
 use pumpkin_data::noise_router::WrapperType;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::generation::biome_coords;
 
@@ -10,8 +11,8 @@ use super::{
         FlatCache, SampleAction,
     },
     density_function::{
-        IndexToNoisePos, NoiseFunctionComponentRange, NoisePos, PassThrough,
-        StaticIndependentChunkNoiseFunctionComponentImpl, UnblendedNoisePos,
+        IndexToNoisePos, NoiseFunctionComponentRange, PassThrough,
+        StaticIndependentChunkNoiseFunctionComponentImpl,
     },
     proto_noise_router::{
         DependentProtoNoiseFunctionComponent, IndependentProtoNoiseFunctionComponent,
@@ -24,7 +25,7 @@ pub trait StaticChunkNoiseFunctionComponentImpl {
     fn sample(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64;
 
@@ -47,7 +48,7 @@ pub trait MutableChunkNoiseFunctionComponentImpl {
     fn sample(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64;
 
@@ -189,7 +190,7 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
     fn sample(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         match self {
@@ -216,7 +217,7 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
         match self {
             Self::Independent(independent) => independent.fill(array, mapper),
             Self::Dependent(dependent) => {
-                dependent.fill(component_stack, array, mapper, sample_options)
+                dependent.fill(component_stack, array, mapper, sample_options);
             }
             Self::Chunk(chunk) => chunk.fill(component_stack, array, mapper, sample_options),
             Self::PassThrough(pass_through) => ChunkNoiseFunctionComponent::fill_from_stack(
@@ -225,7 +226,6 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
                 mapper,
                 sample_options,
             ),
-            //Self::Panic(message) => panic!("{}", message),
         }
     }
 }
@@ -233,7 +233,7 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
 impl ChunkNoiseFunctionComponent<'_> {
     pub fn sample_from_stack(
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         let (top_component, component_stack) = component_stack.split_last_mut().unwrap();
@@ -259,7 +259,7 @@ impl ChunkNoiseDensityFunction<'_> {
     #[inline]
     pub fn sample(
         &mut self,
-        pos: &impl NoisePos,
+        pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         ChunkNoiseFunctionComponent::sample_from_stack(self.component_stack, pos, sample_options)
@@ -286,7 +286,7 @@ macro_rules! sample_function {
         #[inline]
         pub fn $name(
             &mut self,
-            pos: &impl NoisePos,
+            pos: &Vector3<i32>,
             sample_options: &ChunkNoiseFunctionSampleOptions,
         ) -> f64 {
             ChunkNoiseFunctionComponent::sample_from_stack(
@@ -328,6 +328,7 @@ impl ChunkNoiseRouter<'_> {
 }
 
 impl<'a> ChunkNoiseRouter<'a> {
+    #[must_use]
     pub fn generate(
         base: &'a ProtoNoiseRouter,
         build_options: &ChunkNoiseFunctionBuilderOptions,
@@ -349,11 +350,6 @@ impl<'a> ChunkNoiseRouter<'a> {
                     ChunkNoiseFunctionComponent::PassThrough(pass_through.clone())
                 }
                 ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
-                    //NOTE: Due to our previous invariant with the proto-function, it is guaranteed
-                    // that the wrapped function is already on the stack
-
-                    // NOTE: Current wrapped functions do not give different values than what they
-                    // wrap. If they do, maxs and mins need to be changed here
                     let min_value = component_stack[wrapper.input_index].min();
                     let max_value = component_stack[wrapper.input_index].max();
 
@@ -425,11 +421,7 @@ impl<'a> ChunkNoiseRouter<'a> {
                                     let block_z_position =
                                         biome_coords::to_block(absolute_biome_z_position);
 
-                                    let pos = UnblendedNoisePos::new(
-                                        block_x_position,
-                                        0,
-                                        block_z_position,
-                                    );
+                                    let pos = Vector3::new(block_x_position, 0, block_z_position);
 
                                     //NOTE: Due to our stack invariant, what is on the stack is a
                                     // valid density function

@@ -71,11 +71,11 @@ impl BlockEntity for ShulkerBoxBlockEntity {
 
     fn tick<'a>(
         &'a self,
-        world: Arc<dyn SimpleWorld>,
+        world: &'a Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.viewers
-                .update_viewer_count::<ShulkerBoxBlockEntity>(self, world, &self.position)
+                .update_viewer_count::<Self>(self, world, &self.position)
                 .await;
         })
     }
@@ -141,7 +141,7 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
         Box::pin(async move {
             world
                 .add_synced_block_event(*position, Self::OPEN_ANIMATION_EVENT_TYPE, new as u8)
-                .await
+                .await;
         })
     }
 }
@@ -151,6 +151,7 @@ impl ShulkerBoxBlockEntity {
     pub const OPEN_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:shulker_box"; // TODO support multi IDs
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -182,7 +183,7 @@ impl Inventory for ShulkerBoxBlockEntity {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -239,7 +240,7 @@ impl Inventory for ShulkerBoxBlockEntity {
 impl Clearable for ShulkerBoxBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })

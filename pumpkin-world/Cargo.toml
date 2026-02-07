@@ -2,7 +2,7 @@
 name = "pumpkin-world"
 version.workspace = true
 edition.workspace = true
-rust-version = "1.89"
+rust-version.workspace = true
 
 [dependencies]
 pumpkin-nbt.workspace = true
@@ -47,8 +47,8 @@ ruzstd.workspace = true
 itertools.workspace = true
 enum_dispatch.workspace = true
 
-thread_local.workspace = true
-lru.workspace = true
+# thread_local.workspace = true
+# lru.workspace = true
 
 tokio-util = { workspace = true, features = ["rt"] }
 rand.workspace = true
@@ -85,3 +85,9 @@ harness = false
 
 [features]
 tokio_taskdump = []
+
+# [lints]
+# workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["serde_json"]

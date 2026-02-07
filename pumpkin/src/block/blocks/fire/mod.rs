@@ -7,7 +7,7 @@ use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
-use rand::Rng;
+use rand::RngExt;
 use soul_fire::SoulFireBlock;
 
 use crate::block::blocks::fire::fire::FireBlock;
@@ -58,6 +58,7 @@ impl FireBlockBase {
                     block: &Block::SOUL_FIRE,
                     state: Block::SOUL_FIRE.default_state,
                     position: block_pos,
+                    direction: None,
                     player: None,
                     use_item_on: None,
                 })
@@ -71,6 +72,7 @@ impl FireBlockBase {
                     block: &Block::FIRE,
                     state: Block::FIRE.default_state,
                     position: block_pos,
+                    direction: None,
                     player: None,
                     use_item_on: None,
                 })

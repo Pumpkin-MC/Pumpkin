@@ -3,7 +3,7 @@ name = "pumpkin"
 version.workspace = true
 description = "Empowering everyone to host fast and efficient Minecraft servers."
 edition.workspace = true
-rust-version = "1.89"
+rust-version.workspace = true
 
 [package.metadata.tauri-winres]
 # FileDescription is handled as the Program name by Windows!
@@ -17,6 +17,7 @@ doctest = false
 
 [dependencies]
 # pumpkin
+arc-swap.workspace = true
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true
@@ -87,10 +88,13 @@ tokio-util = { workspace = true, features = ["rt"] }
 
 flate2.workspace = true
 console-subscriber = { workspace = true, optional = true }
-signature.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
 
 [features]
 console-subscriber = ["dep:console-subscriber"]
 tokio_taskdump = ["pumpkin-world/tokio_taskdump"]
+
+[lints]
+workspace = true

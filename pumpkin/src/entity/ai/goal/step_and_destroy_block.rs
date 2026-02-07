@@ -89,8 +89,8 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
 {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
-            let world = &mob.get_entity().world;
-            let level_info = world.level_info.read().await;
+            let world = mob.get_entity().world.load();
+            let level_info = world.level_info.load();
             if !level_info.game_rules.mob_griefing {
                 false
             } else if self.move_to_target_pos_goal.cooldown > 0 {
@@ -128,7 +128,7 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
         Box::pin(async {
             self.move_to_target_pos_goal.tick(mob).await;
             let mob_entity = mob.get_mob_entity();
-            let world = &mob.get_entity().world;
+            let world = mob.get_entity().world.load_full();
             let block_pos = mob.get_entity().block_pos.load();
 
             let tweak_pos = self.tweak_to_proper_pos(block_pos, world.clone()).await;

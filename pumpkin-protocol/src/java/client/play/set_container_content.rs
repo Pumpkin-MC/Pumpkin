@@ -2,11 +2,11 @@ use crate::VarInt;
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
 
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_CONTENT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[packet(PLAY_CONTAINER_SET_CONTENT)]
+#[java_packet(PLAY_CONTAINER_SET_CONTENT)]
 pub struct CSetContainerContent<'a> {
     pub window_id: VarInt,
     pub state_id: VarInt,
@@ -15,7 +15,8 @@ pub struct CSetContainerContent<'a> {
 }
 
 impl<'a> CSetContainerContent<'a> {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         window_id: VarInt,
         state_id: VarInt,
         slots: &'a [ItemStackSerializer],

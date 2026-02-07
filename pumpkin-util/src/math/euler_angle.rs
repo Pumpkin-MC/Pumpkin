@@ -9,6 +9,7 @@ pub struct EulerAngle {
 }
 
 impl EulerAngle {
+    #[must_use]
     pub fn new(pitch: f32, yaw: f32, roll: f32) -> Self {
         let pitch = pitch % 360.0;
         let yaw = yaw % 360.0;
@@ -17,7 +18,7 @@ impl EulerAngle {
         Self { pitch, yaw, roll }
     }
 
-    pub const ZERO: EulerAngle = EulerAngle {
+    pub const ZERO: Self = Self {
         pitch: 0.0,
         yaw: 0.0,
         roll: 0.0,
@@ -32,10 +33,10 @@ impl Default for EulerAngle {
 
 impl From<EulerAngle> for NbtTag {
     fn from(val: EulerAngle) -> Self {
-        NbtTag::List(vec![
-            NbtTag::Float(val.pitch),
-            NbtTag::Float(val.yaw),
-            NbtTag::Float(val.roll),
+        Self::List(vec![
+            Self::Float(val.pitch),
+            Self::Float(val.yaw),
+            Self::Float(val.roll),
         ])
     }
 }

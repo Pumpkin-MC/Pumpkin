@@ -1,11 +1,11 @@
 use pumpkin_data::packet::serverbound::PLAY_USE_ITEM;
-use pumpkin_macros::packet;
-use serde::Deserialize;
+use pumpkin_macros::java_packet;
+use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
-#[derive(Deserialize)]
-#[packet(PLAY_USE_ITEM)]
+#[derive(Deserialize, Serialize)]
+#[java_packet(PLAY_USE_ITEM)]
 pub struct SUseItem {
     // 0 for main hand, 1 for off hand
     pub hand: VarInt,

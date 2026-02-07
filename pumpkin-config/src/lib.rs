@@ -83,6 +83,8 @@ pub struct BasicConfiguration {
     pub op_permission_level: PermissionLvl,
     /// Whether the Nether dimension is enabled.
     pub allow_nether: bool,
+    /// Whether the End dimension is enabled.
+    pub allow_end: bool,
     /// Whether the server is in hardcore mode.
     pub hardcore: bool,
     /// Whether online mode is enabled. Requires valid Minecraft accounts.
@@ -102,7 +104,7 @@ pub struct BasicConfiguration {
     /// Whether to use a server favicon
     pub use_favicon: bool,
     /// Path to server favicon
-    pub favicon_path: String,
+    pub favicon_path: Option<String>,
     /// The default level name
     pub default_level_name: String,
     /// Whether chat messages should be signed or not
@@ -127,6 +129,7 @@ impl Default for BasicConfiguration {
             default_difficulty: Difficulty::Normal,
             op_permission_level: PermissionLvl::Four,
             allow_nether: true,
+            allow_end: true,
             hardcore: false,
             online_mode: true,
             encryption: true,
@@ -136,7 +139,7 @@ impl Default for BasicConfiguration {
             force_gamemode: false,
             scrub_ips: true,
             use_favicon: true,
-            favicon_path: "icon.png".to_string(),
+            favicon_path: None,
             default_level_name: "world".to_string(),
             allow_chat_reports: false,
             white_list: false,
@@ -146,12 +149,16 @@ impl Default for BasicConfiguration {
 }
 
 impl BasicConfiguration {
+    #[must_use]
     pub fn get_world_path(&self) -> PathBuf {
         PathBuf::from(&self.default_level_name)
     }
 }
 
 pub trait LoadConfiguration {
+    #[must_use]
+    // Logger is may not ready
+    #[expect(clippy::print_stdout)]
     fn load(config_dir: &Path) -> Self
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
@@ -163,14 +170,15 @@ pub trait LoadConfiguration {
         let path = config_dir.join(Self::get_path());
 
         let config = if path.exists() {
-            let file_content = fs::read_to_string(&path)
-                .unwrap_or_else(|_| panic!("Couldn't read configuration file at {:?}", &path));
+            let file_content = fs::read_to_string(&path).unwrap_or_else(|_| {
+                panic!("Couldn't read configuration file at {}", path.display())
+            });
 
             let parsed_toml_value: toml::Value = toml::from_str(&file_content)
                 .unwrap_or_else(|err| {
                     panic!(
-                        "Couldn't parse TOML at {:?}. Reason: {}. This is probably caused by invalid TOML syntax",
-                        &path, err
+                        "Couldn't parse TOML at {}. Reason: {}. This is probably caused by invalid TOML syntax",
+                        path.display(), err
                     )
                 });
 
@@ -183,8 +191,8 @@ pub trait LoadConfiguration {
                 );
                 if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
                     log::warn!(
-                        "Couldn't write merged config to {:?}. Reason: {}",
-                        &path,
+                        "Couldn't write merged config to {}. Reason: {}",
+                        path.display(),
                         err
                     );
                 }
@@ -193,11 +201,10 @@ pub trait LoadConfiguration {
             merged_config
         } else {
             let content = Self::default();
-
             if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
                 log::warn!(
                     "Couldn't write default config to {:?}. Reason: {}",
-                    &path,
+                    path.display(),
                     err
                 );
             }
@@ -209,6 +216,7 @@ pub trait LoadConfiguration {
         config
     }
 
+    #[must_use]
     fn merge_with_default_toml(parsed_toml: toml::Value) -> (Self, bool)
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
@@ -218,8 +226,7 @@ pub trait LoadConfiguration {
         let default_toml_value =
             toml::Value::try_from(default_config).expect("Failed to parse default config");
 
-        let (merged_value, changed) =
-            Self::merge_toml_values(default_toml_value, parsed_toml.clone());
+        let (merged_value, changed) = Self::merge_toml_values(default_toml_value, parsed_toml);
 
         let config = merged_value
             .try_into()
@@ -228,6 +235,7 @@ pub trait LoadConfiguration {
         (config, changed)
     }
 
+    #[must_use]
     fn merge_toml_values(base: toml::Value, overlay: toml::Value) -> (toml::Value, bool) {
         match (base, overlay) {
             (toml::Value::Table(mut base_table), toml::Value::Table(overlay_table)) => {
@@ -269,7 +277,7 @@ impl LoadConfiguration for AdvancedConfiguration {
     }
 
     fn validate(&self) {
-        self.resource_pack.validate()
+        self.resource_pack.validate();
     }
 }
 
@@ -294,13 +302,13 @@ impl LoadConfiguration for BasicConfiguration {
             assert!(
                 self.encryption,
                 "When online mode is enabled, encryption must be enabled"
-            )
+            );
         }
         if self.allow_chat_reports {
             assert!(
                 self.online_mode,
                 "When allow_chat_reports is enabled, online_mode must be enabled"
-            )
+            );
         }
     }
 }

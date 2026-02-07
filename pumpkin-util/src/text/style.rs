@@ -46,59 +46,69 @@ pub struct Style {
 }
 
 impl Style {
-    pub fn color(mut self, color: Color) -> Self {
+    #[must_use]
+    pub const fn color(mut self, color: Color) -> Self {
         self.color = Some(color);
         self
     }
 
-    pub fn color_named(mut self, color: color::NamedColor) -> Self {
+    #[must_use]
+    pub const fn color_named(mut self, color: color::NamedColor) -> Self {
         self.color = Some(Color::Named(color));
         self
     }
 
     /// Makes the text bold
-    pub fn bold(mut self) -> Self {
+    #[must_use]
+    pub const fn bold(mut self) -> Self {
         self.bold = Some(true);
         self
     }
 
     /// Makes the text italic
-    pub fn italic(mut self) -> Self {
+    #[must_use]
+    pub const fn italic(mut self) -> Self {
         self.italic = Some(true);
         self
     }
 
     /// Makes the text underlined
-    pub fn underlined(mut self) -> Self {
+    #[must_use]
+    pub const fn underlined(mut self) -> Self {
         self.underlined = Some(true);
         self
     }
 
     /// Makes the text strikethrough
-    pub fn strikethrough(mut self) -> Self {
+    #[must_use]
+    pub const fn strikethrough(mut self) -> Self {
         self.strikethrough = Some(true);
         self
     }
 
     /// Makes the text obfuscated
-    pub fn obfuscated(mut self) -> Self {
+    #[must_use]
+    pub const fn obfuscated(mut self) -> Self {
         self.obfuscated = Some(true);
         self
     }
 
     /// When the text is shift-clicked by a player, this string is inserted in their chat input. It does not overwrite any existing text the player was writing. This only works in chat messages.
+    #[must_use]
     pub fn insertion(mut self, text: String) -> Self {
         self.insertion = Some(text);
         self
     }
 
     /// Allows for events to occur when the player clicks on text. Only works in chat.
+    #[must_use]
     pub fn click_event(mut self, event: ClickEvent) -> Self {
         self.click_event = Some(event);
         self
     }
 
     /// Allows for a tooltip to be displayed when the player hovers their mouse over text.
+    #[must_use]
     pub fn hover_event(mut self, event: HoverEvent) -> Self {
         self.hover_event = Some(event);
         self
@@ -106,13 +116,15 @@ impl Style {
 
     /// Allows you to change the font of the text.
     /// Default fonts: `minecraft:default`, `minecraft:uniform`, `minecraft:alt`, `minecraft:illageralt`
+    #[must_use]
     pub fn font(mut self, resource_location: String) -> Self {
         self.font = Some(resource_location);
         self
     }
 
     /// Overrides the shadow properties of text.
-    pub fn shadow_color(mut self, color: ARGBColor) -> Self {
+    #[must_use]
+    pub const fn shadow_color(mut self, color: ARGBColor) -> Self {
         self.shadow_color = Some(color);
         self
     }

@@ -24,7 +24,7 @@ impl BoundingPlane {
     }
 
     // Projecting a 3D box into 2D
-    pub fn from_box(bounding_box: &BoundingBox, excluded: Axis) -> Self {
+    pub const fn from_box(bounding_box: &BoundingBox, excluded: Axis) -> Self {
         let [axis1, axis2] = Axis::excluding(excluded);
 
         Self {
@@ -42,18 +42,21 @@ impl BoundingPlane {
 }
 
 impl BoundingBox {
+    #[must_use]
     pub fn new_default(size: &EntityDimensions) -> Self {
         Self::new_from_pos(0., 0., 0., size)
     }
 
+    #[must_use]
     pub fn new_from_pos(x: f64, y: f64, z: f64, size: &EntityDimensions) -> Self {
-        let f = size.width as f64 / 2.;
+        let f = f64::from(size.width) / 2.;
         Self {
             min: Vector3::new(x - f, y, z - f),
-            max: Vector3::new(x + f, y + size.height as f64, z + f),
+            max: Vector3::new(x + f, y + f64::from(size.height), z + f),
         }
     }
 
+    #[must_use]
     pub fn expand(&self, x: f64, y: f64, z: f64) -> Self {
         Self {
             min: Vector3::new(self.min.x - x, self.min.y - y, self.min.z - z),
@@ -61,14 +64,17 @@ impl BoundingBox {
         }
     }
 
+    #[must_use]
     pub fn expand_all(&self, value: f64) -> Self {
         self.expand(value, value, value)
     }
 
+    #[must_use]
     pub fn contract_all(&self, value: f64) -> Self {
         self.expand_all(-value)
     }
 
+    #[must_use]
     pub fn offset(&self, other: Self) -> Self {
         Self {
             min: self.min.add(&other.min),
@@ -76,33 +82,42 @@ impl BoundingBox {
         }
     }
 
-    pub fn new(min: Vector3<f64>, max: Vector3<f64>) -> Self {
+    #[must_use]
+    pub const fn new(min: Vector3<f64>, max: Vector3<f64>) -> Self {
         Self { min, max }
     }
 
-    pub fn new_array(min: [f64; 3], max: [f64; 3]) -> Self {
+    #[must_use]
+    pub const fn new_array(min: [f64; 3], max: [f64; 3]) -> Self {
         Self {
             min: Vector3::new(min[0], min[1], min[2]),
             max: Vector3::new(max[0], max[1], max[2]),
         }
     }
 
+    #[must_use]
     pub fn from_block(position: &BlockPos) -> Self {
         let position = position.0;
         Self {
-            min: Vector3::new(position.x as f64, position.y as f64, position.z as f64),
+            min: Vector3::new(
+                f64::from(position.x),
+                f64::from(position.y),
+                f64::from(position.z),
+            ),
             max: Vector3::new(
-                position.x as f64 + 1.0,
-                position.y as f64 + 1.0,
-                position.z as f64 + 1.0,
+                f64::from(position.x) + 1.0,
+                f64::from(position.y) + 1.0,
+                f64::from(position.z) + 1.0,
             ),
         }
     }
 
-    pub fn get_side(&self, max: bool) -> Vector3<f64> {
+    #[must_use]
+    pub const fn get_side(&self, max: bool) -> Vector3<f64> {
         if max { self.max } else { self.min }
     }
 
+    #[must_use]
     pub fn calculate_collision_time(
         &self,
         other: &Self,
@@ -138,6 +153,7 @@ impl BoundingBox {
         Some(collision_time)
     }
 
+    #[must_use]
     pub fn get_average_side_length(&self) -> f64 {
         let width = self.max.x - self.min.x;
         let height = self.max.y - self.min.y;
@@ -146,14 +162,17 @@ impl BoundingBox {
         (width + height + depth) / 3.0
     }
 
+    #[must_use]
     pub fn min_block_pos(&self) -> BlockPos {
         BlockPos::floored_v(self.min)
     }
 
+    #[must_use]
     pub fn max_block_pos(&self) -> BlockPos {
         BlockPos::ceiled_v(self.max)
     }
 
+    #[must_use]
     pub fn shift(&self, delta: Vector3<f64>) -> Self {
         Self {
             min: self.min + delta,
@@ -162,6 +181,7 @@ impl BoundingBox {
         }
     }
 
+    #[must_use]
     pub fn stretch(&self, other: Vector3<f64>) -> Self {
         let mut new = *self;
 
@@ -186,15 +206,25 @@ impl BoundingBox {
         new
     }
 
+    #[must_use]
     pub fn from_block_raw(position: &BlockPos) -> Self {
         let position = position.0;
         Self {
-            min: Vector3::new(position.x as f64, position.y as f64, position.z as f64),
-            max: Vector3::new(position.x as f64, position.y as f64, position.z as f64),
+            min: Vector3::new(
+                f64::from(position.x),
+                f64::from(position.y),
+                f64::from(position.z),
+            ),
+            max: Vector3::new(
+                f64::from(position.x),
+                f64::from(position.y),
+                f64::from(position.z),
+            ),
         }
     }
 
-    pub fn intersects(&self, other: &BoundingBox) -> bool {
+    #[must_use]
+    pub fn intersects(&self, other: &Self) -> bool {
         self.min.x < other.max.x
             && self.max.x > other.min.x
             && self.min.y < other.max.y
@@ -203,6 +233,7 @@ impl BoundingBox {
             && self.max.z > other.min.z
     }
 
+    #[must_use]
     pub fn squared_magnitude(&self, pos: Vector3<f64>) -> f64 {
         let d = f64::max(f64::max(self.min.x - pos.x, pos.x - self.max.x), 0.0);
         let e = f64::max(f64::max(self.min.y - pos.y, pos.y - self.max.y), 0.0);
@@ -219,7 +250,8 @@ pub struct EntityDimensions {
 }
 
 impl EntityDimensions {
-    pub fn new(width: f32, height: f32, eye_height: f32) -> Self {
+    #[must_use]
+    pub const fn new(width: f32, height: f32, eye_height: f32) -> Self {
         Self {
             width,
             height,

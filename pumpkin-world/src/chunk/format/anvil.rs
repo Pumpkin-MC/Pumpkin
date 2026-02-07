@@ -1,4 +1,4 @@
-use bytes::*;
+use bytes::{Buf, Bytes};
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use itertools::Itertools;
 use lz4_java_wrc::Context;
@@ -43,9 +43,9 @@ pub const WORLD_DATA_VERSION: i32 = 4671;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Compression {
-    /// GZip Compression
+    /// `GZip` Compression
     GZip = Self::GZIP_ID,
-    /// ZLib Compression
+    /// `ZLib` Compression
     ZLib = Self::ZLIB_ID,
     /// LZ4 Compression (since 24w04a)
     LZ4 = Self::LZ4_ID,
@@ -123,32 +123,25 @@ impl Compression {
     const CUSTOM_ID: u8 = 127;
 
     fn decompress_data(&self, compressed_data: &[u8]) -> Result<Box<[u8]>, CompressionError> {
+        fn decode<R: std::io::Read>(mut reader: R, capacity: usize) -> std::io::Result<Box<[u8]>> {
+            let mut buf = Vec::with_capacity(capacity);
+            reader.read_to_end(&mut buf)?;
+            Ok(buf.into_boxed_slice())
+        }
+
+        let initial_capacity = compressed_data.len();
+
         match self {
-            Compression::GZip => {
-                let mut decoder = GzDecoder::new(compressed_data);
-                let mut chunk_data = Vec::new();
-                decoder
-                    .read_to_end(&mut chunk_data)
-                    .map_err(CompressionError::GZipError)?;
-                Ok(chunk_data.into_boxed_slice())
-            }
-            Compression::ZLib => {
-                let mut decoder = ZlibDecoder::new(compressed_data);
-                let mut chunk_data = Vec::new();
-                decoder
-                    .read_to_end(&mut chunk_data)
-                    .map_err(CompressionError::ZlibError)?;
-                Ok(chunk_data.into_boxed_slice())
-            }
-            Compression::LZ4 => {
-                let mut decoder = lz4_java_wrc::Lz4BlockInput::new(compressed_data);
-                let mut decompressed_data = Vec::new();
-                decoder
-                    .read_to_end(&mut decompressed_data)
-                    .map_err(CompressionError::LZ4Error)?;
-                Ok(decompressed_data.into_boxed_slice())
-            }
-            Compression::Custom => todo!(),
+            Self::GZip => decode(GzDecoder::new(compressed_data), initial_capacity)
+                .map_err(CompressionError::GZipError),
+            Self::ZLib => decode(ZlibDecoder::new(compressed_data), initial_capacity)
+                .map_err(CompressionError::ZlibError),
+            Self::LZ4 => decode(
+                lz4_java_wrc::Lz4BlockInput::new(compressed_data),
+                initial_capacity,
+            )
+            .map_err(CompressionError::LZ4Error),
+            Self::Custom => todo!(),
         }
     }
 
@@ -159,7 +152,7 @@ impl Compression {
         compression_level: u32,
     ) -> Result<Vec<u8>, CompressionError> {
         match self {
-            Compression::GZip => {
+            Self::GZip => {
                 let mut encoder = GzEncoder::new(
                     uncompressed_data,
                     flate2::Compression::new(compression_level),
@@ -170,7 +163,7 @@ impl Compression {
                     .map_err(CompressionError::GZipError)?;
                 Ok(chunk_data)
             }
-            Compression::ZLib => {
+            Self::ZLib => {
                 let mut encoder = ZlibEncoder::new(
                     uncompressed_data,
                     flate2::Compression::new(compression_level),
@@ -181,7 +174,7 @@ impl Compression {
                     .map_err(CompressionError::ZlibError)?;
                 Ok(chunk_data)
             }
-            Compression::LZ4 => {
+            Self::LZ4 => {
                 let mut compressed_data = Vec::new();
                 let block_size = 1 << (Self::LZ4_COMPRESSION_LEVEL_BASE + compression_level);
                 let mut encoder = lz4_java_wrc::Lz4BlockOutput::with_context(
@@ -196,13 +189,13 @@ impl Compression {
                 drop(encoder);
                 Ok(compressed_data)
             }
-            Compression::Custom => todo!(),
+            Self::Custom => todo!(),
         }
     }
 
     /// Returns Ok when a compression is found otherwise an Err
     #[expect(clippy::result_unit_err)]
-    pub fn from_byte(byte: u8) -> Result<Option<Self>, ()> {
+    pub const fn from_byte(byte: u8) -> Result<Option<Self>, ()> {
         match byte {
             Self::GZIP_ID => Ok(Some(Self::GZip)),
             Self::ZLIB_ID => Ok(Some(Self::ZLib)),
@@ -231,20 +224,20 @@ impl From<pumpkin_config::chunk::Compression> for Compression {
 impl AnvilChunkData {
     /// Raw size of serialized chunk
     #[inline]
-    fn raw_write_size(&self) -> usize {
+    const fn raw_write_size(&self) -> usize {
         // 4 bytes for the *length* and 1 byte for the *compression* method
         self.compressed_data.len() + 4 + 1
     }
 
     /// Size of serialized chunk with padding
     #[inline]
-    fn padded_size(&self) -> usize {
+    const fn padded_size(&self) -> usize {
         let sector_count = self.sector_count() as usize;
         sector_count * SECTOR_BYTES
     }
 
     #[inline]
-    fn sector_count(&self) -> u32 {
+    const fn sector_count(&self) -> u32 {
         let total_size = self.raw_write_size();
         total_size.div_ceil(SECTOR_BYTES) as u32
     }
@@ -266,9 +259,9 @@ impl AnvilChunkData {
 
         let compression_method = bytes.get_u8();
         let compression = Compression::from_byte(compression_method)
-            .map_err(|_| ChunkReadingError::Compression(CompressionError::UnknownCompression))?;
+            .map_err(|()| ChunkReadingError::Compression(CompressionError::UnknownCompression))?;
 
-        Ok(AnvilChunkData {
+        Ok(Self {
             compression,
             // If this has padding, we need to trim it
             compressed_data: bytes.slice(..length),
@@ -329,7 +322,7 @@ impl AnvilChunkData {
             .compress_data(&raw_bytes, chunk_config.compression.level)
             .map_err(ChunkWritingError::Compression)?;
 
-        Ok(AnvilChunkData {
+        Ok(Self {
             compression: Some(compression),
             compressed_data: compressed_data.into(),
         })
@@ -337,11 +330,13 @@ impl AnvilChunkData {
 }
 
 impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
+    #[must_use]
     pub const fn get_region_coords(at: &Vector2<i32>) -> (i32, i32) {
         // Divide by 32 for the region coordinates
         (at.x >> SUBREGION_BITS, at.y >> SUBREGION_BITS)
     }
 
+    #[must_use]
     pub const fn get_chunk_index(x: i32, z: i32) -> usize {
         let local_x = x & SUBREGION_AND;
         let local_z = z & SUBREGION_AND;
@@ -349,11 +344,13 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         index as usize
     }
 
-    async fn write_indices(&self, path: &Path, indices: &[usize]) -> Result<(), std::io::Error> {
+    async fn write_indices<I>(&self, path: &Path, indices: I) -> Result<(), std::io::Error>
+    where
+        I: IntoIterator<Item = usize>,
+    {
         log::trace!("Writing in place: {}", path.display());
 
         let file = tokio::fs::OpenOptions::new()
-            .read(false)
             .write(true)
             .create(true)
             .truncate(false)
@@ -379,7 +376,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
             } else {
                 // If the chunk is not present, we write 0 to the location and timestamp tables
                 write.write_u32(0).await?;
-            };
+            }
         }
 
         for metadata in &self.chunks_data {
@@ -392,11 +389,11 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         }
 
         let mut chunks = indices
-            .iter()
+            .into_iter()
             .map(|index| {
                 (
                     index,
-                    self.chunks_data[*index]
+                    self.chunks_data[index]
                         .as_ref()
                         .expect("We are trying to write a chunk, but it does not exist!"),
                 )
@@ -411,7 +408,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
             // Verify we are actually two sectors into the file
             let current_pos = write.stream_position().await?;
             assert!(current_pos as usize == 2 * SECTOR_BYTES);
-        }
+        };
 
         let mut current_sector = 2;
         for (index, chunk) in chunks {
@@ -452,13 +449,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         let temp_path = path.with_extension("tmp");
         log::trace!("Writing tmp file to disk: {temp_path:?}");
 
-        let file = tokio::fs::OpenOptions::new()
-            .read(false)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&temp_path)
-            .await?;
+        let file = tokio::fs::File::create(&temp_path).await?;
 
         let mut write = BufWriter::new(file);
 
@@ -475,7 +466,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
             } else {
                 // If the chunk is not present, we write 0 to the location and timestamp tables
                 write.write_u32(0).await?;
-            };
+            }
         }
 
         for metadata in &self.chunks_data {
@@ -547,10 +538,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                 Ok(())
             }
             WriteAction::All => self.write_all(path).await,
-            WriteAction::Parts(parts) => {
-                self.write_indices(path, Vec::from_iter(parts.iter().cloned()).as_slice())
-                    .await
-            }
+            WriteAction::Parts(parts) => self.write_indices(path, parts.iter().copied()).await,
         }?;
 
         // If we still are in memory after this, we don't need to write again!
@@ -568,7 +556,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         let headers = raw_file_bytes.split_to(SECTOR_BYTES * 2);
         let (mut location_bytes, mut timestamp_bytes) = headers.split_at(SECTOR_BYTES);
 
-        let mut chunk_file = AnvilChunkFile::default();
+        let mut chunk_file = Self::default();
 
         let mut last_offset = 2;
         for i in 0..CHUNK_COUNT {
@@ -629,7 +617,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
             .unwrap()
             .as_secs() as u32;
 
-        let index = AnvilChunkFile::<S>::get_chunk_index(chunk.position().0, chunk.position().1);
+        let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
         // Default to the compression type read from the file
         let compression_type = self.chunks_data[index]
             .as_ref()
@@ -802,8 +790,8 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
     ) {
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
-        for chunk in chunks.into_iter() {
-            let index = AnvilChunkFile::<S>::get_chunk_index(chunk.x, chunk.y);
+        for chunk in chunks {
+            let index = Self::get_chunk_index(chunk.x, chunk.y);
             let is_ok = match &self.chunks_data[index] {
                 None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
                 Some(chunk_metadata) => {
@@ -925,7 +913,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_write_in_place() {
+    async fn write_in_place() {
         let mut config = AdvancedConfiguration::default();
         config.chunk.write_in_place = true;
         override_config_for_testing(config);
@@ -1201,7 +1189,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_write_bulk() {
+    async fn write_bulk() {
         let mut config = AdvancedConfiguration::default();
         config.chunk.write_in_place = false;
         override_config_for_testing(config);
@@ -1293,7 +1281,7 @@ mod tests {
     // TODO
     /*
     #[test]
-    fn test_load_java_chunk() {
+    fn load_java_chunk() {
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),

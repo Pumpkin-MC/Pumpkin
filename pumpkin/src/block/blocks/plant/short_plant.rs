@@ -1,3 +1,4 @@
+use pumpkin_data::Block;
 use pumpkin_world::BlockStateId;
 
 use crate::block::{
@@ -8,12 +9,8 @@ use crate::block::{
 pub struct ShortPlantBlock;
 
 impl BlockMetadata for ShortPlantBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &["short_grass", "fern"]
+    fn ids() -> Box<[u16]> {
+        [Block::SHORT_GRASS.id, Block::FERN.id].into()
     }
 }
 

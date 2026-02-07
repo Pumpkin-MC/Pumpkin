@@ -40,7 +40,7 @@ impl BedrockClient {
         .await;
     }
 
-    pub fn handle_new_incoming_connection(&self, _packet: &SNewIncomingConnection) {
+    pub const fn handle_new_incoming_connection(&self, _packet: &SNewIncomingConnection) {
         // self.connection_state.store(ConnectionState::Login);
     }
 

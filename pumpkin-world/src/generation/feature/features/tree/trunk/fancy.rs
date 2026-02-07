@@ -145,7 +145,7 @@ impl FancyTrunkPlacer {
             if make {
                 let axis = Self::get_log_axis(start_pos, block_pos_2.0);
 
-                if TreeFeature::can_replace(block.to_state(), block.to_block()) {
+                if TreeFeature::can_replace(block.to_state(), block.to_block_id()) {
                     let block = Block::from_state_id(trunk_provider.id);
                     let original_props = &block.properties(trunk_provider.id).unwrap().to_props();
                     let axis = axis.to_value();
@@ -167,7 +167,7 @@ impl FancyTrunkPlacer {
                 }
             }
 
-            if TreeFeature::can_replace_or_log(block.to_state(), block.to_block()) {
+            if TreeFeature::can_replace_or_log(block.to_state(), block.to_block_id()) {
                 continue;
             }
             return (false, logs);
@@ -245,8 +245,8 @@ pub struct BranchPosition {
 }
 
 impl BranchPosition {
-    pub fn new(pos: BlockPos, end_y: i32) -> Self {
-        BranchPosition {
+    pub const fn new(pos: BlockPos, end_y: i32) -> Self {
+        Self {
             node: TreeNode {
                 center: pos,
                 foliage_radius: 0,
@@ -256,7 +256,7 @@ impl BranchPosition {
         }
     }
 
-    pub fn get_end_y(&self) -> i32 {
+    pub const fn get_end_y(&self) -> i32 {
         self.end_y
     }
 }

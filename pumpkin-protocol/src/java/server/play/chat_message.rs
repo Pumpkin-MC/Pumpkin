@@ -1,7 +1,8 @@
 use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_CHAT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
+use pumpkin_util::version::MinecraftVersion;
 
 use crate::{
     ClientPacket, ServerPacket,
@@ -10,7 +11,7 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[packet(PLAY_CHAT)]
+#[java_packet(PLAY_CHAT)]
 pub struct SChatMessage {
     pub message: String,
     pub timestamp: i64,
@@ -40,6 +41,7 @@ impl ClientPacket for SChatMessage {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
+        _version: &MinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_string(&self.message)?;
         write.write_i64_be(self.timestamp)?;

@@ -1,9 +1,10 @@
 use std::num::NonZeroU32;
 
-use pumpkin_util::random::{RandomGenerator, RandomImpl};
+use pumpkin_util::{
+    random::{RandomGenerator, RandomImpl},
+    y_offset::YOffset,
+};
 use serde::Deserialize;
-
-use super::y_offset::YOffset;
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -19,9 +20,9 @@ pub enum HeightProvider {
 impl HeightProvider {
     pub fn get(&self, random: &mut RandomGenerator, min_y: i8, height: u16) -> i32 {
         match self {
-            HeightProvider::Uniform(provider) => provider.get(random, min_y, height),
-            HeightProvider::Trapezoid(provider) => provider.get(random, min_y, height),
-            HeightProvider::VeryBiasedToBottom(provider) => provider.get(random, min_y, height),
+            Self::Uniform(provider) => provider.get(random, min_y, height),
+            Self::Trapezoid(provider) => provider.get(random, min_y, height),
+            Self::VeryBiasedToBottom(provider) => provider.get(random, min_y, height),
         }
     }
 }
@@ -37,7 +38,7 @@ impl VeryBiasedToBottomHeightProvider {
     pub fn get(&self, random: &mut RandomGenerator, min_y: i8, height: u16) -> i32 {
         let min = self.min_inclusive.get_y(min_y as i16, height);
         let max = self.max_inclusive.get_y(min_y as i16, height);
-        let inner = self.inner.map(|i| i.get()).unwrap_or(1) as i32;
+        let inner = self.inner.map_or(1, std::num::NonZero::get) as i32;
 
         let min_rnd = random.next_inbetween_i32(min + inner, max);
         let max_rnd = random.next_inbetween_i32(min, min_rnd - 1);

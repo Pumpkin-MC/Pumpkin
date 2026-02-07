@@ -4,7 +4,7 @@ use crate::{
         args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::{SaveJSONConfiguration, banned_player_data::BANNED_PLAYER_LIST},
+    data::SaveJSONConfiguration,
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -20,7 +20,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -29,30 +29,31 @@ impl CommandExecutor for Executor {
             };
             let target = (*target).to_string();
 
-            let mut lock = BANNED_PLAYER_LIST.write().await;
+            let mut lock = server.data.banned_player_list.write().await;
 
-            if let Some(idx) = lock
+            let result = if let Some(idx) = lock
                 .banned_players
                 .iter()
                 .position(|entry| entry.name == target)
             {
                 lock.banned_players.remove(idx);
-            } else {
                 sender
-                    .send_message(TextComponent::translate("commands.pardon.failed", []))
+                    .send_message(TextComponent::translate(
+                        "commands.pardon.success",
+                        [TextComponent::text(target)],
+                    ))
                     .await;
-                return Ok(());
-            }
+                Ok(1)
+            } else {
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.pardon.failed",
+                    [],
+                )))
+            };
 
             lock.save();
 
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.pardon.success",
-                    [TextComponent::text(target)],
-                ))
-                .await;
-            Ok(())
+            result
         })
     }
 }

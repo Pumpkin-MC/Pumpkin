@@ -31,10 +31,8 @@ where
         _server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        // 1. Perform the synchronous mutable operation (pop) outside the Future.
         let s_opt: Option<&'a str> = args.pop();
 
-        // 2. Process the entire argument and check bounds synchronously.
         let result: Option<Arg<'a>> = s_opt
             // Replace args.pop()?.parse::<T>().ok()?
             .and_then(|s| s.parse::<T>().ok())
@@ -57,7 +55,6 @@ where
                 Arg::Num(Ok(x.to_number()))
             });
 
-        // 3. Return a Future that immediately resolves to the calculated result.
         Box::pin(async move { result })
     }
 }
@@ -116,7 +113,7 @@ pub enum Number {
 
 impl Number {
     #[must_use]
-    pub fn qualifier(&self) -> &'static str {
+    pub const fn qualifier(&self) -> &'static str {
         match self {
             Self::F64(_) | Self::F32(_) => "Float",
             Self::I32(_) | Self::I64(_) => "Integer",

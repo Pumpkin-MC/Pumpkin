@@ -74,8 +74,8 @@ impl ServerPlayerData {
         if should_save && self.storage.is_save_enabled() {
             self.last_save.store(now);
             // Save all online players periodically across all worlds
-            for world in server.worlds.read().await.iter() {
-                for player in world.players.read().await.values() {
+            for world in server.worlds.load().iter() {
+                for player in world.players.load().iter() {
                     let mut nbt = NbtCompound::new();
                     player.write_nbt(&mut nbt).await;
 
@@ -103,8 +103,8 @@ impl ServerPlayerData {
         let mut total_players = 0;
 
         // Save players from all worlds
-        for world in server.worlds.read().await.iter() {
-            for player in world.players.read().await.values() {
+        for world in server.worlds.load().iter() {
+            for player in world.players.load().iter() {
                 self.extract_data_and_save_player(player).await?;
                 total_players += 1;
             }
@@ -177,7 +177,7 @@ impl ServerPlayerData {
 
 #[cfg(test)]
 mod test {
-    use crate::data::player_server_data::ServerPlayerData;
+    use crate::data::player_server::ServerPlayerData;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_world::data::player_data::PlayerDataStorage;
     use std::time::Duration;
@@ -186,7 +186,7 @@ mod test {
     use uuid::Uuid;
 
     #[tokio::test]
-    async fn test_player_data_storage_new() {
+    async fn player_data_storage_new() {
         // Create a temporary directory for testing
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
@@ -198,7 +198,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_player_data_storage_get_player_data_path() {
+    async fn player_data_storage_get_player_data_path() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
 
@@ -211,7 +211,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_player_data_storage_save_and_load() {
+    async fn player_data_storage_save_and_load() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
 
@@ -236,7 +236,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_player_data_storage_load_nonexistent() {
+    async fn player_data_storage_load_nonexistent() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
 
@@ -252,7 +252,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_player_data_storage_disabled() {
+    async fn player_data_storage_disabled() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
 
@@ -273,7 +273,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_server_player_data_new() {
+    async fn server_player_data_new() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
         let save_interval = Duration::from_secs(300);
@@ -287,7 +287,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_player_data_file_structure() {
+    async fn player_data_file_structure() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
 

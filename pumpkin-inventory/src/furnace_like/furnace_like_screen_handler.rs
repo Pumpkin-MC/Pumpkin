@@ -1,7 +1,11 @@
 use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::{fuels::is_fuel, screen::WindowType};
-use pumpkin_world::{block::entities::BlockEntity, inventory::Inventory, item::ItemStack};
+use pumpkin_world::{
+    block::entities::{PropertyDelegate, furnace_like_block_entity::ExperienceContainer},
+    inventory::Inventory,
+    item::ItemStack,
+};
 
 use crate::{
     player::player_inventory::PlayerInventory,
@@ -11,10 +15,11 @@ use crate::{
     },
 };
 
-use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType};
+use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType, FurnaceOutputSlot};
 
 pub struct FurnaceLikeScreenHandler {
     pub inventory: Arc<dyn Inventory>,
+    experience_container: Arc<dyn ExperienceContainer>,
     behaviour: ScreenHandlerBehaviour,
 }
 
@@ -23,15 +28,10 @@ impl FurnaceLikeScreenHandler {
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
         inventory: Arc<dyn Inventory>,
-        furnace_block_entity: Arc<dyn BlockEntity>,
+        property_delegate: Arc<dyn PropertyDelegate>,
+        experience_container: Arc<dyn ExperienceContainer>,
         window_type: WindowType,
     ) -> Self {
-        let furnace_like_property_delegate = furnace_block_entity.to_property_delegate().unwrap();
-        let mut handler = Self {
-            inventory,
-            behaviour: ScreenHandlerBehaviour::new(sync_id, Some(window_type)),
-        };
-
         struct FurnaceLikeScreenListener;
         impl ScreenHandlerListener for FurnaceLikeScreenListener {
             fn on_property_update<'a>(
@@ -43,22 +43,24 @@ impl FurnaceLikeScreenHandler {
                 Box::pin(async move {
                     if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
                         sync_handler
-                            .update_property(screen_handler, property as i32, value)
+                            .update_property(screen_handler, i32::from(property), value)
                             .await;
                     }
                 })
             }
         }
+        let mut handler = Self {
+            inventory,
+            experience_container,
+            behaviour: ScreenHandlerBehaviour::new(sync_id, Some(window_type)),
+        };
 
         // 0: Fire icon (fuel left) counting from fuel burn time down to 0 (in-game ticks)
         // 1: Maximum fuel burn time fuel burn time or 0 (in-game ticks)
         // 2: Progress arrow counting from 0 to maximum progress (in-game ticks)
         // 3: Maximum progress always 200 on the vanilla server
         for i in 0..4 {
-            handler.add_property(ScreenProperty::new(
-                furnace_like_property_delegate.clone(),
-                i,
-            ));
+            handler.add_property(ScreenProperty::new(property_delegate.clone(), i));
         }
 
         handler
@@ -80,9 +82,10 @@ impl FurnaceLikeScreenHandler {
             self.inventory.clone(),
             FurnaceLikeSlotType::Bottom,
         )));
-        self.add_slot(Arc::new(FurnaceLikeSlot::new(
+        // Output slot awards experience when items are taken
+        self.add_slot(Arc::new(FurnaceOutputSlot::new(
             self.inventory.clone(),
-            FurnaceLikeSlotType::Side,
+            self.experience_container.clone(),
         )));
     }
 }
@@ -109,11 +112,14 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
 
     fn quick_move<'a>(
         &'a mut self,
-        _player: &'a dyn InventoryPlayer,
+        player: &'a dyn InventoryPlayer,
         slot_index: i32,
     ) -> ItemStackFuture<'a> {
         Box::pin(async move {
             const FUEL_SLOT: i32 = 1; // Note: Slots 0, 1, 2 are Furnace slots.
+            const OUTPUT_SLOT: i32 = 2;
+
+            log::debug!("FurnaceLikeScreenHandler::quick_move slot_index={slot_index}");
 
             let mut stack_left = ItemStack::EMPTY.clone();
 
@@ -153,6 +159,12 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
                 slot.set_stack(ItemStack::EMPTY.clone()).await;
             } else {
                 slot.mark_dirty().await;
+            }
+
+            // Award XP when taking from output slot (slot 2)
+            if slot_index == OUTPUT_SLOT {
+                log::debug!("quick_move: taking from output slot, calling on_take_item");
+                slot.on_take_item(player, &stack_left).await;
             }
 
             stack_left

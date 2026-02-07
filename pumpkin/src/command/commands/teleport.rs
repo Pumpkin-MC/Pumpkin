@@ -1,3 +1,4 @@
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
@@ -65,9 +66,9 @@ impl CommandExecutor for EntitiesToEntityExecutor {
 
             let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
             let pos = destination.get_entity().pos.load();
-            if !World::is_valid(pos) {
+            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    "commands.teleport.invalidPosition",
                     [],
                 )));
             }
@@ -75,14 +76,14 @@ impl CommandExecutor for EntitiesToEntityExecutor {
                 let base_entity = target.get_entity();
                 let yaw = base_entity.yaw.load();
                 let pitch = base_entity.pitch.load();
-                let world = base_entity.world.clone();
+                let world = base_entity.world.load_full();
                 target
                     .clone()
                     .teleport(pos, yaw.into(), pitch.into(), world)
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -100,9 +101,9 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
             let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(pos) {
+            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    "commands.teleport.invalidPosition",
                     [],
                 )));
             }
@@ -111,7 +112,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
             //todo
             let world = match sender {
                 CommandSender::Rcon(_) | CommandSender::Console => {
-                    server.worlds.read().await.first().unwrap().clone()
+                    server.worlds.load().first().unwrap().clone()
                 }
                 CommandSender::Player(player) => player.world().clone(),
                 CommandSender::CommandBlock(_, w) => w.clone(),
@@ -124,7 +125,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -142,9 +143,9 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
             let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(pos) {
+            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    "commands.teleport.invalidPosition",
                     [],
                 )));
             }
@@ -159,12 +160,12 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
                         pos,
                         Some(yaw),
                         Some(pitch),
-                        facing_entity.get_entity().world.clone(),
+                        facing_entity.get_entity().world.load_full(),
                     )
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -182,16 +183,18 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
             let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(pos) {
+            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    "commands.teleport.invalidPosition",
                     [],
                 )));
             }
-            let (yaw, pitch) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
+            // Note: Rotation returns (yaw, is_yaw_relative, pitch, is_pitch_relative)
+            // For teleport, we use absolute values only (ignore relative flags)
+            let (yaw, _, pitch, _) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
 
             // todo command context
-            let world = server.worlds.read().await.first().unwrap().clone();
+            let world = server.worlds.load().first().unwrap().clone();
             for target in targets {
                 target
                     .clone()
@@ -199,7 +202,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -217,16 +220,16 @@ impl CommandExecutor for EntitiesToPosExecutor {
             let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(pos) {
+            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    "commands.teleport.invalidPosition",
                     [],
                 )));
             }
             // todo command context
             let world = match sender {
                 CommandSender::Rcon(_) | CommandSender::Console => {
-                    server.worlds.read().await.first().unwrap().clone()
+                    server.worlds.load().first().unwrap().clone()
                 }
                 CommandSender::Player(player) => player.world().clone(),
                 CommandSender::CommandBlock(_, w) => w.clone(),
@@ -240,7 +243,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
                     .await;
             }
 
-            Ok(())
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -257,15 +260,15 @@ impl CommandExecutor for SelfToEntityExecutor {
         Box::pin(async move {
             let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
             let pos = destination.get_entity().pos.load();
-            let world = destination.get_entity().world.clone();
+            let world = destination.get_entity().world.load_full();
 
             match sender {
                 CommandSender::Player(player) => {
                     let yaw = player.living_entity.entity.yaw.load();
                     let pitch = player.living_entity.entity.pitch.load();
-                    if !World::is_valid(pos) {
+                    if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                         return Err(CommandError::CommandFailed(TextComponent::translate(
-                            "argument.pos.outofbounds",
+                            "commands.teleport.invalidPosition",
                             [],
                         )));
                     }
@@ -273,15 +276,14 @@ impl CommandExecutor for SelfToEntityExecutor {
                         .clone()
                         .teleport(pos, Some(yaw), Some(pitch), world)
                         .await;
-                }
-                _ => {
-                    sender
-                        .send_message(TextComponent::translate("permissions.requires.player", []))
-                        .await;
-                }
-            }
 
-            Ok(())
+                    Ok(1)
+                }
+                _ => Err(CommandError::CommandFailed(TextComponent::translate(
+                    "permissions.requires.player",
+                    [],
+                ))),
+            }
         })
     }
 }
@@ -300,9 +302,9 @@ impl CommandExecutor for SelfToPosExecutor {
                     let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
                     let yaw = player.living_entity.entity.yaw.load();
                     let pitch = player.living_entity.entity.pitch.load();
-                    if !World::is_valid(pos) {
+                    if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                         return Err(CommandError::CommandFailed(TextComponent::translate(
-                            "argument.pos.outofbounds",
+                            "commands.teleport.invalidPosition",
                             [],
                         )));
                     }
@@ -310,15 +312,14 @@ impl CommandExecutor for SelfToPosExecutor {
                         .clone()
                         .teleport(pos, Some(yaw), Some(pitch), player.world().clone())
                         .await;
-                }
-                _ => {
-                    sender
-                        .send_message(TextComponent::translate("permissions.requires.player", []))
-                        .await;
-                }
-            }
 
-            Ok(())
+                    Ok(1)
+                }
+                _ => Err(CommandError::CommandFailed(TextComponent::translate(
+                    "permissions.requires.player",
+                    [],
+                ))),
+            }
         })
     }
 }

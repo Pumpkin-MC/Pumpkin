@@ -22,17 +22,14 @@ pub struct WeightedPressurePlateBlock;
 type PressurePlateProps = pumpkin_data::block_properties::LightWeightedPressurePlateLikeProperties;
 
 impl BlockMetadata for WeightedPressurePlateBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
+    fn ids() -> Box<[u16]> {
         // light = Gold
         // heavy = Iron
-        &[
-            "light_weighted_pressure_plate",
-            "heavy_weighted_pressure_plate",
+        [
+            Block::LIGHT_WEIGHTED_PRESSURE_PLATE.id,
+            Block::HEAVY_WEIGHTED_PRESSURE_PLATE.id,
         ]
+        .into()
     }
 }
 
@@ -116,8 +113,7 @@ impl PressurePlate for WeightedPressurePlateBlock {
         };
         // TODO: this is bad use real box
         let aabb = BoundingBox::from_block(pos);
-        let len = world.get_entities_at_box(&aabb).await.len()
-            + world.get_players_at_box(&aabb).await.len();
+        let len = world.get_entities_at_box(&aabb).len() + world.get_players_at_box(&aabb).len();
         let len = len.min(weight);
         if len > 0 {
             let f = (weight.min(len) / weight) as f32;

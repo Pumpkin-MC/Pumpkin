@@ -76,11 +76,11 @@ impl BlockEntity for ChestBlockEntity {
 
     fn tick<'a>(
         &'a self,
-        world: Arc<dyn SimpleWorld>,
+        world: &'a Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.viewers
-                .update_viewer_count::<ChestBlockEntity>(self, world, &self.position)
+                .update_viewer_count::<Self>(self, world, &self.position)
                 .await;
         })
     }
@@ -105,7 +105,7 @@ impl ViewerCountListener for ChestBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockEnderChestOpen).await;
+            self.play_sound(world, Sound::BlockChestOpen).await;
         })
     }
 
@@ -115,7 +115,7 @@ impl ViewerCountListener for ChestBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockEnderChestClose).await;
+            self.play_sound(world, Sound::BlockChestClose).await;
         })
     }
 
@@ -129,7 +129,7 @@ impl ViewerCountListener for ChestBlockEntity {
         Box::pin(async move {
             world
                 .add_synced_block_event(*position, Self::LID_ANIMATION_EVENT_TYPE, new as u8)
-                .await
+                .await;
         })
     }
 }
@@ -138,6 +138,12 @@ impl ChestBlockEntity {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:chest";
 
+    /// Returns the number of players currently viewing this chest
+    pub fn get_viewer_count(&self) -> u16 {
+        self.viewers.get_viewer_count()
+    }
+
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -188,7 +194,7 @@ impl Inventory for ChestBlockEntity {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -245,7 +251,7 @@ impl Inventory for ChestBlockEntity {
 impl Clearable for ChestBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })

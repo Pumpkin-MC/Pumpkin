@@ -1,12 +1,12 @@
 use pumpkin_data::packet::clientbound::PLAY_RESPAWN;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
 use serde::{Deserialize, Serialize};
 
 use crate::VarInt;
 
 #[derive(Serialize, Deserialize)]
-#[packet(PLAY_RESPAWN)]
+#[java_packet(PLAY_RESPAWN)]
 pub struct CRespawn {
     pub dimension_type: VarInt,
     pub dimension_name: ResourceLocation,
@@ -23,7 +23,8 @@ pub struct CRespawn {
 
 impl CRespawn {
     #[expect(clippy::too_many_arguments)]
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         dimension_type: VarInt,
         dimension_name: ResourceLocation,
         hashed_seed: i64,

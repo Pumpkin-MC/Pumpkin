@@ -2,18 +2,29 @@ use crate::WritingError;
 use crate::codec::bit_set::BitSet;
 use crate::{ClientPacket, VarInt, ser::NetworkWriteExt};
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_nbt::END_ID;
 use pumpkin_util::math::position::get_local_cord;
+use pumpkin_util::version::MinecraftVersion;
 use pumpkin_world::chunk::format::LightContainer;
 use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
 use std::io::Write;
 
-#[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
+/// Sent by the server to provide the client with the full data for a chunk.
+///
+/// This includes heightmaps, the actual block and biome data (organized into sections),
+/// block entities (like signs or chests), and the light level information for both
+/// sky and block light.
+#[java_packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
 pub struct CChunkData<'a>(pub &'a ChunkData);
 
 impl ClientPacket for CChunkData<'_> {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    #[expect(clippy::too_many_lines)]
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut write = write;
 
         // Chunk X
@@ -21,7 +32,7 @@ impl ClientPacket for CChunkData<'_> {
         // Chunk Z
         write.write_i32_be(self.0.z)?;
 
-        let heightmaps = &self.0.heightmap;
+        let heightmaps = &self.0.heightmap.lock().unwrap();
         write.write_var_int(&VarInt(3))?; // Map size
 
         let mut write_heightmap = |index: i32, data: &[i64]| -> Result<(), WritingError> {
@@ -39,15 +50,17 @@ impl ClientPacket for CChunkData<'_> {
 
         {
             let mut blocks_and_biomes_buf = Vec::new();
-            for section in &self.0.section.sections {
-                // Block count
-                let non_empty_block_count = section.block_states.non_air_block_count() as i16;
+            let block_sections = self.0.section.block_sections.read().unwrap();
+            let biome_sections = self.0.section.biome_sections.read().unwrap();
+
+            for (block_palette, biome_palette) in block_sections.iter().zip(biome_sections.iter()) {
+                let non_empty_block_count = block_palette.non_air_block_count() as i16;
                 blocks_and_biomes_buf.write_i16_be(non_empty_block_count)?;
 
-                // This is a bit messy, but we dont have access to VarInt in pumpkin-world
-                let network_repr = section.block_states.convert_network();
-                blocks_and_biomes_buf.write_u8(network_repr.bits_per_entry)?;
-                match network_repr.palette {
+                let block_network = block_palette.convert_network();
+                blocks_and_biomes_buf.write_u8(block_network.bits_per_entry)?;
+
+                match block_network.palette {
                     NetworkPalette::Single(registry_id) => {
                         blocks_and_biomes_buf.write_var_int(&registry_id.into())?;
                     }
@@ -67,13 +80,14 @@ impl ClientPacket for CChunkData<'_> {
                     NetworkPalette::Direct => {}
                 }
 
-                for packed in network_repr.packed_data {
+                for packed in block_network.packed_data {
                     blocks_and_biomes_buf.write_i64_be(packed)?;
                 }
 
-                let network_repr = section.biomes.convert_network();
-                blocks_and_biomes_buf.write_u8(network_repr.bits_per_entry)?;
-                match network_repr.palette {
+                let biome_network = biome_palette.convert_network();
+                blocks_and_biomes_buf.write_u8(biome_network.bits_per_entry)?;
+
+                match biome_network.palette {
                     NetworkPalette::Single(registry_id) => {
                         blocks_and_biomes_buf.write_var_int(&registry_id.into())?;
                     }
@@ -93,12 +107,11 @@ impl ClientPacket for CChunkData<'_> {
                     NetworkPalette::Direct => {}
                 }
 
-                // NOTE: Not updated in wiki; i64 array length is now determined by the bits per entry
-                //data_buf.write_var_int(&network_repr.packed_data.len().into())?;
-                for packed in network_repr.packed_data {
+                for packed in biome_network.packed_data {
                     blocks_and_biomes_buf.write_i64_be(packed)?;
                 }
             }
+
             write.write_var_int(&blocks_and_biomes_buf.len().try_into().map_err(|_| {
                 WritingError::Message(format!(
                     "{} is not representable as a VarInt!",
@@ -106,10 +119,11 @@ impl ClientPacket for CChunkData<'_> {
                 ))
             })?)?;
             write.write_slice(&blocks_and_biomes_buf)?;
-        }
+        };
 
-        write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
-        for block_entity in self.0.block_entities.values() {
+        let block_entities = self.0.block_entities.lock().unwrap();
+        write.write_var_int(&VarInt(block_entities.len() as i32))?;
+        for block_entity in block_entities.values() {
             let pos = block_entity.get_position();
             let local_xz = ((get_local_cord(pos.0.x) & 0xF) << 4) | (get_local_cord(pos.0.z) & 0xF);
 
@@ -118,7 +132,7 @@ impl ClientPacket for CChunkData<'_> {
             write.write_var_int(&VarInt(block_entity.get_id() as i32))?;
 
             if let Some(nbt) = block_entity.chunk_data_nbt() {
-                write.write_nbt(&nbt.into())?;
+                write.write_nbt(nbt.into())?;
             } else {
                 write.write_u8(END_ID)?;
             }

@@ -9,21 +9,40 @@ use pumpkin_util::{
 };
 use std::hash::{Hash, Hasher};
 
+/// Represents the static definition of a Minecraft block type.
+///
+/// This struct contains the base properties shared by all instances of a block
+/// Data-driven attributes like `hardness` and `blast_resistance` are defined here,
+/// while specific orientations or variations are stored in the associated `BlockState`.
 #[derive(Debug)]
 pub struct Block {
+    /// The numeric ID used for internal registry mapping.
     pub id: u16,
+    /// The unique namespaced ID (e.g., "`diamond_ore`").
     pub name: &'static str,
+    /// The key used for client-side localization (e.g., "`block.minecraft.diamond_ore`").
     pub translation_key: &'static str,
+    /// How hard the block is to break. A value of -1.0 indicates an unbreakable block (e.g., Bedrock).
     pub hardness: f32,
+    /// The block's resistance to explosions.
     pub blast_resistance: f32,
+    /// The friction coefficient. Default is 0.6; Ice is 0.98.
     pub slipperiness: f32,
+    /// How much this block affects the speed of an entity walking on it (e.g., Soul Sand).
     pub velocity_multiplier: f32,
+    /// How much this block affects an entity's jump height (e.g., Honey Blocks).
     pub jump_velocity_multiplier: f32,
+    /// The ID of the item form of this block, used for inventory and drops.
     pub item_id: u16,
+    /// The initial state of the block when placed without extra data.
     pub default_state: &'static BlockState,
+    /// A list of all possible valid states (properties like rotation, waterlogged, etc.) for this block.
     pub states: &'static [BlockState],
+    /// Fire behavior settings. If `None`, the block is not flammable.
     pub flammable: Option<Flammable>,
+    /// Defines the items dropped when this block is destroyed.
     pub loot_table: Option<LootTable>,
+    /// Defines the amount of XP dropped when the block is mined (e.g., Coal or Diamond).
     pub experience: Option<Experience>,
 }
 
@@ -72,17 +91,22 @@ impl Taggable for Block {
 
 impl ToResourceLocation for &'static Block {
     fn to_resource_location(&self) -> ResourceLocation {
-        ResourceLocation::vanilla(self.name)
+        format!("minecraft:{}", self.name)
     }
 }
 
 impl FromResourceLocation for &'static Block {
     fn from_resource_location(resource_location: &ResourceLocation) -> Option<Self> {
-        Block::from_registry_key(&resource_location.path)
+        Block::from_registry_key(
+            resource_location
+                .strip_prefix("minecraft:")
+                .unwrap_or(resource_location),
+        )
     }
 }
 
 impl Block {
+    #[must_use]
     pub fn is_waterlogged(&self, state_id: u16) -> bool {
         self.properties(state_id).is_some_and(|properties| {
             properties
@@ -90,6 +114,16 @@ impl Block {
                 .into_iter()
                 .any(|(key, value)| key == "waterlogged" && value == "true")
         })
+    }
+
+    /// Returns whether this block is solid (based on default state)
+    pub fn is_solid(&self) -> bool {
+        self.default_state.is_solid()
+    }
+
+    /// Returns whether this block is air (based on default state)
+    pub fn is_air(&self) -> bool {
+        self.default_state.is_air()
     }
 }
 

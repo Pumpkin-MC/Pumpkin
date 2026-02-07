@@ -18,7 +18,7 @@ pub struct FallingEntity {
 }
 
 impl FallingEntity {
-    pub fn new(entity: Entity, block_state_id: BlockStateId) -> Self {
+    pub const fn new(entity: Entity, block_state_id: BlockStateId) -> Self {
         Self {
             entity,
             block_state_id,
@@ -68,6 +68,7 @@ impl EntityBase for FallingEntity {
                 entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
                 entity
                     .world
+                    .load()
                     .set_block_state(
                         &self.entity.block_pos.load(),
                         self.block_state_id,

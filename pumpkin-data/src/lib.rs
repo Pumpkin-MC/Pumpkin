@@ -9,12 +9,17 @@ pub mod item;
 pub mod packet;
 
 #[rustfmt::skip]
+#[path = "generated/jukebox_song.rs"]
+pub mod jukebox_song;
+
+#[rustfmt::skip]
 #[path = "generated/registry.rs"]
 pub mod registry;
 
 #[rustfmt::skip]
 #[path = "generated/screen.rs"]
 pub mod screen;
+
 
 #[rustfmt::skip]
 #[path = "generated/particle.rs"]
@@ -166,6 +171,10 @@ pub mod fuels;
 pub mod effect;
 
 #[rustfmt::skip]
+#[path = "generated/structures.rs"]
+pub mod structures;
+
+#[rustfmt::skip]
 #[path = "generated/potion.rs"]
 pub mod potion;
 
@@ -189,3 +198,7 @@ pub use block_state::BlockState;
 pub use block_state::BlockStateRef;
 pub use blocks::Block;
 pub use collision_shape::CollisionShape;
+
+#[rustfmt::skip]
+#[path = "generated/chunk_gen_settings.rs"]
+pub mod chunk_gen_settings;

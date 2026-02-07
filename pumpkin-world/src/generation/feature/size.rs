@@ -17,10 +17,10 @@ pub enum FeatureSizeType {
 }
 
 impl FeatureSizeType {
-    pub fn get_radius(&self, height: u32, y: i32) -> i32 {
+    pub const fn get_radius(&self, height: u32, y: i32) -> i32 {
         match self {
-            FeatureSizeType::ThreeLayersFeatureSize(three) => three.get_radius(height, y),
-            FeatureSizeType::TwoLayersFeatureSize(two) => two.get_radius(y),
+            Self::ThreeLayersFeatureSize(three) => three.get_radius(height, y),
+            Self::TwoLayersFeatureSize(two) => two.get_radius(y),
         }
     }
 }
@@ -33,7 +33,7 @@ pub struct TwoLayersFeatureSize {
 }
 
 impl TwoLayersFeatureSize {
-    pub fn get_radius(&self, y: i32) -> i32 {
+    pub const fn get_radius(&self, y: i32) -> i32 {
         if y < self.limit as i32 {
             self.lower_size as i32
         } else {
@@ -52,7 +52,7 @@ pub struct ThreeLayersFeatureSize {
 }
 
 impl ThreeLayersFeatureSize {
-    pub fn get_radius(&self, height: u32, y: i32) -> i32 {
+    pub const fn get_radius(&self, height: u32, y: i32) -> i32 {
         if y < self.limit as i32 {
             self.lower_size as i32
         } else if y >= height as i32 - self.upper_limit as i32 {

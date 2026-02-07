@@ -58,18 +58,12 @@ impl PlayerInventory {
 
     /// getOffHandStack in source
     pub async fn off_hand_item(&self) -> Arc<Mutex<ItemStack>> {
-        let slot = self
-            .equipment_slots
-            .get(&PlayerInventory::OFF_HAND_SLOT)
-            .unwrap();
+        let slot = self.equipment_slots.get(&Self::OFF_HAND_SLOT).unwrap();
         self.entity_equipment.lock().await.get(slot)
     }
 
     pub async fn swap_item(&self) -> (ItemStack, ItemStack) {
-        let slot = self
-            .equipment_slots
-            .get(&PlayerInventory::OFF_HAND_SLOT)
-            .unwrap();
+        let slot = self.equipment_slots.get(&Self::OFF_HAND_SLOT).unwrap();
         let mut equipment = self.entity_equipment.lock().await;
         let binding = self.held_item();
         let mut main_hand_item = binding.lock().await;
@@ -78,7 +72,8 @@ impl PlayerInventory {
         (main_hand_item.clone(), off_hand_item)
     }
 
-    pub fn is_valid_hotbar_index(slot: usize) -> bool {
+    #[must_use]
+    pub const fn is_valid_hotbar_index(slot: usize) -> bool {
         slot < Self::HOTBAR_SIZE
     }
 
@@ -109,13 +104,11 @@ impl PlayerInventory {
         let count_left = self_stack.get_max_stack_size() - self_stack.item_count;
         let count_min = stack_count.min(count_left);
 
-        if count_min == 0 {
-            stack_count as usize
-        } else {
+        if count_min != 0 {
             stack_count -= count_min;
             self_stack.increment(count_min);
-            stack_count as usize
         }
+        stack_count as usize
     }
 
     async fn get_empty_slot(&self) -> i16 {
@@ -128,7 +121,7 @@ impl PlayerInventory {
         -1
     }
 
-    fn can_stack_add_more(&self, existing_stack: &ItemStack, stack: &ItemStack) -> bool {
+    fn can_stack_add_more(existing_stack: &ItemStack, stack: &ItemStack) -> bool {
         !existing_stack.is_empty()
             && existing_stack.are_items_and_components_equal(stack)
             && existing_stack.is_stackable()
@@ -136,7 +129,7 @@ impl PlayerInventory {
     }
 
     async fn get_occupied_slot_with_room_for_stack(&self, stack: &ItemStack) -> i16 {
-        if self.can_stack_add_more(
+        if Self::can_stack_add_more(
             &*self
                 .get_stack(self.get_selected_slot() as usize)
                 .await
@@ -144,15 +137,15 @@ impl PlayerInventory {
                 .await,
             stack,
         ) {
-            self.get_selected_slot() as i16
-        } else if self.can_stack_add_more(
+            i16::from(self.get_selected_slot())
+        } else if Self::can_stack_add_more(
             &*self.get_stack(Self::OFF_HAND_SLOT).await.lock().await,
             stack,
         ) {
             Self::OFF_HAND_SLOT as i16
         } else {
             for i in 0..Self::MAIN_SIZE {
-                if self.can_stack_add_more(&*self.main_inventory[i].lock().await, stack) {
+                if Self::can_stack_add_more(&*self.main_inventory[i].lock().await, stack) {
                     return i as i16;
                 }
             }
@@ -298,7 +291,7 @@ impl PlayerInventory {
             {
                 player
                     .enqueue_slot_set_packet(&CSetPlayerInventory::new(
-                        (room_for_stack as i32).into(),
+                        i32::from(room_for_stack).into(),
                         &self
                             .get_stack(room_for_stack as usize)
                             .await
@@ -316,7 +309,7 @@ impl PlayerInventory {
 impl Clearable for PlayerInventory {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for item in self.main_inventory.iter() {
+            for item in &self.main_inventory {
                 *item.lock().await = ItemStack::EMPTY.clone();
             }
 
@@ -332,7 +325,7 @@ impl Inventory for PlayerInventory {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for item in self.main_inventory.iter() {
+            for item in &self.main_inventory {
                 if !item.lock().await.is_empty() {
                     return false;
                 }

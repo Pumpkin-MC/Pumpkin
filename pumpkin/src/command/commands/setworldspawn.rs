@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::command::CommandResult;
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::{
@@ -80,7 +82,9 @@ impl CommandExecutor for AngleWorldSpawnExecutor {
                 return Err(InvalidConsumption(Some(ARG_BLOCK_POS.into())));
             };
 
-            let Some(Arg::Rotation(pitch, yaw)) = args.get(ARG_ANGLE) else {
+            // Note: Rotation argument is (yaw, is_yaw_relative, pitch, is_pitch_relative)
+            // For setworldspawn, we use absolute values only (ignore relative flags)
+            let Some(Arg::Rotation(yaw, _, pitch, _)) = args.get(ARG_ANGLE) else {
                 return Err(InvalidConsumption(Some(ARG_ANGLE.into())));
             };
 
@@ -95,31 +99,30 @@ async fn setworldspawn(
     block_pos: BlockPos,
     yaw: f32,
     pitch: f32,
-) -> Result<(), CommandError> {
+) -> Result<i32, CommandError> {
     let Some(world) = sender.world() else {
         return Err(CommandError::CommandFailed(TextComponent::text(
             "Failed to get world.",
         )));
     };
     if world.dimension != Dimension::OVERWORLD && world.dimension != Dimension::OVERWORLD_CAVES {
-        sender
-            .send_message(TextComponent::translate(
-                "commands.setworldspawn.failure.not_overworld",
-                [],
-            ))
-            .await;
-        return Ok(());
+        return Err(CommandError::CommandFailed(TextComponent::translate(
+            "commands.setworldspawn.failure.not_overworld",
+            [],
+        )));
     }
 
-    let mut level_info_guard = server.level_info.write().await;
-    level_info_guard.spawn_x = block_pos.0.x;
-    level_info_guard.spawn_y = block_pos.0.y;
-    level_info_guard.spawn_z = block_pos.0.z;
+    let current_info = server.level_info.load();
 
-    level_info_guard.spawn_yaw = yaw;
-    level_info_guard.spawn_pitch = pitch;
+    let mut new_info = (**current_info).clone();
 
-    drop(level_info_guard);
+    new_info.spawn_x = block_pos.0.x;
+    new_info.spawn_y = block_pos.0.y;
+    new_info.spawn_z = block_pos.0.z;
+    new_info.spawn_yaw = yaw;
+    new_info.spawn_pitch = pitch;
+
+    server.level_info.store(Arc::new(new_info));
 
     sender
         .send_message(TextComponent::translate(
@@ -135,7 +138,7 @@ async fn setworldspawn(
         ))
         .await;
 
-    Ok(())
+    Ok(1)
 }
 
 #[must_use]

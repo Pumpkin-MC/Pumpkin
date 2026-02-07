@@ -2,6 +2,7 @@
 name = "pumpkin-util"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 pumpkin-nbt.workspace = true
@@ -27,3 +28,6 @@ base64.workspace = true
 p384 = { workspace = true, features = ["ecdsa"] }
 thiserror.workspace = true
 ecdsa.workspace = true
+
+[lints]
+workspace = true

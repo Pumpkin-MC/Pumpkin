@@ -11,7 +11,10 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
+            stronghold::{
+                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                StrongholdPieceType,
+            },
         },
     },
 };
@@ -68,11 +71,24 @@ impl StructurePieceBase for ChestCorridorPiece {
         &self,
         start: &StructurePiece,
         random: &mut RandomGenerator,
+        weights: &mut Vec<PieceWeight>,
+        last_piece_type: &mut Option<StrongholdPieceType>,
+        _has_portal_room: &mut bool,
+
         collector: &mut StructurePiecesCollector,
         pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
-        self.piece
-            .fill_forward_opening(start, collector, random, 1, 1, pieces_to_process, None);
+        self.piece.fill_forward_opening(
+            start,
+            collector,
+            random,
+            weights,
+            last_piece_type,
+            1,
+            1,
+            pieces_to_process,
+            None,
+        );
     }
 
     fn place(&mut self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, _seed: i64) {
@@ -133,7 +149,6 @@ impl StructurePieceBase for ChestCorridorPiece {
         //         // Note: In a full implementation, you would use a helper to set the LootTable NBT here
         //         inner.add_block(chunk, &chest_state, 3, 2, 3, &box_limit);
 
-        //         // If Pumpkin has a loot provider, you'd hook into it here:
         //         // chunk.set_loot_table(chest_pos, "minecraft:chests/stronghold_corridor");
         //     }
         // }

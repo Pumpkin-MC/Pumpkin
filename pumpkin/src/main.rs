@@ -1,47 +1,10 @@
-#![deny(clippy::all)]
-#![deny(clippy::pedantic)]
-// #![warn(clippy::restriction)]
-#![deny(clippy::cargo)]
-// to keep consistency
-#![deny(clippy::if_then_some_else_none)]
-#![deny(clippy::empty_enum_variants_with_brackets)]
-#![deny(clippy::empty_structs_with_brackets)]
-#![deny(clippy::separated_literal_suffix)]
-#![deny(clippy::semicolon_outside_block)]
-#![deny(clippy::non_zero_suggestions)]
-#![deny(clippy::string_lit_chars_any)]
-#![deny(clippy::use_self)]
-#![deny(clippy::useless_let_if_seq)]
-#![deny(clippy::branches_sharing_code)]
-#![deny(clippy::equatable_if_let)]
-#![deny(clippy::option_if_let_else)]
-#![deny(clippy::needless_pass_by_ref_mut)]
-#![deny(clippy::needless_collect)]
-#![deny(clippy::redundant_clone)]
-#![deny(clippy::set_contains_or_insert)]
-#![deny(clippy::significant_drop_in_scrutinee)]
-// use log crate
-#![deny(clippy::print_stdout)]
-#![deny(clippy::print_stderr)]
-// REMOVE SOME WHEN RELEASE
-#![expect(clippy::cargo_common_metadata)]
-#![expect(clippy::cast_precision_loss)]
-#![expect(clippy::multiple_crate_versions)]
-#![expect(clippy::single_call_fn)]
-#![expect(clippy::cast_sign_loss)]
-#![expect(clippy::cast_possible_truncation)]
-#![expect(clippy::cast_possible_wrap)]
-#![expect(clippy::missing_panics_doc)]
-#![expect(clippy::missing_errors_doc)]
-#![expect(clippy::module_name_repetitions)]
-#![expect(clippy::struct_excessive_bools)]
 // Don't warn on event sending macros
+#![recursion_limit = "512"]
 #![expect(unused_labels)]
 
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
 
-use plugin::PluginManager;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use std::{
     io::{self},
@@ -51,15 +14,12 @@ use std::{
 use tokio::signal::ctrl_c;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
-use tokio::sync::RwLock;
 
+use pumpkin::data::VanillaData;
 use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
-use pumpkin_util::{
-    permission::{PermissionManager, PermissionRegistry},
-    text::{TextComponent, color::NamedColor},
-};
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::time::Instant;
 
 // Setup some tokens to allow us to identify which event is for which socket.
@@ -75,18 +35,6 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
-
-pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
-    LazyLock::new(|| Arc::new(PluginManager::new()));
-
-pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
-
-pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLock::new(|| {
-    Arc::new(RwLock::new(PermissionManager::new(
-        PERMISSION_REGISTRY.clone(),
-    )))
-});
 
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
@@ -107,6 +55,8 @@ async fn main() {
 
     let basic_config = BasicConfiguration::load(&config_dir);
     let advanced_config = AdvancedConfiguration::load(&config_dir);
+
+    let vanilla_data = VanillaData::load();
 
     pumpkin::init_logger(&advanced_config);
 
@@ -146,7 +96,7 @@ async fn main() {
             .expect("Unable to setup signal handlers");
     });
 
-    let pumpkin_server = PumpkinServer::new(basic_config, advanced_config).await;
+    let pumpkin_server = PumpkinServer::new(basic_config, advanced_config, vanilla_data).await;
     pumpkin_server.init_plugins().await;
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());

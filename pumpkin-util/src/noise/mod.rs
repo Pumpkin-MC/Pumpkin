@@ -92,7 +92,8 @@ pub const GRADIENTS: [Gradient; 16] = [
 
 impl Gradient {
     #[inline]
+    #[must_use]
     pub fn dot(&self, x: f64, y: f64, z: f64) -> f64 {
-        self.x * x + self.y * y + self.z * z
+        self.z.mul_add(z, self.x.mul_add(x, self.y * y))
     }
 }

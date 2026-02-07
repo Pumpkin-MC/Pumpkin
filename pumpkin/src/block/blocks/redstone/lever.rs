@@ -104,13 +104,13 @@ impl BlockBehaviour for LeverBlock {
 
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
-            WallMountedBlock::can_place_at(
-                self,
-                args.block_accessor,
-                args.position,
-                self.get_direction(args.state.id, args.block),
-            )
-            .await
+            // Use the provided direction, or fallback to the current state's direction if missing
+            let direction = args
+                .direction
+                .unwrap_or_else(|| self.get_direction(args.state.id, args.block));
+
+            WallMountedBlock::can_place_at(self, args.block_accessor, args.position, direction)
+                .await
         })
     }
 

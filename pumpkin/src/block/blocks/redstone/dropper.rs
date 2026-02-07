@@ -25,7 +25,7 @@ use pumpkin_world::block::entities::hopper::HopperBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
-use rand::{Rng, rng};
+use rand::{Rng, RngExt, rng};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -57,7 +57,7 @@ pub struct DropperBlock;
 type DispenserLikeProperties = pumpkin_data::block_properties::DispenserLikeProperties;
 
 fn triangle<R: Rng>(rng: &mut R, min: f64, max: f64) -> f64 {
-    min + (rng.random::<f64>() - rng.random::<f64>()) * max
+    (rng.random::<f64>() - rng.random::<f64>()).mul_add(max, min)
 }
 
 const fn to_normal(facing: Facing) -> Vector3<f64> {
@@ -200,7 +200,7 @@ impl BlockBehaviour for DropperBlock {
                         _ => 0.15625,
                     };
                     let entity = Entity::new(args.world.clone(), position, &EntityType::ITEM);
-                    let rd = rng().random::<f64>() * 0.1 + 0.2;
+                    let rd = rng().random::<f64>().mul_add(0.1, 0.2);
                     let velocity = Vector3::new(
                         triangle(&mut rng(), facing.x * rd, 0.017_227_5 * 6.),
                         triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),

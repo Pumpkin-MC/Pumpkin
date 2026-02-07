@@ -17,7 +17,7 @@ const KEY_CLICK_HOTBAR_END: i8 = 9;
 const SLOT_INDEX_OUTSIDE: i16 = -999;
 
 impl Click {
-    pub fn new(mode: SlotActionType, button: i8, slot: i16) -> Result<Self, InventoryError> {
+    pub fn new(mode: &SlotActionType, button: i8, slot: i16) -> Result<Self, InventoryError> {
         match mode {
             SlotActionType::Pickup => Self::new_normal_click(button, slot),
             // Both buttons do the same here, so we omit it
@@ -37,12 +37,11 @@ impl Click {
     }
 
     fn new_normal_click(button: i8, slot: i16) -> Result<Self, InventoryError> {
-        let slot = match slot {
-            SLOT_INDEX_OUTSIDE => Slot::OutsideInventory,
-            _ => {
-                let slot = slot.try_into().unwrap_or(0);
-                Slot::Normal(slot)
-            }
+        let slot = if slot == SLOT_INDEX_OUTSIDE {
+            Slot::OutsideInventory
+        } else {
+            let slot = slot.try_into().unwrap_or(0);
+            Slot::Normal(slot)
         };
         let button = match button {
             BUTTON_CLICK_LEFT => MouseClick::Left,
@@ -79,12 +78,11 @@ impl Click {
 
     fn new_drop_item(button: i8, slot: i16) -> Result<Self, InventoryError> {
         let drop_type = DropType::from_i8(button)?;
-        let slot = match slot {
-            SLOT_INDEX_OUTSIDE => Slot::OutsideInventory,
-            _ => {
-                let slot = slot.try_into().unwrap_or(0);
-                Slot::Normal(slot)
-            }
+        let slot = if slot == SLOT_INDEX_OUTSIDE {
+            Slot::OutsideInventory
+        } else {
+            let slot = slot.try_into().unwrap_or(0);
+            Slot::Normal(slot)
         };
         Ok(Self {
             click_type: ClickType::DropType(drop_type),
@@ -147,7 +145,7 @@ pub enum DropType {
 }
 
 impl DropType {
-    fn from_i8(value: i8) -> Result<Self, InventoryError> {
+    const fn from_i8(value: i8) -> Result<Self, InventoryError> {
         Ok(match value {
             0 => Self::SingleItem,
             1 => Self::FullStack,
@@ -156,13 +154,13 @@ impl DropType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MouseDragType {
     Left,
     Right,
     Middle,
 }
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum MouseDragState {
     Start(MouseDragType),
     AddSlot(usize),

@@ -1,7 +1,7 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::BlockProperties,
-    tag::{RegistryKey, get_tag_values},
+    tag::{self},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{BlockStateId, world::BlockFlags};
@@ -23,19 +23,11 @@ pub struct PressurePlateBlock;
 type PressurePlateProps = pumpkin_data::block_properties::StonePressurePlateLikeProperties;
 
 impl BlockMetadata for PressurePlateBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
+    fn ids() -> Box<[u16]> {
         let mut combined = Vec::new();
-        combined.extend_from_slice(
-            get_tag_values(RegistryKey::Block, "minecraft:wooden_pressure_plates").unwrap(),
-        );
-        combined.extend_from_slice(
-            get_tag_values(RegistryKey::Block, "minecraft:stone_pressure_plates").unwrap(),
-        );
-        combined.leak()
+        combined.extend_from_slice(tag::Block::MINECRAFT_WOODEN_PRESSURE_PLATES.1);
+        combined.extend_from_slice(tag::Block::MINECRAFT_STONE_PRESSURE_PLATES.1);
+        combined.into_boxed_slice()
     }
 }
 
@@ -110,8 +102,8 @@ impl PressurePlate for PressurePlateBlock {
     async fn calculate_redstone_output(&self, world: &World, _block: &Block, pos: &BlockPos) -> u8 {
         // TODO: this is bad use real box
         let aabb = BoundingBox::from_block(pos);
-        if !world.get_entities_at_box(&aabb).await.is_empty()
-            || !world.get_players_at_box(&aabb).await.is_empty()
+        if !world.get_entities_at_box(&aabb).is_empty()
+            || !world.get_players_at_box(&aabb).is_empty()
         {
             return 15;
         }

@@ -43,20 +43,21 @@ impl PlayerDataStorage {
     }
 
     #[must_use]
-    pub fn get_data_path(&self) -> &PathBuf {
+    pub const fn get_data_path(&self) -> &PathBuf {
         &self.data_path
     }
 
     #[must_use]
-    pub fn is_save_enabled(&self) -> bool {
+    pub const fn is_save_enabled(&self) -> bool {
         self.save_enabled
     }
 
-    pub fn set_save_enabled(&mut self, enabled: bool) {
+    pub const fn set_save_enabled(&mut self, enabled: bool) {
         self.save_enabled = enabled;
     }
 
     /// Returns the path for a player's data file based on their UUID.
+    #[must_use]
     pub fn get_player_data_path(&self, uuid: &Uuid) -> PathBuf {
         self.get_data_path().join(format!("{uuid}.dat"))
     }
@@ -138,7 +139,7 @@ impl PlayerDataStorage {
         // Create the file and write directly with GZip compression
         match File::create(&path) {
             Ok(file) => {
-                if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(&data, file) {
+                if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file) {
                     log::error!("Failed to write compressed player data for {uuid}: {e}");
                     Err(PlayerDataError::Nbt(e.to_string()))
                 } else {

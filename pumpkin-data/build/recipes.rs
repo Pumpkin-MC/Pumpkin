@@ -44,15 +44,73 @@ pub struct CookingRecipeStruct {
     result: RecipeResultStruct,
 }
 
+impl CookingRecipeStruct {
+    /// Generate a recipe ID based on result, ingredient, and cooking type
+    /// Format: minecraft:{result}_from_{cooking_type}_{ingredient}
+    fn generate_recipe_id(&self, cooking_type: &str) -> String {
+        let result_name = self
+            .result
+            .id
+            .strip_prefix("minecraft:")
+            .unwrap_or(&self.result.id);
+        let ingredient_name = match &self.ingredient {
+            RecipeIngredientTypes::Simple(s) => {
+                if s.starts_with('#') {
+                    // Tagged ingredient - strip # and replace : with _
+                    s.strip_prefix('#').unwrap_or(s).replace(':', "_")
+                } else {
+                    s.strip_prefix("minecraft:").unwrap_or(s).to_string()
+                }
+            }
+            RecipeIngredientTypes::OneOf(items) => {
+                // Use first item for ID generation
+                items
+                    .first()
+                    .map(|s| s.strip_prefix("minecraft:").unwrap_or(s))
+                    .unwrap_or("unknown")
+                    .to_string()
+            }
+        };
+        format!("minecraft:{result_name}_from_{cooking_type}_{ingredient_name}")
+    }
+
+    fn to_tokens_with_id(&self, tokens: &mut TokenStream, recipe_id: &str) {
+        let category = match &self.category {
+            Some(category) => category.to_token_stream(),
+            None => RecipeCategoryTypes::Misc.to_token_stream(),
+        };
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
+        };
+        let ingredient = self.ingredient.to_token_stream();
+        let cookingtime = self.cookingtime.to_token_stream();
+        let experience = self.experience.to_token_stream();
+        let result = self.result.to_token_stream();
+
+        tokens.extend(quote! {
+                recipe_id: #recipe_id,
+                category: #category,
+                group: #group,
+                ingredient: #ingredient,
+                cookingtime: #cookingtime,
+                experience: #experience,
+                result: #result,
+        });
+    }
+}
+
 impl ToTokens for CookingRecipeStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let category = match &self.category {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = match &self.group {
-            Some(group) => quote! { Some(#group) },
-            None => quote! { None },
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
         };
         let ingredient = self.ingredient.to_token_stream();
         let cookingtime = self.cookingtime.to_token_stream();
@@ -88,9 +146,10 @@ impl ToTokens for CraftingShapedRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = match &self.group {
-            Some(group) => quote! { Some(#group) },
-            None => quote! { None },
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
         };
         let show_notification = self.show_notification.unwrap_or(true);
         let key = self
@@ -104,7 +163,7 @@ impl ToTokens for CraftingShapedRecipeStruct {
         let pattern = self
             .pattern
             .iter()
-            .map(|c| c.to_token_stream())
+            .map(quote::ToTokens::to_token_stream)
             .collect::<Vec<_>>();
         let result = self.result.to_token_stream();
 
@@ -135,14 +194,15 @@ impl ToTokens for CraftingShapelessRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = match &self.group {
-            Some(group) => quote! { Some(#group) },
-            None => quote! { None },
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
         };
         let ingredients = self
             .ingredients
             .iter()
-            .map(|c| c.to_token_stream())
+            .map(quote::ToTokens::to_token_stream)
             .collect::<Vec<_>>();
         let result = self.result.to_token_stream();
 
@@ -172,9 +232,10 @@ impl ToTokens for CraftingTransmuteRecipeStruct {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
         };
-        let group = match &self.group {
-            Some(group) => quote! { Some(#group) },
-            None => quote! { None },
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
         };
         let input = self.input.to_token_stream();
         let material = self.material.to_token_stream();
@@ -243,17 +304,17 @@ pub enum RecipeIngredientTypes {
 impl ToTokens for RecipeIngredientTypes {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = match self {
-            RecipeIngredientTypes::Simple(ingredient) => {
-                if ingredient.starts_with("#") {
+            Self::Simple(ingredient) => {
+                if ingredient.starts_with('#') {
                     quote! { RecipeIngredientTypes::Tagged(#ingredient) }
                 } else {
                     quote! { RecipeIngredientTypes::Simple(#ingredient) }
                 }
             }
-            RecipeIngredientTypes::OneOf(ingredients) => {
+            Self::OneOf(ingredients) => {
                 let ingredients = ingredients
                     .iter()
-                    .map(|c| c.to_token_stream())
+                    .map(quote::ToTokens::to_token_stream)
                     .collect::<Vec<_>>();
                 quote! { RecipeIngredientTypes::OneOf(&[#(#ingredients),*]) }
             }
@@ -282,22 +343,22 @@ pub enum RecipeCategoryTypes {
 impl ToTokens for RecipeCategoryTypes {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = match self {
-            RecipeCategoryTypes::Equipment => {
+            Self::Equipment => {
                 quote! { RecipeCategoryTypes::Equipment }
             }
-            RecipeCategoryTypes::Building => {
+            Self::Building => {
                 quote! { RecipeCategoryTypes::Building }
             }
-            RecipeCategoryTypes::Restone => {
+            Self::Restone => {
                 quote! { RecipeCategoryTypes::Restone }
             }
-            RecipeCategoryTypes::Misc => {
+            Self::Misc => {
                 quote! { RecipeCategoryTypes::Misc }
             }
-            RecipeCategoryTypes::Food => {
+            Self::Food => {
                 quote! { RecipeCategoryTypes::Food }
             }
-            RecipeCategoryTypes::Blocks => {
+            Self::Blocks => {
                 quote! { RecipeCategoryTypes::Blocks }
             }
         };
@@ -319,7 +380,9 @@ pub(crate) fn build() -> TokenStream {
     for recipe in recipes_assets {
         match recipe {
             RecipeTypes::Blasting(recipe) => {
-                let common_cooking_token = recipe.to_token_stream();
+                let recipe_id = recipe.generate_recipe_id("blasting");
+                let mut common_cooking_token = TokenStream::new();
+                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id);
                 let blasting_token = quote! {
                     CookingRecipeType::Blasting (CookingRecipe {
                         #common_cooking_token
@@ -328,7 +391,9 @@ pub(crate) fn build() -> TokenStream {
                 cooking_recipes.push(blasting_token);
             }
             RecipeTypes::CampfireCooking(recipe) => {
-                let common_cooking_token = recipe.to_token_stream();
+                let recipe_id = recipe.generate_recipe_id("campfire_cooking");
+                let mut common_cooking_token = TokenStream::new();
+                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id);
                 let campfire_token = quote! {
                     CookingRecipeType::CampfireCooking (CookingRecipe {
                         #common_cooking_token
@@ -349,7 +414,9 @@ pub(crate) fn build() -> TokenStream {
                 crafting_recipes.push(recipe.to_token_stream());
             }
             RecipeTypes::Smelting(recipe) => {
-                let common_cooking_token = recipe.to_token_stream();
+                let recipe_id = recipe.generate_recipe_id("smelting");
+                let mut common_cooking_token = TokenStream::new();
+                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id);
                 let smelting_token = quote! {
                     CookingRecipeType::Smelting(CookingRecipe {
                         #common_cooking_token
@@ -360,7 +427,9 @@ pub(crate) fn build() -> TokenStream {
             RecipeTypes::SmithingTransform => {}
             RecipeTypes::SmithingTrim => {}
             RecipeTypes::Smoking(recipe) => {
-                let common_cooking_token = recipe.to_token_stream();
+                let recipe_id = recipe.generate_recipe_id("smoking");
+                let mut common_cooking_token = TokenStream::new();
+                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id);
                 let smoking_token = quote! {
                     CookingRecipeType::Smoking(CookingRecipe{
                         #common_cooking_token
@@ -409,6 +478,8 @@ pub(crate) fn build() -> TokenStream {
         #[allow(dead_code)]
         #[derive(Clone, Debug)]
         pub struct CookingRecipe {
+            /// Vanilla-compatible recipe ID (e.g., "minecraft:iron_ingot_from_smelting_iron_ore")
+            pub recipe_id: &'static str,
             pub category: RecipeCategoryTypes,
             pub group: Option<&'static str>,
             pub ingredient: RecipeIngredientTypes,
@@ -529,6 +600,25 @@ pub(crate) fn build() -> TokenStream {
                         }
                     }
                     _ => None
+                }
+            })
+        }
+
+        /// Get the experience value for a recipe by its recipe ID.
+        /// Used for calculating XP when extracting from furnace.
+        /// Recipe IDs are in vanilla format like "minecraft:iron_ingot_from_smelting_iron_ore"
+        pub fn get_recipe_experience(recipe_id: &str) -> Option<f32> {
+            RECIPES_COOKING.iter().find_map(|recipe| {
+                let cooking_recipe = match recipe {
+                    CookingRecipeType::Blasting(r)
+                    | CookingRecipeType::Smelting(r)
+                    | CookingRecipeType::Smoking(r)
+                    | CookingRecipeType::CampfireCooking(r) => r,
+                };
+                if cooking_recipe.recipe_id == recipe_id {
+                    Some(cooking_recipe.experience)
+                } else {
+                    None
                 }
             })
         }

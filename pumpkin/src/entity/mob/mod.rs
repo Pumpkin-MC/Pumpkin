@@ -19,6 +19,7 @@ use tokio::sync::Mutex;
 
 pub mod creeper;
 pub mod drowned;
+pub mod silverfish;
 pub mod skeleton;
 pub mod zombie;
 pub mod zombie_villager;
@@ -57,10 +58,10 @@ impl MobEntity {
         }
     }
     pub fn is_in_position_target_range(&self) -> bool {
-        self.is_in_position_target_range_pos(self.living_entity.entity.block_pos.load())
+        self.is_in_position_target_range_pos(&self.living_entity.entity.block_pos.load())
     }
 
-    pub fn is_in_position_target_range_pos(&self, block_pos: BlockPos) -> bool {
+    pub fn is_in_position_target_range_pos(&self, block_pos: &BlockPos) -> bool {
         let position_target_range = self.position_target_range.load(Relaxed);
         if position_target_range == -1 {
             true

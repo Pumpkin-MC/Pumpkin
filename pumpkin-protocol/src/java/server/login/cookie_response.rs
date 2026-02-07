@@ -1,5 +1,5 @@
 use pumpkin_data::packet::serverbound::LOGIN_COOKIE_RESPONSE;
-use pumpkin_macros::packet;
+use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 use std::io::Read;
 
@@ -8,7 +8,7 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[packet(LOGIN_COOKIE_RESPONSE)]
+#[java_packet(LOGIN_COOKIE_RESPONSE)]
 /// Response to a `CCookieRequest` (login) from the server.
 /// The Notchian server only accepts responses of up to 5 kiB in size.
 pub struct SLoginCookieResponse {
@@ -22,7 +22,7 @@ impl ServerPacket for SLoginCookieResponse {
     fn read(read: impl Read) -> Result<Self, ReadingError> {
         let mut read = read;
 
-        let key = read.get_resource_location()?;
+        let key = read.get_string()?;
         let has_payload = read.get_bool()?;
 
         if !has_payload {

@@ -22,10 +22,31 @@ pub mod commands;
 pub mod dispatcher;
 pub mod tree;
 
+/// Represents the source of a command execution.
+///
+/// Different senders have different permissions, output targets, and
+/// positions in the world. This enum abstracts those differences for the
+/// command dispatcher.
 pub enum CommandSender {
+    /// A remote console connection via the RCON protocol.
+    ///
+    /// Stores an asynchronous buffer to capture command output
+    /// so it can be sent back over the network to the RCON client.
     Rcon(Arc<tokio::sync::Mutex<Vec<String>>>),
+    /// The local server terminal/console.
+    ///
+    /// This sender typically has absolute permissions (bypass) and
+    /// outputs directly to the server logs.
     Console,
+    /// A player currently connected to the server.
+    ///
+    /// Contains a reference to the [Player] struct to access their
+    /// location, permissions, and session.
     Player(Arc<Player>),
+    /// A Command Block or Command Block Minecart.
+    ///
+    /// Contains the block entity responsible for the command and the
+    /// world context it exists in for coordinate-relative execution (e.g., `~ ~ ~`).
     CommandBlock(Arc<dyn BlockEntity>, Arc<World>),
 }
 
@@ -110,12 +131,12 @@ impl CommandSender {
     }
 
     /// Check if the sender has a specific permission
-    pub async fn has_permission(&self, node: &str) -> bool {
+    pub async fn has_permission(&self, server: &Server, node: &str) -> bool {
         match self {
             Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
-            Self::Player(p) => p.has_permission(node).await,
+            Self::Player(p) => p.has_permission(server, node).await,
             Self::CommandBlock(..) => {
-                let perm_reg = crate::PERMISSION_REGISTRY.read().await;
+                let perm_reg = server.permission_registry.read().await;
                 let Some(p) = perm_reg.get_permission(node) else {
                     return false;
                 };
@@ -142,22 +163,37 @@ impl CommandSender {
         match self {
             // TODO: maybe return first world when console
             Self::Console | Self::Rcon(..) => None,
-            Self::Player(p) => Some(p.living_entity.entity.world.clone()),
+            Self::Player(p) => Some(p.living_entity.entity.world.load_full()),
             Self::CommandBlock(_, w) => Some(w.clone()),
         }
     }
 
-    pub async fn get_locale(&self) -> Locale {
+    #[must_use]
+    pub fn get_locale(&self) -> Locale {
         match self {
             Self::CommandBlock(..) | Self::Console | Self::Rcon(..) => Locale::EnUs, // Default locale for console and RCON
             Self::Player(player) => {
-                Locale::from_str(&player.config.read().await.locale).unwrap_or(Locale::EnUs)
+                Locale::from_str(&player.config.load().locale).unwrap_or(Locale::EnUs)
             }
         }
     }
 }
 
-pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<(), CommandError>> + Send + 'a>>;
+/// Represents the result of running a command after completion.
+///
+/// If the command **ran successfully**, an [`Ok`] is returned containing an [`i32`].
+/// This represents the 'output value' of the command, which is *homologous* to the
+/// `int` that command executors in vanilla return **upon success**.
+///
+/// **You should choose the successful result as `1` if**:
+/// - you don't know what value to use for a success for your
+///   own commands, or
+/// - you don't understand what this value means, or
+/// - you just simply don't care about this value at all
+///
+/// If the command **fails**, an [`Err`] is returned, containing the [`CommandError`]
+/// that led to this result.
+pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<i32, CommandError>> + Send + 'a>>;
 
 pub trait CommandExecutor: Sync + Send {
     fn execute<'a>(

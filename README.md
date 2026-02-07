@@ -4,8 +4,7 @@
 
 ![CI](https://github.com/Pumpkin-MC/Pumpkin/actions/workflows/rust.yml/badge.svg)
 [![Discord](https://img.shields.io/discord/1268592337445978193.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/wT8XjrjKkf)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Current version)](https://img.shields.io/badge/current_version-1.21.11-blue)
+[![License: GPL](https://img.shields.io/badge/License-GPLv3-yellow.svg)](https://opensource.org/licenses/gpl-3-0)
 
 </div>
 
@@ -26,17 +25,20 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - **Extensibility**: Provides a foundation for plugin development.
 
 > [!IMPORTANT]
-> Pumpkin is currently under heavy development
+> Pumpkin is currently under heavy development.
+>
+> [See what needs to be done before the 1.0.0 Release](https://github.com/Pumpkin-MC/Pumpkin/issues/449)
 
 ## Features
 
 - [x] Configuration (toml)
-- [x] Server Status/Ping
-- Networking
+- [Tracking: Protocol](https://github.com/Pumpkin-MC/Pumpkin/issues/1401)
+  - [x] Server Status/Ping
   - [x] Encryption
   - [x] Packet Compression
-- World
-  - [x] World Joining
+  - [x] Java/Bedrock
+  - ...
+- [Tracking: World](https://github.com/Pumpkin-MC/Pumpkin/issues/1403)
   - [x] Player Tab-list
   - [x] Scoreboard
   - [x] World Loading
@@ -45,54 +47,52 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] World Saving
   - [x] Lighting
   - [x] Entity Spawning
-  - [x] Item drops (W.I.P)
   - [x] Bossbar
   - [x] Chunk Loading (Vanilla, Linear)
-  - [x] Chunk Generation
+  - [Chunk Generation](https://github.com/Pumpkin-MC/Pumpkin/issues/36)
   - [x] Chunk Saving (Vanilla, Linear)
-  - [x] Biomes
-  - [x] Redstone (W.I.P)
+  - [Redstone](https://github.com/Pumpkin-MC/Pumpkin/issues/1402)
   - [x] Liquid Physics
-  - [x] Vegetation
-  - [ ] Structure Generation
-- Player
+  - ...
+- [Tracking: Player](https://github.com/Pumpkin-MC/Pumpkin/issues/1405)
   - [x] Skins
   - [x] Teleport
   - [x] Movement
   - [x] Animation
   - [x] Inventory
-  - [x] Combat
+  - [Combat](https://github.com/Pumpkin-MC/Pumpkin/issues/1404)
   - [x] Experience
   - [x] Hunger
   - [X] Off Hand
   - [ ] Advancements
   - [x] Eating
+  - ...
 - Entities
   - [x] Non-Living (Minecart, Eggs...) (W.I.P)
   - [x] Entity Effects
   - [x] Players
   - [x] Mobs (W.I.P)
   - [x] Animals (W.I.P)
-  - [x] Entity AI (W.I.P)
+  - [Entity AI](https://github.com/Pumpkin-MC/Pumpkin/issues/1406)
   - [ ] Boss
   - [ ] Villagers
   - [ ] Mobs Inventory
   - [X] Entity Saving
 - Server
-  - [x] Plugins (W.I.P)
+  - [Plugins](https://github.com/Pumpkin-MC/Pumpkin/issues/1407)
   - [x] Query
   - [x] RCON
   - [x] Inventories
   - [x] Particles
   - [x] Chat
-  - [x] Commands (W.I.P)
+  - [Commands](https://github.com/Pumpkin-MC/Pumpkin/issues/15)
   - [x] Permissions
   - [x] Translations
 - Proxy
   - [x] Bungeecord
   - [x] Velocity
 
-Check out our [Github Project](https://github.com/orgs/Pumpkin-MC/projects/3) to see current progress.
+<!-- Check out our [Github Project](https://github.com/orgs/Pumpkin-MC/projects/3) to see current progress. -->
 
 ## How to run
 

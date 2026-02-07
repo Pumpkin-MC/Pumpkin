@@ -27,14 +27,7 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use tokio::sync::Mutex;
 
 pub trait BlockMetadata {
-    fn namespace(&self) -> &'static str;
-    fn ids(&self) -> &'static [&'static str];
-    fn names(&self) -> Vec<String> {
-        self.ids()
-            .iter()
-            .map(|f| format!("{}:{}", self.namespace(), f))
-            .collect()
-    }
+    fn ids() -> Box<[u16]>;
 }
 
 pub type BlockFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -240,6 +233,7 @@ pub struct CanPlaceAtArgs<'a> {
     pub block: &'a Block,
     pub state: &'a BlockState,
     pub position: &'a BlockPos,
+    pub direction: Option<BlockDirection>,
     pub player: Option<&'a Player>,
     pub use_item_on: Option<&'a SUseItemOn>,
 }
@@ -398,7 +392,7 @@ pub async fn calc_block_breaking(
     player.get_mining_speed(block).await / hardness / i
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum BlockIsReplacing {
     Itself(BlockStateId),
     Water(Integer0To15),

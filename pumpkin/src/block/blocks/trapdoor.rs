@@ -6,7 +6,7 @@ use crate::world::World;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{BlockHalf, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::{RegistryKey, Taggable, get_tag_values};
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
