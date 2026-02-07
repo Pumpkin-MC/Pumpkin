@@ -11,8 +11,10 @@ use crate::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
             desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator,
-            jungle_temple::JungleTempleGenerator, stronghold::StrongholdGenerator,
-            swamp_hut::SwampHutGenerator,
+            jungle_temple::JungleTempleGenerator,
+            ocean_ruin::{ColdOceanRuinGenerator, WarmOceanRuinGenerator},
+            pillager_outpost::PillagerOutpostGenerator, shipwreck::ShipwreckGenerator,
+            stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
         },
     },
 };
@@ -57,6 +59,18 @@ pub fn try_generate_structure(
             JungleTempleGenerator::get_structure_position(&JungleTempleGenerator, context)
         }
         StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
+        StructureKeys::Shipwreck | StructureKeys::ShipwreckBeached => {
+            ShipwreckGenerator::get_structure_position(&ShipwreckGenerator, context)
+        }
+        StructureKeys::OceanRuinCold => {
+            ColdOceanRuinGenerator::get_structure_position(&ColdOceanRuinGenerator, context)
+        }
+        StructureKeys::OceanRuinWarm => {
+            WarmOceanRuinGenerator::get_structure_position(&WarmOceanRuinGenerator, context)
+        }
+        StructureKeys::PillagerOutpost => {
+            PillagerOutpostGenerator::get_structure_position(&PillagerOutpostGenerator, context)
+        }
         // TODO: Implement other structure types
         _ => None,
     };

@@ -25,6 +25,9 @@ pub mod desert_pyramid;
 pub mod igloo;
 pub mod jungle_temple;
 pub mod nether_fortress;
+pub mod ocean_ruin;
+pub mod pillager_outpost;
+pub mod shipwreck;
 pub mod stronghold;
 pub mod swamp_hut;
 
