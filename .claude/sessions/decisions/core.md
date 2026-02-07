@@ -87,3 +87,27 @@
 **Rationale:** Centralized enforcement in the dispatcher ensures all commands are logged without per-command code. Matches vanilla behavior.
 **Affects:** Core
 **Status:** active
+
+## CORE-012: Chunk events blocked by type mismatch
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/008_core_chunk-event-audit-config-enforcement.md
+**Decision:** ChunkLoad/ChunkSend/ChunkSave events cannot be wired until Plugin agent fixes event struct type from `Arc<RwLock<ChunkData>>` to `Arc<ChunkData>`. The runtime universally uses `SyncChunk = Arc<ChunkData>` and ChunkData does not implement Clone.
+**Rationale:** Comprehensive audit of all 9 remaining unfired events. 3 chunk events are blocked by type mismatch. 2 block events (Place, CanBuild) are in net/ (not Core scope). 4 block events (Burn, FromTo, Grow, Fade) are Redstone scope.
+**Affects:** Core, WorldGen, Entity, Plugin
+**Status:** active (blocker — requires Plugin agent fix)
+
+## CORE-013: force_gamemode enforced on player login
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/008_core_chunk-event-audit-config-enforcement.md
+**Decision:** After player NBT data is loaded in `add_player()`, if `force_gamemode` is true, the player's gamemode is reset to the server default. Placed after `read_nbt()` and before `Arc::new()`.
+**Rationale:** Matches vanilla `force-gamemode` behavior. Previously only enforced when admin changed default gamemode via `/defaultgamemode`, not on login.
+**Affects:** Core
+**Status:** active
+
+## CORE-014: Three more config fields added
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/008_core_chunk-event-audit-config-enforcement.md
+**Decision:** Added `broadcast_console_to_ops` (bool, true), `max_world_size` (u32, 29999984), `function_permission_level` (PermissionLvl, Two) to BasicConfiguration following CORE-006 pattern.
+**Rationale:** Commonly used vanilla server.properties fields. Declared before runtime enforcement to allow operators to configure them.
+**Affects:** Core
+**Status:** active
