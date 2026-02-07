@@ -18,7 +18,7 @@ pub trait NodeEvaluator {
     ) -> impl std::future::Future<Output = Vec<Node>> + Send;
     fn get_path_type_of_mob(
         &mut self,
-        context: &PathfindingContext,
+        context: &mut PathfindingContext,
         pos: Vector3<i32>,
         mob_data: &MobData,
     ) -> impl std::future::Future<Output = PathType> + Send;
@@ -48,12 +48,13 @@ pub struct MobData {
     pub can_walk_on_water: bool,
     pub avoids_fire: bool,
     pub avoids_water: bool,
+    pub on_ground: bool,
     pub path_type_malus: HashMap<PathType, f32>,
 }
 
 impl MobData {
     #[must_use]
-    pub fn new_zombie(position: Vector3<f64>) -> Self {
+    pub fn new_zombie(position: Vector3<f64>, on_ground: bool) -> Self {
         let mut path_type_malus = HashMap::new();
 
         path_type_malus.insert(PathType::DangerFire, 16.0);
@@ -72,6 +73,7 @@ impl MobData {
             can_walk_on_water: false,
             avoids_fire: true,
             avoids_water: false,
+            on_ground,
             path_type_malus,
         }
     }
@@ -88,6 +90,7 @@ impl MobData {
             can_walk_on_water: false,
             avoids_fire: true,
             avoids_water: false,
+            on_ground: true,
             path_type_malus: HashMap::new(),
         }
     }

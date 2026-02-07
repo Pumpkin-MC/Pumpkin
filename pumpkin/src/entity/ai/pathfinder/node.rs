@@ -32,7 +32,7 @@ impl Default for Node {
     fn default() -> Self {
         Self {
             pos: BlockPos::new(0, 0, 0),
-            heap_idx: 0,
+            heap_idx: -1,
             g: 0.0,
             h: 0.0,
             f: 0.0,
@@ -247,7 +247,7 @@ impl Coordinate for Vector3<i32> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PathType {
     Blocked,
     Open,

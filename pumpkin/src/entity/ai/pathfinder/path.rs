@@ -95,7 +95,7 @@ impl Path {
         entity_width: f32,
     ) -> Option<(f32, f32, f32)> {
         self.nodes.get(index).map(|node| {
-            let offset = (entity_width + 1.0) * 0.5;
+            let offset = ((entity_width + 1.0) as i32 as f32) * 0.5;
             (
                 node.pos.0.x as f32 + offset,
                 node.pos.0.y as f32,

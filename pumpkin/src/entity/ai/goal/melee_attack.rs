@@ -145,7 +145,11 @@ impl Goal for MeleeAttackGoal {
                 return;
             };
 
-            //mob.get_mob_entity().look_at(target, 30.0, 30.0);
+            mob.get_mob_entity()
+                .look_control
+                .lock()
+                .await
+                .look_at_entity_with_range(target, 30.0, 30.0);
 
             self.update_countdown_ticks = (self.update_countdown_ticks - 1).max(0);
 

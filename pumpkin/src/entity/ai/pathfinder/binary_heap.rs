@@ -125,6 +125,33 @@ impl BinaryHeap {
         self.position_map.contains_key(&coords.as_vector3())
     }
 
+    /// Get a reference to the node at the given coordinates, if it exists in the heap.
+    pub fn get_node(&self, coords: &dyn Coordinate) -> Option<&Node> {
+        self.position_map
+            .get(&coords.as_vector3())
+            .and_then(|&index| self.heap[index].as_deref())
+    }
+
+    /// Updates an existing node's fields and reorders the heap.
+    /// This is used when we find a better path to an already-open node.
+    pub fn update_node(&mut self, coords: &dyn Coordinate, updated: Node) {
+        if let Some(&index) = self.position_map.get(&coords.as_vector3())
+            && let Some(ref mut node) = self.heap[index]
+        {
+            let old_f = node.f;
+            // Preserve heap_idx
+            let heap_idx = node.heap_idx;
+            **node = updated;
+            node.heap_idx = heap_idx;
+
+            if node.f < old_f {
+                self.bubble_up(index);
+            } else if node.f > old_f {
+                self.bubble_down(index);
+            }
+        }
+    }
+
     #[must_use]
     pub fn get_heap(&self) -> Vec<Node> {
         self.heap[1..=self.size]

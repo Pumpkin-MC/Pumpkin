@@ -8,7 +8,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
-use pumpkin_protocol::java::client::play::Metadata;
+use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -35,6 +35,9 @@ pub struct MobEntity {
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
     mob_flags: AtomicU8,
+    last_sent_yaw: AtomicU8,
+    last_sent_pitch: AtomicU8,
+    last_sent_head_yaw: AtomicU8,
 }
 
 impl MobEntity {
@@ -56,6 +59,9 @@ impl MobEntity {
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
             mob_flags: AtomicU8::new(0),
+            last_sent_yaw: AtomicU8::new(0),
+            last_sent_pitch: AtomicU8::new(0),
+            last_sent_head_yaw: AtomicU8::new(0),
         }
     }
     pub fn is_in_position_target_range(&self) -> bool {
@@ -212,6 +218,39 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             let mut look_control = mob_entity.look_control.lock().await;
             look_control.tick(self).await;
             drop(look_control);
+
+            // Send rotation packets after look_control finalizes head_yaw and pitch
+            let entity = &mob_entity.living_entity.entity;
+            let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
+            let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
+            let head_yaw =
+                (entity.head_yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
+
+            let last_yaw = mob_entity.last_sent_yaw.load(Relaxed);
+            let last_pitch = mob_entity.last_sent_pitch.load(Relaxed);
+            let last_head_yaw = mob_entity.last_sent_head_yaw.load(Relaxed);
+
+            if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
+                let world = entity.world.load();
+                world
+                    .broadcast_packet_all(&CUpdateEntityRot::new(
+                        entity.entity_id.into(),
+                        yaw,
+                        pitch,
+                        entity.on_ground.load(Relaxed),
+                    ))
+                    .await;
+                mob_entity.last_sent_yaw.store(yaw, Relaxed);
+                mob_entity.last_sent_pitch.store(pitch, Relaxed);
+            }
+
+            if head_yaw.abs_diff(last_head_yaw) >= 1 {
+                let world = entity.world.load();
+                world
+                    .broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), head_yaw))
+                    .await;
+                mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
+            }
         })
     }
 

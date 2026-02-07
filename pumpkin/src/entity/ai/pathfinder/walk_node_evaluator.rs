@@ -1,5 +1,5 @@
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use std::{collections::HashMap, time::Instant};
+use std::collections::HashMap;
 
 use crate::entity::ai::pathfinder::{
     node::{Coordinate, Node, PathType, Target},
@@ -11,35 +11,6 @@ const DIRECTIONS: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
 const DIAGONAL_DIRECTIONS: [(i32, i32); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
 
 const DEFAULT_MOB_JUMP_HEIGHT: f64 = 1.125;
-
-#[derive(Clone, Copy)]
-struct StandingResult {
-    can_stand: bool,
-    path_type: PathType,
-}
-
-impl StandingResult {
-    const fn walkable(path_type: PathType) -> Self {
-        Self {
-            can_stand: true,
-            path_type,
-        }
-    }
-
-    const fn open(path_type: PathType) -> Self {
-        Self {
-            can_stand: true,
-            path_type,
-        }
-    }
-
-    const fn blocked() -> Self {
-        Self {
-            can_stand: false,
-            path_type: PathType::Blocked,
-        }
-    }
-}
 
 pub struct WalkNodeEvaluator {
     base: BaseNodeEvaluator,
@@ -63,76 +34,27 @@ impl WalkNodeEvaluator {
         self.base.can_float
     }
 
-    // TODO: Should theoretically be handled by context
+    // TODO: Check collision shapes for partial blocks (slabs/stairs)
+    #[allow(clippy::unused_self)]
     fn get_floor_level(&self, pos: Vector3<i32>) -> f64 {
-        self.base.context.as_ref().map_or_else(
-            || {
-                self.base
-                    .mob_data
-                    .as_ref()
-                    .map_or_else(|| f64::from(pos.y), |d| f64::from(d.block_position().1))
-            },
-            |c| f64::from(c.mob_position().y),
-        )
+        f64::from(pos.y)
     }
 
     fn get_mob_jump_height(&self) -> f64 {
         self.base
             .mob_data
             .as_ref()
-            .map_or(DEFAULT_MOB_JUMP_HEIGHT, |d| f64::from(d.max_step_height))
+            .map_or(DEFAULT_MOB_JUMP_HEIGHT, |d| {
+                f64::from(d.max_step_height).max(DEFAULT_MOB_JUMP_HEIGHT)
+            })
     }
 
-    fn is_neighbor_valid(&self, neighbor: Option<&Node>, current: &Node) -> bool {
+    fn is_neighbor_valid(neighbor: Option<&Node>, current: &Node) -> bool {
         if let Some(neighbor) = neighbor {
             if neighbor.closed {
                 return false;
             }
-
-            let path_type = neighbor.path_type;
-            if !path_type.is_passable() {
-                return false;
-            }
-
-            if let Some(ref mob_data) = self.base.mob_data {
-                let malus = mob_data.get_pathfinding_malus(path_type);
-                if malus < 0.0 {
-                    return false;
-                }
-            }
-
-            let height_diff = neighbor.pos.0.y - current.pos.0.y;
-            let horizontal_diff = f64::from(
-                (neighbor.pos.0.x - current.pos.0.x).pow(2)
-                    + (neighbor.pos.0.z - current.pos.0.z).pow(2),
-            );
-            let horizontal_distance = horizontal_diff.sqrt();
-
-            // Check jump height for upward movement
-            if height_diff > 0 {
-                let jump_height = self.get_mob_jump_height();
-                if f64::from(height_diff) > jump_height {
-                    return false;
-                }
-
-                // TODO: Check ifg calculated correctly
-                if horizontal_distance > 1.0 && f64::from(height_diff) > jump_height * 0.8 {
-                    return false;
-                }
-            }
-
-            if height_diff < 0 {
-                let fall_distance = -height_diff;
-                if fall_distance > 3 {
-                    return false;
-                }
-
-                if horizontal_distance > 1.0 && fall_distance > 2 {
-                    return false;
-                }
-            }
-
-            true
+            neighbor.cost_malus >= 0.0 || current.cost_malus < 0.0
         } else {
             false
         }
@@ -141,252 +63,234 @@ impl WalkNodeEvaluator {
     fn is_diagonal_valid(
         &self,
         current: &Node,
-        neighbor1: Option<&Node>,
-        neighbor2: Option<&Node>,
+        adj_x: Option<&Node>,
+        adj_z: Option<&Node>,
     ) -> bool {
-        if !self.is_neighbor_valid(neighbor1, current)
-            || !self.is_neighbor_valid(neighbor2, current)
+        let (Some(adj_x), Some(adj_z)) = (adj_x, adj_z) else {
+            return false;
+        };
+        if adj_x.pos.0.y > current.pos.0.y || adj_z.pos.0.y > current.pos.0.y {
+            return false;
+        }
+        if adj_z.path_type == PathType::WalkableDoor
+            || adj_x.path_type == PathType::WalkableDoor
         {
             return false;
         }
+        let mob_width = self
+            .base
+            .mob_data
+            .as_ref()
+            .map_or(0.6, |d| d.width);
+        let both_fence =
+            adj_x.path_type == PathType::Fence && adj_z.path_type == PathType::Fence;
+        let fence_exception = both_fence && mob_width < 0.5;
 
-        if let Some(n1) = neighbor1
-            && n1.path_type.has_partial_collision()
-        {
-            return false;
-        }
-        if let Some(n2) = neighbor2
-            && n2.path_type.has_partial_collision()
-        {
-            return false;
-        }
-
-        true
+        (adj_x.pos.0.y < current.pos.0.y || adj_x.cost_malus >= 0.0 || fence_exception)
+            && (adj_z.pos.0.y < current.pos.0.y || adj_z.cost_malus >= 0.0 || fence_exception)
     }
 
     fn is_diagonal_node_valid(diagonal: Option<&Node>) -> bool {
-        diagonal.is_some_and(|n| !n.path_type.has_partial_collision())
+        diagonal.is_some_and(|n| {
+            !n.closed && n.path_type != PathType::WalkableDoor && n.cost_malus >= 0.0
+        })
     }
 
+    /// Returns the best path node for the given position, handling step-ups, falls, and blocked nodes.
     async fn find_accepted_node(
         &mut self,
         pos: Vector3<i32>,
-        max_up_step: i32,
-        floor_level: f64,
+        max_y_step: i32,
+        last_feet_y: f64,
         facing: (i32, i32),
         current_path_type: PathType,
     ) -> Option<Node> {
-        let mut node = None;
-        let mut search_pos = pos;
-
-        if let Some(valid_node) = self
-            .try_jump_on(
-                search_pos.as_blockpos(),
-                max_up_step,
-                floor_level,
-                facing,
-                current_path_type,
-            )
-            .await
-        {
-            return Some(valid_node);
+        let feet_y = self.get_floor_level(pos);
+        if feet_y - last_feet_y > self.get_mob_jump_height() {
+            return None;
         }
 
-        let max_jump_height = self.get_mob_jump_height().floor() as i32;
-        // TODO: Might need to use floats here
-        for dy in 1..=max_jump_height.min(max_up_step) {
-            search_pos.y = pos.y + dy;
+        let path_type = self.get_cached_path_type(pos).await;
+        let penalty = self.get_mob_penalty(path_type);
 
-            if let Some(valid_node) = self
-                .try_jump_on(
-                    search_pos.as_blockpos(),
-                    max_up_step,
-                    floor_level,
-                    facing,
-                    current_path_type,
-                )
-                .await
+        let mut node = (penalty >= 0.0).then(|| {
+            let mut n = self.base.get_node(pos.as_blockpos());
+            n.path_type = path_type;
+            n.cost_malus = penalty.max(n.cost_malus);
+            n
+        });
+
+        // TODO: Add ray-march collision check for blocked types (fence/door)
+
+        if path_type != PathType::Walkable
+            && !(self.is_amphibious() && path_type == PathType::Water)
+        {
+            if (node.is_none() || node.as_ref().is_some_and(|n| n.cost_malus < 0.0))
+                && max_y_step > 0
+                && (path_type != PathType::Fence || self.base.can_walk_over_fences)
+                && path_type != PathType::UnpassableRail
+                && path_type != PathType::Trapdoor
+                && path_type != PathType::PowderSnow
             {
-                node = Some(valid_node);
-                break;
-            }
-        }
-
-        if node.is_none() {
-            for dy in 1..=3 {
-                search_pos.y = pos.y - dy;
-
-                if let Some(valid_node) = self
-                    .try_jump_on(
-                        search_pos.as_blockpos(),
-                        max_up_step,
-                        floor_level,
-                        facing,
-                        current_path_type,
-                    )
-                    .await
-                {
-                    node = Some(valid_node);
-                    break;
+                let jump_node = self
+                    .get_jump_on_top_node(pos, max_y_step, last_feet_y, facing, current_path_type)
+                    .await;
+                if jump_node.is_some() {
+                    node = jump_node;
                 }
-
-                if let Some(valid_node) = self.try_find_first_ground_node_below(search_pos).await {
-                    node = Some(valid_node);
-                    break;
-                }
+            } else if !self.is_amphibious()
+                && path_type == PathType::Water
+                && !self.base.can_float
+            {
+                node = self.get_non_water_node_below(pos, node).await;
+            } else if path_type == PathType::Open {
+                node = Some(self.get_open_node(pos).await);
+            } else if Self::is_blocked_type(path_type) && node.is_none() {
+                let mut n = self.base.get_node(pos.as_blockpos());
+                n.closed = true;
+                n.path_type = path_type;
+                n.cost_malus = path_type.get_malus();
+                node = Some(n);
             }
-        }
-
-        if node.is_none()
-            && self.is_amphibious()
-            && let Some(valid_node) = self.try_find_first_non_water_below(pos, None).await
-        {
-            node = Some(valid_node);
         }
 
         node
     }
 
-    async fn try_jump_on(
+    /// Tries stepping up one block at a time (up to `max_y_step`).
+    async fn get_jump_on_top_node(
         &mut self,
-        pos: BlockPos,
-        _max_up_step: i32,
-        floor_level: f64,
+        pos: Vector3<i32>,
+        max_y_step: i32,
+        last_feet_y: f64,
         _facing: (i32, i32),
         _current_path_type: PathType,
     ) -> Option<Node> {
-        let standing_result = self.can_stand_at(pos.as_vector3()).await;
-        if !standing_result.can_stand {
+        for dy in 1..=max_y_step {
+            let step_pos = Vector3::new(pos.x, pos.y + dy, pos.z);
+            let remaining_steps = max_y_step - dy;
+
+            let feet_y = self.get_floor_level(step_pos);
+            if feet_y - last_feet_y > self.get_mob_jump_height() {
+                return None;
+            }
+
+            let path_type = self.get_cached_path_type(step_pos).await;
+            let penalty = self.get_mob_penalty(path_type);
+
+            if penalty >= 0.0
+                && (path_type == PathType::Walkable
+                    || (self.is_amphibious() && path_type == PathType::Water))
+            {
+                let mut n = self.base.get_node(step_pos.as_blockpos());
+                n.path_type = path_type;
+                n.cost_malus = penalty.max(n.cost_malus);
+                return Some(n);
+            }
+
+            if remaining_steps > 0
+                && (path_type != PathType::Fence || self.base.can_walk_over_fences)
+                && path_type != PathType::UnpassableRail
+                && path_type != PathType::Trapdoor
+                && path_type != PathType::PowderSnow
+            {
+                continue;
+            }
+
+            if path_type == PathType::Open {
+                return Some(self.get_open_node(step_pos).await);
+            }
+
             return None;
         }
 
-        if f64::from(pos.0.y) > floor_level {
-            let jump_height = f64::from(pos.0.y) - floor_level;
-            if jump_height > self.get_mob_jump_height() {
-                return None;
-            }
-        }
-
-        if let Some(ref mob_data) = self.base.mob_data {
-            for dy in 1..mob_data.get_bb_height() {
-                let above_pos = pos.add(0, dy, 0);
-                let above_type = self.get_cached_path_type(above_pos.as_vector3()).await;
-                if !above_type.is_passable() {
-                    return None;
-                }
-            }
-        }
-
-        let mut node = self.base.get_node(pos);
-        node.path_type = standing_result.path_type;
-        node.cost_malus = standing_result.path_type.get_malus();
-
-        Some(node)
+        None
     }
 
-    async fn can_stand_at(&mut self, pos: Vector3<i32>) -> StandingResult {
-        let current_type = self.get_cached_path_type(pos).await;
-        if !current_type.is_passable() {
-            return StandingResult::blocked();
-        }
+    /// Searches downward for the first non-OPEN block, respecting safe fall distance.
+    async fn get_open_node(&mut self, pos: Vector3<i32>) -> Node {
+        let safe_fall_distance = self
+            .base
+            .mob_data
+            .as_ref()
+            .map_or(3, |d| d.max_fall_distance as i32);
 
-        let ground_result = self.find_ground_below(pos, 4).await;
-        if let Some((ground_y, _ground_type)) = ground_result {
-            let fall_distance = pos.y - ground_y;
-            if fall_distance > 3 {
-                return StandingResult::blocked();
+        let mut check_y = pos.y - 1;
+        let bottom_y = pos.y - safe_fall_distance - 2;
+
+        while check_y >= bottom_y {
+            let fall_dist = pos.y - check_y;
+            if fall_dist > safe_fall_distance {
+                let mut n = self.base.get_node(BlockPos::new(pos.x, check_y, pos.z));
+                n.path_type = PathType::Blocked;
+                n.cost_malus = -1.0;
+                return n;
             }
 
-            if fall_distance == 1 {
-                return StandingResult::walkable(current_type);
-            }
-            return StandingResult::open(current_type);
-        }
-
-        StandingResult::blocked()
-    }
-
-    async fn find_ground_below(
-        &mut self,
-        pos: Vector3<i32>,
-        max_distance: i32,
-    ) -> Option<(i32, PathType)> {
-        for dy in 1..=max_distance {
             let path_type = self
-                .get_cached_path_type(pos.sub(&Vector3::new(0, dy, 0)))
+                .get_cached_path_type(Vector3::new(pos.x, check_y, pos.z))
                 .await;
+            let penalty = self.get_mob_penalty(path_type);
 
-            if path_type == PathType::Blocked || path_type == PathType::Walkable {
-                return Some((pos.y - dy, path_type));
+            if path_type != PathType::Open {
+                if penalty >= 0.0 {
+                    let mut n = self.base.get_node(BlockPos::new(pos.x, check_y, pos.z));
+                    n.path_type = path_type;
+                    n.cost_malus = penalty.max(n.cost_malus);
+                    return n;
+                }
+                let mut n = self.base.get_node(BlockPos::new(pos.x, check_y, pos.z));
+                n.path_type = PathType::Blocked;
+                n.cost_malus = -1.0;
+                return n;
             }
+
+            check_y -= 1;
         }
-        None
+
+        let mut n = self.base.get_node(pos.as_blockpos());
+        n.path_type = PathType::Blocked;
+        n.cost_malus = -1.0;
+        n
     }
 
-    async fn try_find_first_non_water_below(
+    async fn get_non_water_node_below(
         &mut self,
         pos: Vector3<i32>,
-        _start_node: Option<&Node>,
+        mut node: Option<Node>,
     ) -> Option<Node> {
-        let mut pos = pos;
-        for _ in 0..16 {
-            let path_type = self.get_cached_path_type(pos).await;
-            if !path_type.is_water() {
-                if path_type.is_passable() {
-                    let mut node = self.base.get_node(pos.as_blockpos());
-                    node.path_type = path_type;
-                    node.cost_malus = path_type.get_malus();
-                    return Some(node);
-                }
-                break;
+        let mut y = pos.y - 1;
+        while y > pos.y - 16 {
+            let path_type = self
+                .get_cached_path_type(Vector3::new(pos.x, y, pos.z))
+                .await;
+            if path_type != PathType::Water {
+                return node;
             }
-            pos.y -= 1;
+            let penalty = self.get_mob_penalty(path_type);
+            let mut n = self.base.get_node(BlockPos::new(pos.x, y, pos.z));
+            n.path_type = path_type;
+            n.cost_malus = penalty.max(n.cost_malus);
+            node = Some(n);
+            y -= 1;
         }
-
-        None
+        node
     }
 
-    async fn try_find_first_ground_node_below(&mut self, pos: Vector3<i32>) -> Option<Node> {
-        for dy in 0..=3 {
-            let pos = pos.sub(&Vector3::new(0, dy, 0));
-            let path_type = self.get_cached_path_type(pos).await;
+    fn get_mob_penalty(&self, path_type: PathType) -> f32 {
+        self.base
+            .mob_data
+            .as_ref()
+            .map_or(path_type.get_malus(), |d| {
+                d.get_pathfinding_malus(path_type)
+            })
+    }
 
-            if path_type == PathType::Blocked || path_type == PathType::Walkable {
-                let above_type = self.get_cached_path_type(pos.add_raw(0, 1, 0)).await;
-                let two_above_type = self.get_cached_path_type(pos.add_raw(0, 2, 0)).await;
-
-                if above_type.is_passable() && two_above_type.is_passable() {
-                    let mut node = self.base.get_node(pos.add_raw(0, 1, 0).as_blockpos());
-                    node.path_type = above_type;
-                    node.cost_malus = above_type.get_malus();
-
-                    if dy > 0 {
-                        // Small penalty for falling
-                        // TODO: Check if correct
-                        node.cost_malus += dy as f32 * 0.5;
-                    }
-
-                    return Some(node);
-                }
-            }
-
-            if path_type == PathType::Walkable {
-                let above_type = self.get_cached_path_type(pos.add_raw(0, 1, 0)).await;
-                if above_type.is_passable() {
-                    let mut node = self.base.get_node(pos.as_blockpos());
-                    node.path_type = path_type;
-                    node.cost_malus = path_type.get_malus();
-
-                    if dy > 0 {
-                        node.cost_malus += dy as f32 * 0.5;
-                    }
-
-                    return Some(node);
-                }
-            }
-        }
-
-        None
+    const fn is_blocked_type(path_type: PathType) -> bool {
+        matches!(
+            path_type,
+            PathType::Fence | PathType::DoorWoodClosed | PathType::DoorIronClosed
+        )
     }
 
     async fn get_cached_path_type(&mut self, pos: Vector3<i32>) -> PathType {
@@ -397,12 +301,10 @@ impl WalkNodeEvaluator {
         // Temporarily take the context out to avoid overlapping borrows when calling
         // the async helper which requires `&mut self`
         // Clone mob_data so we can call helper while `self.base.context` is None.
-        let path_type = if let Some(ctx) = self.base.context.take()
+        let path_type = if let Some(mut ctx) = self.base.context.take()
             && let Some(mob_clone) = self.base.mob_data.clone()
         {
-            let start = Instant::now();
-            let res = self.get_path_type_of_mob(&ctx, pos, &mob_clone).await;
-            let _dur = start.elapsed();
+            let res = self.get_path_type_of_mob(&mut ctx, pos, &mob_clone).await;
             self.base.context = Some(ctx);
             res
         } else {
@@ -413,16 +315,16 @@ impl WalkNodeEvaluator {
         path_type
     }
 
-    fn has_collisions(&mut self, center: Vector3<i32>) -> bool {
+    async fn has_collisions(&mut self, center: Vector3<i32>) -> bool {
         if let Some(&cached) = self.collision_cache.get(&center) {
             return cached;
         }
 
-        let has_collision = self
-            .base
-            .context
-            .as_mut()
-            .is_some_and(|c| c.has_collisions(center));
+        let has_collision = if let Some(ref mut ctx) = self.base.context {
+            ctx.has_collisions(center).await
+        } else {
+            false
+        };
 
         self.collision_cache.insert(center, has_collision);
         has_collision
@@ -430,7 +332,7 @@ impl WalkNodeEvaluator {
 
     async fn can_start_at(&mut self, pos: Vector3<i32>) -> bool {
         let path_type = self.get_cached_path_type(pos).await;
-        path_type.is_passable() && !self.has_collisions(pos)
+        path_type.is_passable() && !self.has_collisions(pos).await
     }
 
     async fn get_start_node(&mut self, pos: Vector3<i32>) -> Option<Node> {
@@ -441,7 +343,7 @@ impl WalkNodeEvaluator {
         let mut node = self.base.get_node(pos.as_blockpos());
         let path_type = self.get_cached_path_type(pos).await;
         node.path_type = path_type;
-        node.cost_malus = path_type.get_malus();
+        node.cost_malus = self.get_mob_penalty(path_type);
 
         Some(node)
     }
@@ -467,24 +369,52 @@ impl NodeEvaluator for WalkNodeEvaluator {
     }
 
     async fn get_start(&mut self) -> Option<Node> {
-        if let Some(ref mob_data) = self.base.mob_data {
-            let start_pos = mob_data.block_position();
+        let mob_data = self.base.mob_data.as_ref()?;
+        let mob_x = mob_data.position.x;
+        let mob_y_f64 = mob_data.position.y;
+        let mob_z = mob_data.position.z;
+        let on_ground = mob_data.on_ground;
 
-            if let Some(node) = self.get_start_node(start_pos.into()).await {
-                return Some(node);
-            }
-
-            for &(dx, dz) in &DIRECTIONS {
-                let try_pos = (start_pos.0 + dx, start_pos.1, start_pos.2 + dz);
-                if let Some(node) = self.get_start_node(try_pos.into()).await {
-                    return Some(node);
+        // TODO: add swimming support
+        let y = if on_ground {
+            (mob_y_f64 + 0.5).floor() as i32
+        } else {
+            let start_y = (mob_y_f64 + 1.0).floor() as i32;
+            let bottom_y = start_y - 64;
+            let mut found_y = start_y;
+            for check_y in (bottom_y..start_y).rev() {
+                let path_type = self
+                    .get_cached_path_type(Vector3::new(
+                        mob_x.floor() as i32,
+                        check_y,
+                        mob_z.floor() as i32,
+                    ))
+                    .await;
+                if path_type != PathType::Open && path_type != PathType::Water {
+                    found_y = check_y + 1;
+                    break;
                 }
             }
+            found_y
+        };
 
-            let above_pos = Vector3::new(start_pos.0, start_pos.1 + 1, start_pos.2);
-            return self.get_start_node(above_pos).await;
+        let block_x = mob_x.floor() as i32;
+        let block_z = mob_z.floor() as i32;
+        let start_pos = Vector3::new(block_x, y, block_z);
+
+        if let Some(node) = self.get_start_node(start_pos).await {
+            return Some(node);
         }
-        None
+
+        for &(dx, dz) in &DIRECTIONS {
+            let try_pos = Vector3::new(block_x + dx, y, block_z + dz);
+            if let Some(node) = self.get_start_node(try_pos).await {
+                return Some(node);
+            }
+        }
+
+        let above_pos = Vector3::new(block_x, y + 1, block_z);
+        self.get_start_node(above_pos).await
     }
 
     fn get_target(&mut self, pos: BlockPos) -> Target {
@@ -494,57 +424,43 @@ impl NodeEvaluator for WalkNodeEvaluator {
 
     async fn get_neighbors(&mut self, current: &Node) -> Vec<Node> {
         let mut out_neighbors: Vec<Node> = Vec::new();
-        let max_up_step = self.get_mob_jump_height().floor() as i32;
+
+        let headroom_type = self
+            .get_cached_path_type(current.pos.0.add_raw(0, 1, 0))
+            .await;
+        let current_type = self
+            .get_cached_path_type(current.pos.0)
+            .await;
+
+        let headroom_penalty = self.get_mob_penalty(headroom_type);
+        let max_y_step = if headroom_penalty >= 0.0 && current_type != PathType::StickyHoney {
+            self.get_mob_jump_height().floor() as i32
+        } else {
+            0
+        };
+
         let floor_level = self.get_floor_level(current.pos.0);
 
         for i in 0..4 {
             self.reusable_neighbors[i] = None;
         }
 
-        for dy in [-1, 1] {
-            let vertical_pos = current.pos.0.add_raw(0, dy, 0);
-
-            if dy > 0 && f64::from(dy) > self.get_mob_jump_height() {
-                continue;
-            }
-
-            if dy < 0 && -dy > 3 {
-                continue;
-            }
-
-            if let Some(vertical_neighbor) = self
-                .find_accepted_node(
-                    vertical_pos,
-                    max_up_step,
-                    floor_level,
-                    (0, 0),
-                    current.path_type,
-                )
-                .await
-                && self.is_neighbor_valid(Some(&vertical_neighbor), current)
-            {
-                out_neighbors.push(vertical_neighbor);
-            }
-        }
-
         for (i, &(dx, dz)) in DIRECTIONS.iter().enumerate() {
             let neighbor_pos = current.pos.0.add_raw(dx, 0, dz);
 
-            let start = Instant::now();
             let neighbor_opt = self
                 .find_accepted_node(
                     neighbor_pos,
-                    max_up_step,
+                    max_y_step,
                     floor_level,
                     (dx, dz),
                     current.path_type,
                 )
                 .await;
-            let _dur = start.elapsed();
 
             if let Some(neighbor) = neighbor_opt {
                 self.reusable_neighbors[i] = Some(neighbor.clone());
-                if self.is_neighbor_valid(Some(&neighbor), current) {
+                if Self::is_neighbor_valid(Some(&neighbor), current) {
                     out_neighbors.push(neighbor);
                 }
             }
@@ -567,26 +483,20 @@ impl NodeEvaluator for WalkNodeEvaluator {
             ) {
                 let diagonal_pos = current.pos.0.add_raw(dx, 0, dz);
 
-                let start_diag = Instant::now();
                 let diagonal_opt = self
                     .find_accepted_node(
                         diagonal_pos,
-                        max_up_step,
+                        max_y_step,
                         floor_level,
                         (dx, dz),
                         current.path_type,
                     )
                     .await;
-                let _dur_diag = start_diag.elapsed();
 
-                if let Some(mut diagonal) = diagonal_opt {
-                    // Prioritize straight movement
-                    // TODO: Check
-                    diagonal.cost_malus += 0.4;
-
-                    if Self::is_diagonal_node_valid(Some(&diagonal)) {
-                        out_neighbors.push(diagonal);
-                    }
+                if let Some(diagonal) = diagonal_opt
+                    && Self::is_diagonal_node_valid(Some(&diagonal))
+                {
+                    out_neighbors.push(diagonal);
                 }
             }
         }
@@ -596,29 +506,76 @@ impl NodeEvaluator for WalkNodeEvaluator {
 
     async fn get_path_type_of_mob(
         &mut self,
-        context: &PathfindingContext,
+        context: &mut PathfindingContext,
         pos: Vector3<i32>,
         mob_data: &MobData,
     ) -> PathType {
         let mut path_types = Vec::new();
+        let mob_block_pos = mob_data.block_position();
 
         for dy in 0..mob_data.get_bb_height() {
             for dx in 0..mob_data.get_bb_width() {
                 for dz in 0..mob_data.get_bb_width() {
                     let check_pos = pos.add_raw(dx, dy, dz);
-                    let path_type = context.compute_path_type_from_state(check_pos).await;
-                    path_types.push(path_type);
+                    let mut cell_type = context.get_land_node_type(check_pos).await;
+
+                    if cell_type == PathType::DoorWoodClosed
+                        && self.base.can_open_doors
+                        && self.base.can_pass_doors
+                    {
+                        cell_type = PathType::WalkableDoor;
+                    }
+
+                    if cell_type == PathType::DoorOpen && !self.base.can_pass_doors {
+                        cell_type = PathType::Blocked;
+                    }
+
+                    if cell_type == PathType::Rail {
+                        let mob_pos = Vector3::new(mob_block_pos.0, mob_block_pos.1, mob_block_pos.2);
+                        let mob_below = Vector3::new(mob_block_pos.0, mob_block_pos.1 - 1, mob_block_pos.2);
+                        let mob_type = context.get_land_node_type(mob_pos).await;
+                        let mob_below_type = context.get_land_node_type(mob_below).await;
+                        if mob_type != PathType::Rail && mob_below_type != PathType::Rail {
+                            cell_type = PathType::UnpassableRail;
+                        }
+                    }
+
+                    path_types.push(cell_type);
                 }
             }
         }
 
-        let mut result = PathType::Open;
-        for path_type in path_types {
-            if path_type.is_blocked() {
+        // Sort+dedup to match vanilla's EnumSet ordinal iteration order
+        path_types.sort();
+        path_types.dedup();
+
+        if path_types.contains(&PathType::Fence) {
+            return PathType::Fence;
+        }
+        if path_types.contains(&PathType::UnpassableRail) {
+            return PathType::UnpassableRail;
+        }
+
+        let mut result = PathType::Blocked;
+        for &path_type in &path_types {
+            let penalty = mob_data.get_pathfinding_malus(path_type);
+            if penalty < 0.0 {
                 return path_type;
             }
-            if path_type.get_malus() > result.get_malus() {
+
+            let result_penalty = mob_data.get_pathfinding_malus(result);
+            if penalty >= result_penalty {
                 result = path_type;
+            }
+        }
+
+        if self.base.entity_width <= 1
+            && result != PathType::Open
+            && mob_data.get_pathfinding_malus(result) == 0.0
+        {
+            let raw_center = context.get_land_node_type(pos).await;
+            if raw_center == PathType::Open {
+                return PathType::Open;
             }
         }
 

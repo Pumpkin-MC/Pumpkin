@@ -3,7 +3,7 @@ use pumpkin_data::{
     fluid::Fluid,
     tag::{self, Taggable},
 };
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     entity::ai::pathfinder::{
@@ -62,118 +62,182 @@ impl PathfindingContext {
         pt
     }
 
+    /// Classifies a block position into a `PathType` for pathfinding.
     pub async fn compute_path_type_from_state(&self, pos: Vector3<i32>) -> PathType {
-        let pos = pos.as_blockpos();
+        let block_pos = pos.as_blockpos();
 
-        let block = self.world.get_block(&pos).await;
-        let state_id = self.world.get_block_state_id(&pos).await;
+        let block = self.world.get_block(&block_pos).await;
+        let state_id = self.world.get_block_state_id(&block_pos).await;
+        let state = self.world.get_block_state(&block_pos).await;
 
-        if block.id == Block::AIR.id {
-            // Check if there's solid ground directly below for walking
-            let below_pos = BlockPos::new(pos.0.x, pos.0.y - 1, pos.0.z);
-            let below_block = self.world.get_block(&below_pos).await;
-
-            if Self::is_solid_walkable_surface(below_block) {
-                PathType::Walkable
-            } else {
-                PathType::Open
-            }
+        if block.id == Block::AIR.id
+            || block.id == Block::VOID_AIR.id
+            || block.id == Block::CAVE_AIR.id
+        {
+            return PathType::Open;
         }
-        // Handle special walkable blocks (partial blocks that can be walked on)
-        else if Self::is_partial_walkable_block(block) {
-            PathType::Walkable
-        }
-        // Handle dangerous/special blocks
-        else if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS)
+
+        if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS)
             || block.id == Block::LILY_PAD.id
             || block.id == Block::BIG_DRIPLEAF.id
         {
-            PathType::Trapdoor
-        } else if block.id == Block::POWDER_SNOW.id {
-            PathType::PowderSnow
-        } else if block.id == Block::CACTUS.id || block.id == Block::SWEET_BERRY_BUSH.id {
-            PathType::DamageOther
-        } else if block.id == Block::HONEY_BLOCK.id {
-            PathType::StickyHoney
-        } else if block.id == Block::COCOA.id {
-            PathType::Cocoa
-        } else if block.id == Block::WITHER_ROSE.id || block.id == Block::POINTED_DRIPSTONE.id {
-            PathType::DamageCautious
-        } else {
-            let fluid = Fluid::from_state_id(state_id);
-            if fluid.is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_LAVA)) {
-                PathType::Lava
-            } else if block.id == Block::FIRE.id
-                || block.id == Block::SOUL_FIRE.id
-                || block.id == Block::MAGMA_BLOCK.id
-            {
-                PathType::DamageFire
-            } else if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
-                // TODO: Properly implement door states
+            return PathType::Trapdoor;
+        }
+
+        if block.id == Block::POWDER_SNOW.id {
+            return PathType::PowderSnow;
+        }
+
+        if block.id == Block::CACTUS.id || block.id == Block::SWEET_BERRY_BUSH.id {
+            return PathType::DamageOther;
+        }
+
+        if block.id == Block::HONEY_BLOCK.id {
+            return PathType::StickyHoney;
+        }
+
+        if block.id == Block::COCOA.id {
+            return PathType::Cocoa;
+        }
+
+        if block.id == Block::WITHER_ROSE.id || block.id == Block::POINTED_DRIPSTONE.id {
+            return PathType::DamageCautious;
+        }
+
+        let fluid = Fluid::from_state_id(state_id);
+        if fluid.is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_LAVA)) {
+            return PathType::Lava;
+        }
+
+        if block.id == Block::FIRE.id
+            || block.id == Block::SOUL_FIRE.id
+            || block.id == Block::MAGMA_BLOCK.id
+            || block.id == Block::CAMPFIRE.id
+            || block.id == Block::SOUL_CAMPFIRE.id
+            || block.id == Block::LAVA_CAULDRON.id
+        {
+            return PathType::DamageFire;
+        }
+
+        if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
+            if state.collision_shapes.is_empty() {
+                return PathType::DoorOpen;
+            }
+
+            return if block.id == Block::IRON_DOOR.id {
                 PathType::DoorIronClosed
-            } else if block.has_tag(&tag::Block::MINECRAFT_RAILS) {
-                PathType::Rail
-            } else if block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
-                PathType::Leaves
-            } else if block.has_tag(&tag::Block::MINECRAFT_FENCES)
-                || block.has_tag(&tag::Block::MINECRAFT_WALLS)
-            {
-                PathType::Fence
-            } else if fluid.is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER)) {
-                PathType::Water
             } else {
-                // Most solid blocks should be treated as blocked for pathfinding
-                // since mobs can't walk through them
-                PathType::Blocked
+                PathType::DoorWoodClosed
+            };
+        }
+
+        if block.has_tag(&tag::Block::MINECRAFT_RAILS) {
+            return PathType::Rail;
+        }
+
+        if block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
+            return PathType::Leaves;
+        }
+
+        if block.has_tag(&tag::Block::MINECRAFT_FENCES)
+            || block.has_tag(&tag::Block::MINECRAFT_WALLS)
+        {
+            return PathType::Fence;
+        }
+
+        if block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES)
+            && !state.collision_shapes.is_empty()
+        {
+            return PathType::Fence;
+        }
+
+        if state.is_full_cube() {
+            return PathType::Blocked;
+        }
+
+        if fluid.is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER)) {
+            return PathType::Water;
+        }
+
+        PathType::Open
+    }
+
+    /// Wraps the raw block type with below-check and neighbor danger scanning for OPEN nodes.
+    pub async fn get_land_node_type(&mut self, pos: Vector3<i32>) -> PathType {
+        let raw_type = self.get_path_type_from_state(pos).await;
+
+        if raw_type == PathType::Open {
+            let below_type = self.get_path_type_from_state(Vector3::new(pos.x, pos.y - 1, pos.z)).await;
+            return match below_type {
+                PathType::Open | PathType::Water | PathType::Lava | PathType::Walkable => {
+                    PathType::Open
+                }
+                PathType::DamageFire => PathType::DamageFire,
+                PathType::DamageOther => PathType::DamageOther,
+                PathType::StickyHoney => PathType::StickyHoney,
+                PathType::PowderSnow => PathType::DangerPowderSnow,
+                PathType::DamageCautious => PathType::DamageCautious,
+                PathType::Trapdoor => PathType::DangerTrapdoor,
+                _ => {
+                    self.get_node_type_from_neighbors(pos, PathType::Walkable).await
+                }
+            };
+        }
+
+        raw_type
+    }
+
+    /// Scans a 3x3x3 neighborhood for danger blocks and returns the appropriate danger type.
+    pub async fn get_node_type_from_neighbors(
+        &mut self,
+        pos: Vector3<i32>,
+        fallback: PathType,
+    ) -> PathType {
+        for dy in -1..=1i32 {
+            for dx in -1..=1i32 {
+                for dz in -1..=1i32 {
+                    if dx == 0 && dz == 0 {
+                        continue;
+                    }
+
+                    let neighbor_type = self
+                        .get_path_type_from_state(Vector3::new(
+                            pos.x + dx,
+                            pos.y + dy,
+                            pos.z + dz,
+                        ))
+                        .await;
+
+                    if neighbor_type == PathType::DamageOther {
+                        return PathType::DangerOther;
+                    }
+                    if neighbor_type == PathType::DamageFire || neighbor_type == PathType::Lava {
+                        return PathType::DangerFire;
+                    }
+                    if neighbor_type == PathType::Water {
+                        return PathType::WaterBorder;
+                    }
+                    if neighbor_type == PathType::DamageCautious {
+                        return PathType::DamageCautious;
+                    }
+                }
             }
         }
+
+        fallback
     }
 
-    fn is_solid_walkable_surface(block: &Block) -> bool {
-        match block.id {
-            id if id == Block::AIR.id => false,
-            id if id == Block::WATER.id => false,
-            id if id == Block::LAVA.id => false,
-            id if id == Block::VOID_AIR.id => false,
-            id if id == Block::CAVE_AIR.id => false,
-
-            id if id == Block::CACTUS.id => true,
-            id if id == Block::MAGMA_BLOCK.id => true,
-            id if id == Block::WITHER_ROSE.id => true,
-
-            _ => {
-                !block.has_tag(&tag::Block::MINECRAFT_FLOWERS)
-                    && !block.has_tag(&tag::Block::MINECRAFT_SAPLINGS)
-                    && block.id != Block::TALL_GRASS.id
-                    && block.id != Block::FERN.id
-                    && block.id != Block::DEAD_BUSH.id
-            }
-        }
-    }
-
-    fn is_partial_walkable_block(block: &Block) -> bool {
-        block.has_tag(&tag::Block::MINECRAFT_STAIRS)
-            || block.has_tag(&tag::Block::MINECRAFT_SLABS)
-            || block.id == Block::FARMLAND.id
-            || block.id == Block::SOUL_SAND.id
-            || block.id == Block::SNOW.id
-    }
-
-    pub const fn has_collisions(&mut self, _pos: Vector3<i32>) -> bool {
-        /*
-        * TODO: Find how this is implemented on vanilla (might need to modify extractor)
-        *
+    pub async fn has_collisions(&mut self, pos: Vector3<i32>) -> bool {
         if let Some(&cached) = self.collision_cache.get(&pos) {
             return cached;
         }
 
-        let block = self.world.get_block(&pos).await;
-        let has_collision = ?;
+        let block_pos = pos.as_blockpos();
+        let state = self.world.get_block_state(&block_pos).await;
+        let has_collision = state.is_full_cube();
 
         self.collision_cache.insert(pos, has_collision);
         has_collision
-        */
-        false
     }
 
     pub fn clear_caches(&mut self) {
