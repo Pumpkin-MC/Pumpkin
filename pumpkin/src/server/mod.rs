@@ -411,6 +411,11 @@ impl Server {
             player.read_nbt(&mut nbt_data).await;
         }
 
+        // Enforce force_gamemode: override saved gamemode with the server default on every login
+        if self.basic_config.force_gamemode {
+            player.gamemode.store(gamemode);
+        }
+
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
 
