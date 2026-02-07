@@ -715,6 +715,14 @@ impl Server {
         }
 
         self.tick_profiler.record_total_tick(tick_start);
+
+        // Fire server tick event for plugins
+        let tick_count = self.tick_count.load(Ordering::Relaxed);
+        self.plugin_manager
+            .fire(crate::plugin::api::events::server::server_tick::ServerTickEvent::new(
+                tick_count as i64,
+            ))
+            .await;
     }
 
     /// Ticks essential server functions that must run even when the game is frozen.
