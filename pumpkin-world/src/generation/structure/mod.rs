@@ -10,11 +10,16 @@ use crate::{
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
             ancient_city::AncientCityGenerator,
+            bastion_remnant::BastionRemnantGenerator,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
-            desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator,
+            desert_pyramid::DesertPyramidGenerator,
+            end_city::EndCityGenerator,
+            igloo::IglooGenerator,
             jungle_temple::JungleTempleGenerator,
             mineshaft::{MineshaftGenerator, MineshaftMesaGenerator},
+            nether_fortress::NetherFortressGenerator,
             nether_fossil::NetherFossilGenerator,
+            ocean_monument::OceanMonumentGenerator,
             ocean_ruin::{ColdOceanRuinGenerator, WarmOceanRuinGenerator},
             pillager_outpost::PillagerOutpostGenerator,
             ruined_portal::RuinedPortalGenerator, shipwreck::ShipwreckGenerator,
@@ -127,8 +132,18 @@ pub fn try_generate_structure(
         StructureKeys::VillageTaiga => {
             VillageTaigaGenerator::get_structure_position(&VillageTaigaGenerator, context)
         }
-        // TODO: Implement other structure types
-        _ => None,
+        StructureKeys::Monument => {
+            OceanMonumentGenerator::get_structure_position(&OceanMonumentGenerator, context)
+        }
+        StructureKeys::Fortress => {
+            NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
+        }
+        StructureKeys::EndCity => {
+            EndCityGenerator::get_structure_position(&EndCityGenerator, context)
+        }
+        StructureKeys::BastionRemnant => {
+            BastionRemnantGenerator::get_structure_position(&BastionRemnantGenerator, context)
+        }
     };
 
     if let Some(pos) = structure_pos {

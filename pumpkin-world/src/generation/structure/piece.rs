@@ -74,4 +74,7 @@ pub enum StructurePieceType {
     AncientCity,
     TrailRuins,
     TrialChambers,
+
+    // Nether
+    BastionRemnant,
 }

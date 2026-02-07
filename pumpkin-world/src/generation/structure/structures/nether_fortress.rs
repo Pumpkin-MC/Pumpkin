@@ -186,3 +186,141 @@
 //         &mut self.piece
 //     }
 // }
+
+// === New implementation below ===
+
+use std::sync::Arc;
+
+use pumpkin_data::Block;
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+
+use crate::{
+    ProtoChunk,
+    generation::{
+        positions::chunk_pos::{get_center_x, get_center_z},
+        structure::{
+            piece::StructurePieceType,
+            shiftable_piece::ShiftableStructurePiece,
+            structures::{
+                StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
+                StructurePiecesCollector, StructurePosition,
+            },
+        },
+    },
+};
+
+pub struct NetherFortressGenerator;
+
+impl StructureGenerator for NetherFortressGenerator {
+    fn get_structure_position(
+        &self,
+        mut context: StructureGeneratorContext,
+    ) -> Option<StructurePosition> {
+        let x = get_center_x(context.chunk_x);
+        let z = get_center_z(context.chunk_z);
+
+        // Nether Fortress generates at Y 64 in the Nether
+        let y = 64;
+
+        let mut collector = StructurePiecesCollector::default();
+        collector.add_piece(Box::new(NetherFortressPieceImpl {
+            shiftable_structure_piece: ShiftableStructurePiece::new(
+                StructurePieceType::NetherFortressStart,
+                x,
+                y,
+                z,
+                18,
+                10,
+                14,
+                StructurePiece::get_random_horizontal_direction(&mut context.random).get_axis(),
+            ),
+        }));
+
+        Some(StructurePosition {
+            start_pos: BlockPos::new(x, y, z),
+            collector: Arc::new(collector.into()),
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct NetherFortressPieceImpl {
+    shiftable_structure_piece: ShiftableStructurePiece,
+}
+
+impl StructurePieceBase for NetherFortressPieceImpl {
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
+    }
+
+    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
+        let box_limit = self.shiftable_structure_piece.piece.bounding_box;
+        let p = &self.shiftable_structure_piece.piece;
+
+        let nether_bricks = Block::NETHER_BRICKS.default_state;
+        let nether_brick_fence = Block::NETHER_BRICK_FENCE.default_state;
+        let air = Block::AIR.default_state;
+        let lava = Block::LAVA.default_state;
+        let soul_sand = Block::SOUL_SAND.default_state;
+        let nether_wart = Block::NETHER_WART.default_state;
+
+        // Bridge platform with corridor
+        // Floor
+        p.fill(chunk, &box_limit, 0, 0, 0, 17, 0, 13, nether_bricks);
+        // Carve interior
+        p.fill(chunk, &box_limit, 1, 1, 1, 16, 8, 12, air);
+
+        // Side walls
+        p.fill(chunk, &box_limit, 0, 1, 0, 0, 8, 13, nether_bricks);
+        p.fill(chunk, &box_limit, 17, 1, 0, 17, 8, 13, nether_bricks);
+        // End walls
+        p.fill(chunk, &box_limit, 1, 1, 0, 16, 8, 0, nether_bricks);
+        p.fill(chunk, &box_limit, 1, 1, 13, 16, 8, 13, nether_bricks);
+
+        // Ceiling
+        p.fill(chunk, &box_limit, 0, 9, 0, 17, 9, 13, nether_bricks);
+
+        // Entrance openings
+        p.fill(chunk, &box_limit, 7, 1, 0, 10, 4, 0, air);
+        p.fill(chunk, &box_limit, 7, 1, 13, 10, 4, 13, air);
+
+        // Interior pillars
+        for &(px, pz) in &[(4, 4), (4, 9), (13, 4), (13, 9)] {
+            p.fill(chunk, &box_limit, px, 1, pz, px, 8, pz, nether_bricks);
+        }
+
+        // Fence railings on second level
+        p.fill(chunk, &box_limit, 1, 5, 1, 1, 5, 12, nether_brick_fence);
+        p.fill(chunk, &box_limit, 16, 5, 1, 16, 5, 12, nether_brick_fence);
+
+        // Blaze spawner platform
+        p.fill(chunk, &box_limit, 7, 5, 5, 10, 5, 8, nether_bricks);
+        p.add_block(chunk, Block::SPAWNER.default_state, 8, 6, 6, &box_limit);
+
+        // Nether wart garden
+        p.fill(chunk, &box_limit, 2, 0, 2, 3, 0, 3, soul_sand);
+        p.add_block(chunk, nether_wart, 2, 1, 2, &box_limit);
+        p.add_block(chunk, nether_wart, 3, 1, 3, &box_limit);
+
+        // Lava well
+        p.fill(chunk, &box_limit, 14, 0, 2, 15, 0, 3, lava);
+
+        // Chest
+        p.add_block(chunk, Block::CHEST.default_state, 2, 1, 10, &box_limit);
+
+        // Fill downward
+        for x in (0..18).step_by(17) {
+            for z in (0..14).step_by(13) {
+                p.fill_downwards(chunk, nether_bricks, x, -1, z, &box_limit);
+            }
+        }
+    }
+
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.shiftable_structure_piece.piece
+    }
+
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.shiftable_structure_piece.piece
+    }
+}
