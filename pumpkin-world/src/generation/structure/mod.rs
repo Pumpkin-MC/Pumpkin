@@ -12,9 +12,12 @@ use crate::{
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
             desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator,
             jungle_temple::JungleTempleGenerator,
+            nether_fossil::NetherFossilGenerator,
             ocean_ruin::{ColdOceanRuinGenerator, WarmOceanRuinGenerator},
-            pillager_outpost::PillagerOutpostGenerator, shipwreck::ShipwreckGenerator,
+            pillager_outpost::PillagerOutpostGenerator,
+            ruined_portal::RuinedPortalGenerator, shipwreck::ShipwreckGenerator,
             stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
+            woodland_mansion::WoodlandMansionGenerator,
         },
     },
 };
@@ -70,6 +73,21 @@ pub fn try_generate_structure(
         }
         StructureKeys::PillagerOutpost => {
             PillagerOutpostGenerator::get_structure_position(&PillagerOutpostGenerator, context)
+        }
+        StructureKeys::NetherFossil => {
+            NetherFossilGenerator::get_structure_position(&NetherFossilGenerator, context)
+        }
+        StructureKeys::RuinedPortal
+        | StructureKeys::RuinedPortalDesert
+        | StructureKeys::RuinedPortalJungle
+        | StructureKeys::RuinedPortalSwamp
+        | StructureKeys::RuinedPortalMountain
+        | StructureKeys::RuinedPortalOcean
+        | StructureKeys::RuinedPortalNether => {
+            RuinedPortalGenerator::get_structure_position(&RuinedPortalGenerator, context)
+        }
+        StructureKeys::Mansion => {
+            WoodlandMansionGenerator::get_structure_position(&WoodlandMansionGenerator, context)
         }
         // TODO: Implement other structure types
         _ => None,
