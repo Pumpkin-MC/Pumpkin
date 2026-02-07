@@ -32,6 +32,9 @@ use crate::{
             player_leave::PlayerLeaveEvent,
             player_respawn::PlayerRespawnEvent,
         },
+        world::{
+            chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend,
+        },
     },
     server::Server,
 };
@@ -251,9 +254,23 @@ impl World {
         }
     }
 
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(self: &Arc<Self>) {
         for entity in self.entities.load().iter() {
             self.save_entity(entity).await;
+        }
+
+        // Fire ChunkSave events for all loaded chunks
+        if let Some(server) = self.server.upgrade() {
+            for entry in self.level.loaded_chunks.iter() {
+                let _ = server
+                    .plugin_manager
+                    .fire(ChunkSave {
+                        world: self.clone(),
+                        chunk: entry.value().clone(),
+                        cancelled: false,
+                    })
+                    .await;
+            }
         }
 
         // Save portal POI to disk
@@ -2083,11 +2100,39 @@ impl World {
         if let crate::net::ClientPlatform::Java(java_client) = &player.client {
             let center_chunk = player.living_entity.entity.chunk_pos.load();
             let chunk = target_world.level.get_chunk(center_chunk).await;
-            java_client.send_packet_now(&CChunkBatchStart).await;
-            java_client.send_packet_now(&CChunkData(&chunk)).await;
-            java_client
-                .send_packet_now(&CChunkBatchEnd::new(1u16))
-                .await;
+
+            // Fire ChunkSend event — if cancelled, skip sending
+            let send_cancelled = if let Some(server) = target_world.server.upgrade() {
+                if let Some(world_arc) = server
+                    .worlds
+                    .load()
+                    .iter()
+                    .find(|w| w.dimension == target_world.dimension)
+                    .cloned()
+                {
+                    server
+                        .plugin_manager
+                        .fire(ChunkSend {
+                            world: world_arc,
+                            chunk: chunk.clone(),
+                            cancelled: false,
+                        })
+                        .await
+                        .cancelled
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if !send_cancelled {
+                java_client.send_packet_now(&CChunkBatchStart).await;
+                java_client.send_packet_now(&CChunkData(&chunk)).await;
+                java_client
+                    .send_packet_now(&CChunkBatchEnd::new(1u16))
+                    .await;
+            }
         }
 
         // Send teleport packet after at least the center chunk was delivered
@@ -2223,6 +2268,22 @@ impl World {
 
                     continue 'main;
                 };
+
+                // Fire ChunkLoad event — if cancelled, skip this chunk
+                if let Some(server) = world.server.upgrade() {
+                    let terrain_chunk = level.get_chunk(position).await;
+                    let event = server
+                        .plugin_manager
+                        .fire(ChunkLoad {
+                            world: world.clone(),
+                            chunk: terrain_chunk,
+                            cancelled: false,
+                        })
+                        .await;
+                    if event.cancelled {
+                        continue 'main;
+                    }
+                }
 
                 // Add all new Entities to the world
                 let mut entities_to_add: Vec<Arc<dyn EntityBase>> = Vec::new();
