@@ -14,6 +14,7 @@ Usage:
     await bb.persist(state)             # SESSION END
 """
 
+import asyncio
 import json
 import os
 import uuid
@@ -115,6 +116,8 @@ class Blackboard:
         ada:a2a:inbox:{agent_id}         — Agent inbox
         ada:session:{session_id}         — Session snapshot
         ada:session:latest:{project}     — Latest session pointer
+        ada:broadcast:{project}:{agent}  — Per-agent broadcast channel (sorted set)
+        ada:broadcast:{project}:ack:{id} — Broadcast acknowledgements (hash)
     """
 
     def __init__(self, project: str, agent_id: str = "orchestrator"):
@@ -153,6 +156,16 @@ class Blackboard:
         handovers = await self._check_inbox()
         if handovers:
             state["pending_handovers"] = handovers
+
+        # DI: Check broadcasts during hydration
+        last_ts = state.get("last_broadcast_seen", 0.0)
+        broadcasts = await self.check_broadcasts(since_ts=last_ts)
+        if broadcasts:
+            state["pending_broadcasts"] = broadcasts
+            # Advance watermark to newest broadcast
+            state["last_broadcast_seen"] = max(
+                b.get("ts_score", 0.0) for b in broadcasts
+            )
 
         return state
 
@@ -313,6 +326,135 @@ class Blackboard:
             return "BLOCK", sd
         else:
             return "HOLD", sd
+
+    # ── Broadcast (Agent-Scoped) ────────────────────────────────
+
+    async def broadcast(self, to_agents: list[str], message: dict):
+        """
+        Send a broadcast to specific agents.
+
+        Each agent has its own broadcast channel:
+            ada:broadcast:{project}:{agent_id}
+
+        message = {
+            "type": "task" | "decision" | "unblock" | "status_request",
+            "subject": "Short description",
+            "body": { ... },
+            "priority": "high" | "normal" | "low",
+        }
+        """
+        ts = _ts()
+        envelope = {
+            "id": f"bc_{_uid()}",
+            "from_agent": self.agent_id,
+            "timestamp": _now(),
+            "ts_score": ts,
+            **message,
+        }
+        payload = json.dumps(envelope, default=str)
+
+        cmds = []
+        for agent in to_agents:
+            key = f"ada:broadcast:{self.project}:{agent}"
+            cmds.append(["ZADD", key, str(ts), payload])
+            # Keep only last 50 broadcasts per agent to prevent unbounded growth
+            cmds.append(["ZREMRANGEBYRANK", key, "0", "-51"])
+
+        await self.redis.pipeline(cmds)
+        return envelope["id"]
+
+    async def broadcast_all(self, message: dict, exclude: list[str] | None = None):
+        """
+        Broadcast to all registered agents (except excluded ones).
+        Reads the agent registry to get the list.
+        """
+        agents_raw = await self.redis.cmd("HKEYS", f"ada:bb:{self.project}:agents")
+        agents = [a for a in (agents_raw or []) if a not in (exclude or [])]
+        if agents:
+            return await self.broadcast(agents, message)
+        return None
+
+    async def check_broadcasts(self, since_ts: float = 0.0) -> list[dict]:
+        """
+        Check for broadcasts sent to this agent since a given timestamp.
+
+        Args:
+            since_ts: Unix timestamp. Only broadcasts after this are returned.
+                      Pass 0.0 to get all. Typical usage: pass the ts from
+                      the last broadcast you processed.
+
+        Returns:
+            List of broadcast envelopes, oldest first.
+        """
+        key = f"ada:broadcast:{self.project}:{self.agent_id}"
+        # ZRANGEBYSCORE key min max — exclusive min with "("
+        min_score = f"({since_ts}" if since_ts > 0 else "-inf"
+        results = await self.redis.cmd("ZRANGEBYSCORE", key, min_score, "+inf")
+        return [json.loads(r) for r in (results or [])]
+
+    async def ack_broadcast(self, broadcast_id: str, response: dict | None = None):
+        """
+        Acknowledge a broadcast, optionally with a response.
+        Stores the ack so the sender can check status.
+        """
+        ack = {
+            "broadcast_id": broadcast_id,
+            "agent": self.agent_id,
+            "timestamp": _now(),
+            "response": response,
+        }
+        key = f"ada:broadcast:{self.project}:ack:{broadcast_id}"
+        await self.redis.cmd(
+            "HSET", key, self.agent_id, json.dumps(ack, default=str)
+        )
+
+    async def wait_for_broadcast(self, poll_interval: int = 300,
+                                  timeout: int = 0) -> list[dict]:
+        """
+        Block until broadcasts arrive for this agent, then return them.
+
+        Usage inside a Claude Code session:
+            broadcasts = await bb.wait_for_broadcast()
+            # process broadcasts...
+            # call again to wait for more
+
+        Args:
+            poll_interval: Seconds between polls (default 300 = 5 min)
+            timeout: Max seconds to wait (0 = forever)
+
+        Returns:
+            List of broadcast envelopes when work arrives.
+        """
+        import time as _time
+        start = _time.monotonic()
+        since = self._state.get("last_broadcast_seen", 0.0) if self._state else 0.0
+
+        while True:
+            broadcasts = await self.check_broadcasts(since_ts=since)
+            if broadcasts:
+                # Advance watermark
+                since = max(b.get("ts_score", 0.0) for b in broadcasts)
+                if self._state:
+                    self._state["last_broadcast_seen"] = since
+                    self._state["pending_broadcasts"] = broadcasts
+                return broadcasts
+
+            if timeout > 0 and (_time.monotonic() - start) >= timeout:
+                return []  # Timed out, no work
+
+            await asyncio.sleep(poll_interval)
+
+    async def check_broadcast_acks(self, broadcast_id: str) -> dict:
+        """Check which agents have acknowledged a broadcast."""
+        key = f"ada:broadcast:{self.project}:ack:{broadcast_id}"
+        raw = await self.redis.cmd("HGETALL", key)
+        if not raw:
+            return {}
+        # HGETALL returns [k1, v1, k2, v2, ...]
+        acks = {}
+        for i in range(0, len(raw), 2):
+            acks[raw[i]] = json.loads(raw[i + 1])
+        return acks
 
     # ── Convenience ────────────────────────────────────────────
 

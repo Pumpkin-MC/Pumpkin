@@ -270,6 +270,40 @@ gate, sd = Blackboard.collapse_gate([0.9, 0.85, 0.88])
 | `ada:bb:pumpkin:log` | List | Session log (last 100) |
 | `ada:a2a:inbox:{agent_id}` | List | Agent inbox for handovers |
 | `ada:session:{session_id}` | String (JSON) | Session snapshot |
+| `ada:broadcast:pumpkin:{agent}` | Sorted Set | Per-agent broadcast channel (score=timestamp) |
+| `ada:broadcast:pumpkin:ack:{id}` | Hash | Broadcast acknowledgements (agent → ack JSON) |
+| `ada:crown:pumpkin:watermarks` | Hash | Per-agent last-processed broadcast timestamp |
+
+### Agent Broadcasts
+
+Agent-scoped broadcasts replace global channels to avoid noise. Each agent has its own sorted set.
+
+```python
+# Architect sends a task to specific agents
+await bb.broadcast(["entity", "redstone"], {
+    "type": "task",
+    "subject": "Implement EntitySpawnEvent",
+    "body": {"details": "..."},
+    "priority": "high",
+})
+
+# Agent waits for broadcasts (blocks until work arrives, polls every 5 min)
+broadcasts = await bb.wait_for_broadcast(poll_interval=300)
+
+# Or check non-blocking (e.g. during hydrate — automatic via DI)
+broadcasts = await bb.check_broadcasts(since_ts=last_seen)
+
+# Acknowledge a broadcast
+await bb.ack_broadcast(broadcast_id, {"status": "done"})
+```
+
+CLI via `cron.py`:
+```bash
+python cron.py status                                    # All agents' broadcast status
+python cron.py poll --agent entity --interval 300        # Poll loop for one agent
+python cron.py send --to entity,redstone --subject "New task" --body '{"x":1}'
+python cron.py send --to all --subject "Rebase needed"   # Broadcast to all agents
+```
 
 ### Blackboard Skill
 
