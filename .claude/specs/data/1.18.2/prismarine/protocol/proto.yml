@@ -1,0 +1,1830 @@
+!version: 1.18.2
+
+^types:
+   varint: native
+   varlong: native
+   optvarint: varint
+   pstring: native
+   buffer: native
+   u8: native
+   u16: native
+   u32: native
+   u64: native
+   i8: native
+   i16: native
+   i32: native
+   i64: native
+   bool: native
+   f32: native
+   f64: native
+   UUID: native
+   option: native
+   entityMetadataLoop: native
+   topBitSetTerminatedArray: native
+   bitfield: native
+   bitflags: native
+   container: native
+   switch: native
+   void: native
+   array: native
+   restBuffer: native
+   nbt: native
+   optionalNbt: native
+   ByteArray: ["buffer", { "countType": "varint" }]
+   string: ["pstring", { "countType": "varint" }]
+   slot:   
+      present: bool
+      _: present ?
+         if false: void
+         if true:         
+            itemId: varint
+            itemCount: i8
+            nbtData: optionalNbt
+   particle:   
+      particleId: varint
+      data: [
+         "particleData",
+         {
+            "compareTo": "particleId"
+         }
+      ]
+   particleData: $compareTo ?
+      if 2:      
+         blockState: varint
+      if 3:      
+         blockState: varint
+      if 14:      
+         red: f32
+         green: f32
+         blue: f32
+         scale: f32
+      if 15:      
+         fromRed: f32
+         fromGreen: f32
+         fromBlue: f32
+         scale: f32
+         toRed: f32
+         toGreen: f32
+         toBlue: f32
+      if 24:      
+         blockState: varint
+      if 35:      
+         item: slot
+      if 36:      
+         origin: position
+         positionType: string
+         destination: positionType ?
+            if minecraft:block: position
+            if minecraft:entity: varint
+         ticks: varint
+      default: void
+   ingredient: slot[]varint
+   position: [
+      "bitfield",
+      [
+         {
+            "name": "x",
+            "size": 26,
+            "signed": true
+         },
+         {
+            "name": "z",
+            "size": 26,
+            "signed": true
+         },
+         {
+            "name": "y",
+            "size": 12,
+            "signed": true
+         }
+      ]
+   ]
+   entityMetadataItem: $compareTo ?
+      if 0: i8
+      if 1: varint
+      if 2: f32
+      if 3: string
+      if 4: string
+      if 5: [
+         "option",
+         "string"
+      ]
+      if 6: slot
+      if 7: bool
+      if 8:      
+         pitch: f32
+         yaw: f32
+         roll: f32
+      if 9: position
+      if 10: [
+         "option",
+         "position"
+      ]
+      if 11: varint
+      if 12: [
+         "option",
+         "UUID"
+      ]
+      if 13: varint
+      if 14: nbt
+      if 15: particle
+      if 16:      
+         villagerType: varint
+         villagerProfession: varint
+         level: varint
+      if 17: optvarint
+      if 18: varint
+   entityMetadata: [
+      "entityMetadataLoop",
+      {
+         "endVal": 255,
+         "type": [
+            "container",
+            [
+               {
+                  "anon": true,
+                  "type": [
+                     "container",
+                     [
+                        {
+                           "name": "key",
+                           "type": "u8"
+                        },
+                        {
+                           "name": "type",
+                           "type": "varint"
+                        }
+                     ]
+                  ]
+               },
+               {
+                  "name": "value",
+                  "type": [
+                     "entityMetadataItem",
+                     {
+                        "compareTo": "type"
+                     }
+                  ]
+               }
+            ]
+         ]
+      }
+   ]
+   minecraft_smelting_format:   
+      group: string
+      ingredient: ingredient
+      result: slot
+      experience: f32
+      cookTime: varint
+   tags: []varint
+      tagName: string
+      entries: varint[]varint
+   chunkBlockEntity:   
+      _: [
+         "bitfield",
+         [
+            {
+               "name": "x",
+               "size": 4,
+               "signed": false
+            },
+            {
+               "name": "z",
+               "size": 4,
+               "signed": false
+            }
+         ]
+      ]
+      y: i16
+      type: varint
+      nbtData: optionalNbt
+   command_node:   
+      flags: [
+         "bitfield",
+         [
+            {
+               "name": "unused",
+               "size": 3,
+               "signed": false
+            },
+            {
+               "name": "has_custom_suggestions",
+               "size": 1,
+               "signed": false
+            },
+            {
+               "name": "has_redirect_node",
+               "size": 1,
+               "signed": false
+            },
+            {
+               "name": "has_command",
+               "size": 1,
+               "signed": false
+            },
+            {
+               "name": "command_node_type",
+               "size": 2,
+               "signed": false
+            }
+         ]
+      ]
+      children: varint[]varint
+      redirectNode: flags/has_redirect_node ?
+         if 1: varint
+         default: void
+      extraNodeData: flags/command_node_type ?
+         if 0: void
+         if 1:         
+            name: string
+         if 2:         
+            name: string
+            parser: string
+            properties: parser ?
+               if brigadier:bool: void
+               if brigadier:float:               
+                  flags: [
+                     "bitfield",
+                     [
+                        {
+                           "name": "unused",
+                           "size": 6,
+                           "signed": false
+                        },
+                        {
+                           "name": "max_present",
+                           "size": 1,
+                           "signed": false
+                        },
+                        {
+                           "name": "min_present",
+                           "size": 1,
+                           "signed": false
+                        }
+                     ]
+                  ]
+                  min: flags/min_present ?
+                     if 1: f32
+                     default: void
+                  max: flags/max_present ?
+                     if 1: f32
+                     default: void
+               if brigadier:double:               
+                  flags: [
+                     "bitfield",
+                     [
+                        {
+                           "name": "unused",
+                           "size": 6,
+                           "signed": false
+                        },
+                        {
+                           "name": "max_present",
+                           "size": 1,
+                           "signed": false
+                        },
+                        {
+                           "name": "min_present",
+                           "size": 1,
+                           "signed": false
+                        }
+                     ]
+                  ]
+                  min: flags/min_present ?
+                     if 1: f64
+                     default: void
+                  max: flags/max_present ?
+                     if 1: f64
+                     default: void
+               if brigadier:integer:               
+                  flags: [
+                     "bitfield",
+                     [
+                        {
+                           "name": "unused",
+                           "size": 6,
+                           "signed": false
+                        },
+                        {
+                           "name": "max_present",
+                           "size": 1,
+                           "signed": false
+                        },
+                        {
+                           "name": "min_present",
+                           "size": 1,
+                           "signed": false
+                        }
+                     ]
+                  ]
+                  min: flags/min_present ?
+                     if 1: i32
+                     default: void
+                  max: flags/max_present ?
+                     if 1: i32
+                     default: void
+               if brigadier:long:               
+                  flags: [
+                     "bitfield",
+                     [
+                        {
+                           "name": "unused",
+                           "size": 6,
+                           "signed": false
+                        },
+                        {
+                           "name": "max_present",
+                           "size": 1,
+                           "signed": false
+                        },
+                        {
+                           "name": "min_present",
+                           "size": 1,
+                           "signed": false
+                        }
+                     ]
+                  ]
+                  min: flags/min_present ?
+                     if 1: i64
+                     default: void
+                  max: flags/max_present ?
+                     if 1: i64
+                     default: void
+               if brigadier:string: varint =>
+                  0: SINGLE_WORD
+                  1: QUOTABLE_PHRASE
+                  2: GREEDY_PHRASE
+               if minecraft:entity: [
+                  "bitfield",
+                  [
+                     {
+                        "name": "unused",
+                        "size": 6,
+                        "signed": false
+                     },
+                     {
+                        "name": "onlyAllowPlayers",
+                        "size": 1,
+                        "signed": false
+                     },
+                     {
+                        "name": "onlyAllowEntities",
+                        "size": 1,
+                        "signed": false
+                     }
+                  ]
+               ]
+               if minecraft:game_profile: void
+               if minecraft:block_pos: void
+               if minecraft:column_pos: void
+               if minecraft:vec3: void
+               if minecraft:vec2: void
+               if minecraft:block_state: void
+               if minecraft:block_predicate: void
+               if minecraft:item_stack: void
+               if minecraft:item_predicate: void
+               if minecraft:color: void
+               if minecraft:component: void
+               if minecraft:message: void
+               if minecraft:nbt: void
+               if minecraft:nbt_path: void
+               if minecraft:objective: void
+               if minecraft:objective_criteria: void
+               if minecraft:operation: void
+               if minecraft:particle: void
+               if minecraft:angle: void
+               if minecraft:rotation: void
+               if minecraft:scoreboard_slot: void
+               if minecraft:score_holder: [
+                  "bitfield",
+                  [
+                     {
+                        "name": "unused",
+                        "size": 7,
+                        "signed": false
+                     },
+                     {
+                        "name": "allowMultiple",
+                        "size": 1,
+                        "signed": false
+                     }
+                  ]
+               ]
+               if minecraft:swizzle: void
+               if minecraft:team: void
+               if minecraft:item_slot: void
+               if minecraft:resource_location: void
+               if minecraft:mob_effect: void
+               if minecraft:function: void
+               if minecraft:entity_anchor: void
+               if minecraft:range:               
+                  allowDecimals: bool
+               if minecraft:int_range: void
+               if minecraft:float_range: void
+               if minecraft:item_enchantment: void
+               if minecraft:entity_summon: void
+               if minecraft:dimension: void
+               if minecraft:nbt_compound_tag: void
+               if minecraft:time: void
+               if minecraft:resource_or_tag:               
+                  registry: string
+               if minecraft:resource:               
+                  registry: string
+               if minecraft:uuid: void
+            suggestionType: ../flags/has_custom_suggestions ?
+               if 1: string
+               default: void
+
+^handshaking.toClient.types:
+   packet:   
+      name: varint =>
+      params: ["switch",{"compareTo":"name","fields":{}}]
+
+^handshaking.toServer.types:
+   packet_set_protocol:   
+      protocolVersion: varint
+      serverHost: string
+      serverPort: u16
+      nextState: varint
+   packet_legacy_server_list_ping:   
+      payload: u8
+   packet:   
+      name: varint =>
+         0x00: set_protocol
+         0xfe: legacy_server_list_ping
+      params: name ?
+         if set_protocol: packet_set_protocol
+         if legacy_server_list_ping: packet_legacy_server_list_ping
+
+^status.toClient.types:
+   packet_server_info:   
+      response: string
+   packet_ping:   
+      time: i64
+   packet:   
+      name: varint =>
+         0x00: server_info
+         0x01: ping
+      params: name ?
+         if server_info: packet_server_info
+         if ping: packet_ping
+
+^status.toServer.types:
+   packet_ping_start:   
+      # Empty
+   packet_ping:   
+      time: i64
+   packet:   
+      name: varint =>
+         0x00: ping_start
+         0x01: ping
+      params: name ?
+         if ping_start: packet_ping_start
+         if ping: packet_ping
+
+^login.toClient.types:
+   packet_disconnect:   
+      reason: string
+   packet_encryption_begin:   
+      serverId: string
+      publicKey: [
+         "buffer",
+         {
+            "countType": "varint"
+         }
+      ]
+      verifyToken: [
+         "buffer",
+         {
+            "countType": "varint"
+         }
+      ]
+   packet_success:   
+      uuid: UUID
+      username: string
+   packet_compress:   
+      threshold: varint
+   packet_login_plugin_request:   
+      messageId: varint
+      channel: string
+      data: restBuffer
+   packet:   
+      name: varint =>
+         0x00: disconnect
+         0x01: encryption_begin
+         0x02: success
+         0x03: compress
+         0x04: login_plugin_request
+      params: name ?
+         if disconnect: packet_disconnect
+         if encryption_begin: packet_encryption_begin
+         if success: packet_success
+         if compress: packet_compress
+         if login_plugin_request: packet_login_plugin_request
+
+^login.toServer.types:
+   packet_login_start:   
+      username: string
+   packet_encryption_begin:   
+      sharedSecret: [
+         "buffer",
+         {
+            "countType": "varint"
+         }
+      ]
+      verifyToken: [
+         "buffer",
+         {
+            "countType": "varint"
+         }
+      ]
+   packet_login_plugin_response:   
+      messageId: varint
+      data?: restBuffer
+   packet:   
+      name: varint =>
+         0x00: login_start
+         0x01: encryption_begin
+         0x02: login_plugin_response
+      params: name ?
+         if login_start: packet_login_start
+         if encryption_begin: packet_encryption_begin
+         if login_plugin_response: packet_login_plugin_response
+
+^play.toClient.types:
+   packet_spawn_entity:   
+      entityId: varint
+      objectUUID: UUID
+      type: varint
+      x: f64
+      y: f64
+      z: f64
+      pitch: i8
+      yaw: i8
+      objectData: i32
+      velocityX: i16
+      velocityY: i16
+      velocityZ: i16
+   packet_spawn_entity_experience_orb:   
+      entityId: varint
+      x: f64
+      y: f64
+      z: f64
+      count: i16
+   packet_spawn_entity_living:   
+      entityId: varint
+      entityUUID: UUID
+      type: varint
+      x: f64
+      y: f64
+      z: f64
+      yaw: i8
+      pitch: i8
+      headPitch: i8
+      velocityX: i16
+      velocityY: i16
+      velocityZ: i16
+   packet_spawn_entity_painting:   
+      entityId: varint
+      entityUUID: UUID
+      title: varint
+      location: position
+      direction: u8
+   packet_named_entity_spawn:   
+      entityId: varint
+      playerUUID: UUID
+      x: f64
+      y: f64
+      z: f64
+      yaw: i8
+      pitch: i8
+   packet_animation:   
+      entityId: varint
+      animation: u8
+   packet_statistics:   
+      entries: []varint
+         categoryId: varint
+         statisticId: varint
+         value: varint
+   packet_advancements:   
+      reset: bool
+      advancementMapping: []varint
+         key: string
+         value:         
+            parentId?: string
+            displayData?:            
+               title: string
+               description: string
+               icon: slot
+               frameType: varint
+               flags: [
+                  "bitfield",
+                  [
+                     {
+                        "name": "_unused",
+                        "size": 29,
+                        "signed": false
+                     },
+                     {
+                        "name": "hidden",
+                        "size": 1,
+                        "signed": false
+                     },
+                     {
+                        "name": "show_toast",
+                        "size": 1,
+                        "signed": false
+                     },
+                     {
+                        "name": "has_background_texture",
+                        "size": 1,
+                        "signed": false
+                     }
+                  ]
+               ]
+               backgroundTexture: flags/has_background_texture ?
+                  if 1: string
+                  default: void
+               xCord: f32
+               yCord: f32
+            criteria: []varint
+               key: string
+               value: void
+            requirements: []varint
+               _: string[]varint
+      identifiers: string[]varint
+      progressMapping: []varint
+         key: string
+         value: []varint
+            criterionIdentifier: string
+            criterionProgress?: i64
+   packet_block_break_animation:   
+      entityId: varint
+      location: position
+      destroyStage: i8
+   packet_tile_entity_data:   
+      location: position
+      action: varint
+      nbtData: optionalNbt
+   packet_block_action:   
+      location: position
+      byte1: u8
+      byte2: u8
+      blockId: varint
+   packet_block_change:   
+      location: position
+      type: varint
+   packet_boss_bar:   
+      entityUUID: UUID
+      action: varint
+      title: action ?
+         if 0: string
+         if 3: string
+         default: void
+      health: action ?
+         if 0: f32
+         if 2: f32
+         default: void
+      color: action ?
+         if 0: varint
+         if 4: varint
+         default: void
+      dividers: action ?
+         if 0: varint
+         if 4: varint
+         default: void
+      flags: action ?
+         if 0: u8
+         if 5: u8
+         default: void
+   packet_difficulty:   
+      difficulty: u8
+      difficultyLocked: bool
+   packet_tab_complete:   
+      transactionId: varint
+      start: varint
+      length: varint
+      matches: []varint
+         match: string
+         tooltip?: string
+   packet_declare_commands:   
+      nodes: command_node[]varint
+      rootIndex: varint
+   packet_face_player:   
+      feet_eyes: varint
+      x: f64
+      y: f64
+      z: f64
+      isEntity: bool
+      entityId: isEntity ?
+         if true: varint
+         default: void
+      entity_feet_eyes: isEntity ?
+         if true: string
+         default: void
+   packet_nbt_query_response:   
+      transactionId: varint
+      nbt: optionalNbt
+   packet_chat:   
+      message: string
+      position: i8
+      sender: UUID
+   packet_multi_block_change:   
+      chunkCoordinates: [
+         "bitfield",
+         [
+            {
+               "name": "x",
+               "size": 22,
+               "signed": true
+            },
+            {
+               "name": "z",
+               "size": 22,
+               "signed": true
+            },
+            {
+               "name": "y",
+               "size": 20,
+               "signed": true
+            }
+         ]
+      ]
+      notTrustEdges: bool
+      records: varlong[]varint
+   packet_close_window:   
+      windowId: u8
+   packet_open_window:   
+      windowId: varint
+      inventoryType: varint
+      windowTitle: string
+   packet_window_items:   
+      windowId: u8
+      stateId: varint
+      items: slot[]varint
+      carriedItem: slot
+   packet_craft_progress_bar:   
+      windowId: u8
+      property: i16
+      value: i16
+   packet_set_slot:   
+      windowId: i8
+      stateId: varint
+      slot: i16
+      item: slot
+   packet_set_cooldown:   
+      itemID: varint
+      cooldownTicks: varint
+   packet_custom_payload:   
+      channel: string
+      data: restBuffer
+   packet_named_sound_effect:   
+      soundName: string
+      soundCategory: varint
+      x: i32
+      y: i32
+      z: i32
+      volume: f32
+      pitch: f32
+   packet_kick_disconnect:   
+      reason: string
+   packet_entity_status:   
+      entityId: i32
+      entityStatus: i8
+   packet_explosion:   
+      x: f32
+      y: f32
+      z: f32
+      radius: f32
+      affectedBlockOffsets: []varint
+         x: i8
+         y: i8
+         z: i8
+      playerMotionX: f32
+      playerMotionY: f32
+      playerMotionZ: f32
+   packet_unload_chunk:   
+      chunkX: i32
+      chunkZ: i32
+   packet_game_state_change:   
+      reason: u8
+      gameMode: f32
+   packet_open_horse_window:   
+      windowId: u8
+      nbSlots: varint
+      entityId: i32
+   packet_keep_alive:   
+      keepAliveId: i64
+   packet_map_chunk:   
+      x: i32
+      z: i32
+      heightmaps: nbt
+      chunkData: [
+         "buffer",
+         {
+            "countType": "varint"
+         }
+      ]
+      blockEntities: chunkBlockEntity[]varint
+      trustEdges: bool
+      skyLightMask: i64[]varint
+      blockLightMask: i64[]varint
+      emptySkyLightMask: i64[]varint
+      emptyBlockLightMask: i64[]varint
+      skyLight: []varint
+         _: u8[]varint
+      blockLight: []varint
+         _: u8[]varint
+   packet_world_event:   
+      effectId: i32
+      location: position
+      data: i32
+      global: bool
+   packet_world_particles:   
+      particleId: i32
+      longDistance: bool
+      x: f64
+      y: f64
+      z: f64
+      offsetX: f32
+      offsetY: f32
+      offsetZ: f32
+      particleData: f32
+      particles: i32
+      data: [
+         "particleData",
+         {
+            "compareTo": "particleId"
+         }
+      ]
+   packet_update_light:   
+      chunkX: varint
+      chunkZ: varint
+      trustEdges: bool
+      skyLightMask: i64[]varint
+      blockLightMask: i64[]varint
+      emptySkyLightMask: i64[]varint
+      emptyBlockLightMask: i64[]varint
+      skyLight: []varint
+         _: u8[]varint
+      blockLight: []varint
+         _: u8[]varint
+   packet_login:   
+      entityId: i32
+      isHardcore: bool
+      gameMode: u8
+      previousGameMode: i8
+      worldNames: string[]varint
+      dimensionCodec: nbt
+      dimension: nbt
+      worldName: string
+      hashedSeed: i64
+      maxPlayers: varint
+      viewDistance: varint
+      simulationDistance: varint
+      reducedDebugInfo: bool
+      enableRespawnScreen: bool
+      isDebug: bool
+      isFlat: bool
+   packet_map:   
+      itemDamage: varint
+      scale: i8
+      locked: bool
+      icons?: []varint
+         type: varint
+         x: i8
+         z: i8
+         direction: u8
+         displayName?: string
+      columns: u8
+      rows: columns ?
+         if 0: void
+         default: u8
+      x: columns ?
+         if 0: void
+         default: u8
+      y: columns ?
+         if 0: void
+         default: u8
+      data: columns ?
+         if 0: void
+         default: [
+            "buffer",
+            {
+               "countType": "varint"
+            }
+         ]
+   packet_trade_list:   
+      windowId: varint
+      trades: []u8
+         inputItem1: slot
+         outputItem: slot
+         inputItem2?: slot
+         tradeDisabled: bool
+         nbTradeUses: i32
+         maximumNbTradeUses: i32
+         xp: i32
+         specialPrice: i32
+         priceMultiplier: f32
+         demand: i32
+      villagerLevel: varint
+      experience: varint
+      isRegularVillager: bool
+      canRestock: bool
+   packet_rel_entity_move:   
+      entityId: varint
+      dX: i16
+      dY: i16
+      dZ: i16
+      onGround: bool
+   packet_entity_move_look:   
+      entityId: varint
+      dX: i16
+      dY: i16
+      dZ: i16
+      yaw: i8
+      pitch: i8
+      onGround: bool
+   packet_entity_look:   
+      entityId: varint
+      yaw: i8
+      pitch: i8
+      onGround: bool
+   packet_vehicle_move:   
+      x: f64
+      y: f64
+      z: f64
+      yaw: f32
+      pitch: f32
+   packet_open_book:   
+      hand: varint
+   packet_open_sign_entity:   
+      location: position
+   packet_craft_recipe_response:   
+      windowId: i8
+      recipe: string
+   packet_abilities:   
+      flags: i8
+      flyingSpeed: f32
+      walkingSpeed: f32
+   packet_end_combat_event:   
+      duration: varint
+      entityId: i32
+   packet_enter_combat_event:   
+      # Empty
+   packet_death_combat_event:   
+      playerId: varint
+      entityId: i32
+      message: string
+   # MC: ClientboundPlayerInfoPacket
+   packet_player_info:
+      action: varint =>
+         - add_player
+         - update_game_mode
+         - update_latency
+         - update_display_name
+         - remove_player
+      ## https://github.com/extremeheat/extracted_minecraft_data/blob/client1.18.1/client/net/minecraft/network/protocol/game/ClientboundPlayerInfoPacket.java#L122
+      data: []varint
+         uuid: UUID
+         _: ../action ?
+            if add_player:
+               name: string
+               properties: []varint
+                  name: string
+                  value: string
+                  signature?: string
+               gamemode: varint
+               ping: varint
+               displayName?: string
+            if update_game_mode:
+               gamemode: varint
+            if update_latency:
+               ping: varint
+            if update_display_name:
+               displayName?: string
+            if remove_player: void
+   packet_position:   
+      x: f64
+      y: f64
+      z: f64
+      yaw: f32
+      pitch: f32
+      flags: i8
+      teleportId: varint
+      dismountVehicle: bool
+   packet_unlock_recipes:   
+      action: varint
+      craftingBookOpen: bool
+      filteringCraftable: bool
+      smeltingBookOpen: bool
+      filteringSmeltable: bool
+      blastFurnaceOpen: bool
+      filteringBlastFurnace: bool
+      smokerBookOpen: bool
+      filteringSmoker: bool
+      recipes1: string[]varint
+      recipes2: action ?
+         if 0: string[]varint
+         default: void
+   packet_entity_destroy:   
+      entityIds: varint[]varint
+   packet_remove_entity_effect:   
+      entityId: varint
+      effectId: varint
+   packet_resource_pack_send:   
+      url: string
+      hash: string
+      forced: bool
+      promptMessage?: string
+   packet_respawn:   
+      dimension: nbt
+      worldName: string
+      hashedSeed: i64
+      gamemode: u8
+      previousGamemode: u8
+      isDebug: bool
+      isFlat: bool
+      copyMetadata: bool
+   packet_entity_head_rotation:   
+      entityId: varint
+      headYaw: i8
+   packet_camera:   
+      cameraId: varint
+   packet_held_item_slot:   
+      slot: i8
+   packet_update_view_position:   
+      chunkX: varint
+      chunkZ: varint
+   packet_update_view_distance:   
+      viewDistance: varint
+   packet_scoreboard_display_objective:   
+      position: i8
+      name: string
+   packet_entity_metadata:   
+      entityId: varint
+      metadata: entityMetadata
+   packet_attach_entity:   
+      entityId: i32
+      vehicleId: i32
+   packet_entity_velocity:   
+      entityId: varint
+      velocityX: i16
+      velocityY: i16
+      velocityZ: i16
+   packet_entity_equipment:   
+      entityId: varint
+      equipments: [
+         "topBitSetTerminatedArray",
+         {
+            "type": [
+               "container",
+               [
+                  {
+                     "name": "slot",
+                     "type": "i8"
+                  },
+                  {
+                     "name": "item",
+                     "type": "slot"
+                  }
+               ]
+            ]
+         }
+      ]
+   packet_experience:   
+      experienceBar: f32
+      level: varint
+      totalExperience: varint
+   packet_update_health:   
+      health: f32
+      food: varint
+      foodSaturation: f32
+   packet_scoreboard_objective:   
+      name: string
+      action: i8
+      displayText: action ?
+         if 0: string
+         if 2: string
+         default: void
+      type: action ?
+         if 0: varint
+         if 2: varint
+         default: void
+   packet_set_passengers:   
+      entityId: varint
+      passengers: varint[]varint
+   packet_teams:   
+      team: string
+      mode: i8
+      name: mode ?
+         if 0: string
+         if 2: string
+         default: void
+      friendlyFire: mode ?
+         if 0: i8
+         if 2: i8
+         default: void
+      nameTagVisibility: mode ?
+         if 0: string
+         if 2: string
+         default: void
+      collisionRule: mode ?
+         if 0: string
+         if 2: string
+         default: void
+      formatting: mode ?
+         if 0: varint
+         if 2: varint
+         default: void
+      prefix: mode ?
+         if 0: string
+         if 2: string
+         default: void
+      suffix: mode ?
+         if 0: string
+         if 2: string
+         default: void
+      players: mode ?
+         if 0: string[]varint
+         if 3: string[]varint
+         if 4: string[]varint
+         default: void
+   packet_scoreboard_score:   
+      itemName: string
+      action: varint
+      scoreName: string
+      value: action ?
+         if 1: void
+         default: varint
+   packet_spawn_position:   
+      location: position
+      angle: f32
+   packet_update_time:   
+      age: i64
+      time: i64
+   packet_entity_sound_effect:   
+      soundId: varint
+      soundCategory: varint
+      entityId: varint
+      volume: f32
+      pitch: f32
+   packet_stop_sound:   
+      flags: i8
+      source: flags ?
+         if 1: varint
+         if 3: varint
+         default: void
+      sound: flags ?
+         if 2: string
+         if 3: string
+         default: void
+   packet_sound_effect:   
+      soundId: varint
+      soundCategory: varint
+      x: i32
+      y: i32
+      z: i32
+      volume: f32
+      pitch: f32
+   packet_playerlist_header:   
+      header: string
+      footer: string
+   packet_collect:   
+      collectedEntityId: varint
+      collectorEntityId: varint
+      pickupItemCount: varint
+   packet_entity_teleport:   
+      entityId: varint
+      x: f64
+      y: f64
+      z: f64
+      yaw: i8
+      pitch: i8
+      onGround: bool
+   packet_entity_update_attributes:   
+      entityId: varint
+      properties: []varint
+         name: string
+         value: f64
+         modifiers: []varint
+            uuid: UUID
+            amount: f64
+            operation: i8
+   packet_entity_effect:   
+      entityId: varint
+      effectId: varint
+      amplifier: i8
+      duration: varint
+      hideParticles: i8
+   packet_select_advancement_tab:   
+      id?: string
+   packet_declare_recipes:   
+      recipes: []varint
+         type: string
+         recipeId: string
+         data: type ?
+            if minecraft:crafting_shapeless:            
+               group: string
+               ingredients: ingredient[]varint
+               result: slot
+            if minecraft:crafting_shaped:            
+               width: varint
+               height: varint
+               group: string
+               ingredients: []$width
+                  _: ingredient[]$height
+               result: slot
+            if minecraft:crafting_special_armordye: void
+            if minecraft:crafting_special_bookcloning: void
+            if minecraft:crafting_special_mapcloning: void
+            if minecraft:crafting_special_mapextending: void
+            if minecraft:crafting_special_firework_rocket: void
+            if minecraft:crafting_special_firework_star: void
+            if minecraft:crafting_special_firework_star_fade: void
+            if minecraft:crafting_special_repairitem: void
+            if minecraft:crafting_special_tippedarrow: void
+            if minecraft:crafting_special_bannerduplicate: void
+            if minecraft:crafting_special_banneraddpattern: void
+            if minecraft:crafting_special_shielddecoration: void
+            if minecraft:crafting_special_shulkerboxcoloring: void
+            if minecraft:crafting_special_suspiciousstew: void
+            if minecraft:smelting: minecraft_smelting_format
+            if minecraft:blasting: minecraft_smelting_format
+            if minecraft:smoking: minecraft_smelting_format
+            if minecraft:campfire_cooking: minecraft_smelting_format
+            if minecraft:stonecutting:            
+               group: string
+               ingredient: ingredient
+               result: slot
+            if minecraft:smithing:            
+               base: ingredient
+               addition: ingredient
+               result: slot
+   packet_tags:   
+      tags: []varint
+         tagType: string
+         tags: tags
+   packet_acknowledge_player_digging:   
+      location: position
+      block: varint
+      status: varint
+      successful: bool
+   packet_sculk_vibration_signal:   
+      sourcePosition: position
+      destinationIdentifier: string
+      destination: destinationIdentifier ?
+         if block: position
+         if entityId: varint
+         default: void
+      arrivalTicks: varint
+   packet_clear_titles:   
+      reset: bool
+   packet_initialize_world_border:   
+      x: f64
+      z: f64
+      oldDiameter: f64
+      newDiameter: f64
+      speed: varlong
+      portalTeleportBoundary: varint
+      warningBlocks: varint
+      warningTime: varint
+   packet_action_bar:   
+      text: string
+   packet_world_border_center:   
+      x: f64
+      z: f64
+   packet_world_border_lerp_size:   
+      oldDiameter: f64
+      newDiameter: f64
+      speed: varlong
+   packet_world_border_size:   
+      diameter: f64
+   packet_world_border_warning_delay:   
+      warningTime: varint
+   packet_world_border_warning_reach:   
+      warningBlocks: varint
+   packet_ping:   
+      id: i32
+   packet_set_title_subtitle:   
+      text: string
+   packet_set_title_text:   
+      text: string
+   packet_set_title_time:   
+      fadeIn: i32
+      stay: i32
+      fadeOut: i32
+   packet_simulation_distance:   
+      distance: varint
+   packet:   
+      name: varint =>
+         0x00: spawn_entity
+         0x01: spawn_entity_experience_orb
+         0x02: spawn_entity_living
+         0x03: spawn_entity_painting
+         0x04: named_entity_spawn
+         0x05: sculk_vibration_signal
+         0x06: animation
+         0x07: statistics
+         0x08: acknowledge_player_digging
+         0x09: block_break_animation
+         0x0a: tile_entity_data
+         0x0b: block_action
+         0x0c: block_change
+         0x0d: boss_bar
+         0x0e: difficulty
+         0x0f: chat
+         0x10: clear_titles
+         0x11: tab_complete
+         0x12: declare_commands
+         0x13: close_window
+         0x14: window_items
+         0x15: craft_progress_bar
+         0x16: set_slot
+         0x17: set_cooldown
+         0x18: custom_payload
+         0x19: named_sound_effect
+         0x1a: kick_disconnect
+         0x1b: entity_status
+         0x1c: explosion
+         0x1d: unload_chunk
+         0x1e: game_state_change
+         0x1f: open_horse_window
+         0x20: initialize_world_border
+         0x21: keep_alive
+         0x22: map_chunk
+         0x23: world_event
+         0x24: world_particles
+         0x25: update_light
+         0x26: login
+         0x27: map
+         0x28: trade_list
+         0x29: rel_entity_move
+         0x2a: entity_move_look
+         0x2b: entity_look
+         0x2c: vehicle_move
+         0x2d: open_book
+         0x2e: open_window
+         0x2f: open_sign_entity
+         0x30: ping
+         0x31: craft_recipe_response
+         0x32: abilities
+         0x33: end_combat_event
+         0x34: enter_combat_event
+         0x35: death_combat_event
+         0x36: player_info
+         0x37: face_player
+         0x38: position
+         0x39: unlock_recipes
+         0x3a: entity_destroy
+         0x3b: remove_entity_effect
+         0x3c: resource_pack_send
+         0x3d: respawn
+         0x3e: entity_head_rotation
+         0x3f: multi_block_change
+         0x40: select_advancement_tab
+         0x41: action_bar
+         0x42: world_border_center
+         0x43: world_border_lerp_size
+         0x44: world_border_size
+         0x45: world_border_warning_delay
+         0x46: world_border_warning_reach
+         0x47: camera
+         0x48: held_item_slot
+         0x49: update_view_position
+         0x4a: update_view_distance
+         0x4b: spawn_position
+         0x4c: scoreboard_display_objective
+         0x4d: entity_metadata
+         0x4e: attach_entity
+         0x4f: entity_velocity
+         0x50: entity_equipment
+         0x51: experience
+         0x52: update_health
+         0x53: scoreboard_objective
+         0x54: set_passengers
+         0x55: teams
+         0x56: scoreboard_score
+         0x57: simulation_distance
+         0x58: set_title_subtitle
+         0x59: update_time
+         0x5a: set_title_text
+         0x5b: set_title_time
+         0x5c: entity_sound_effect
+         0x5d: sound_effect
+         0x5e: stop_sound
+         0x5f: playerlist_header
+         0x60: nbt_query_response
+         0x61: collect
+         0x62: entity_teleport
+         0x63: advancements
+         0x64: entity_update_attributes
+         0x65: entity_effect
+         0x66: declare_recipes
+         0x67: tags
+      params: name ?
+         if spawn_entity: packet_spawn_entity
+         if spawn_entity_experience_orb: packet_spawn_entity_experience_orb
+         if spawn_entity_living: packet_spawn_entity_living
+         if spawn_entity_painting: packet_spawn_entity_painting
+         if named_entity_spawn: packet_named_entity_spawn
+         if animation: packet_animation
+         if statistics: packet_statistics
+         if advancements: packet_advancements
+         if block_break_animation: packet_block_break_animation
+         if tile_entity_data: packet_tile_entity_data
+         if block_action: packet_block_action
+         if block_change: packet_block_change
+         if boss_bar: packet_boss_bar
+         if difficulty: packet_difficulty
+         if tab_complete: packet_tab_complete
+         if declare_commands: packet_declare_commands
+         if face_player: packet_face_player
+         if nbt_query_response: packet_nbt_query_response
+         if chat: packet_chat
+         if multi_block_change: packet_multi_block_change
+         if close_window: packet_close_window
+         if open_window: packet_open_window
+         if window_items: packet_window_items
+         if craft_progress_bar: packet_craft_progress_bar
+         if set_slot: packet_set_slot
+         if set_cooldown: packet_set_cooldown
+         if custom_payload: packet_custom_payload
+         if named_sound_effect: packet_named_sound_effect
+         if kick_disconnect: packet_kick_disconnect
+         if entity_status: packet_entity_status
+         if explosion: packet_explosion
+         if unload_chunk: packet_unload_chunk
+         if game_state_change: packet_game_state_change
+         if open_horse_window: packet_open_horse_window
+         if keep_alive: packet_keep_alive
+         if map_chunk: packet_map_chunk
+         if world_event: packet_world_event
+         if world_particles: packet_world_particles
+         if update_light: packet_update_light
+         if login: packet_login
+         if map: packet_map
+         if trade_list: packet_trade_list
+         if rel_entity_move: packet_rel_entity_move
+         if entity_move_look: packet_entity_move_look
+         if entity_look: packet_entity_look
+         if vehicle_move: packet_vehicle_move
+         if open_book: packet_open_book
+         if open_sign_entity: packet_open_sign_entity
+         if craft_recipe_response: packet_craft_recipe_response
+         if abilities: packet_abilities
+         if end_combat_event: packet_end_combat_event
+         if enter_combat_event: packet_enter_combat_event
+         if death_combat_event: packet_death_combat_event
+         if player_info: packet_player_info
+         if position: packet_position
+         if unlock_recipes: packet_unlock_recipes
+         if entity_destroy: packet_entity_destroy
+         if remove_entity_effect: packet_remove_entity_effect
+         if resource_pack_send: packet_resource_pack_send
+         if respawn: packet_respawn
+         if entity_update_attributes: packet_entity_update_attributes
+         if camera: packet_camera
+         if held_item_slot: packet_held_item_slot
+         if update_view_position: packet_update_view_position
+         if update_view_distance: packet_update_view_distance
+         if scoreboard_display_objective: packet_scoreboard_display_objective
+         if entity_metadata: packet_entity_metadata
+         if attach_entity: packet_attach_entity
+         if entity_velocity: packet_entity_velocity
+         if entity_equipment: packet_entity_equipment
+         if experience: packet_experience
+         if update_health: packet_update_health
+         if scoreboard_objective: packet_scoreboard_objective
+         if set_passengers: packet_set_passengers
+         if teams: packet_teams
+         if scoreboard_score: packet_scoreboard_score
+         if simulation_distance: packet_simulation_distance
+         if spawn_position: packet_spawn_position
+         if update_time: packet_update_time
+         if entity_sound_effect: packet_entity_sound_effect
+         if stop_sound: packet_stop_sound
+         if sound_effect: packet_sound_effect
+         if playerlist_header: packet_playerlist_header
+         if collect: packet_collect
+         if entity_teleport: packet_entity_teleport
+         if entity_head_rotation: packet_entity_head_rotation
+         if entity_effect: packet_entity_effect
+         if select_advancement_tab: packet_select_advancement_tab
+         if declare_recipes: packet_declare_recipes
+         if tags: packet_tags
+         if acknowledge_player_digging: packet_acknowledge_player_digging
+         if sculk_vibration_signal: packet_sculk_vibration_signal
+         if clear_titles: packet_clear_titles
+         if initialize_world_border: packet_initialize_world_border
+         if action_bar: packet_action_bar
+         if world_border_center: packet_world_border_center
+         if world_border_lerp_size: packet_world_border_lerp_size
+         if world_border_size: packet_world_border_size
+         if world_border_warning_delay: packet_world_border_warning_delay
+         if world_border_warning_reach: packet_world_border_warning_reach
+         if ping: packet_ping
+         if set_title_subtitle: packet_set_title_subtitle
+         if set_title_text: packet_set_title_text
+         if set_title_time: packet_set_title_time
+
+^play.toServer.types:
+   packet_teleport_confirm:   
+      teleportId: varint
+   packet_query_block_nbt:   
+      transactionId: varint
+      location: position
+   packet_set_difficulty:   
+      newDifficulty: u8
+   packet_edit_book:   
+      hand: varint
+      pages: string[]varint
+      title?: string
+   packet_query_entity_nbt:   
+      transactionId: varint
+      entityId: varint
+   packet_pick_item:   
+      slot: varint
+   packet_name_item:   
+      name: string
+   packet_select_trade:   
+      slot: varint
+   packet_set_beacon_effect:   
+      primary_effect: varint
+      secondary_effect: varint
+   packet_update_command_block:   
+      location: position
+      command: string
+      mode: varint
+      flags: u8
+   packet_update_command_block_minecart:   
+      entityId: varint
+      command: string
+      track_output: bool
+   packet_update_structure_block:   
+      location: position
+      action: varint
+      mode: varint
+      name: string
+      offset_x: i8
+      offset_y: i8
+      offset_z: i8
+      size_x: i8
+      size_y: i8
+      size_z: i8
+      mirror: varint
+      rotation: varint
+      metadata: string
+      integrity: f32
+      seed: varlong
+      flags: u8
+   packet_tab_complete:   
+      transactionId: varint
+      text: string
+   packet_chat:   
+      message: string
+   packet_client_command:   
+      actionId: varint
+   packet_settings:   
+      locale: string
+      viewDistance: i8
+      chatFlags: varint
+      chatColors: bool
+      skinParts: u8
+      mainHand: varint
+      enableTextFiltering: bool
+      enableServerListing: bool
+   packet_enchant_item:   
+      windowId: i8
+      enchantment: i8
+   packet_window_click:   
+      windowId: u8
+      stateId: varint
+      slot: i16
+      mouseButton: i8
+      mode: varint
+      changedSlots: []varint
+         location: i16
+         item: slot
+      cursorItem: slot
+   packet_close_window:   
+      windowId: u8
+   packet_custom_payload:   
+      channel: string
+      data: restBuffer
+   packet_use_entity:   
+      target: varint
+      mouse: varint
+      x: mouse ?
+         if 2: f32
+         default: void
+      y: mouse ?
+         if 2: f32
+         default: void
+      z: mouse ?
+         if 2: f32
+         default: void
+      hand: mouse ?
+         if 0: varint
+         if 2: varint
+         default: void
+      sneaking: bool
+   packet_generate_structure:   
+      location: position
+      levels: varint
+      keepJigsaws: bool
+   packet_keep_alive:   
+      keepAliveId: i64
+   packet_lock_difficulty:   
+      locked: bool
+   packet_position:   
+      x: f64
+      y: f64
+      z: f64
+      onGround: bool
+   packet_position_look:   
+      x: f64
+      y: f64
+      z: f64
+      yaw: f32
+      pitch: f32
+      onGround: bool
+   packet_look:   
+      yaw: f32
+      pitch: f32
+      onGround: bool
+   packet_flying:   
+      onGround: bool
+   packet_vehicle_move:   
+      x: f64
+      y: f64
+      z: f64
+      yaw: f32
+      pitch: f32
+   packet_steer_boat:   
+      leftPaddle: bool
+      rightPaddle: bool
+   packet_craft_recipe_request:   
+      windowId: i8
+      recipe: string
+      makeAll: bool
+   packet_abilities:   
+      flags: i8
+   packet_block_dig:   
+      status: varint
+      location: position
+      face: i8
+   packet_entity_action:   
+      entityId: varint
+      actionId: varint
+      jumpBoost: varint
+   packet_steer_vehicle:   
+      sideways: f32
+      forward: f32
+      jump: u8
+   packet_displayed_recipe:   
+      recipeId: string
+   packet_recipe_book:   
+      bookId: varint
+      bookOpen: bool
+      filterActive: bool
+   packet_resource_pack_receive:   
+      result: varint
+   packet_held_item_slot:   
+      slotId: i16
+   packet_set_creative_slot:   
+      slot: i16
+      item: slot
+   packet_update_jigsaw_block:   
+      location: position
+      name: string
+      target: string
+      pool: string
+      finalState: string
+      jointType: string
+   packet_update_sign:   
+      location: position
+      text1: string
+      text2: string
+      text3: string
+      text4: string
+   packet_arm_animation:   
+      hand: varint
+   packet_spectate:   
+      target: UUID
+   packet_block_place:   
+      hand: varint
+      location: position
+      direction: varint
+      cursorX: f32
+      cursorY: f32
+      cursorZ: f32
+      insideBlock: bool
+   packet_use_item:   
+      hand: varint
+   packet_advancement_tab:   
+      action: varint
+      tabId: action ?
+         if 0: string
+         if 1: void
+   packet_pong:   
+      id: i32
+   packet:   
+      name: varint =>
+         0x00: teleport_confirm
+         0x01: query_block_nbt
+         0x02: set_difficulty
+         0x03: chat
+         0x04: client_command
+         0x05: settings
+         0x06: tab_complete
+         0x07: enchant_item
+         0x08: window_click
+         0x09: close_window
+         0x0a: custom_payload
+         0x0b: edit_book
+         0x0c: query_entity_nbt
+         0x0d: use_entity
+         0x0e: generate_structure
+         0x0f: keep_alive
+         0x10: lock_difficulty
+         0x11: position
+         0x12: position_look
+         0x13: look
+         0x14: flying
+         0x15: vehicle_move
+         0x16: steer_boat
+         0x17: pick_item
+         0x18: craft_recipe_request
+         0x19: abilities
+         0x1a: block_dig
+         0x1b: entity_action
+         0x1c: steer_vehicle
+         0x1d: pong
+         0x1e: recipe_book
+         0x1f: displayed_recipe
+         0x20: name_item
+         0x21: resource_pack_receive
+         0x22: advancement_tab
+         0x23: select_trade
+         0x24: set_beacon_effect
+         0x25: held_item_slot
+         0x26: update_command_block
+         0x27: update_command_block_minecart
+         0x28: set_creative_slot
+         0x29: update_jigsaw_block
+         0x2a: update_structure_block
+         0x2b: update_sign
+         0x2c: arm_animation
+         0x2d: spectate
+         0x2e: block_place
+         0x2f: use_item
+      params: name ?
+         if teleport_confirm: packet_teleport_confirm
+         if query_block_nbt: packet_query_block_nbt
+         if set_difficulty: packet_set_difficulty
+         if edit_book: packet_edit_book
+         if query_entity_nbt: packet_query_entity_nbt
+         if pick_item: packet_pick_item
+         if name_item: packet_name_item
+         if select_trade: packet_select_trade
+         if set_beacon_effect: packet_set_beacon_effect
+         if update_command_block: packet_update_command_block
+         if update_command_block_minecart: packet_update_command_block_minecart
+         if update_structure_block: packet_update_structure_block
+         if tab_complete: packet_tab_complete
+         if chat: packet_chat
+         if client_command: packet_client_command
+         if settings: packet_settings
+         if enchant_item: packet_enchant_item
+         if window_click: packet_window_click
+         if close_window: packet_close_window
+         if custom_payload: packet_custom_payload
+         if use_entity: packet_use_entity
+         if generate_structure: packet_generate_structure
+         if keep_alive: packet_keep_alive
+         if lock_difficulty: packet_lock_difficulty
+         if position: packet_position
+         if position_look: packet_position_look
+         if look: packet_look
+         if flying: packet_flying
+         if vehicle_move: packet_vehicle_move
+         if steer_boat: packet_steer_boat
+         if craft_recipe_request: packet_craft_recipe_request
+         if abilities: packet_abilities
+         if block_dig: packet_block_dig
+         if entity_action: packet_entity_action
+         if steer_vehicle: packet_steer_vehicle
+         if displayed_recipe: packet_displayed_recipe
+         if recipe_book: packet_recipe_book
+         if resource_pack_receive: packet_resource_pack_receive
+         if held_item_slot: packet_held_item_slot
+         if set_creative_slot: packet_set_creative_slot
+         if update_jigsaw_block: packet_update_jigsaw_block
+         if update_sign: packet_update_sign
+         if arm_animation: packet_arm_animation
+         if spectate: packet_spectate
+         if block_place: packet_block_place
+         if use_item: packet_use_item
+         if advancement_tab: packet_advancement_tab
+         if pong: packet_pong
