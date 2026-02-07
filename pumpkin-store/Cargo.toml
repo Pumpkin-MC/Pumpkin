@@ -25,5 +25,11 @@ default = ["toml-store"]
 toml-store = ["dep:pumpkin-data"]
 lance-store = [] # Deps added in Phase 4 (lancedb, arrow 57, datafusion 51)
 
+# Extended store — reserved for future columnar/vector deps (Lance, Arrow, Calcite).
+# All additive types (ZeroCopyGuard, GameMappingRecord, MobGoalState, CachedStore)
+# are zero-dep and always compiled. StoreProvider::open() is the runtime meta-switch.
+# Community default = toml-store + StoreProvider::Static.
+extended-store = []
+
 [lints]
 workspace = true

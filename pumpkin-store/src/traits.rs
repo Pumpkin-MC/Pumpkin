@@ -144,6 +144,105 @@ impl ZeroCopyGuard for GameMappingRecord {
     }
 }
 
+/// Bitpacked mob goal state for Hamming XOR overlay (ARCH-027).
+///
+/// Encodes a mob's entire goal selector state in a single `u64`:
+/// ```text
+/// Bits  0-3:  active MOVE goal index (0xF = none)
+/// Bits  4-7:  active LOOK goal index
+/// Bits  8-11: active JUMP goal index
+/// Bits 12-15: active TARGET goal index
+/// Bits 16-19: disabled controls mask (4 bits)
+/// Bits 20-35: running mask (16 bits, 1 per PrioritizedGoal)
+/// Bits 36-63: reserved (priority encoding, cooldown state)
+/// ```
+///
+/// The Hamming XOR overlay computes state transitions:
+/// ```text
+/// prev_state XOR curr_state = diff_bits
+/// hamming_weight(diff_bits) = number of goal state changes
+/// ```
+///
+/// - `hamming_distance == 0` → stable (no goals changed)
+/// - `hamming_distance == 1` → single goal switch (normal tick)
+/// - `hamming_distance > 4`  → anomalous multi-goal switch
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MobGoalState(pub u64);
+
+impl MobGoalState {
+    /// No goals active, no controls disabled.
+    pub const EMPTY: Self = Self(0x0000_FFFF_FFFF_FFFFu64.reverse_bits());
+
+    /// Create a new goal state with explicit control slot indices.
+    ///
+    /// Pass `0xF` for a control slot with no active goal.
+    #[must_use]
+    pub const fn new(
+        move_goal: u8,
+        look_goal: u8,
+        jump_goal: u8,
+        target_goal: u8,
+        disabled_controls: u8,
+        running_mask: u16,
+    ) -> Self {
+        let bits = (move_goal as u64 & 0xF)
+            | ((look_goal as u64 & 0xF) << 4)
+            | ((jump_goal as u64 & 0xF) << 8)
+            | ((target_goal as u64 & 0xF) << 12)
+            | ((disabled_controls as u64 & 0xF) << 16)
+            | ((running_mask as u64) << 20);
+        Self(bits)
+    }
+
+    /// XOR two states — the result encodes which bits changed.
+    #[must_use]
+    pub const fn xor_diff(self, other: Self) -> u64 {
+        self.0 ^ other.0
+    }
+
+    /// Hamming distance between two states (number of changed bits).
+    #[must_use]
+    pub const fn hamming_distance(self, other: Self) -> u32 {
+        self.xor_diff(other).count_ones()
+    }
+
+    /// Extract the active goal index for the MOVE control slot.
+    #[must_use]
+    pub const fn move_goal(self) -> u8 {
+        (self.0 & 0xF) as u8
+    }
+
+    /// Extract the active goal index for the LOOK control slot.
+    #[must_use]
+    pub const fn look_goal(self) -> u8 {
+        ((self.0 >> 4) & 0xF) as u8
+    }
+
+    /// Extract the active goal index for the JUMP control slot.
+    #[must_use]
+    pub const fn jump_goal(self) -> u8 {
+        ((self.0 >> 8) & 0xF) as u8
+    }
+
+    /// Extract the active goal index for the TARGET control slot.
+    #[must_use]
+    pub const fn target_goal(self) -> u8 {
+        ((self.0 >> 12) & 0xF) as u8
+    }
+
+    /// Extract the disabled controls mask.
+    #[must_use]
+    pub const fn disabled_controls(self) -> u8 {
+        ((self.0 >> 16) & 0xF) as u8
+    }
+
+    /// Extract the running mask (1 bit per goal, up to 16 goals).
+    #[must_use]
+    pub const fn running_mask(self) -> u16 {
+        ((self.0 >> 20) & 0xFFFF) as u16
+    }
+}
+
 /// Core trait for game data access.
 ///
 /// Backends implement this to provide block, item, entity, and recipe lookups.

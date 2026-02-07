@@ -77,8 +77,8 @@ mod lance_store;
 
 pub use error::{StoreError, StoreResult};
 pub use traits::{
-    BlockRecord, EntityRecord, GameDataStore, GameMappingRecord, ItemRecord, RecipeRecord,
-    ZeroCopyGuard, XOR_SENTINEL,
+    BlockRecord, EntityRecord, GameDataStore, GameMappingRecord, ItemRecord, MobGoalState,
+    RecipeRecord, ZeroCopyGuard, XOR_SENTINEL,
 };
 
 pub use cached_store::{CacheEntry, CacheSnapshot, CachedStore};
@@ -89,39 +89,153 @@ pub use static_store::StaticStore;
 #[cfg(feature = "lance-store")]
 pub use lance_store::LanceStore;
 
-/// Store provider tier — selects which backend to use at runtime.
+/// Store provider tier — meta-switch for transparent backend routing.
+///
+/// Works like a NAT: callers get `Box<dyn GameDataStore>` from [`open`](Self::open)
+/// and call methods without knowing which backend handles them. The provider
+/// transparently routes all commands to the selected tier:
 ///
 /// ```text
-/// Static  → compile-time pumpkin-data, zero cost (default)
-/// Cached  → Static + HashMap memoization, transparent DTOs
-/// Lance   → hydrated from Static, Arrow zero-copy, lance 2.0 native queries
+/// StoreProvider::open()
+///      │
+///      ├── Static  → StaticStore (pumpkin-data, compile-time, zero cost)
+///      ├── Cached  → CachedStore<StaticStore> (HashMap memoization + XOR guard)
+///      └── Lance   → LanceStore (Arrow zero-copy, lance 2.0 native queries)
+/// ```
+///
+/// All tiers implement the same `GameDataStore` trait — including additive methods
+/// like `game_mappings()` that don't conflict with existing block/item/entity/recipe
+/// lookups. Static returns empty for relationship queries; higher tiers populate them.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use pumpkin_store::StoreProvider;
+///
+/// // Default: compile-time static data, zero cost
+/// let store = StoreProvider::default().open();
+/// let block = store.block_by_name("stone")?;
+///
+/// // Cached: HashMap memoization + XOR zero-copy guard
+/// let store = StoreProvider::Cached.open();
+/// let block = store.block_by_name("stone")?; // delegate + cache
+/// let block = store.block_by_name("stone")?; // instant O(1) hit
+///
+/// // Lance: async construction (use LanceStore::open() directly)
+/// let mut lance = LanceStore::open("./data/lance").await?;
+/// lance.hydrate_from(&*StoreProvider::default().open()).await?;
 /// ```
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum StoreProvider {
-    /// Use `StaticStore` directly — zero-cost, compile-time data.
+    /// `StaticStore` — zero-cost, compile-time pumpkin-data lookups.
     #[default]
     Static,
-    /// Use `CachedStore<StaticStore>` — lazy `HashMap` cache over static data.
+    /// `CachedStore<StaticStore>` — lazy `HashMap` + XOR write-through guard.
     Cached,
-    /// Use `LanceStore` — Arrow columnar, hydrated from static data.
+    /// `LanceStore` — Arrow columnar, hydrated from Static. Requires async.
     Lance,
+}
+
+impl StoreProvider {
+    /// Open a store with this provider tier.
+    ///
+    /// Returns a `Box<dyn GameDataStore>` that transparently routes all commands
+    /// to the selected backend — the caller doesn't know or care which tier handles it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `Lance` is selected — Lance requires async construction.
+    /// Use `LanceStore::open()` directly for the Lance tier.
+    #[cfg(feature = "toml-store")]
+    #[must_use]
+    pub fn open(self) -> Box<dyn GameDataStore> {
+        match self {
+            Self::Static => Box::new(StaticStore::new()),
+            Self::Cached => Box::new(CachedStore::new(StaticStore::new())),
+            Self::Lance => {
+                panic!("Lance tier requires async — use LanceStore::open() directly")
+            }
+        }
+    }
 }
 
 /// Open the default store based on enabled features.
 ///
 /// Returns `StaticStore` wrapping pumpkin-data — zero-cost, always available.
-/// For cached or Lance tiers, construct directly:
+/// For tier selection via meta-switch, use [`StoreProvider::open`] instead.
 ///
 /// ```rust,ignore
-/// // Cached tier
-/// let store = CachedStore::new(open_default_store());
+/// // Direct construction
+/// let store = open_default_store();
 ///
-/// // Lance tier
-/// let mut lance = LanceStore::open("./data/lance").await?;
-/// lance.hydrate_from(&open_default_store()).await?;
+/// // Meta-switch (equivalent, returns Box<dyn GameDataStore>)
+/// let store = StoreProvider::default().open();
 /// ```
 #[cfg(feature = "toml-store")]
 #[must_use]
 pub const fn open_default_store() -> StaticStore {
     StaticStore::new()
+}
+
+#[cfg(test)]
+#[cfg(feature = "toml-store")]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_static_routes_block_lookup() {
+        let store = StoreProvider::Static.open();
+        let block = store.block_by_name("stone").unwrap();
+        assert_eq!(block.name, "stone");
+    }
+
+    #[test]
+    fn provider_cached_routes_block_lookup() {
+        let store = StoreProvider::Cached.open();
+        let block = store.block_by_name("stone").unwrap();
+        assert_eq!(block.name, "stone");
+
+        // Second call hits cache — same result, transparent to caller
+        let block2 = store.block_by_name("stone").unwrap();
+        assert_eq!(block.id, block2.id);
+    }
+
+    #[test]
+    fn provider_default_is_static() {
+        assert_eq!(StoreProvider::default(), StoreProvider::Static);
+    }
+
+    #[test]
+    #[should_panic(expected = "Lance tier requires async")]
+    fn provider_lance_panics_sync() {
+        let _store = StoreProvider::Lance.open();
+    }
+
+    #[test]
+    fn provider_additive_methods_available() {
+        // Additive methods (game_mappings) are available on all tiers
+        // without conflicting with existing block/item/entity lookups.
+        let store = StoreProvider::Static.open();
+        let mappings = store.game_mappings("biome", "plains").unwrap();
+        assert!(mappings.is_empty(), "Static tier returns empty game_mappings");
+
+        let count = store.game_mapping_count();
+        assert_eq!(count, 0);
+
+        // Same methods accessible through Cached tier
+        let cached = StoreProvider::Cached.open();
+        let mappings = cached.game_mappings("biome", "plains").unwrap();
+        assert!(mappings.is_empty());
+    }
+
+    #[test]
+    fn provider_routes_item_and_entity() {
+        let store = StoreProvider::Cached.open();
+        let item = store.item_by_name("diamond_sword").unwrap();
+        assert_eq!(item.name, "diamond_sword");
+
+        let entity = store.entity_by_name("zombie").unwrap();
+        assert_eq!(entity.name, "zombie");
+        assert!(entity.is_mob);
+    }
 }
