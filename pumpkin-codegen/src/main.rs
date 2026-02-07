@@ -57,6 +57,7 @@ mod tracked_data;
 mod translations;
 mod version;
 mod world_event;
+mod advancement;
 
 pub const OUT_DIR: &str = "../pumpkin-data/src/generated";
 

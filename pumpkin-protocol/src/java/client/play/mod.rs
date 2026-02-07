@@ -53,6 +53,7 @@ mod remove_entities;
 mod remove_mob_effect;
 mod reset_score;
 mod respawn;
+mod select_advancements_tab;
 mod server_links;
 mod set_border_center;
 mod set_border_lerp_size;
@@ -92,6 +93,7 @@ mod update_mob_effect;
 mod update_objectives;
 mod update_score;
 mod worldevent;
+mod update_advancement;
 
 pub use acknowledge_block::*;
 pub use actionbar::*;

@@ -1,5 +1,5 @@
 use std::io::Write;
-
+use serde::Serialize;
 use crate::codec::var_int::VarInt;
 use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, WritingError};

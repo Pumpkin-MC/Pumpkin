@@ -1,5 +1,6 @@
 use std::{borrow::Cow, vec};
-
+use proc_macro2::TokenStream;
+use quote::ToTokens;
 use serde::{Deserialize, Serialize};
 
 use super::{TextComponent, TextComponentBase};
@@ -52,5 +53,11 @@ impl HoverEvent {
                 None => None,
             },
         }
+    }
+}
+
+impl ToTokens for HoverEvent {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        todo!()
     }
 }
