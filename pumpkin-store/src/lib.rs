@@ -78,7 +78,7 @@ mod lance_store;
 pub use error::{StoreError, StoreResult};
 pub use traits::{
     BlockRecord, EntityRecord, GameDataStore, GameMappingRecord, ItemRecord, MobGoalState,
-    RecipeRecord, ZeroCopyGuard, XOR_SENTINEL,
+    RecipeRecord, SpatialOverlay, ZeroCopyGuard, OVERLAY_BITS, OVERLAY_WORDS, XOR_SENTINEL,
 };
 
 pub use cached_store::{CacheEntry, CacheSnapshot, CachedStore};
