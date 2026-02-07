@@ -163,7 +163,7 @@ loot tables, mob drops, worldgen, and tags without guessing.
 1. **TOML/YAML backend** — Human-editable, file-based. For configs, small registries, dev/modding use.
 2. **LanceDB backend** — Embedded columnar DB (no server process). Zero-copy via Apache Arrow IPC. For high-performance queries over large registries (26K+ block states, 1470 recipes, 149 entities, loot tables). DataFusion provides SQL query capability over Arrow RecordBatches.
 
-**Key crates:** `lancedb` v0.21.3+ (embedded), `arrow` v55+ (zero-copy), `datafusion` v51+ (SQL engine)
+**Key crates:** Lance 2.0+ / `lancedb` (embedded), `arrow` v57+ (zero-copy), `datafusion` v51+ (SQL engine)
 
 **Storage DTO trait sketch:**
 ```rust
@@ -193,5 +193,40 @@ trait GameDataStore: Send + Sync {
 
 **Rationale:** PatchBukkit's JVM bridge is the right design for running actual Java plugins, but for pure-Rust servers the JVM is dead weight. Transcoding the API knowledge into Rust DTOs with a pluggable storage backend gives us: (a) Bukkit-compatible API surface without JVM, (b) zero-copy data access via Arrow, (c) SQL query capability for plugins/admin, (d) human-editable fallback via TOML/YAML.
 
+**Rust compatibility:** Lance 2.0 requires Rust 2024 edition (1.88+). Pumpkin MSRV is 1.89 — compatible. But lance-store is fully optional: `default = ["toml-store"]` compiles zero Lance/Arrow deps. The `lance-store` feature is an empty gate until chrono version conflict is resolved upstream. Verified: `--no-default-features`, default, and `--features lance-store` all build clean.
+
+**Implementation status (Phase 1-2 DONE):** `pumpkin-store/` crate created as 10th workspace member. `GameDataStore` trait + `StaticStore` backend (9 tests pass). `LanceStore` stub behind feature gate. See session 009 for details.
+
 **Affects:** All agents (new data access pattern), Plugin (API surface), Storage (backend impl), Items (recipe queries), Core (data loading)
-**Status:** PROPOSED — requires human operator approval before implementation
+**Status:** PHASE 1-2 DONE, PHASE 3-4 PENDING (lance deps blocked on chrono conflict)
+
+## ARCH-021: Type corrections are NOT renames (ARCH-011 clarification)
+**Date:** 2026-02-07
+**Decision:** Fixing incorrect field types on existing enum variants or struct fields is authorized under ARCH-011 when ALL of the following conditions are met:
+1. The **name** of the variant/field stays identical
+2. The current type is **demonstrably wrong** per the Minecraft protocol specification (wiki.vg)
+3. The variant/field is **not constructed anywhere** in the current codebase (no callers to break)
+4. The fix is **required for correct serialization** — the current type makes the feature non-functional
+
+**ARCH-011 says "never rename."** Changing `UpdateLatency(u8)` to `UpdateLatency(VarInt)` is not a rename — "UpdateLatency" stays "UpdateLatency." It's a type correction. This is analogous to ARCH-008 (Navigator::is_idle() return value fix).
+
+**Specific authorizations for Protocol agent:**
+- `PlayerAction::UpdateLatency(u8)` → `PlayerAction::UpdateLatency(VarInt)` — latency is VarInt per wiki.vg
+- `PlayerAction::UpdateDisplayName(u8)` → `PlayerAction::UpdateDisplayName(Option<TextComponent<'a>>)` — spec says Optional Chat
+- `PlayerAction::UpdateListOrder` → `PlayerAction::UpdateListOrder(VarInt)` — spec says VarInt sort priority
+
+**What is NOT authorized:** Renaming `UpdateLatency` to `SetPing`, renaming `PlayerAction` to `PlayerInfoAction`, restructuring the enum into separate structs, moving the file, etc.
+
+**Rationale:** ARCH-011 prevents unnecessary refactoring that breaks contributors. Type corrections that fix spec compliance on unused variants have zero blast radius — no callers exist, no one's code breaks. Blocking these fixes means leaving `todo!()` panics and incorrect serialization in production code, which is worse than the type change.
+**Affects:** Protocol
+**Status:** active
+
+## ARCH-022: ARCH-019 (Protocol DTO) and ARCH-020 (Storage DTO) are complementary
+**Date:** 2026-02-07
+**Decision:** The two DTO layers serve different purposes and do not conflict:
+- **ARCH-019** (Protocol DTO, `pumpkin-protocol/src/dto/`): Translates **wire formats** between Minecraft protocol versions. Lives at the network boundary. Owned by Protocol agent.
+- **ARCH-020** (Storage DTO, `pumpkin-store/`): Abstracts **game data access** behind pluggable backends (static arrays, LanceDB). Lives at the data layer. Owned by Architect/Storage.
+
+They are orthogonal: Protocol DTO translates packets at the network edge, Storage DTO serves game registries internally. A block lookup goes through `GameDataStore`, then the result may be serialized differently for 1.21 vs 1.16.5 clients via the Protocol DTO. No conflict.
+**Affects:** Protocol, Storage, Architect
+**Status:** active
