@@ -32,7 +32,9 @@ pub mod abstract_redstone_gate;
 pub mod dispenser;
 
 pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
-    for direction in BlockDirection::all() {
+    // Use vanilla update order (W, E, D, U, N, S) for parity with technical redstone builds.
+    // The order matters because some contraptions depend on which neighbor gets updated first.
+    for direction in BlockDirection::update_order() {
         let neighbor_pos = pos.offset(direction.to_offset());
         let block = world.get_block(&neighbor_pos).await;
         world
@@ -40,7 +42,7 @@ pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
             .on_neighbor_update(world, block, &neighbor_pos, block, true)
             .await;
 
-        for n_direction in BlockDirection::all() {
+        for n_direction in BlockDirection::update_order() {
             let n_neighbor_pos = neighbor_pos.offset(n_direction.to_offset());
             let block = world.get_block(&n_neighbor_pos).await;
             world
@@ -193,4 +195,59 @@ pub async fn diode_get_input_strength(world: &World, pos: &BlockPos, facing: Blo
         return get_max_weak_power(world, &input_pos, true).await;
     }
     power
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::BlockDirection;
+
+    #[test]
+    fn test_is_diode_repeater() {
+        assert!(is_diode(&Block::REPEATER));
+    }
+
+    #[test]
+    fn test_is_diode_comparator() {
+        assert!(is_diode(&Block::COMPARATOR));
+    }
+
+    #[test]
+    fn test_is_diode_non_diode_blocks() {
+        assert!(!is_diode(&Block::REDSTONE_WIRE));
+        assert!(!is_diode(&Block::REDSTONE_TORCH));
+        assert!(!is_diode(&Block::REDSTONE_BLOCK));
+        assert!(!is_diode(&Block::OBSERVER));
+        assert!(!is_diode(&Block::PISTON));
+        assert!(!is_diode(&Block::LEVER));
+        assert!(!is_diode(&Block::STONE));
+        assert!(!is_diode(&Block::AIR));
+    }
+
+    /// Vanilla update order is West, East, Down, Up, North, South.
+    /// This differs from BlockDirection::all() which is Down, Up, North, South, West, East.
+    /// Technical redstone builds depend on this specific order.
+    #[test]
+    fn test_vanilla_update_order() {
+        let order = BlockDirection::update_order();
+        assert_eq!(order[0], BlockDirection::West);
+        assert_eq!(order[1], BlockDirection::East);
+        assert_eq!(order[2], BlockDirection::Down);
+        assert_eq!(order[3], BlockDirection::Up);
+        assert_eq!(order[4], BlockDirection::North);
+        assert_eq!(order[5], BlockDirection::South);
+    }
+
+    /// Verify that all() and update_order() contain the same directions
+    /// but in different order. This is important for signal propagation:
+    /// - all() is used for power queries (order doesn't matter, max is taken)
+    /// - update_order() is used for neighbor notifications (order matters)
+    #[test]
+    fn test_all_vs_update_order_same_elements() {
+        let mut all: Vec<BlockDirection> = BlockDirection::all().to_vec();
+        let mut update: Vec<BlockDirection> = BlockDirection::update_order().to_vec();
+        all.sort_by_key(|d| d.to_index());
+        update.sort_by_key(|d| d.to_index());
+        assert_eq!(all, update);
+    }
 }
