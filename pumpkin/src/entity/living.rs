@@ -1232,14 +1232,12 @@ impl EntityBase for LivingEntity {
 
             let world = self.entity.world.load();
 
-            let bypasses_cooldown = damage_type == DamageType::GENERIC_KILL
-                || damage_type == DamageType::OUT_OF_WORLD;
+            let bypasses_cooldown =
+                damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
 
             let last_damage = self.last_damage_taken.load();
             let play_sound;
-            let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10
-                && !bypasses_cooldown
-            {
+            let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown {
                 if amount <= last_damage {
                     return false;
                 }
