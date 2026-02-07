@@ -665,9 +665,8 @@ impl PluginManager {
     /// 1. All handlers sorted by priority: Highest -> High -> Normal -> Low -> Lowest -> Monitor
     /// 2. Blocking handlers execute sequentially; non-blocking handlers run concurrently
     ///
-    /// Note: `ignore_cancelled` metadata is stored on handlers for future use.
-    /// Full Bukkit-compatible cancellation skipping requires the Architect to update
-    /// pumpkin-macros `#[derive(Event)]` to generate `is_cancelled()` on Payload.
+    /// Note: `ignore_cancelled` metadata is stored on handlers.
+    /// `Payload::is_cancelled()` is available — implement filtering in a follow-up.
     pub async fn fire<E: Payload + Send + Sync + 'static>(&self, mut event: E) -> E {
         if let Some(server) = self.server.read().await.as_ref() {
             let handlers = self.handlers.read().await;
