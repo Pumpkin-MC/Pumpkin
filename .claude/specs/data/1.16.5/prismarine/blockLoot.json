@@ -1,0 +1,10058 @@
+[
+  {
+    "block": "acacia_button",
+    "drops": [
+      {
+        "item": "acacia_button",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_door",
+    "drops": [
+      {
+        "item": "acacia_door",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_fence",
+    "drops": [
+      {
+        "item": "acacia_fence",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_fence_gate",
+    "drops": [
+      {
+        "item": "acacia_fence_gate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_leaves",
+    "drops": [
+      {
+        "item": "acacia_leaves",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "acacia_sapling",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "stick",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_log",
+    "drops": [
+      {
+        "item": "acacia_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_planks",
+    "drops": [
+      {
+        "item": "acacia_planks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_pressure_plate",
+    "drops": [
+      {
+        "item": "acacia_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_sapling",
+    "drops": [
+      {
+        "item": "acacia_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_sign",
+    "drops": [
+      {
+        "item": "acacia_sign",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_slab",
+    "drops": [
+      {
+        "item": "acacia_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_stairs",
+    "drops": [
+      {
+        "item": "acacia_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_trapdoor",
+    "drops": [
+      {
+        "item": "acacia_trapdoor",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "acacia_wood",
+    "drops": [
+      {
+        "item": "acacia_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "activator_rail",
+    "drops": [
+      {
+        "item": "activator_rail",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "allium",
+    "drops": [
+      {
+        "item": "allium",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "ancient_debris",
+    "drops": [
+      {
+        "item": "ancient_debris",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "andesite",
+    "drops": [
+      {
+        "item": "andesite",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "andesite_slab",
+    "drops": [
+      {
+        "item": "andesite_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "andesite_stairs",
+    "drops": [
+      {
+        "item": "andesite_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "andesite_wall",
+    "drops": [
+      {
+        "item": "andesite_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "anvil",
+    "drops": [
+      {
+        "item": "anvil",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "attached_melon_stem",
+    "drops": [
+      {
+        "item": "melon_seeds",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "attached_pumpkin_stem",
+    "drops": [
+      {
+        "item": "pumpkin_seeds",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "azure_bluet",
+    "drops": [
+      {
+        "item": "azure_bluet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "bamboo",
+    "drops": [
+      {
+        "item": "bamboo",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "bamboo_sapling",
+    "drops": [
+      {
+        "item": "bamboo",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "barrel",
+    "drops": [
+      {
+        "item": "barrel",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "basalt",
+    "drops": [
+      {
+        "item": "basalt",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "beacon",
+    "drops": [
+      {
+        "item": "beacon",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "bee_nest",
+    "drops": [
+      {
+        "item": "bee_nest",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "beehive",
+    "drops": [
+      {
+        "item": "beehive",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "beehive",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "beetroots",
+    "drops": [
+      {
+        "item": "beetroot",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "blockAge": 3
+      },
+      {
+        "item": "beetroot_seeds",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "beetroot_seeds",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          4
+        ],
+        "blockAge": 3
+      }
+    ]
+  },
+  {
+    "block": "bell",
+    "drops": [
+      {
+        "item": "bell",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_button",
+    "drops": [
+      {
+        "item": "birch_button",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_door",
+    "drops": [
+      {
+        "item": "birch_door",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_fence",
+    "drops": [
+      {
+        "item": "birch_fence",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_fence_gate",
+    "drops": [
+      {
+        "item": "birch_fence_gate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_leaves",
+    "drops": [
+      {
+        "item": "birch_leaves",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "birch_sapling",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "stick",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_log",
+    "drops": [
+      {
+        "item": "birch_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_planks",
+    "drops": [
+      {
+        "item": "birch_planks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_pressure_plate",
+    "drops": [
+      {
+        "item": "birch_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_sapling",
+    "drops": [
+      {
+        "item": "birch_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_sign",
+    "drops": [
+      {
+        "item": "birch_sign",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_slab",
+    "drops": [
+      {
+        "item": "birch_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_stairs",
+    "drops": [
+      {
+        "item": "birch_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_trapdoor",
+    "drops": [
+      {
+        "item": "birch_trapdoor",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "birch_wood",
+    "drops": [
+      {
+        "item": "birch_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "black_banner",
+    "drops": [
+      {
+        "item": "black_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "black_bed",
+    "drops": [
+      {
+        "item": "black_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "black_carpet",
+    "drops": [
+      {
+        "item": "black_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "black_concrete",
+    "drops": [
+      {
+        "item": "black_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "black_concrete_powder",
+    "drops": [
+      {
+        "item": "black_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "black_glazed_terracotta",
+    "drops": [
+      {
+        "item": "black_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "black_shulker_box",
+    "drops": [
+      {
+        "item": "black_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "black_stained_glass",
+    "drops": [
+      {
+        "item": "black_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "black_stained_glass_pane",
+    "drops": [
+      {
+        "item": "black_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "black_terracotta",
+    "drops": [
+      {
+        "item": "black_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "black_wool",
+    "drops": [
+      {
+        "item": "black_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blackstone",
+    "drops": [
+      {
+        "item": "blackstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blackstone_slab",
+    "drops": [
+      {
+        "item": "blackstone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blackstone_stairs",
+    "drops": [
+      {
+        "item": "blackstone_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blackstone_wall",
+    "drops": [
+      {
+        "item": "blackstone_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blast_furnace",
+    "drops": [
+      {
+        "item": "blast_furnace",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blue_banner",
+    "drops": [
+      {
+        "item": "blue_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blue_bed",
+    "drops": [
+      {
+        "item": "blue_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blue_carpet",
+    "drops": [
+      {
+        "item": "blue_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blue_concrete",
+    "drops": [
+      {
+        "item": "blue_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blue_concrete_powder",
+    "drops": [
+      {
+        "item": "blue_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blue_glazed_terracotta",
+    "drops": [
+      {
+        "item": "blue_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blue_ice",
+    "drops": [
+      {
+        "item": "blue_ice",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "blue_orchid",
+    "drops": [
+      {
+        "item": "blue_orchid",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blue_shulker_box",
+    "drops": [
+      {
+        "item": "blue_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blue_stained_glass",
+    "drops": [
+      {
+        "item": "blue_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "blue_stained_glass_pane",
+    "drops": [
+      {
+        "item": "blue_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "blue_terracotta",
+    "drops": [
+      {
+        "item": "blue_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "blue_wool",
+    "drops": [
+      {
+        "item": "blue_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "bone_block",
+    "drops": [
+      {
+        "item": "bone_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "bookshelf",
+    "drops": [
+      {
+        "item": "bookshelf",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "book",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          3,
+          3
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "brain_coral",
+    "drops": [
+      {
+        "item": "brain_coral",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "brain_coral_block",
+    "drops": [
+      {
+        "item": "brain_coral_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "dead_brain_coral_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "brain_coral_fan",
+    "drops": [
+      {
+        "item": "brain_coral_fan",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "brewing_stand",
+    "drops": [
+      {
+        "item": "brewing_stand",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brick_slab",
+    "drops": [
+      {
+        "item": "brick_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brick_stairs",
+    "drops": [
+      {
+        "item": "brick_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brick_wall",
+    "drops": [
+      {
+        "item": "brick_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "bricks",
+    "drops": [
+      {
+        "item": "bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brown_banner",
+    "drops": [
+      {
+        "item": "brown_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brown_bed",
+    "drops": [
+      {
+        "item": "brown_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brown_carpet",
+    "drops": [
+      {
+        "item": "brown_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brown_concrete",
+    "drops": [
+      {
+        "item": "brown_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brown_concrete_powder",
+    "drops": [
+      {
+        "item": "brown_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brown_glazed_terracotta",
+    "drops": [
+      {
+        "item": "brown_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brown_mushroom",
+    "drops": [
+      {
+        "item": "brown_mushroom",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brown_mushroom_block",
+    "drops": [
+      {
+        "item": "brown_mushroom_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "brown_mushroom",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          0,
+          null
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "brown_shulker_box",
+    "drops": [
+      {
+        "item": "brown_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brown_stained_glass",
+    "drops": [
+      {
+        "item": "brown_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "brown_stained_glass_pane",
+    "drops": [
+      {
+        "item": "brown_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "brown_terracotta",
+    "drops": [
+      {
+        "item": "brown_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "brown_wool",
+    "drops": [
+      {
+        "item": "brown_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "bubble_coral",
+    "drops": [
+      {
+        "item": "bubble_coral",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "bubble_coral_block",
+    "drops": [
+      {
+        "item": "bubble_coral_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "dead_bubble_coral_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "bubble_coral_fan",
+    "drops": [
+      {
+        "item": "bubble_coral_fan",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "cactus",
+    "drops": [
+      {
+        "item": "cactus",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cake",
+    "drops": []
+  },
+  {
+    "block": "campfire",
+    "drops": [
+      {
+        "item": "campfire",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "charcoal",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          2,
+          2
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "carrots",
+    "drops": [
+      {
+        "item": "carrot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "carrot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          4
+        ],
+        "blockAge": 7
+      }
+    ]
+  },
+  {
+    "block": "cartography_table",
+    "drops": [
+      {
+        "item": "cartography_table",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "carved_pumpkin",
+    "drops": [
+      {
+        "item": "carved_pumpkin",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cauldron",
+    "drops": [
+      {
+        "item": "cauldron",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chain",
+    "drops": [
+      {
+        "item": "chain",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chest",
+    "drops": [
+      {
+        "item": "chest",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chipped_anvil",
+    "drops": [
+      {
+        "item": "chipped_anvil",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chiseled_nether_bricks",
+    "drops": [
+      {
+        "item": "chiseled_nether_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chiseled_polished_blackstone",
+    "drops": [
+      {
+        "item": "chiseled_polished_blackstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chiseled_quartz_block",
+    "drops": [
+      {
+        "item": "chiseled_quartz_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chiseled_red_sandstone",
+    "drops": [
+      {
+        "item": "chiseled_red_sandstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chiseled_sandstone",
+    "drops": [
+      {
+        "item": "chiseled_sandstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chiseled_stone_bricks",
+    "drops": [
+      {
+        "item": "chiseled_stone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chorus_flower",
+    "drops": [
+      {
+        "item": "chorus_flower",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "chorus_plant",
+    "drops": [
+      {
+        "item": "chorus_fruit",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "clay",
+    "drops": [
+      {
+        "item": "clay",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "clay_ball",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          4,
+          4
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "coal_block",
+    "drops": [
+      {
+        "item": "coal_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "coal_ore",
+    "drops": [
+      {
+        "item": "coal_ore",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "coal",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          2
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "coarse_dirt",
+    "drops": [
+      {
+        "item": "coarse_dirt",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cobblestone",
+    "drops": [
+      {
+        "item": "cobblestone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cobblestone_slab",
+    "drops": [
+      {
+        "item": "cobblestone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cobblestone_stairs",
+    "drops": [
+      {
+        "item": "cobblestone_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cobblestone_wall",
+    "drops": [
+      {
+        "item": "cobblestone_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cobweb",
+    "drops": [
+      {
+        "item": "cobweb",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "string",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cocoa",
+    "drops": [
+      {
+        "item": "cocoa_beans",
+        "dropChance": 1,
+        "stackSizeRange": [
+          3,
+          3
+        ]
+      }
+    ]
+  },
+  {
+    "block": "comparator",
+    "drops": [
+      {
+        "item": "comparator",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "composter",
+    "drops": [
+      {
+        "item": "composter",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "bone_meal",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "conduit",
+    "drops": [
+      {
+        "item": "conduit",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cornflower",
+    "drops": [
+      {
+        "item": "cornflower",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cracked_nether_bricks",
+    "drops": [
+      {
+        "item": "cracked_nether_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cracked_polished_blackstone_bricks",
+    "drops": [
+      {
+        "item": "cracked_polished_blackstone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cracked_stone_bricks",
+    "drops": [
+      {
+        "item": "cracked_stone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crafting_table",
+    "drops": [
+      {
+        "item": "crafting_table",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "creeper_head",
+    "drops": [
+      {
+        "item": "creeper_head",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_button",
+    "drops": [
+      {
+        "item": "crimson_button",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_door",
+    "drops": [
+      {
+        "item": "crimson_door",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_fence",
+    "drops": [
+      {
+        "item": "crimson_fence",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_fence_gate",
+    "drops": [
+      {
+        "item": "crimson_fence_gate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_fungus",
+    "drops": [
+      {
+        "item": "crimson_fungus",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_hyphae",
+    "drops": [
+      {
+        "item": "crimson_hyphae",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_nylium",
+    "drops": [
+      {
+        "item": "crimson_nylium",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "netherrack",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "crimson_planks",
+    "drops": [
+      {
+        "item": "crimson_planks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_pressure_plate",
+    "drops": [
+      {
+        "item": "crimson_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_roots",
+    "drops": [
+      {
+        "item": "crimson_roots",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_sign",
+    "drops": [
+      {
+        "item": "crimson_sign",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_slab",
+    "drops": [
+      {
+        "item": "crimson_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_stairs",
+    "drops": [
+      {
+        "item": "crimson_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_stem",
+    "drops": [
+      {
+        "item": "crimson_stem",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crimson_trapdoor",
+    "drops": [
+      {
+        "item": "crimson_trapdoor",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "crying_obsidian",
+    "drops": [
+      {
+        "item": "crying_obsidian",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cut_red_sandstone",
+    "drops": [
+      {
+        "item": "cut_red_sandstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cut_red_sandstone_slab",
+    "drops": [
+      {
+        "item": "cut_red_sandstone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cut_sandstone",
+    "drops": [
+      {
+        "item": "cut_sandstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cut_sandstone_slab",
+    "drops": [
+      {
+        "item": "cut_sandstone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cyan_banner",
+    "drops": [
+      {
+        "item": "cyan_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cyan_bed",
+    "drops": [
+      {
+        "item": "cyan_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cyan_carpet",
+    "drops": [
+      {
+        "item": "cyan_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cyan_concrete",
+    "drops": [
+      {
+        "item": "cyan_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cyan_concrete_powder",
+    "drops": [
+      {
+        "item": "cyan_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cyan_glazed_terracotta",
+    "drops": [
+      {
+        "item": "cyan_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cyan_shulker_box",
+    "drops": [
+      {
+        "item": "cyan_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cyan_stained_glass",
+    "drops": [
+      {
+        "item": "cyan_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "cyan_stained_glass_pane",
+    "drops": [
+      {
+        "item": "cyan_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "cyan_terracotta",
+    "drops": [
+      {
+        "item": "cyan_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "cyan_wool",
+    "drops": [
+      {
+        "item": "cyan_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "damaged_anvil",
+    "drops": [
+      {
+        "item": "damaged_anvil",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dandelion",
+    "drops": [
+      {
+        "item": "dandelion",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_button",
+    "drops": [
+      {
+        "item": "dark_oak_button",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_door",
+    "drops": [
+      {
+        "item": "dark_oak_door",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_fence",
+    "drops": [
+      {
+        "item": "dark_oak_fence",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_fence_gate",
+    "drops": [
+      {
+        "item": "dark_oak_fence_gate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_leaves",
+    "drops": [
+      {
+        "item": "dark_oak_leaves",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "dark_oak_sapling",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "stick",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "apple",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_log",
+    "drops": [
+      {
+        "item": "dark_oak_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_planks",
+    "drops": [
+      {
+        "item": "dark_oak_planks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_pressure_plate",
+    "drops": [
+      {
+        "item": "dark_oak_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_sapling",
+    "drops": [
+      {
+        "item": "dark_oak_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_sign",
+    "drops": [
+      {
+        "item": "dark_oak_sign",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_slab",
+    "drops": [
+      {
+        "item": "dark_oak_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_stairs",
+    "drops": [
+      {
+        "item": "dark_oak_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_trapdoor",
+    "drops": [
+      {
+        "item": "dark_oak_trapdoor",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_oak_wood",
+    "drops": [
+      {
+        "item": "dark_oak_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_prismarine",
+    "drops": [
+      {
+        "item": "dark_prismarine",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_prismarine_slab",
+    "drops": [
+      {
+        "item": "dark_prismarine_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dark_prismarine_stairs",
+    "drops": [
+      {
+        "item": "dark_prismarine_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "daylight_detector",
+    "drops": [
+      {
+        "item": "daylight_detector",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dead_brain_coral",
+    "drops": [
+      {
+        "item": "dead_brain_coral",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "dead_brain_coral_block",
+    "drops": [
+      {
+        "item": "dead_brain_coral_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dead_brain_coral_fan",
+    "drops": [
+      {
+        "item": "dead_brain_coral_fan",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "dead_bubble_coral",
+    "drops": [
+      {
+        "item": "dead_bubble_coral",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "dead_bubble_coral_block",
+    "drops": [
+      {
+        "item": "dead_bubble_coral_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dead_bubble_coral_fan",
+    "drops": [
+      {
+        "item": "dead_bubble_coral_fan",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "dead_bush",
+    "drops": [
+      {
+        "item": "dead_bush",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "stick",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dead_fire_coral",
+    "drops": [
+      {
+        "item": "dead_fire_coral",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "dead_fire_coral_block",
+    "drops": [
+      {
+        "item": "dead_fire_coral_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dead_fire_coral_fan",
+    "drops": [
+      {
+        "item": "dead_fire_coral_fan",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "dead_horn_coral",
+    "drops": [
+      {
+        "item": "dead_horn_coral",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "dead_horn_coral_block",
+    "drops": [
+      {
+        "item": "dead_horn_coral_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dead_horn_coral_fan",
+    "drops": [
+      {
+        "item": "dead_horn_coral_fan",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "dead_tube_coral",
+    "drops": [
+      {
+        "item": "dead_tube_coral",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "dead_tube_coral_block",
+    "drops": [
+      {
+        "item": "dead_tube_coral_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dead_tube_coral_fan",
+    "drops": [
+      {
+        "item": "dead_tube_coral_fan",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "detector_rail",
+    "drops": [
+      {
+        "item": "detector_rail",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "diamond_block",
+    "drops": [
+      {
+        "item": "diamond_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "diamond_ore",
+    "drops": [
+      {
+        "item": "diamond_ore",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "diamond",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          2
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "diorite",
+    "drops": [
+      {
+        "item": "diorite",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "diorite_slab",
+    "drops": [
+      {
+        "item": "diorite_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "diorite_stairs",
+    "drops": [
+      {
+        "item": "diorite_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "diorite_wall",
+    "drops": [
+      {
+        "item": "diorite_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dirt",
+    "drops": [
+      {
+        "item": "dirt",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dispenser",
+    "drops": [
+      {
+        "item": "dispenser",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dragon_egg",
+    "drops": [
+      {
+        "item": "dragon_egg",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dragon_head",
+    "drops": [
+      {
+        "item": "dragon_head",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dried_kelp_block",
+    "drops": [
+      {
+        "item": "dried_kelp_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "dropper",
+    "drops": [
+      {
+        "item": "dropper",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "emerald_block",
+    "drops": [
+      {
+        "item": "emerald_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "emerald_ore",
+    "drops": [
+      {
+        "item": "emerald_ore",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "emerald",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          2
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "enchanting_table",
+    "drops": [
+      {
+        "item": "enchanting_table",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "end_rod",
+    "drops": [
+      {
+        "item": "end_rod",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "end_stone",
+    "drops": [
+      {
+        "item": "end_stone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "end_stone_brick_slab",
+    "drops": [
+      {
+        "item": "end_stone_brick_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "end_stone_brick_stairs",
+    "drops": [
+      {
+        "item": "end_stone_brick_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "end_stone_brick_wall",
+    "drops": [
+      {
+        "item": "end_stone_brick_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "end_stone_bricks",
+    "drops": [
+      {
+        "item": "end_stone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "ender_chest",
+    "drops": [
+      {
+        "item": "ender_chest",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "obsidian",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          8,
+          8
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "farmland",
+    "drops": [
+      {
+        "item": "dirt",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "fern",
+    "drops": [
+      {
+        "item": "fern",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "wheat_seeds",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "fire",
+    "drops": []
+  },
+  {
+    "block": "fire_coral",
+    "drops": [
+      {
+        "item": "fire_coral",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "fire_coral_block",
+    "drops": [
+      {
+        "item": "fire_coral_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "dead_fire_coral_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "fire_coral_fan",
+    "drops": [
+      {
+        "item": "fire_coral_fan",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "fletching_table",
+    "drops": [
+      {
+        "item": "fletching_table",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "flower_pot",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "frosted_ice",
+    "drops": []
+  },
+  {
+    "block": "furnace",
+    "drops": [
+      {
+        "item": "furnace",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gilded_blackstone",
+    "drops": [
+      {
+        "item": "gilded_blackstone",
+        "dropChance": 0.3333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "gold_nugget",
+        "dropChance": 0.3333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      },
+      {
+        "item": "gilded_blackstone",
+        "dropChance": 0.3333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "glass",
+    "drops": [
+      {
+        "item": "glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "glass_pane",
+    "drops": [
+      {
+        "item": "glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "glowstone",
+    "drops": [
+      {
+        "item": "glowstone",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "glowstone_dust",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "gold_block",
+    "drops": [
+      {
+        "item": "gold_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gold_ore",
+    "drops": [
+      {
+        "item": "gold_ore",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "granite",
+    "drops": [
+      {
+        "item": "granite",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "granite_slab",
+    "drops": [
+      {
+        "item": "granite_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "granite_stairs",
+    "drops": [
+      {
+        "item": "granite_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "granite_wall",
+    "drops": [
+      {
+        "item": "granite_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "grass",
+    "drops": [
+      {
+        "item": "grass",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "wheat_seeds",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "grass_block",
+    "drops": [
+      {
+        "item": "grass_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "dirt",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "grass_path",
+    "drops": [
+      {
+        "item": "dirt",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gravel",
+    "drops": [
+      {
+        "item": "gravel",
+        "dropChance": 0.3333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "flint",
+        "dropChance": 0.3333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      },
+      {
+        "item": "gravel",
+        "dropChance": 0.3333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "gray_banner",
+    "drops": [
+      {
+        "item": "gray_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gray_bed",
+    "drops": [
+      {
+        "item": "gray_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gray_carpet",
+    "drops": [
+      {
+        "item": "gray_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gray_concrete",
+    "drops": [
+      {
+        "item": "gray_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gray_concrete_powder",
+    "drops": [
+      {
+        "item": "gray_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gray_glazed_terracotta",
+    "drops": [
+      {
+        "item": "gray_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gray_shulker_box",
+    "drops": [
+      {
+        "item": "gray_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gray_stained_glass",
+    "drops": [
+      {
+        "item": "gray_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "gray_stained_glass_pane",
+    "drops": [
+      {
+        "item": "gray_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "gray_terracotta",
+    "drops": [
+      {
+        "item": "gray_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "gray_wool",
+    "drops": [
+      {
+        "item": "gray_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "green_banner",
+    "drops": [
+      {
+        "item": "green_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "green_bed",
+    "drops": [
+      {
+        "item": "green_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "green_carpet",
+    "drops": [
+      {
+        "item": "green_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "green_concrete",
+    "drops": [
+      {
+        "item": "green_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "green_concrete_powder",
+    "drops": [
+      {
+        "item": "green_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "green_glazed_terracotta",
+    "drops": [
+      {
+        "item": "green_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "green_shulker_box",
+    "drops": [
+      {
+        "item": "green_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "green_stained_glass",
+    "drops": [
+      {
+        "item": "green_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "green_stained_glass_pane",
+    "drops": [
+      {
+        "item": "green_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "green_terracotta",
+    "drops": [
+      {
+        "item": "green_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "green_wool",
+    "drops": [
+      {
+        "item": "green_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "grindstone",
+    "drops": [
+      {
+        "item": "grindstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "hay_block",
+    "drops": [
+      {
+        "item": "hay_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "heavy_weighted_pressure_plate",
+    "drops": [
+      {
+        "item": "heavy_weighted_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "honey_block",
+    "drops": [
+      {
+        "item": "honey_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "honeycomb_block",
+    "drops": [
+      {
+        "item": "honeycomb_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "hopper",
+    "drops": [
+      {
+        "item": "hopper",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "horn_coral",
+    "drops": [
+      {
+        "item": "horn_coral",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "horn_coral_block",
+    "drops": [
+      {
+        "item": "horn_coral_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "dead_horn_coral_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "horn_coral_fan",
+    "drops": [
+      {
+        "item": "horn_coral_fan",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "ice",
+    "drops": [
+      {
+        "item": "ice",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "infested_chiseled_stone_bricks",
+    "drops": [
+      {
+        "item": "chiseled_stone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "infested_cobblestone",
+    "drops": [
+      {
+        "item": "cobblestone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "infested_cracked_stone_bricks",
+    "drops": [
+      {
+        "item": "cracked_stone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "infested_mossy_stone_bricks",
+    "drops": [
+      {
+        "item": "mossy_stone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "infested_stone",
+    "drops": [
+      {
+        "item": "stone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "infested_stone_bricks",
+    "drops": [
+      {
+        "item": "stone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "iron_bars",
+    "drops": [
+      {
+        "item": "iron_bars",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "iron_block",
+    "drops": [
+      {
+        "item": "iron_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "iron_door",
+    "drops": [
+      {
+        "item": "iron_door",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "iron_ore",
+    "drops": [
+      {
+        "item": "iron_ore",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "iron_trapdoor",
+    "drops": [
+      {
+        "item": "iron_trapdoor",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jack_o_lantern",
+    "drops": [
+      {
+        "item": "jack_o_lantern",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jukebox",
+    "drops": [
+      {
+        "item": "jukebox",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_button",
+    "drops": [
+      {
+        "item": "jungle_button",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_door",
+    "drops": [
+      {
+        "item": "jungle_door",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_fence",
+    "drops": [
+      {
+        "item": "jungle_fence",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_fence_gate",
+    "drops": [
+      {
+        "item": "jungle_fence_gate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_leaves",
+    "drops": [
+      {
+        "item": "jungle_leaves",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "jungle_sapling",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "stick",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_log",
+    "drops": [
+      {
+        "item": "jungle_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_planks",
+    "drops": [
+      {
+        "item": "jungle_planks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_pressure_plate",
+    "drops": [
+      {
+        "item": "jungle_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_sapling",
+    "drops": [
+      {
+        "item": "jungle_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_sign",
+    "drops": [
+      {
+        "item": "jungle_sign",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_slab",
+    "drops": [
+      {
+        "item": "jungle_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_stairs",
+    "drops": [
+      {
+        "item": "jungle_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_trapdoor",
+    "drops": [
+      {
+        "item": "jungle_trapdoor",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "jungle_wood",
+    "drops": [
+      {
+        "item": "jungle_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "kelp",
+    "drops": [
+      {
+        "item": "kelp",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "kelp_plant",
+    "drops": [
+      {
+        "item": "kelp",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "ladder",
+    "drops": [
+      {
+        "item": "ladder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lantern",
+    "drops": [
+      {
+        "item": "lantern",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lapis_block",
+    "drops": [
+      {
+        "item": "lapis_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lapis_ore",
+    "drops": [
+      {
+        "item": "lapis_ore",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "lapis_lazuli",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          2
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "large_fern",
+    "drops": [
+      {
+        "item": "fern",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      },
+      {
+        "item": "wheat_seeds",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lectern",
+    "drops": [
+      {
+        "item": "lectern",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lever",
+    "drops": [
+      {
+        "item": "lever",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_blue_banner",
+    "drops": [
+      {
+        "item": "light_blue_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_blue_bed",
+    "drops": [
+      {
+        "item": "light_blue_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_blue_carpet",
+    "drops": [
+      {
+        "item": "light_blue_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_blue_concrete",
+    "drops": [
+      {
+        "item": "light_blue_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_blue_concrete_powder",
+    "drops": [
+      {
+        "item": "light_blue_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_blue_glazed_terracotta",
+    "drops": [
+      {
+        "item": "light_blue_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_blue_shulker_box",
+    "drops": [
+      {
+        "item": "light_blue_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_blue_stained_glass",
+    "drops": [
+      {
+        "item": "light_blue_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "light_blue_stained_glass_pane",
+    "drops": [
+      {
+        "item": "light_blue_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "light_blue_terracotta",
+    "drops": [
+      {
+        "item": "light_blue_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_blue_wool",
+    "drops": [
+      {
+        "item": "light_blue_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_gray_banner",
+    "drops": [
+      {
+        "item": "light_gray_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_gray_bed",
+    "drops": [
+      {
+        "item": "light_gray_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_gray_carpet",
+    "drops": [
+      {
+        "item": "light_gray_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_gray_concrete",
+    "drops": [
+      {
+        "item": "light_gray_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_gray_concrete_powder",
+    "drops": [
+      {
+        "item": "light_gray_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_gray_glazed_terracotta",
+    "drops": [
+      {
+        "item": "light_gray_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_gray_shulker_box",
+    "drops": [
+      {
+        "item": "light_gray_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_gray_stained_glass",
+    "drops": [
+      {
+        "item": "light_gray_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "light_gray_stained_glass_pane",
+    "drops": [
+      {
+        "item": "light_gray_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "light_gray_terracotta",
+    "drops": [
+      {
+        "item": "light_gray_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_gray_wool",
+    "drops": [
+      {
+        "item": "light_gray_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "light_weighted_pressure_plate",
+    "drops": [
+      {
+        "item": "light_weighted_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lilac",
+    "drops": [
+      {
+        "item": "lilac",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lily_of_the_valley",
+    "drops": [
+      {
+        "item": "lily_of_the_valley",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lily_pad",
+    "drops": [
+      {
+        "item": "lily_pad",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lime_banner",
+    "drops": [
+      {
+        "item": "lime_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lime_bed",
+    "drops": [
+      {
+        "item": "lime_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lime_carpet",
+    "drops": [
+      {
+        "item": "lime_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lime_concrete",
+    "drops": [
+      {
+        "item": "lime_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lime_concrete_powder",
+    "drops": [
+      {
+        "item": "lime_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lime_glazed_terracotta",
+    "drops": [
+      {
+        "item": "lime_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lime_shulker_box",
+    "drops": [
+      {
+        "item": "lime_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lime_stained_glass",
+    "drops": [
+      {
+        "item": "lime_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "lime_stained_glass_pane",
+    "drops": [
+      {
+        "item": "lime_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "lime_terracotta",
+    "drops": [
+      {
+        "item": "lime_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lime_wool",
+    "drops": [
+      {
+        "item": "lime_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "lodestone",
+    "drops": [
+      {
+        "item": "lodestone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "loom",
+    "drops": [
+      {
+        "item": "loom",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "magenta_banner",
+    "drops": [
+      {
+        "item": "magenta_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "magenta_bed",
+    "drops": [
+      {
+        "item": "magenta_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "magenta_carpet",
+    "drops": [
+      {
+        "item": "magenta_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "magenta_concrete",
+    "drops": [
+      {
+        "item": "magenta_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "magenta_concrete_powder",
+    "drops": [
+      {
+        "item": "magenta_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "magenta_glazed_terracotta",
+    "drops": [
+      {
+        "item": "magenta_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "magenta_shulker_box",
+    "drops": [
+      {
+        "item": "magenta_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "magenta_stained_glass",
+    "drops": [
+      {
+        "item": "magenta_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "magenta_stained_glass_pane",
+    "drops": [
+      {
+        "item": "magenta_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "magenta_terracotta",
+    "drops": [
+      {
+        "item": "magenta_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "magenta_wool",
+    "drops": [
+      {
+        "item": "magenta_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "magma_block",
+    "drops": [
+      {
+        "item": "magma_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "melon",
+    "drops": [
+      {
+        "item": "melon",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "melon_slice",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          null,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "melon_stem",
+    "drops": [
+      {
+        "item": "melon_seeds",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "mossy_cobblestone",
+    "drops": [
+      {
+        "item": "mossy_cobblestone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "mossy_cobblestone_slab",
+    "drops": [
+      {
+        "item": "mossy_cobblestone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "mossy_cobblestone_stairs",
+    "drops": [
+      {
+        "item": "mossy_cobblestone_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "mossy_cobblestone_wall",
+    "drops": [
+      {
+        "item": "mossy_cobblestone_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "mossy_stone_brick_slab",
+    "drops": [
+      {
+        "item": "mossy_stone_brick_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "mossy_stone_brick_stairs",
+    "drops": [
+      {
+        "item": "mossy_stone_brick_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "mossy_stone_brick_wall",
+    "drops": [
+      {
+        "item": "mossy_stone_brick_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "mossy_stone_bricks",
+    "drops": [
+      {
+        "item": "mossy_stone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "mushroom_stem",
+    "drops": [
+      {
+        "item": "mushroom_stem",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "mycelium",
+    "drops": [
+      {
+        "item": "mycelium",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "dirt",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "nether_brick_fence",
+    "drops": [
+      {
+        "item": "nether_brick_fence",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "nether_brick_slab",
+    "drops": [
+      {
+        "item": "nether_brick_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "nether_brick_stairs",
+    "drops": [
+      {
+        "item": "nether_brick_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "nether_brick_wall",
+    "drops": [
+      {
+        "item": "nether_brick_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "nether_bricks",
+    "drops": [
+      {
+        "item": "nether_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "nether_gold_ore",
+    "drops": [
+      {
+        "item": "nether_gold_ore",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "gold_nugget",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          2
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "nether_portal",
+    "drops": []
+  },
+  {
+    "block": "nether_quartz_ore",
+    "drops": [
+      {
+        "item": "nether_quartz_ore",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "quartz",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          2
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "nether_sprouts",
+    "drops": [
+      {
+        "item": "nether_sprouts",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "nether_wart",
+    "drops": [
+      {
+        "item": "nether_wart",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "nether_wart_block",
+    "drops": [
+      {
+        "item": "nether_wart_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "netherite_block",
+    "drops": [
+      {
+        "item": "netherite_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "netherrack",
+    "drops": [
+      {
+        "item": "netherrack",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "note_block",
+    "drops": [
+      {
+        "item": "note_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_button",
+    "drops": [
+      {
+        "item": "oak_button",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_door",
+    "drops": [
+      {
+        "item": "oak_door",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_fence",
+    "drops": [
+      {
+        "item": "oak_fence",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_fence_gate",
+    "drops": [
+      {
+        "item": "oak_fence_gate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_leaves",
+    "drops": [
+      {
+        "item": "oak_leaves",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "oak_sapling",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "stick",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "apple",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_log",
+    "drops": [
+      {
+        "item": "oak_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_planks",
+    "drops": [
+      {
+        "item": "oak_planks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_pressure_plate",
+    "drops": [
+      {
+        "item": "oak_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_sapling",
+    "drops": [
+      {
+        "item": "oak_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_sign",
+    "drops": [
+      {
+        "item": "oak_sign",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_slab",
+    "drops": [
+      {
+        "item": "oak_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_stairs",
+    "drops": [
+      {
+        "item": "oak_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_trapdoor",
+    "drops": [
+      {
+        "item": "oak_trapdoor",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oak_wood",
+    "drops": [
+      {
+        "item": "oak_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "observer",
+    "drops": [
+      {
+        "item": "observer",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "obsidian",
+    "drops": [
+      {
+        "item": "obsidian",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "orange_banner",
+    "drops": [
+      {
+        "item": "orange_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "orange_bed",
+    "drops": [
+      {
+        "item": "orange_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "orange_carpet",
+    "drops": [
+      {
+        "item": "orange_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "orange_concrete",
+    "drops": [
+      {
+        "item": "orange_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "orange_concrete_powder",
+    "drops": [
+      {
+        "item": "orange_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "orange_glazed_terracotta",
+    "drops": [
+      {
+        "item": "orange_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "orange_shulker_box",
+    "drops": [
+      {
+        "item": "orange_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "orange_stained_glass",
+    "drops": [
+      {
+        "item": "orange_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "orange_stained_glass_pane",
+    "drops": [
+      {
+        "item": "orange_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "orange_terracotta",
+    "drops": [
+      {
+        "item": "orange_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "orange_tulip",
+    "drops": [
+      {
+        "item": "orange_tulip",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "orange_wool",
+    "drops": [
+      {
+        "item": "orange_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "oxeye_daisy",
+    "drops": [
+      {
+        "item": "oxeye_daisy",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "packed_ice",
+    "drops": [
+      {
+        "item": "packed_ice",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "peony",
+    "drops": [
+      {
+        "item": "peony",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "petrified_oak_slab",
+    "drops": [
+      {
+        "item": "petrified_oak_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pink_banner",
+    "drops": [
+      {
+        "item": "pink_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pink_bed",
+    "drops": [
+      {
+        "item": "pink_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pink_carpet",
+    "drops": [
+      {
+        "item": "pink_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pink_concrete",
+    "drops": [
+      {
+        "item": "pink_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pink_concrete_powder",
+    "drops": [
+      {
+        "item": "pink_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pink_glazed_terracotta",
+    "drops": [
+      {
+        "item": "pink_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pink_shulker_box",
+    "drops": [
+      {
+        "item": "pink_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pink_stained_glass",
+    "drops": [
+      {
+        "item": "pink_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "pink_stained_glass_pane",
+    "drops": [
+      {
+        "item": "pink_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "pink_terracotta",
+    "drops": [
+      {
+        "item": "pink_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pink_tulip",
+    "drops": [
+      {
+        "item": "pink_tulip",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pink_wool",
+    "drops": [
+      {
+        "item": "pink_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "piston",
+    "drops": [
+      {
+        "item": "piston",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "player_head",
+    "drops": [
+      {
+        "item": "player_head",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "podzol",
+    "drops": [
+      {
+        "item": "podzol",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "dirt",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "polished_andesite",
+    "drops": [
+      {
+        "item": "polished_andesite",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_andesite_slab",
+    "drops": [
+      {
+        "item": "polished_andesite_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_andesite_stairs",
+    "drops": [
+      {
+        "item": "polished_andesite_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_basalt",
+    "drops": [
+      {
+        "item": "polished_basalt",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_blackstone",
+    "drops": [
+      {
+        "item": "polished_blackstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_blackstone_brick_slab",
+    "drops": [
+      {
+        "item": "polished_blackstone_brick_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_blackstone_brick_stairs",
+    "drops": [
+      {
+        "item": "polished_blackstone_brick_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_blackstone_brick_wall",
+    "drops": [
+      {
+        "item": "polished_blackstone_brick_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_blackstone_bricks",
+    "drops": [
+      {
+        "item": "polished_blackstone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_blackstone_button",
+    "drops": [
+      {
+        "item": "polished_blackstone_button",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_blackstone_pressure_plate",
+    "drops": [
+      {
+        "item": "polished_blackstone_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_blackstone_slab",
+    "drops": [
+      {
+        "item": "polished_blackstone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_blackstone_stairs",
+    "drops": [
+      {
+        "item": "polished_blackstone_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_blackstone_wall",
+    "drops": [
+      {
+        "item": "polished_blackstone_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_diorite",
+    "drops": [
+      {
+        "item": "polished_diorite",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_diorite_slab",
+    "drops": [
+      {
+        "item": "polished_diorite_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_diorite_stairs",
+    "drops": [
+      {
+        "item": "polished_diorite_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_granite",
+    "drops": [
+      {
+        "item": "polished_granite",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_granite_slab",
+    "drops": [
+      {
+        "item": "polished_granite_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "polished_granite_stairs",
+    "drops": [
+      {
+        "item": "polished_granite_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "poppy",
+    "drops": [
+      {
+        "item": "poppy",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potatoes",
+    "drops": [
+      {
+        "item": "potato",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "potato",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          4
+        ],
+        "blockAge": 7
+      },
+      {
+        "item": "poisonous_potato",
+        "dropChance": 0.02,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "blockAge": 7
+      }
+    ]
+  },
+  {
+    "block": "potted_acacia_sapling",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "acacia_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_allium",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "allium",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_azure_bluet",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "azure_bluet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_bamboo",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "bamboo",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_birch_sapling",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "birch_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_blue_orchid",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "blue_orchid",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_brown_mushroom",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "brown_mushroom",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_cactus",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "cactus",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_cornflower",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "cornflower",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_crimson_fungus",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "crimson_fungus",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_crimson_roots",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "crimson_roots",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_dandelion",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "dandelion",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_dark_oak_sapling",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "dark_oak_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_dead_bush",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "dead_bush",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_fern",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "fern",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_jungle_sapling",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "jungle_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_lily_of_the_valley",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "lily_of_the_valley",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_oak_sapling",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "oak_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_orange_tulip",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "orange_tulip",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_oxeye_daisy",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "oxeye_daisy",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_pink_tulip",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "pink_tulip",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_poppy",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "poppy",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_red_mushroom",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "red_mushroom",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_red_tulip",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "red_tulip",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_spruce_sapling",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "spruce_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_warped_fungus",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "warped_fungus",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_warped_roots",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "warped_roots",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_white_tulip",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "white_tulip",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "potted_wither_rose",
+    "drops": [
+      {
+        "item": "flower_pot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "wither_rose",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "powered_rail",
+    "drops": [
+      {
+        "item": "powered_rail",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "prismarine",
+    "drops": [
+      {
+        "item": "prismarine",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "prismarine_brick_slab",
+    "drops": [
+      {
+        "item": "prismarine_brick_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "prismarine_brick_stairs",
+    "drops": [
+      {
+        "item": "prismarine_brick_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "prismarine_bricks",
+    "drops": [
+      {
+        "item": "prismarine_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "prismarine_slab",
+    "drops": [
+      {
+        "item": "prismarine_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "prismarine_stairs",
+    "drops": [
+      {
+        "item": "prismarine_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "prismarine_wall",
+    "drops": [
+      {
+        "item": "prismarine_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pumpkin",
+    "drops": [
+      {
+        "item": "pumpkin",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "pumpkin_stem",
+    "drops": [
+      {
+        "item": "pumpkin_seeds",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purple_banner",
+    "drops": [
+      {
+        "item": "purple_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purple_bed",
+    "drops": [
+      {
+        "item": "purple_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purple_carpet",
+    "drops": [
+      {
+        "item": "purple_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purple_concrete",
+    "drops": [
+      {
+        "item": "purple_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purple_concrete_powder",
+    "drops": [
+      {
+        "item": "purple_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purple_glazed_terracotta",
+    "drops": [
+      {
+        "item": "purple_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purple_shulker_box",
+    "drops": [
+      {
+        "item": "purple_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purple_stained_glass",
+    "drops": [
+      {
+        "item": "purple_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "purple_stained_glass_pane",
+    "drops": [
+      {
+        "item": "purple_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "purple_terracotta",
+    "drops": [
+      {
+        "item": "purple_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purple_wool",
+    "drops": [
+      {
+        "item": "purple_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purpur_block",
+    "drops": [
+      {
+        "item": "purpur_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purpur_pillar",
+    "drops": [
+      {
+        "item": "purpur_pillar",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purpur_slab",
+    "drops": [
+      {
+        "item": "purpur_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "purpur_stairs",
+    "drops": [
+      {
+        "item": "purpur_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "quartz_block",
+    "drops": [
+      {
+        "item": "quartz_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "quartz_bricks",
+    "drops": [
+      {
+        "item": "quartz_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "quartz_pillar",
+    "drops": [
+      {
+        "item": "quartz_pillar",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "quartz_slab",
+    "drops": [
+      {
+        "item": "quartz_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "quartz_stairs",
+    "drops": [
+      {
+        "item": "quartz_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "rail",
+    "drops": [
+      {
+        "item": "rail",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_banner",
+    "drops": [
+      {
+        "item": "red_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_bed",
+    "drops": [
+      {
+        "item": "red_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_carpet",
+    "drops": [
+      {
+        "item": "red_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_concrete",
+    "drops": [
+      {
+        "item": "red_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_concrete_powder",
+    "drops": [
+      {
+        "item": "red_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_glazed_terracotta",
+    "drops": [
+      {
+        "item": "red_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_mushroom",
+    "drops": [
+      {
+        "item": "red_mushroom",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_mushroom_block",
+    "drops": [
+      {
+        "item": "red_mushroom_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "red_mushroom",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          0,
+          null
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "red_nether_brick_slab",
+    "drops": [
+      {
+        "item": "red_nether_brick_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_nether_brick_stairs",
+    "drops": [
+      {
+        "item": "red_nether_brick_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_nether_brick_wall",
+    "drops": [
+      {
+        "item": "red_nether_brick_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_nether_bricks",
+    "drops": [
+      {
+        "item": "red_nether_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_sand",
+    "drops": [
+      {
+        "item": "red_sand",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_sandstone",
+    "drops": [
+      {
+        "item": "red_sandstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_sandstone_slab",
+    "drops": [
+      {
+        "item": "red_sandstone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_sandstone_stairs",
+    "drops": [
+      {
+        "item": "red_sandstone_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_sandstone_wall",
+    "drops": [
+      {
+        "item": "red_sandstone_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_shulker_box",
+    "drops": [
+      {
+        "item": "red_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_stained_glass",
+    "drops": [
+      {
+        "item": "red_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "red_stained_glass_pane",
+    "drops": [
+      {
+        "item": "red_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "red_terracotta",
+    "drops": [
+      {
+        "item": "red_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_tulip",
+    "drops": [
+      {
+        "item": "red_tulip",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "red_wool",
+    "drops": [
+      {
+        "item": "red_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "redstone_block",
+    "drops": [
+      {
+        "item": "redstone_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "redstone_lamp",
+    "drops": [
+      {
+        "item": "redstone_lamp",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "redstone_ore",
+    "drops": [
+      {
+        "item": "redstone_ore",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "redstone",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "redstone_torch",
+    "drops": [
+      {
+        "item": "redstone_torch",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "redstone_wire",
+    "drops": [
+      {
+        "item": "redstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "repeater",
+    "drops": [
+      {
+        "item": "repeater",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "respawn_anchor",
+    "drops": [
+      {
+        "item": "respawn_anchor",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "rose_bush",
+    "drops": [
+      {
+        "item": "rose_bush",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "sand",
+    "drops": [
+      {
+        "item": "sand",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "sandstone",
+    "drops": [
+      {
+        "item": "sandstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "sandstone_slab",
+    "drops": [
+      {
+        "item": "sandstone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "sandstone_stairs",
+    "drops": [
+      {
+        "item": "sandstone_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "sandstone_wall",
+    "drops": [
+      {
+        "item": "sandstone_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "scaffolding",
+    "drops": [
+      {
+        "item": "scaffolding",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "sea_lantern",
+    "drops": [
+      {
+        "item": "sea_lantern",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "prismarine_crystals",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "sea_pickle",
+    "drops": [
+      {
+        "item": "sea_pickle",
+        "dropChance": 1,
+        "stackSizeRange": [
+          4,
+          4
+        ]
+      }
+    ]
+  },
+  {
+    "block": "seagrass",
+    "drops": [
+      {
+        "item": "seagrass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "shroomlight",
+    "drops": [
+      {
+        "item": "shroomlight",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "shulker_box",
+    "drops": [
+      {
+        "item": "shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "skeleton_skull",
+    "drops": [
+      {
+        "item": "skeleton_skull",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "slime_block",
+    "drops": [
+      {
+        "item": "slime_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smithing_table",
+    "drops": [
+      {
+        "item": "smithing_table",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smoker",
+    "drops": [
+      {
+        "item": "smoker",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_quartz",
+    "drops": [
+      {
+        "item": "smooth_quartz",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_quartz_slab",
+    "drops": [
+      {
+        "item": "smooth_quartz_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_quartz_stairs",
+    "drops": [
+      {
+        "item": "smooth_quartz_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_red_sandstone",
+    "drops": [
+      {
+        "item": "smooth_red_sandstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_red_sandstone_slab",
+    "drops": [
+      {
+        "item": "smooth_red_sandstone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_red_sandstone_stairs",
+    "drops": [
+      {
+        "item": "smooth_red_sandstone_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_sandstone",
+    "drops": [
+      {
+        "item": "smooth_sandstone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_sandstone_slab",
+    "drops": [
+      {
+        "item": "smooth_sandstone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_sandstone_stairs",
+    "drops": [
+      {
+        "item": "smooth_sandstone_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_stone",
+    "drops": [
+      {
+        "item": "smooth_stone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "smooth_stone_slab",
+    "drops": [
+      {
+        "item": "smooth_stone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "snow",
+    "drops": [
+      {
+        "item": "snowball",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "snowball",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      },
+      {
+        "item": "snowball",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          3,
+          3
+        ]
+      },
+      {
+        "item": "snowball",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          4,
+          4
+        ]
+      },
+      {
+        "item": "snowball",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          5,
+          5
+        ]
+      },
+      {
+        "item": "snowball",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          6,
+          6
+        ]
+      },
+      {
+        "item": "snowball",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          7,
+          7
+        ]
+      },
+      {
+        "item": "snowball",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          8,
+          8
+        ]
+      },
+      {
+        "item": "snow",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "snow",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      },
+      {
+        "item": "snow",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          3,
+          3
+        ]
+      },
+      {
+        "item": "snow",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          4,
+          4
+        ]
+      },
+      {
+        "item": "snow",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          5,
+          5
+        ]
+      },
+      {
+        "item": "snow",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          6,
+          6
+        ]
+      },
+      {
+        "item": "snow",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          7,
+          7
+        ]
+      },
+      {
+        "item": "snow_block",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "snow_block",
+    "drops": [
+      {
+        "item": "snow_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "snowball",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          4,
+          4
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "soul_campfire",
+    "drops": [
+      {
+        "item": "soul_campfire",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "soul_soil",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "soul_fire",
+    "drops": []
+  },
+  {
+    "block": "soul_lantern",
+    "drops": [
+      {
+        "item": "soul_lantern",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "soul_sand",
+    "drops": [
+      {
+        "item": "soul_sand",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "soul_soil",
+    "drops": [
+      {
+        "item": "soul_soil",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "soul_torch",
+    "drops": [
+      {
+        "item": "soul_torch",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spawner",
+    "drops": []
+  },
+  {
+    "block": "sponge",
+    "drops": [
+      {
+        "item": "sponge",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_button",
+    "drops": [
+      {
+        "item": "spruce_button",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_door",
+    "drops": [
+      {
+        "item": "spruce_door",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_fence",
+    "drops": [
+      {
+        "item": "spruce_fence",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_fence_gate",
+    "drops": [
+      {
+        "item": "spruce_fence_gate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_leaves",
+    "drops": [
+      {
+        "item": "spruce_leaves",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "spruce_sapling",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "stick",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_log",
+    "drops": [
+      {
+        "item": "spruce_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_planks",
+    "drops": [
+      {
+        "item": "spruce_planks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_pressure_plate",
+    "drops": [
+      {
+        "item": "spruce_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_sapling",
+    "drops": [
+      {
+        "item": "spruce_sapling",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_sign",
+    "drops": [
+      {
+        "item": "spruce_sign",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_slab",
+    "drops": [
+      {
+        "item": "spruce_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_stairs",
+    "drops": [
+      {
+        "item": "spruce_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_trapdoor",
+    "drops": [
+      {
+        "item": "spruce_trapdoor",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "spruce_wood",
+    "drops": [
+      {
+        "item": "spruce_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "sticky_piston",
+    "drops": [
+      {
+        "item": "sticky_piston",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stone",
+    "drops": [
+      {
+        "item": "stone",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "cobblestone",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "stone_brick_slab",
+    "drops": [
+      {
+        "item": "stone_brick_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stone_brick_stairs",
+    "drops": [
+      {
+        "item": "stone_brick_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stone_brick_wall",
+    "drops": [
+      {
+        "item": "stone_brick_wall",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stone_bricks",
+    "drops": [
+      {
+        "item": "stone_bricks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stone_button",
+    "drops": [
+      {
+        "item": "stone_button",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stone_pressure_plate",
+    "drops": [
+      {
+        "item": "stone_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stone_slab",
+    "drops": [
+      {
+        "item": "stone_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stone_stairs",
+    "drops": [
+      {
+        "item": "stone_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stonecutter",
+    "drops": [
+      {
+        "item": "stonecutter",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_acacia_log",
+    "drops": [
+      {
+        "item": "stripped_acacia_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_acacia_wood",
+    "drops": [
+      {
+        "item": "stripped_acacia_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_birch_log",
+    "drops": [
+      {
+        "item": "stripped_birch_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_birch_wood",
+    "drops": [
+      {
+        "item": "stripped_birch_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_crimson_hyphae",
+    "drops": [
+      {
+        "item": "stripped_crimson_hyphae",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_crimson_stem",
+    "drops": [
+      {
+        "item": "stripped_crimson_stem",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_dark_oak_log",
+    "drops": [
+      {
+        "item": "stripped_dark_oak_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_dark_oak_wood",
+    "drops": [
+      {
+        "item": "stripped_dark_oak_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_jungle_log",
+    "drops": [
+      {
+        "item": "stripped_jungle_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_jungle_wood",
+    "drops": [
+      {
+        "item": "stripped_jungle_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_oak_log",
+    "drops": [
+      {
+        "item": "stripped_oak_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_oak_wood",
+    "drops": [
+      {
+        "item": "stripped_oak_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_spruce_log",
+    "drops": [
+      {
+        "item": "stripped_spruce_log",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_spruce_wood",
+    "drops": [
+      {
+        "item": "stripped_spruce_wood",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_warped_hyphae",
+    "drops": [
+      {
+        "item": "stripped_warped_hyphae",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "stripped_warped_stem",
+    "drops": [
+      {
+        "item": "stripped_warped_stem",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "sugar_cane",
+    "drops": [
+      {
+        "item": "sugar_cane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "sunflower",
+    "drops": [
+      {
+        "item": "sunflower",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "sweet_berry_bush",
+    "drops": [
+      {
+        "item": "sweet_berries",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "blockAge": 3
+      },
+      {
+        "item": "sweet_berries",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "blockAge": 2
+      }
+    ]
+  },
+  {
+    "block": "tall_grass",
+    "drops": [
+      {
+        "item": "grass",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      },
+      {
+        "item": "wheat_seeds",
+        "dropChance": 0.0625,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "tall_seagrass",
+    "drops": [
+      {
+        "item": "seagrass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "target",
+    "drops": [
+      {
+        "item": "target",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "terracotta",
+    "drops": [
+      {
+        "item": "terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "tnt",
+    "drops": [
+      {
+        "item": "tnt",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "torch",
+    "drops": [
+      {
+        "item": "torch",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "trapped_chest",
+    "drops": [
+      {
+        "item": "trapped_chest",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "tripwire",
+    "drops": [
+      {
+        "item": "string",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "tripwire_hook",
+    "drops": [
+      {
+        "item": "tripwire_hook",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "tube_coral",
+    "drops": [
+      {
+        "item": "tube_coral",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "tube_coral_block",
+    "drops": [
+      {
+        "item": "tube_coral_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "dead_tube_coral_block",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "tube_coral_fan",
+    "drops": [
+      {
+        "item": "tube_coral_fan",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "turtle_egg",
+    "drops": [
+      {
+        "item": "turtle_egg",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "twisting_vines",
+    "drops": [
+      {
+        "item": "twisting_vines",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "twisting_vines_plant",
+    "drops": [
+      {
+        "item": "twisting_vines",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "vine",
+    "drops": [
+      {
+        "item": "vine",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_button",
+    "drops": [
+      {
+        "item": "warped_button",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_door",
+    "drops": [
+      {
+        "item": "warped_door",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_fence",
+    "drops": [
+      {
+        "item": "warped_fence",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_fence_gate",
+    "drops": [
+      {
+        "item": "warped_fence_gate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_fungus",
+    "drops": [
+      {
+        "item": "warped_fungus",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_hyphae",
+    "drops": [
+      {
+        "item": "warped_hyphae",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_nylium",
+    "drops": [
+      {
+        "item": "warped_nylium",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      },
+      {
+        "item": "netherrack",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "noSilkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "warped_planks",
+    "drops": [
+      {
+        "item": "warped_planks",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_pressure_plate",
+    "drops": [
+      {
+        "item": "warped_pressure_plate",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_roots",
+    "drops": [
+      {
+        "item": "warped_roots",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_sign",
+    "drops": [
+      {
+        "item": "warped_sign",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_slab",
+    "drops": [
+      {
+        "item": "warped_slab",
+        "dropChance": 1,
+        "stackSizeRange": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_stairs",
+    "drops": [
+      {
+        "item": "warped_stairs",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_stem",
+    "drops": [
+      {
+        "item": "warped_stem",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_trapdoor",
+    "drops": [
+      {
+        "item": "warped_trapdoor",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "warped_wart_block",
+    "drops": [
+      {
+        "item": "warped_wart_block",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "weeping_vines",
+    "drops": [
+      {
+        "item": "weeping_vines",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "weeping_vines_plant",
+    "drops": [
+      {
+        "item": "weeping_vines",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "wet_sponge",
+    "drops": [
+      {
+        "item": "wet_sponge",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "wheat",
+    "drops": [
+      {
+        "item": "wheat",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "blockAge": 7
+      },
+      {
+        "item": "wheat_seeds",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "wheat_seeds",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          4
+        ],
+        "blockAge": 7
+      }
+    ]
+  },
+  {
+    "block": "white_banner",
+    "drops": [
+      {
+        "item": "white_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "white_bed",
+    "drops": [
+      {
+        "item": "white_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "white_carpet",
+    "drops": [
+      {
+        "item": "white_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "white_concrete",
+    "drops": [
+      {
+        "item": "white_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "white_concrete_powder",
+    "drops": [
+      {
+        "item": "white_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "white_glazed_terracotta",
+    "drops": [
+      {
+        "item": "white_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "white_shulker_box",
+    "drops": [
+      {
+        "item": "white_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "white_stained_glass",
+    "drops": [
+      {
+        "item": "white_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "white_stained_glass_pane",
+    "drops": [
+      {
+        "item": "white_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "white_terracotta",
+    "drops": [
+      {
+        "item": "white_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "white_tulip",
+    "drops": [
+      {
+        "item": "white_tulip",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "white_wool",
+    "drops": [
+      {
+        "item": "white_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "wither_rose",
+    "drops": [
+      {
+        "item": "wither_rose",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "wither_skeleton_skull",
+    "drops": [
+      {
+        "item": "wither_skeleton_skull",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "yellow_banner",
+    "drops": [
+      {
+        "item": "yellow_banner",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "yellow_bed",
+    "drops": [
+      {
+        "item": "yellow_bed",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "yellow_carpet",
+    "drops": [
+      {
+        "item": "yellow_carpet",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "yellow_concrete",
+    "drops": [
+      {
+        "item": "yellow_concrete",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "yellow_concrete_powder",
+    "drops": [
+      {
+        "item": "yellow_concrete_powder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "yellow_glazed_terracotta",
+    "drops": [
+      {
+        "item": "yellow_glazed_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "yellow_shulker_box",
+    "drops": [
+      {
+        "item": "yellow_shulker_box",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "yellow_stained_glass",
+    "drops": [
+      {
+        "item": "yellow_stained_glass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "yellow_stained_glass_pane",
+    "drops": [
+      {
+        "item": "yellow_stained_glass_pane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "silkTouch": true
+      }
+    ]
+  },
+  {
+    "block": "yellow_terracotta",
+    "drops": [
+      {
+        "item": "yellow_terracotta",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "yellow_wool",
+    "drops": [
+      {
+        "item": "yellow_wool",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "block": "zombie_head",
+    "drops": [
+      {
+        "item": "zombie_head",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  }
+]

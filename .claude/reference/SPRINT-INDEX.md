@@ -8,6 +8,7 @@
 |--------|---------|----------|-------|
 | Mojang vanilla (misode/mcmeta) | 1.21.4 | — | Blocks, recipes, loot tables, worldgen, damage types, tags |
 | PrismarineJS (minecraft-data) | 1.21.4 | — | Entities, foods, effects, materials, enchantments |
+| PrismarineJS (minecraft-data) | 1.16.5 | 754 | Multi-version baseline: 108 entities, 763 blocks, 975 items |
 | Bukkit/Spigot API | 1.21.11 | 774 | 318 events, plugin lifecycle, scheduler |
 | Pumpkin target | 1.21.11 | 772–774 | Current supported range |
 
@@ -45,6 +46,10 @@ The source of truth. Agents grep these to find their backlog.
 | **Entities** | `.claude/registry/entities.toml` | 149 entities, 39 effects, 40 foods, 49 damage types |
 | **Items** | `.claude/registry/items.toml` | 1385 items, 42 enchantments, 1370 recipes, 1237 loot tables |
 | **Blocks** | `.claude/registry/blocks.toml` | 1095 blocks (198 types), 135 biomes, 47 structures |
+| | | |
+| *1.16.5 (multi-version baseline)* | | |
+| **Entities 1.16.5** | `.claude/registry/entities_1_16_5.toml` | 108 entities with delta vs 1.21.4 |
+| **Items 1.16.5** | `.claude/registry/items_1_16_5.toml` | 975 items, 38 enchantments, 33 effects, 40 foods |
 
 **How to query your backlog:**
 ```bash
@@ -107,6 +112,23 @@ Detailed briefings with gap analysis. Read YOUR file on session start.
 │       ├── effects.json               # 32+ status effects
 │       ├── foods.json                 # ~50 foods with nutrition
 │       └── materials.json             # Tool mining speed table
+├── 1.16.5/
+│   ├── README.md                      # Version delta analysis (1.16.5 → 1.21.4)
+│   └── prismarine/
+│       ├── entities.json              # 108 entities (vs 149 in 1.21.4)
+│       ├── blocks.json                # 763 blocks (vs 1095)
+│       ├── items.json                 # 975 items (vs 1385)
+│       ├── recipes.json               # 562 recipes (vs 1370)
+│       ├── enchantments.json          # 38 enchantments (vs 42)
+│       ├── effects.json               # 33 effects (vs 39)
+│       ├── foods.json                 # 40 foods
+│       ├── biomes.json                # 79 biomes (vs 135)
+│       ├── materials.json             # Mining speed table
+│       ├── blockLoot.json             # 701 block loot tables
+│       ├── entityLoot.json            # 72 entity loot tables
+│       ├── attributes.json            # 13 entity attributes
+│       ├── particles.json             # 72 particle types
+│       └── sounds.json                # 985 sound events
 └── bukkit-api/
     ├── BUKKIT-API-REFERENCE.md        # 318 events, plugin lifecycle
     └── bukkit-api-ref.zip             # 23 scraped Javadoc files
