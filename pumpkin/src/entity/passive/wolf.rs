@@ -4,7 +4,10 @@ use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
     Entity, NBTStorage,
-    ai::goal::{look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal},
+    ai::goal::{
+        look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt,
+        wander_around::WanderAroundGoal,
+    },
     mob::{Mob, MobEntity},
 };
 
@@ -25,7 +28,9 @@ impl WolfEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
 
-            // TODO
+            goal_selector.add_goal(0, SwimGoal::new());
+            goal_selector.add_goal(3, tempt::TemptGoal::new(1.0, tempt::TEMPT_WOLF, 10.0));
+            goal_selector.add_goal(6, WanderAroundGoal::new(1.0));
             goal_selector.add_goal(
                 8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),

@@ -6,7 +6,7 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal, panic::PanicGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        swim::SwimGoal, tempt, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -34,6 +34,7 @@ impl TurtleEntity {
 
             goal_selector.add_goal(0, SwimGoal::new());
             goal_selector.add_goal(1, PanicGoal::new(1.2));
+            goal_selector.add_goal(3, tempt::TemptGoal::new(1.1, tempt::TEMPT_TURTLE, 10.0));
             goal_selector.add_goal(6, WanderAroundGoal::new(1.0));
             goal_selector.add_goal(
                 7,
