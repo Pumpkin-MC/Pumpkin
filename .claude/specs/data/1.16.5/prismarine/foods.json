@@ -1,0 +1,402 @@
+[
+  {
+    "id": 576,
+    "displayName": "Apple",
+    "name": "apple",
+    "stackSize": 64,
+    "foodPoints": 4,
+    "saturation": 2.4,
+    "effectiveQuality": 6.4,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 601,
+    "displayName": "Mushroom Stew",
+    "name": "mushroom_stew",
+    "stackSize": 1,
+    "foodPoints": 6,
+    "saturation": 7.2,
+    "effectiveQuality": 13.2,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 621,
+    "displayName": "Bread",
+    "name": "bread",
+    "stackSize": 64,
+    "foodPoints": 5,
+    "saturation": 6,
+    "effectiveQuality": 11,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 647,
+    "displayName": "Raw Porkchop",
+    "name": "porkchop",
+    "stackSize": 64,
+    "foodPoints": 3,
+    "saturation": 1.8,
+    "effectiveQuality": 4.8,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 648,
+    "displayName": "Cooked Porkchop",
+    "name": "cooked_porkchop",
+    "stackSize": 64,
+    "foodPoints": 8,
+    "saturation": 12.8,
+    "effectiveQuality": 20.8,
+    "saturationRatio": 1.6
+  },
+  {
+    "id": 650,
+    "displayName": "Golden Apple",
+    "name": "golden_apple",
+    "stackSize": 64,
+    "foodPoints": 4,
+    "saturation": 9.6,
+    "effectiveQuality": 13.6,
+    "saturationRatio": 2.4
+  },
+  {
+    "id": 651,
+    "displayName": "Enchanted Golden Apple",
+    "name": "enchanted_golden_apple",
+    "stackSize": 64,
+    "foodPoints": 4,
+    "saturation": 9.6,
+    "effectiveQuality": 13.6,
+    "saturationRatio": 2.4
+  },
+  {
+    "id": 687,
+    "displayName": "Raw Cod",
+    "name": "cod",
+    "stackSize": 64,
+    "foodPoints": 2,
+    "saturation": 0.4,
+    "effectiveQuality": 2.4,
+    "saturationRatio": 0.2
+  },
+  {
+    "id": 688,
+    "displayName": "Raw Salmon",
+    "name": "salmon",
+    "stackSize": 64,
+    "foodPoints": 2,
+    "saturation": 0.4,
+    "effectiveQuality": 2.4,
+    "saturationRatio": 0.2
+  },
+  {
+    "id": 689,
+    "displayName": "Tropical Fish",
+    "name": "tropical_fish",
+    "stackSize": 64,
+    "foodPoints": 1,
+    "saturation": 0.2,
+    "effectiveQuality": 1.2,
+    "saturationRatio": 0.2
+  },
+  {
+    "id": 690,
+    "displayName": "Pufferfish",
+    "name": "pufferfish",
+    "stackSize": 64,
+    "foodPoints": 1,
+    "saturation": 0.2,
+    "effectiveQuality": 1.2,
+    "saturationRatio": 0.2
+  },
+  {
+    "id": 691,
+    "displayName": "Cooked Cod",
+    "name": "cooked_cod",
+    "stackSize": 64,
+    "foodPoints": 5,
+    "saturation": 6,
+    "effectiveQuality": 11,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 692,
+    "displayName": "Cooked Salmon",
+    "name": "cooked_salmon",
+    "stackSize": 64,
+    "foodPoints": 6,
+    "saturation": 9.6,
+    "effectiveQuality": 15.6,
+    "saturationRatio": 1.5999999999999999
+  },
+  {
+    "id": 715,
+    "displayName": "Cake",
+    "name": "cake",
+    "stackSize": 1,
+    "foodPoints": 2,
+    "saturation": 0.4,
+    "effectiveQuality": 2.4,
+    "saturationRatio": 0.2
+  },
+  {
+    "id": 732,
+    "displayName": "Cookie",
+    "name": "cookie",
+    "stackSize": 64,
+    "foodPoints": 2,
+    "saturation": 0.4,
+    "effectiveQuality": 2.4,
+    "saturationRatio": 0.2
+  },
+  {
+    "id": 735,
+    "displayName": "Melon Slice",
+    "name": "melon_slice",
+    "stackSize": 64,
+    "foodPoints": 2,
+    "saturation": 1.2,
+    "effectiveQuality": 3.2,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 736,
+    "displayName": "Dried Kelp",
+    "name": "dried_kelp",
+    "stackSize": 64,
+    "foodPoints": 1,
+    "saturation": 0.6,
+    "effectiveQuality": 1.6,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 739,
+    "displayName": "Raw Beef",
+    "name": "beef",
+    "stackSize": 64,
+    "foodPoints": 3,
+    "saturation": 1.8,
+    "effectiveQuality": 4.8,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 740,
+    "displayName": "Steak",
+    "name": "cooked_beef",
+    "stackSize": 64,
+    "foodPoints": 8,
+    "saturation": 12.8,
+    "effectiveQuality": 20.8,
+    "saturationRatio": 1.6
+  },
+  {
+    "id": 741,
+    "displayName": "Raw Chicken",
+    "name": "chicken",
+    "stackSize": 64,
+    "foodPoints": 2,
+    "saturation": 1.2,
+    "effectiveQuality": 3.2,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 742,
+    "displayName": "Cooked Chicken",
+    "name": "cooked_chicken",
+    "stackSize": 64,
+    "foodPoints": 6,
+    "saturation": 7.2,
+    "effectiveQuality": 13.2,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 743,
+    "displayName": "Rotten Flesh",
+    "name": "rotten_flesh",
+    "stackSize": 64,
+    "foodPoints": 4,
+    "saturation": 0.8,
+    "effectiveQuality": 4.8,
+    "saturationRatio": 0.2
+  },
+  {
+    "id": 751,
+    "displayName": "Spider Eye",
+    "name": "spider_eye",
+    "stackSize": 64,
+    "foodPoints": 2,
+    "saturation": 3.2,
+    "effectiveQuality": 5.2,
+    "saturationRatio": 1.6
+  },
+  {
+    "id": 829,
+    "displayName": "Carrot",
+    "name": "carrot",
+    "stackSize": 64,
+    "foodPoints": 3,
+    "saturation": 3.6,
+    "effectiveQuality": 6.6,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 830,
+    "displayName": "Potato",
+    "name": "potato",
+    "stackSize": 64,
+    "foodPoints": 1,
+    "saturation": 0.6,
+    "effectiveQuality": 1.6,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 831,
+    "displayName": "Baked Potato",
+    "name": "baked_potato",
+    "stackSize": 64,
+    "foodPoints": 5,
+    "saturation": 6,
+    "effectiveQuality": 11,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 832,
+    "displayName": "Poisonous Potato",
+    "name": "poisonous_potato",
+    "stackSize": 64,
+    "foodPoints": 2,
+    "saturation": 1.2,
+    "effectiveQuality": 3.2,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 834,
+    "displayName": "Golden Carrot",
+    "name": "golden_carrot",
+    "stackSize": 64,
+    "foodPoints": 6,
+    "saturation": 14.4,
+    "effectiveQuality": 20.4,
+    "saturationRatio": 2.4
+  },
+  {
+    "id": 844,
+    "displayName": "Pumpkin Pie",
+    "name": "pumpkin_pie",
+    "stackSize": 64,
+    "foodPoints": 8,
+    "saturation": 4.8,
+    "effectiveQuality": 12.8,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 854,
+    "displayName": "Raw Rabbit",
+    "name": "rabbit",
+    "stackSize": 64,
+    "foodPoints": 3,
+    "saturation": 1.8,
+    "effectiveQuality": 4.8,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 855,
+    "displayName": "Cooked Rabbit",
+    "name": "cooked_rabbit",
+    "stackSize": 64,
+    "foodPoints": 5,
+    "saturation": 6,
+    "effectiveQuality": 11,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 856,
+    "displayName": "Rabbit Stew",
+    "name": "rabbit_stew",
+    "stackSize": 1,
+    "foodPoints": 10,
+    "saturation": 12,
+    "effectiveQuality": 22,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 867,
+    "displayName": "Raw Mutton",
+    "name": "mutton",
+    "stackSize": 64,
+    "foodPoints": 2,
+    "saturation": 1.2,
+    "effectiveQuality": 3.2,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 868,
+    "displayName": "Cooked Mutton",
+    "name": "cooked_mutton",
+    "stackSize": 64,
+    "foodPoints": 6,
+    "saturation": 9.6,
+    "effectiveQuality": 15.6,
+    "saturationRatio": 1.5999999999999999
+  },
+  {
+    "id": 886,
+    "displayName": "Chorus Fruit",
+    "name": "chorus_fruit",
+    "stackSize": 64,
+    "foodPoints": 4,
+    "saturation": 2.4,
+    "effectiveQuality": 6.4,
+    "saturationRatio": 0.6
+  },
+  {
+    "id": 888,
+    "displayName": "Beetroot",
+    "name": "beetroot",
+    "stackSize": 64,
+    "foodPoints": 1,
+    "saturation": 1.2,
+    "effectiveQuality": 2.2,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 890,
+    "displayName": "Beetroot Soup",
+    "name": "beetroot_soup",
+    "stackSize": 1,
+    "foodPoints": 6,
+    "saturation": 7.2,
+    "effectiveQuality": 13.2,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 926,
+    "displayName": "Suspicious Stew",
+    "name": "suspicious_stew",
+    "stackSize": 1,
+    "foodPoints": 6,
+    "saturation": 7.2,
+    "effectiveQuality": 13.2,
+    "saturationRatio": 1.2
+  },
+  {
+    "id": 947,
+    "displayName": "Sweet Berries",
+    "name": "sweet_berries",
+    "stackSize": 64,
+    "foodPoints": 2,
+    "saturation": 0.4,
+    "effectiveQuality": 2.4,
+    "saturationRatio": 0.2
+  },
+  {
+    "id": 954,
+    "displayName": "Honey Bottle",
+    "name": "honey_bottle",
+    "stackSize": 16,
+    "foodPoints": 6,
+    "saturation": 1.2,
+    "effectiveQuality": 7.2,
+    "saturationRatio": 0.19999999999999998
+  }
+]
