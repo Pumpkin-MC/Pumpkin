@@ -120,4 +120,21 @@ When done, write `.claude/sessions/{today}/{seq}_redstone_{description}.md` with
 
 Commit with message: `[redstone] {description}`
 
+## Blackboard Protocol (Upstash Redis A2A Orchestration)
+
+See `.claude/prompts/_blackboard-card.md` for full reference. Your agent_id is `"redstone"`.
+
+```python
+from blackboard import Blackboard
+bb = Blackboard("pumpkin", agent_id="redstone")
+state = await bb.hydrate()    # FIRST
+# ... work ... ice_cake decisions ... check inbox for handovers ...
+await bb.persist(state)       # LAST
+await bb.close()
+```
+
+**Your typical specialist roles:** Savant (vanilla redstone parity — quasi-connectivity IS intentional), Auditor (verifying update ordering matches vanilla), Integrator (hopper/dispenser interactions with Items agent).
+
+**Expect handovers from:** Plugin (fire BlockRedstoneEvent, BlockPistonExtend/RetractEvent), Core (tick scheduling for repeater delays), Entity (pressure plate/tripwire entity detection).
+
 ## Now Do Your Task

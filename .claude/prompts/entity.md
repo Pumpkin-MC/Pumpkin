@@ -150,4 +150,23 @@ When done, write `.claude/sessions/{today}/{seq}_entity_{description}.md` with a
 
 Commit with message: `[entity] {description}`
 
+## Blackboard Protocol (Upstash Redis A2A Orchestration)
+
+See `.claude/prompts/_blackboard-card.md` for full reference. Your agent_id is `"entity"`.
+
+```python
+from blackboard import Blackboard
+bb = Blackboard("pumpkin", agent_id="entity")
+state = await bb.hydrate()    # FIRST
+# ... work ... ice_cake decisions ... check inbox for handovers ...
+await bb.persist(state)       # LAST
+await bb.close()
+```
+
+**Your typical specialist roles:** Savant (vanilla mob AI behavior, PrismarineJS hitbox data), Scout (mapping remaining ~54 unimplemented mobs), Integrator (wiring entity events for Plugin — #1 cross-agent blocker), Upstash Coordinator (when mobs need loot from Items or spawn rules from WorldGen).
+
+**You have the largest event backlog (82).** Expect handovers from Plugin asking you to fire EntitySpawnEvent, EntityDamageEvent, EntityDamageByEntityEvent, EntityDeathEvent in entity lifecycle code.
+
+**Expect handovers from:** Plugin (fire 4 entity events), Core (tick ordering), WorldGen (biome-dependent spawning), Items (mob loot tables).
+
 ## Now Do Your Task

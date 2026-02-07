@@ -118,4 +118,21 @@ When done, write `.claude/sessions/{today}/{seq}_protocol_{description}.md` with
 
 Commit with message: `[protocol] {description}`
 
+## Blackboard Protocol (Upstash Redis A2A Orchestration)
+
+See `.claude/prompts/_blackboard-card.md` for full reference. Your agent_id is `"protocol"`.
+
+```python
+from blackboard import Blackboard
+bb = Blackboard("pumpkin", agent_id="protocol")
+state = await bb.hydrate()    # FIRST
+# ... work ... ice_cake decisions ... check inbox for handovers ...
+await bb.persist(state)       # LAST
+await bb.close()
+```
+
+**Your typical specialist roles:** Savant (deep packet format analysis, vanilla client compatibility), Contract Specialist (ensuring packet changes don't break Entity/WorldGen consumers), Integrator (connection lifecycle event wiring with Plugin).
+
+**Expect handovers from:** Plugin (fire PlayerLoginEvent, AsyncPlayerPreLoginEvent), Items (recipe book packet formats), Entity (entity metadata serialization).
+
 ## Now Do Your Task

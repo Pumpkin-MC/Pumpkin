@@ -146,4 +146,28 @@ When done, write `.claude/sessions/{today}/{seq}_plugin_{description}.md` with a
 
 Commit with message: `[plugin] {description}`
 
+## Blackboard Protocol (Upstash Redis A2A Orchestration)
+
+See `.claude/prompts/_blackboard-card.md` for full reference. Your agent_id is `"plugin"`.
+
+```python
+from blackboard import Blackboard
+bb = Blackboard("pumpkin", agent_id="plugin")
+state = await bb.hydrate()    # FIRST
+# ... work ... ice_cake decisions ... check inbox for handovers ...
+await bb.persist(state)       # LAST
+await bb.close()
+```
+
+**Your typical specialist roles:** Contract Specialist (API stability — once shipped it's a contract), Savant (Bukkit compatibility analysis), Upstash Coordinator (you define events that 5+ other agents must fire — post handovers to each), Scout (Mindcraft compatibility research).
+
+**You are the biggest handover sender.** You define events. Others wire them. Post handovers to:
+- **core** → fire ServerStartedEvent, ServerStopEvent, ServerTickEvent
+- **entity** → fire EntitySpawnEvent, EntityDamageEvent, EntityDeathEvent
+- **redstone** → fire BlockRedstoneEvent, BlockPistonExtend/RetractEvent
+- **worldgen** → fire ChunkLoadEvent, ChunkUnloadEvent
+- **protocol** → fire PlayerLoginEvent, AsyncPlayerPreLoginEvent
+
+**Expect handovers from:** Architect (macro updates, is_cancelled() changes), all agents (event API questions).
+
 ## Now Do Your Task

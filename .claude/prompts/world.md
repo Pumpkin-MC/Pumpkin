@@ -116,4 +116,21 @@ When done, write `.claude/sessions/{today}/{seq}_world_{description}.md` with al
 
 Commit with message: `[world] {description}`
 
+## Blackboard Protocol (Upstash Redis A2A Orchestration)
+
+See `.claude/prompts/_blackboard-card.md` for full reference. Your agent_id is `"worldgen"`.
+
+```python
+from blackboard import Blackboard
+bb = Blackboard("pumpkin", agent_id="worldgen")
+state = await bb.hydrate()    # FIRST
+# ... work ... ice_cake decisions ... check inbox for handovers ...
+await bb.persist(state)       # LAST
+await bb.close()
+```
+
+**Your typical specialist roles:** Savant (noise function tuning, biome distribution), Scout (mapping remaining ~13 unimplemented structures), Contract Specialist (Anvil adoption boundary with Storage), Upstash Coordinator (when structures need loot tables from Items or entity placement from Entity).
+
+**Expect handovers from:** Storage (Anvil RegionFile API changes), Plugin (fire ChunkLoadEvent, ChunkUnloadEvent), Entity (structure entity placement).
+
 ## Now Do Your Task

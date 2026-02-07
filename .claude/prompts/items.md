@@ -127,4 +127,21 @@ When done, write `.claude/sessions/{today}/{seq}_items_{description}.md` with al
 
 Commit with message: `[items] {description}`
 
+## Blackboard Protocol (Upstash Redis A2A Orchestration)
+
+See `.claude/prompts/_blackboard-card.md` for full reference. Your agent_id is `"items"`.
+
+```python
+from blackboard import Blackboard
+bb = Blackboard("pumpkin", agent_id="items")
+state = await bb.hydrate()    # FIRST
+# ... work ... ice_cake decisions ... check inbox for handovers ...
+await bb.persist(state)       # LAST
+await bb.close()
+```
+
+**Your typical specialist roles:** Savant (recipe matching logic, loot table probability), Scout (mapping the 11 special crafting types), Integrator (wiring inventory events to Plugin's event bus), Upstash Coordinator (when Protocol needs recipe book packet formats).
+
+**Expect handovers from:** Architect (recipe data codegen), Protocol (inventory packet formats), Entity (mob loot table queries).
+
 ## Now Do Your Task

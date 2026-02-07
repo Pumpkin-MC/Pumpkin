@@ -95,4 +95,21 @@ When done, write `.claude/sessions/{today}/{seq}_storage_{description}.md` with 
 
 Commit with message: `[storage] {description}`
 
+## Blackboard Protocol (Upstash Redis A2A Orchestration)
+
+See `.claude/prompts/_blackboard-card.md` for full reference. Your agent_id is `"storage"`.
+
+```python
+from blackboard import Blackboard
+bb = Blackboard("pumpkin", agent_id="storage")
+state = await bb.hydrate()    # FIRST
+# ... work ... ice_cake decisions ... check inbox for handovers ...
+await bb.persist(state)       # LAST
+await bb.close()
+```
+
+**Your typical specialist roles:** Savant (deep NBT format analysis), Contract Specialist (Anvil API stability for WorldGen adoption), Upstash Coordinator (when Entity/Core need player data persistence handovers).
+
+**Expect handovers from:** WorldGen (Anvil adoption questions), Entity/Core (player data persistence), Architect (NBT format decisions).
+
 ## Now Do Your Task
