@@ -121,3 +121,10 @@ loot tables, mob drops, worldgen, and tags without guessing.
 **Rationale:** Enables Bukkit-compatible ignore_cancelled filtering without trait object downcasting. Zero changes to existing event definitions.
 **Affects:** Plugin, all agents that define events
 **Status:** active
+
+## ARCH-016: Multi-version support deferred — DTO layer when ready
+**Date:** 2026-02-07
+**Decision:** Multi-version protocol support is deferred until 1.21.11 reaches ~90%+ feature completion. Pumpkin is currently single-version (protocol 772-774 window, 1.21.7-1.21.11). When ready, multi-version requires a DTO (Data Transfer Object) abstraction layer between internal game state and per-version wire format — one canonical internal model, version-specific serializers at the network boundary. Target milestones: 1.8.x (PvP community, protocol 47), 1.12.2 (pre-flattening, protocol 340), 1.16.5 (Nether Update, protocol 754), 1.21.11 (current, protocol 774).
+**Rationale:** Current priority is feature completion. Multi-version would require protocol translation, multiple block/item registries, world format differences, and feature gates. This is a ViaVersion-scale effort that would distract from shipping the base version. The DTO pattern keeps internal code clean while enabling future version adapters.
+**Affects:** Protocol, Core, all agents
+**Status:** active — DEFERRED (Phase 2)
