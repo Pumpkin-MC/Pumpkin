@@ -17,22 +17,44 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use tokio::sync::Mutex;
 
+pub mod blaze;
+pub mod bogged;
+pub mod breeze;
 pub mod cave_spider;
+pub mod creaking;
 pub mod creeper;
 pub mod drowned;
+pub mod elder_guardian;
 pub mod enderman;
 pub mod endermite;
+pub mod evoker;
+pub mod ghast;
+pub mod giant;
+pub mod guardian;
+pub mod hoglin;
 pub mod husk;
+pub mod illusioner;
 pub mod magma_cube;
 pub mod phantom;
+pub mod piglin;
+pub mod piglin_brute;
+pub mod pillager;
+pub mod ravager;
+pub mod shulker;
 pub mod silverfish;
 pub mod skeleton;
 pub mod slime;
 pub mod spider;
 pub mod stray;
+pub mod vex;
+pub mod vindicator;
+pub mod warden;
 pub mod witch;
+pub mod wither_skeleton;
 pub mod zombie;
 pub mod zombie_villager;
+pub mod zombified_piglin;
+pub mod zoglin;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
