@@ -117,7 +117,7 @@ loot tables, mob drops, worldgen, and tags without guessing.
 ## ARCH-015: Payload::is_cancelled() via Event derive field detection
 **Date:** 2026-02-07
 **Session:** .claude/sessions/2026-02-07/004_architect_recipe-codegen-and-event-macro.md
-**Decision:** Added `fn is_cancelled(&self) -> bool { false }` as default method on Payload. #[derive(Event)] detects `cancelled` field and generates override returning `self.cancelled`.
+**Decision:** Added `fn is_cancelled(&self) -> bool { false }` as default method on Payload. #[derive(Event)] detects `cancelled` field and generates override returning `self.cancelled`. Name follows Bukkit's `isCancelled()` convention (Rust snake_case: `is_cancelled`). Distinct from `Cancellable::cancelled()` to avoid trait method ambiguity on concrete types.
 **Rationale:** Enables Bukkit-compatible ignore_cancelled filtering without trait object downcasting. Zero changes to existing event definitions.
 **Affects:** Plugin, all agents that define events
 **Status:** active
