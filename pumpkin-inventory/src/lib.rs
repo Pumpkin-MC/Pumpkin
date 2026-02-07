@@ -9,6 +9,8 @@ pub mod generic_container_screen_handler;
 pub mod player;
 pub mod screen_handler;
 pub mod slot;
+pub mod smithing;
+pub mod stonecutter;
 pub mod sync_handler;
 pub mod window_property;
 

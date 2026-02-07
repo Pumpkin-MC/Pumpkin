@@ -166,3 +166,189 @@ pub enum MouseDragState {
     AddSlot(usize),
     End,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn click(mode: SlotActionType, button: i8, slot: i16) -> Result<Click, InventoryError> {
+        Click::new(&mode, button, slot)
+    }
+
+    #[test]
+    fn normal_left_click_on_slot() {
+        let c = click(SlotActionType::Pickup, 0, 5).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::MouseClick(MouseClick::Left)
+        ));
+        assert!(matches!(c.slot, Slot::Normal(5)));
+    }
+
+    #[test]
+    fn normal_right_click_on_slot() {
+        let c = click(SlotActionType::Pickup, 1, 10).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::MouseClick(MouseClick::Right)
+        ));
+        assert!(matches!(c.slot, Slot::Normal(10)));
+    }
+
+    #[test]
+    fn normal_click_outside_inventory() {
+        let c = click(SlotActionType::Pickup, 0, -999).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::MouseClick(MouseClick::Left)
+        ));
+        assert!(matches!(c.slot, Slot::OutsideInventory));
+    }
+
+    #[test]
+    fn normal_click_invalid_button() {
+        let result = click(SlotActionType::Pickup, 2, 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn shift_click_normal_slot() {
+        let c = click(SlotActionType::QuickMove, 0, 3).unwrap();
+        assert!(matches!(c.click_type, ClickType::ShiftClick));
+        assert!(matches!(c.slot, Slot::Normal(3)));
+    }
+
+    #[test]
+    fn key_click_hotbar_slot_0() {
+        let c = click(SlotActionType::Swap, 0, 5).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::KeyClick(KeyClick::Slot(0))
+        ));
+        assert!(matches!(c.slot, Slot::Normal(5)));
+    }
+
+    #[test]
+    fn key_click_hotbar_slot_8() {
+        let c = click(SlotActionType::Swap, 8, 5).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::KeyClick(KeyClick::Slot(8))
+        ));
+    }
+
+    #[test]
+    fn key_click_offhand() {
+        let c = click(SlotActionType::Swap, 40, 5).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::KeyClick(KeyClick::Offhand)
+        ));
+    }
+
+    #[test]
+    fn key_click_invalid_button() {
+        let result = click(SlotActionType::Swap, 41, 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn creative_pick_item() {
+        let c = click(SlotActionType::Clone, 2, 7).unwrap();
+        assert!(matches!(c.click_type, ClickType::CreativePickItem));
+        assert!(matches!(c.slot, Slot::Normal(7)));
+    }
+
+    #[test]
+    fn drop_single_item() {
+        let c = click(SlotActionType::Throw, 0, 5).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::DropType(DropType::SingleItem)
+        ));
+    }
+
+    #[test]
+    fn drop_full_stack() {
+        let c = click(SlotActionType::Throw, 1, 5).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::DropType(DropType::FullStack)
+        ));
+    }
+
+    #[test]
+    fn drop_invalid_button() {
+        let result = click(SlotActionType::Throw, 2, 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn drag_start_left() {
+        let c = click(SlotActionType::QuickCraft, 0, -999).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::MouseDrag {
+                drag_state: MouseDragState::Start(MouseDragType::Left)
+            }
+        ));
+    }
+
+    #[test]
+    fn drag_start_right() {
+        let c = click(SlotActionType::QuickCraft, 4, -999).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::MouseDrag {
+                drag_state: MouseDragState::Start(MouseDragType::Right)
+            }
+        ));
+    }
+
+    #[test]
+    fn drag_start_middle() {
+        let c = click(SlotActionType::QuickCraft, 8, -999).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::MouseDrag {
+                drag_state: MouseDragState::Start(MouseDragType::Middle)
+            }
+        ));
+    }
+
+    #[test]
+    fn drag_add_slot() {
+        let c = click(SlotActionType::QuickCraft, 1, 5).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::MouseDrag {
+                drag_state: MouseDragState::AddSlot(5)
+            }
+        ));
+        assert!(matches!(c.slot, Slot::Normal(5)));
+    }
+
+    #[test]
+    fn drag_end() {
+        let c = click(SlotActionType::QuickCraft, 2, -999).unwrap();
+        assert!(matches!(
+            c.click_type,
+            ClickType::MouseDrag {
+                drag_state: MouseDragState::End
+            }
+        ));
+    }
+
+    #[test]
+    fn drag_invalid_button() {
+        let result = click(SlotActionType::QuickCraft, 3, -999);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn double_click() {
+        let c = click(SlotActionType::PickupAll, 0, 5).unwrap();
+        assert!(matches!(c.click_type, ClickType::DoubleClick));
+        assert!(matches!(c.slot, Slot::Normal(5)));
+    }
+}
