@@ -146,11 +146,9 @@ pub struct BasicConfiguration {
 
     /// Whether to use a server favicon.
     pub use_favicon: bool,
-
-    /// Path to server favicon.
-    pub favicon_path: String,
-
-    /// The default level name.
+    /// Path to server favicon
+    pub favicon_path: Option<String>,
+    /// The default level name
     pub default_level_name: String,
 
     /// Whether chat messages should be signed or not.
@@ -187,7 +185,7 @@ impl Default for BasicConfiguration {
             force_gamemode: false,
             scrub_ips: true,
             use_favicon: true,
-            favicon_path: "icon.png".to_string(),
+            favicon_path: None,
             default_level_name: "world".to_string(),
             allow_chat_reports: false,
             white_list: false,
@@ -258,7 +256,6 @@ pub trait LoadConfiguration {
             merged_config
         } else {
             let content = Self::default();
-
             if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
                 log::warn!(
                     "Couldn't write default config to {:?}. Reason: {}",
