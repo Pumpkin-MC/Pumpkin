@@ -13,10 +13,14 @@ use crate::{
         },
         living::LivingEntity,
         mob::{
-            creeper::CreeperEntity, drowned::DrownedEntity, silverfish::SilverfishEntity,
-            zombie::ZombieEntity, zombie_villager::ZombieVillagerEntity,
+            creeper::CreeperEntity, drowned::DrownedEntity, enderman::EndermanEntity,
+            silverfish::SilverfishEntity, spider::SpiderEntity, zombie::ZombieEntity,
+            zombie_villager::ZombieVillagerEntity,
         },
-        passive::{iron_golem::IronGolemEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity},
+        passive::{
+            chicken::ChickenEntity, cow::CowEntity, iron_golem::IronGolemEntity,
+            pig::PigEntity, sheep::SheepEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity,
+        },
     },
     world::World,
 };
@@ -42,6 +46,12 @@ pub async fn from_type(
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity).await,
+        id if id == EntityType::SPIDER.id => SpiderEntity::new(entity).await,
+        id if id == EntityType::ENDERMAN.id => EndermanEntity::new(entity).await,
+        id if id == EntityType::CHICKEN.id => ChickenEntity::new(entity).await,
+        id if id == EntityType::COW.id => CowEntity::new(entity).await,
+        id if id == EntityType::PIG.id => PigEntity::new(entity).await,
+        id if id == EntityType::SHEEP.id => SheepEntity::new(entity).await,
         // Fallback Entity
         _ => {
             if entity_type.max_health.is_some() {
