@@ -2329,11 +2329,13 @@ impl Player {
     pub async fn drop_item_with_event(&self, item_stack: ItemStack) -> bool {
         let item_uuid = Uuid::new_v4();
         let Some(server) = self.world().server.upgrade() else {
-            self.spawn_dropped_item_with_uuid(item_uuid, item_stack).await;
+            self.spawn_dropped_item_with_uuid(item_uuid, item_stack)
+                .await;
             return true;
         };
         let Some(player_arc) = self.as_arc() else {
-            self.spawn_dropped_item_with_uuid(item_uuid, item_stack).await;
+            self.spawn_dropped_item_with_uuid(item_uuid, item_stack)
+                .await;
             return true;
         };
 
