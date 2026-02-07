@@ -14,6 +14,7 @@ mod bossbar;
 mod clear;
 mod damage;
 mod data;
+mod debug;
 pub mod defaultgamemode;
 mod deop;
 mod difficulty;
@@ -34,6 +35,7 @@ mod op;
 mod pardon;
 mod pardonip;
 mod particle;
+mod perf;
 mod playsound;
 mod plugin;
 mod plugins;
@@ -155,8 +157,10 @@ pub async fn default_dispatcher(
         setidletimeout::init_command_tree(),
         "minecraft:command.setidletimeout",
     );
+    dispatcher.register(debug::init_command_tree(), "minecraft:command.debug");
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
+    dispatcher.register(perf::init_command_tree(), "minecraft:command.perf");
     dispatcher.register(
         save_all::init_command_tree(),
         "minecraft:command.save-all",
@@ -544,6 +548,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.debug",
+            "Starts or stops a debugging session",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
 }
 
 fn register_level_4_permissions(registry: &mut PermissionRegistry) {
@@ -573,6 +584,13 @@ fn register_level_4_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.save-on",
             "Enables automatic server saving",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.perf",
+            "Captures performance metrics",
             PermissionDefault::Op(PermissionLvl::Four),
         ))
         .unwrap();
