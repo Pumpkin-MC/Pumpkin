@@ -230,3 +230,36 @@ trait GameDataStore: Send + Sync {
 They are orthogonal: Protocol DTO translates packets at the network edge, Storage DTO serves game registries internally. A block lookup goes through `GameDataStore`, then the result may be serialized differently for 1.21 vs 1.16.5 clients via the Protocol DTO. No conflict.
 **Affects:** Protocol, Storage, Architect
 **Status:** active
+
+## ARCH-023: Event-firing write access for integration points
+**Date:** 2026-02-07
+**Decision:** The ownership gap for `pumpkin/src/world/` and `pumpkin/src/net/` is resolved as follows:
+
+**Primary ownership stays unchanged:**
+- `pumpkin/src/world/` — WorldGen (structure generation, terrain, chunk management)
+- `pumpkin/src/net/` — Protocol (packet handlers, connection state machine)
+
+**Event-firing write access granted:**
+- **Entity agent** gets write access to `pumpkin/src/world/natural_spawner.rs` and `pumpkin/src/world/mod.rs` — specifically for wiring `EntitySpawnEvent` at spawn call sites. Entity MUST NOT modify chunk generation, structure placement, or world management logic.
+- **Plugin agent** gets write access to `pumpkin/src/net/java/play.rs` — specifically for wiring `ServerListPingEvent` in status handler and `CustomPayloadEvent` in play handler. Plugin MUST NOT modify packet parsing, connection state machine, or crypto/compression logic.
+- **Core agent** gets write access to `pumpkin/src/world/mod.rs` — specifically for wiring Core lifecycle events (save, tick) that touch the world. Core MUST NOT modify terrain generation or chunk loading.
+
+**How it works:** When an agent needs to fire an event from another agent's code, they add a single `plugin_manager.fire(Event { ... }).await` call at the appropriate point. The event type itself lives in `pumpkin/src/plugin/api/events/` (Plugin's scope). The fire call is a thin integration point, not a new feature.
+
+**Rules for cross-agent event wiring:**
+1. The change must be a single `fire()` call or equivalent — no logic changes
+2. The event struct must already exist in Plugin's event module
+3. The commit message must include `[{your-agent}+{owner-agent}]` prefix (e.g., `[entity+world]`)
+4. The owning agent must be notified via broadcast before push
+
+**Rationale:** Event wiring is the #1 cross-agent blocker. 37 event types exist but most are never fired because the fire call sites are in other agents' territory. Granting narrow write access for event wiring unblocks Entity (EntitySpawnEvent), Plugin (ServerListPingEvent), and Core (save events) without transferring ownership of the modules.
+**Affects:** Entity, Plugin, Core, WorldGen, Protocol
+**Status:** active
+
+## ARCH-024: Items should NOT adopt GameDataStore yet
+**Date:** 2026-02-07
+**Decision:** Items agent continues using pumpkin-data statics directly for recipe matching. The `GameDataStore` trait (ARCH-020) is for future use when the Lance backend is ready. Adopting it now would add an indirection layer with zero benefit — `StaticStore` just wraps the same pumpkin-data arrays Items already uses.
+
+When Lance backend is ready (Phase 4), Items will migrate recipe queries to `store.recipes_for_output()` and `store.sql("SELECT...")`. Until then, direct pumpkin-data access is correct.
+**Affects:** Items
+**Status:** active
