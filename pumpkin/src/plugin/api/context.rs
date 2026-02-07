@@ -306,7 +306,7 @@ impl Context {
 
         let static_logger = Box::leak(Box::new(logger_arc));
 
-        if let Some(Some((_logger_impl, level))) = static_logger.get() {
+        if let Some(Some((_logger_impl, _level))) = static_logger.get() {
             // TODO
             //log::set_max_level(*level);
         }
