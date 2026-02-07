@@ -97,8 +97,8 @@ use pumpkin_protocol::{
 use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{
-        CAcknowledgeBlockChange, CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData,
-        CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage, CWorldEvent,
+        CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage,
+        CExplosion, CRespawn, CSetBlockDestroyStage, CWorldEvent,
     },
 };
 use pumpkin_util::resource_location::ResourceLocation;
@@ -587,7 +587,8 @@ impl World {
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         let start = tokio::time::Instant::now();
 
-        // 1. Block & Environment
+        // IMPORANT: send flush_block_updates first to prevent issues with CAcknowledgeBlockChange
+        self.flush_block_updates().await;
         self.flush_synced_block_events().await;
         self.tick_environment().await;
 
@@ -627,16 +628,6 @@ impl World {
         }
         let entity_elapsed = entity_start.elapsed();
 
-        self.flush_block_updates().await;
-        for player in players.iter() {
-            let seq = player.packet_sequence.swap(-1, Ordering::Relaxed);
-            if seq != -1 {
-                player
-                    .client
-                    .enqueue_packet(&CAcknowledgeBlockChange::new(seq.into()))
-                    .await;
-            }
-        }
         //self.level.chunk_loading.lock().unwrap().send_change();
 
         let total_elapsed = start.elapsed();
