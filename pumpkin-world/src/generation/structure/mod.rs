@@ -10,16 +10,26 @@ use crate::{
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
             ancient_city::AncientCityGenerator,
+            bastion_remnant::BastionRemnantGenerator,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
-            desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator,
+            desert_pyramid::DesertPyramidGenerator,
+            end_city::EndCityGenerator,
+            igloo::IglooGenerator,
             jungle_temple::JungleTempleGenerator,
             mineshaft::{MineshaftGenerator, MineshaftMesaGenerator},
+            nether_fortress::NetherFortressGenerator,
             nether_fossil::NetherFossilGenerator,
+            ocean_monument::OceanMonumentGenerator,
             ocean_ruin::{ColdOceanRuinGenerator, WarmOceanRuinGenerator},
             pillager_outpost::PillagerOutpostGenerator,
             ruined_portal::RuinedPortalGenerator, shipwreck::ShipwreckGenerator,
             stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
             trail_ruins::TrailRuinsGenerator,
+            trial_chambers::TrialChambersGenerator,
+            village::{
+                VillageDesertGenerator, VillagePlainsGenerator, VillageSavannaGenerator,
+                VillageSnowyGenerator, VillageTaigaGenerator,
+            },
             woodland_mansion::WoodlandMansionGenerator,
         },
     },
@@ -104,8 +114,36 @@ pub fn try_generate_structure(
         StructureKeys::TrailRuins => {
             TrailRuinsGenerator::get_structure_position(&TrailRuinsGenerator, context)
         }
-        // TODO: Implement other structure types
-        _ => None,
+        StructureKeys::TrialChambers => {
+            TrialChambersGenerator::get_structure_position(&TrialChambersGenerator, context)
+        }
+        StructureKeys::VillagePlains => {
+            VillagePlainsGenerator::get_structure_position(&VillagePlainsGenerator, context)
+        }
+        StructureKeys::VillageDesert => {
+            VillageDesertGenerator::get_structure_position(&VillageDesertGenerator, context)
+        }
+        StructureKeys::VillageSavanna => {
+            VillageSavannaGenerator::get_structure_position(&VillageSavannaGenerator, context)
+        }
+        StructureKeys::VillageSnowy => {
+            VillageSnowyGenerator::get_structure_position(&VillageSnowyGenerator, context)
+        }
+        StructureKeys::VillageTaiga => {
+            VillageTaigaGenerator::get_structure_position(&VillageTaigaGenerator, context)
+        }
+        StructureKeys::Monument => {
+            OceanMonumentGenerator::get_structure_position(&OceanMonumentGenerator, context)
+        }
+        StructureKeys::Fortress => {
+            NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
+        }
+        StructureKeys::EndCity => {
+            EndCityGenerator::get_structure_position(&EndCityGenerator, context)
+        }
+        StructureKeys::BastionRemnant => {
+            BastionRemnantGenerator::get_structure_position(&BastionRemnantGenerator, context)
+        }
     };
 
     if let Some(pos) = structure_pos {

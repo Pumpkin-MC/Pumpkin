@@ -21,13 +21,16 @@ use crate::{
 };
 
 pub mod ancient_city;
+pub mod bastion_remnant;
 pub mod buried_treasure;
 pub mod desert_pyramid;
+pub mod end_city;
 pub mod igloo;
 pub mod jungle_temple;
 pub mod mineshaft;
 pub mod nether_fortress;
 pub mod nether_fossil;
+pub mod ocean_monument;
 pub mod ocean_ruin;
 pub mod pillager_outpost;
 pub mod ruined_portal;
@@ -35,6 +38,8 @@ pub mod shipwreck;
 pub mod stronghold;
 pub mod swamp_hut;
 pub mod trail_ruins;
+pub mod trial_chambers;
+pub mod village;
 pub mod woodland_mansion;
 
 pub trait BlockRandomizer {

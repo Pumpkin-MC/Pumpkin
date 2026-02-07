@@ -73,4 +73,8 @@ pub enum StructurePieceType {
     // Deep Dark / Archaeology
     AncientCity,
     TrailRuins,
+    TrialChambers,
+
+    // Nether
+    BastionRemnant,
 }
