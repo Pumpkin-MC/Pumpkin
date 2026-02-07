@@ -37,23 +37,21 @@ tests = "cargo test -p pumpkin-world"
 - **Session 003 (2026-02-07):** Acknowledged ARCH-009 (Anvil dedup). WORLD-001.
 - **Session 002 (2026-02-07):** Added Shipwreck, Ocean Ruin, Pillager Outpost structures.
 - **Session 003 (2026-02-07):** Added Ruined Portal, Nether Fossil, Woodland Mansion structures.
-- **Session 004 (2026-02-07):** Added **Mineshaft, Ancient City, Trail Ruins** structures. **13 of ~20+ structures implemented.**
-- **Total:** 13 of ~20+ structures implemented
+- **Session 004 (2026-02-07):** Added Mineshaft, Ancient City, Trail Ruins structures. 13 of ~20+.
+- **Session 005 (2026-02-07):** **100% StructureKeys coverage (34/34).** All vanilla structure types registered.
+- **Total:** 34/34 StructureKeys, all vanilla structure types covered
 
 ## Rebase Status
 
-Your branch was recently merged (PR #67). Verify rebase before next session — was 69 commits behind, should now be current.
+Branch is current with master (PR #74 merged).
 
 ## Your Priority (P1 — High Value)
 
-**Remaining structures** — 7 more needed. High-value targets:
-1. Ocean Monument (complex, multi-floor)
-2. Stronghold (portal room, libraries)
-3. Bastion Remnant (Nether)
-4. Buried Treasure (simple)
-5. Swamp Hut (simple)
-6. End City (End dimension)
-7. Desert Well (simple)
+**StructureKeys are 100% complete.** Remaining work is:
+1. Structure placement refinement — spacing, separation, biome constraints verification
+2. World events — fire ChunkLoadEvent, ChunkUnloadEvent (ARCH-023)
+3. Anvil adoption (WORLD-001) — delegate to Storage's RegionFile
+4. Structure generation tests — verify placement against vanilla
 
 ## Active Decisions That Affect You
 

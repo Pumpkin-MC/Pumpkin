@@ -5,25 +5,30 @@
 # Architect resolves disputes over block/mod.rs and block/blocks/mod.rs.
 
 [redstone_agent]
-# Signal propagation, components, quasi-connectivity
+# Signal propagation, components, quasi-connectivity, block state events
+# ARCH-032: Expanded to cover block event wiring (fire, fluid, plant, snow)
 paths = [
     "pumpkin/src/block/blocks/redstone/",
     "pumpkin/src/block/blocks/piston/",
+    "pumpkin/src/block/blocks/fire/",
+    "pumpkin/src/block/blocks/plant/",
+    "pumpkin/src/block/blocks/snow.rs",
+    "pumpkin/src/block/fluid/",
+    "pumpkin/src/block/blocks/note.rs",
+    "pumpkin/src/block/blocks/sponge.rs",
 ]
 
 [worldgen_agent]
 # Block registry, block state management, placement rules
+# NOTE: plant/, snow.rs, fluid/ moved to redstone_agent for block event wiring (ARCH-032)
 paths = [
     "pumpkin/src/block/registry.rs",
-    "pumpkin/src/block/blocks/plant/",
     "pumpkin/src/block/blocks/falling.rs",
     "pumpkin/src/block/blocks/farmland.rs",
     "pumpkin/src/block/blocks/dirt_path.rs",
-    "pumpkin/src/block/blocks/snow.rs",
     "pumpkin/src/block/blocks/vine.rs",
     "pumpkin/src/block/blocks/mangrove_roots.rs",
     "pumpkin/src/block/blocks/powder_snow.rs",
-    "pumpkin/src/block/fluid/",
 ]
 
 [entity_agent]
@@ -88,7 +93,6 @@ paths = [
     "pumpkin/src/block/blocks/end_rod.rs",
     "pumpkin/src/block/blocks/fences.rs",
     "pumpkin/src/block/blocks/fence_gates.rs",
-    "pumpkin/src/block/blocks/fire/",
     "pumpkin/src/block/blocks/glass_panes.rs",
     "pumpkin/src/block/blocks/glazed_terracotta.rs",
     "pumpkin/src/block/blocks/hay.rs",
@@ -97,12 +101,10 @@ paths = [
     "pumpkin/src/block/blocks/ladder.rs",
     "pumpkin/src/block/blocks/lanterns.rs",
     "pumpkin/src/block/blocks/logs.rs",
-    "pumpkin/src/block/blocks/note.rs",
     "pumpkin/src/block/blocks/pumpkin.rs",
     "pumpkin/src/block/blocks/signs.rs",
     "pumpkin/src/block/blocks/slabs.rs",
     "pumpkin/src/block/blocks/slime.rs",
-    "pumpkin/src/block/blocks/sponge.rs",
     "pumpkin/src/block/blocks/stairs.rs",
     "pumpkin/src/block/blocks/torches.rs",
     "pumpkin/src/block/blocks/trapdoor.rs",
