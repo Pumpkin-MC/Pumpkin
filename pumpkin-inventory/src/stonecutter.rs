@@ -1,5 +1,7 @@
 use std::{any::Any, pin::Pin, sync::Arc};
 
+use pumpkin_data::item::Item;
+use pumpkin_data::recipes::{StonecuttingRecipe, RECIPES_STONECUTTING};
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::{
     inventory::{Clearable, Inventory, InventoryFuture, split_stack},
@@ -17,6 +19,16 @@ use crate::{
 };
 
 use std::sync::atomic::{AtomicU8, Ordering};
+
+/// Returns all stonecutting recipes whose ingredient matches the given item.
+pub fn get_stonecutting_recipes_for(
+    item: &Item,
+) -> Vec<&'static StonecuttingRecipe> {
+    RECIPES_STONECUTTING
+        .iter()
+        .filter(|recipe| recipe.ingredient.match_item(item))
+        .collect()
+}
 
 /// A simple inventory backing the stonecutter's input slot.
 pub struct StonecutterInventory {
@@ -174,16 +186,20 @@ impl Slot for StonecutterOutputSlot {
 /// Layout:
 /// - Slot 0: Input slot (1 item)
 /// - Slot 1: Output slot (result of selected recipe)
-/// - Slots 2-28: Player inventory (3×9)
+/// - Slots 2-28: Player inventory (3x9)
 /// - Slots 29-37: Player hotbar (9)
 ///
-/// Note: Actual recipe selection requires stonecutting recipe data to be generated
-/// by pumpkin-data. Currently the handler provides the correct slot structure and
-/// quick-move logic. Recipe matching is a placeholder until RECIPES_STONECUTTING
-/// is available from the Architect.
+/// Recipe selection:
+/// When the input slot changes, `get_available_recipes()` returns all matching
+/// stonecutting recipes from `RECIPES_STONECUTTING`. The client displays these
+/// and sends the selected recipe index. `select_recipe()` sets the output slot.
 pub struct StonecutterScreenHandler {
     pub input_inventory: Arc<StonecutterInventory>,
     pub output_slot: Arc<StonecutterOutputSlot>,
+    /// Cached list of recipes available for the current input item.
+    available_recipes: Vec<&'static StonecuttingRecipe>,
+    /// Index of the currently selected recipe, or None if nothing selected.
+    selected_recipe: Option<usize>,
     behaviour: ScreenHandlerBehaviour,
 }
 
@@ -195,6 +211,8 @@ impl StonecutterScreenHandler {
         let mut handler = Self {
             input_inventory: input_inventory.clone(),
             output_slot: output_slot.clone(),
+            available_recipes: Vec::new(),
+            selected_recipe: None,
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(WindowType::Stonecutter)),
         };
 
@@ -209,10 +227,67 @@ impl StonecutterScreenHandler {
 
         handler
     }
+
+    /// Returns all stonecutting recipes available for the current input item.
+    pub fn get_available_recipes(&self) -> &[&'static StonecuttingRecipe] {
+        &self.available_recipes
+    }
+
+    /// Updates the cached recipe list based on the current input item.
+    /// Called when the input slot changes.
+    pub async fn update_recipes(&mut self) {
+        let input_stack = self.input_inventory.get_stack(0).await;
+        let input = input_stack.lock().await;
+
+        if input.is_empty() {
+            self.available_recipes.clear();
+            self.selected_recipe = None;
+            self.output_slot.set_stack(ItemStack::EMPTY.clone()).await;
+            return;
+        }
+
+        self.available_recipes = get_stonecutting_recipes_for(input.item);
+        // Reset selection — client must re-select
+        self.selected_recipe = None;
+        self.output_slot.set_stack(ItemStack::EMPTY.clone()).await;
+    }
+
+    /// Selects a recipe by index from the available recipes list.
+    /// Sets the output slot to the recipe result if valid.
+    /// Returns true if the selection was valid.
+    pub async fn select_recipe(&mut self, index: usize) -> bool {
+        if index >= self.available_recipes.len() {
+            return false;
+        }
+
+        // Verify input slot still has an item
+        let input_stack = self.input_inventory.get_stack(0).await;
+        let input = input_stack.lock().await;
+        if input.is_empty() {
+            return false;
+        }
+
+        let recipe = self.available_recipes[index];
+        // Double-check ingredient still matches (input could have changed)
+        if !recipe.ingredient.match_item(input.item) {
+            self.selected_recipe = None;
+            self.output_slot.set_stack(ItemStack::EMPTY.clone()).await;
+            return false;
+        }
+        drop(input);
+
+        self.selected_recipe = Some(index);
+        let result = ItemStack::from(&recipe.result);
+        self.output_slot.set_stack(result).await;
+        true
+    }
 }
 
 impl ScreenHandler for StonecutterScreenHandler {
-    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
+    fn on_closed<'a>(
+        &'a mut self,
+        player: &'a dyn InventoryPlayer,
+    ) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
             self.default_on_closed(player).await;
             self.drop_inventory(player, self.input_inventory.clone())
@@ -253,13 +328,7 @@ impl ScreenHandler for StonecutterScreenHandler {
                 if !self.insert_item(&mut slot_stack, 2, 38, true).await {
                     return ItemStack::EMPTY.clone();
                 }
-                slot.on_take_item(
-                    // We need a player ref but quick_move signature doesn't give us one
-                    // in a usable way here — on_take_item consumes from input
-                    _player,
-                    &stack_prev,
-                )
-                .await;
+                slot.on_take_item(_player, &stack_prev).await;
             } else if slot_index == 0 {
                 // From input slot — move to player inventory (2..38)
                 if !self.insert_item(&mut slot_stack, 2, 38, false).await {
@@ -372,5 +441,66 @@ mod tests {
         assert!(output.has_stack().await);
         let stack = output.get_cloned_stack().await;
         assert_eq!(stack.item_count, 2);
+    }
+
+    // --- Recipe matching tests ---
+
+    #[test]
+    fn stonecutting_recipes_for_stone() {
+        // Stone should have multiple stonecutting recipes (slabs, stairs, bricks, etc.)
+        let recipes = get_stonecutting_recipes_for(&pumpkin_data::item::Item::STONE);
+        assert!(
+            !recipes.is_empty(),
+            "Stone should have at least one stonecutting recipe"
+        );
+
+        // Verify all returned recipes actually match stone
+        for recipe in &recipes {
+            assert!(
+                recipe.ingredient.match_item(&pumpkin_data::item::Item::STONE),
+                "Recipe {} should match stone",
+                recipe.recipe_id
+            );
+        }
+    }
+
+    #[test]
+    fn stonecutting_recipes_for_dirt_is_empty() {
+        // Dirt has no stonecutting recipes
+        let recipes = get_stonecutting_recipes_for(&pumpkin_data::item::Item::DIRT);
+        assert!(
+            recipes.is_empty(),
+            "Dirt should have no stonecutting recipes"
+        );
+    }
+
+    #[test]
+    fn stonecutting_recipes_for_andesite() {
+        // Andesite should produce polished andesite, slabs, stairs, walls
+        let recipes = get_stonecutting_recipes_for(&pumpkin_data::item::Item::ANDESITE);
+        assert!(
+            recipes.len() >= 2,
+            "Andesite should have multiple stonecutting recipes, got {}",
+            recipes.len()
+        );
+    }
+
+    #[test]
+    fn stonecutting_result_produces_valid_itemstack() {
+        let recipes = get_stonecutting_recipes_for(&pumpkin_data::item::Item::STONE);
+        assert!(!recipes.is_empty());
+        let result = ItemStack::from(&recipes[0].result);
+        assert!(!result.is_empty());
+        assert!(result.item_count > 0);
+    }
+
+    #[test]
+    fn stonecutting_total_recipe_count() {
+        // Verify that RECIPES_STONECUTTING was actually generated with data
+        assert_eq!(
+            RECIPES_STONECUTTING.len(),
+            254,
+            "Expected 254 stonecutting recipes"
+        );
     }
 }

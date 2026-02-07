@@ -22,4 +22,28 @@
 **Decision:** Stonecutting recipes (254) are the highest priority gap because they're the largest count of unused recipes. Smithing (30) is second. Special crafting (11) is third.
 **Rationale:** Data is already in assets/recipes.json. Only the build codegen is missing (Architect territory).
 **Affects:** Items, Architect
+**Status:** resolved — stonecutting and smithing recipe matching wired in session 008
+
+## ITEMS-004: Stonecutting recipe matching uses static filtering
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/008_items_recipe-matching.md
+**Decision:** `get_stonecutting_recipes_for()` iterates `RECIPES_STONECUTTING` and filters by `ingredient.match_item()`. Results are cached in the handler's `available_recipes` field and refreshed on input change.
+**Rationale:** Simple, correct, and fast enough for 254 recipes. No index structure needed.
+**Affects:** Items
+**Status:** active
+
+## ITEMS-005: Smithing transform takes priority over trim
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/008_items_recipe-matching.md
+**Decision:** `find_smithing_recipe()` checks transform recipes before trim recipes. If both match, transform wins.
+**Rationale:** Transform produces a different item (diamond→netherite), which is the more significant operation. Trims are cosmetic.
+**Affects:** Items
+**Status:** active
+
+## ITEMS-006: Trim recipes produce base item copy (pending component system)
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/008_items_recipe-matching.md
+**Decision:** When a smithing trim recipe matches, the output is a copy of the base item. The trim pattern is stored in `SmithingTrimRecipe::pattern` but not yet applied as a data component.
+**Rationale:** The data component system for armor trims isn't available yet. This produces a functionally correct output while the visual trim is deferred.
+**Affects:** Items
 **Status:** active
