@@ -15,3 +15,11 @@
 **Rationale:** In vanilla, dispensers and droppers share the same redstone activation logic including quasi-connectivity. Players expect dispensers to activate from power sources above them.
 **Affects:** Redstone
 **Status:** active
+
+## RED-003: Block event firing deferred until Plugin creates event types
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/002_redstone_component-verification.md
+**Decision:** Redstone agent will not create BlockRedstoneEvent/BlockPistonExtend/RetractEvent since event definitions belong in `pumpkin/src/plugin/api/events/block/` which is outside redstone write_paths. Will fire them once Plugin creates them.
+**Rationale:** Respect agent ownership boundaries. Plugin agent owns event type definitions.
+**Affects:** Redstone, Plugin
+**Status:** active — waiting on Plugin
