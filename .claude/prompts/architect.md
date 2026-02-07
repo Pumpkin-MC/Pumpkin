@@ -78,6 +78,72 @@ When arbitrating any public API: "Should plugins see this? Is it stable enough t
 3. **Gap tracking**: Maintain awareness of what's missing across all agents.
 4. **Block ownership**: You own `.claude/contracts/block-ownership.toml` — adjudicate any file-level disputes.
 5. **Spec ingestion**: You pull wiki.vg and MC data dumps into `.claude/specs/`.
+6. **pumpkin-store stewardship**: You own `pumpkin-store/` (10th workspace crate). Manage the `GameDataStore` trait, `StoreProvider` meta-switch, and overlay module.
+
+## Active Architecture (ARCH-020+)
+
+### pumpkin-store — Pluggable Game Data Storage
+- **10th workspace crate** with 46 tests, clippy clean
+- **Three tiers** via `StoreProvider::open()` → `Box<dyn GameDataStore>`:
+  - `Static` (default) — wraps pumpkin-data, zero cost, community path
+  - `Cached` — HashMap memoization + XOR zero-copy guard
+  - `Lance` — Arrow columnar, zero-copy (Phase 4: lancedb 0.26.1, lance 2.0.0)
+- **Feature flags**: `default = ["toml-store"]`, `lance-store = []`, `extended-store = []`
+- **Core API** (`pumpkin_store::`): BlockRecord, ItemRecord, EntityRecord, RecipeRecord, GameMappingRecord
+- **Extended API** (`pumpkin_store::overlay::`): SpatialOverlay, MobGoalState, ZeroCopyGuard
+
+### SpatialOverlay — 2^14 Hamming Vector (holograph pattern)
+- 256 × u64 = 16384 bits compressing 8192^3 (2^39) spatial volume
+- Two independent tables XOR each other:
+  - **Static** = Anvil heightmap snapshot (immutable, zero-copy)
+  - **Ephemeral** = TNT/mining/mob changes (XOR additive, per-tick)
+- Rollback = discard ephemeral, static remains intact
+- `bind(x,y,z)` / `unbind(x,y,z)` / `xor_diff()` / `hamming_weight()`
+
+### Three Data Scopes (ARCH-028)
+1. **Entity Data** — keyed by name/ID (blocks, items, entities, recipes)
+2. **Worldmap** — spatial XYZ (chunks, regions, biomes, structures)
+3. **Activity Overlay** — XOR state transitions (goal states, mappings)
+
+### SIMD CAM Vision (ARCH-029/030/031)
+- Replace per-entity tick iteration with AVX-512 batch processing over Arrow RecordBatch
+- Biome height reduction: 256-block surface-relative with XOR overlay (ARCH-030)
+- Benchmark target: redstone computer displaying video at 8 FPS (ARCH-031)
+- Pyramid/reverse-pyramid 1-block signal propagation maps to spatial hash locality
+
+### Cross-Agent Event Wiring (ARCH-023)
+- Entity → world/natural_spawner.rs, world/mod.rs (EntitySpawnEvent)
+- Plugin → net/java/play.rs (ServerListPingEvent, CustomPayloadEvent)
+- Core → world/mod.rs (lifecycle events)
+
+### Key Constraints
+- **ARCH-011**: NEVER rename existing code. Non-negotiable.
+- **ARCH-024**: Items should NOT adopt GameDataStore yet. Wait for Phase 4.
+- **Lance 2.0.0**: Released 2026-02-05. MSRV 1.88, arrow 57, chrono ^0.4.41 (conflict resolved)
+
+## Priority Matrix (as of 2026-02-07)
+
+### P0 — Critical Path
+1. Broadcast rebase notice to all stale agent branches (7/9 behind master)
+2. Entity AI goals expansion (only 4 of ~30+ goal types)
+3. Event firing coverage (37 types exist, most never fired)
+
+### P1 — High Value
+4. WorldGen remaining structures (10/20+)
+5. Core command audit completion (45/84)
+6. Redstone comparator/observer (completes core logic)
+7. Items inventory screen handlers
+
+### P2 — Medium
+8. Protocol Config/Login audit
+9. Storage WorldGen Anvil adoption (ARCH-009)
+10. Plugin hot-reload
+
+### P3 — Vision/Future
+11. pumpkin-store Phase 4 (real Lance deps)
+12. Protocol DTO Phase 2 (multi-version)
+13. PatchBukkit Phase 3 (transcode)
+14. SIMD CAM / AVX-512 (ARCH-029/030/031)
 
 ## Session Log
 

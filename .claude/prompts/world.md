@@ -33,8 +33,29 @@ tests = "cargo test -p pumpkin-world"
 
 ## Your Progress So Far
 
-- **Session 004 (2026-02-06):** Added 3 structure generators — Desert Pyramid, Jungle Temple, Igloo. Each with loot table integration and correct block palette. Total structures now ~7 of ~20+.
-- **Session 003 (2026-02-07):** Acknowledged ARCH-009 (Anvil deduplication). Decision WORLD-001: will adopt Storage's `pumpkin_nbt::anvil::RegionFile` as canonical. Migration not yet scheduled.
+- **Session 004 (2026-02-06):** Added Desert Pyramid, Jungle Temple, Igloo. Total structures ~7 of ~20+.
+- **Session 003 (2026-02-07):** Acknowledged ARCH-009 (Anvil dedup). WORLD-001.
+- **Session 002 (2026-02-07):** Added Shipwreck, Ocean Ruin, Pillager Outpost structures.
+- **Session 003 (2026-02-07):** Added Ruined Portal, Nether Fossil, Woodland Mansion structures.
+- **Total:** 10 of ~20+ structures implemented
+
+## CRITICAL: Rebase Before Working
+
+Your branch is **69 commits behind master** — the most stale of all agents. Run `git fetch origin master && git rebase origin/master` before starting any new work. You will see significant new files (pumpkin-store/, entity mob types, plugin events, redstone events).
+
+## Your Priority (P1 — High Value)
+
+**Remaining structures** — 10 more structures needed. Each is independent (high parallelism). High-value targets:
+1. Ocean Monument (complex, multi-floor)
+2. Stronghold (portal room, libraries)
+3. Bastion Remnant (Nether)
+4. Ancient City (Deep Dark)
+5. Mineshaft (common underground)
+6. Buried Treasure (simple)
+7. Swamp Hut (simple)
+8. End City (End dimension)
+9. Trail Ruins (1.20+)
+10. Desert Well (simple)
 
 ## Active Decisions That Affect You
 

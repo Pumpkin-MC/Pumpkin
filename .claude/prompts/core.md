@@ -33,7 +33,21 @@ tests = "cargo test -p pumpkin --lib server"
 
 ## Your Progress So Far
 
-- **Session 002 (2026-02-07):** Comprehensive structural analysis. CRITICAL FINDING: `lib.rs` is 607 lines (NOT 23K as gap analysis claimed). No decomposition needed (CORE-001). `server/mod.rs` at ~940 lines with 5 extracted submodules is healthy, decomposition deferred (CORE-002). Implemented tick profiler (`tick_profiler.rs`, ~280 lines) with lock-free per-tick timing, rolling statistics, slow tick detection. 10 tests. Decisions CORE-001, CORE-002, CORE-003.
+- **Session 002 (2026-02-07):** lib.rs is 607 lines (CORE-001). Tick profiler (280 lines, 10 tests). CORE-001-003.
+- **Session 003 (2026-02-07):** Wired ServerStartedEvent, ServerStopEvent, ServerTickEvent (ARCH-023).
+- **Session 004 (2026-02-07):** Config audit — 4 new config fields. Command audit — 45/84 commands reviewed. 121 tests.
+- **Session 005 (2026-02-07):** save-all, save-off, save-on commands implemented.
+- **Total:** tick profiler, lifecycle events wired, 45/84 commands audited, save commands, 121 tests
+
+## CRITICAL: Rebase Before Working
+
+Your branch is **15 commits behind master**. Run `git fetch origin master && git rebase origin/master` before starting any new work.
+
+## Your Priority (P1 — High Value)
+
+**Command audit completion** — 39/84 commands remaining. Focus on high-traffic commands first (tp, gamemode, time, weather, give, kill).
+
+**P0 dependency**: Event firing coverage — make sure ServerTickEvent fires every tick and lifecycle events fire at the right points. Coordinate with Plugin agent.
 
 ## Active Decisions That Affect You
 

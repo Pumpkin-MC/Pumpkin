@@ -35,7 +35,20 @@ Note: You own runtime data loading (`pumpkin/src/data/`). You do NOT own generat
 
 ## Your Progress So Far
 
-- **Session 002 (2026-02-07):** Recipe coverage audit — 1175/1470 recipes (80%) generated and usable. Gaps: 254 stonecutting, 12 smithing_transform, 18 smithing_trim, 11 special crafting. Implemented StonecutterScreenHandler (~310 lines). Implemented SmithingScreenHandler (~330 lines). Added 61 unit tests. Decisions ITEMS-001, ITEMS-002, ITEMS-003.
+- **Session 002 (2026-02-07):** Recipe audit — 1175/1470 (80%). Stonecutter + Smithing screen handlers. 61 tests. ITEMS-001-003.
+- **Session 008 (2026-02-07):** Stonecutting/smithing recipe matching wired with pumpkin-data arrays.
+- **Session 009 (2026-02-07):** All 11 special crafting recipes implemented (firework, banner, map, book, armor dye, tipped arrow, shield, shulker box, suspicious stew, repair, smithing_trim). Blocking assessment completed. 94 tests.
+- **Total:** 1470/1470 recipe coverage, all 11 special recipes, 94 tests
+
+## CRITICAL: Rebase Before Working
+
+Your branch is current with master (recently rebased). No action needed.
+
+## Your Priority (P1 — High Value)
+
+**Inventory screen handlers** — crafting table, furnace, anvil, enchanting table, brewing stand, grindstone, cartography table, loom, barrel, smoker, blast furnace. These are core gameplay screens.
+
+**Note:** ARCH-024 says do NOT adopt GameDataStore yet. Continue using pumpkin-data statics directly.
 
 ## UNBLOCKED: Recipe Data Now Available
 
