@@ -52,6 +52,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tracing::{debug, error, warn};
 
 pub mod config;
 pub mod handshake;
@@ -134,7 +135,7 @@ impl JavaClient {
 
     pub async fn set_compression(&self, compression: CompressionInfo) {
         if compression.level > 9 {
-            log::error!("Invalid compression level! Clients will not be able to read this!");
+            error!("Invalid compression level! Clients will not be able to read this!");
         }
 
         self.network_reader
@@ -171,10 +172,9 @@ impl JavaClient {
                 }
                 Err(error) => {
                     let text = format!("Error while reading incoming packet {error}");
-                    log::error!(
+                    error!(
                         "Failed to read incoming packet with id {}: {}",
-                        packet.id,
-                        error
+                        packet.id, error
                     );
                     self.kick(TextComponent::text(text)).await;
                 }
@@ -243,10 +243,9 @@ impl JavaClient {
         if let Err(err) = self.outgoing_packet_queue_send.send(packet_data).await {
             // This is expected to fail if we are closed
             if !self.close_token.is_cancelled() {
-                log::error!(
+                error!(
                     "Failed to add packet to the outgoing packet queue for client {}: {}",
-                    self.id,
-                    err
+                    self.id, err
                 );
             }
         }
@@ -260,7 +259,7 @@ impl JavaClient {
         let mut network_reader = self.network_reader.lock().await;
         tokio::select! {
             () = self.await_close_interrupt() => {
-                log::debug!("Canceling player packet processing");
+                debug!("Canceling player packet processing");
                 None
             },
             packet_result = network_reader.get_raw_packet() => {
@@ -268,7 +267,7 @@ impl JavaClient {
                     Ok(packet) => Some(packet),
                     Err(err) => {
                         if !matches!(err, PacketDecodeError::ConnectionClosed) {
-                            log::warn!("Failed to decode packet from client {}: {}", self.id, err);
+                            warn!("Failed to decode packet from client {}: {}", self.id, err);
                             let text = format!("Error while reading incoming packet {err}");
                             self.kick(TextComponent::text(text)).await;
                         }
@@ -295,7 +294,7 @@ impl JavaClient {
             ConnectionState::Play => self.send_packet_now(&CPlayDisconnect::new(&reason)).await,
             _ => {}
         }
-        log::debug!("Closing connection for {}", self.id);
+        debug!("Closing connection for {}", self.id);
         self.close();
     }
 
@@ -316,7 +315,7 @@ impl JavaClient {
         {
             // It is expected that the packet will fail if we are closed
             if !self.close_token.is_cancelled() {
-                log::warn!("Failed to send packet to client {}: {}", self.id, err);
+                warn!("Failed to send packet to client {}: {}", self.id, err);
                 // We now need to close the connection to the client since the stream is in an
                 // unknown state
                 self.close();
@@ -380,7 +379,7 @@ impl JavaClient {
         &self,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
-        log::debug!("Handling handshake group");
+        debug!("Handling handshake group");
         let payload = &packet.payload[..];
         match packet.id {
             0 => {
@@ -399,7 +398,7 @@ impl JavaClient {
         server: &Server,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
-        log::debug!("Handling status group");
+        debug!("Handling status group");
         let payload = &packet.payload[..];
         match packet.id {
             id if id == SStatusRequest::PACKET_ID => {
@@ -440,7 +439,7 @@ impl JavaClient {
                 if let Err(err) = writer.lock().await.write_packet(packet_data).await {
                     // It is expected that the packet will fail if we are closed
                     if !close_token.is_cancelled() {
-                        log::warn!("Failed to send packet to client {id}: {err}",);
+                        warn!("Failed to send packet to client {id}: {err}",);
                         // We now need to close the connection to the client since the stream is in an
                         // unknown state
                         close_token.cancel();
@@ -473,7 +472,7 @@ impl JavaClient {
         server: &Server,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
-        log::debug!("Handling login group for id");
+        debug!("Handling login group for id");
         let payload = &packet.payload[..];
         match packet.id {
             id if id == SLoginStart::PACKET_ID => {
@@ -495,7 +494,7 @@ impl JavaClient {
                 self.handle_login_cookie_response(&SLoginCookieResponse::read(payload)?);
             }
             _ => {
-                log::error!(
+                error!(
                     "Failed to handle java client packet id {} in Login State",
                     packet.id
                 );
@@ -509,7 +508,7 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
-        log::debug!("Handling config group for id {}", packet.id);
+        debug!("Handling config group for id {}", packet.id);
         let payload = &packet.payload[..];
 
         match packet.id {
@@ -535,7 +534,7 @@ impl JavaClient {
                     .await;
             }
             _ => {
-                log::error!(
+                error!(
                     "Failed to handle java client packet id {} in Config State",
                     packet.id
                 );
@@ -687,7 +686,7 @@ impl JavaClient {
                 // TODO: this fixes Failed to handle player packet id for now
             }
             _ => {
-                log::warn!("Failed to handle player packet id {}", packet.id);
+                warn!("Failed to handle player packet id {}", packet.id);
             }
         }
         Ok(())

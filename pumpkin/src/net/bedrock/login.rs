@@ -22,6 +22,7 @@ use pumpkin_world::CURRENT_BEDROCK_MC_VERSION;
 use serde::Deserialize;
 use std::sync::Arc;
 use thiserror::Error;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
@@ -58,7 +59,7 @@ impl BedrockClient {
         match self.try_handle_login(packet, server).await {
             Ok(()) => Some(()),
             Err(error) => {
-                log::warn!("Bedrock login failed: {error}");
+                warn!("Bedrock login failed: {error}");
                 let message = match error {
                     LoginError::InvalidUsername => "Your username is invalid.".to_string(),
                     _ => "Failed to log in. The data sent by your client was invalid.".to_string(),
@@ -124,7 +125,7 @@ impl BedrockClient {
     pub async fn handle_resource_pack_response(&self, packet: SResourcePackResponse) {
         // TODO: Add all
         if packet.response == SResourcePackResponse::STATUS_HAVE_ALL_PACKS {
-            log::debug!("Bedrock: STATUS_HAVE_ALL_PACKS");
+            debug!("Bedrock: STATUS_HAVE_ALL_PACKS");
             let mut frame_set = FrameSet::default();
 
             self.write_game_packet_to_set(

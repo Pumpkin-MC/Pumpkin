@@ -11,6 +11,8 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
+use tracing::{debug, error};
+
 /// Helper for managing player data in the server context.
 ///
 /// This struct provides server-wide access to the `PlayerDataStorage` and
@@ -81,7 +83,7 @@ impl ServerPlayerData {
 
                     // Save to disk periodically to prevent data loss on server crash
                     if let Err(e) = self.storage.save_player_data(&player.gameprofile.id, nbt) {
-                        log::error!(
+                        error!(
                             "Failed to save player data for {}: {e}",
                             player.gameprofile.id,
                         );
@@ -89,7 +91,7 @@ impl ServerPlayerData {
                 }
             }
 
-            log::debug!("Periodic player data save completed");
+            debug!("Periodic player data save completed");
         }
 
         Ok(())
@@ -110,7 +112,7 @@ impl ServerPlayerData {
             }
         }
 
-        log::debug!("Saved data for {total_players} online players");
+        debug!("Saved data for {total_players} online players");
         Ok(())
     }
 
@@ -138,10 +140,10 @@ impl ServerPlayerData {
             Err(e) => {
                 if self.storage.is_save_enabled() {
                     // Only log as error if player data saving is enabled
-                    log::error!("Error loading player data for {uuid}: {e}");
+                    error!("Error loading player data for {uuid}: {e}");
                 } else {
                     // Otherwise just log as info since it's expected
-                    log::debug!("Not loading player data for {uuid} (saving disabled)");
+                    debug!("Not loading player data for {uuid} (saving disabled)");
                 }
                 // Continue with default data even if there's an error
                 Ok(None)

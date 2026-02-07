@@ -10,6 +10,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
+use tracing::warn;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
@@ -92,7 +93,7 @@ impl BlockBehaviour for CactusBlock {
     }
 
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        log::warn!("CactusBlock::on_entity_collision");
+        warn!("CactusBlock::on_entity_collision");
         Box::pin(async move {
             args.entity
                 .damage(args.entity, 1.0, DamageType::CACTUS)

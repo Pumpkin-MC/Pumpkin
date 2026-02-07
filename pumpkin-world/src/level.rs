@@ -14,7 +14,6 @@ use crate::{
 };
 use crossbeam::channel::Sender;
 use dashmap::DashMap;
-use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{chunk::ChunkConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
@@ -27,6 +26,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, trace, warn};
 // use std::time::Duration;
 use std::{
     path::PathBuf,
@@ -269,7 +269,7 @@ impl Level {
     }
 
     pub async fn shutdown(&self) {
-        log::info!("Saving level...");
+        info!("Saving level...");
         self.cancel_token.cancel();
         self.shut_down_chunk_system.store(true, Ordering::Relaxed);
         self.level_channel.notify();
@@ -282,7 +282,7 @@ impl Level {
             lock.drain(..).collect::<Vec<_>>()
         };
 
-        log::info!("Joining {} synchronous threads...", handles.len());
+        info!("Joining {} synchronous threads...", handles.len());
         let join_task = tokio::task::spawn_blocking(move || {
             for handle in handles {
                 // Attempt to join. If a thread is stuck, this block stays alive.
@@ -293,20 +293,18 @@ impl Level {
         match timeout(Duration::from_secs(3), join_task).await {
             Ok(task_result) => {
                 task_result.unwrap();
-                log::info!("All threads joined successfully.");
+                info!("All threads joined successfully.");
             }
             Err(_) => {
-                log::warn!(
-                    "Timed out waiting for synchronous threads to join. Proceeding anyway..."
-                );
+                warn!("Timed out waiting for synchronous threads to join. Proceeding anyway...");
             }
         }
 
-        log::debug!("Awaiting remaining async tasks...");
+        debug!("Awaiting remaining async tasks...");
         self.tasks.wait().await;
         self.chunk_system_tasks.wait().await;
 
-        log::info!("Flushing savers to disk...");
+        info!("Flushing savers to disk...");
         self.chunk_saver.block_and_await_ongoing_tasks().await;
         self.entity_saver.block_and_await_ongoing_tasks().await;
 
@@ -341,7 +339,7 @@ impl Level {
 
     pub fn list_cached(&self) {
         for entry in self.loaded_chunks.iter() {
-            log::debug!("In map: {:?}", entry.key());
+            debug!("In map: {:?}", entry.key());
         }
     }
 
@@ -423,7 +421,7 @@ impl Level {
 
         let level = self.clone();
         self.spawn_task(async move {
-            log::debug!("Writing {} entity chunks to disk", chunks_to_process.len());
+            debug!("Writing {} entity chunks to disk", chunks_to_process.len());
             level.write_entity_chunks(chunks_to_process).await;
         });
     }
@@ -716,7 +714,7 @@ impl Level {
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
-            log::error!("Failed writing Chunk to disk {error}");
+            error!("Failed writing Chunk to disk {error}");
         }
     }
 
@@ -733,7 +731,7 @@ impl Level {
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
-            log::error!("Failed writing Chunk to disk {error}");
+            error!("Failed writing Chunk to disk {error}");
         }
     }
 

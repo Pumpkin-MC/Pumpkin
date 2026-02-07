@@ -5,12 +5,12 @@ use std::{
 };
 
 use futures::future::join_all;
-use log::{error, trace};
 use pumpkin_util::math::vector2::Vector2;
 use tokio::{
     join,
     sync::{OnceCell, RwLock, mpsc},
 };
+use tracing::{debug, error, trace};
 
 use crate::{
     chunk::{
@@ -294,7 +294,7 @@ where
                 // The closure now needs `move` to capture `self` and `folder` by value
                 .map(move |(file_name, chunk_locks)| async move {
                     let path = P::file_path(folder, &file_name);
-                    log::trace!("Updating data for file {}", path.display());
+                    trace!("Updating data for file {}", path.display());
 
                     let chunk_serializer = match self.get_serializer(&path).await {
                         Ok(file) => Ok(file),
@@ -327,7 +327,7 @@ where
                     });
                     // Run all update tasks concurrently and propagate any error
                     futures::future::try_join_all(update_tasks).await?;
-                    log::trace!("Updated data for file {}", path.display());
+                    trace!("Updated data for file {}", path.display());
 
                     let is_watched = self
                         .watchers
@@ -341,7 +341,7 @@ where
                         // to avoid other threads to write/modify the data, but allow other threads to read it
                         let serializer = chunk_serializer.read().await;
 
-                        log::debug!("Writing file for {}", path.display());
+                        debug!("Writing file for {}", path.display());
                         serializer
                             .write(&path)
                             .await
@@ -370,9 +370,9 @@ where
 
                             if can_remove {
                                 locks.remove(&path);
-                                log::trace!("Removed lockfile cache {}", path.display());
+                                trace!("Removed lockfile cache {}", path.display());
                             } else {
-                                log::trace!("Wanted to remove lockfile cache {} but someone still holds a reference to it!", path.display());
+                                trace!("Wanted to remove lockfile cache {} but someone still holds a reference to it!", path.display());
                             }
                         }
                     }

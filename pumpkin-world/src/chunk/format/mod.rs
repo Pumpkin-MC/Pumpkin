@@ -14,6 +14,7 @@ use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
+use tracing::{debug, trace};
 use uuid::Uuid;
 
 use crate::{
@@ -106,7 +107,7 @@ impl ChunkData {
                         .sum();
                 }
                 if (block || sky) && section.y == -5 {
-                    log::trace!(
+                    trace!(
                         "section {},{},{}: block_light={}/{}, sky_light={}/{}",
                         chunk_data.x_pos,
                         section.y,
@@ -331,11 +332,9 @@ impl ChunkEntityData {
                         | (uuid[3] as u128),
                 )
             } else {
-                log::debug!(
+                debug!(
                     "Entity in chunk {},{} is missing UUID: {:?}",
-                    position.x,
-                    position.y,
-                    entity_nbt
+                    position.x, position.y, entity_nbt
                 );
                 continue;
             };

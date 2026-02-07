@@ -16,6 +16,7 @@ use tokio::{
     io::{AsyncSeekExt, AsyncWrite, AsyncWriteExt, BufWriter},
     sync::Mutex,
 };
+use tracing::{debug, trace};
 
 use crate::chunk::{
     ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
@@ -348,7 +349,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     where
         I: IntoIterator<Item = usize>,
     {
-        log::trace!("Writing in place: {}", path.display());
+        trace!("Writing in place: {}", path.display());
 
         let file = tokio::fs::OpenOptions::new()
             .write(true)
@@ -364,11 +365,9 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
             if let Some(chunk) = metadata {
                 let chunk_data = &chunk.serialized_data;
                 let sector_count = chunk_data.sector_count();
-                log::trace!(
+                trace!(
                     "Writing position for chunk {} - {}:{}",
-                    index,
-                    chunk.file_sector_offset,
-                    sector_count
+                    index, chunk.file_sector_offset, sector_count
                 );
                 write
                     .write_u32((chunk.file_sector_offset << 8) | sector_count)
@@ -421,7 +420,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
 
             // Seek only if we need to
             if chunk.file_sector_offset != current_sector {
-                log::trace!("Seeking to sector {}", chunk.file_sector_offset);
+                trace!("Seeking to sector {}", chunk.file_sector_offset);
                 let _ = write
                     .seek(SeekFrom::Start(
                         chunk.file_sector_offset as u64 * SECTOR_BYTES as u64,
@@ -429,7 +428,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
                     .await?;
                 current_sector = chunk.file_sector_offset;
             }
-            log::trace!(
+            trace!(
                 "Writing chunk {} - {}:{}",
                 index,
                 current_sector,
@@ -447,7 +446,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     /// Write entire file, disregarding saved offsets
     async fn write_all(&self, path: &Path) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        log::trace!("Writing tmp file to disk: {temp_path:?}");
+        trace!("Writing tmp file to disk: {temp_path:?}");
 
         let file = tokio::fs::File::create(&temp_path).await?;
 
@@ -487,7 +486,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, path).await?;
 
-        log::trace!("Wrote file to Disk: {}", path.display());
+        trace!("Wrote file to Disk: {}", path.display());
         Ok(())
     }
 }
@@ -531,7 +530,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         let mut write_action = self.write_action.lock().await;
         match &*write_action {
             WriteAction::Pass => {
-                log::debug!(
+                debug!(
                     "Skipping write for {}, as there were no dirty chunks",
                     path.display()
                 );
@@ -632,7 +631,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
         match &*write_action {
             WriteAction::All => {
-                log::trace!("Write action is all: setting chunk in place");
+                trace!("Write action is all: setting chunk in place");
                 // Doesn't matter, just add the data
                 self.chunks_data[index] = Some(AnvilChunkMetadata {
                     serialized_data: new_chunk_data,
@@ -643,7 +642,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
             _ => {
                 match self.chunks_data[index].as_ref() {
                     None => {
-                        log::trace!(
+                        trace!(
                             "Chunk {} does not exist, appending to EOF: {}:{}",
                             index,
                             self.end_sector,
@@ -662,7 +661,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                     Some(old_chunk) => {
                         if old_chunk.serialized_data.sector_count() == new_chunk_data.sector_count()
                         {
-                            log::trace!(
+                            trace!(
                                 "Chunk {} exists, writing in place: {}:{}",
                                 index,
                                 old_chunk.file_sector_offset,
@@ -710,7 +709,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                                 .collect::<Vec<_>>();
 
                             if chunks_to_shift.last().is_none_or(|chunk| chunk.0 == index) {
-                                log::trace!(
+                                trace!(
                                     "Unable to find a chunk to swap with; falling back to serialize all",
                                 );
 
@@ -755,7 +754,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                                 // If positive, now larger -> shift right, else shift left
                                 let offset = new_sectors as i64 - swapped_sectors as i64;
 
-                                log::trace!(
+                                trace!(
                                     "Swapping {index} with {swapped_index}, shifting all chunks {swapped_index} and after by {offset}"
                                 );
 

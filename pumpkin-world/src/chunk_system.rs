@@ -26,9 +26,9 @@ use crate::{BlockStateId, GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
 use crossbeam::channel::{Receiver, Sender};
 use dashmap::DashMap;
 use itertools::Itertools;
-use log::{debug, error};
 use num_traits::abs;
 use pumpkin_data::biome::Biome;
+use tracing::{debug, error, info, warn};
 
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockState};
@@ -1004,11 +1004,9 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::debug!(
+            debug!(
                 "illegal get_block_state {pos:?} cache pos ({}, {}) size {}",
-                self.x,
-                self.z,
-                self.size
+                self.x, self.z, self.size
             );
             return RawBlockState::AIR;
         }
@@ -1028,11 +1026,9 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::debug!(
+            debug!(
                 "illegal set_block_state {pos:?} cache pos ({}, {}) size {}",
-                self.x,
-                self.z,
-                self.size
+                self.x, self.z, self.size
             );
             return;
         }
@@ -1638,7 +1634,7 @@ impl GenerationSchedule {
         lock: IOLock,
     ) {
         use crate::biome::hash_seed;
-        log::debug!("io read thread start");
+        debug!("io read thread start");
         let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
         let dimension = &level.world_gen.dimension;
         let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
@@ -1685,7 +1681,7 @@ impl GenerationSchedule {
                 }
                 LoadedData::Missing(_) => {}
                 LoadedData::Error(_) => {
-                    log::warn!("chunk data read error pos: {pos:?}. regenerating");
+                    warn!("chunk data read error pos: {pos:?}. regenerating");
                 }
             }
             if send
@@ -1704,11 +1700,11 @@ impl GenerationSchedule {
                 break;
             }
         }
-        log::debug!("io read thread stop");
+        debug!("io read thread stop");
     }
 
     async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
-        log::info!("io write thread start",);
+        info!("io write thread start",);
         while let Ok(data) = recv.recv().await {
             // debug!("io write thread receive chunks size {}", data.len());
             let mut vec = Vec::with_capacity(data.len());
@@ -1746,7 +1742,7 @@ impl GenerationSchedule {
                 }
             }
         }
-        log::info!(
+        info!(
             "io write thread stop id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")
@@ -1758,7 +1754,7 @@ impl GenerationSchedule {
         send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
         level: Arc<Level>,
     ) {
-        log::debug!(
+        debug!(
             "generation thread start id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")
@@ -1780,7 +1776,7 @@ impl GenerationSchedule {
                 break;
             }
         }
-        log::debug!(
+        debug!(
             "generation thread stop id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")
@@ -1991,7 +1987,7 @@ impl GenerationSchedule {
     }
 
     fn work(mut self, level: Arc<Level>) {
-        log::info!(
+        info!(
             "schedule thread start id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")
@@ -2142,15 +2138,15 @@ impl GenerationSchedule {
                 }
             }
         }
-        log::info!("waiting all generation task finished");
+        info!("waiting all generation task finished");
         while self.running_task_count > 0 {
             let (pos, data) = self.recv_chunk.recv().expect("recv_chunk stop");
             self.receive_chunk(pos, data);
         }
-        log::info!("saving all chunks");
+        info!("saving all chunks");
         self.save_all_chunk(true);
-        log::info!("there are {} chunks to write", self.io_write.len());
-        log::info!(
+        info!("there are {} chunks to write", self.io_write.len());
+        info!(
             "schedule thread stop id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")

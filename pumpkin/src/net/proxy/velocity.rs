@@ -16,6 +16,7 @@ use pumpkin_protocol::{
 use rand::RngExt;
 use sha2::Sha256;
 use thiserror::Error;
+use tracing::debug;
 
 use crate::net::{GameProfile, java::JavaClient};
 
@@ -108,7 +109,7 @@ pub fn receive_velocity_plugin_response(
     config: &VelocityConfig,
     response: SLoginPluginResponse,
 ) -> Result<(GameProfile, SocketAddr), VelocityError> {
-    log::debug!("Received velocity response");
+    debug!("Received velocity response");
     if let Some(data) = response.data {
         let (signature, mut data_without_signature) = data.split_at(32);
 
