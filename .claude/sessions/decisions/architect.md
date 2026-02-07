@@ -263,3 +263,22 @@ They are orthogonal: Protocol DTO translates packets at the network edge, Storag
 When Lance backend is ready (Phase 4), Items will migrate recipe queries to `store.recipes_for_output()` and `store.sql("SELECT...")`. Until then, direct pumpkin-data access is correct.
 **Affects:** Items
 **Status:** active
+
+## ARCH-025: Tiered Store Provider Architecture
+**Date:** 2026-02-07
+**Decision:** pumpkin-store implements three provider tiers via `StoreProvider` enum:
+1. **Static** (default) — `StaticStore` wrapping pumpkin-data compile-time arrays. Zero runtime cost.
+2. **Cached** — `CachedStore<S>` wrapping any `GameDataStore` + `HashMap` memoization. Each entry is a transparent `CacheEntry<T>` DTO with method/key metadata for inspection.
+3. **Lance** — `LanceStore` hydrated FROM `StaticStore` via `hydrate_from()`. No external JSON files needed. Lance 2.0 native queries (no `DataFusion` sidecar).
+
+Key design:
+- `CacheEntry<T>` has `method: Cow<str>`, `key: Cow<str>`, `value: T` — transparent, serializable
+- `CacheSnapshot` tracks cache sizes across all maps
+- `LanceStore::hydrate_from(&dyn GameDataStore)` reads all records from source store, writes to Lance tables
+- Static is always the source of truth — Cache and Lance bootstrap from it
+- Lance 2.0 includes its own query engine; `DataFusion` is NOT needed as a sidecar
+
+**Feature flags unchanged:** `default = ["toml-store"]`, `lance-store = []` (empty until Phase 4)
+**Tests:** 21 pass (9 static + 12 cached), clippy clean
+**Affects:** All agents (future consumers of `GameDataStore`)
+**Status:** active
