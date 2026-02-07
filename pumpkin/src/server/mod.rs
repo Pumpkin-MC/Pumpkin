@@ -117,6 +117,8 @@ pub struct Server {
     pub server_guid: u64,
     /// Player idle timeout in minutes (0 = disabled)
     pub player_idle_timeout: AtomicI32,
+    /// Whether automatic world/player saving is enabled (toggled by save-off/save-on)
+    pub autosave_enabled: AtomicBool,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
@@ -246,6 +248,7 @@ impl Server {
             tasks: TaskTracker::new(),
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
+            autosave_enabled: AtomicBool::new(true),
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
@@ -466,6 +469,44 @@ impl Server {
             log::error!("Failed to save level.dat: {err}");
         }
         log::info!("Completed worlds");
+    }
+
+    /// Saves all player data, triggers chunk saves on all worlds, and writes level.dat.
+    /// This is the non-destructive save used by the /save-all command.
+    /// Unlike shutdown(), this does not cancel tasks or join threads.
+    pub async fn save_all(&self, flush: bool) {
+        log::info!("Saving all player data...");
+        if let Err(e) = self.player_data_storage.save_all_players(self).await {
+            log::error!("Error saving player data: {e}");
+        }
+
+        // Trigger chunk saves on all worlds via the should_save flag
+        for world in self.worlds.load().iter() {
+            world.level.should_save.store(true, Ordering::Relaxed);
+            world.level.level_channel.notify();
+        }
+
+        // If flush requested, wait for all pending chunk writes to complete
+        if flush {
+            for world in self.worlds.load().iter() {
+                world
+                    .level
+                    .chunk_saver
+                    .block_and_await_ongoing_tasks()
+                    .await;
+            }
+        }
+
+        // Save level.dat
+        let level_data = self.level_info.load();
+        if let Err(err) = self
+            .world_info_writer
+            .write_world_info(&level_data, &self.basic_config.get_world_path())
+        {
+            log::error!("Failed to save level.dat: {err}");
+        }
+
+        log::info!("Save complete.");
     }
 
     /// Broadcasts a packet to all players in all worlds.
@@ -760,9 +801,11 @@ impl Server {
 
         set.join_all().await;
 
-        // Global tasks
-        if let Err(e) = self.player_data_storage.tick(self).await {
-            log::error!("Error ticking player data: {e}");
+        // Global tasks (only autosave when enabled — /save-off disables this)
+        if self.autosave_enabled.load(Ordering::Relaxed) {
+            if let Err(e) = self.player_data_storage.tick(self).await {
+                log::error!("Error ticking player data: {e}");
+            }
         }
 
         self.tick_profiler.record_world_tick(phase_start);
