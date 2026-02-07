@@ -12,10 +12,12 @@ use serializer::WriteAdaptor;
 use tag::NbtTag;
 use thiserror::Error;
 
+pub mod anvil;
 pub mod compound;
 pub mod deserializer;
 pub mod nbt_compress;
 pub mod serializer;
+pub mod snbt;
 pub mod tag;
 
 pub use deserializer::{from_bytes, from_bytes_unnamed};
