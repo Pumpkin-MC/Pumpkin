@@ -134,11 +134,6 @@ run/
 result
 result-*
 
-# Agent orchestration workspace
-.current-agent
-.claude/sessions/
-.claude/specs/
-.claude/reference/
 
 # Generated Data
 pumpkin-data/src/generated
