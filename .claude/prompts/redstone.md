@@ -36,16 +36,25 @@ tests = "cargo test --lib -p pumpkin -- block::blocks::redstone"
 - **Session 001 (2026-02-07):** Fixed vanilla update order (W,E,D,U,N,S). Dispenser quasi-connectivity. 28 tests. RED-001, RED-002.
 - **Session 002 (2026-02-07):** Component verification — repeater, comparator, observer, piston validation. 30 tests.
 - **Session 003 (2026-02-07):** Wired BlockRedstoneEvent, BlockPistonExtendEvent, BlockPistonRetractEvent (ARCH-023).
-- **Total:** vanilla update order, quasi-connectivity, event wiring, 28+ tests
-- Current Pumpkin redstone: ~6284 lines across 20+ files. Partially complete.
+- **Session 004 (2026-02-07):** Comparator/observer completion audit — both verified vanilla-parity. 14 new logic tests (exhaustive formula, truth tables, pulse state machine). **72 total tests** (59 redstone + 13 piston). Rebased to master.
+- **Total:** vanilla update order, quasi-connectivity, event wiring, comparator+observer verified complete, 72 tests
 
 ## CRITICAL: Rebase Before Working
 
-Your branch is **14 commits behind master**. Run `git fetch origin master && git rebase origin/master` before starting any new work.
+Your branch is current with master (rebased in session 004). No action needed.
 
 ## Your Priority (P1 — High Value)
 
-**Comparator and observer completion** — these are the key missing pieces for functional redstone. Completes the core logic.
+**Remaining redstone events** — 10 events still in backlog. High-value targets:
+1. **BlockPhysicsEvent** — fires on any block update (high priority)
+2. Hopper-comparator interaction tests — verify comparator reads hopper fill levels
+3. Remaining 9 events: BellRing, NotePlay, TNTPrime, etc.
+
+**Cross-agent dependencies identified:**
+- Items: Container blocks need `get_comparator_output` (chests, barrels, furnaces)
+- Entity: Item frame `getComparatorPower()` hardcoded to 1 in comparator.rs:361
+
+**Comparator and observer are functionally complete** for vanilla parity — no further work needed on core logic.
 
 ## ARCH-031: Redstone Computer Benchmark
 

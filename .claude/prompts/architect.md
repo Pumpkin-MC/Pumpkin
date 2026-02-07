@@ -129,10 +129,10 @@ When arbitrating any public API: "Should plugins see this? Is it stable enough t
 3. Event firing coverage (37 types exist, most never fired)
 
 ### P1 — High Value
-4. WorldGen remaining structures (10/20+)
-5. Core command audit completion (45/84)
-6. Redstone comparator/observer (completes core logic)
-7. Items inventory screen handlers
+4. WorldGen remaining structures (13/20+, 7 left)
+5. Core command audit completion (55/84, 29 remaining)
+6. Redstone remaining events (10 left, core logic complete)
+7. Items remaining screen handlers (Beacon, Lectern, Merchant, Crafter)
 
 ### P2 — Medium
 8. Protocol Config/Login audit

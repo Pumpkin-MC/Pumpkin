@@ -37,25 +37,23 @@ tests = "cargo test -p pumpkin-world"
 - **Session 003 (2026-02-07):** Acknowledged ARCH-009 (Anvil dedup). WORLD-001.
 - **Session 002 (2026-02-07):** Added Shipwreck, Ocean Ruin, Pillager Outpost structures.
 - **Session 003 (2026-02-07):** Added Ruined Portal, Nether Fossil, Woodland Mansion structures.
-- **Total:** 10 of ~20+ structures implemented
+- **Session 004 (2026-02-07):** Added **Mineshaft, Ancient City, Trail Ruins** structures. **13 of ~20+ structures implemented.**
+- **Total:** 13 of ~20+ structures implemented
 
-## CRITICAL: Rebase Before Working
+## Rebase Status
 
-Your branch is **69 commits behind master** — the most stale of all agents. Run `git fetch origin master && git rebase origin/master` before starting any new work. You will see significant new files (pumpkin-store/, entity mob types, plugin events, redstone events).
+Your branch was recently merged (PR #67). Verify rebase before next session — was 69 commits behind, should now be current.
 
 ## Your Priority (P1 — High Value)
 
-**Remaining structures** — 10 more structures needed. Each is independent (high parallelism). High-value targets:
+**Remaining structures** — 7 more needed. High-value targets:
 1. Ocean Monument (complex, multi-floor)
 2. Stronghold (portal room, libraries)
 3. Bastion Remnant (Nether)
-4. Ancient City (Deep Dark)
-5. Mineshaft (common underground)
-6. Buried Treasure (simple)
-7. Swamp Hut (simple)
-8. End City (End dimension)
-9. Trail Ruins (1.20+)
-10. Desert Well (simple)
+4. Buried Treasure (simple)
+5. Swamp Hut (simple)
+6. End City (End dimension)
+7. Desert Well (simple)
 
 ## Active Decisions That Affect You
 
