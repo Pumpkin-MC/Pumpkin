@@ -1,68 +1,52 @@
 //! # pumpkin-store — Pluggable Game Data Storage
 //!
-//! Abstracts game data access behind the [`GameDataStore`] trait with three tiers:
+//! Abstracts game data access behind the [`GameDataStore`] trait.
 //!
-//! ## Provider Tiers
+//! ## Single-Flip Separation of Concerns
+//!
+//! [`StoreProvider`] is the **single control point** for selecting behavior.
+//! Community default is `StoreProvider::Static` — zero cost, zero extended features.
+//! One flip to `Cached` or `Lance` activates extended capabilities. Everything
+//! flows through `StoreProvider::open()` → `Box<dyn GameDataStore>`.
 //!
 //! ```text
-//! ┌─────────────────────────────────────────────────────────────┐
-//! │              GameDataStore trait                             │
-//! ├──────────────┬────────────────────┬─────────────────────────┤
-//! │  StaticStore │   CachedStore      │     LanceStore          │
-//! │  (default)   │   (cached)         │     (lance-store)       │
-//! │  pumpkin-data│   Static+HashMap   │     hydrate from Static │
-//! │  compile-time│   transparent DTOs │     Arrow zero-copy     │
-//! │  zero-cost   │   O(1) hot path    │     lance 2.0 native    │
-//! └──────────────┴────────────────────┴─────────────────────────┘
+//! StoreProvider::open()            ← single flip point
+//!      │
+//!      ├── Static  (default)       ← community path: pumpkin-data only
+//!      │   Zero cost, no cache, no XOR, no overlays.
+//!      │   Identical to using pumpkin-data directly.
+//!      │
+//!      ├── Cached                  ← extended: HashMap + XOR zero-copy guard
+//!      │   Transparent CacheEntry DTOs, debug_assert XOR verification.
+//!      │
+//!      └── Lance                   ← extended: Arrow columnar, zero-copy
+//!          Hydrated from Static, lance 2.0 native queries.
 //! ```
 //!
-//! - **`StaticStore`** (default): Wraps `pumpkin-data` static arrays. Zero runtime cost,
-//!   zero new dependencies. Developers see no difference from using pumpkin-data directly.
-//!
-//! - **`CachedStore`**: Wraps any store + adds `HashMap` memoization with transparent
-//!   [`CacheEntry`] DTOs. Each entry records the lookup method, key, and value.
-//!   No additional dependencies.
-//!
-//! - **`LanceStore`** (opt-in): Hydrates Lance tables FROM `StaticStore`, then serves
-//!   zero-copy Arrow reads. Lance 2.0 provides native queries — no `DataFusion` sidecar.
-//!   Enable with `--features lance-store`.
-//!
-//! ## Quick Start
+//! ## Core API (all tiers)
 //!
 //! ```rust,ignore
-//! use pumpkin_store::{GameDataStore, open_default_store};
+//! use pumpkin_store::{StoreProvider, GameDataStore};
 //!
-//! let store = open_default_store();
-//! let block = store.block_by_state_id(1);
-//! let item = store.item_by_name("diamond_sword");
+//! let store = StoreProvider::default().open(); // Static — community default
+//! let block = store.block_by_name("stone")?;
+//! let item  = store.item_by_name("diamond_sword")?;
 //! ```
 //!
-//! ## Cached Store
+//! ## Extended API (Cached/Lance tiers)
+//!
+//! The [`overlay`] module contains spatial types used by extended tiers.
+//! These are always compiled (zero deps) but only active when the provider
+//! is flipped away from `Static`.
 //!
 //! ```rust,ignore
-//! use pumpkin_store::{CachedStore, StaticStore};
+//! use pumpkin_store::StoreProvider;
+//! use pumpkin_store::overlay::{SpatialOverlay, MobGoalState};
 //!
-//! let cached = CachedStore::new(StaticStore::new());
-//! let block = cached.block_by_name("stone"); // delegate + cache
-//! let block = cached.block_by_name("stone"); // instant O(1) hit
-//! let snap = cached.snapshot();               // inspect cache state
+//! let store = StoreProvider::Cached.open(); // single flip → extended
+//! let mut world_map = SpatialOverlay::new();
+//! world_map.bind(100, 64, -200);
 //! ```
-//!
-//! ## Lance Store (hydration from static)
-//!
-//! ```rust,ignore
-//! use pumpkin_store::{StaticStore, LanceStore};
-//!
-//! let static_store = StaticStore::new();
-//! let mut lance = LanceStore::open("./data/lance").await?;
-//! lance.hydrate_from(&static_store).await?;  // one-time, zero-copy Arrow tables
-//! ```
-//!
-//! ## Future: GEL (Graph Execution Language)
-//!
-//! The Lance backend is the substrate for a future Graph Execution Language layer
-//! that compiles Java imports (e.g. Bukkit API calls) to graph operations over
-//! Arrow columnar storage. See ARCH-020 and holograph (AdaWorldAPI/holograph).
 
 mod error;
 mod traits;
@@ -76,10 +60,20 @@ mod static_store;
 mod lance_store;
 
 pub use error::{StoreError, StoreResult};
-pub use traits::{
-    BlockRecord, EntityRecord, GameDataStore, GameMappingRecord, ItemRecord, MobGoalState,
-    RecipeRecord, SpatialOverlay, ZeroCopyGuard, OVERLAY_BITS, OVERLAY_WORDS, XOR_SENTINEL,
-};
+
+// ── Core API (community path) ─────────────────────────────────────────
+// These types are used by all tiers including Static (community default).
+pub use traits::{BlockRecord, EntityRecord, GameDataStore, GameMappingRecord, ItemRecord, RecipeRecord};
+
+// ── Extended API (Cached/Lance tiers) ──────────────────────────────────
+// Spatial overlays, XOR guards, and goal state encoding. Always compiled
+// (zero deps) but only _active_ when StoreProvider is flipped from Static.
+// Community default path never touches these.
+pub mod overlay {
+    pub use crate::traits::{
+        MobGoalState, SpatialOverlay, ZeroCopyGuard, OVERLAY_BITS, OVERLAY_WORDS, XOR_SENTINEL,
+    };
+}
 
 pub use cached_store::{CacheEntry, CacheSnapshot, CachedStore};
 
