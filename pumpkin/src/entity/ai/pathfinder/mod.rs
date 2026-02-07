@@ -62,7 +62,7 @@ impl Navigator {
         self.current_path = None;
     }
 
-    pub fn cancel(&mut self) {
+    pub fn stop(&mut self) {
         self.current_goal = None;
         self.current_path = None;
     }

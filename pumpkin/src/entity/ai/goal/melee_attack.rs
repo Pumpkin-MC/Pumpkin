@@ -5,6 +5,7 @@ use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 const MAX_ATTACK_TIME: i64 = 20;
 
@@ -88,17 +89,15 @@ impl Goal for MeleeAttackGoal {
                 return !mob.get_mob_entity().navigator.lock().await.is_idle();
             }
 
-            if mob
+            let is_valid_target = !target
+                .get_player()
+                .is_some_and(|p| p.is_spectator() || p.is_creative());
+
+            let in_range = mob
                 .get_mob_entity()
-                .is_in_position_target_range_pos(&target.get_entity().block_pos.load())
-            {
-                // This is sync based on the assumed Player methods
-                target
-                    .get_player()
-                    .is_some_and(|player| player.is_spectator() || player.is_creative())
-            } else {
-                false
-            }
+                .is_in_position_target_range_pos(&target.get_entity().block_pos.load());
+
+            in_range && is_valid_target
         })
     }
 
@@ -138,32 +137,48 @@ impl Goal for MeleeAttackGoal {
     }
 
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        // TODO: implement
+        // This code is not Vanilla, tick method needs to be reimplemented
         Box::pin(async {
-            // TODO: implement
-            // This code is not Vanilla, tick method needs to be reimplemented
+            let target_lock = mob.get_mob_entity().target.lock().await;
+            let Some(target) = target_lock.as_ref() else {
+                return;
+            };
 
-            if let Some(target) = mob.get_mob_entity().target.lock().await.as_ref() {
-                let current_target_pos = target.get_entity().pos.load();
+            //mob.get_mob_entity().look_at(target, 30.0, 30.0);
 
-                // Only update navigator if last position is not set, or target has moved more than 1
-                // block
-                let should_update_nav = self.last_target_position.is_none_or(|last_pos| {
-                    let distance_moved = ((current_target_pos.x - last_pos.x).powi(2)
-                        + (current_target_pos.y - last_pos.y).powi(2)
-                        + (current_target_pos.z - last_pos.z).powi(2))
-                    .sqrt();
-                    distance_moved > 1.0
+            self.update_countdown_ticks = (self.update_countdown_ticks - 1).max(0);
+
+            let current_target_pos = target.get_entity().pos.load();
+            let should_update_nav = self.update_countdown_ticks <= 0
+                && self.last_target_position.is_none_or(|last_pos| {
+                    current_target_pos.squared_distance_to_vec(&last_pos) >= 1.0
                 });
 
-                if should_update_nav {
-                    let mut navigator = mob.get_mob_entity().navigator.lock().await;
-                    navigator.set_progress(NavigatorGoal {
-                        current_progress: mob.get_entity().pos.load(),
-                        destination: current_target_pos,
-                        speed: self.speed,
-                    });
-                    self.last_target_position = Some(current_target_pos);
-                }
+            if should_update_nav {
+                let mut navigator = mob.get_mob_entity().navigator.lock().await;
+                navigator.set_progress(NavigatorGoal {
+                    current_progress: mob.get_entity().pos.load(),
+                    destination: current_target_pos,
+                    speed: self.speed,
+                });
+                self.last_target_position = Some(current_target_pos);
+                self.update_countdown_ticks = 4 + mob.get_random().random_range(0..7);
+            }
+
+            self.cooldown = (self.cooldown - 1).max(0);
+
+            if self.cooldown <= 0
+                && mob
+                    .get_mob_entity()
+                    .is_in_attack_range(target.as_ref())
+                    .await
+            {
+                self.cooldown = self.get_max_cooldown();
+                mob.get_mob_entity().living_entity.swing_hand().await;
+
+                //let world = mob.get_entity().world.load();
+                //mob.get_mob_entity().try_attack(world, target);
             }
         })
     }
