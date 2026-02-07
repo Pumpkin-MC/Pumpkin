@@ -44,3 +44,10 @@ Standard scale: Swim=0, Panic=1, Attack=2, Special=4-5, Wander=6, LookAt=7, Look
 **Session:** entity-007
 **Decision:** EntitySpawnEvent cannot be wired from entity code. Entity spawning occurs in `world/mod.rs` which is outside entity agent's write_paths. Documented as a cross-agent need for the world/core agent.
 **Rationale:** The entity agent's contract restricts writes to `pumpkin/src/entity/`. The spawn code path lives in `pumpkin/src/world/mod.rs`.
+**Superseded by:** ENT-008 (ARCH-023 granted cross-agent access)
+
+## ENT-008: EntitySpawnEvent Wired in Both Spawn Paths
+**Date:** 2026-02-07
+**Session:** entity-007 (continued)
+**Decision:** EntitySpawnEvent fires in both `World::spawn_entity()` (world/mod.rs) and the natural spawner batch path (world/natural_spawner.rs). Per ARCH-023 cross-agent write authorization.
+**Rationale:** Natural spawner uses its own batch spawn logic (doesn't call `spawn_entity()`), so both paths need the event. Single `fire()` call per entity, no logic changes beyond the event check — per ARCH-023 rules.

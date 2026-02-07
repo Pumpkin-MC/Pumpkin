@@ -12,9 +12,12 @@ Rebased to latest master. Hydrated blackboard (entity at 30%).
 Previous sessions (005, 006) established 16 hostile mobs and 10 passive mobs, plus 4 AI goals and
 the Navigator::is_idle() fix. This session focuses on Priority #1 (plugin events) and Priority #2 (more mobs).
 
+ARCH-023 granted cross-agent write access to `world/mod.rs` and `world/natural_spawner.rs` for
+EntitySpawnEvent wiring. Used this authorization to complete all 4 plugin events.
+
 ## What I Did
 
-### 1. Wired Plugin Entity Events into Entity Lifecycle
+### 1. Wired All 4 Plugin Entity Events into Entity Lifecycle
 
 **EntityDamageEvent + EntityDamageByEntityEvent** — wired into `LivingEntity::damage_with_context()` in `living.rs`:
 - Fire `EntityDamageByEntityEvent` first (when source entity exists), then `EntityDamageEvent` for all damage
@@ -24,7 +27,9 @@ the Navigator::is_idle() fix. This session focuses on Priority #1 (plugin events
 **EntityDeathEvent** — wired into `LivingEntity::on_death()` in `living.rs`:
 - Fire before death processing; if cancelled, skip death entirely
 
-**EntitySpawnEvent** — ⚠️ CANNOT wire from entity code. Spawning happens in `world/mod.rs` which is outside entity write_paths. Documented as cross-agent need for world/core agent.
+**EntitySpawnEvent** — wired in TWO locations per ARCH-023:
+- `World::spawn_entity()` in `world/mod.rs`: Fire before spawn packet broadcast; if cancelled, return early. Changed signature from `&self` to `self: &Arc<Self>` (all callers already use `Arc<Self>`).
+- Natural spawner batch spawn in `world/natural_spawner.rs`: Fire for each entity in batch before preparation; filter out cancelled entities.
 
 ### 2. Created 9 More Mob Entities (Total: 34 registered)
 
@@ -52,6 +57,8 @@ the Navigator::is_idle() fix. This session focuses on Priority #1 (plugin events
 - `pumpkin/src/entity/type.rs` — imports + 9 new match arms
 - `pumpkin/src/entity/mob/mod.rs` — 3 new module declarations
 - `pumpkin/src/entity/passive/mod.rs` — 6 new module declarations
+- `pumpkin/src/world/mod.rs` — EntitySpawnEvent in spawn_entity() [ARCH-023]
+- `pumpkin/src/world/natural_spawner.rs` — EntitySpawnEvent in batch spawn [ARCH-023]
 
 ## Files Created
 - `pumpkin/src/entity/mob/phantom.rs`
@@ -66,16 +73,16 @@ the Navigator::is_idle() fix. This session focuses on Priority #1 (plugin events
 
 ## Decisions Made
 - ENT-006: Use OnceLock array for DamageType static reference cache
-- ENT-007: EntitySpawnEvent requires cross-agent coordination
+- ENT-007: EntitySpawnEvent requires cross-agent coordination → resolved by ARCH-023
+- ENT-008: EntitySpawnEvent fires in both spawn_entity() and natural_spawner batch path
 
 ## What Others Should Know
-- ⚠️ **World/Core agent**: EntitySpawnEvent needs to be fired in `world/mod.rs` during entity spawning. Entity agent cannot do this (outside write_paths).
-- Plugin events (damage, death) are now live — plugins can cancel damage and death.
+- All 4 plugin entity events (spawn, damage, damage-by-entity, death) are now wired and cancellable.
 - 34 entity types are now registered in the factory (up from 25 at session start).
+- `World::spawn_entity()` signature changed from `&self` to `self: &Arc<Self>` — all existing callers already use `Arc<Self>`.
 
 ## What I Need From Others
-- **World/Core agent**: Wire `EntitySpawnEvent` in `world/mod.rs` spawn_entity path
-- **Architect**: If more entity types are needed beyond the current 34, guidance on priority order
+- **Architect**: Guidance on priority for remaining ~45 entity types toward the 79+ vanilla target
 
 ## Build Status
 - `cargo build` — clean, no warnings

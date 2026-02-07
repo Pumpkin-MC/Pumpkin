@@ -1,5 +1,6 @@
 use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
+use crate::plugin::entity::entity_spawn::EntitySpawnEvent;
 use crate::world::World;
 use arc_swap::ArcSwap;
 use pumpkin_data::biome::Spawner;
@@ -422,6 +423,28 @@ pub async fn spawn_category_for_position(
 
     // Spawn in batch
     if !batch_buffer.is_empty() {
+        // Fire EntitySpawnEvent for each entity; skip cancelled ones
+        if let Some(server) = world.server.upgrade() {
+            let mut approved = Vec::with_capacity(batch_buffer.len());
+            for entity in batch_buffer {
+                let base = entity.get_entity();
+                let event = EntitySpawnEvent::new(
+                    base.entity_id,
+                    base.entity_type,
+                    base.pos.load(),
+                    world.clone(),
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if !event.cancelled {
+                    approved.push(entity);
+                }
+            }
+            batch_buffer = approved;
+        }
+        if batch_buffer.is_empty() {
+            return;
+        }
+
         let mut prepared_data = Vec::with_capacity(batch_buffer.len());
 
         for entity in &batch_buffer {
