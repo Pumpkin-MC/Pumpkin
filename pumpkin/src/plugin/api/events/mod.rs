@@ -48,7 +48,7 @@ pub trait Payload: Send + Sync {
     /// macro generates an override that returns the actual cancellation state.
     ///
     /// This enables Bukkit-compatible `ignore_cancelled` filtering in `fire()`.
-    fn cancelled(&self) -> bool {
+    fn is_cancelled(&self) -> bool {
         false
     }
 }
@@ -206,24 +206,24 @@ mod tests {
     #[test]
     fn cancellable_event_starts_not_cancelled() {
         let event = ServerCommandEvent::new("test".to_string());
-        assert!(!Cancellable::cancelled(&event));
+        assert!(!event.cancelled());
     }
 
     #[test]
     fn cancellable_event_can_be_cancelled() {
         let mut event = ServerCommandEvent::new("test".to_string());
-        assert!(!Cancellable::cancelled(&event));
+        assert!(!event.cancelled());
         event.set_cancelled(true);
-        assert!(Cancellable::cancelled(&event));
+        assert!(event.cancelled());
     }
 
     #[test]
     fn cancellable_event_can_be_uncancelled() {
         let mut event = ServerCommandEvent::new("test".to_string());
         event.set_cancelled(true);
-        assert!(Cancellable::cancelled(&event));
+        assert!(event.cancelled());
         event.set_cancelled(false);
-        assert!(!Cancellable::cancelled(&event));
+        assert!(!event.cancelled());
     }
 
     // --- Downcast tests ---
@@ -305,7 +305,7 @@ mod tests {
     fn server_command_event_construction() {
         let event = ServerCommandEvent::new("say hello".to_string());
         assert_eq!(event.command, "say hello");
-        assert!(!Cancellable::cancelled(&event));
+        assert!(!event.cancelled());
     }
 
     // --- Event clone tests ---
@@ -315,7 +315,7 @@ mod tests {
         let mut event = ServerCommandEvent::new("test".to_string());
         event.set_cancelled(true);
         let cloned = event.clone();
-        assert!(Cancellable::cancelled(&cloned));
+        assert!(cloned.cancelled());
         assert_eq!(cloned.command, "test");
     }
 
