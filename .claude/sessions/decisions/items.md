@@ -47,3 +47,19 @@
 **Rationale:** The data component system for armor trims isn't available yet. This produces a functionally correct output while the visual trim is deferred.
 **Affects:** Items
 **Status:** active
+
+## ITEMS-007: Special recipes implemented as procedural code in pumpkin-inventory
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/009_items_special-recipes-and-blocking-assessment.md
+**Decision:** All 11 `crafting_special_*` recipes live in `pumpkin-inventory/src/crafting/special_recipes.rs` as procedural Rust functions. They are NOT generated from data. Each recipe type has its own matching function.
+**Rationale:** Special recipes can't be represented as static data — their results depend on input item components (dye colors, potion effects, book contents). Procedural code is the correct approach.
+**Affects:** Items
+**Status:** active
+
+## ITEMS-008: Special recipes checked after RECIPES_CRAFTING as fallback
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/009_items_special-recipes-and-blocking-assessment.md
+**Decision:** `try_special_recipe()` is called in `ResultSlot::refill_output()` only when the normal `match_recipe()` returns None. Special recipes never override data-driven recipes.
+**Rationale:** Data-driven recipes are authoritative. Special recipes are fallback for the 11 types that have no data representation. This ordering prevents conflicts.
+**Affects:** Items
+**Status:** active
