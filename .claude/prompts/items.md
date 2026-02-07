@@ -83,6 +83,8 @@ If a recipe, loot table, or item property exists as JSON data in the Minecraft d
 
 ## Reference Data
 
+- `.claude/reference/items-data.md` — your agent reference package (recipes, loot tables, enchantments, Bukkit events)
+- `.claude/registry/items.toml` — full item registry with properties
 - `pumpkin-data/build/recipes.rs` — the generated recipe structs and arrays
 - `.claude/specs/data/mcdata-1.21.4.zip` — recipe/, loot_table/, enchantment/ data
 - `.claude/specs/data/1.21.4/prismarine/foods.json` — hunger/saturation values

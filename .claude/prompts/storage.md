@@ -58,6 +58,8 @@ Priority areas:
 
 ## Reference Data
 
+- `.claude/registry/blocks.toml` — full block registry (for chunk NBT block state palette)
+- `.claude/registry/entities.toml` — entity registry (for player data NBT structure)
 - `.claude/specs/data/mcdata-1.21.4.zip` — level format, player data format
 - `.claude/specs/data/1.21.4/summary/block_definitions.json` — block state palette for chunk NBT
 

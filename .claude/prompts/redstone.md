@@ -70,6 +70,8 @@ When in doubt between "correct" and "vanilla-compatible," choose vanilla-compati
 
 ## Reference Data
 
+- `.claude/reference/redstone-data.md` — your agent reference package (components, update order, Bukkit events)
+- `.claude/registry/blocks.toml` — full block registry with states and properties
 - `.claude/specs/data/1.21.4/summary/blocks.json` — block states including redstone properties
 - `.claude/specs/data/1.21.4/summary/block_definitions.json` — block state definitions
 - `.claude/registry/bukkit_api.toml` — full Bukkit event registry with your 13 missing events

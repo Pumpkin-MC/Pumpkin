@@ -89,6 +89,7 @@ Priority areas:
 
 ## Reference Data
 
+- `.claude/reference/core-data.md` — your agent reference package (tick loop, commands, lifecycle, Bukkit events)
 - `.claude/specs/data/1.21.4/summary/commands.json` — command packet structure and tree
 - `.claude/specs/data/1.21.4/summary/registries.json` — all registry IDs
 - `.claude/registry/bukkit_api.toml` — full Bukkit event registry with your 7 missing events

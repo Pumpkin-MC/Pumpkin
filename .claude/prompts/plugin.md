@@ -103,6 +103,8 @@ void setCancelled(boolean cancel); // Rust: Cancellable::set_cancelled()
 
 ## Reference Data
 
+- `.claude/reference/plugin-data.md` — your agent reference package (event system, API surface, Mindcraft, Bukkit events)
+- `.claude/reference/SPRINT-INDEX.md` — sprint overview with registry query examples
 - `.claude/registry/bukkit_api.toml` — your authoritative source: 283 events, status, owners
 - `.claude/specs/data/bukkit-api/BUKKIT-API-REFERENCE.md` — 318 events across 11 packages
 - `.claude/specs/data/bukkit-api/bukkit-api-ref.zip` — scraped Javadoc
