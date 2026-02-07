@@ -386,3 +386,43 @@ Prerequisites:
 
 **Affects:** Entity (tick loop), Core (scheduler), WorldGen (chunk spatial index)
 **Status:** vision (long-term)
+
+## ARCH-030: Biome Height Reduction — 256-block Surface-Relative XOR
+**Date:** 2026-02-07
+**Decision:** The SpatialOverlay (ARCH-029) can optimize biome processing by using reduced 256-block height relative to surface XY with XOR overlay. Instead of storing the full 384-block world height (Y=-64 to Y=320), biomes compress to a 256-block height vector relative to the surface position at each (X,Z) column.
+
+**Design:**
+- Surface height map at (X,Z) → Y_surface (from heightmap data)
+- Overlay height = Y - Y_surface, clamped to [0, 256) relative range
+- Static table: Anvil heightmap snapshot (XY surface), zero-copy
+- Ephemeral table: TNT/mining/mob height changes XOR'd against static
+- Rollback: discard ephemeral, static remains intact
+
+**Benefits:**
+- 256-block range fits in 8 bits instead of 9 (384 range needs 9 bits)
+- Surface-relative encoding means underground (negative relative Y) and sky (positive) are symmetric
+- XOR between static surface and ephemeral changes isolates terrain modifications
+- AVX-512: 64 height columns per SIMD operation (8-bit × 64 = 512 bits per lane)
+
+**Affects:** WorldGen (heightmap data), Entity (mob height tracking), Redstone (signal propagation height)
+**Status:** vision (extension of ARCH-029)
+
+## ARCH-031: Redstone Computer Benchmark — 8 FPS Video Display
+**Date:** 2026-02-07
+**Decision:** Target benchmark for SIMD CAM optimization (ARCH-029): a redstone computer using 1-block-distance pyramid/reverse-pyramid signal propagation pattern that can drive a screen displaying video at 8 FPS.
+
+**Why this benchmark matters:**
+- Redstone computers are the hardest stress test for tick performance
+- 1-block pyramid/reverse-pyramid is a common redstone CPU architecture (converging/diverging signal tree)
+- 8 FPS at 20 TPS means 2.5 ticks per frame — every tick must evaluate thousands of redstone dust positions
+- If the SIMD CAM + SpatialOverlay can handle this, it proves the architecture scales to real-world complexity
+- Vanilla Minecraft redstone computers typically run at <1 FPS due to sequential tick evaluation
+
+**Architecture fit:**
+- Each redstone dust position is a spatial bind in the SpatialOverlay
+- Signal propagation is XOR diff between tick N and tick N+1
+- AVX-512 batch evaluates 16 redstone positions per instruction (f32 signal strength)
+- Pyramid pattern maps naturally to spatial hash locality (adjacent blocks hash nearby)
+
+**Affects:** Redstone (signal evaluation), Core (tick scheduler), Entity (SIMD CAM)
+**Status:** vision (benchmark target for ARCH-029)
