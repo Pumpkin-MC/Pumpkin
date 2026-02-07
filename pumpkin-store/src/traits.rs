@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
 use crate::StoreResult;
@@ -6,10 +8,13 @@ use crate::StoreResult;
 ///
 /// This is what crosses the store boundary. Backends fill it from whatever
 /// storage they use (static arrays, TOML files, Arrow batches, Lance tables).
+///
+/// Uses `Cow<'static, str>` for zero-copy from pumpkin-data statics AND
+/// owned strings from TOML registry files (`.claude/registry/blocks.toml`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockRecord {
     pub id: u16,
-    pub name: &'static str,
+    pub name: Cow<'static, str>,
     pub hardness: f32,
     pub blast_resistance: f32,
     pub is_air: bool,
@@ -24,7 +29,7 @@ pub struct BlockRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ItemRecord {
     pub id: u16,
-    pub name: &'static str,
+    pub name: Cow<'static, str>,
     pub max_stack_size: u8,
 }
 
@@ -32,7 +37,7 @@ pub struct ItemRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntityRecord {
     pub id: u16,
-    pub name: &'static str,
+    pub name: Cow<'static, str>,
     pub max_health: Option<f32>,
     pub is_mob: bool,
     pub width: f32,
@@ -43,9 +48,9 @@ pub struct EntityRecord {
 /// Lightweight recipe record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecipeRecord {
-    pub recipe_type: &'static str,
-    pub group: &'static str,
-    pub result_item: &'static str,
+    pub recipe_type: Cow<'static, str>,
+    pub group: Cow<'static, str>,
+    pub result_item: Cow<'static, str>,
     pub result_count: u8,
 }
 

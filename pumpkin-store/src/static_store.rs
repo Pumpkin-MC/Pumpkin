@@ -3,6 +3,8 @@
 //! Zero runtime cost — all lookups delegate to `Block::from_*`, `Item::from_*`, etc.
 //! No heap allocation, no I/O, no new dependencies beyond pumpkin-data.
 
+use std::borrow::Cow;
+
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -34,7 +36,7 @@ impl Default for StaticStore {
 fn block_to_record(b: &'static Block) -> BlockRecord {
     BlockRecord {
         id: b.id,
-        name: b.name,
+        name: Cow::Borrowed(b.name),
         hardness: b.hardness,
         blast_resistance: b.blast_resistance,
         is_air: b.is_air(),
@@ -67,7 +69,7 @@ fn item_to_record(item: &'static Item) -> ItemRecord {
 
     ItemRecord {
         id: item.id,
-        name: item.registry_key,
+        name: Cow::Borrowed(item.registry_key),
         max_stack_size: max_stack,
     }
 }
@@ -76,7 +78,7 @@ fn item_to_record(item: &'static Item) -> ItemRecord {
 const fn entity_to_record(e: &'static EntityType) -> EntityRecord {
     EntityRecord {
         id: e.id,
-        name: e.resource_name,
+        name: Cow::Borrowed(e.resource_name),
         max_health: e.max_health,
         is_mob: e.mob,
         width: e.dimension[0],
