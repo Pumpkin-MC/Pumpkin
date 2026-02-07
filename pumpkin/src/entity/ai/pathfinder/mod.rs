@@ -30,7 +30,11 @@ pub struct NavigatorGoal {
 
 impl NavigatorGoal {
     #[must_use]
-    pub fn new(current_progress: Vector3<f64>, destination: Vector3<f64>, speed: f64) -> Self {
+    pub const fn new(
+        current_progress: Vector3<f64>,
+        destination: Vector3<f64>,
+        speed: f64,
+    ) -> Self {
         Self {
             current_progress,
             destination,
@@ -273,7 +277,7 @@ impl Navigator {
     }
 
     #[must_use]
-    pub fn is_idle(&self) -> bool {
+    pub const fn is_idle(&self) -> bool {
         self.current_goal.is_none()
     }
 }

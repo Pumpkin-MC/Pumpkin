@@ -42,7 +42,7 @@ impl PathfindingContext {
     }
 
     #[must_use]
-    pub fn mob_position(&self) -> Vector3<i32> {
+    pub const fn mob_position(&self) -> Vector3<i32> {
         self.mob_position
     }
 
@@ -159,7 +159,7 @@ impl PathfindingContext {
             || block.id == Block::SNOW.id
     }
 
-    pub fn has_collisions(&mut self, _pos: Vector3<i32>) -> bool {
+    pub const fn has_collisions(&mut self, _pos: Vector3<i32>) -> bool {
         /*
         * TODO: Find how this is implemented on vanilla (might need to modify extractor)
         *

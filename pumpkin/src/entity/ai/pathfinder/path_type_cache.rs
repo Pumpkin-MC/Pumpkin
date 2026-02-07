@@ -102,12 +102,12 @@ impl PathTypeCache {
             | (i64::from(pos.y) & 0xFFF)
     }
 
-    fn key_to_index(key: i64) -> usize {
+    const fn key_to_index(key: i64) -> usize {
         let hash = Self::hash_long(key);
         (hash as usize) & CACHE_MASK
     }
 
-    fn hash_long(mut x: i64) -> i64 {
+    const fn hash_long(mut x: i64) -> i64 {
         x ^= x >> 32;
         x = x.wrapping_mul(0xd6e8_feb8_6659_fd93u64 as i64);
         x ^= x >> 32;

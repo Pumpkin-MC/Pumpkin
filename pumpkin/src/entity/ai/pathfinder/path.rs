@@ -40,12 +40,12 @@ impl Path {
     }
 
     #[must_use]
-    pub fn not_started(&self) -> bool {
+    pub const fn not_started(&self) -> bool {
         self.next_node_index == 0
     }
 
     #[must_use]
-    pub fn is_done(&self) -> bool {
+    pub const fn is_done(&self) -> bool {
         self.next_node_index >= self.nodes.len()
     }
 
@@ -75,12 +75,12 @@ impl Path {
     }
 
     #[must_use]
-    pub fn get_node_count(&self) -> usize {
+    pub const fn get_node_count(&self) -> usize {
         self.nodes.len()
     }
 
     #[must_use]
-    pub fn get_next_node_index(&self) -> usize {
+    pub const fn get_next_node_index(&self) -> usize {
         self.next_node_index
     }
 
@@ -140,17 +140,17 @@ impl Path {
     }
 
     #[must_use]
-    pub fn can_reach(&self) -> bool {
+    pub const fn can_reach(&self) -> bool {
         self.reached
     }
 
     #[must_use]
-    pub fn get_target(&self) -> Vector3<i32> {
+    pub const fn get_target(&self) -> Vector3<i32> {
         self.target
     }
 
     #[must_use]
-    pub fn get_dist_to_target(&self) -> f32 {
+    pub const fn get_dist_to_target(&self) -> f32 {
         self.dist_to_target
     }
 
@@ -202,7 +202,7 @@ impl Path {
     }
 
     #[must_use]
-    pub fn is_valid(&self) -> bool {
+    pub const fn is_valid(&self) -> bool {
         !self.nodes.is_empty()
     }
 }

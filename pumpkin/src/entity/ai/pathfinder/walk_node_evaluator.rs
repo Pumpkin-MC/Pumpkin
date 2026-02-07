@@ -19,21 +19,21 @@ struct StandingResult {
 }
 
 impl StandingResult {
-    fn walkable(path_type: PathType) -> Self {
+    const fn walkable(path_type: PathType) -> Self {
         Self {
             can_stand: true,
             path_type,
         }
     }
 
-    fn open(path_type: PathType) -> Self {
+    const fn open(path_type: PathType) -> Self {
         Self {
             can_stand: true,
             path_type,
         }
     }
 
-    fn blocked() -> Self {
+    const fn blocked() -> Self {
         Self {
             can_stand: false,
             path_type: PathType::Blocked,
@@ -59,7 +59,7 @@ impl WalkNodeEvaluator {
         }
     }
 
-    fn is_amphibious(&self) -> bool {
+    const fn is_amphibious(&self) -> bool {
         self.base.can_float
     }
 
@@ -397,9 +397,9 @@ impl WalkNodeEvaluator {
         // Temporarily take the context out to avoid overlapping borrows when calling
         // the async helper which requires `&mut self`
         // Clone mob_data so we can call helper while `self.base.context` is None.
-        let path_type = if self.base.context.is_some() && self.base.mob_data.is_some() {
-            let ctx = self.base.context.take().unwrap();
-            let mob_clone = self.base.mob_data.as_ref().unwrap().clone();
+        let path_type = if let Some(ctx) = self.base.context.take()
+            && let Some(mob_clone) = self.base.mob_data.clone()
+        {
             let start = Instant::now();
             let res = self.get_path_type_of_mob(&ctx, pos, &mob_clone).await;
             let _dur = start.elapsed();

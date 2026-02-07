@@ -71,7 +71,7 @@ impl Node {
     }
 
     #[must_use]
-    pub fn create_hash(pos: BlockPos) -> i32 {
+    pub const fn create_hash(pos: BlockPos) -> i32 {
         pos.0.y & 0xFF
             | (pos.0.x & 32767) << 8
             | (pos.0.z & 32767) << 24
@@ -279,7 +279,7 @@ pub enum PathType {
 
 impl PathType {
     #[must_use]
-    pub fn get_malus(self) -> f32 {
+    pub const fn get_malus(self) -> f32 {
         match self {
             Self::Blocked
             | Self::PowderSnow
@@ -321,12 +321,12 @@ impl PathType {
     }
 
     #[must_use]
-    pub fn is_water(self) -> bool {
+    pub const fn is_water(self) -> bool {
         matches!(self, Self::Water | Self::WaterBorder)
     }
 
     #[must_use]
-    pub fn is_dangerous(self) -> bool {
+    pub const fn is_dangerous(self) -> bool {
         matches!(
             self,
             Self::Lava
@@ -340,7 +340,7 @@ impl PathType {
     }
 
     #[must_use]
-    pub fn is_door(self) -> bool {
+    pub const fn is_door(self) -> bool {
         matches!(
             self,
             Self::WalkableDoor | Self::DoorOpen | Self::DoorWoodClosed | Self::DoorIronClosed
@@ -348,7 +348,7 @@ impl PathType {
     }
 
     #[must_use]
-    pub fn has_partial_collision(self) -> bool {
+    pub const fn has_partial_collision(self) -> bool {
         matches!(
             self,
             Self::Fence
