@@ -83,3 +83,13 @@
 **Rationale:** This is a public fork intended for upstream PRs. Renaming existing code breaks other contributors' work, creates unnecessary merge conflicts with upstream, and exceeds our mandate. We are here to complete missing features, not rewrite what works.
 **Affects:** All agents
 **Status:** active — NON-NEGOTIABLE
+
+### ARCH-012: Vanilla Data Import
+**Decision**: MC 1.21.4 vanilla data imported to `.claude/specs/data/` from misode/mcmeta.
+Summary JSONs (blocks, registries, items, commands) accessible directly.
+Full data (1370 recipes, 1237 loot tables, worldgen, tags, enchantments, damage types)
+in `mcdata-1.21.4.zip` — agents extract locally as needed.
+**Rationale**: Data-driven agents need canonical vanilla JSON to implement recipes,
+loot tables, mob drops, worldgen, and tags without guessing.
+**Affects**: Items, Entity, WorldGen, Storage, Redstone
+**Status**: COMMITTED
