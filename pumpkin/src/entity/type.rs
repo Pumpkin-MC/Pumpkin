@@ -13,13 +13,15 @@ use crate::{
         },
         living::LivingEntity,
         mob::{
-            creeper::CreeperEntity, drowned::DrownedEntity, enderman::EndermanEntity,
-            silverfish::SilverfishEntity, spider::SpiderEntity, zombie::ZombieEntity,
-            zombie_villager::ZombieVillagerEntity,
+            cave_spider::CaveSpiderEntity, creeper::CreeperEntity, drowned::DrownedEntity,
+            enderman::EndermanEntity, husk::HuskEntity, silverfish::SilverfishEntity,
+            slime::SlimeEntity, spider::SpiderEntity, stray::StrayEntity, witch::WitchEntity,
+            zombie::ZombieEntity, zombie_villager::ZombieVillagerEntity,
         },
         passive::{
-            chicken::ChickenEntity, cow::CowEntity, iron_golem::IronGolemEntity,
-            pig::PigEntity, sheep::SheepEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity,
+            bat::BatEntity, chicken::ChickenEntity, cow::CowEntity, iron_golem::IronGolemEntity,
+            ocelot::OcelotEntity, pig::PigEntity, rabbit::RabbitEntity, sheep::SheepEntity,
+            snow_golem::SnowGolemEntity, squid::SquidEntity, wolf::WolfEntity,
         },
     },
     world::World,
@@ -52,6 +54,15 @@ pub async fn from_type(
         id if id == EntityType::COW.id => CowEntity::new(entity).await,
         id if id == EntityType::PIG.id => PigEntity::new(entity).await,
         id if id == EntityType::SHEEP.id => SheepEntity::new(entity).await,
+        id if id == EntityType::CAVE_SPIDER.id => CaveSpiderEntity::new(entity).await,
+        id if id == EntityType::HUSK.id => HuskEntity::new(entity).await,
+        id if id == EntityType::STRAY.id => StrayEntity::new(entity).await,
+        id if id == EntityType::WITCH.id => WitchEntity::new(entity).await,
+        id if id == EntityType::SLIME.id => SlimeEntity::new(entity).await,
+        id if id == EntityType::BAT.id => BatEntity::new(entity).await,
+        id if id == EntityType::SQUID.id => SquidEntity::new(entity).await,
+        id if id == EntityType::RABBIT.id => RabbitEntity::new(entity).await,
+        id if id == EntityType::OCELOT.id => OcelotEntity::new(entity).await,
         // Fallback Entity
         _ => {
             if entity_type.max_health.is_some() {
