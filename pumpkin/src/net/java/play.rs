@@ -849,7 +849,9 @@ impl JavaClient {
             return;
         };
 
-        let server = player.world().server.upgrade().unwrap();
+        let Some(server) = player.world().server.upgrade() else {
+            return;
+        };
         let animation_event = PlayerAnimationEvent::new(player.clone(), "ARM_SWING".to_string());
         server.plugin_manager.fire(animation_event).await;
 
@@ -1446,7 +1448,16 @@ impl JavaClient {
                             slot.to_string(),
                         );
                         let event = server.plugin_manager.fire(event).await;
-                        if event.cancelled {}
+                        if event.cancelled {
+                            player
+                                .current_screen_handler
+                                .lock()
+                                .await
+                                .lock()
+                                .await
+                                .send_content_updates()
+                                .await;
+                        }
                     }
                 }
             }
@@ -1500,6 +1511,13 @@ impl JavaClient {
         let slot_index = slot as usize;
         if slot_index >= PlayerInventory::MAIN_SIZE {
             return;
+        }
+        {
+            let slot_stack = player.inventory.get_stack(slot_index).await;
+            let slot_stack = slot_stack.lock().await;
+            if slot_stack.item.id != Item::WRITABLE_BOOK.id {
+                return;
+            }
         }
 
         let is_signing = edit_book.title.is_some();
