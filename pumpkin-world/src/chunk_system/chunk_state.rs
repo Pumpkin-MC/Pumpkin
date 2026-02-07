@@ -1,4 +1,4 @@
-use crate::chunk::{ChunkData, ChunkSections};
+use crate::chunk::{ChunkData, ChunkLight, ChunkSections};
 use crate::generation::biome_coords;
 use pumpkin_data::dimension::Dimension;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ pub enum StagedChunkEnum {
     /// Chunk with features and structures, ready for lighting
     Features, // FEATURES SPAWN
     /// Chunk with lighting calculated, ready for finalization
-    Lighting, // INITIALIZE_LIGHT LIGHT
+    Lighting, // INITIALIZE LIGHT
     /// Fully generated chunk
     Full,
 }
@@ -171,7 +171,26 @@ impl Chunk {
         }
     }
     pub fn upgrade_to_level_chunk(&mut self, dimension: &Dimension) {
-        let proto_chunk = self.get_proto_chunk();
+        // Take ownership of the ProtoChunk by temporarily replacing with a dummy value
+        // This allows us to move the light data instead of cloning it
+        let proto_chunk_box = match std::mem::replace(self, Chunk::Level(Arc::new(ChunkData {
+            section: ChunkSections::new(0, 0),
+            heightmap: Default::default(),
+            x: 0,
+            z: 0,
+            block_ticks: Default::default(),
+            fluid_ticks: Default::default(),
+            block_entities: Default::default(),
+            light_engine: Mutex::new(ChunkLight::default()),
+            light_populated: AtomicBool::new(false),
+            status: ChunkStatus::Empty,
+            dirty: AtomicBool::new(false),
+        }))) {
+            Chunk::Proto(proto) => proto,
+            Chunk::Level(_) => panic!("Cannot upgrade a Level chunk"),
+        };
+
+        let proto_chunk = *proto_chunk_box;
 
         let total_sections = dimension.height as usize / 16;
         let sections = ChunkSections::new(total_sections, dimension.min_y);
@@ -222,8 +241,15 @@ impl Chunk {
             }
         }
 
+        // Move the light data instead of cloning it
+        // By taking ownership of proto_chunk, we can move the light data directly
+        // This prevents keeping duplicate lighting data in memory
+        let light_data = proto_chunk.light;
+        let is_lit = proto_chunk.stage >= StagedChunkEnum::Lighting;
+
         let mut chunk = ChunkData {
-            light_engine: Mutex::new(proto_chunk.light.clone()),
+            light_engine: Mutex::new(light_data),
+            light_populated: AtomicBool::new(is_lit),
             section: sections,
             heightmap: Default::default(),
             x: proto_chunk.x,

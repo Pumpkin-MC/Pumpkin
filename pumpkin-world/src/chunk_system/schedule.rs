@@ -77,7 +77,10 @@ impl GenerationSchedule {
         let (send_read_io, recv_read_io) =
             crossfire::compat::mpmc::bounded_tx_blocking_rx_async(io_read_thread_count + 5);
 
-        let (send_write_io, recv_write_io) = crossfire::compat::spsc::unbounded_async();
+        // Use a bounded single-producer/single-consumer channel to prevent unbounded memory growth
+        // when IO can't keep up. If the queue reaches capacity, producers will block until
+        // the disk catches up.
+        let (send_write_io, recv_write_io) = crossfire::compat::spsc::bounded_tx_blocking_rx_async(500);
 
         let (send_gen, recv_gen) = crossfire::compat::mpmc::bounded_blocking(gen_thread_count + 5);
 
@@ -239,8 +242,10 @@ impl GenerationSchedule {
             if old_stage > new_stage {
                 for i in (new_stage.max(holder.current_stage) as usize + 1)..=(old_stage as usize) {
                     let task = &mut holder.tasks[i];
-                    self.graph.fast_drop_node(*task);
-                    *task = NodeKey::null();
+                    if !task.is_null() {
+                        self.drop_node(*task);  // Properly handles incoming/outgoing edges and in_degree
+                        *task = NodeKey::null();
+                    }
                 }
                 if new_stage == StagedChunkEnum::None {
                     self.unload_chunks.insert(pos);
@@ -486,7 +491,9 @@ impl GenerationSchedule {
             RecvChunk::IO(chunk) => {
                 // debug!("receive io chunk pos {pos:?}");
                 let mut holder = self.chunk_map.remove(&pos).unwrap();
-                debug_assert!(holder.chunk.is_none());
+                if holder.chunk.is_some() {
+                    log::warn!("receive_chunk(IO): holder already has chunk at {:?}; replacing", pos);
+                }
                 debug_assert_eq!(holder.current_stage, StagedChunkEnum::None);
 
                 for i in (holder.current_stage as usize + 1)..=(chunk.get_stage_id() as usize) {
@@ -498,16 +505,27 @@ impl GenerationSchedule {
                 self.drop_node(holder.occupied);
                 holder.occupied = NodeKey::null();
 
-                debug_assert!(!holder.public);
                 match &chunk {
                     Chunk::Level(data) => {
+                        // Full chunk from IO - mark as public and notify
                         self.apply_lighting_override(data);
                         let result = self.public_chunk_map.insert(pos, data.clone());
-                        debug_assert!(result.is_none());
+                        if result.is_some() {
+                            log::warn!("receive_chunk(IO): replacing existing public chunk at {:?}", pos);
+                        }
                         holder.public = true;
+                        log::trace!("Notifying players: chunk {:?} loaded from disk (Full status)", pos);
                         self.listener.process_new_chunk(pos, data);
                     }
-                    Chunk::Proto(_) => {}
+                    Chunk::Proto(_) => {
+                        // Proto chunk from IO (downgraded for relighting) - mark as non-public
+                        // so players get notified when it finishes generation
+                        if holder.public {
+                            log::debug!("Chunk {:?} downgraded to Proto for relighting, marking as non-public", pos);
+                            self.public_chunk_map.remove(&pos);
+                            holder.public = false;
+                        }
+                    }
                 }
                 holder.chunk = Some(chunk);
                 self.chunk_map.insert(pos, holder);
@@ -540,59 +558,82 @@ impl GenerationSchedule {
                                 }
                                 holder.current_stage = StagedChunkEnum::Full;
 
-                                holder.chunk = Some(Chunk::Level(chunk.clone()));
-                                if !holder.public {
+                                // Check if this is the first time becoming public
+                                let was_public = holder.public;
+                                
+                                if !was_public {
                                     self.apply_lighting_override(&chunk);
-                                    let result = self.public_chunk_map.insert(new_pos, chunk.clone());
+                                    // Clone once for public_chunk_map (needed for player access)
+                                    let public_chunk = chunk.clone();
+                                    holder.chunk = Some(Chunk::Level(chunk));
+                                    let result = self.public_chunk_map.insert(new_pos, public_chunk);
                                     holder.public = true;
                                     if result.is_some() {
                                         log::warn!("public_chunk_map.insert returned existing chunk for {new_pos:?}");
                                     }
+                                    // Notify players about the new chunk
+                                    if let Some(pc) = self.public_chunk_map.get(&new_pos) {
+                                        log::trace!("Notifying players: new chunk at {:?} (generation complete)", new_pos);
+                                        self.listener.process_new_chunk(new_pos, &*pc);
+                                    } else {
+                                        log::error!("CRITICAL: Failed to retrieve chunk {:?} from public_chunk_map immediately after insert!", new_pos);
+                                    }
+                                } else {
+                                    // Was already public but chunk has been regenerated (e.g., after relighting)
+                                    // Update the chunk data and re-notify players
+                                    self.apply_lighting_override(&chunk);
+                                    holder.chunk = Some(Chunk::Level(chunk.clone()));
+                                    self.public_chunk_map.insert(new_pos, chunk.clone());
+                                    log::info!("Notifying players: regenerated chunk at {:?} (was already public)", new_pos);
                                     self.listener.process_new_chunk(new_pos, &chunk);
                                 }
+                            } else {
+                                // Non-center chunk... just restore it to holder without cloning
+                                holder.chunk = Some(Chunk::Level(chunk));
                             }
 
+                            // Always drop the occupied node before nulling it
+                            if !holder.occupied.is_null() {
+                                if self.graph.nodes.contains_key(holder.occupied) {
+                                    self.drop_node(holder.occupied);
+                                }
+                            }
                             holder.occupied = NodeKey::null();
                             self.chunk_map.insert(new_pos, holder);
                         }
                         Chunk::Proto(chunk) => {
                             let mut holder = self.chunk_map.remove(&new_pos).unwrap();
-                            debug_assert!(holder.chunk.is_none());
-                            let expected_stage = if new_pos == pos {
-                                chunk.stage_id().saturating_sub(1)
-                            } else {
-                                chunk.stage_id()
-                            };
-                            if holder.current_stage as u8 != expected_stage {
-                                let old_stage = holder.current_stage;
-                                log::warn!(
-                                    "receive_chunk: stage mismatch at {:?}: holder {} expected {}",
-                                    new_pos,
-                                    old_stage as u8,
-                                    expected_stage
-                                );
-                                // Drop any task nodes that belong to stages above the expected one
-                                // to keep the graph consistent and avoid leaked/in-flight tasks.
-                                for i in (expected_stage as usize + 1)..=(old_stage as usize) {
-                                    let task = holder.tasks[i];
-                                    if !task.is_null() {
-                                        self.drop_node(task);
-                                        holder.tasks[i] = NodeKey::null();
-                                    }
+
+                            // Clean up the task node for the stage that just finished.
+                            let stage = chunk.stage_id();
+                            if stage < holder.tasks.len() as u8 {
+                                let task_idx = stage as usize;
+                                if !holder.tasks[task_idx].is_null() {
+                                    self.drop_node(holder.tasks[task_idx]);
+                                    holder.tasks[task_idx] = NodeKey::null();
                                 }
-                                // Align holder to the expected stage to continue safely.
-                                holder.current_stage = StagedChunkEnum::from(expected_stage);
                             }
 
                             if new_pos == pos {
+                                // Center Chunk Logic
                                 debug_assert_ne!(holder.current_stage, StagedChunkEnum::None);
-                                let stage = chunk.stage_id();
-                                self.drop_node(holder.tasks[stage as usize]);
-                                holder.tasks[stage as usize] = NodeKey::null();
-                                debug_assert!(self.graph.nodes.contains_key(holder.occupied));
-                                self.drop_node(holder.occupied);
+                                if self.graph.nodes.contains_key(holder.occupied) {
+                                    self.drop_node(holder.occupied);
+                                }
                                 holder.current_stage = StagedChunkEnum::from(stage);
+                            } else {
+                                // Neighbor Logic
+                                if holder.current_stage < StagedChunkEnum::from(stage) {
+                                    holder.current_stage = StagedChunkEnum::from(stage);
+                                }
+
+                                if !holder.occupied.is_null() {
+                                    if self.graph.nodes.contains_key(holder.occupied) {
+                                        self.drop_node(holder.occupied);
+                                    }
+                                }
                             }
+
                             holder.occupied = NodeKey::null();
                             holder.chunk = Some(Chunk::Proto(chunk));
                             self.chunk_map.insert(new_pos, holder);
@@ -603,6 +644,70 @@ impl GenerationSchedule {
                         dy = 0;
                         dx += 1;
                     }
+                }
+            }
+            RecvChunk::GenerationFailure { pos: fail_pos, stage, error } => {
+                log::error!(
+                    "Received generation failure notification for chunk {:?} at stage {:?}: {}",
+                    fail_pos,
+                    stage,
+                    error
+                );
+                
+                // Clean up the holder
+                if let Some(mut holder) = self.chunk_map.remove(&pos) {
+                    let target_stage = holder.target_stage;
+                    
+                    // Clean up occupied node
+                    if !holder.occupied.is_null() {
+                        if self.graph.nodes.contains_key(holder.occupied) {
+                            self.drop_node(holder.occupied);
+                        }
+                        holder.occupied = NodeKey::null();
+                    }
+                    
+                    // Clean up all task nodes
+                    for i in 0..holder.tasks.len() {
+                        if !holder.tasks[i].is_null() {
+                            self.drop_node(holder.tasks[i]);
+                            holder.tasks[i] = NodeKey::null();
+                        }
+                    }
+                    
+                    // Reset chunk to None so it will be regenerated
+                    holder.current_stage = StagedChunkEnum::None;
+                    holder.chunk = None;
+                    
+                    // Recreate tasks from None to target_stage
+                    for i in (StagedChunkEnum::None as usize + 1)..=(target_stage as usize) {
+                        let stage_enum = StagedChunkEnum::from(i as u8);
+                        let task_node = Node::new(pos, stage_enum);
+                        holder.tasks[i] = self.graph.nodes.insert(task_node);
+                        
+                        // Add dependencies
+                        if i > (StagedChunkEnum::None as usize + 1) {
+                            self.graph.add_edge(holder.tasks[i - 1], holder.tasks[i]);
+                        }
+                    }
+                    
+                    // Add first task to queue with high priority (use a boost to retry faster)
+                    if target_stage > StagedChunkEnum::None {
+                        let first_task = holder.tasks[StagedChunkEnum::None as usize + 1];
+                        if let Some(node) = self.graph.nodes.get_mut(first_task) {
+                            node.in_queue = true;
+                        }
+                        self.queue.push(TaskHeapNode(
+                            Self::calc_priority(&self.last_level, &self.last_high_priority, pos, StagedChunkEnum::from(1))
+                                - 50, // Priority boost for retry
+                            first_task,
+                        ));
+                    }
+                    
+                    self.chunk_map.insert(pos, holder);
+                    
+                    log::warn!("Chunk {:?} reset to None and re-queued for regeneration (target: {:?})", pos, target_stage);
+                } else {
+                    log::error!("Failed to find holder for failed chunk {:?}", pos);
                 }
             }
         }
@@ -678,10 +783,6 @@ impl GenerationSchedule {
                             break 'out2;
                         }
                     } else {
-                        let occupy = self.graph.nodes.insert(Node::new(
-                            ChunkPos::new(i32::MAX, i32::MAX),
-                            StagedChunkEnum::None,
-                        ));
                         let write_radius = node.stage.get_write_radius();
                         let mut cache = Cache::new(
                             node.pos.x - write_radius,
@@ -774,6 +875,13 @@ impl GenerationSchedule {
                             continue;
                         }
 
+                        // Only create the occupy node after we know all chunks are available
+                        // and we're actually proceeding with the task
+                        let occupy = self.graph.nodes.insert(Node::new(
+                            ChunkPos::new(i32::MAX, i32::MAX),
+                            StagedChunkEnum::None,
+                        ));
+
                         for dx in -write_radius..=write_radius {
                             for dy in -write_radius..=write_radius {
                                 let new_pos = node.pos.add_raw(dx, dy);
@@ -789,10 +897,13 @@ impl GenerationSchedule {
                                 };
                                 match tmp {
                                     Chunk::Level(chunk) => {
-                                        cache.chunks.push(Chunk::Level(chunk.clone()));
-                                        holder.chunk = Some(Chunk::Level(chunk));
+                                        // Don't clone Level chunks. Move them into cache to avoid
+                                        // extra Arc references that prevent unloading.
+                                        cache.chunks.push(Chunk::Level(chunk));
                                     }
-                                    Chunk::Proto(chunk) => cache.chunks.push(Chunk::Proto(chunk)),
+                                    Chunk::Proto(chunk) => {
+                                        cache.chunks.push(Chunk::Proto(chunk));
+                                    }
                                 }
 
                                 debug_assert!(holder.occupied.is_null());
@@ -887,6 +998,14 @@ impl GenerationSchedule {
             log::warn!("Cancelling {} in-flight generation tasks", self.running_task_count);
             // Clear occupy nodes for cancelled tasks
             for (_pos, holder) in &mut self.chunk_map {
+                // Drop any task nodes associated with this holder to ensure full cleanup.
+                for task in &mut holder.tasks {
+                    if !task.is_null() {
+                        self.graph.fast_drop_node(*task);
+                        *task = NodeKey::null();
+                    }
+                }
+
                 if !holder.occupied.is_null() {
                     if let Some(node) = self.graph.nodes.get(holder.occupied) {
                         if node.pos.x == i32::MAX && node.pos.y == i32::MAX {
@@ -905,9 +1024,9 @@ impl GenerationSchedule {
         drop(self.io_write);
         
         // Clean up any remaining graph structures
-        if !self.graph.nodes.is_empty() {
-            log::warn!("Cleaning up {} unreleased nodes from incomplete tasks", self.graph.nodes.len());
-            self.graph.nodes.clear();
+        let unreleased_count = self.graph.nodes.len();
+        if unreleased_count > 0 {
+            log::warn!("Cleaning up {} unreleased nodes from incomplete tasks", unreleased_count);
         }
         self.graph.edges.clear();
     }

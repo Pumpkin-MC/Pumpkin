@@ -25,6 +25,17 @@ impl SkyLightEngine {
         }
     }
 
+    /// Clear all internal state to free memory after lighting calculation
+    pub fn clear(&mut self) {
+        self.queue.clear();
+        self.visited.clear();
+        self.decrease_queue.clear();
+        // Shrink capacity to release memory
+        self.queue.shrink_to_fit();
+        self.visited.shrink_to_fit();
+        self.decrease_queue.shrink_to_fit();
+    }
+
     pub fn convert_light(&mut self, _cache: &mut Cache) {
         // Placeholder or integrated into propagate
     }
@@ -226,29 +237,11 @@ impl SkyLightEngine {
                 }
             }
         }
-        
-        // Pre-cache block opacity for the entire working region to avoid repeated lookups
-        // This significantly reduces lock acquisitions and block state queries during BFS
-        let mut opacity_cache: HashMap<BlockPos, u8> = HashMap::new();
-        let cache_margin = 2; // Cache slightly beyond our immediate needs
-        for y in min_y..max_y {
-            for z in (start_z - cache_margin)..(end_z + cache_margin) {
-                for x in (start_x - cache_margin)..(end_x + cache_margin) {
-                    let pos = BlockPos(Vector3::new(x, y, z));
-                    let state = cache.get_block_state(&Vector3::new(x, y, z));
-                    let opacity = state.to_state().opacity;
-                    if opacity > 0 {
-                        opacity_cache.insert(pos, opacity);
-                    }
-                }
-            }
-        }
 
         // Horizontal spread (BFS) with batched updates
         // Propagate light horizontally using flood fill
-        // Collect updates per chunk to minimize lock contention
-        let mut pending_updates: HashMap<(i32, i32), Vec<(BlockPos, u8)>> = HashMap::new();
-        let mut shadow_cache: HashMap<BlockPos, u8> = HashMap::new();
+        let mut pending_updates: HashMap<(i32, i32), Vec<(BlockPos, u8)>> = HashMap::with_capacity(32);
+        let mut shadow_cache: HashMap<BlockPos, u8> = HashMap::with_capacity(4096);
         
         while let Some(pos) = self.queue.pop_front() {
             // Read from shadow cache first, then fall back to actual storage
@@ -270,10 +263,8 @@ impl SkyLightEngine {
                 let neighbor_level = shadow_cache.get(&neighbor_pos).copied()
                     .unwrap_or_else(|| get_sky_light(cache, neighbor_pos));
                 
-                // Get opacity from cache, or compute if not cached (distant positions)
-                let opacity = opacity_cache.get(&neighbor_pos).copied()
-                    .unwrap_or_else(|| cache.get_block_state(&neighbor_pos.0).to_state().opacity)
-                    .max(1);
+                // Query opacity on-demand
+                let opacity = cache.get_block_state(&neighbor_pos.0).to_state().opacity.max(1);
 
                 let new_level = level.saturating_sub(opacity);
 

@@ -53,6 +53,10 @@ impl DAG {
         }
     }
     pub fn add_edge(&mut self, from: NodeKey, to: NodeKey) {
+        // Ensure both nodes exist before adding edge
+        if !self.nodes.contains_key(to) || !self.nodes.contains_key(from) {
+            return;
+        }
         self.nodes.get_mut(to).unwrap().in_degree += 1;
         let edge = &mut self.nodes.get_mut(from).unwrap().edge;
         *edge = self.edges.insert(Edge::new(to, *edge));

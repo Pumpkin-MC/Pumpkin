@@ -87,41 +87,6 @@ impl ChunkData {
         let chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
-        if chunk_data.light_correct {
-            for section in &chunk_data.sections {
-                let mut block = false;
-                let mut sky = false;
-                let mut block_sum = 0;
-                let mut sky_sum = 0;
-                if let Some(block_light) = &section.block_light {
-                    block = !block_light.is_empty();
-                    block_sum = block_light
-                        .iter()
-                        .map(|b| ((*b >> 4) + (*b & 0x0F)) as usize)
-                        .sum();
-                }
-                if let Some(sky_light) = &section.sky_light {
-                    sky = !sky_light.is_empty();
-                    sky_sum = sky_light
-                        .iter()
-                        .map(|b| ((*b >> 4) + (*b & 0x0F)) as usize)
-                        .sum();
-                }
-                if (block || sky) && section.y == -5 {
-                    log::trace!(
-                        "section {},{},{}: block_light={}/{}, sky_light={}/{}",
-                        chunk_data.x_pos,
-                        section.y,
-                        chunk_data.z_pos,
-                        block,
-                        block_sum,
-                        sky,
-                        sky_sum,
-                    );
-                }
-            }
-        }
-
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
             return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
                 "Expected data for chunk {},{} but got it for {},{}!",
@@ -199,24 +164,21 @@ impl ChunkData {
                 std::sync::Mutex::new(block_entities)
             },
             light_engine: std::sync::Mutex::new(light_engine),
+            light_populated: AtomicBool::new(chunk_data.light_correct),
             status: chunk_data.status,
         })
     }
 
     async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        // Lock and process light data immediately
-        let (sections, has_light_data) = {
-            let light_lock = self.light_engine.lock().unwrap();
-            
-            // Check this while we have the lock
-            let has_light = light_lock.sky_light.iter().any(|l| !matches!(l, LightContainer::Empty(0)))
-                || light_lock.block_light.iter().any(|l| !matches!(l, LightContainer::Empty(0)));
+        let is_light_correct = self.light_populated.load(std::sync::atomic::Ordering::Relaxed);
 
+        let sections = {
+            let light_lock = self.light_engine.lock().unwrap();
             let block_lock = self.section.block_sections.read().unwrap();
             let biome_lock = self.section.biome_sections.read().unwrap();
             let min_section_y = (self.section.min_y >> 4) as i8;
 
-            let sections_vec: Vec<ChunkSectionNBT> = (0..self.section.count)
+            (0..self.section.count)
                 .map(|i| {
                     ChunkSectionNBT {
                         y: i as i8 + min_section_y,
@@ -243,9 +205,7 @@ impl ChunkData {
                         },
                     }
                 })
-                .collect();
-                
-            (sections_vec, has_light)
+                .collect::<Vec<_>>()
         };
 
         // Lock and clone heightmaps
@@ -278,7 +238,7 @@ impl ChunkData {
             block_ticks: self.block_ticks.to_vec(),
             fluid_ticks: self.fluid_ticks.to_vec(),
             block_entities: block_entities_nbt,
-            light_correct: has_light_data,
+            light_correct: is_light_correct,
         };
 
         let mut result = Vec::new();
@@ -532,7 +492,7 @@ struct ChunkNbt {
     fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
     #[serde(rename = "block_entities")]
     block_entities: Vec<NbtCompound>,
-    #[serde(rename = "isLightOn")]
+    #[serde(rename = "isLightOn", default)]
     light_correct: bool,
 }
 

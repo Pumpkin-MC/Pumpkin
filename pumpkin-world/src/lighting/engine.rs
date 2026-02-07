@@ -1,7 +1,9 @@
 use super::block_light::BlockLightEngine;
 use super::sky_light::SkyLightEngine;
 use crate::chunk_system::generation_cache::Cache;
+use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_config::lighting::LightingEngineConfig;
 
 pub struct LightEngine {
     block_light: BlockLightEngine,
@@ -18,7 +20,22 @@ impl LightEngine {
 
     /// Initialize lighting for newly generated chunks.
     /// This performs full lighting calculations including sky light conversion.
-    pub fn initialize_light(&mut self, cache: &mut Cache) {
+    pub fn initialize_light(&mut self, cache: &mut Cache, config: &LightingEngineConfig) {
+        // Skip lighting if config is not default (for "full" or "dark" modes)
+        if *config != LightingEngineConfig::Default {
+            return;
+        }
+        
+        // Short-circuit if center chunk is already lit
+        let should_skip = {
+            let center_chunk = cache.get_center_chunk();
+            center_chunk.stage >= crate::chunk_system::chunk_state::StagedChunkEnum::Lighting
+        };
+        
+        if should_skip {
+            return;
+        }
+        
         self.sky_light.convert_light(cache);
         self.block_light.propagate_light(cache);
         self.sky_light.propagate_light(cache);
@@ -26,9 +43,9 @@ impl LightEngine {
         // Validate block light to fix any ghost lights from generation
         self.block_light.validate_light(cache);
         
-        // Sky light validation disabled (convert_light and propagate_light produce correct results)
-        // Validation with decrease queue can cause harsh lighting artifacts during generation
-        // self.sky_light.validate_light(cache); ... re-enable if issues arise
+        // Clear internal state to free memory after lighting calculation completes
+        self.block_light.clear();
+        self.sky_light.clear();
     }
 
     /// Update lighting when a block changes during gameplay.

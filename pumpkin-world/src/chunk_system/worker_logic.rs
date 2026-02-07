@@ -13,42 +13,48 @@ use pumpkin_data::chunk::ChunkStatus;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
+use std::sync::atomic::Ordering::Relaxed;
 
 pub enum RecvChunk {
     IO(Chunk),
     Generation(Cache),
+    GenerationFailure {
+        pos: ChunkPos,
+        stage: StagedChunkEnum,
+        error: String,
+    },
 }
 
 /// Checks if a chunk needs relighting based on the current lighting configuration
 /// Returns true if the chunk has uniform lighting (from full/dark mode) but the server
 /// is now running in default mode (which needs proper lighting calculation)
 fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConfig) -> bool {
-    // Only need relighting if we're in default mode
     if *config != LightingEngineConfig::Default {
         return false;
     }
 
+    // If the chunk says it's already lit, believe it.
+    if chunk.light_populated.load(Relaxed) {
+        return false;
+    }
+
     let engine = chunk.light_engine.lock().expect("Mutex poisoned");
-    
-    // Check if all light sections are uniformly filled (all 0xFF) or empty (all 0x00)
-    // This indicates the chunk was generated/saved with full or dark mode
-    let all_sky_uniform = engine.sky_light.iter().all(|lc| {
+
+    // Scan for any complex lighting data
+    let has_complex_light = engine.sky_light.iter().any(|lc| {
         match lc {
-            LightContainer::Full(data) => data.iter().all(|b| *b == 0xFF || *b == 0x00),
-            LightContainer::Empty(0) | LightContainer::Empty(15) => true,
-            _ => false,
+            LightContainer::Full(data) => data.iter().any(|&b| b != 0x00 && b != 0xFF),
+            LightContainer::Empty(val) => *val != 0 && *val != 15,
+        }
+    }) || engine.block_light.iter().any(|lc| {
+        match lc {
+            LightContainer::Full(data) => data.iter().any(|&b| b != 0x00 && b != 0xFF),
+            LightContainer::Empty(val) => *val != 0 && *val != 15,
         }
     });
-    
-    let all_block_uniform = engine.block_light.iter().all(|lc| {
-        match lc {
-            LightContainer::Full(data) => data.iter().all(|b| *b == 0xFF || *b == 0x00),
-            LightContainer::Empty(0) | LightContainer::Empty(15) => true,
-            _ => false,
-        }
-    });
-    
-    all_sky_uniform && all_block_uniform
+
+    // If it has complex light, we don't need to relight.
+    !has_complex_light
 }
 
 pub async fn io_read_work(
@@ -104,16 +110,10 @@ pub async fn io_read_work(
                         // Clear all lighting data
                         let section_count = proto.light.sky_light.len();
                         proto.light.sky_light = (0..section_count)
-                            .map(|_| {
-                                if dimension.has_skylight {
-                                    LightContainer::new_filled(0)
-                                } else {
-                                    LightContainer::new_empty(0)
-                                }
-                            })
+                            .map(|_| LightContainer::new_empty(0))
                             .collect();
                         proto.light.block_light = (0..section_count)
-                            .map(|_| LightContainer::new_filled(0))
+                            .map(|_| LightContainer::new_empty(0))
                             .collect();
 
                         // Set stage to Features
@@ -231,9 +231,8 @@ pub fn generation_work(
     level: Arc<Level>,
 ) {
     let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
+    
     loop {
-        // Use blocking recv() instead of try_recv() + sleep loop
-        // This will properly exit when the channel is closed (sender dropped)
         let (pos, mut cache, stage) = match recv.recv() {
             Ok(data) => data,
             Err(_) => {
@@ -241,21 +240,42 @@ pub fn generation_work(
                 break;
             }
         };
-        
-        // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
-        cache.advance(
-            stage,
-            level.block_registry.as_ref(),
-            settings,
-            &level.world_gen.random_config,
-            &level.world_gen.terrain_cache,
-            &level.world_gen.base_router,
-            level.world_gen.dimension,
-        );
-        
-        if send.send((pos, RecvChunk::Generation(cache))).is_err() {
-            log::debug!("generation send failed, receiver dropped");
-            break;
+
+        // Run generation with panic catching
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            cache.advance(
+                stage,
+                &level.lighting_config,
+                level.block_registry.as_ref(),
+                &settings,
+                &level.world_gen.random_config,
+                &level.world_gen.terrain_cache,
+                &level.world_gen.base_router,
+                level.world_gen.dimension,
+            );
+            cache // Return cache on success
+        }));
+
+        match result {
+            Ok(cache) => {
+                if send.send((pos, RecvChunk::Generation(cache))).is_err() {
+                    break;
+                }
+            }
+            Err(payload) => {
+                let msg = payload.downcast_ref::<&str>().copied()
+                    .or_else(|| payload.downcast_ref::<String>().map(|s| s.as_str()))
+                    .unwrap_or("Unknown panic payload");
+
+                log::error!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");
+
+                // Send failure notification
+                let _ = send.send((pos, RecvChunk::GenerationFailure { 
+                    pos, 
+                    stage, 
+                    error: msg.to_string() 
+                }));
+            }
         }
     }
 }

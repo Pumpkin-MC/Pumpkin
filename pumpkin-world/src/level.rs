@@ -27,7 +27,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
-// use std::time::Duration;
+use crate::lighting::DynamicLightEngine;
 use std::{
     path::PathBuf,
     sync::{
@@ -80,6 +80,9 @@ pub struct Level {
     entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
 
     pub world_gen: Arc<VanillaGenerator>,
+
+    /// Handles runtime lighting updates
+    pub light_engine: DynamicLightEngine,
 
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
@@ -180,6 +183,7 @@ impl Level {
             world_gen,
             level_folder,
             lighting_config: level_config.lighting,
+            light_engine: DynamicLightEngine::new(),
             chunk_saver,
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),

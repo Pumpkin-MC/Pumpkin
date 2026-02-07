@@ -81,6 +81,7 @@ pub struct ChunkData {
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
     pub block_entities: std::sync::Mutex<FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
     pub light_engine: std::sync::Mutex<ChunkLight>,
+    pub light_populated: AtomicBool,
     pub status: ChunkStatus,
     pub dirty: AtomicBool,
 }
