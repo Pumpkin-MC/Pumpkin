@@ -76,7 +76,7 @@ impl<T> Metadata<T> {
                 let mut serializer = serializer::Serializer::new(&mut serialized_value);
                 self.value
                     .serialize(&mut serializer)
-                    .map_err(|e| WritingError::Serde(e.to_string()))?
+                    .map_err(|e| WritingError::Serde(e.to_string()))?;
             };
 
             let mut cursor = Cursor::new(serialized_value);
