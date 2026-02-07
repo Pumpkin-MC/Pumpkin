@@ -1,6 +1,12 @@
 pub mod bat;
+pub mod bee;
+pub mod cat;
 pub mod chicken;
 pub mod cow;
+pub mod dolphin;
+pub mod fox;
+pub mod frog;
+pub mod goat;
 pub mod iron_golem;
 pub mod ocelot;
 pub mod pig;

@@ -14,13 +14,16 @@ use crate::{
         living::LivingEntity,
         mob::{
             cave_spider::CaveSpiderEntity, creeper::CreeperEntity, drowned::DrownedEntity,
-            enderman::EndermanEntity, husk::HuskEntity, silverfish::SilverfishEntity,
+            enderman::EndermanEntity, endermite::EndermiteEntity, husk::HuskEntity,
+            magma_cube::MagmaCubeEntity, phantom::PhantomEntity, silverfish::SilverfishEntity,
             slime::SlimeEntity, spider::SpiderEntity, stray::StrayEntity, witch::WitchEntity,
             zombie::ZombieEntity, zombie_villager::ZombieVillagerEntity,
         },
         passive::{
-            bat::BatEntity, chicken::ChickenEntity, cow::CowEntity, iron_golem::IronGolemEntity,
-            ocelot::OcelotEntity, pig::PigEntity, rabbit::RabbitEntity, sheep::SheepEntity,
+            bat::BatEntity, bee::BeeEntity, cat::CatEntity, chicken::ChickenEntity,
+            cow::CowEntity, dolphin::DolphinEntity, fox::FoxEntity, frog::FrogEntity,
+            goat::GoatEntity, iron_golem::IronGolemEntity, ocelot::OcelotEntity,
+            pig::PigEntity, rabbit::RabbitEntity, sheep::SheepEntity,
             snow_golem::SnowGolemEntity, squid::SquidEntity, wolf::WolfEntity,
         },
     },
@@ -63,6 +66,15 @@ pub async fn from_type(
         id if id == EntityType::SQUID.id => SquidEntity::new(entity).await,
         id if id == EntityType::RABBIT.id => RabbitEntity::new(entity).await,
         id if id == EntityType::OCELOT.id => OcelotEntity::new(entity).await,
+        id if id == EntityType::PHANTOM.id => PhantomEntity::new(entity).await,
+        id if id == EntityType::ENDERMITE.id => EndermiteEntity::new(entity).await,
+        id if id == EntityType::MAGMA_CUBE.id => MagmaCubeEntity::new(entity).await,
+        id if id == EntityType::DOLPHIN.id => DolphinEntity::new(entity).await,
+        id if id == EntityType::FOX.id => FoxEntity::new(entity).await,
+        id if id == EntityType::BEE.id => BeeEntity::new(entity).await,
+        id if id == EntityType::GOAT.id => GoatEntity::new(entity).await,
+        id if id == EntityType::FROG.id => FrogEntity::new(entity).await,
+        id if id == EntityType::CAT.id => CatEntity::new(entity).await,
         // Fallback Entity
         _ => {
             if entity_type.max_health.is_some() {
