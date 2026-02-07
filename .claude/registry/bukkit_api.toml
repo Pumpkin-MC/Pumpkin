@@ -9,9 +9,9 @@ source_url = "https://hub.spigotmc.org/javadocs/bukkit/"
 total_events = 283
 total_interfaces = 9
 total_enums = 5
-pumpkin_implemented = 28
+pumpkin_implemented = 31
 pumpkin_stub = 1
-pumpkin_missing = 252
+pumpkin_missing = 249
 note = "Bukkit header says 318 but 37 of those are inner enums (DamageCause, SpawnReason, etc.), not events"
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -82,38 +82,49 @@ owner = "redstone"
 [[events]]
 name = "BlockRedstoneEvent"
 package = "org.bukkit.event.block"
-cancellable = false
-rust_equivalent = ""
-rust_path = ""
+cancellable = true
+rust_equivalent = "BlockRedstoneEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_redstone.rs"
 fields = [
-    { name = "oldCurrent", java_type = "int", rust_type = "" },
-    { name = "newCurrent", java_type = "int", rust_type = "" },
+    { name = "oldCurrent", java_type = "int", rust_type = "old_current: u8" },
+    { name = "newCurrent", java_type = "int", rust_type = "new_current: u8" },
 ]
-status = "missing"
+status = "implemented"
 priority = "high"
 owner = "redstone"
+note = "Fires in redstone_wire.rs on_neighbor_update when power level changes"
 
 [[events]]
 name = "BlockPistonExtendEvent"
 package = "org.bukkit.event.block"
 cancellable = true
-rust_equivalent = ""
-rust_path = ""
-fields = [{ name = "blocks", java_type = "List<Block>", rust_type = "" }]
-status = "missing"
+rust_equivalent = "BlockPistonExtendEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_piston_extend.rs"
+fields = [
+    { name = "block", java_type = "Block", rust_type = "block: &'static Block" },
+    { name = "direction", java_type = "BlockFace", rust_type = "direction: u8" },
+    { name = "sticky", java_type = "boolean", rust_type = "sticky: bool" },
+]
+status = "implemented"
 priority = "high"
 owner = "redstone"
+note = "Fires in piston.rs on_synced_block_event before extend. blocks list not yet populated."
 
 [[events]]
 name = "BlockPistonRetractEvent"
 package = "org.bukkit.event.block"
 cancellable = true
-rust_equivalent = ""
-rust_path = ""
-fields = [{ name = "blocks", java_type = "List<Block>", rust_type = "" }]
-status = "missing"
+rust_equivalent = "BlockPistonRetractEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_piston_retract.rs"
+fields = [
+    { name = "block", java_type = "Block", rust_type = "block: &'static Block" },
+    { name = "direction", java_type = "BlockFace", rust_type = "direction: u8" },
+    { name = "sticky", java_type = "boolean", rust_type = "sticky: bool" },
+]
+status = "implemented"
 priority = "high"
 owner = "redstone"
+note = "Fires in piston.rs on_synced_block_event before retract. blocks list not yet populated."
 
 [[events]]
 name = "BlockFromToEvent"
@@ -2382,15 +2393,15 @@ note = "ignoreCancelled stored as metadata; filtering in fire() ready to impleme
 
 [sprint]
 total_bukkit_events = 318
-implemented = 28
+implemented = 31
 stub = 1
-missing = 289
+missing = 286
 
 [sprint.by_owner]
 entity = 118
 items = 46
 world = 38
-redstone = 13
+redstone = 10
 protocol = 10
 core = 7
 plugin = 4

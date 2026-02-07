@@ -156,7 +156,21 @@ impl BlockBehaviour for RedstoneWireBlock {
                 let state = args.world.get_block_state(args.position).await;
                 let mut wire = RedstoneWireProperties::from_state_id(state.id, args.block);
                 let new_power = calculate_power(args.world, args.position).await;
-                if wire.power.to_index() as u8 != new_power {
+                let old_power = wire.power.to_index() as u8;
+                if old_power != new_power {
+                    // Fire BlockRedstoneEvent for plugin cancellation support
+                    if let Some(server) = args.world.server.upgrade() {
+                        let event = crate::plugin::api::events::block::block_redstone::BlockRedstoneEvent::new(
+                            &Block::REDSTONE_WIRE,
+                            *args.position,
+                            old_power,
+                            new_power,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                    }
                     wire.power = Integer0To15::from_index(new_power.into());
                     args.world
                         .set_block_state(
