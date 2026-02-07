@@ -11,7 +11,6 @@ pub enum ChunkConfig {
     /// Standard Anvil chunk storage.
     #[serde(rename = "anvil")]
     Anvil(AnvilChunkConfig),
-
     /// Linear chunk storage format.
     #[serde(rename = "linear")]
     Linear(LinearChunkConfig),
@@ -29,7 +28,6 @@ impl Default for ChunkConfig {
 pub struct AnvilChunkConfig {
     /// Compression settings for chunk data.
     pub compression: ChunkCompression,
-
     /// Whether chunks should be written in place.
     pub write_in_place: bool,
 }
@@ -39,7 +37,6 @@ pub struct AnvilChunkConfig {
 pub struct ChunkCompression {
     /// Compression algorithm to use.
     pub algorithm: Compression,
-
     /// Compression level (algorithm-specific).
     pub level: u32,
 }
@@ -57,13 +54,10 @@ impl Default for ChunkCompression {
 pub enum Compression {
     /// `GZip` Compression.
     GZip,
-
     /// `ZLib` Compression.
     ZLib,
-
     /// LZ4 Compression (since 24w04a).
     LZ4,
-
     /// Custom compression algorithm (since 24w05a).
     Custom,
 }

@@ -49,31 +49,22 @@ use world::LevelConfig;
 pub struct AdvancedConfiguration {
     /// Logging-related configuration such as log levels and output behaviour.
     pub logging: LoggingConfig,
-
     /// Resource pack configuration, including enforcement and pack metadata.
     pub resource_pack: ResourcePackConfig,
-
     /// World and level-related settings beyond basic configuration.
     pub world: LevelConfig,
-
     /// Networking-related features such as compression, authentication, and LAN broadcast.
     pub networking: NetworkingConfig,
-
     /// Command system configuration, including availability and permissions.
     pub commands: CommandsConfig,
-
     /// Chat-related features such as formatting, filtering, and message behaviour.
     pub chat: ChatConfig,
-
     /// Player-vs-player rules and mechanics.
     pub pvp: PVPConfig,
-
     /// Server links configuration exposed to clients.
     pub server_links: ServerLinksConfig,
-
     /// Persistent player data handling and storage behaviour.
     pub player_data: PlayerDataConfig,
-
     /// Optional fun and experimental features.
     pub fun: FunConfig,
 }
@@ -86,77 +77,54 @@ pub struct AdvancedConfiguration {
 pub struct BasicConfiguration {
     /// Whether Java Edition Clients are Accepted.
     pub java_edition: bool,
-
     /// The address and port to which the Java Edition server will bind.
     pub java_edition_address: SocketAddr,
-
     /// Whether Bedrock Edition Clients are Accepted.
     pub bedrock_edition: bool,
-
     /// Whether Bedrock Edition Clients are Accepted.
     pub bedrock_edition_address: SocketAddr,
-
     /// The seed for the world generation.
     pub seed: Seed,
-
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
     pub max_players: u32,
-
     /// The maximum view distance for players.
     pub view_distance: NonZeroU8,
-
     /// The maximum simulated view distance.
     pub simulation_distance: NonZeroU8,
-
     /// The default game difficulty.
     pub default_difficulty: Difficulty,
-
     /// The op level assigned by the /op command.
     pub op_permission_level: PermissionLvl,
-
     /// Whether the Nether dimension is enabled.
     pub allow_nether: bool,
-
     /// Whether the End dimension is enabled.
     pub allow_end: bool,
-
     /// Whether the server is in hardcore mode.
     pub hardcore: bool,
-
     /// Whether online mode is enabled. Requires valid Minecraft accounts.
     pub online_mode: bool,
-
     /// Whether packet encryption is enabled. Required when online mode is enabled.
     pub encryption: bool,
-
     /// Message of the Day; the server's description displayed on the status screen.
     pub motd: String,
-
     /// The server's ticks per second.
     pub tps: f32,
-
     /// The default gamemode for players.
     pub default_gamemode: GameMode,
-
     /// If the server forces the gamemode on-join.
     pub force_gamemode: bool,
-
     /// Whether to remove IPs from logs or not.
     pub scrub_ips: bool,
-
     /// Whether to use a server favicon.
     pub use_favicon: bool,
-    /// Path to server favicon
+    /// Path to optional server favicon.
     pub favicon_path: Option<String>,
     /// The default level name
     pub default_level_name: String,
-
     /// Whether chat messages should be signed or not.
     pub allow_chat_reports: bool,
-
     /// Whether to enable the whitelist.
     pub white_list: bool,
-
     /// Whether to enforce the whitelist.
     pub enforce_whitelist: bool,
 }

@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 pub struct PlayerDataConfig {
     /// Whether saving player data is enabled.
     pub save_player_data: bool,
-
     /// Time interval in seconds between automatic player data saves.
     pub save_player_cron_interval: u64,
 }

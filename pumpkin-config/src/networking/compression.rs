@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 pub struct CompressionConfig {
     /// Whether compression is enabled.
     pub enabled: bool,
-
     /// Detailed compression settings.
     #[serde(flatten)]
     pub info: CompressionInfo,
@@ -32,7 +31,6 @@ pub struct CompressionInfo {
     /// The compression threshold in bytes.
     /// Packets smaller than this will not be compressed.
     pub threshold: u32,
-
     /// Compression level, between `0..9`.
     /// `1` = optimize for speed, `9` = optimize for size.
     pub level: u32,

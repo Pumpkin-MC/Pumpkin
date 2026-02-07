@@ -21,19 +21,14 @@ pub mod rcon;
 pub struct NetworkingConfig {
     /// Authentication settings for client connections.
     pub authentication: AuthenticationConfig,
-
     /// Query protocol settings for server status requests.
     pub query: QueryConfig,
-
     /// RCON (remote console) configuration.
     pub rcon: RCONConfig,
-
     /// Proxy-related networking settings.
     pub proxy: ProxyConfig,
-
     /// Packet compression settings.
     pub packet_compression: CompressionConfig,
-
     /// LAN broadcast settings.
     pub lan_broadcast: LANBroadcastConfig,
 }
