@@ -164,6 +164,22 @@ The pumpkin-api-macros crate failed `cargo test -p pumpkin-api-macros` because i
 **Rationale:** These represent facts (the server started, is stopping, ticked) not proposals. Cancelling them would be meaningless or harmful. Matches Bukkit where ServerLoadEvent is not cancellable.
 **Affects:** Plugin
 
+**PLUGIN-004: ignore_cancelled filtering POSTPONED — needs Architect**
+**Date:** 2026-02-07
+**Decision:** The `ignore_cancelled` field exists on handler metadata but filtering is NOT enforced in `fire()`. Postponed until Architect updates pumpkin-macros.
+**Rationale:**
+Bukkit's `@EventHandler(ignoreCancelled = true)` skips a handler if a higher-priority handler already cancelled the event. To implement this in `fire()`, we need to check cancellation state on a generic `E: Payload`. The problem:
+
+1. **vtable breakage**: Adding `is_cancelled()` as a default method to the `Payload` trait changes the vtable layout for `dyn Payload`. External compiled plugins (`.so` files) that were compiled against the old vtable would crash. Violates ARCH-011 (never modify existing interfaces).
+2. **derive macro gap**: `#[derive(Event)]` (in pumpkin-macros) generates the `Payload` impl. `#[cancellable]` adds `cancelled: bool` + `Cancellable` impl separately. Neither generates an `is_cancelled()` override on `Payload`, so even if we added the default method, all events would return `false`.
+3. **no runtime trait query**: Rust cannot check "does this `dyn Payload` also implement `Cancellable`?" at runtime. `TypeId` downcasting fails across compilation boundaries (plugin `.so` vs host have different `TypeId` values).
+4. **specialization unstable**: `default fn` with concrete override requires nightly-only specialization.
+
+We tried adding `fn is_cancelled(&self) -> bool { false }` to `Payload` and reverted it.
+
+**Resolution path**: Architect must update `pumpkin-macros` `#[derive(Event)]` to detect the `cancelled` field and generate `fn is_cancelled(&self) -> bool { self.cancelled }` in the `Payload` impl (or `false` for non-cancellable events). Then `fire()` can filter handlers. Until then, `ignore_cancelled` is stored as forward-compatible metadata with no runtime effect.
+**Affects:** Plugin, Architect (pumpkin-macros)
+
 ## Tests
 
 - `cargo test -p pumpkin --lib plugin` — **32 tests pass**, 0 failures

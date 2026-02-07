@@ -20,3 +20,10 @@
 **Rationale:** These represent facts, not proposals. Matches Bukkit (ServerLoadEvent not cancellable).
 **Affects:** Plugin
 **Status:** active
+
+## PLUGIN-004: ignore_cancelled filtering — UNBLOCKED
+**Date:** 2026-02-07
+**Decision:** The `ignore_cancelled` field exists on handler metadata. `Payload::is_cancelled()` is now available via the derive macro (ARCH-015). Next step: implement actual filtering in `fire()`.
+**Rationale:** Bukkit's `@EventHandler(ignoreCancelled = true)` skips a handler if a higher-priority handler already cancelled the event. The Architect resolved this by updating `#[derive(Event)]` to detect the `cancelled` field and generate `is_cancelled()` on `Payload` (Option A). Non-cancellable events return `false`.
+**Affects:** Plugin
+**Status:** active — ready to implement filtering in `fire()`
