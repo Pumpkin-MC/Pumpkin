@@ -27,7 +27,11 @@ use crate::{
     plugin::{
         block::block_break::BlockBreakEvent,
         entity::entity_spawn::EntitySpawnEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
+        player::{
+            player_join::PlayerJoinEvent,
+            player_leave::PlayerLeaveEvent,
+            player_respawn::PlayerRespawnEvent,
+        },
     },
     server::Server,
 };
@@ -1960,7 +1964,7 @@ impl World {
         };
 
         // Handle cross-dimension transfer if we found a different target world
-        let (target_world, position) = if let Some(ref new_world) = target_world {
+        let (target_world, mut position) = if let Some(ref new_world) = target_world {
             log::debug!(
                 "Cross-dimension respawn: {} -> {}",
                 self.dimension.minecraft_name,
@@ -2005,6 +2009,15 @@ impl World {
         } else {
             (self.as_ref(), position)
         };
+
+        // Fire PlayerRespawnEvent — plugins can modify respawn position
+        if let Some(server) = self.server.upgrade() {
+            let event = PlayerRespawnEvent::new(player.clone(), position);
+            let event = server.plugin_manager.fire(event).await;
+            if !event.cancelled {
+                position = event.respawn_position;
+            }
+        }
 
         // Send respawn packet with target dimension (using send_packet_now to ensure proper order)
         player
