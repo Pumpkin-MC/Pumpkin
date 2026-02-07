@@ -21,9 +21,37 @@
 **Affects:** Plugin
 **Status:** active
 
-## PLUGIN-004: ignore_cancelled filtering — UNBLOCKED
+## PLUGIN-004: ignore_cancelled filtering — IMPLEMENTED
 **Date:** 2026-02-07
-**Decision:** The `ignore_cancelled` field exists on handler metadata. `Payload::is_cancelled()` is now available via the derive macro (ARCH-015). Next step: implement actual filtering in `fire()`.
-**Rationale:** Bukkit's `@EventHandler(ignoreCancelled = true)` skips a handler if a higher-priority handler already cancelled the event. The Architect resolved this by updating `#[derive(Event)]` to detect the `cancelled` field and generate `is_cancelled()` on `Payload` (Option A). Non-cancellable events return `false`.
+**Decision:** Implemented Bukkit-compatible `ignore_cancelled` filtering in `PluginManager::fire()`. Blocking handlers check `handler.ignore_cancelled() && event.is_cancelled()` per-iteration (since earlier handlers can cancel mid-loop). Non-blocking handlers are filtered once before `join_all` (they receive immutable refs, so cancellation state is stable during concurrent execution). Non-cancellable events always return `false` from `is_cancelled()`, so filtering is a no-op for them.
+**Rationale:** Bukkit's `@EventHandler(ignoreCancelled = true)` skips a handler if a higher-priority handler already cancelled the event.
 **Affects:** Plugin
-**Status:** active — ready to implement filtering in `fire()`
+**Status:** IMPLEMENTED (commit a5f1dbc, merged as PR #46)
+
+## PLUGIN-005: Multi-version data harvest with delta annotations
+**Date:** 2026-02-07
+**Decision:** Harvested PrismarineJS data for MC 1.12.2, 1.14.4, 1.16.5, 1.18.2, 1.21.4 into `.claude/specs/data/`. Built TOML registries: bukkit_api.toml (283 events), entities.toml, items.toml, blocks.toml, protocol.toml (237 packets). Delta registries annotate version presence for multi-version plugin compatibility.
+**Rationale:** Agents need canonical data to implement features. Cross-version deltas enable the DTO multi-version strategy.
+**Affects:** All agents
+**Status:** active — FLOW
+
+## PLUGIN-006: Block events for Redstone agent (RED-003 unblock)
+**Date:** 2026-02-07
+**Decision:** Created 7 new block event types: BlockRedstoneEvent, BlockPistonExtendEvent, BlockPistonRetractEvent, BlockPhysicsEvent, BlockFromToEvent, BlockGrowEvent, BlockFadeEvent. All cancellable, all implement BlockEvent trait.
+**Rationale:** RED-003 blocked Redstone agent from firing events until Plugin created the type definitions. These match Bukkit's block event hierarchy.
+**Affects:** Plugin, Redstone
+**Status:** IMPLEMENTED (commit a5f1dbc, merged as PR #46)
+
+## PLUGIN-007: Player item events (drop, consume)
+**Date:** 2026-02-07
+**Decision:** Created PlayerDropItemEvent and PlayerItemConsumeEvent. Both carry `ItemStack` (from pumpkin-world) directly rather than `Arc<Mutex<ItemStack>>` since the events represent a snapshot, not a live reference.
+**Rationale:** Matches Bukkit's PlayerDropItemEvent and PlayerItemConsumeEvent. Snapshot semantics prevent race conditions.
+**Affects:** Plugin
+**Status:** IMPLEMENTED (commit a5f1dbc, merged as PR #46)
+
+## PLUGIN-008: Core lifecycle events verified
+**Date:** 2026-02-07
+**Decision:** Verified that Core agent correctly wired all 3 lifecycle events: ServerStartedEvent fires after init_plugins() in main.rs, ServerTickEvent fires at end of each tick in server/mod.rs, ServerStopEvent fires during shutdown in lib.rs. Firing order matches Bukkit semantics.
+**Rationale:** Core requested Plugin verification of lifecycle event wiring (session 003_core).
+**Affects:** Plugin, Core
+**Status:** VERIFIED
