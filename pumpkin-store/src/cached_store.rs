@@ -284,6 +284,19 @@ impl<S: GameDataStore> GameDataStore for CachedStore<S> {
     fn recipe_count(&self) -> usize {
         self.delegate.recipe_count()
     }
+
+    fn game_mappings(
+        &self,
+        source_type: &str,
+        source_key: &str,
+    ) -> StoreResult<Vec<crate::traits::GameMappingRecord>> {
+        // Game mappings are not cached — delegate directly.
+        self.delegate.game_mappings(source_type, source_key)
+    }
+
+    fn game_mapping_count(&self) -> usize {
+        self.delegate.game_mapping_count()
+    }
 }
 
 #[cfg(test)]

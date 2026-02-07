@@ -113,6 +113,37 @@ impl ZeroCopyGuard for RecipeRecord {
     }
 }
 
+/// Cross-entity relationship mapping record (ARCH-027).
+///
+/// Stores relationships between game objects that don't fit in entity tables:
+/// biome→spawn rules, structure→loot tables, block→item drops, mob→goal states.
+///
+/// Used by the `game_mapping` Lance table and queryable via
+/// `GameDataStore::game_mappings()`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameMappingRecord {
+    /// Source category (e.g. "biome", "structure", "block", `mob_goal`).
+    pub source_type: Cow<'static, str>,
+    /// Source key within category (e.g. "plains", `desert_pyramid`, "stone").
+    pub source_key: Cow<'static, str>,
+    /// Target category (e.g. `entity_spawn`, `loot_table`, `item_drop`, `goal_state`).
+    pub target_type: Cow<'static, str>,
+    /// Target key (e.g. "zombie", `chest_loot_desert`, "cobblestone").
+    pub target_key: Cow<'static, str>,
+    /// Optional weight/priority for weighted relationships (spawn weights, etc.).
+    pub weight: Option<f32>,
+}
+
+impl ZeroCopyGuard for GameMappingRecord {
+    fn borrow_mask(&self) -> u64 {
+        let b0 = u64::from(matches!(self.source_type, Cow::Borrowed(_)));
+        let b1 = u64::from(matches!(self.source_key, Cow::Borrowed(_)));
+        let b2 = u64::from(matches!(self.target_type, Cow::Borrowed(_)));
+        let b3 = u64::from(matches!(self.target_key, Cow::Borrowed(_)));
+        b0 | (b1 << 1) | (b2 << 2) | (b3 << 3)
+    }
+}
+
 /// Core trait for game data access.
 ///
 /// Backends implement this to provide block, item, entity, and recipe lookups.
@@ -161,4 +192,19 @@ pub trait GameDataStore: Send + Sync {
 
     /// Total number of recipes.
     fn recipe_count(&self) -> usize;
+
+    // ── Game Mappings ────────────────────────────────────────────
+
+    /// Query cross-entity relationship mappings by source type and key.
+    ///
+    /// Returns all mappings from the given source (e.g. all spawn rules
+    /// for a biome, all goals for a mob type, all drops for a block).
+    fn game_mappings(
+        &self,
+        source_type: &str,
+        source_key: &str,
+    ) -> StoreResult<Vec<GameMappingRecord>>;
+
+    /// Total number of game mapping entries.
+    fn game_mapping_count(&self) -> usize;
 }

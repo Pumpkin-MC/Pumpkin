@@ -310,3 +310,31 @@ StaticStore (pumpkin-data, compile-time)
 
 **Affects:** Plugin (PatchBukkit bridge), all agents (data consumers)
 **Status:** planned (Phase 5)
+
+## ARCH-027: Game Mapping Table + XOR for Mob Goal States
+**Date:** 2026-02-07
+**Decision:** Add a separate `game_mapping` table to Lance for cross-entity relationship data, and apply XOR write-through guard to mob goal state transitions.
+
+**Game Mapping Table:**
+A relationship table that cross-cuts entity tables (blocks, items, entities):
+- `source_type` + `source_key` → `target_type` + `target_key`
+- Examples: biome→entity_spawn, structure→loot_table, block→item_drop, mob→goal_state
+- Not a game-object table — a *mapping* table. Lives alongside blocks/items/entities in Lance.
+- Queryable via Lance 2.0 native API: `game_mapping.filter("source_type = 'biome' AND source_key = 'plains'")`
+
+**XOR for Mob Goal States:**
+The Entity agent's `GoalSelector` evaluates 16 goal types across 4 control slots (`MOVE`, `LOOK`, `JUMP`, `TARGET`) every tick, with priority-based switching. During tick evaluation:
+1. Goals are stopped/started (ephemeral switching)
+2. Goal state (target position, cooldown, entity refs) transfers between slots
+3. XOR tag on goal state records detects if `Cow::Borrowed` fields (entity type names, block names in goals) were silently materialized to `Cow::Owned` during the switch
+
+The `game_mapping` table stores the static goal→mob relationships (which goals each mob type has), while the XOR guard protects the runtime goal state during tick arbitration.
+
+**Implementation path:**
+1. Add `GameMappingRecord` to `pumpkin-store/src/traits.rs`
+2. Add `game_mappings()` query to `GameDataStore` trait
+3. In Phase 4, create `game_mapping` Lance table alongside blocks/items/entities
+4. Entity agent integrates XOR guard into `PrioritizedGoal` state for tick-level verification
+
+**Affects:** Entity (goal states), WorldGen (biome→spawn mappings), Items (block→drop mappings)
+**Status:** planned

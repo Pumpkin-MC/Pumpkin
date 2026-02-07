@@ -147,6 +147,20 @@ impl GameDataStore for StaticStore {
         // ~1470 recipes in 1.21.11
         1470
     }
+
+    fn game_mappings(
+        &self,
+        _source_type: &str,
+        _source_key: &str,
+    ) -> StoreResult<Vec<crate::traits::GameMappingRecord>> {
+        // Game mappings are relationship data — not available in pumpkin-data statics.
+        // The Lance backend will populate this from registry TOML files and mob goal data.
+        Ok(Vec::new())
+    }
+
+    fn game_mapping_count(&self) -> usize {
+        0
+    }
 }
 
 #[cfg(test)]

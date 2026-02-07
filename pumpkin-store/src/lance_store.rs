@@ -185,4 +185,16 @@ impl GameDataStore for LanceStore {
     fn recipe_count(&self) -> usize {
         0
     }
+
+    fn game_mappings(
+        &self,
+        _source_type: &str,
+        _source_key: &str,
+    ) -> StoreResult<Vec<crate::traits::GameMappingRecord>> {
+        Err(StoreError::Lance("not yet implemented".to_string()))
+    }
+
+    fn game_mapping_count(&self) -> usize {
+        0
+    }
 }
