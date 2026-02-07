@@ -236,7 +236,7 @@ fn test() {
             .collect::<Vec<_>>()
             .join("\n");
 
-        info!("\nloading level:\n{header}\n{grid}");
+        println!("\nloading level:\n{header}\n{grid}");
     }
 }
 

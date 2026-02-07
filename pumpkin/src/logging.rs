@@ -15,7 +15,7 @@ use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use time::{Duration, OffsetDateTime};
-use tracing::{Subscriber, error, info};
+use tracing::Subscriber;
 use tracing_subscriber::Layer;
 use tracing_subscriber::filter::LevelFilter;
 
@@ -69,7 +69,7 @@ impl GzipRollingLogger {
 
         // If latest.log exists, we will gzip it
         if latest_path.exists() {
-            info!(
+            eprintln!(
                 "Found existing log file at '{}', gzipping it now...",
                 latest_path.display()
             );
@@ -217,7 +217,7 @@ where
             if data.current_day_of_month != now.day() {
                 drop(data);
                 if let Err(e) = self.rotate_log() {
-                    error!("Failed to rotate log: {e}");
+                    eprintln!("Failed to rotate log: {e}");
                 }
             }
         }

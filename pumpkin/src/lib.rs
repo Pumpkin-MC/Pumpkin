@@ -49,6 +49,7 @@ pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter)>;
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
+#[expect(clippy::print_stderr)]
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     use tracing_subscriber::EnvFilter;
     use tracing_subscriber::fmt;
@@ -99,7 +100,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
                     (Box::new(std::io::stdout()), Some(rl))
                 }
                 Err(e) => {
-                    error!(
+                    eprintln!(
                         "Failed to initialize console input ({e}); falling back to simple logger"
                     );
                     (Box::new(std::io::stdout()), None)
