@@ -137,8 +137,6 @@ impl Goal for MeleeAttackGoal {
     }
 
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        // TODO: implement
-        // This code is not Vanilla, tick method needs to be reimplemented
         Box::pin(async {
             let target_lock = mob.get_mob_entity().target.lock().await;
             let Some(target) = target_lock.as_ref() else {
@@ -155,23 +153,31 @@ impl Goal for MeleeAttackGoal {
 
             let current_target_pos = target.get_entity().pos.load();
             let should_update_nav = self.update_countdown_ticks <= 0
-                && self.last_target_position.is_none_or(|last_pos| {
+                && (self.last_target_position.is_none_or(|last_pos| {
                     current_target_pos.squared_distance_to_vec(&last_pos) >= 1.0
-                });
+                }) || mob.get_random().random_range(0..20) == 0);
 
             if should_update_nav {
+                let mob_pos = mob.get_entity().pos.load();
+                let dist_sq = mob_pos.squared_distance_to_vec(&current_target_pos);
                 let mut navigator = mob.get_mob_entity().navigator.lock().await;
                 navigator.set_progress(NavigatorGoal {
-                    current_progress: mob.get_entity().pos.load(),
+                    current_progress: mob_pos,
                     destination: current_target_pos,
                     speed: self.speed,
                 });
                 self.last_target_position = Some(current_target_pos);
                 self.update_countdown_ticks = 4 + mob.get_random().random_range(0..7);
+                if dist_sq > 1024.0 {
+                    self.update_countdown_ticks += 10;
+                } else if dist_sq > 256.0 {
+                    self.update_countdown_ticks += 5;
+                }
             }
 
             self.cooldown = (self.cooldown - 1).max(0);
 
+            // TODO: Add visibility check (canSee) - requires world raycast
             if self.cooldown <= 0
                 && mob
                     .get_mob_entity()
@@ -180,9 +186,7 @@ impl Goal for MeleeAttackGoal {
             {
                 self.cooldown = self.get_max_cooldown();
                 mob.get_mob_entity().living_entity.swing_hand().await;
-
-                //let world = mob.get_entity().world.load();
-                //mob.get_mob_entity().try_attack(world, target);
+                mob.get_mob_entity().try_attack(mob, target.as_ref()).await;
             }
         })
     }

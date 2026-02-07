@@ -137,7 +137,7 @@ impl Navigator {
             let Some(current) = open_set.pop() else {
                 break;
             };
-            if current.distance_manhattan(&target) <= 1.0 {
+            if current.distance_manhattan(&target) < 1.0 {
                 target.reached = true;
                 reached = true;
                 target.update_best(0.0, &current);

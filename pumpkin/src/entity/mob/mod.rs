@@ -102,10 +102,9 @@ impl MobEntity {
     }
 
     pub async fn is_in_attack_range(&self, target: &dyn EntityBase) -> bool {
-        const DEFAULT_ATTACK_RANGE: f64 = 2.0;
+        const DEFAULT_ATTACK_RANGE: f64 = 0.828_427_12; // sqrt(2.04) - 0.6
 
         // TODO: Implement DataComponent lookup for ATTACK_RANGE when components are ready
-        // For now, we use the Vanilla default.
         let max_range = DEFAULT_ATTACK_RANGE;
         let min_range = 0.0;
 
@@ -127,6 +126,22 @@ impl MobEntity {
         }
 
         true
+    }
+
+    pub async fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
+        // TODO: Use entity attributes for damage once implemented
+        const ZOMBIE_ATTACK_DAMAGE: f32 = 3.0;
+
+        target
+            .damage_with_context(
+                target,
+                ZOMBIE_ATTACK_DAMAGE,
+                DamageType::MOB_ATTACK,
+                None,
+                Some(caller),
+                Some(caller),
+            )
+            .await;
     }
 
     async fn get_attack_box(&self, attack_range: f64) -> BoundingBox {
