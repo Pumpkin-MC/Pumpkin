@@ -47,7 +47,7 @@ impl Goal for CreeperIgniteGoal {
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             let mut navigator = mob.get_mob_entity().navigator.lock().await;
-            navigator.cancel();
+            navigator.stop();
 
             // TODO
         })

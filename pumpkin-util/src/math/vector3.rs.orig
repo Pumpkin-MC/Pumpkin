@@ -177,6 +177,7 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
         delta_x * delta_x + delta_y * delta_y + delta_z * delta_z
     }
 
+<<<<<<< HEAD
     pub fn squared_distance_to_vec_xz(&self, other: Self) -> T {
         self.squared_distance_to_xz(other.x, other.z)
     }
@@ -187,7 +188,9 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
         delta_x * delta_x + delta_z * delta_z
     }
 
+=======
     #[must_use]
+>>>>>>> master
     pub fn is_within_bounds(&self, block_pos: Self, x: T, y: T, z: T) -> bool {
         let min_x = block_pos.x - x;
         let max_x = block_pos.x + x;
