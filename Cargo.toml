@@ -10,6 +10,7 @@ members = [
     "pumpkin-world",
     "pumpkin/",
     "pumpkin-data",
+    "pumpkin-store",
 ]
 
 
@@ -146,6 +147,7 @@ pumpkin-inventory = { path = "pumpkin-inventory" }
 pumpkin-macros = { path = "pumpkin-macros" }
 pumpkin-nbt = { path = "pumpkin-nbt" }
 pumpkin-protocol = { path = "pumpkin-protocol" }
+pumpkin-store = { path = "pumpkin-store" }
 pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"

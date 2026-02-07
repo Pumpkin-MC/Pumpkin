@@ -1,0 +1,29 @@
+[package]
+name = "pumpkin-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Pluggable game data storage for Pumpkin — TOML default, optional LanceDB/Arrow"
+
+[dependencies]
+# Always needed — trait definitions
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+# TOML backend (default) — wraps pumpkin-data static arrays, zero new deps
+pumpkin-data = { workspace = true, optional = true }
+
+# Lance backend deps are NOT declared here yet — they will be added in Phase 4
+# when the implementation is ready. Declaring them now causes chrono version
+# conflicts between lancedb 0.21 (chrono =0.4.41) and datafusion 51 (chrono ^0.4.42).
+# Target versions (aligned with holograph): lancedb 0.21+, arrow 57, datafusion 51+
+# See: https://github.com/AdaWorldAPI/holograph
+
+[features]
+default = ["toml-store"]
+toml-store = ["dep:pumpkin-data"]
+lance-store = [] # Deps added in Phase 4 (lancedb, arrow 57, datafusion 51)
+
+[lints]
+workspace = true
