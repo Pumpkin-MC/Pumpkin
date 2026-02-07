@@ -37,7 +37,8 @@ tests = "cargo test -p pumpkin --lib server"
 - **Session 003 (2026-02-07):** Wired ServerStartedEvent, ServerStopEvent, ServerTickEvent (ARCH-023).
 - **Session 004 (2026-02-07):** Config audit — 4 new config fields. Command audit — 45/84 commands reviewed. 121 tests.
 - **Session 005 (2026-02-07):** save-all, save-off, save-on commands implemented.
-- **Total:** tick profiler, lifecycle events wired, 45/84 commands audited, save commands, 121 tests
+- **Session 006 (2026-02-07):** `/debug start|stop` (OP3) and `/perf start|stop` (OP4) profiling commands. Leverages tick profiler. CORE-010: shared TickProfiler, cannot run simultaneously.
+- **Total:** tick profiler, lifecycle events wired, 55/84 commands (65%), save/debug/perf commands, 121+ tests
 
 ## CRITICAL: Rebase Before Working
 
@@ -45,7 +46,7 @@ Your branch is **15 commits behind master**. Run `git fetch origin master && git
 
 ## Your Priority (P1 — High Value)
 
-**Command audit completion** — 39/84 commands remaining. Focus on high-traffic commands first (tp, gamemode, time, weather, give, kill).
+**Command audit completion** — 29/84 commands remaining (55 done, 65%). Focus on high-traffic commands first (tp, gamemode, time, weather, give, kill). 11 remaining are Core scope (execute, function, schedule, return, scoreboard, advancement — all moderate-to-complex).
 
 **P0 dependency**: Event firing coverage — make sure ServerTickEvent fires every tick and lifecycle events fire at the right points. Coordinate with Plugin agent.
 
