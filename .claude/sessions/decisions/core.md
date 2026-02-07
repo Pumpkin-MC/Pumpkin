@@ -39,3 +39,19 @@
 **Rationale:** Matches Bukkit's ServerStopEvent behavior. Plugins may want to send final messages, save data, or clean up while players are still connected and the world is accessible.
 **Affects:** Core, Plugin
 **Status:** active
+
+## CORE-006: Config fields added before runtime enforcement
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/004_core_command-config-audit.md
+**Decision:** Config fields (allow_flight, spawn_protection, generate_structures, player_idle_timeout) added to BasicConfiguration before runtime code that consumes them.
+**Rationale:** Config fields with sane defaults are harmless. They appear in TOML, allowing operators to set values before enforcement exists. Other agents can consume them.
+**Affects:** Core, Entity (allow_flight, player_idle_timeout), WorldGen (generate_structures, spawn_protection)
+**Status:** active
+
+## CORE-007: Command completeness — 39 missing, 7 are Core scope
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/004_core_command-config-audit.md
+**Decision:** Of 39 missing vanilla commands, 7 fall under Core scope: execute, function, schedule, return, save-all, save-off, save-on. Save-* are simple. Execute/function/schedule/return require dispatcher work.
+**Rationale:** Execute is most impactful missing command but also most complex. Needs Architect guidance.
+**Affects:** Core, Architect
+**Status:** active
