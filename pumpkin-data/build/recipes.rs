@@ -22,13 +22,13 @@ pub enum RecipeTypes {
     #[serde(rename = "minecraft:smelting")]
     Smelting(CookingRecipeStruct),
     #[serde(rename = "minecraft:smithing_transform")]
-    SmithingTransform,
+    SmithingTransform(SmithingTransformRecipeStruct),
     #[serde(rename = "minecraft:smithing_trim")]
-    SmithingTrim,
+    SmithingTrim(SmithingTrimRecipeStruct),
     #[serde(rename = "minecraft:smoking")]
     Smoking(CookingRecipeStruct),
     #[serde(rename = "minecraft:stonecutting")]
-    Stonecutting,
+    Stonecutting(StonecuttingRecipeStruct),
     #[serde(other)]
     #[serde(rename = "minecraft:crafting_special_*")]
     CraftingSpecial,
@@ -274,6 +274,118 @@ impl ToTokens for CraftingDecoratedPotStruct {
 }
 
 #[derive(Deserialize)]
+pub struct StonecuttingRecipeStruct {
+    ingredient: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+impl StonecuttingRecipeStruct {
+    fn generate_recipe_id(&self) -> String {
+        let result_name = self
+            .result
+            .id
+            .strip_prefix("minecraft:")
+            .unwrap_or(&self.result.id);
+        let ingredient_name = match &self.ingredient {
+            RecipeIngredientTypes::Simple(s) => {
+                if s.starts_with('#') {
+                    s.strip_prefix('#').unwrap_or(s).replace(':', "_")
+                } else {
+                    s.strip_prefix("minecraft:").unwrap_or(s).to_string()
+                }
+            }
+            RecipeIngredientTypes::OneOf(items) => items
+                .first()
+                .map(|s| s.strip_prefix("minecraft:").unwrap_or(s))
+                .unwrap_or("unknown")
+                .to_string(),
+        };
+        format!("minecraft:{result_name}_from_stonecutting_{ingredient_name}")
+    }
+}
+
+impl ToTokens for StonecuttingRecipeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let recipe_id = self.generate_recipe_id();
+        let ingredient = self.ingredient.to_token_stream();
+        let result = self.result.to_token_stream();
+
+        tokens.extend(quote! {
+            StonecuttingRecipe {
+                recipe_id: #recipe_id,
+                ingredient: #ingredient,
+                result: #result,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SmithingTransformRecipeStruct {
+    template: RecipeIngredientTypes,
+    base: RecipeIngredientTypes,
+    addition: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+impl SmithingTransformRecipeStruct {
+    fn generate_recipe_id(&self) -> String {
+        let result_name = self
+            .result
+            .id
+            .strip_prefix("minecraft:")
+            .unwrap_or(&self.result.id);
+        format!("minecraft:{result_name}_smithing")
+    }
+}
+
+impl ToTokens for SmithingTransformRecipeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let recipe_id = self.generate_recipe_id();
+        let template = self.template.to_token_stream();
+        let base = self.base.to_token_stream();
+        let addition = self.addition.to_token_stream();
+        let result = self.result.to_token_stream();
+
+        tokens.extend(quote! {
+            SmithingTransformRecipe {
+                recipe_id: #recipe_id,
+                template: #template,
+                base: #base,
+                addition: #addition,
+                result: #result,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SmithingTrimRecipeStruct {
+    template: RecipeIngredientTypes,
+    base: RecipeIngredientTypes,
+    addition: RecipeIngredientTypes,
+    pattern: String,
+}
+
+impl ToTokens for SmithingTrimRecipeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let template = self.template.to_token_stream();
+        let base = self.base.to_token_stream();
+        let addition = self.addition.to_token_stream();
+        let pattern = &self.pattern;
+
+        tokens.extend(quote! {
+            SmithingTrimRecipe {
+                template: #template,
+                base: #base,
+                addition: #addition,
+                pattern: #pattern,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize)]
 pub struct RecipeResultStruct {
     id: String,
     count: Option<u8>,
@@ -376,6 +488,9 @@ pub(crate) fn build() -> TokenStream {
 
     let mut crafting_recipes = Vec::new();
     let mut cooking_recipes = Vec::new();
+    let mut stonecutting_recipes = Vec::new();
+    let mut smithing_transform_recipes = Vec::new();
+    let mut smithing_trim_recipes = Vec::new();
 
     for recipe in recipes_assets {
         match recipe {
@@ -424,8 +539,12 @@ pub(crate) fn build() -> TokenStream {
                 };
                 cooking_recipes.push(smelting_token);
             }
-            RecipeTypes::SmithingTransform => {}
-            RecipeTypes::SmithingTrim => {}
+            RecipeTypes::SmithingTransform(recipe) => {
+                smithing_transform_recipes.push(recipe.to_token_stream());
+            }
+            RecipeTypes::SmithingTrim(recipe) => {
+                smithing_trim_recipes.push(recipe.to_token_stream());
+            }
             RecipeTypes::Smoking(recipe) => {
                 let recipe_id = recipe.generate_recipe_id("smoking");
                 let mut common_cooking_token = TokenStream::new();
@@ -437,7 +556,9 @@ pub(crate) fn build() -> TokenStream {
                 };
                 cooking_recipes.push(smoking_token);
             }
-            RecipeTypes::Stonecutting => {}
+            RecipeTypes::Stonecutting(recipe) => {
+                stonecutting_recipes.push(recipe.to_token_stream());
+            }
             RecipeTypes::CraftingSpecial => {}
         }
     }
@@ -579,11 +700,47 @@ pub(crate) fn build() -> TokenStream {
             Blocks,
         }
 
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub struct StonecuttingRecipe {
+            pub recipe_id: &'static str,
+            pub ingredient: RecipeIngredientTypes,
+            pub result: RecipeResultStruct,
+        }
+
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub struct SmithingTransformRecipe {
+            pub recipe_id: &'static str,
+            pub template: RecipeIngredientTypes,
+            pub base: RecipeIngredientTypes,
+            pub addition: RecipeIngredientTypes,
+            pub result: RecipeResultStruct,
+        }
+
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub struct SmithingTrimRecipe {
+            pub template: RecipeIngredientTypes,
+            pub base: RecipeIngredientTypes,
+            pub addition: RecipeIngredientTypes,
+            pub pattern: &'static str,
+        }
+
         pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             #(#crafting_recipes),*
         ];
         pub static RECIPES_COOKING: &[CookingRecipeType] = &[
             #(#cooking_recipes ),*
+        ];
+        pub static RECIPES_STONECUTTING: &[StonecuttingRecipe] = &[
+            #(#stonecutting_recipes),*
+        ];
+        pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
+            #(#smithing_transform_recipes),*
+        ];
+        pub static RECIPES_SMITHING_TRIM: &[SmithingTrimRecipe] = &[
+            #(#smithing_trim_recipes),*
         ];
 
         pub fn get_cooking_recipe_with_ingredient(ingredient: &Item, recipe_type: CookingRecipeKind) -> Option<&'static CookingRecipe> {

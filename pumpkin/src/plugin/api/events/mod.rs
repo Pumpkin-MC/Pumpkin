@@ -40,6 +40,17 @@ pub trait Payload: Send + Sync {
     /// # Returns
     /// A mutable reference to the payload as a `dyn Any` trait object.
     fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    /// Checks if this event has been cancelled.
+    ///
+    /// Returns `false` by default for non-cancellable events.
+    /// For cancellable events (marked with `#[cancellable]`), the `#[derive(Event)]`
+    /// macro generates an override that returns the actual cancellation state.
+    ///
+    /// This enables Bukkit-compatible `ignore_cancelled` filtering in `fire()`.
+    fn is_cancelled(&self) -> bool {
+        false
+    }
 }
 
 /// Helper functions for safe downcasting of Payload implementations.
