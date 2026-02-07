@@ -217,4 +217,50 @@ mod tests {
         let block = store.block_by_name("stone").unwrap();
         assert_eq!(block.name, "stone");
     }
+
+    /// Verify that `StaticStore` produces `Cow::Borrowed` (zero-copy pointers
+    /// into pumpkin-data statics), and that cloning preserves this invariant.
+    /// If this test fails, something is forcing heap allocation on the read path.
+    #[test]
+    fn zero_copy_invariant_preserved() {
+        let store = StaticStore::new();
+
+        // Block name must be Borrowed (pointer to static "stone")
+        let block = store.block_by_name("stone").unwrap();
+        assert!(
+            matches!(block.name, Cow::Borrowed(_)),
+            "block.name must be Cow::Borrowed, got Owned"
+        );
+
+        // Clone must preserve Borrowed — NOT heap-allocate.
+        // We intentionally clone here to test the invariant.
+        #[allow(clippy::redundant_clone)]
+        let cloned = block.clone();
+        assert!(
+            matches!(cloned.name, Cow::Borrowed(_)),
+            "cloned block.name must stay Cow::Borrowed"
+        );
+
+        // Item name
+        let item = store.item_by_name("diamond_sword").unwrap();
+        assert!(
+            matches!(item.name, Cow::Borrowed(_)),
+            "item.name must be Cow::Borrowed"
+        );
+
+        // Entity name
+        let entity = store.entity_by_name("zombie").unwrap();
+        assert!(
+            matches!(entity.name, Cow::Borrowed(_)),
+            "entity.name must be Cow::Borrowed"
+        );
+
+        // Cloned entity must still be Borrowed.
+        #[allow(clippy::redundant_clone)]
+        let cloned_entity = entity.clone();
+        assert!(
+            matches!(cloned_entity.name, Cow::Borrowed(_)),
+            "cloned entity.name must stay Cow::Borrowed"
+        );
+    }
 }

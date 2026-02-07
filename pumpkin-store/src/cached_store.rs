@@ -373,4 +373,45 @@ mod tests {
         let block = cached.block_by_name("stone").unwrap();
         assert_eq!(block.name, "stone");
     }
+
+    /// Critical: Verify that `StaticStore` → `CachedStore` chain preserves
+    /// `Cow::Borrowed` (zero-copy). Cache cloning must NOT break into Owned.
+    #[test]
+    fn zero_copy_preserved_through_cache() {
+        let cached = CachedStore::new(StaticStore::new());
+
+        // First lookup (cache miss → delegate → cache)
+        let block1 = cached.block_by_name("stone").unwrap();
+        assert!(
+            matches!(block1.name, Cow::Borrowed(_)),
+            "first lookup must return Cow::Borrowed"
+        );
+
+        // Second lookup (cache hit → cloned from cache)
+        let block2 = cached.block_by_name("stone").unwrap();
+        assert!(
+            matches!(block2.name, Cow::Borrowed(_)),
+            "cache hit must return Cow::Borrowed, not heap-allocated Owned"
+        );
+
+        // Item through cache
+        let item = cached.item_by_name("diamond_sword").unwrap();
+        assert!(matches!(item.name, Cow::Borrowed(_)));
+
+        let item2 = cached.item_by_name("diamond_sword").unwrap();
+        assert!(
+            matches!(item2.name, Cow::Borrowed(_)),
+            "cached item must stay Cow::Borrowed"
+        );
+
+        // Entity through cache
+        let entity = cached.entity_by_name("zombie").unwrap();
+        assert!(matches!(entity.name, Cow::Borrowed(_)));
+
+        let entity2 = cached.entity_by_name("zombie").unwrap();
+        assert!(
+            matches!(entity2.name, Cow::Borrowed(_)),
+            "cached entity must stay Cow::Borrowed"
+        );
+    }
 }
