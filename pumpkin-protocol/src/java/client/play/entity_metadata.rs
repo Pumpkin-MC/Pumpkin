@@ -1,4 +1,7 @@
+use std::io::Cursor;
+
 use pumpkin_data::{
+    block_state_remap::remap_block_state_for_version,
     meta_data_type::MetaDataType, packet::clientbound::PLAY_SET_ENTITY_DATA,
     tracked_data::TrackedId,
 };
@@ -67,6 +70,27 @@ impl<T> Metadata<T> {
 
         writer.write_u8(resolved_index)?;
         self.r#type.encode(&mut writer)?;
+
+        if self.r#type.0 == MetaDataType::BlockState as i32 {
+            let mut serialized_value = Vec::new();
+            {
+                let mut serializer = serializer::Serializer::new(&mut serialized_value);
+                self.value
+                    .serialize(&mut serializer)
+                    .map_err(|e| WritingError::Serde(e.to_string()))?;
+            }
+
+            let mut cursor = Cursor::new(serialized_value);
+            let decoded_state = VarInt::decode(&mut cursor).map_err(|e| {
+                WritingError::Message(format!("Failed to decode block state metadata: {e}"))
+            })?;
+            let remapped_state = match u16::try_from(decoded_state.0) {
+                Ok(state_id) => VarInt(i32::from(remap_block_state_for_version(state_id, *version))),
+                Err(_) => decoded_state,
+            };
+            writer.write_var_int(&remapped_state)?;
+            return Ok(());
+        }
 
         let mut serializer = serializer::Serializer::new(&mut writer);
         self.value

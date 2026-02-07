@@ -1,14 +1,21 @@
+use std::io::Write;
+
+use crate::{
+    ClientPacket,
+    ser::{NetworkWriteExt, WritingError},
+};
+use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_EVENT;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::version::MinecraftVersion;
 
 use pumpkin_macros::java_packet;
-use serde::Serialize;
 
 /// Sent by the server to trigger a specific sound or particle effect at a world location.
 ///
 /// This is used for a wide variety of effects, from breaking blocks and firework
 /// explosions to splashing water or record playing.
-#[derive(Serialize)]
 #[java_packet(PLAY_LEVEL_EVENT)]
 pub struct CWorldEvent {
     /// The ID of the event to trigger (e.g., 1000 for a bow shoot, 2001 for block break).
@@ -40,5 +47,30 @@ impl CWorldEvent {
             data,
             disable_relative_volume,
         }
+    }
+}
+
+impl ClientPacket for CWorldEvent {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let mut write = write;
+        write.write_i32_be(self.event)?;
+        write.write_block_pos(&self.location)?;
+
+        let data = if self.event == WorldEvent::BlockBroken as i32 {
+            match u16::try_from(self.data) {
+                Ok(state_id) => i32::from(remap_block_state_for_version(state_id, *version)),
+                Err(_) => self.data,
+            }
+        } else {
+            self.data
+        };
+        write.write_i32_be(data)?;
+        write.write_bool(self.disable_relative_volume)?;
+
+        Ok(())
     }
 }

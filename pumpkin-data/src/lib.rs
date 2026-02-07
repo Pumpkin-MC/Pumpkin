@@ -147,6 +147,10 @@ pub mod fluid;
 pub mod block_properties;
 
 #[rustfmt::skip]
+#[path = "generated/block_state_remap.rs"]
+pub mod block_state_remap;
+
+#[rustfmt::skip]
 #[path = "generated/tag.rs"]
 pub mod tag;
 

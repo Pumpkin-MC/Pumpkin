@@ -1,5 +1,7 @@
 use std::io::Write;
 
+use pumpkin_data::block_state_remap::remap_block_state_for_version;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::packet::clientbound::PLAY_ADD_ENTITY;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
@@ -75,7 +77,15 @@ impl ClientPacket for CSpawnEntity {
         write.write_u8(self.yaw)?;
         write.write_u8(self.head_yaw)?;
 
-        write.write_var_int(&self.data)?;
+        let data = if self.r#type.0 == i32::from(EntityType::FALLING_BLOCK.id) {
+            match u16::try_from(self.data.0) {
+                Ok(state_id) => VarInt(i32::from(remap_block_state_for_version(state_id, *version))),
+                Err(_) => self.data,
+            }
+        } else {
+            self.data
+        };
+        write.write_var_int(&data)?;
 
         if version <= &MinecraftVersion::V_1_21_7 {
             write.write_i16_be(self.velocity.0.x as i16)?;

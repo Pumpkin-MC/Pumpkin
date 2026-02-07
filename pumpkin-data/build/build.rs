@@ -12,6 +12,7 @@ use std::{
 mod attributes;
 mod biome;
 mod bitsets;
+mod block_state_remap;
 mod block;
 mod chunk_gen_settings;
 mod chunk_status;
@@ -84,6 +85,7 @@ pub fn main() {
         (message_type::build, "message_type.rs"),
         (spawn_egg::build, "spawn_egg.rs"),
         (block::build, "block.rs"),
+        (block_state_remap::build, "block_state_remap.rs"),
         (item::build, "item.rs"),
         (structures::build, "structures.rs"),
         (chunk_gen_settings::build, "chunk_gen_settings.rs"),
