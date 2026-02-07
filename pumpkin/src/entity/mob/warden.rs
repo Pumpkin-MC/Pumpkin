@@ -6,14 +6,15 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::LookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
 /// Warden — a powerful hostile mob in the deep dark.
 ///
-/// Currently has basic AI: targets players, wanders, looks around.
+/// Has melee attack AI, targets players, wanders, looks around.
 /// Sculk sensor tracking, sonic boom, and sniffing behavior are future additions.
 pub struct WardenEntity {
     pub mob_entity: MobEntity,
@@ -34,6 +35,7 @@ impl WardenEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
             goal_selector.add_goal(0, SwimGoal::new());
+            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(0.9, true)));
             goal_selector.add_goal(6, WanderAroundGoal::new(0.5));
             goal_selector.add_goal(
                 7,

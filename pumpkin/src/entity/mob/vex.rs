@@ -6,7 +6,7 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal,
-        wander_around::WanderAroundGoal,
+        melee_attack::MeleeAttackGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -33,6 +33,7 @@ impl VexEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
+            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(6, WanderAroundGoal::new(1.0));
             goal_selector.add_goal(
                 7,

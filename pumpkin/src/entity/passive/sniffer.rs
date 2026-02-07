@@ -6,7 +6,7 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal, panic::PanicGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        swim::SwimGoal, tempt, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -34,6 +34,7 @@ impl SnifferEntity {
 
             goal_selector.add_goal(0, SwimGoal::new());
             goal_selector.add_goal(1, PanicGoal::new(2.0));
+            goal_selector.add_goal(3, tempt::TemptGoal::new(1.0, tempt::TEMPT_SNIFFER, 10.0));
             goal_selector.add_goal(6, WanderAroundGoal::new(0.6));
             goal_selector.add_goal(
                 7,

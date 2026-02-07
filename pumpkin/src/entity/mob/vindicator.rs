@@ -6,15 +6,15 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::LookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
 /// Vindicator — an illager that attacks with an iron axe.
 ///
-/// Currently has basic AI: targets players, wanders, looks around.
-/// Melee attack behavior is a future addition.
+/// Has melee attack AI, targets players, wanders, looks around.
 pub struct VindicatorEntity {
     pub mob_entity: MobEntity,
 }
@@ -34,6 +34,7 @@ impl VindicatorEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
             goal_selector.add_goal(0, SwimGoal::new());
+            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(6, WanderAroundGoal::new(1.0));
             goal_selector.add_goal(
                 7,
