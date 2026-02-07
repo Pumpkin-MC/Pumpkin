@@ -4,6 +4,17 @@
 //! Each entry records the lookup method, key, and the full record value — making
 //! the cache inspectable for debugging and serialization.
 //!
+//! ## XOR Write-Through Guard (holograph pattern)
+//!
+//! Each [`CacheEntry`] carries an `xor_tag` computed at insertion time from the
+//! `Cow` variant discriminant. On read-back, [`CacheEntry::verify_zero_copy`]
+//! re-computes the tag and checks it matches. If an ephemeral variable switch
+//! silently converted `Cow::Borrowed` to `Cow::Owned` (breaking zero-copy),
+//! the XOR mismatch is detected immediately.
+//!
+//! This pattern is borrowed from `AdaWorldAPI/holograph` where it guards Arrow
+//! IPC zero-copy buffers from accidental materialization.
+//!
 //! ## Usage
 //!
 //! ```rust,ignore
@@ -27,12 +38,23 @@ use std::sync::RwLock;
 use serde::{Deserialize, Serialize};
 
 use crate::error::StoreResult;
-use crate::traits::{BlockRecord, EntityRecord, GameDataStore, ItemRecord, RecipeRecord};
+use crate::traits::{
+    BlockRecord, EntityRecord, GameDataStore, ItemRecord, RecipeRecord, ZeroCopyGuard,
+};
 
 /// A transparent cache entry that records the lookup source and key.
 ///
 /// Every cached value is wrapped in this DTO so the cache is inspectable:
 /// you can see which method produced it, what key was used, and the full value.
+///
+/// ## XOR Write-Through Guard
+///
+/// The `xor_tag` field is computed at insertion time from the value's
+/// [`ZeroCopyGuard::borrow_mask`]. On read-back, calling [`verify_zero_copy`]
+/// re-computes the tag — if an ephemeral variable switch silently converted
+/// a `Cow::Borrowed` to `Cow::Owned`, the mismatch is detected immediately.
+///
+/// [`verify_zero_copy`]: CacheEntry::verify_zero_copy
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheEntry<T> {
     /// The lookup method that produced this entry (e.g. `block_by_name`, `item_by_name`).
@@ -41,6 +63,32 @@ pub struct CacheEntry<T> {
     pub key: Cow<'static, str>,
     /// The cached value — the full record DTO from the delegate store.
     pub value: T,
+    /// XOR tag computed at insertion: `borrow_mask ^ XOR_SENTINEL`.
+    /// Used to detect zero-copy breach on read-back.
+    pub xor_tag: u64,
+}
+
+impl<T: ZeroCopyGuard> CacheEntry<T> {
+    /// Create a new cache entry with XOR tag computed from the value's borrow state.
+    pub fn new(method: Cow<'static, str>, key: Cow<'static, str>, value: T) -> Self {
+        let xor_tag = value.xor_tag();
+        Self {
+            method,
+            key,
+            value,
+            xor_tag,
+        }
+    }
+
+    /// Verify that zero-copy is intact: the value's current borrow state
+    /// must match what was recorded at insertion time.
+    ///
+    /// Returns `true` if all `Cow::Borrowed` fields are still borrowed.
+    /// Returns `false` if any field was silently switched to `Cow::Owned`.
+    #[must_use]
+    pub fn verify_zero_copy(&self) -> bool {
+        self.value.verify_xor(self.xor_tag)
+    }
 }
 
 /// Summary of current cache state — returned by [`CachedStore::snapshot`].
@@ -121,31 +169,33 @@ impl<S: GameDataStore> CachedStore<S> {
 
 impl<S: GameDataStore> GameDataStore for CachedStore<S> {
     fn block_by_id(&self, id: u16) -> StoreResult<BlockRecord> {
-        // Check cache first (read lock)
+        // Check cache first (read lock) + XOR verify
         if let Some(entry) = self.blocks_by_id.read().unwrap().get(&id) {
+            debug_assert!(entry.verify_zero_copy(), "XOR zero-copy breach: block_by_id({id})");
             return Ok(entry.value.clone());
         }
-        // Miss — delegate, then cache with transparent entry (write lock)
+        // Miss — delegate, then cache with XOR tag (write lock)
         let record = self.delegate.block_by_id(id)?;
-        let entry = CacheEntry {
-            method: Cow::Borrowed("block_by_id"),
-            key: Cow::Owned(id.to_string()),
-            value: record.clone(),
-        };
+        let entry = CacheEntry::new(
+            Cow::Borrowed("block_by_id"),
+            Cow::Owned(id.to_string()),
+            record.clone(),
+        );
         self.blocks_by_id.write().unwrap().insert(id, entry);
         Ok(record)
     }
 
     fn block_by_name(&self, name: &str) -> StoreResult<BlockRecord> {
         if let Some(entry) = self.blocks_by_name.read().unwrap().get(name) {
+            debug_assert!(entry.verify_zero_copy(), "XOR zero-copy breach: block_by_name({name})");
             return Ok(entry.value.clone());
         }
         let record = self.delegate.block_by_name(name)?;
-        let entry = CacheEntry {
-            method: Cow::Borrowed("block_by_name"),
-            key: Cow::Owned(name.to_string()),
-            value: record.clone(),
-        };
+        let entry = CacheEntry::new(
+            Cow::Borrowed("block_by_name"),
+            Cow::Owned(name.to_string()),
+            record.clone(),
+        );
         self.blocks_by_name
             .write()
             .unwrap()
@@ -155,14 +205,18 @@ impl<S: GameDataStore> GameDataStore for CachedStore<S> {
 
     fn block_by_state_id(&self, state_id: u16) -> StoreResult<BlockRecord> {
         if let Some(entry) = self.blocks_by_state.read().unwrap().get(&state_id) {
+            debug_assert!(
+                entry.verify_zero_copy(),
+                "XOR zero-copy breach: block_by_state_id({state_id})"
+            );
             return Ok(entry.value.clone());
         }
         let record = self.delegate.block_by_state_id(state_id)?;
-        let entry = CacheEntry {
-            method: Cow::Borrowed("block_by_state_id"),
-            key: Cow::Owned(state_id.to_string()),
-            value: record.clone(),
-        };
+        let entry = CacheEntry::new(
+            Cow::Borrowed("block_by_state_id"),
+            Cow::Owned(state_id.to_string()),
+            record.clone(),
+        );
         self.blocks_by_state
             .write()
             .unwrap()
@@ -176,14 +230,15 @@ impl<S: GameDataStore> GameDataStore for CachedStore<S> {
 
     fn item_by_name(&self, name: &str) -> StoreResult<ItemRecord> {
         if let Some(entry) = self.items_by_name.read().unwrap().get(name) {
+            debug_assert!(entry.verify_zero_copy(), "XOR zero-copy breach: item_by_name({name})");
             return Ok(entry.value.clone());
         }
         let record = self.delegate.item_by_name(name)?;
-        let entry = CacheEntry {
-            method: Cow::Borrowed("item_by_name"),
-            key: Cow::Owned(name.to_string()),
-            value: record.clone(),
-        };
+        let entry = CacheEntry::new(
+            Cow::Borrowed("item_by_name"),
+            Cow::Owned(name.to_string()),
+            record.clone(),
+        );
         self.items_by_name
             .write()
             .unwrap()
@@ -197,14 +252,18 @@ impl<S: GameDataStore> GameDataStore for CachedStore<S> {
 
     fn entity_by_name(&self, name: &str) -> StoreResult<EntityRecord> {
         if let Some(entry) = self.entities_by_name.read().unwrap().get(name) {
+            debug_assert!(
+                entry.verify_zero_copy(),
+                "XOR zero-copy breach: entity_by_name({name})"
+            );
             return Ok(entry.value.clone());
         }
         let record = self.delegate.entity_by_name(name)?;
-        let entry = CacheEntry {
-            method: Cow::Borrowed("entity_by_name"),
-            key: Cow::Owned(name.to_string()),
-            value: record.clone(),
-        };
+        let entry = CacheEntry::new(
+            Cow::Borrowed("entity_by_name"),
+            Cow::Owned(name.to_string()),
+            record.clone(),
+        );
         self.entities_by_name
             .write()
             .unwrap()
@@ -413,5 +472,65 @@ mod tests {
             matches!(entity2.name, Cow::Borrowed(_)),
             "cached entity must stay Cow::Borrowed"
         );
+    }
+
+    /// XOR write-through guard: verify tag is set and verifies correctly
+    /// for entries cached from `StaticStore` (all fields `Cow::Borrowed`).
+    #[test]
+    fn xor_guard_passes_for_borrowed() {
+        use crate::traits::XOR_SENTINEL;
+
+        let cached = CachedStore::new(StaticStore::new());
+        let _ = cached.block_by_name("stone").unwrap();
+
+        let cache = cached.blocks_by_name.read().unwrap();
+        let entry = cache.get("stone").unwrap();
+
+        // Tag should be: borrow_mask(1) ^ SENTINEL
+        assert_eq!(entry.xor_tag, 1 ^ XOR_SENTINEL);
+        assert!(entry.verify_zero_copy());
+    }
+
+    /// XOR write-through guard: verify that a manually corrupted entry
+    /// (simulating `Cow::Borrowed` → `Cow::Owned` flip) fails verification.
+    #[test]
+    fn xor_guard_detects_owned_breach() {
+        use crate::traits::XOR_SENTINEL;
+
+        let store = StaticStore::new();
+        let record = store.block_by_name("stone").unwrap();
+
+        // Create entry with Borrowed name — tag records borrow_mask = 1
+        let entry = CacheEntry::new(
+            Cow::Borrowed("block_by_name"),
+            Cow::Borrowed("stone"),
+            record,
+        );
+        assert!(entry.verify_zero_copy());
+        assert_eq!(entry.xor_tag, 1 ^ XOR_SENTINEL);
+
+        // Simulate zero-copy breach: force name to Owned.
+        // We intentionally clone here to create an independent copy to mutate.
+        #[allow(clippy::redundant_clone)]
+        let mut breached = entry.clone();
+        breached.value.name = Cow::Owned("stone".to_string());
+
+        // XOR tag was computed with borrow_mask=1, but now borrow_mask=0
+        // So verify_zero_copy must return false
+        assert!(
+            !breached.verify_zero_copy(),
+            "XOR guard must detect Borrowed→Owned flip"
+        );
+    }
+
+    /// XOR guard with entity record through cache.
+    #[test]
+    fn xor_guard_entity_through_cache() {
+        let cached = CachedStore::new(StaticStore::new());
+        let _ = cached.entity_by_name("zombie").unwrap();
+
+        let cache = cached.entities_by_name.read().unwrap();
+        let entry = cache.get("zombie").unwrap();
+        assert!(entry.verify_zero_copy());
     }
 }

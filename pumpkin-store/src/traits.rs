@@ -54,6 +54,65 @@ pub struct RecipeRecord {
     pub result_count: u8,
 }
 
+/// XOR sentinel for zero-copy write-through guard (holograph pattern).
+///
+/// Used by [`CacheEntry`](crate::CacheEntry) to detect if a `Cow::Borrowed` field
+/// was silently converted to `Cow::Owned` during ephemeral variable switching.
+pub const XOR_SENTINEL: u64 = 0xDEAD_BEEF_CAFE_BABE;
+
+/// Reports which `Cow` fields are currently `Borrowed` (zero-copy).
+///
+/// Each bit in the returned mask corresponds to a `Cow` field:
+/// - bit 0 = first `Cow` field (typically `name`)
+/// - bit 1 = second `Cow` field, etc.
+///
+/// Used by the XOR write-through guard in [`CacheEntry`](crate::CacheEntry):
+/// at insertion, `borrow_mask() ^ XOR_SENTINEL` is stored. On read-back,
+/// re-computing `borrow_mask() ^ XOR_SENTINEL` must produce the same tag.
+/// If a `Cow::Borrowed` silently flipped to `Cow::Owned`, the tags diverge.
+pub trait ZeroCopyGuard {
+    /// Bitmask of Borrowed `Cow` fields. Bit i = 1 if field i is `Cow::Borrowed`.
+    fn borrow_mask(&self) -> u64;
+
+    /// Compute the XOR tag for zero-copy verification.
+    fn xor_tag(&self) -> u64 {
+        self.borrow_mask() ^ XOR_SENTINEL
+    }
+
+    /// Verify that the current borrow state matches a previously computed tag.
+    /// Returns `true` if zero-copy is intact, `false` if breached.
+    fn verify_xor(&self, tag: u64) -> bool {
+        self.xor_tag() == tag
+    }
+}
+
+impl ZeroCopyGuard for BlockRecord {
+    fn borrow_mask(&self) -> u64 {
+        u64::from(matches!(self.name, Cow::Borrowed(_)))
+    }
+}
+
+impl ZeroCopyGuard for ItemRecord {
+    fn borrow_mask(&self) -> u64 {
+        u64::from(matches!(self.name, Cow::Borrowed(_)))
+    }
+}
+
+impl ZeroCopyGuard for EntityRecord {
+    fn borrow_mask(&self) -> u64 {
+        u64::from(matches!(self.name, Cow::Borrowed(_)))
+    }
+}
+
+impl ZeroCopyGuard for RecipeRecord {
+    fn borrow_mask(&self) -> u64 {
+        let b0 = u64::from(matches!(self.recipe_type, Cow::Borrowed(_)));
+        let b1 = u64::from(matches!(self.group, Cow::Borrowed(_)));
+        let b2 = u64::from(matches!(self.result_item, Cow::Borrowed(_)));
+        b0 | (b1 << 1) | (b2 << 2)
+    }
+}
+
 /// Core trait for game data access.
 ///
 /// Backends implement this to provide block, item, entity, and recipe lookups.

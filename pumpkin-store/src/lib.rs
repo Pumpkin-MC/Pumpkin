@@ -76,7 +76,10 @@ mod static_store;
 mod lance_store;
 
 pub use error::{StoreError, StoreResult};
-pub use traits::{BlockRecord, EntityRecord, GameDataStore, ItemRecord, RecipeRecord};
+pub use traits::{
+    BlockRecord, EntityRecord, GameDataStore, ItemRecord, RecipeRecord, ZeroCopyGuard,
+    XOR_SENTINEL,
+};
 
 pub use cached_store::{CacheEntry, CacheSnapshot, CachedStore};
 
