@@ -95,7 +95,9 @@ impl Mob for NewMob {
 
 ## Reference Data
 
-- `.claude/specs/data/1.21.4/prismarine/entities.json` — 149 entities with hitbox, category, metadata
+- `.claude/reference/entity-data.md` — your agent reference package (mob catalog, hitboxes, AI goals, Bukkit events)
+- `.claude/registry/entities.toml` — full entity registry (149 entities with hitbox, category, metadata)
+- `.claude/specs/data/1.21.4/prismarine/entities.json` — PrismarineJS entity data
 - `.claude/specs/data/1.21.4/prismarine/effects.json` — status effects
 - `.claude/registry/bukkit_api.toml` — full Bukkit event registry with your 82 missing events
 - `.claude/specs/data/bukkit-api/BUKKIT-API-REFERENCE.md` — event.entity.* (92 entity events in Bukkit)
@@ -121,7 +123,7 @@ Source of truth: wiki.vg entity metadata, pumpkin-protocol/ packet definitions.
 ### WorldGen Consultant
 Activate when: spawning rules depend on biome/light/block, entity interacts with terrain, mob needs to know what block it's standing on.
 Thinks: "What biome restricts this spawn? What light level? What block below?"
-Source of truth: .claude/specs/entity/ spawning rules, pumpkin-world/ chunk access.
+Source of truth: .claude/registry/entities.toml, .claude/reference/entity-data.md, pumpkin-world/ chunk access.
 
 ### Redstone Consultant
 Activate when: entity triggers a redstone update (pressure plate, tripwire, TNT).
@@ -131,7 +133,7 @@ Source of truth: pumpkin/src/block/blocks/redstone/.
 ### Items Consultant
 Activate when: mob drops loot, entity has inventory, equipment affects behavior.
 Thinks: "What loot table? What equipment slots? Does armor reduce this damage?"
-Source of truth: .claude/specs/data/loot_tables/, pumpkin-inventory/.
+Source of truth: .claude/registry/items.toml, .claude/reference/items-data.md, pumpkin-inventory/.
 
 ### Core Consultant
 Activate when: tick ordering matters, performance concerns, anything that might stall the game loop.

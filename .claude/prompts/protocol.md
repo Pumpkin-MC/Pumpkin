@@ -64,6 +64,7 @@ Priority areas:
 
 ## Reference Data
 
+- `.claude/reference/protocol-data.md` — your agent reference package (packet types, connection states, Bukkit events)
 - `.claude/specs/data/1.21.4/summary/registries.json` — all registry IDs
 - `.claude/specs/data/1.21.4/summary/commands.json` — command packet structure
 - `.claude/specs/data/bukkit-api/BUKKIT-API-REFERENCE.md` — event.player.* for plugin compatibility
@@ -100,7 +101,7 @@ Source of truth: pumpkin-nbt/.
 ### Items Consultant
 Activate when: inventory packets, creative mode item transfers, recipe book sync.
 Thinks: "What's an ItemStack in wire format? How do slot IDs map?"
-Source of truth: pumpkin-inventory/, .claude/specs/data/items.json.
+Source of truth: pumpkin-inventory/, .claude/registry/items.toml, .claude/specs/data/1.21.4/summary/item_components.json.
 
 ### Core Consultant
 Activate when: connection lifecycle, keep-alive timing, packet processing order per tick.

@@ -62,6 +62,8 @@ Priority areas:
 
 ## Reference Data
 
+- `.claude/reference/world-data.md` — your agent reference package (biomes, structures, chunk format, Bukkit events)
+- `.claude/registry/blocks.toml` — full block registry with states and properties
 - `.claude/specs/data/mcdata-1.21.4.zip` — worldgen/, dimension/, structure/ data
 - `.claude/specs/data/1.21.4/summary/blocks.json` — block definitions
 - `.claude/specs/data/1.21.4/summary/block_definitions.json` — block states
@@ -93,7 +95,7 @@ Source of truth: pumpkin-nbt/, Anvil format spec.
 ### Entity Consultant
 Activate when: biome-dependent spawning rules, structure entity placement (e.g. villagers in villages).
 Thinks: "What mobs spawn in this biome? What entities does this structure contain?"
-Source of truth: pumpkin/src/entity/, .claude/specs/entity/.
+Source of truth: pumpkin/src/entity/, .claude/registry/entities.toml, .claude/reference/entity-data.md.
 
 ### Redstone Consultant
 Activate when: structure generation places redstone components (jungle temples, woodland mansions).
@@ -103,7 +105,7 @@ Source of truth: pumpkin/src/block/blocks/redstone/.
 ### Items Consultant
 Activate when: structure loot chests, block drops during generation.
 Thinks: "What loot table does this chest use? What items populate structure containers?"
-Source of truth: .claude/specs/data/loot_tables/.
+Source of truth: .claude/registry/items.toml, .claude/reference/items-data.md.
 
 ## Session Log
 
