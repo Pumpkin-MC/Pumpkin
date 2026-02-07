@@ -1,9 +1,8 @@
 use std::io::Cursor;
 
 use pumpkin_data::{
-    block_state_remap::remap_block_state_for_version,
-    meta_data_type::MetaDataType, packet::clientbound::PLAY_SET_ENTITY_DATA,
-    tracked_data::TrackedId,
+    block_state_remap::remap_block_state_for_version, meta_data_type::MetaDataType,
+    packet::clientbound::PLAY_SET_ENTITY_DATA, tracked_data::TrackedId,
 };
 use pumpkin_macros::java_packet;
 use serde::Serialize;
@@ -85,7 +84,9 @@ impl<T> Metadata<T> {
                 WritingError::Message(format!("Failed to decode block state metadata: {e}"))
             })?;
             let remapped_state = match u16::try_from(decoded_state.0) {
-                Ok(state_id) => VarInt(i32::from(remap_block_state_for_version(state_id, *version))),
+                Ok(state_id) => {
+                    VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
+                }
                 Err(_) => decoded_state,
             };
             writer.write_var_int(&remapped_state)?;

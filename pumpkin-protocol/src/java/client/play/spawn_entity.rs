@@ -79,7 +79,9 @@ impl ClientPacket for CSpawnEntity {
 
         let data = if self.r#type.0 == i32::from(EntityType::FALLING_BLOCK.id) {
             match u16::try_from(self.data.0) {
-                Ok(state_id) => VarInt(i32::from(remap_block_state_for_version(state_id, *version))),
+                Ok(state_id) => {
+                    VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
+                }
                 Err(_) => self.data,
             }
         } else {

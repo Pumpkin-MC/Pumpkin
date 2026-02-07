@@ -12,8 +12,8 @@ use std::{
 mod attributes;
 mod biome;
 mod bitsets;
-mod block_state_remap;
 mod block;
+mod block_state_remap;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;

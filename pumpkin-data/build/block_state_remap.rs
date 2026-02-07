@@ -83,13 +83,12 @@ fn parse_blockstate_mappings(blockstates: &NbtCompound, path: &str) -> ParsedMap
             let changes_at = blockstates
                 .get_int_array("at")
                 .unwrap_or_else(|| panic!("Missing `blockstates.at` for change mapping in {path}"));
-            let values = blockstates
-                .get_int_array("val")
-                .unwrap_or_else(|| panic!("Missing `blockstates.val` for change mapping in {path}"));
-            let size = blockstates
-                .get_int("size")
-                .unwrap_or_else(|| panic!("Missing `blockstates.size` for change mapping in {path}"))
-                as usize;
+            let values = blockstates.get_int_array("val").unwrap_or_else(|| {
+                panic!("Missing `blockstates.val` for change mapping in {path}")
+            });
+            let size = blockstates.get_int("size").unwrap_or_else(|| {
+                panic!("Missing `blockstates.size` for change mapping in {path}")
+            }) as usize;
             let fill_between = blockstates.get("nofill").is_none();
 
             assert_eq!(
@@ -141,8 +140,8 @@ fn invert_to_u16(forward: &[i32], mapped_size: usize, name: &str) -> Vec<u16> {
             continue;
         }
 
-        let old_u16 =
-            u16::try_from(old_id).unwrap_or_else(|_| panic!("{name}: id {old_id} does not fit in u16"));
+        let old_u16 = u16::try_from(old_id)
+            .unwrap_or_else(|_| panic!("{name}: id {old_id} does not fit in u16"));
         inverse[mapped_id] = old_u16;
         seen[mapped_id] = true;
     }
@@ -161,7 +160,8 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt");
     println!("cargo:rerun-if-changed=../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt");
 
-    let mappings_7_to_9 = parse_mapping_file("../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt");
+    let mappings_7_to_9 =
+        parse_mapping_file("../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt");
     let mappings_9_to_11 =
         parse_mapping_file("../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt");
 

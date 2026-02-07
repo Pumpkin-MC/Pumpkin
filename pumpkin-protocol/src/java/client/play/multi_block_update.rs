@@ -1,5 +1,5 @@
-use pumpkin_data::packet::clientbound::PLAY_SECTION_BLOCKS_UPDATE;
 use pumpkin_data::block_state_remap::remap_block_state_for_version;
+use pumpkin_data::packet::clientbound::PLAY_SECTION_BLOCKS_UPDATE;
 use pumpkin_util::math::{
     position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section},
     vector3::{self},
