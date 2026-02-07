@@ -163,7 +163,7 @@ loot tables, mob drops, worldgen, and tags without guessing.
 1. **TOML/YAML backend** — Human-editable, file-based. For configs, small registries, dev/modding use.
 2. **LanceDB backend** — Embedded columnar DB (no server process). Zero-copy via Apache Arrow IPC. For high-performance queries over large registries (26K+ block states, 1470 recipes, 149 entities, loot tables). DataFusion provides SQL query capability over Arrow RecordBatches.
 
-**Key crates:** `lancedb` v0.21.3+ (embedded), `arrow` v55+ (zero-copy), `datafusion` v51+ (SQL engine)
+**Key crates:** Lance 2.0+ / `lancedb` (embedded), `arrow` v57+ (zero-copy), `datafusion` v51+ (SQL engine)
 
 **Storage DTO trait sketch:**
 ```rust
@@ -193,5 +193,9 @@ trait GameDataStore: Send + Sync {
 
 **Rationale:** PatchBukkit's JVM bridge is the right design for running actual Java plugins, but for pure-Rust servers the JVM is dead weight. Transcoding the API knowledge into Rust DTOs with a pluggable storage backend gives us: (a) Bukkit-compatible API surface without JVM, (b) zero-copy data access via Arrow, (c) SQL query capability for plugins/admin, (d) human-editable fallback via TOML/YAML.
 
+**Rust compatibility:** Lance 2.0 requires Rust 2024 edition (1.88+). Pumpkin MSRV is 1.89 — compatible. But lance-store is fully optional: `default = ["toml-store"]` compiles zero Lance/Arrow deps. The `lance-store` feature is an empty gate until chrono version conflict is resolved upstream. Verified: `--no-default-features`, default, and `--features lance-store` all build clean.
+
+**Implementation status (Phase 1-2 DONE):** `pumpkin-store/` crate created as 10th workspace member. `GameDataStore` trait + `StaticStore` backend (9 tests pass). `LanceStore` stub behind feature gate. See session 009 for details.
+
 **Affects:** All agents (new data access pattern), Plugin (API surface), Storage (backend impl), Items (recipe queries), Core (data loading)
-**Status:** PROPOSED — requires human operator approval before implementation
+**Status:** PHASE 1-2 DONE, PHASE 3-4 PENDING (lance deps blocked on chrono conflict)

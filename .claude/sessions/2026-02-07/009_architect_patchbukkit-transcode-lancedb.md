@@ -251,3 +251,23 @@ PatchBukkit remains the bridge for **actual Java Bukkit plugins** (.jar files). 
 Human operator's vision: compile Java imports to a database substrate via Graph Execution Language (GEL) — an artificial abstraction layer over Arrow columnar storage. Java `@lance` annotations would compile to graph execution backed by LanceDB/Arrow. The Lance backend in pumpkin-store is the substrate for this. See holograph for reference.
 
 A Java→Lance/Rust graph execution showcase would have significant blast radius if realized. This is tracked as a future direction beyond ARCH-020.
+
+## Lance 2.0 Compatibility Notes
+
+Lance 2.0 released 2026-02-06, requires Rust 2024 edition (1.88+).
+- Pumpkin MSRV = 1.89, current toolchain = 1.93 → **compatible**
+- But lance-store MUST remain fully optional — devs who don't enable it should never see lance compile
+- Verified all three build modes work:
+  - `--no-default-features` → bare trait only (0.77s)
+  - default (`toml-store`) → wraps pumpkin-data (2.3s)
+  - `--features lance-store` → compiles stub, no lance deps yet (2.5s)
+- The chrono conflict (lancedb 0.21 pins =0.4.41 vs datafusion 51 needs ^0.4.42) may be resolved in Lance 2.0's updated deps — needs verification before adding real lance deps
+- Strategy: don't rush Lance deps. Wait for ecosystem alignment. The trait and toml-store are production-ready now.
+
+## Rebase Status
+
+Rebased on master (`d143573`). Picked up merged PRs:
+- PR #46: Plugin PLUGIN-004 ignore_cancelled + 9 new events (BlockFade, BlockFromTo, BlockGrow, BlockPhysics, BlockPistonExtend/Retract, BlockRedstone, PlayerDropItem, PlayerItemConsume)
+- PR #47: WorldGen session 003 log (Ruined Portal, Nether Fossil, Woodland Mansion)
+- Entity branch has new work: wired plugin events (damage/death) + 9 more mobs
+- Items branch: wired stonecutting and smithing recipe matching
