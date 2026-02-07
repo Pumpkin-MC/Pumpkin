@@ -37,16 +37,19 @@ Note: You own runtime data loading (`pumpkin/src/data/`). You do NOT own generat
 
 - **Session 002 (2026-02-07):** Recipe audit — 1175/1470 (80%). Stonecutter + Smithing screen handlers. 61 tests. ITEMS-001-003.
 - **Session 008 (2026-02-07):** Stonecutting/smithing recipe matching wired with pumpkin-data arrays.
-- **Session 009 (2026-02-07):** All 11 special crafting recipes implemented (firework, banner, map, book, armor dye, tipped arrow, shield, shulker box, suspicious stew, repair, smithing_trim). Blocking assessment completed. 94 tests.
-- **Total:** 1470/1470 recipe coverage, all 11 special recipes, 94 tests
+- **Session 009 (2026-02-07):** All 11 special crafting recipes implemented. Blocking assessment. 94 tests.
+- **Session 004 (2026-02-07):** 6 inventory screen handlers: Anvil (repair+enchant combine), Grindstone (enchantment removal, curse preservation), Enchanting Table (lapis slot, enchantability), Brewing Stand (potion/fuel slots), Loom (banner/dye/pattern), Cartography Table (map extend/clone/lock). **136 tests** (up from 94). +3023 lines.
+- **Total:** 1470/1470 recipe coverage, all 11 special recipes, 6 screen handlers, 136 tests
 
-## CRITICAL: Rebase Before Working
+## Rebase Status
 
-Your branch is current with master (recently rebased). No action needed.
+Your branch is current with master. No action needed.
 
 ## Your Priority (P1 — High Value)
 
-**Inventory screen handlers** — crafting table, furnace, anvil, enchanting table, brewing stand, grindstone, cartography table, loom, barrel, smoker, blast furnace. These are core gameplay screens.
+**Remaining screen handlers** — Beacon, Lectern, Merchant, Crafter3x3 (lower priority, require entity/redstone integration). Barrel, Smoker, Blast Furnace if not already handled by furnace-like pattern.
+
+**Note:** PlayerItemConsumeEvent (from Plugin session 009) fires during food consumption — relevant to your item use logic.
 
 **Note:** ARCH-024 says do NOT adopt GameDataStore yet. Continue using pumpkin-data statics directly.
 

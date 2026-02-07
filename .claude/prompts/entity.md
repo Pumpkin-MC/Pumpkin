@@ -34,23 +34,24 @@ tests = "cargo test -p pumpkin --lib entity"
 ## Your Progress So Far
 
 - **Session 005 (2026-02-06):** Created WanderAroundGoal, SwimGoal, PanicGoal. Added initial 16 mobs. Decisions ENT-001 through ENT-003.
-- **Session 006 (2026-02-07):** Fixed Navigator::is_idle() (ARCH-008). Created FleeEntityGoal. Added 9 mobs: CaveSpider, Husk, Stray, Witch, Slime, Bat, Squid, Rabbit, Ocelot. Decisions ENT-004, ENT-005.
+- **Session 006 (2026-02-07):** Fixed Navigator::is_idle() (ARCH-008). Created FleeEntityGoal. Added 9 mobs. ENT-004, ENT-005.
 - **Session 007 (2026-02-07):** Wired EntitySpawnEvent in spawn_entity and natural_spawner (ARCH-023). Damage/death events.
 - **Session 008 (2026-02-07):** Mass mob implementation — 45 more mob entities added. **81 total types registered.**
-- **Total:** 81 mob types registered, 4 AI goals (Wander, Swim, Panic, Flee), EntitySpawnEvent wired
+- **Session 009 (2026-02-07):** AI goal expansion — **MeleeAttackGoal** for 14 hostile mobs + **TemptGoal** for 19 passive mobs. 6 goals total.
+- **Session 010 (2026-02-07):** Wired 4 player events (Death, DropItem, ItemConsume, Respawn) cross-agent via ARCH-023.
+- **Total:** 81 mob types registered, **6 AI goals** (Wander, Swim, Panic, Flee, MeleeAttack, Tempt), EntitySpawnEvent + 4 player events wired
 
 ## CRITICAL: Rebase Before Working
 
-Your branch is **19 commits behind master**. Run `git fetch origin master && git rebase origin/master` before starting any new work. pumpkin-store and other agent work has been merged.
+Your branch has been rebased. Verify with `git log --oneline origin/master..HEAD` — should show only unmerged commits.
 
 ## Your Priority (P0 — Critical Path)
 
-**AI goal expansion is P0.** You have 81 mob types registered but only 4 AI goals. Mobs are idle. This is the single biggest gameplay gap.
+**AI goal expansion continues as P0.** Now at 6 goals (up from 4). Next priorities:
 
-Next goals to implement (vanilla priority order):
-1. **MeleeAttackGoal** — zombies, spiders, skeletons need this
-2. **RangedAttackGoal** — skeletons, blazes, ghasts
-3. **TemptGoal** — passive mobs follow food items
+1. ~~**MeleeAttackGoal**~~ DONE — 14 hostile mobs
+2. ~~**TemptGoal**~~ DONE — 19 passive mobs
+3. **RangedAttackGoal** — skeletons, blazes, ghasts (next)
 4. **BreedGoal** — passive mob breeding
 5. **FollowOwnerGoal** — wolves, cats follow tamed owner
 6. **LookAtPlayerGoal** — most mobs look at nearby players

@@ -38,11 +38,12 @@ tests = "cargo test -p pumpkin --lib server"
 - **Session 004 (2026-02-07):** Config audit — 4 new config fields. Command audit — 45/84 commands reviewed. 121 tests.
 - **Session 005 (2026-02-07):** save-all, save-off, save-on commands implemented.
 - **Session 006 (2026-02-07):** `/debug start|stop` (OP3) and `/perf start|stop` (OP4) profiling commands. Leverages tick profiler. CORE-010: shared TickProfiler, cannot run simultaneously.
-- **Total:** tick profiler, lifecycle events wired, 55/84 commands (65%), save/debug/perf commands, 121+ tests
+- **Session 007 (2026-02-07):** Enforce `log_admin_commands` game rule + game rule audit.
+- **Total:** tick profiler, lifecycle events wired, 55/84 commands (65%), save/debug/perf commands, game rule enforcement, 121+ tests
 
-## CRITICAL: Rebase Before Working
+## Rebase Status
 
-Your branch is **15 commits behind master**. Run `git fetch origin master && git rebase origin/master` before starting any new work.
+Your branch was recently merged (PR #72). Verify rebase before next session.
 
 ## Your Priority (P1 — High Value)
 
