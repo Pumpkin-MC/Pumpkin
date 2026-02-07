@@ -106,20 +106,15 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                     PlayerAction::UpdateGameMode(gamemode) => p.write_var_int(gamemode)?,
                     PlayerAction::UpdateListed(listed) => p.write_bool(*listed)?,
                     PlayerAction::UpdateLatency(latency) => {
-                        // Wire format: VarInt (ping in ms).
-                        // Enum carries u8; cast to VarInt for now.
-                        p.write_var_int(&crate::VarInt(i32::from(*latency)))?;
+                        p.write_var_int(latency)?;
                     }
-                    PlayerAction::UpdateDisplayName(has_display_name) => {
-                        // Wire format: Optional<TextComponent>.
-                        // Enum carries u8; treat nonzero as "has name" with no content.
-                        // A proper impl needs the enum to carry Option<TextComponent>.
-                        p.write_bool(*has_display_name != 0)?;
+                    PlayerAction::UpdateDisplayName(display_name) => {
+                        p.write_option(display_name, |p, name| {
+                            p.write_slice(&name.encode())
+                        })?;
                     }
-                    PlayerAction::UpdateListOrder => {
-                        // Wire format: VarInt (list priority).
-                        // Enum variant has no data; write 0 as default priority.
-                        p.write_var_int(&crate::VarInt(0))?;
+                    PlayerAction::UpdateListOrder(priority) => {
+                        p.write_var_int(priority)?;
                     }
                 }
             }
