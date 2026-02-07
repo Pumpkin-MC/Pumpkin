@@ -271,6 +271,19 @@ gate, sd = Blackboard.collapse_gate([0.9, 0.85, 0.88])
 | `ada:a2a:inbox:{agent_id}` | List | Agent inbox for handovers |
 | `ada:session:{session_id}` | String (JSON) | Session snapshot |
 
+### Blackboard Skill
+
+Use `/blackboard` for quick operations. See `.claude/skills/blackboard.md` for full reference.
+
+```
+/blackboard hydrate       # Start session
+/blackboard persist       # End session
+/blackboard status        # Show current state
+/blackboard decisions     # Show ice-caked decisions
+/blackboard inbox         # Check for handovers
+/blackboard handover <agent>  # Send handover
+```
+
 ### Blackboard Rules
 
 1. **HYDRATE FIRST** — never read/write Redis without hydrating
