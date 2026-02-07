@@ -426,3 +426,22 @@ Prerequisites:
 
 **Affects:** Redstone (signal evaluation), Core (tick scheduler), Entity (SIMD CAM)
 **Status:** vision (benchmark target for ARCH-029)
+
+## ARCH-032: Redstone Agent Expanded to Block Event Wiring
+**Date:** 2026-02-07
+**Decision:** Redstone agent's core logic (comparator, observer, repeater, piston) is complete. Expanding its scope to cover all block state event wiring — fire spread, fluid flow, crop growth, snow decay, note blocks, sponge absorption.
+
+**Ownership transfers (from block-ownership.toml):**
+- `fire/` — from shared_structural → redstone (BlockBurnEvent)
+- `plant/` — from worldgen → redstone (BlockGrowEvent)
+- `snow.rs` — from worldgen → redstone (BlockFadeEvent)
+- `fluid/` — from worldgen → redstone (BlockFromToEvent)
+- `note.rs` — from shared_structural → redstone (NotePlayEvent)
+- `sponge.rs` — from shared_structural → redstone (SpongeAbsorbEvent)
+
+**Rationale:** Redstone is the domain expert for block state transitions, update ordering, and event firing. Their 4 high-priority events are done. The remaining 9 lower-priority events + 4 block events all involve block state changes that follow the same patterns Redstone already handles. No new agent needed — Redstone absorbs the work.
+
+**Contract update:** Redstone write_paths now includes `fire/`, `plant/`, `snow.rs`, `fluid/`, `note.rs`, `sponge.rs` in addition to `redstone/` and `piston/`.
+
+**Affects:** Redstone (expanded scope), WorldGen (loses plant/, snow.rs, fluid/ write access — READ still allowed)
+**Status:** active
