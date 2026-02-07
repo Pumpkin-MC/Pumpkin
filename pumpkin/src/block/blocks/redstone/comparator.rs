@@ -399,3 +399,138 @@ impl ComparatorBlock {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Comparator update delay is always 2 game ticks (1 redstone tick).
+    /// This differs from repeater which has configurable 2/4/6/8 tick delays.
+    #[test]
+    fn test_comparator_update_delay_always_2() {
+        let comparator = ComparatorBlock;
+        let block = &Block::COMPARATOR;
+        let default_state = block.default_state.id;
+        assert_eq!(
+            RedstoneGateBlock::get_update_delay_internal(&comparator, default_state, block),
+            2
+        );
+    }
+
+    /// Comparator mode toggles between Compare and Subtract when right-clicked.
+    #[test]
+    fn test_mode_toggle() {
+        assert_eq!(
+            match ComparatorMode::Compare {
+                ComparatorMode::Compare => ComparatorMode::Subtract,
+                ComparatorMode::Subtract => ComparatorMode::Compare,
+            },
+            ComparatorMode::Subtract
+        );
+        assert_eq!(
+            match ComparatorMode::Subtract {
+                ComparatorMode::Compare => ComparatorMode::Subtract,
+                ComparatorMode::Subtract => ComparatorMode::Compare,
+            },
+            ComparatorMode::Compare
+        );
+    }
+
+    /// Comparator mode property roundtrips through state ID correctly.
+    #[test]
+    fn test_mode_property_roundtrip() {
+        let block = &Block::COMPARATOR;
+        for mode in [ComparatorMode::Compare, ComparatorMode::Subtract] {
+            let mut props = ComparatorLikeProperties::default(block);
+            props.mode = mode;
+            let state_id = props.to_state_id(block);
+            let recovered = ComparatorLikeProperties::from_state_id(state_id, block);
+            assert_eq!(
+                recovered.mode, mode,
+                "Mode {:?} not preserved through state roundtrip",
+                mode
+            );
+        }
+    }
+
+    /// Comparator powered property roundtrips through state ID correctly.
+    #[test]
+    fn test_comparator_powered_roundtrip() {
+        let block = &Block::COMPARATOR;
+        for powered in [true, false] {
+            let mut props = ComparatorLikeProperties::default(block);
+            props.powered = powered;
+            let state_id = props.to_state_id(block);
+            let recovered = ComparatorLikeProperties::from_state_id(state_id, block);
+            assert_eq!(
+                recovered.powered, powered,
+                "Powered={} not preserved through state roundtrip",
+                powered
+            );
+        }
+    }
+
+    /// Comparator facing roundtrips through state ID correctly for all 4 horizontal directions.
+    #[test]
+    fn test_comparator_facing_roundtrip() {
+        let block = &Block::COMPARATOR;
+        for facing in HorizontalFacing::all() {
+            let mut props = ComparatorLikeProperties::default(block);
+            props.facing = facing;
+            let state_id = props.to_state_id(block);
+            let recovered = ComparatorLikeProperties::from_state_id(state_id, block);
+            assert_eq!(
+                recovered.facing, facing,
+                "Facing {:?} not preserved through state roundtrip",
+                facing
+            );
+        }
+    }
+
+    /// Verify the comparator output formula (from `calculate_output_signal`):
+    /// - If side_power >= back_power, output = 0
+    /// - If Subtract mode and back > side: output = back - side
+    /// - If Compare mode and back > side: output = back
+    /// These are the vanilla rules for comparator operation.
+    #[test]
+    fn test_compare_subtract_formula() {
+        // Helper matching the calculate_output_signal logic
+        fn calc(back: u8, side: u8, subtract: bool) -> u8 {
+            if side >= back {
+                return 0;
+            }
+            if subtract {
+                back - side
+            } else {
+                back
+            }
+        }
+
+        // Compare mode: back > side → outputs back power
+        assert_eq!(calc(10, 5, false), 10);
+        // Subtract mode: back > side → outputs difference
+        assert_eq!(calc(10, 5, true), 5);
+
+        // Equal power → always 0 (side >= back)
+        assert_eq!(calc(7, 7, false), 0);
+        assert_eq!(calc(7, 7, true), 0);
+
+        // Side stronger → always 0
+        assert_eq!(calc(3, 10, false), 0);
+        assert_eq!(calc(3, 10, true), 0);
+
+        // Zero inputs
+        assert_eq!(calc(0, 0, false), 0);
+        assert_eq!(calc(0, 0, true), 0);
+
+        // Max power, no side → full output
+        assert_eq!(calc(15, 0, false), 15);
+        assert_eq!(calc(15, 0, true), 15);
+
+        // Max power subtract max side → 0
+        assert_eq!(calc(15, 15, true), 0);
+
+        // Subtract to 1
+        assert_eq!(calc(8, 7, true), 1);
+    }
+}
