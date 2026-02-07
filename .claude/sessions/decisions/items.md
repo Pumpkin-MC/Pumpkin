@@ -63,3 +63,19 @@
 **Rationale:** Data-driven recipes are authoritative. Special recipes are fallback for the 11 types that have no data representation. This ordering prevents conflicts.
 **Affects:** Items
 **Status:** active
+
+## ITEMS-009: Anvil material repair uses tag + name prefix matching
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/010_items_screen-handlers.md
+**Decision:** `is_repair_material()` checks `material.has_tag(&REPAIRS_*_ARMOR)` combined with `item.registry_key.starts_with("diamond_")` etc. This is a workaround because `RepairableImpl` is a stub.
+**Rationale:** Repair tags contain materials, not items. Without the repairable component, name prefix matching is the most reliable heuristic.
+**Affects:** Items
+**Status:** active (supersede when RepairableImpl is implemented)
+
+## ITEMS-010: Screen handlers defer processing logic to block entity
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/010_items_screen-handlers.md
+**Decision:** Enchanting, brewing, and loom screen handlers provide correct slot layouts and quick-move routing but defer actual processing (enchantment generation, brewing ticks, pattern application) to block entity integration.
+**Rationale:** These operations require world access (bookshelf counting), tick-driven processing (brewing), or component system support (banner patterns) that is outside pumpkin-inventory scope.
+**Affects:** Items
+**Status:** active
