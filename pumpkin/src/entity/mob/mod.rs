@@ -19,8 +19,10 @@ use tokio::sync::Mutex;
 
 pub mod creeper;
 pub mod drowned;
+pub mod enderman;
 pub mod silverfish;
 pub mod skeleton;
+pub mod spider;
 pub mod zombie;
 pub mod zombie_villager;
 
