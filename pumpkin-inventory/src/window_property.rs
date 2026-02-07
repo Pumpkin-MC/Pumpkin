@@ -74,3 +74,46 @@ pub enum Loom {
 pub enum Lectern {
     PageNumber,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enchantment_table_level_requirement_slot_0() {
+        let id = EnchantmentTable::LevelRequirement { slot: 0 }.to_id();
+        assert_eq!(id, 0);
+    }
+
+    #[test]
+    fn enchantment_table_level_requirement_slot_2() {
+        let id = EnchantmentTable::LevelRequirement { slot: 2 }.to_id();
+        assert_eq!(id, 2);
+    }
+
+    #[test]
+    fn enchantment_table_seed() {
+        let id = EnchantmentTable::EnchantmentSeed.to_id();
+        assert_eq!(id, 3);
+    }
+
+    #[test]
+    fn enchantment_table_id_slot_0() {
+        let id = EnchantmentTable::EnchantmentId { slot: 0 }.to_id();
+        assert_eq!(id, 4);
+    }
+
+    #[test]
+    fn enchantment_table_level_slot_0() {
+        let id = EnchantmentTable::EnchantmentLevel { slot: 0 }.to_id();
+        assert_eq!(id, 7);
+    }
+
+    #[test]
+    fn window_property_into_tuple() {
+        let prop = WindowProperty::new(EnchantmentTable::EnchantmentSeed, 42);
+        let (id, value) = prop.into_tuple();
+        assert_eq!(id, 3);
+        assert_eq!(value, 42);
+    }
+}

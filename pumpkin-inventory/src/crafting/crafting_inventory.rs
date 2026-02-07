@@ -96,3 +96,97 @@ impl Clearable for CraftingInventory {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crafting_inventory_3x3_size() {
+        let inv = CraftingInventory::new(3, 3);
+        assert_eq!(inv.size(), 9);
+        assert_eq!(inv.get_width(), 3);
+        assert_eq!(inv.get_height(), 3);
+    }
+
+    #[test]
+    fn crafting_inventory_2x2_size() {
+        let inv = CraftingInventory::new(2, 2);
+        assert_eq!(inv.size(), 4);
+        assert_eq!(inv.get_width(), 2);
+        assert_eq!(inv.get_height(), 2);
+    }
+
+    #[test]
+    fn crafting_inventory_1x1_size() {
+        let inv = CraftingInventory::new(1, 1);
+        assert_eq!(inv.size(), 1);
+    }
+
+    #[tokio::test]
+    async fn crafting_inventory_starts_empty() {
+        let inv = CraftingInventory::new(3, 3);
+        assert!(inv.is_empty().await);
+    }
+
+    #[tokio::test]
+    async fn crafting_inventory_set_and_get_stack() {
+        let inv = CraftingInventory::new(3, 3);
+        let item = ItemStack::new(1, &pumpkin_data::item::Item::STONE);
+        inv.set_stack(0, item.clone()).await;
+
+        let stack = inv.get_stack(0).await;
+        let stack = stack.lock().await;
+        assert_eq!(stack.item_count, 1);
+        assert!(!stack.is_empty());
+    }
+
+    #[tokio::test]
+    async fn crafting_inventory_not_empty_after_set() {
+        let inv = CraftingInventory::new(3, 3);
+        let item = ItemStack::new(1, &pumpkin_data::item::Item::STONE);
+        inv.set_stack(4, item).await;
+        assert!(!inv.is_empty().await);
+    }
+
+    #[tokio::test]
+    async fn crafting_inventory_remove_stack() {
+        let inv = CraftingInventory::new(3, 3);
+        let item = ItemStack::new(5, &pumpkin_data::item::Item::STONE);
+        inv.set_stack(0, item).await;
+
+        let removed = inv.remove_stack(0).await;
+        assert_eq!(removed.item_count, 5);
+
+        // Slot should now be empty
+        let stack = inv.get_stack(0).await;
+        assert!(stack.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn crafting_inventory_remove_stack_specific() {
+        let inv = CraftingInventory::new(3, 3);
+        let item = ItemStack::new(10, &pumpkin_data::item::Item::STONE);
+        inv.set_stack(0, item).await;
+
+        let removed = inv.remove_stack_specific(0, 3).await;
+        assert_eq!(removed.item_count, 3);
+
+        // 7 remaining
+        let stack = inv.get_stack(0).await;
+        assert_eq!(stack.lock().await.item_count, 7);
+    }
+
+    #[tokio::test]
+    async fn crafting_inventory_clear() {
+        let inv = CraftingInventory::new(3, 3);
+        inv.set_stack(0, ItemStack::new(1, &pumpkin_data::item::Item::STONE))
+            .await;
+        inv.set_stack(4, ItemStack::new(2, &pumpkin_data::item::Item::DIRT))
+            .await;
+
+        assert!(!inv.is_empty().await);
+        inv.clear().await;
+        assert!(inv.is_empty().await);
+    }
+}

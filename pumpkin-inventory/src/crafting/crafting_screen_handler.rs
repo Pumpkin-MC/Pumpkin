@@ -612,3 +612,76 @@ impl ScreenHandler for CraftingTableScreenHandler {
 }
 
 impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn symmetrical_single_column_pattern() {
+        // A single-column pattern is always symmetrical
+        static PATTERN: &[&str] = &["#", "#", "#"];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn symmetrical_single_row_pattern() {
+        // "###" is symmetric
+        static PATTERN: &[&str] = &["###"];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn symmetrical_3x3_cross() {
+        // Cross pattern is symmetric
+        static PATTERN: &[&str] = &[" # ", "###", " # "];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn asymmetrical_boat_pattern() {
+        // Boat pattern "# #" / "###" is symmetric
+        static PATTERN: &[&str] = &["# #", "###"];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn asymmetrical_axe_pattern() {
+        // Axe pattern "##" / "#X" / " X" is not symmetric
+        static PATTERN: &[&str] = &["##", "#X", " X"];
+        assert!(!is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn symmetrical_empty_pattern() {
+        static PATTERN: &[&str] = &[];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn asymmetrical_hoe_pattern() {
+        // Hoe pattern "##" / " X" is not symmetric
+        static PATTERN: &[&str] = &["##", " X"];
+        assert!(!is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn symmetrical_door_pattern() {
+        // Door pattern "##" / "##" / "##" is symmetric
+        static PATTERN: &[&str] = &["##", "##", "##"];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn asymmetrical_single_char_side() {
+        // Pattern where one side differs: "AB"
+        static PATTERN: &[&str] = &["AB"];
+        assert!(!is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn symmetrical_single_cell() {
+        static PATTERN: &[&str] = &["#"];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+}
