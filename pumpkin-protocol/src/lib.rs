@@ -25,6 +25,7 @@ use crate::packet::{MultiVersionJavaPacket, Packet};
 
 pub mod bedrock;
 pub mod codec;
+pub mod dto;
 pub mod java;
 pub mod packet;
 #[cfg(feature = "query")]

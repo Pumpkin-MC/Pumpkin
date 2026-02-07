@@ -13,8 +13,9 @@ pub struct Packets {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/packet/1_21_7_packets.json");
     println!("cargo:rerun-if-changed=../assets/packet/1_21_11_packets.json");
+    println!("cargo:rerun-if-changed=../assets/packet/1_18_2_packets.json");
 
-    // 2. Parse the protocol files
+    // Parse the protocol files
     let packets_7: Packets = serde_json::from_str(
         &fs::read_to_string("../assets/packet/1_21_7_packets.json").expect("1.21.7 file missing"),
     )
@@ -25,10 +26,19 @@ pub(crate) fn build() -> TokenStream {
     )
     .unwrap();
 
+    // 1.18.2 is optional — if the file doesn't exist yet, all IDs default to -1 (suppressed)
+    let packets_18: Option<Packets> =
+        fs::read_to_string("../assets/packet/1_18_2_packets.json")
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok());
+
     let latest_version = packets_11.version;
-    // 3. Generate mapped constants for both directions
-    let serverbound_consts = generate_mapped_consts(&packets_11, &packets_7, true);
-    let clientbound_consts = generate_mapped_consts(&packets_11, &packets_7, false);
+
+    // Generate mapped constants for both directions
+    let serverbound_consts =
+        generate_mapped_consts(&packets_11, &packets_7, packets_18.as_ref(), true);
+    let clientbound_consts =
+        generate_mapped_consts(&packets_11, &packets_7, packets_18.as_ref(), false);
 
     quote!(
         use pumpkin_util::version::MinecraftVersion;
@@ -38,6 +48,7 @@ pub(crate) fn build() -> TokenStream {
         pub struct PacketId {
             pub latest_id: i32,
             pub v1_21_7_id: i32,
+            pub v1_18_2_id: i32,
         }
 
         impl PacketId {
@@ -46,7 +57,10 @@ pub(crate) fn build() -> TokenStream {
             pub fn to_id(&self, version: MinecraftVersion) -> i32 {
                 match version {
                     MinecraftVersion::V_1_21_11 => self.latest_id,
-                    MinecraftVersion::V_1_21_7 => self.v1_21_7_id,
+                    MinecraftVersion::V_1_21_7
+                    | MinecraftVersion::V_1_21_9 => self.v1_21_7_id,
+                    MinecraftVersion::V_1_18
+                    | MinecraftVersion::V_1_18_2 => self.v1_18_2_id,
                     // Default to latest for unrecognized/unmapped versions
                     _ => self.latest_id,
                 }
@@ -76,7 +90,12 @@ pub(crate) fn build() -> TokenStream {
     )
 }
 
-fn generate_mapped_consts(latest: &Packets, v7: &Packets, is_serverbound: bool) -> TokenStream {
+fn generate_mapped_consts(
+    latest: &Packets,
+    v7: &Packets,
+    v18: Option<&Packets>,
+    is_serverbound: bool,
+) -> TokenStream {
     let mut output = TokenStream::new();
     let latest_phases = if is_serverbound {
         &latest.serverbound
@@ -88,6 +107,13 @@ fn generate_mapped_consts(latest: &Packets, v7: &Packets, is_serverbound: bool) 
     } else {
         &v7.clientbound
     };
+    let v18_phases = v18.map(|p| {
+        if is_serverbound {
+            &p.serverbound
+        } else {
+            &p.clientbound
+        }
+    });
 
     for (phase, packets) in latest_phases {
         for (name, id_11) in packets {
@@ -101,11 +127,19 @@ fn generate_mapped_consts(latest: &Packets, v7: &Packets, is_serverbound: bool) 
                 .copied()
                 .unwrap_or(-1);
 
+            // Check if the packet exists in 1.18.2 to get the alternate ID
+            let id_18 = v18_phases
+                .and_then(|phases| phases.get(phase))
+                .and_then(|p| p.get(name))
+                .copied()
+                .unwrap_or(-1);
+
             // Since serverbound/clientbound are modules, we reference the PacketId in the parent scope
             output.extend(quote! {
                 pub const #const_name: super::PacketId = super::PacketId {
                     latest_id: #id_11,
                     v1_21_7_id: #id_7,
+                    v1_18_2_id: #id_18,
                 };
             });
         }
