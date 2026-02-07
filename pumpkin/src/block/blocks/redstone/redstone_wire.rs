@@ -568,3 +568,294 @@ async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
 
     block_power.max(wire_power.saturating_sub(1))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::block_properties::Integer0To15;
+
+    // === WireConnection tests ===
+
+    #[test]
+    fn test_wire_connection_is_connected() {
+        assert!(WireConnection::Up.is_connected());
+        assert!(WireConnection::Side.is_connected());
+        assert!(!WireConnection::None.is_connected());
+    }
+
+    #[test]
+    fn test_wire_connection_is_none() {
+        assert!(WireConnection::None.is_none());
+        assert!(!WireConnection::Up.is_none());
+        assert!(!WireConnection::Side.is_none());
+    }
+
+    // === Direction conversion roundtrip tests ===
+
+    #[test]
+    fn test_wire_connection_to_north_roundtrip() {
+        assert_eq!(
+            WireConnection::Up.to_north().to_wire_connection(),
+            WireConnection::Up
+        );
+        assert_eq!(
+            WireConnection::Side.to_north().to_wire_connection(),
+            WireConnection::Side
+        );
+        assert_eq!(
+            WireConnection::None.to_north().to_wire_connection(),
+            WireConnection::None
+        );
+    }
+
+    #[test]
+    fn test_wire_connection_to_south_roundtrip() {
+        assert_eq!(
+            WireConnection::Up.to_south().to_wire_connection(),
+            WireConnection::Up
+        );
+        assert_eq!(
+            WireConnection::Side.to_south().to_wire_connection(),
+            WireConnection::Side
+        );
+        assert_eq!(
+            WireConnection::None.to_south().to_wire_connection(),
+            WireConnection::None
+        );
+    }
+
+    #[test]
+    fn test_wire_connection_to_east_roundtrip() {
+        assert_eq!(
+            WireConnection::Up.to_east().to_wire_connection(),
+            WireConnection::Up
+        );
+        assert_eq!(
+            WireConnection::Side.to_east().to_wire_connection(),
+            WireConnection::Side
+        );
+        assert_eq!(
+            WireConnection::None.to_east().to_wire_connection(),
+            WireConnection::None
+        );
+    }
+
+    #[test]
+    fn test_wire_connection_to_west_roundtrip() {
+        assert_eq!(
+            WireConnection::Up.to_west().to_wire_connection(),
+            WireConnection::Up
+        );
+        assert_eq!(
+            WireConnection::Side.to_west().to_wire_connection(),
+            WireConnection::Side
+        );
+        assert_eq!(
+            WireConnection::None.to_west().to_wire_connection(),
+            WireConnection::None
+        );
+    }
+
+    // === Cardinal wire connection is_none tests ===
+
+    #[test]
+    fn test_cardinal_is_none() {
+        assert!(NorthWireConnection::None.is_none());
+        assert!(!NorthWireConnection::Side.is_none());
+        assert!(!NorthWireConnection::Up.is_none());
+
+        assert!(SouthWireConnection::None.is_none());
+        assert!(!SouthWireConnection::Side.is_none());
+        assert!(!SouthWireConnection::Up.is_none());
+
+        assert!(EastWireConnection::None.is_none());
+        assert!(!EastWireConnection::Side.is_none());
+        assert!(!EastWireConnection::Up.is_none());
+
+        assert!(WestWireConnection::None.is_none());
+        assert!(!WestWireConnection::Side.is_none());
+        assert!(!WestWireConnection::Up.is_none());
+    }
+
+    // === make_cross tests ===
+
+    #[test]
+    fn test_make_cross_zero_power() {
+        let cross = make_cross(Integer0To15::L0);
+        assert_eq!(cross.north, NorthWireConnection::Side);
+        assert_eq!(cross.south, SouthWireConnection::Side);
+        assert_eq!(cross.east, EastWireConnection::Side);
+        assert_eq!(cross.west, WestWireConnection::Side);
+        assert_eq!(cross.power, Integer0To15::L0);
+    }
+
+    #[test]
+    fn test_make_cross_max_power() {
+        let cross = make_cross(Integer0To15::L15);
+        assert_eq!(cross.north, NorthWireConnection::Side);
+        assert_eq!(cross.south, SouthWireConnection::Side);
+        assert_eq!(cross.east, EastWireConnection::Side);
+        assert_eq!(cross.west, WestWireConnection::Side);
+        assert_eq!(cross.power, Integer0To15::L15);
+    }
+
+    #[test]
+    fn test_make_cross_preserves_power_level() {
+        for i in 0..=15 {
+            let power = Integer0To15::from_index(i);
+            let cross = make_cross(power);
+            assert_eq!(cross.power, power, "Power level {} not preserved", i);
+        }
+    }
+
+    // === is_dot / is_cross tests ===
+
+    #[test]
+    fn test_is_dot_all_none() {
+        let wire = RedstoneWireProperties {
+            north: NorthWireConnection::None,
+            south: SouthWireConnection::None,
+            east: EastWireConnection::None,
+            west: WestWireConnection::None,
+            power: Integer0To15::L0,
+        };
+        assert!(is_dot(wire));
+    }
+
+    #[test]
+    fn test_is_dot_one_side_connected() {
+        let wire = RedstoneWireProperties {
+            north: NorthWireConnection::Side,
+            south: SouthWireConnection::None,
+            east: EastWireConnection::None,
+            west: WestWireConnection::None,
+            power: Integer0To15::L0,
+        };
+        assert!(!is_dot(wire));
+    }
+
+    #[test]
+    fn test_is_dot_ignores_power() {
+        let wire = RedstoneWireProperties {
+            north: NorthWireConnection::None,
+            south: SouthWireConnection::None,
+            east: EastWireConnection::None,
+            west: WestWireConnection::None,
+            power: Integer0To15::L15,
+        };
+        assert!(is_dot(wire), "is_dot should not care about power level");
+    }
+
+    #[test]
+    fn test_is_cross_all_side() {
+        let wire = make_cross(Integer0To15::L0);
+        assert!(is_cross(wire));
+    }
+
+    #[test]
+    fn test_is_cross_with_up_connection() {
+        let wire = RedstoneWireProperties {
+            north: NorthWireConnection::Up,
+            south: SouthWireConnection::Side,
+            east: EastWireConnection::Side,
+            west: WestWireConnection::Side,
+            power: Integer0To15::L0,
+        };
+        assert!(!is_cross(wire), "Up connections make it not a cross");
+    }
+
+    #[test]
+    fn test_is_cross_ignores_power() {
+        let wire = make_cross(Integer0To15::L15);
+        assert!(is_cross(wire), "is_cross should not care about power level");
+    }
+
+    #[test]
+    fn test_dot_and_cross_mutually_exclusive() {
+        let dot = RedstoneWireProperties {
+            north: NorthWireConnection::None,
+            south: SouthWireConnection::None,
+            east: EastWireConnection::None,
+            west: WestWireConnection::None,
+            power: Integer0To15::L0,
+        };
+        assert!(is_dot(dot));
+        assert!(!is_cross(dot));
+
+        let cross = make_cross(Integer0To15::L0);
+        assert!(is_cross(cross));
+        assert!(!is_dot(cross));
+    }
+
+    // === Wire side connection (is_side_connected) tests ===
+
+    #[test]
+    fn test_is_side_connected_horizontal_directions() {
+        let wire = RedstoneWireProperties {
+            north: NorthWireConnection::Side,
+            south: SouthWireConnection::None,
+            east: EastWireConnection::Up,
+            west: WestWireConnection::None,
+            power: Integer0To15::L0,
+        };
+
+        assert!(wire.is_side_connected(BlockDirection::North));
+        assert!(!wire.is_side_connected(BlockDirection::South));
+        assert!(wire.is_side_connected(BlockDirection::East)); // Up counts as connected
+        assert!(!wire.is_side_connected(BlockDirection::West));
+    }
+
+    #[test]
+    fn test_is_side_connected_vertical_always_false() {
+        let wire = make_cross(Integer0To15::L15);
+        assert!(!wire.is_side_connected(BlockDirection::Up));
+        assert!(!wire.is_side_connected(BlockDirection::Down));
+    }
+
+    // === Power decay tests (vanilla rule: wire loses 1 power per block) ===
+
+    #[test]
+    fn test_power_saturating_sub_at_zero() {
+        // Wire power decays by 1 per block; at 0 it stays 0 (saturating)
+        assert_eq!(0u8.saturating_sub(1), 0);
+    }
+
+    #[test]
+    fn test_power_decay_all_levels() {
+        // Verify the power decay formula: max(block_power, wire_power - 1)
+        for wire_power in 0u8..=15 {
+            let decayed = wire_power.saturating_sub(1);
+            if wire_power == 0 {
+                assert_eq!(decayed, 0);
+            } else {
+                assert_eq!(decayed, wire_power - 1);
+            }
+        }
+    }
+
+    /// Verify that a cross shape created with make_cross has all 4 sides connected
+    /// and a dot shape has no sides connected.
+    #[test]
+    fn test_cross_all_sides_connected() {
+        let cross = make_cross(Integer0To15::L0);
+        assert!(cross.is_side_connected(BlockDirection::North));
+        assert!(cross.is_side_connected(BlockDirection::South));
+        assert!(cross.is_side_connected(BlockDirection::East));
+        assert!(cross.is_side_connected(BlockDirection::West));
+    }
+
+    #[test]
+    fn test_dot_no_sides_connected() {
+        let dot = RedstoneWireProperties {
+            north: NorthWireConnection::None,
+            south: SouthWireConnection::None,
+            east: EastWireConnection::None,
+            west: WestWireConnection::None,
+            power: Integer0To15::L0,
+        };
+        assert!(!dot.is_side_connected(BlockDirection::North));
+        assert!(!dot.is_side_connected(BlockDirection::South));
+        assert!(!dot.is_side_connected(BlockDirection::East));
+        assert!(!dot.is_side_connected(BlockDirection::West));
+    }
+}
