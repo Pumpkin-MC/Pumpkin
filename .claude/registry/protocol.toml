@@ -1,0 +1,2638 @@
+# .claude/registry/protocol.toml
+# Protocol packet registry for MC 1.21.4
+# Source: PrismarineJS minecraft-data (ProtoDef format)
+# Date: 2026-02-07
+
+[meta]
+mc_version = "1.21.4"
+protocol_version = 769
+source = "PrismarineJS minecraft-data"
+total_packets = 237
+states = ["handshaking", "status", "login", "configuration", "play"]
+
+# =============================================================================
+# HANDSHAKING (2 packets)
+# =============================================================================
+
+[[packets]]
+state = "handshaking"
+direction = "serverbound"
+id = "0x00"
+name = "set_protocol"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "handshaking"
+direction = "serverbound"
+id = "0xfe"
+name = "legacy_server_list_ping"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+# =============================================================================
+# STATUS (4 packets)
+# =============================================================================
+
+[[packets]]
+state = "status"
+direction = "clientbound"
+id = "0x00"
+name = "server_info"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "status"
+direction = "clientbound"
+id = "0x01"
+name = "ping"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "status"
+direction = "serverbound"
+id = "0x00"
+name = "ping_start"
+fields = 0
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "status"
+direction = "serverbound"
+id = "0x01"
+name = "ping"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+# =============================================================================
+# LOGIN (11 packets)
+# =============================================================================
+
+[[packets]]
+state = "login"
+direction = "clientbound"
+id = "0x00"
+name = "disconnect"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "login"
+direction = "clientbound"
+id = "0x01"
+name = "encryption_begin"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "login"
+direction = "clientbound"
+id = "0x02"
+name = "success"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "login"
+direction = "clientbound"
+id = "0x03"
+name = "compress"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "login"
+direction = "clientbound"
+id = "0x04"
+name = "login_plugin_request"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "login"
+direction = "clientbound"
+id = "0x05"
+name = "cookie_request"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "login"
+direction = "serverbound"
+id = "0x00"
+name = "login_start"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "login"
+direction = "serverbound"
+id = "0x01"
+name = "encryption_begin"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "login"
+direction = "serverbound"
+id = "0x02"
+name = "login_plugin_response"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "login"
+direction = "serverbound"
+id = "0x03"
+name = "login_acknowledged"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "login"
+direction = "serverbound"
+id = "0x04"
+name = "cookie_response"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+# =============================================================================
+# CONFIGURATION (27 packets)
+# =============================================================================
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x00"
+name = "cookie_request"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x01"
+name = "custom_payload"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x02"
+name = "disconnect"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x03"
+name = "finish_configuration"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x04"
+name = "keep_alive"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x05"
+name = "ping"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x06"
+name = "reset_chat"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x07"
+name = "registry_data"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x08"
+name = "remove_resource_pack"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x09"
+name = "add_resource_pack"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x0a"
+name = "store_cookie"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x0b"
+name = "transfer"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x0c"
+name = "feature_flags"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x0d"
+name = "tags"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x0e"
+name = "select_known_packs"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x0f"
+name = "custom_report_details"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "clientbound"
+id = "0x10"
+name = "server_links"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "serverbound"
+id = "0x00"
+name = "settings"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "serverbound"
+id = "0x01"
+name = "cookie_response"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "serverbound"
+id = "0x02"
+name = "custom_payload"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "serverbound"
+id = "0x03"
+name = "finish_configuration"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "serverbound"
+id = "0x04"
+name = "keep_alive"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "serverbound"
+id = "0x05"
+name = "pong"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "serverbound"
+id = "0x06"
+name = "resource_pack_receive"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "serverbound"
+id = "0x07"
+name = "select_known_packs"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "serverbound"
+id = "0x08"
+name = "custom_report_details"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "configuration"
+direction = "serverbound"
+id = "0x09"
+name = "server_links"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+# =============================================================================
+# PLAY (193 packets)
+# =============================================================================
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x00"
+name = "bundle_delimiter"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x01"
+name = "spawn_entity"
+fields = 13
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x02"
+name = "spawn_entity_experience_orb"
+fields = 5
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x03"
+name = "animation"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x04"
+name = "statistics"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x05"
+name = "acknowledge_player_digging"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x06"
+name = "block_break_animation"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x07"
+name = "tile_entity_data"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x08"
+name = "block_action"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x09"
+name = "block_change"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x0a"
+name = "boss_bar"
+fields = 7
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x0b"
+name = "difficulty"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x0c"
+name = "chunk_batch_finished"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x0d"
+name = "chunk_batch_start"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x0e"
+name = "chunk_biomes"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x0f"
+name = "clear_titles"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x10"
+name = "tab_complete"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x11"
+name = "declare_commands"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x12"
+name = "close_window"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x13"
+name = "window_items"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x14"
+name = "craft_progress_bar"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x15"
+name = "set_slot"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x16"
+name = "cookie_request"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x17"
+name = "set_cooldown"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x18"
+name = "chat_suggestions"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x19"
+name = "custom_payload"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x1a"
+name = "damage_event"
+fields = 5
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x1b"
+name = "debug_sample"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x1c"
+name = "hide_message"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x1d"
+name = "kick_disconnect"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x1e"
+name = "profileless_chat"
+fields = 4
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x1f"
+name = "entity_status"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x20"
+name = "sync_entity_position"
+fields = 10
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x21"
+name = "explosion"
+fields = 6
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x22"
+name = "unload_chunk"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x23"
+name = "game_state_change"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x24"
+name = "open_horse_window"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x25"
+name = "hurt_animation"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x26"
+name = "initialize_world_border"
+fields = 8
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x27"
+name = "keep_alive"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x28"
+name = "map_chunk"
+fields = 11
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x29"
+name = "world_event"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x2a"
+name = "world_particles"
+fields = 11
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x2b"
+name = "update_light"
+fields = 8
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x2c"
+name = "login"
+fields = 11
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x2d"
+name = "map"
+fields = 9
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x2e"
+name = "trade_list"
+fields = 6
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x2f"
+name = "rel_entity_move"
+fields = 5
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x30"
+name = "entity_move_look"
+fields = 7
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x31"
+name = "move_minecart"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x32"
+name = "entity_look"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x33"
+name = "vehicle_move"
+fields = 5
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x34"
+name = "open_book"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x35"
+name = "open_window"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x36"
+name = "open_sign_entity"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x37"
+name = "ping"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x38"
+name = "ping_response"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x39"
+name = "craft_recipe_response"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x3a"
+name = "abilities"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x3b"
+name = "player_chat"
+fields = 13
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x3c"
+name = "end_combat_event"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x3d"
+name = "enter_combat_event"
+fields = 0
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x3e"
+name = "death_combat_event"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x3f"
+name = "player_remove"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x40"
+name = "player_info"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x41"
+name = "face_player"
+fields = 7
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x42"
+name = "position"
+fields = 10
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x43"
+name = "player_rotation"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x44"
+name = "recipe_book_add"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x45"
+name = "recipe_book_remove"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x46"
+name = "recipe_book_settings"
+fields = 8
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x47"
+name = "entity_destroy"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x48"
+name = "remove_entity_effect"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x49"
+name = "reset_score"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x4a"
+name = "remove_resource_pack"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x4b"
+name = "add_resource_pack"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x4c"
+name = "respawn"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x4d"
+name = "entity_head_rotation"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x4e"
+name = "multi_block_change"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x4f"
+name = "select_advancement_tab"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x50"
+name = "server_data"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x51"
+name = "action_bar"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x52"
+name = "world_border_center"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x53"
+name = "world_border_lerp_size"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x54"
+name = "world_border_size"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x55"
+name = "world_border_warning_delay"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x56"
+name = "world_border_warning_reach"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x57"
+name = "camera"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x58"
+name = "update_view_position"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x59"
+name = "update_view_distance"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x5a"
+name = "set_cursor_item"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x5b"
+name = "spawn_position"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x5c"
+name = "scoreboard_display_objective"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x5d"
+name = "entity_metadata"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x5e"
+name = "attach_entity"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x5f"
+name = "entity_velocity"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x60"
+name = "entity_equipment"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x61"
+name = "experience"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x62"
+name = "update_health"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x63"
+name = "held_item_slot"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x64"
+name = "scoreboard_objective"
+fields = 6
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x65"
+name = "set_passengers"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x66"
+name = "set_player_inventory"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x67"
+name = "teams"
+fields = 10
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x68"
+name = "scoreboard_score"
+fields = 6
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x69"
+name = "simulation_distance"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x6a"
+name = "set_title_subtitle"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x6b"
+name = "update_time"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x6c"
+name = "set_title_text"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x6d"
+name = "set_title_time"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x6e"
+name = "entity_sound_effect"
+fields = 6
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x6f"
+name = "sound_effect"
+fields = 8
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x70"
+name = "start_configuration"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x71"
+name = "stop_sound"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x72"
+name = "store_cookie"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x73"
+name = "system_chat"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x74"
+name = "playerlist_header"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x75"
+name = "nbt_query_response"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x76"
+name = "collect"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x77"
+name = "entity_teleport"
+fields = 7
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x78"
+name = "set_ticking_state"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x79"
+name = "step_tick"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x7a"
+name = "transfer"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x7b"
+name = "advancements"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x7c"
+name = "entity_update_attributes"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x7d"
+name = "entity_effect"
+fields = 5
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x7e"
+name = "declare_recipes"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x7f"
+name = "tags"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x80"
+name = "set_projectile_power"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x81"
+name = "custom_report_details"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "clientbound"
+id = "0x82"
+name = "server_links"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x00"
+name = "teleport_confirm"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x01"
+name = "query_block_nbt"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x02"
+name = "select_bundle_item"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x03"
+name = "set_difficulty"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x04"
+name = "message_acknowledgement"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x05"
+name = "chat_command"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x06"
+name = "chat_command_signed"
+fields = 6
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x07"
+name = "chat_message"
+fields = 6
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x08"
+name = "chat_session_update"
+fields = 4
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x09"
+name = "chunk_batch_received"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x0a"
+name = "client_command"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x0b"
+name = "tick_end"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x0c"
+name = "settings"
+fields = 0
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x0d"
+name = "tab_complete"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x0e"
+name = "configuration_acknowledged"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x0f"
+name = "enchant_item"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x10"
+name = "window_click"
+fields = 7
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x11"
+name = "close_window"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x12"
+name = "set_slot_state"
+fields = 3
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x13"
+name = "cookie_response"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x14"
+name = "custom_payload"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x15"
+name = "debug_sample_subscription"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x16"
+name = "edit_book"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x17"
+name = "query_entity_nbt"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x18"
+name = "use_entity"
+fields = 7
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x19"
+name = "generate_structure"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x1a"
+name = "keep_alive"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x1b"
+name = "lock_difficulty"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x1c"
+name = "position"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x1d"
+name = "position_look"
+fields = 6
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x1e"
+name = "look"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x1f"
+name = "flying"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x20"
+name = "vehicle_move"
+fields = 6
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x21"
+name = "steer_boat"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x22"
+name = "pick_item_from_block"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x23"
+name = "pick_item_from_entity"
+fields = 2
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x24"
+name = "ping_request"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x25"
+name = "craft_recipe_request"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x26"
+name = "abilities"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x27"
+name = "block_dig"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x28"
+name = "entity_action"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x29"
+name = "player_input"
+fields = 1
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x2a"
+name = "player_loaded"
+fields = 0
+in_1_18_2 = false
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x2b"
+name = "pong"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = false
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x2c"
+name = "recipe_book"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x2d"
+name = "displayed_recipe"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = false
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x2e"
+name = "name_item"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x2f"
+name = "resource_pack_receive"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x30"
+name = "advancement_tab"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x31"
+name = "select_trade"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x32"
+name = "set_beacon_effect"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x33"
+name = "held_item_slot"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x34"
+name = "update_command_block"
+fields = 4
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x35"
+name = "update_command_block_minecart"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x36"
+name = "set_creative_slot"
+fields = 2
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x37"
+name = "update_jigsaw_block"
+fields = 8
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x38"
+name = "update_structure_block"
+fields = 16
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = false
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x39"
+name = "update_sign"
+fields = 6
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x3a"
+name = "arm_animation"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x3b"
+name = "spectate"
+fields = 1
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x3c"
+name = "block_place"
+fields = 9
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true
+
+[[packets]]
+state = "play"
+direction = "serverbound"
+id = "0x3d"
+name = "use_item"
+fields = 3
+in_1_18_2 = true
+in_1_16_5 = true
+in_1_14_4 = true
+in_1_12_2 = true

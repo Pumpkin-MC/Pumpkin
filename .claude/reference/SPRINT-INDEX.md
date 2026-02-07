@@ -8,6 +8,7 @@
 |--------|---------|----------|-------|
 | Mojang vanilla (misode/mcmeta) | 1.21.4 | — | Blocks, recipes, loot tables, worldgen, damage types, tags |
 | PrismarineJS (minecraft-data) | 1.21.4 | — | Entities, foods, effects, materials, enchantments |
+| PrismarineJS (minecraft-data) | 1.21.4 | 769 | Protocol: 237 packets (131C+62S play, 27 config, 11 login) |
 | PrismarineJS (minecraft-data) | 1.18.2 | 758 | Caves & Cliffs II: 113 entities, 898 blocks, 1100 items |
 | PrismarineJS (minecraft-data) | 1.16.5 | 754 | Nether Update: 108 entities, 763 blocks, 975 items |
 | PrismarineJS (minecraft-data) | 1.14.4 | 498 | Village & Pillage: 102 entities, 676 blocks, 876 items |
@@ -45,6 +46,8 @@ Pumpkin currently supports **1.21.7–1.21.11** (protocol 772–774). Only packe
 | Effects | 27 | 33 | 33 | 33 | 39 |
 | Enchantments | 30 | 30 | 38 | 38 | 42 |
 | Biomes | 62 | 75 | 79 | 61 | 135 |
+| Packets (C+S) | 125 | 153 | 154 | 166 | 237 |
+| Shared Types | 31 | 38 | 39 | 42 | 84 |
 
 All reference packages below are tagged **MC 1.21.4** unless noted.
 
@@ -60,7 +63,7 @@ The source of truth. Agents grep these to find their backlog.
 | **Entities** | `.claude/registry/entities.toml` | 149 entities, 39 effects, 40 foods, 49 damage types |
 | **Items** | `.claude/registry/items.toml` | 1385 items, 42 enchantments, 1370 recipes, 1237 loot tables |
 | **Blocks** | `.claude/registry/blocks.toml` | 1095 blocks (198 types), 135 biomes, 47 structures |
-| | | |
+| **Protocol** | `.claude/registry/protocol.toml` | 237 packets (5 states), cross-version presence flags |
 | | | |
 | *Multi-version baselines* | | |
 | **Entities 1.18.2** | `.claude/registry/entities_1_18_2.toml` | 113 entities, 33 effects, 40 foods with delta vs 1.21.4 |
@@ -132,19 +135,28 @@ Detailed briefings with gap analysis. Read YOUR file on session start.
 │       ├── entities.json              # 149 entities with hitboxes + metadata
 │       ├── effects.json               # 32+ status effects
 │       ├── foods.json                 # ~50 foods with nutrition
-│       └── materials.json             # Tool mining speed table
+│       ├── materials.json             # Tool mining speed table
+│       └── protocol/
+│           ├── protocol.json          # 237 packets (ProtoDef format, 260KB)
+│           ├── proto.yml              # Human-readable YAML (99KB)
+│           └── version.json           # Protocol version metadata
 ├── 1.18.2/
 │   ├── README.md                      # Version delta analysis (1.18.2 → 1.21.4)
-│   └── prismarine/                    # 13 files: 113 entities, 898 blocks, 1100 items
+│   └── prismarine/                    # 13 files + protocol/ (166 packets)
 ├── 1.16.5/
 │   ├── README.md                      # Version delta analysis (1.16.5 → 1.21.4)
-│   └── prismarine/                    # 16 files: 108 entities, 763 blocks, 975 items
+│   └── prismarine/                    # 16 files + protocol/ (154 packets)
 ├── 1.14.4/
 │   ├── README.md                      # Version delta analysis (1.14.4 → 1.21.4)
-│   └── prismarine/                    # 13 files: 102 entities, 676 blocks, 876 items
+│   └── prismarine/                    # 13 files + protocol/ (153 packets)
 ├── 1.12.2/
 │   ├── README.md                      # Version delta analysis (1.12.2 → 1.21.4, pre-Flattening)
-│   └── prismarine/                    # 11 files: 84 entities, 254 blocks, 410 items
+│   └── prismarine/                    # 11 files + protocol/ (125 packets)
+├── common/
+│   └── prismarine/
+│       ├── README.md                  # Protocol data overview + cross-version matrix
+│       ├── protocolVersions.json      # MC version → protocol number (all versions)
+│       └── versions.json             # PrismarineJS version list
 └── bukkit-api/
     ├── BUKKIT-API-REFERENCE.md        # 318 events, plugin lifecycle
     └── bukkit-api-ref.zip             # 23 scraped Javadoc files
