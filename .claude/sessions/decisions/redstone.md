@@ -22,4 +22,12 @@
 **Decision:** Redstone agent will not create BlockRedstoneEvent/BlockPistonExtend/RetractEvent since event definitions belong in `pumpkin/src/plugin/api/events/block/` which is outside redstone write_paths. Will fire them once Plugin creates them.
 **Rationale:** Respect agent ownership boundaries. Plugin agent owns event type definitions.
 **Affects:** Redstone, Plugin
-**Status:** active — waiting on Plugin
+**Status:** resolved — superseded by RED-004
+
+## RED-004: Block events wired via ARCH-023 cross-agent access
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/003_redstone_event-wiring.md
+**Decision:** Wired BlockRedstoneEvent, BlockPistonExtendEvent, and BlockPistonRetractEvent into their respective code paths. Plugin agent created the event structs; Redstone agent fires them using `server.plugin_manager.fire()`. Used `Block::from_state_id(state.id)` to get `&'static Block` for events requiring static lifetime.
+**Rationale:** ARCH-023 grants cross-agent event-firing write access. Plugin created the event types, Redstone wires the fire points.
+**Affects:** Redstone, Plugin
+**Status:** active
