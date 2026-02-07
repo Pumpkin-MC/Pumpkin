@@ -20,6 +20,11 @@ use crate::{
             ruined_portal::RuinedPortalGenerator, shipwreck::ShipwreckGenerator,
             stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
             trail_ruins::TrailRuinsGenerator,
+            trial_chambers::TrialChambersGenerator,
+            village::{
+                VillageDesertGenerator, VillagePlainsGenerator, VillageSavannaGenerator,
+                VillageSnowyGenerator, VillageTaigaGenerator,
+            },
             woodland_mansion::WoodlandMansionGenerator,
         },
     },
@@ -103,6 +108,24 @@ pub fn try_generate_structure(
         }
         StructureKeys::TrailRuins => {
             TrailRuinsGenerator::get_structure_position(&TrailRuinsGenerator, context)
+        }
+        StructureKeys::TrialChambers => {
+            TrialChambersGenerator::get_structure_position(&TrialChambersGenerator, context)
+        }
+        StructureKeys::VillagePlains => {
+            VillagePlainsGenerator::get_structure_position(&VillagePlainsGenerator, context)
+        }
+        StructureKeys::VillageDesert => {
+            VillageDesertGenerator::get_structure_position(&VillageDesertGenerator, context)
+        }
+        StructureKeys::VillageSavanna => {
+            VillageSavannaGenerator::get_structure_position(&VillageSavannaGenerator, context)
+        }
+        StructureKeys::VillageSnowy => {
+            VillageSnowyGenerator::get_structure_position(&VillageSnowyGenerator, context)
+        }
+        StructureKeys::VillageTaiga => {
+            VillageTaigaGenerator::get_structure_position(&VillageTaigaGenerator, context)
         }
         // TODO: Implement other structure types
         _ => None,
