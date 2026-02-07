@@ -10,6 +10,7 @@ use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile,
 use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
+use crate::server::tick_profiler::TickProfiler;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{command::dispatcher::CommandDispatcher, entity::player::Player, world::World};
@@ -50,6 +51,7 @@ use tokio_util::task::TaskTracker;
 mod connection_cache;
 mod key_store;
 pub mod seasonal_events;
+pub mod tick_profiler;
 pub mod tick_rate_manager;
 pub mod ticker;
 
@@ -103,6 +105,8 @@ pub struct Server {
     pub white_list: AtomicBool,
     /// Manages the server's tick rate, freezing, and sprinting
     pub tick_rate_manager: Arc<ServerTickRateManager>,
+    /// Per-tick performance profiler for diagnosing slow ticks
+    pub tick_profiler: Arc<TickProfiler>,
     /// Stores the duration of the last 100 ticks for performance analysis
     pub tick_times_nanos: Mutex<[i64; 100]>,
     /// Aggregated tick times for efficient rolling average calculation
@@ -191,6 +195,7 @@ impl Server {
         let white_list = AtomicBool::new(basic_config.white_list);
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
+        let tick_profiler = Arc::new(TickProfiler::new());
 
         let mojang_keys_task = tokio::spawn({
             let auth_config = advanced_config.networking.authentication.clone();
@@ -234,6 +239,7 @@ impl Server {
             player_data_storage,
             white_list,
             tick_rate_manager,
+            tick_profiler,
             tick_times_nanos: Mutex::new([0; 100]),
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
@@ -699,17 +705,23 @@ impl Server {
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub async fn tick(self: &Arc<Self>) {
+        let tick_start = std::time::Instant::now();
+
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds().await;
             // Always run player and network ticking, even when game is frozen
         } else {
             self.tick_players_and_network().await;
         }
+
+        self.tick_profiler.record_total_tick(tick_start);
     }
 
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
     pub async fn tick_players_and_network(&self) {
+        let phase_start = std::time::Instant::now();
+
         // First, flush pending block updates and synced block events to clients
         for world in self.worlds.load().iter() {
             world.flush_block_updates().await;
@@ -720,9 +732,13 @@ impl Server {
         for player in players_to_tick {
             player.tick(self).await;
         }
+
+        self.tick_profiler.record_player_tick(phase_start);
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
+        let phase_start = std::time::Instant::now();
+
         let mut set = JoinSet::new();
 
         for world in self.worlds.load().iter() {
@@ -740,6 +756,8 @@ impl Server {
         if let Err(e) = self.player_data_storage.tick(self).await {
             log::error!("Error ticking player data: {e}");
         }
+
+        self.tick_profiler.record_world_tick(phase_start);
     }
 
     /// Updates the tick time statistics with the duration of the last tick.
