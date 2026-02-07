@@ -470,11 +470,14 @@ class Blackboard:
                             description: str = "",
                             context: dict | None = None,
                             priority: str = "normal",
+                            phase: str = "planning",
                             depends_on: list[str] | None = None) -> str:
         """
         Orchestrator dispatches a task to an agent.
 
         Lifecycle: dispatched → claimed → in_progress → done | failed
+        Phases:    planning → coding → testing → review → merged
+        Priority:  critical | high | normal | low
 
         Also broadcasts to the agent so they pick it up via poll/hydrate.
         Returns the task_id.
@@ -482,31 +485,33 @@ class Blackboard:
         task_id = f"task_{_uid()}"
         record = {
             "id": task_id,
-            "agent": to_agent,
+            "owner": to_agent,
             "task": task,
             "description": description,
             "context": context or {},
             "priority": priority,
+            "phase": phase,
             "depends_on": depends_on or [],
             "status": "dispatched",
             "dispatched_by": self.agent_id,
             "dispatched_at": _now(),
             "claimed_at": None,
             "completed_at": None,
+            "phase_log": [{"phase": phase, "at": _now()}],
             "result": None,
             "session_id": self.session_id,
         }
         payload = json.dumps(record, default=str)
+        board_entry = {
+            "owner": to_agent, "task": task, "status": "dispatched",
+            "priority": priority, "phase": phase, "dispatched_at": _now(),
+        }
 
         cmds = [
-            # Store full task record
             ["SET", f"ada:tasks:{self.project}:{task_id}", payload],
-            # Add to agent's task queue
             ["LPUSH", f"ada:tasks:{self.project}:queue:{to_agent}", task_id],
-            # Update task board (global view)
             ["HSET", f"ada:tasks:{self.project}:board", task_id,
-             json.dumps({"agent": to_agent, "task": task, "status": "dispatched",
-                         "priority": priority, "dispatched_at": _now()}, default=str)],
+             json.dumps(board_entry, default=str)],
         ]
         await self.redis.pipeline(cmds)
 
@@ -515,7 +520,7 @@ class Blackboard:
             "type": "task",
             "subject": task,
             "body": {"task_id": task_id, "description": description,
-                     "context": context or {}},
+                     "context": context or {}, "phase": phase},
             "priority": priority,
         })
 
@@ -548,7 +553,7 @@ class Blackboard:
     async def claim_task(self) -> dict | None:
         """
         Agent claims the next task from its queue.
-        Pops from queue and updates status to 'claimed'.
+        Pops from queue, updates status to 'claimed', moves phase to 'coding'.
         """
         task_id = await self.redis.cmd(
             "RPOP", f"ada:tasks:{self.project}:queue:{self.agent_id}"
@@ -562,36 +567,78 @@ class Blackboard:
 
         record["status"] = "claimed"
         record["claimed_at"] = _now()
+        record["phase"] = "coding"
+        record.setdefault("phase_log", []).append({"phase": "coding", "at": _now()})
+
+        owner = record.get("owner", record.get("agent", self.agent_id))
+        board_entry = {
+            "owner": owner, "task": record["task"],
+            "status": "claimed", "priority": record.get("priority", "normal"),
+            "phase": "coding", "claimed_at": _now(),
+        }
 
         cmds = [
             ["SET", f"ada:tasks:{self.project}:{task_id}",
              json.dumps(record, default=str)],
             ["HSET", f"ada:tasks:{self.project}:board", task_id,
-             json.dumps({"agent": record["agent"], "task": record["task"],
-                         "status": "claimed", "priority": record["priority"],
-                         "claimed_at": _now()}, default=str)],
+             json.dumps(board_entry, default=str)],
             ["HSET", f"ada:bb:{self.project}:agents", self.agent_id, "working"],
         ]
         await self.redis.pipeline(cmds)
         return record
 
-    async def complete_task(self, task_id: str, result: dict | None = None):
-        """Agent marks a task as done with optional result."""
+    async def update_task_phase(self, task_id: str, phase: str):
+        """
+        Update a task's phase without changing its status.
+
+        Phases: planning → coding → testing → review → merged
+        """
         record = await self.redis.get_json(f"ada:tasks:{self.project}:{task_id}")
         if not record:
             return
 
-        record["status"] = "done"
-        record["completed_at"] = _now()
-        record["result"] = result or {}
+        record["phase"] = phase
+        record.setdefault("phase_log", []).append({"phase": phase, "at": _now()})
+
+        owner = record.get("owner", record.get("agent", self.agent_id))
+        board_entry = {
+            "owner": owner, "task": record["task"],
+            "status": record["status"], "priority": record.get("priority", "normal"),
+            "phase": phase,
+        }
 
         cmds = [
             ["SET", f"ada:tasks:{self.project}:{task_id}",
              json.dumps(record, default=str)],
             ["HSET", f"ada:tasks:{self.project}:board", task_id,
-             json.dumps({"agent": record["agent"], "task": record["task"],
-                         "status": "done", "priority": record["priority"],
-                         "completed_at": _now()}, default=str)],
+             json.dumps(board_entry, default=str)],
+        ]
+        await self.redis.pipeline(cmds)
+
+    async def complete_task(self, task_id: str, result: dict | None = None):
+        """Agent marks a task as done with optional result. Phase moves to 'merged'."""
+        record = await self.redis.get_json(f"ada:tasks:{self.project}:{task_id}")
+        if not record:
+            return
+
+        record["status"] = "done"
+        record["phase"] = "merged"
+        record["completed_at"] = _now()
+        record["result"] = result or {}
+        record.setdefault("phase_log", []).append({"phase": "merged", "at": _now()})
+
+        owner = record.get("owner", record.get("agent", self.agent_id))
+        board_entry = {
+            "owner": owner, "task": record["task"],
+            "status": "done", "priority": record.get("priority", "normal"),
+            "phase": "merged", "completed_at": _now(),
+        }
+
+        cmds = [
+            ["SET", f"ada:tasks:{self.project}:{task_id}",
+             json.dumps(record, default=str)],
+            ["HSET", f"ada:tasks:{self.project}:board", task_id,
+             json.dumps(board_entry, default=str)],
             ["HSET", f"ada:bb:{self.project}:agents", self.agent_id, "idle"],
         ]
         await self.redis.pipeline(cmds)
@@ -614,13 +661,19 @@ class Blackboard:
         record["completed_at"] = _now()
         record["result"] = {"error": reason}
 
+        owner = record.get("owner", record.get("agent", self.agent_id))
+        board_entry = {
+            "owner": owner, "task": record["task"],
+            "status": "failed", "priority": record.get("priority", "normal"),
+            "phase": record.get("phase", "?"),
+            "failed_at": _now(), "reason": reason[:100],
+        }
+
         cmds = [
             ["SET", f"ada:tasks:{self.project}:{task_id}",
              json.dumps(record, default=str)],
             ["HSET", f"ada:tasks:{self.project}:board", task_id,
-             json.dumps({"agent": record["agent"], "task": record["task"],
-                         "status": "failed", "priority": record["priority"],
-                         "failed_at": _now(), "reason": reason[:100]}, default=str)],
+             json.dumps(board_entry, default=str)],
             ["HSET", f"ada:bb:{self.project}:agents", self.agent_id, "idle"],
         ]
         await self.redis.pipeline(cmds)

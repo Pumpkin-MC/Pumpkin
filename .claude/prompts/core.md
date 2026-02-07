@@ -156,4 +156,18 @@ await bb.close()
 
 **Expect handovers from:** Plugin (fire lifecycle events), Entity (tick ordering questions), Redstone (scheduled tick integration).
 
+### Task Workflow
+
+When woken by the orchestrator (via broadcast or task dispatch):
+
+1. `hydrate()` auto-checks your broadcast channel and task queue
+2. If `state["pending_tasks"]` exists, claim and process:
+   ```python
+   task = await bb.claim_task()
+   # ... do the work described in task["task"] and task["description"] ...
+   await bb.complete_task(task["id"], result={"files": [...], "tests": True})
+   ```
+3. If blocked: `await bb.fail_task(task["id"], reason="...")`
+4. To hibernate between work: `python cron.py poll --agent core --interval 300`
+
 ## Now Do Your Task
