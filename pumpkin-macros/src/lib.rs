@@ -14,7 +14,7 @@ pub fn event(item: TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 
     // Check if the struct has a `cancelled` field (added by #[cancellable]).
-    // If so, generate an is_cancelled() override that returns the actual state.
+    // If so, generate a cancelled() override that returns the actual state.
     let has_cancelled_field = if let syn::Data::Struct(data) = &ast.data {
         data.fields
             .iter()
@@ -23,9 +23,9 @@ pub fn event(item: TokenStream) -> TokenStream {
         false
     };
 
-    let is_cancelled_impl = if has_cancelled_field {
+    let cancelled_impl = if has_cancelled_field {
         quote! {
-            fn is_cancelled(&self) -> bool {
+            fn cancelled(&self) -> bool {
                 self.cancelled
             }
         }
@@ -51,7 +51,7 @@ pub fn event(item: TokenStream) -> TokenStream {
                 self
             }
 
-            #is_cancelled_impl
+            #cancelled_impl
         }
     }
     .into()
