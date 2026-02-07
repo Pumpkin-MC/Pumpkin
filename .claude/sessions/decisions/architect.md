@@ -338,3 +338,51 @@ The `game_mapping` table stores the static goal→mob relationships (which goals
 
 **Affects:** Entity (goal states), WorldGen (biome→spawn mappings), Items (block→drop mappings)
 **Status:** planned
+
+## ARCH-028: Three Store Scopes
+**Date:** 2026-02-07
+**Decision:** pumpkin-store data model has three distinct scopes with different storage strategies:
+
+1. **Entity Data** (Item/Mob/Recipe) — keyed by name/ID. `GameDataStore` trait methods: `block_by_id`, `item_by_name`, `entity_by_name`, `recipes_for_output`. All tiers (Static/Cached/Lance) implement these.
+
+2. **Worldmap** (Chunks/Regions/Biomes/Structures) — spatial data indexed by XYZ coordinates. Currently in pumpkin-world's Anvil format. Future: `WorldMapStore` trait for Lance columnar queries over spatial data (chunk sections, biome grids, structure bounding boxes).
+
+3. **Activity Overlay** (State Transitions/XOR) — `MobGoalState` Hamming XOR overlay, `GameMappingRecord` cross-entity relationships. Tracks ephemeral state changes per tick. Bind/unbind semantics for entities entering/leaving spatial regions.
+
+Each scope maps to different Lance tables and query patterns:
+- Scope 1: dense lookup tables (blocks, items, entities, recipes)
+- Scope 2: spatial index tables (world positions, chunk sections, biome grids)
+- Scope 3: sparse overlay tables (goal state transitions, relationship mappings)
+
+`StoreProvider::open()` is the meta-switch that NATs all commands to the right backend tier, transparent to callers.
+
+**Affects:** All agents
+**Status:** active
+
+## ARCH-029: SIMD Content-Addressable Memory Vision (AVX-512)
+**Date:** 2026-02-07
+**Decision:** Long-term vision to partially replace per-entity tick iteration with SIMD batch processing over content-addressable spatial memory:
+
+```text
+Current:  for entity in entities { entity.tick() }  // sequential O(n)
+
+Future:   CAM[x,y,z].bind(entity)     // entity enters spatial region
+          CAM[x,y,z].unbind(entity)    // entity leaves spatial region
+          AVX-512 batch tick per region // 16x f32 parallel per SIMD lane
+```
+
+Arrow columnar format is the substrate:
+- Columns: `[x: f32, y: f32, z: f32, entity_id: u32, goal_state: u64]`
+- AVX-512 `f32` lanes: 16 entities per instruction (512 bits / 32 bits)
+- Bind/unbind: insert/delete from spatial Arrow `RecordBatch`
+- Content-addressable: entities indexed by position, not linear entity ID
+- XOR overlay (ARCH-027) per SIMD batch detects state transition anomalies
+
+Prerequisites:
+- ARCH-028 Scope 2 (Worldmap spatial store) must exist
+- Lance Phase 4 (real Arrow `RecordBatch` in memory)
+- Rust `std::arch::x86_64` for AVX-512 intrinsics (or `packed_simd2` / `std::simd`)
+- Fallback to scalar for non-AVX-512 platforms (ARM NEON as Tier 2)
+
+**Affects:** Entity (tick loop), Core (scheduler), WorldGen (chunk spatial index)
+**Status:** vision (long-term)

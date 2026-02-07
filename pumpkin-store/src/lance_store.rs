@@ -16,9 +16,10 @@
 //!
 //! ## Lance 2.0 Note
 //!
-//! Lance 2.0 (released 2026-02-06) includes its own query engine — `DataFusion`
-//! is NOT required as a sidecar. Lance 2.0 handles filtering, projection, and
-//! scanning natively. This simplifies deps significantly.
+//! Lance 2.0.0 (released 2026-02-05) + lancedb 0.26.1: MSRV 1.88, arrow 57,
+//! datafusion 51, chrono ^0.4.41 (conflict resolved). The `lance` umbrella crate
+//! still pulls datafusion transitively via `lance-datafusion`, but `lance-core`
+//! has it optional. For minimal deps, depend on `lance-core` directly.
 //!
 //! ## Hydration Flow
 //!
