@@ -93,8 +93,61 @@ await bb.ice_cake({
 })
 ```
 
+### Agent-Scoped Broadcasts
+
+Broadcasts are delivered per-agent — you only receive messages targeted at you (no noise).
+
+```python
+# Check for broadcasts (automatic during hydrate via DI)
+state = await bb.hydrate()
+if state.get("pending_broadcasts"):
+    for bc in state["pending_broadcasts"]:
+        print(f"[{bc['type']}] from {bc['from_agent']}: {bc['subject']}")
+
+# Or wait for broadcasts (blocks until work arrives, polls every 5 min)
+broadcasts = await bb.wait_for_broadcast(poll_interval=300)
+
+# Acknowledge a broadcast
+await bb.ack_broadcast(broadcast_id, {"status": "done"})
+```
+
+### Task Dispatch (Orchestrator → Agent)
+
+The Architect dispatches tasks that you claim, work on, and complete.
+
+```python
+# During hydrate, check for pending tasks (automatic via DI)
+state = await bb.hydrate()
+if state.get("pending_tasks"):
+    task = await bb.claim_task()      # Claim next task from your queue
+    # ... do the work ...
+    await bb.complete_task(task["id"], result={
+        "files_written": ["path/to/file.rs"],
+        "tests_passing": True,
+    })
+    # Or if blocked:
+    await bb.fail_task(task["id"], reason="Missing dependency X")
+```
+
+Task lifecycle: `dispatched → claimed → done | failed`
+
+### Polling for Work (Hibernate Pattern)
+
+When waiting for work, use the poll loop to hibernate until broadcasts or tasks arrive:
+
+```bash
+# CLI poll (run inside your Claude Code session)
+python cron.py poll --agent {YOUR_AGENT_ID} --interval 300
+
+# Or from Python
+broadcasts = await bb.wait_for_broadcast(poll_interval=300)
+```
+
 ### Quick Commands
 
 - `/blackboard status` — current blackboard state
 - `/blackboard decisions` — all ice-caked decisions
 - `/blackboard inbox` — check for pending handovers
+- `python cron.py status` — broadcasts + task board + agent registry
+- `python cron.py board` — task board only
+- `python cron.py poll --agent {id}` — hibernate until work arrives

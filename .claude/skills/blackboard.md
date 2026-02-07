@@ -114,6 +114,75 @@ asyncio.run(main())
 "
 ```
 
+### broadcast
+
+```bash
+# Check broadcasts for your agent
+python3 cron.py poll --agent "$(cat .current-agent 2>/dev/null || echo orchestrator)" --interval 0
+```
+
+### dispatch
+
+```bash
+# Dispatch a task to an agent (orchestrator role)
+python3 cron.py dispatch --to ${1:-entity} --task "${2:-Implement feature}" --priority ${3:-normal}
+```
+
+### board
+
+```bash
+# Show full task board with status
+python3 cron.py board
+```
+
+### tracker
+
+```bash
+# Full status: broadcasts + task board + agent registry
+python3 cron.py status
+```
+
+### claim
+
+```bash
+python3 -c "
+import asyncio
+from blackboard import Blackboard
+async def main():
+    agent = '$(cat .current-agent 2>/dev/null || echo orchestrator)'
+    bb = Blackboard('pumpkin', agent_id=agent)
+    await bb.hydrate()
+    task = await bb.claim_task()
+    if task:
+        print(f'Claimed: {task[\"id\"]}')
+        print(f'Task: {task[\"task\"]}')
+        print(f'Description: {task.get(\"description\", \"\")}')
+        print(f'Priority: {task.get(\"priority\", \"normal\")}')
+        print(f'Context: {task.get(\"context\", {})}')
+    else:
+        print(f'No tasks in queue for {agent}')
+    await bb.close()
+asyncio.run(main())
+"
+```
+
+### complete
+
+```bash
+python3 -c "
+import asyncio
+from blackboard import Blackboard
+async def main():
+    agent = '$(cat .current-agent 2>/dev/null || echo orchestrator)'
+    bb = Blackboard('pumpkin', agent_id=agent)
+    await bb.hydrate()
+    await bb.complete_task('${1}', result={'summary': '${2:-done}'})
+    print(f'Task ${1} marked done')
+    await bb.close()
+asyncio.run(main())
+"
+```
+
 ## Environment
 
 Requires these env vars (no fallbacks):

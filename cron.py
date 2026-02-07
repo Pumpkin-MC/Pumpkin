@@ -111,9 +111,11 @@ async def status():
                 if tasks:
                     log(f"  [{s.upper()}] ({len(tasks)})")
                     for tid, info in tasks:
-                        agent = info.get("agent", "?")
-                        task = info.get("task", "?")[:50]
-                        log(f"    {tid[:16]:16s}  {agent:12s}  {task}")
+                        owner = info.get("owner", info.get("agent", "?"))
+                        task = info.get("task", "?")[:40]
+                        phase = info.get("phase", "?")
+                        priority = info.get("priority", "normal")
+                        log(f"    {tid[:16]:16s}  {owner:12s}  {phase:8s}  [{priority:6s}]  {task}")
 
         log("")
         log("=== Agent Registry ===")
@@ -253,14 +255,17 @@ async def board():
             return
 
         log(f"Task board ({len(task_board)} tasks):")
+        log(f"  {'':1s} {'PRIORITY':8s} {'OWNER':12s} {'STATUS':12s} {'PHASE':8s} {'TASK':40s}")
+        log(f"  {'':1s} {'─'*8:8s} {'─'*12:12s} {'─'*12:12s} {'─'*8:8s} {'─'*40:40s}")
         for tid, info in sorted(task_board.items(),
                                  key=lambda x: x[1].get("dispatched_at", "")):
             status = info.get("status", "?")
-            agent = info.get("agent", "?")
+            owner = info.get("owner", info.get("agent", "?"))
             task = info.get("task", "?")
             priority = info.get("priority", "normal")
+            phase = info.get("phase", "?")
             marker = {"dispatched": ".", "claimed": ">", "done": "+", "failed": "X"}.get(status, "?")
-            log(f"  {marker} [{priority:6s}] {agent:12s} {status:12s} {task[:60]}")
+            log(f"  {marker} {priority:8s} {owner:12s} {status:12s} {phase:8s} {task[:40]}")
 
         # Print JSON for machine consumption
         print(f"\n--- BOARD_JSON ---")
