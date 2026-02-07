@@ -263,6 +263,11 @@ impl CommandDispatcher {
             return Err(PermissionDenied);
         }
 
+        // Log admin commands if the game rule is enabled
+        if server.level_info.load().game_rules.log_admin_commands {
+            log::info!("{src} issued server command: /{cmd}");
+        }
+
         let tree = self.get_tree(key)?;
 
         // try paths until fitting path is found
