@@ -1,0 +1,198 @@
+[
+  {
+    "id": 0,
+    "name": "explode"
+  },
+  {
+    "id": 1,
+    "name": "largeexplode"
+  },
+  {
+    "id": 2,
+    "name": "hugeexplosion"
+  },
+  {
+    "id": 3,
+    "name": "fireworksSpark"
+  },
+  {
+    "id": 4,
+    "name": "bubble"
+  },
+  {
+    "id": 5,
+    "name": "splash"
+  },
+  {
+    "id": 6,
+    "name": "wake"
+  },
+  {
+    "id": 7,
+    "name": "suspended"
+  },
+  {
+    "id": 8,
+    "name": "depthsuspend"
+  },
+  {
+    "id": 9,
+    "name": "crit"
+  },
+  {
+    "id": 10,
+    "name": "magicCrit"
+  },
+  {
+    "id": 11,
+    "name": "smoke"
+  },
+  {
+    "id": 12,
+    "name": "largesmoke"
+  },
+  {
+    "id": 13,
+    "name": "spell"
+  },
+  {
+    "id": 14,
+    "name": "instantSpell"
+  },
+  {
+    "id": 15,
+    "name": "mobSpell"
+  },
+  {
+    "id": 16,
+    "name": "mobSpellAmbient"
+  },
+  {
+    "id": 17,
+    "name": "witchMagic"
+  },
+  {
+    "id": 18,
+    "name": "dripWater"
+  },
+  {
+    "id": 19,
+    "name": "dripLava"
+  },
+  {
+    "id": 20,
+    "name": "angryVillager"
+  },
+  {
+    "id": 21,
+    "name": "happyVillager"
+  },
+  {
+    "id": 22,
+    "name": "townaura"
+  },
+  {
+    "id": 23,
+    "name": "note"
+  },
+  {
+    "id": 24,
+    "name": "portal"
+  },
+  {
+    "id": 25,
+    "name": "enchantmenttable"
+  },
+  {
+    "id": 26,
+    "name": "flame"
+  },
+  {
+    "id": 27,
+    "name": "lava"
+  },
+  {
+    "id": 28,
+    "name": "footstep"
+  },
+  {
+    "id": 29,
+    "name": "cloud"
+  },
+  {
+    "id": 30,
+    "name": "reddust"
+  },
+  {
+    "id": 31,
+    "name": "snowballpoof"
+  },
+  {
+    "id": 32,
+    "name": "snowshovel"
+  },
+  {
+    "id": 33,
+    "name": "slime"
+  },
+  {
+    "id": 34,
+    "name": "heart"
+  },
+  {
+    "id": 35,
+    "name": "barrier"
+  },
+  {
+    "id": 36,
+    "name": "iconcrack"
+  },
+  {
+    "id": 37,
+    "name": "blockcrack"
+  },
+  {
+    "id": 38,
+    "name": "blockdust"
+  },
+  {
+    "id": 39,
+    "name": "droplet"
+  },
+  {
+    "id": 40,
+    "name": "take"
+  },
+  {
+    "id": 41,
+    "name": "mobappearance"
+  },
+  {
+    "id": 42,
+    "name": "dragonbreath"
+  },
+  {
+    "id": 43,
+    "name": "endRod"
+  },
+  {
+    "id": 44,
+    "name": "damageIndicator"
+  },
+  {
+    "id": 45,
+    "name": "sweepAttack"
+  },
+  {
+    "id": 46,
+    "name": "fallingdust"
+  },
+  {
+    "id": 47,
+    "name": "totem"
+  },
+  {
+    "id": 48,
+    "name": "spit"
+  }
+]

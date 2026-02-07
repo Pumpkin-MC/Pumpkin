@@ -1,0 +1,1716 @@
+# .claude/registry/entities_1_14_4.toml
+# Entity registry for MC 1.14.4
+# Source: PrismarineJS minecraft-data (1.14 base)
+# Date: 2026-02-07
+
+[meta]
+mc_version = "1.14.4"
+source = "PrismarineJS minecraft-data (1.14 base)"
+total_entities = 102
+delta_vs_1_21_4 = "+49 entities in 1.21.4"
+
+# ============================================================================
+# Entities (102 entries)
+# ============================================================================
+
+[[entities]]
+id = 0
+name = "area_effect_cloud"
+display_name = "Area Effect Cloud"
+width = 6.0
+height = 0.5
+type = "mob"
+category = "Immobile"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 1
+name = "armor_stand"
+display_name = "Armor Stand"
+width = 0.5
+height = 1.975
+type = "mob"
+category = "Immobile"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 2
+name = "arrow"
+display_name = "Arrow"
+width = 0.5
+height = 0.5
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 3
+name = "bat"
+display_name = "Bat"
+width = 0.5
+height = 0.9
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 4
+name = "blaze"
+display_name = "Blaze"
+width = 0.6
+height = 1.8
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 5
+name = "boat"
+display_name = "Boat"
+width = 1.375
+height = 0.5625
+type = "mob"
+category = "Vehicles"
+in_1_21_4 = false
+renamed_in_1_21_4 = "split into acacia_boat, birch_boat, etc."
+
+[[entities]]
+id = 6
+name = "cat"
+display_name = "Cat"
+width = 0.6
+height = 0.7
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 7
+name = "cave_spider"
+display_name = "Cave Spider"
+width = 0.7
+height = 0.5
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 8
+name = "chicken"
+display_name = "Chicken"
+width = 0.4
+height = 0.7
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 9
+name = "cod"
+display_name = "Cod"
+width = 0.5
+height = 0.3
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 10
+name = "cow"
+display_name = "Cow"
+width = 0.9
+height = 1.4
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 11
+name = "creeper"
+display_name = "Creeper"
+width = 0.6
+height = 1.7
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 12
+name = "donkey"
+display_name = "Donkey"
+width = 1.39648
+height = 1.5
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 13
+name = "dolphin"
+display_name = "Dolphin"
+width = 0.9
+height = 0.6
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 14
+name = "dragon_fireball"
+display_name = "Dragon Fireball"
+width = 1.0
+height = 1.0
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 15
+name = "drowned"
+display_name = "Drowned"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 16
+name = "elder_guardian"
+display_name = "Elder Guardian"
+width = 1.9975
+height = 1.9975
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 17
+name = "end_crystal"
+display_name = "End Crystal"
+width = 2.0
+height = 2.0
+type = "mob"
+category = ""
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 18
+name = "ender_dragon"
+display_name = "Ender Dragon"
+width = 16.0
+height = 8.0
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 19
+name = "enderman"
+display_name = "Enderman"
+width = 0.6
+height = 2.9
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 20
+name = "endermite"
+display_name = "Endermite"
+width = 0.4
+height = 0.3
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 21
+name = "evoker_fangs"
+display_name = "Evoker Fangs"
+width = 0.5
+height = 0.8
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 22
+name = "evoker"
+display_name = "Evoker"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 23
+name = "experience_orb"
+display_name = "Experience Orb"
+width = 0.5
+height = 0.5
+type = "mob"
+category = ""
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 24
+name = "eye_of_ender"
+display_name = "Eye of Ender"
+width = 0.25
+height = 0.25
+type = "mob"
+category = ""
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 25
+name = "falling_block"
+display_name = "Falling Block"
+width = 0.98
+height = 0.98
+type = "mob"
+category = "Blocks"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 26
+name = "firework_rocket"
+display_name = "Firework Rocket"
+width = 0.25
+height = 0.25
+type = "mob"
+category = ""
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 27
+name = "fox"
+display_name = "Fox"
+width = 0.6
+height = 0.7
+type = "mob"
+category = ""
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 28
+name = "ghast"
+display_name = "Ghast"
+width = 4.0
+height = 4.0
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 29
+name = "giant"
+display_name = "Giant"
+width = 3.6
+height = 12.0
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 30
+name = "guardian"
+display_name = "Guardian"
+width = 0.85
+height = 0.85
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 31
+name = "horse"
+display_name = "Horse"
+width = 1.39648
+height = 1.6
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 32
+name = "husk"
+display_name = "Husk"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 33
+name = "illusioner"
+display_name = "Illusioner"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 34
+name = "item"
+display_name = "Item"
+width = 0.25
+height = 0.25
+type = "mob"
+category = "Drops"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 35
+name = "item_frame"
+display_name = "Item Frame"
+width = 0.5
+height = 0.5
+type = "mob"
+category = "Immobile"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 36
+name = "fireball"
+display_name = "Fireball"
+width = 1.0
+height = 1.0
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 37
+name = "leash_knot"
+display_name = "Leash Knot"
+width = 0.5
+height = 0.5
+type = "mob"
+category = "Immobile"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 38
+name = "llama"
+display_name = "Llama"
+width = 0.9
+height = 1.87
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 39
+name = "llama_spit"
+display_name = "Llama Spit"
+width = 0.25
+height = 0.25
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 40
+name = "magma_cube"
+display_name = "Magma Cube"
+width = 2.04
+height = 2.04
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 41
+name = "minecart"
+display_name = "Minecart"
+width = 0.98
+height = 0.7
+type = "mob"
+category = "Vehicles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 42
+name = "chest_minecart"
+display_name = "Minecart with Chest"
+width = 0.98
+height = 0.7
+type = "mob"
+category = "Vehicles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 43
+name = "command_block_minecart"
+display_name = "Minecart with Command Block"
+width = 0.98
+height = 0.7
+type = "mob"
+category = "Vehicles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 44
+name = "furnace_minecart"
+display_name = "Minecart with Furnace"
+width = 0.98
+height = 0.7
+type = "mob"
+category = "Vehicles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 45
+name = "hopper_minecart"
+display_name = "Minecart with Hopper"
+width = 0.98
+height = 0.7
+type = "mob"
+category = "Vehicles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 46
+name = "spawner_minecart"
+display_name = "Minecart with Spawner"
+width = 0.98
+height = 0.7
+type = "mob"
+category = "Vehicles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 47
+name = "tnt_minecart"
+display_name = "Minecart with TNT"
+width = 0.98
+height = 0.7
+type = "mob"
+category = "Vehicles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 48
+name = "mule"
+display_name = "Mule"
+width = 1.39648
+height = 1.6
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 49
+name = "mooshroom"
+display_name = "Mooshroom"
+width = 0.9
+height = 1.4
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 50
+name = "ocelot"
+display_name = "Ocelot"
+width = 0.6
+height = 0.7
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 51
+name = "painting"
+display_name = "Painting"
+width = 0.5
+height = 0.5
+type = "mob"
+category = "Immobile"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 52
+name = "panda"
+display_name = "Panda"
+width = 1.3
+height = 1.25
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 53
+name = "parrot"
+display_name = "Parrot"
+width = 0.5
+height = 0.9
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 54
+name = "pig"
+display_name = "Pig"
+width = 0.9
+height = 0.9
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 55
+name = "pufferfish"
+display_name = "Pufferfish"
+width = 0.7
+height = 0.7
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 56
+name = "zombie_pigman"
+display_name = "Zombie Pigman"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = false
+renamed_in_1_21_4 = "zombified_piglin"
+
+[[entities]]
+id = 57
+name = "polar_bear"
+display_name = "Polar Bear"
+width = 1.4
+height = 1.4
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 58
+name = "tnt"
+display_name = "Primed TNT"
+width = 0.98
+height = 0.98
+type = "mob"
+category = "Blocks"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 59
+name = "rabbit"
+display_name = "Rabbit"
+width = 0.4
+height = 0.5
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 60
+name = "salmon"
+display_name = "Salmon"
+width = 0.7
+height = 0.4
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 61
+name = "sheep"
+display_name = "Sheep"
+width = 0.9
+height = 1.3
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 62
+name = "shulker"
+display_name = "Shulker"
+width = 1.0
+height = 1.0
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 63
+name = "shulker_bullet"
+display_name = "Shulker Bullet"
+width = 0.3125
+height = 0.3125
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 64
+name = "silverfish"
+display_name = "Silverfish"
+width = 0.4
+height = 0.3
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 65
+name = "skeleton"
+display_name = "Skeleton"
+width = 0.6
+height = 1.99
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 66
+name = "skeleton_horse"
+display_name = "Skeleton Horse"
+width = 1.39648
+height = 1.6
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 67
+name = "slime"
+display_name = "Slime"
+width = 2.04
+height = 2.04
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 68
+name = "small_fireball"
+display_name = "Small Fireball"
+width = 0.3125
+height = 0.3125
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 69
+name = "snow_golem"
+display_name = "Snow Golem"
+width = 0.7
+height = 1.9
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 70
+name = "snowball"
+display_name = "Snowball"
+width = 0.25
+height = 0.25
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 71
+name = "spectral_arrow"
+display_name = "Spectral Arrow"
+width = 0.5
+height = 0.5
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 72
+name = "spider"
+display_name = "Spider"
+width = 1.4
+height = 0.9
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 73
+name = "squid"
+display_name = "Squid"
+width = 0.8
+height = 0.8
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 74
+name = "stray"
+display_name = "Stray"
+width = 0.6
+height = 1.99
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 75
+name = "trader_llama"
+display_name = "Trader Llama"
+width = 0.9
+height = 1.87
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 76
+name = "tropical_fish"
+display_name = "Tropical Fish"
+width = 0.5
+height = 0.4
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 77
+name = "turtle"
+display_name = "Turtle"
+width = 1.2
+height = 0.4
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 78
+name = "egg"
+display_name = "Thrown Egg"
+width = 0.25
+height = 0.25
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 79
+name = "ender_pearl"
+display_name = "Thrown Ender Pearl"
+width = 0.25
+height = 0.25
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 80
+name = "experience_bottle"
+display_name = "Thrown Bottle o' Enchanting"
+width = 0.25
+height = 0.25
+type = "mob"
+category = ""
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 81
+name = "potion"
+display_name = "Potion"
+width = 0.25
+height = 0.25
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 82
+name = "trident"
+display_name = "Trident"
+width = 0.5
+height = 0.5
+type = "mob"
+category = ""
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 83
+name = "vex"
+display_name = "Vex"
+width = 0.4
+height = 0.8
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 84
+name = "villager"
+display_name = "Villager"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 85
+name = "iron_golem"
+display_name = "Iron Golem"
+width = 1.4
+height = 2.7
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 86
+name = "vindicator"
+display_name = "Vindicator"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 87
+name = "pillager"
+display_name = "Pillager"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 88
+name = "wandering_trader"
+display_name = "Wandering Trader"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 89
+name = "witch"
+display_name = "Witch"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 90
+name = "wither"
+display_name = "Wither"
+width = 0.9
+height = 3.5
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 91
+name = "wither_skeleton"
+display_name = "Wither Skeleton"
+width = 0.7
+height = 2.4
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 92
+name = "wither_skull"
+display_name = "Wither Skull"
+width = 0.3125
+height = 0.3125
+type = "mob"
+category = "Projectiles"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 93
+name = "wolf"
+display_name = "Wolf"
+width = 0.6
+height = 0.85
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 94
+name = "zombie"
+display_name = "Zombie"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 95
+name = "zombie_horse"
+display_name = "Zombie Horse"
+width = 1.39648
+height = 1.6
+type = "mob"
+category = "Passive mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 96
+name = "zombie_villager"
+display_name = "Zombie Villager"
+width = 0.6
+height = 1.95
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 97
+name = "phantom"
+display_name = "Phantom"
+width = 0.9
+height = 0.5
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 98
+name = "ravager"
+display_name = "Ravager"
+width = 1.95
+height = 2.2
+type = "mob"
+category = "Hostile mobs"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 99
+name = "lightning_bolt"
+display_name = "Lightning Bolt"
+width = 0.0
+height = 0.0
+type = "mob"
+category = ""
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 100
+name = "player"
+display_name = "Player"
+width = 0.6
+height = 1.8
+type = "mob"
+category = ""
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[entities]]
+id = 101
+name = "fishing_bobber"
+display_name = "Fishing Bobber"
+width = 0.25
+height = 0.25
+type = "mob"
+category = ""
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+# ============================================================================
+# Effects (33 entries)
+# Note: PrismarineJS source has known data issues for ids 30-32.
+#   - id 31 listed as duplicate DolphinsGrace (corrected to BadOmen)
+#   - id 32 listed as both BadOmen and HeroOfTheVillage (corrected)
+#   Actual MC 1.14.4 effect IDs: DolphinsGrace=30, BadOmen=31, HeroOfTheVillage=32
+# ============================================================================
+
+[[effects]]
+id = 1
+name = "Speed"
+display_name = "Speed"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 2
+name = "Slowness"
+display_name = "Slowness"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 3
+name = "Haste"
+display_name = "Haste"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 4
+name = "MiningFatigue"
+display_name = "Mining Fatigue"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 5
+name = "Strength"
+display_name = "Strength"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 6
+name = "InstantHealth"
+display_name = "Instant Health"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 7
+name = "InstantDamage"
+display_name = "Instant Damage"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 8
+name = "JumpBoost"
+display_name = "Jump Boost"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 9
+name = "Nausea"
+display_name = "Nausea"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 10
+name = "Regeneration"
+display_name = "Regeneration"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 11
+name = "Resistance"
+display_name = "Resistance"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 12
+name = "FireResistance"
+display_name = "Fire Resistance"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 13
+name = "WaterBreathing"
+display_name = "Water Breathing"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 14
+name = "Invisibility"
+display_name = "Invisibility"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 15
+name = "Blindness"
+display_name = "Blindness"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 16
+name = "NightVision"
+display_name = "Night Vision"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 17
+name = "Hunger"
+display_name = "Hunger"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 18
+name = "Weakness"
+display_name = "Weakness"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 19
+name = "Poison"
+display_name = "Poison"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 20
+name = "Wither"
+display_name = "Wither"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 21
+name = "HealthBoost"
+display_name = "Health Boost"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 22
+name = "Absorption"
+display_name = "Absorption"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 23
+name = "Saturation"
+display_name = "Saturation"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 24
+name = "Glowing"
+display_name = "Glowing"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 25
+name = "Levitation"
+display_name = "Levitation"
+type = "bad"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 26
+name = "Luck"
+display_name = "Luck"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 27
+name = "BadLuck"
+display_name = "Bad Luck"
+type = "bad"
+in_1_21_4 = false
+renamed_in_1_21_4 = "Unluck"
+
+[[effects]]
+id = 28
+name = "SlowFalling"
+display_name = "Slow Falling"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 29
+name = "ConduitPower"
+display_name = "Conduit Power"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 30
+name = "DolphinsGrace"
+display_name = "Dolphin's Grace"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 31
+name = "BadOmen"
+display_name = "Bad Omen"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+[[effects]]
+id = 32
+name = "HeroOfTheVillage"
+display_name = "Hero Of The Village"
+type = "good"
+in_1_21_4 = true
+renamed_in_1_21_4 = ""
+
+# ============================================================================
+# Foods (39 entries)
+# ============================================================================
+
+[[foods]]
+id = 524
+name = "apple"
+display_name = "Apple"
+food_points = 4
+saturation = 2.4
+in_1_21_4 = true
+
+[[foods]]
+id = 547
+name = "mushroom_stew"
+display_name = "Mushroom Stew"
+food_points = 6
+saturation = 7.2
+in_1_21_4 = true
+
+[[foods]]
+id = 562
+name = "bread"
+display_name = "Bread"
+food_points = 5
+saturation = 6.0
+in_1_21_4 = true
+
+[[foods]]
+id = 584
+name = "porkchop"
+display_name = "Raw Porkchop"
+food_points = 3
+saturation = 1.8
+in_1_21_4 = true
+
+[[foods]]
+id = 585
+name = "cooked_porkchop"
+display_name = "Cooked Porkchop"
+food_points = 8
+saturation = 12.8
+in_1_21_4 = true
+
+[[foods]]
+id = 587
+name = "golden_apple"
+display_name = "Golden Apple"
+food_points = 4
+saturation = 9.6
+in_1_21_4 = true
+
+[[foods]]
+id = 588
+name = "enchanted_golden_apple"
+display_name = "Enchanted Golden Apple"
+food_points = 4
+saturation = 9.6
+in_1_21_4 = true
+
+[[foods]]
+id = 625
+name = "cod"
+display_name = "Raw Cod"
+food_points = 2
+saturation = 0.4
+in_1_21_4 = true
+
+[[foods]]
+id = 626
+name = "salmon"
+display_name = "Raw Salmon"
+food_points = 2
+saturation = 0.4
+in_1_21_4 = true
+
+[[foods]]
+id = 627
+name = "tropical_fish"
+display_name = "Tropical Fish"
+food_points = 1
+saturation = 0.2
+in_1_21_4 = true
+
+[[foods]]
+id = 628
+name = "pufferfish"
+display_name = "Pufferfish"
+food_points = 1
+saturation = 0.2
+in_1_21_4 = true
+
+[[foods]]
+id = 629
+name = "cooked_cod"
+display_name = "Cooked Cod"
+food_points = 5
+saturation = 6.0
+in_1_21_4 = true
+
+[[foods]]
+id = 630
+name = "cooked_salmon"
+display_name = "Cooked Salmon"
+food_points = 6
+saturation = 9.6
+in_1_21_4 = true
+
+[[foods]]
+id = 653
+name = "cake"
+display_name = "Cake"
+food_points = 2
+saturation = 0.4
+in_1_21_4 = true
+
+[[foods]]
+id = 670
+name = "cookie"
+display_name = "Cookie"
+food_points = 2
+saturation = 0.4
+in_1_21_4 = true
+
+[[foods]]
+id = 673
+name = "melon_slice"
+display_name = "Melon Slice"
+food_points = 2
+saturation = 1.2
+in_1_21_4 = true
+
+[[foods]]
+id = 674
+name = "dried_kelp"
+display_name = "Dried Kelp"
+food_points = 1
+saturation = 0.6
+in_1_21_4 = true
+
+[[foods]]
+id = 677
+name = "beef"
+display_name = "Raw Beef"
+food_points = 3
+saturation = 1.8
+in_1_21_4 = true
+
+[[foods]]
+id = 678
+name = "cooked_beef"
+display_name = "Steak"
+food_points = 8
+saturation = 12.8
+in_1_21_4 = true
+
+[[foods]]
+id = 679
+name = "chicken"
+display_name = "Raw Chicken"
+food_points = 2
+saturation = 1.2
+in_1_21_4 = true
+
+[[foods]]
+id = 680
+name = "cooked_chicken"
+display_name = "Cooked Chicken"
+food_points = 6
+saturation = 7.2
+in_1_21_4 = true
+
+[[foods]]
+id = 681
+name = "rotten_flesh"
+display_name = "Rotten Flesh"
+food_points = 4
+saturation = 0.8
+in_1_21_4 = true
+
+[[foods]]
+id = 689
+name = "spider_eye"
+display_name = "Spider Eye"
+food_points = 2
+saturation = 3.2
+in_1_21_4 = true
+
+[[foods]]
+id = 762
+name = "carrot"
+display_name = "Carrot"
+food_points = 3
+saturation = 3.6
+in_1_21_4 = true
+
+[[foods]]
+id = 763
+name = "potato"
+display_name = "Potato"
+food_points = 1
+saturation = 0.6
+in_1_21_4 = true
+
+[[foods]]
+id = 764
+name = "baked_potato"
+display_name = "Baked Potato"
+food_points = 5
+saturation = 6.0
+in_1_21_4 = true
+
+[[foods]]
+id = 765
+name = "poisonous_potato"
+display_name = "Poisonous Potato"
+food_points = 2
+saturation = 1.2
+in_1_21_4 = true
+
+[[foods]]
+id = 767
+name = "golden_carrot"
+display_name = "Golden Carrot"
+food_points = 6
+saturation = 14.4
+in_1_21_4 = true
+
+[[foods]]
+id = 776
+name = "pumpkin_pie"
+display_name = "Pumpkin Pie"
+food_points = 8
+saturation = 4.8
+in_1_21_4 = true
+
+[[foods]]
+id = 786
+name = "rabbit"
+display_name = "Raw Rabbit"
+food_points = 3
+saturation = 1.8
+in_1_21_4 = true
+
+[[foods]]
+id = 787
+name = "cooked_rabbit"
+display_name = "Cooked Rabbit"
+food_points = 5
+saturation = 6.0
+in_1_21_4 = true
+
+[[foods]]
+id = 788
+name = "rabbit_stew"
+display_name = "Rabbit Stew"
+food_points = 10
+saturation = 12.0
+in_1_21_4 = true
+
+[[foods]]
+id = 799
+name = "mutton"
+display_name = "Raw Mutton"
+food_points = 2
+saturation = 1.2
+in_1_21_4 = true
+
+[[foods]]
+id = 800
+name = "cooked_mutton"
+display_name = "Cooked Mutton"
+food_points = 6
+saturation = 9.6
+in_1_21_4 = true
+
+[[foods]]
+id = 818
+name = "chorus_fruit"
+display_name = "Chorus Fruit"
+food_points = 4
+saturation = 2.4
+in_1_21_4 = true
+
+[[foods]]
+id = 820
+name = "beetroot"
+display_name = "Beetroot"
+food_points = 1
+saturation = 1.2
+in_1_21_4 = true
+
+[[foods]]
+id = 822
+name = "beetroot_soup"
+display_name = "Beetroot Soup"
+food_points = 6
+saturation = 7.2
+in_1_21_4 = true
+
+[[foods]]
+id = 857
+name = "suspicious_stew"
+display_name = "Suspicious Stew"
+food_points = 6
+saturation = 7.2
+in_1_21_4 = true
+
+[[foods]]
+id = 875
+name = "sweet_berries"
+display_name = "Sweet Berries"
+food_points = 2
+saturation = 0.4
+in_1_21_4 = true
