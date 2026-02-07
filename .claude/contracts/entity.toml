@@ -3,7 +3,7 @@ name = "entity"
 responsibility = "All entities: players, mobs, items on ground. Physics, collision, pathfinding, AI, combat, spawning/despawning, effects, experience"
 
 [boundaries]
-write_paths = ["pumpkin/src/entity/"]
+write_paths = ["pumpkin/src/entity/", "pumpkin/src/world/natural_spawner.rs", "pumpkin/src/world/mod.rs"]
 read_paths = [
     "pumpkin/src/entity/",
     "pumpkin-util/",
@@ -32,3 +32,5 @@ must_pass = "cargo test -p pumpkin --lib entity"
 # Entity AI uses a goal-selector pattern (see pumpkin/src/entity/ai/)
 # Pathfinding is in pumpkin/src/entity/ai/path/
 # Combat mechanics are in pumpkin/src/entity/combat.rs
+# ARCH-023: Event-firing write access to world/natural_spawner.rs and world/mod.rs
+# ONLY for wiring EntitySpawnEvent fire() calls. Do NOT modify terrain/chunk logic.
