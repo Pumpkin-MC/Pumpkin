@@ -145,9 +145,7 @@ impl PathfindingContext {
             return PathType::Fence;
         }
 
-        if block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES)
-            && !state.collision_shapes.is_empty()
-        {
+        if block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES) && !state.collision_shapes.is_empty() {
             return PathType::Fence;
         }
 
@@ -167,7 +165,9 @@ impl PathfindingContext {
         let raw_type = self.get_path_type_from_state(pos).await;
 
         if raw_type == PathType::Open {
-            let below_type = self.get_path_type_from_state(Vector3::new(pos.x, pos.y - 1, pos.z)).await;
+            let below_type = self
+                .get_path_type_from_state(Vector3::new(pos.x, pos.y - 1, pos.z))
+                .await;
             return match below_type {
                 PathType::Open | PathType::Water | PathType::Lava | PathType::Walkable => {
                     PathType::Open
@@ -179,7 +179,8 @@ impl PathfindingContext {
                 PathType::DamageCautious => PathType::DamageCautious,
                 PathType::Trapdoor => PathType::DangerTrapdoor,
                 _ => {
-                    self.get_node_type_from_neighbors(pos, PathType::Walkable).await
+                    self.get_node_type_from_neighbors(pos, PathType::Walkable)
+                        .await
                 }
             };
         }
@@ -201,11 +202,7 @@ impl PathfindingContext {
                     }
 
                     let neighbor_type = self
-                        .get_path_type_from_state(Vector3::new(
-                            pos.x + dx,
-                            pos.y + dy,
-                            pos.z + dz,
-                        ))
+                        .get_path_type_from_state(Vector3::new(pos.x + dx, pos.y + dy, pos.z + dz))
                         .await;
 
                     if neighbor_type == PathType::DamageOther {

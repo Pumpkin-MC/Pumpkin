@@ -223,8 +223,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             let entity = &mob_entity.living_entity.entity;
             let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
             let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            let head_yaw =
-                (entity.head_yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
+            let head_yaw = (entity.head_yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
             let last_yaw = mob_entity.last_sent_yaw.load(Relaxed);
             let last_pitch = mob_entity.last_sent_pitch.load(Relaxed);

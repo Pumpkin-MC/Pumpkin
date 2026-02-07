@@ -101,10 +101,8 @@ impl Navigator {
 
         let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
         // TODO: Assign based on mob type, or load from mob/entity once implemented
-        let mob_data = MobData::new_zombie(
-            start_pos_f,
-            entity.entity.on_ground.load(Ordering::Relaxed),
-        );
+        let mob_data =
+            MobData::new_zombie(start_pos_f, entity.entity.on_ground.load(Ordering::Relaxed));
 
         self.evaluator.prepare(context, mob_data);
 
@@ -300,8 +298,7 @@ impl Navigator {
                     return;
                 }
 
-                let desired_yaw =
-                    wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
+                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
                 let current_yaw = entity.entity.yaw.load();
                 let yaw_diff = wrap_degrees(desired_yaw - current_yaw);
                 let target_yaw =

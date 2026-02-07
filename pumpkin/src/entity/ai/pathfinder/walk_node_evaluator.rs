@@ -72,18 +72,11 @@ impl WalkNodeEvaluator {
         if adj_x.pos.0.y > current.pos.0.y || adj_z.pos.0.y > current.pos.0.y {
             return false;
         }
-        if adj_z.path_type == PathType::WalkableDoor
-            || adj_x.path_type == PathType::WalkableDoor
-        {
+        if adj_z.path_type == PathType::WalkableDoor || adj_x.path_type == PathType::WalkableDoor {
             return false;
         }
-        let mob_width = self
-            .base
-            .mob_data
-            .as_ref()
-            .map_or(0.6, |d| d.width);
-        let both_fence =
-            adj_x.path_type == PathType::Fence && adj_z.path_type == PathType::Fence;
+        let mob_width = self.base.mob_data.as_ref().map_or(0.6, |d| d.width);
+        let both_fence = adj_x.path_type == PathType::Fence && adj_z.path_type == PathType::Fence;
         let fence_exception = both_fence && mob_width < 0.5;
 
         (adj_x.pos.0.y < current.pos.0.y || adj_x.cost_malus >= 0.0 || fence_exception)
@@ -138,9 +131,7 @@ impl WalkNodeEvaluator {
                 if jump_node.is_some() {
                     node = jump_node;
                 }
-            } else if !self.is_amphibious()
-                && path_type == PathType::Water
-                && !self.base.can_float
+            } else if !self.is_amphibious() && path_type == PathType::Water && !self.base.can_float
             {
                 node = self.get_non_water_node_below(pos, node).await;
             } else if path_type == PathType::Open {
@@ -428,9 +419,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
         let headroom_type = self
             .get_cached_path_type(current.pos.0.add_raw(0, 1, 0))
             .await;
-        let current_type = self
-            .get_cached_path_type(current.pos.0)
-            .await;
+        let current_type = self.get_cached_path_type(current.pos.0).await;
 
         let headroom_penalty = self.get_mob_penalty(headroom_type);
         let max_y_step = if headroom_penalty >= 0.0 && current_type != PathType::StickyHoney {
@@ -531,8 +520,10 @@ impl NodeEvaluator for WalkNodeEvaluator {
                     }
 
                     if cell_type == PathType::Rail {
-                        let mob_pos = Vector3::new(mob_block_pos.0, mob_block_pos.1, mob_block_pos.2);
-                        let mob_below = Vector3::new(mob_block_pos.0, mob_block_pos.1 - 1, mob_block_pos.2);
+                        let mob_pos =
+                            Vector3::new(mob_block_pos.0, mob_block_pos.1, mob_block_pos.2);
+                        let mob_below =
+                            Vector3::new(mob_block_pos.0, mob_block_pos.1 - 1, mob_block_pos.2);
                         let mob_type = context.get_land_node_type(mob_pos).await;
                         let mob_below_type = context.get_land_node_type(mob_below).await;
                         if mob_type != PathType::Rail && mob_below_type != PathType::Rail {
