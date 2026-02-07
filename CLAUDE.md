@@ -200,3 +200,95 @@ This repository uses an agent-based development coordination system:
 - **`.claude/rules/session-protocol.md`** — Mandatory read-before-write protocol for agents
 
 **Agent roster:** Architect, Core, Protocol, WorldGen, Entity, Items, Redstone, Storage, Plugin — each owns specific crate paths defined in their contract TOML.
+
+---
+
+## Blackboard Protocol (Upstash Redis)
+
+This project uses an **Upstash Redis blackboard** for multi-agent orchestration.
+Every Claude Code session MUST hydrate at start and persist at end.
+
+### Quick Start
+
+```python
+from blackboard import Blackboard
+
+bb = Blackboard("pumpkin", agent_id="your-agent-name")
+state = await bb.hydrate()        # SESSION START — always first
+# ...work...
+await bb.ice_cake(decision)       # MID-SESSION — lock in FLOW decisions
+await bb.persist(state)           # SESSION END — always last
+await bb.close()
+```
+
+### Required Environment Variables
+
+All credentials come from environment variables. No hardcoded fallbacks.
+
+| Variable | Purpose |
+|---|---|
+| `UPSTASH_REDIS_REST_URL` | Primary Redis REST endpoint |
+| `UPSTASH_REDIS_REST_TOKEN` | Primary Redis auth token |
+| `UPSTASH_REDIS_REST_URL2` | Hot cache Redis REST endpoint |
+| `UPSTASH_REDIS_REST_TOKEN2` | Hot cache Redis auth token |
+
+### Session Lifecycle
+
+1. **Hydrate** — `await bb.hydrate()` reads `ada:bb:pumpkin:state`, carries forward previous sessions, checks inbox
+2. **Work** — `await bb.update_task(...)`, `await bb.log_files(...)`
+3. **Ice Cake** — `await bb.ice_cake({...})` writes FLOW decisions immediately to Redis sorted set
+4. **Persist** — `await bb.persist(state)` writes final state, session snapshot, log entry
+
+### Agent-to-Agent Communication
+
+```python
+# Post handover to another agent
+hid = await bb.post_handover(to_agent="entity", task="Fire EntitySpawnEvent", ...)
+
+# Receive handover (called at agent start)
+handover = await bb.receive_handover()
+if handover:
+    await bb.post_result(handover, {"status": "done", ...})
+```
+
+### Collapse Gate
+
+```python
+gate, sd = Blackboard.collapse_gate([0.9, 0.85, 0.88])
+# FLOW (sd < 0.15) → proceed, ice-cake immediately
+# HOLD (0.15 < sd < 0.35) → needs discussion
+# BLOCK (sd > 0.35) → stop, escalate to human
+```
+
+### Redis Key Schema
+
+| Key Pattern | Type | Purpose |
+|---|---|---|
+| `ada:bb:pumpkin:state` | String (JSON) | Current blackboard state |
+| `ada:bb:pumpkin:decisions` | Sorted Set | Ice-caked decisions (score=timestamp) |
+| `ada:bb:pumpkin:agents` | Hash | Agent registry (name → status) |
+| `ada:bb:pumpkin:log` | List | Session log (last 100) |
+| `ada:a2a:inbox:{agent_id}` | List | Agent inbox for handovers |
+| `ada:session:{session_id}` | String (JSON) | Session snapshot |
+
+### Blackboard Skill
+
+Use `/blackboard` for quick operations. See `.claude/skills/blackboard.md` for full reference.
+
+```
+/blackboard hydrate       # Start session
+/blackboard persist       # End session
+/blackboard status        # Show current state
+/blackboard decisions     # Show ice-caked decisions
+/blackboard inbox         # Check for handovers
+/blackboard handover <agent>  # Send handover
+```
+
+### Blackboard Rules
+
+1. **HYDRATE FIRST** — never read/write Redis without hydrating
+2. **PERSIST LAST** — always persist before session ends
+3. **ICE CAKE FLOW DECISIONS** — don't wait for persist, write immediately
+4. **CHECK INBOX** — always check for pending handovers at start
+5. **NEVER HARDCODE CREDENTIALS** — all from env vars
+6. **ARCH-011 APPLIES EVERYWHERE** — never rename existing Pumpkin code
