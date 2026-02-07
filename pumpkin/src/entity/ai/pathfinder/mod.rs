@@ -1,10 +1,8 @@
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::living::LivingEntity;
-use crate::world::World;
 
 use crate::entity::ai::pathfinder::binary_heap::BinaryHeap;
 use crate::entity::ai::pathfinder::node::Coordinate;
@@ -74,9 +72,7 @@ impl Navigator {
         let start_block_vec = start_pos_f.to_i32();
         let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
 
-        let world: Arc<World> = entity.entity.world.clone();
-
-        let context = PathfindingContext::new(mob_position, world);
+        let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
         // TODO: Assign based on mob type, or load from mob/entity once implemented
         let mob_data = MobData::new_zombie(start_pos_f);
 
@@ -208,6 +204,7 @@ impl Navigator {
                     entity
                         .entity
                         .world
+                        .load()
                         .broadcast_packet_all(&CEntityPositionSync::new(
                             entity.entity.entity_id.into(),
                             target_pos,
@@ -256,6 +253,7 @@ impl Navigator {
                     entity
                         .entity
                         .world
+                        .load()
                         .broadcast_packet_all(&CEntityPositionSync::new(
                             entity.entity.entity_id.into(),
                             new_pos,

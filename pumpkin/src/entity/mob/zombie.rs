@@ -43,7 +43,7 @@ impl ZombieEntity {
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
-            goal_selector.add_goal(2, ZombieAttackGoal::new(0.1, false));
+            goal_selector.add_goal(2, ZombieAttackGoal::new(1.0, false));
 
             target_selector.add_goal(
                 2,

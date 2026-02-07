@@ -82,7 +82,7 @@ impl Node {
 
 impl Coordinate for Node {
     fn distance(&self, other: &dyn Coordinate) -> f32 {
-        (self.pos.0.squared_distance_to_vec(other.as_vector3()) as f32).sqrt()
+        (self.pos.0.squared_distance_to_vec(&other.as_vector3()) as f32).sqrt()
     }
 
     fn distance_xz(&self, other: &dyn Coordinate) -> f32 {
@@ -90,7 +90,7 @@ impl Coordinate for Node {
     }
 
     fn distance_sqr(&self, other: &dyn Coordinate) -> f32 {
-        self.pos.0.squared_distance_to_vec(other.as_vector3()) as f32
+        self.pos.0.squared_distance_to_vec(&other.as_vector3()) as f32
     }
 
     fn distance_manhattan(&self, other: &dyn Coordinate) -> f32 {
@@ -142,7 +142,7 @@ impl Target {
 
 impl Coordinate for Target {
     fn distance(&self, other: &dyn Coordinate) -> f32 {
-        (self.node.pos.0.squared_distance_to_vec(other.as_vector3()) as f32).sqrt()
+        (self.node.pos.0.squared_distance_to_vec(&other.as_vector3()) as f32).sqrt()
     }
 
     fn distance_xz(&self, other: &dyn Coordinate) -> f32 {
@@ -155,7 +155,7 @@ impl Coordinate for Target {
     }
 
     fn distance_sqr(&self, other: &dyn Coordinate) -> f32 {
-        self.node.pos.0.squared_distance_to_vec(other.as_vector3()) as f32
+        self.node.pos.0.squared_distance_to_vec(&other.as_vector3()) as f32
     }
 
     fn distance_manhattan(&self, other: &dyn Coordinate) -> f32 {
@@ -181,7 +181,7 @@ impl Coordinate for Target {
 
 impl Coordinate for BlockPos {
     fn distance(&self, other: &dyn Coordinate) -> f32 {
-        (self.0.squared_distance_to_vec(other.as_vector3()) as f32).sqrt()
+        (self.0.squared_distance_to_vec(&other.as_vector3()) as f32).sqrt()
     }
 
     fn distance_xz(&self, other: &dyn Coordinate) -> f32 {
@@ -189,7 +189,7 @@ impl Coordinate for BlockPos {
     }
 
     fn distance_sqr(&self, other: &dyn Coordinate) -> f32 {
-        self.0.squared_distance_to_vec(other.as_vector3()) as f32
+        self.0.squared_distance_to_vec(&other.as_vector3()) as f32
     }
 
     fn distance_manhattan(&self, other: &dyn Coordinate) -> f32 {
@@ -215,7 +215,7 @@ impl Coordinate for BlockPos {
 
 impl Coordinate for Vector3<i32> {
     fn distance(&self, other: &dyn Coordinate) -> f32 {
-        (self.squared_distance_to_vec(other.as_vector3()) as f32).sqrt()
+        (self.squared_distance_to_vec(&other.as_vector3()) as f32).sqrt()
     }
 
     fn distance_xz(&self, other: &dyn Coordinate) -> f32 {
@@ -223,7 +223,7 @@ impl Coordinate for Vector3<i32> {
     }
 
     fn distance_sqr(&self, other: &dyn Coordinate) -> f32 {
-        self.squared_distance_to_vec(other.as_vector3()) as f32
+        self.squared_distance_to_vec(&other.as_vector3()) as f32
     }
 
     fn distance_manhattan(&self, other: &dyn Coordinate) -> f32 {
