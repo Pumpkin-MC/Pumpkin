@@ -847,6 +847,190 @@ mod tests {
         assert_eq!(read_data, large_data);
     }
 
+    // --- Edge case and hardening tests ---
+
+    #[test]
+    fn header_only_file() {
+        // A valid file with just the 8KB header and no chunk data
+        let data = vec![0u8; DATA_OFFSET];
+        let region = RegionFile::from_bytes(&data).unwrap();
+        assert_eq!(region.chunk_count(), 0);
+        for x in 0..32u8 {
+            for z in 0..32u8 {
+                assert!(!region.has_chunk(x, z).unwrap());
+            }
+        }
+    }
+
+    #[test]
+    fn corrupted_location_pointing_past_file() {
+        let mut data = vec![0u8; DATA_OFFSET];
+        // Set chunk (0,0) location to sector offset 100, count 1
+        // but the file only has 2 sectors (header)
+        data[0] = 0;
+        data[1] = 0;
+        data[2] = 100; // offset = 100
+        data[3] = 1; // sector_count = 1
+
+        let region = RegionFile::from_bytes(&data).unwrap();
+        assert!(region.has_chunk(0, 0).unwrap());
+        let result = region.read_chunk(0, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn zero_data_length_in_sector() {
+        let mut data = vec![0u8; DATA_OFFSET + SECTOR_BYTES];
+        // Location: sector 2, count 1
+        data[0] = 0;
+        data[1] = 0;
+        data[2] = 2;
+        data[3] = 1;
+        // Chunk header at sector 2: data_len = 0 (already zeroed)
+
+        let region = RegionFile::from_bytes(&data).unwrap();
+        let result = region.read_chunk(0, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn data_length_exceeds_sector_allocation() {
+        let mut data = vec![0u8; DATA_OFFSET + SECTOR_BYTES];
+        data[0] = 0;
+        data[1] = 0;
+        data[2] = 2;
+        data[3] = 1; // 1 sector = 4096 bytes
+        // Chunk header: data_len = 5000 (exceeds single sector)
+        let len_bytes = 5000u32.to_be_bytes();
+        let base = DATA_OFFSET;
+        data[base..base + 4].copy_from_slice(&len_bytes);
+
+        let region = RegionFile::from_bytes(&data).unwrap();
+        let result = region.read_chunk(0, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn unknown_compression_in_chunk() {
+        let mut data = vec![0u8; DATA_OFFSET + SECTOR_BYTES];
+        data[0] = 0;
+        data[1] = 0;
+        data[2] = 2;
+        data[3] = 1;
+        let base = DATA_OFFSET;
+        data[base + 3] = 2; // length = 2
+        data[base + 4] = 99; // unknown compression method
+        data[base + 5] = 0;
+
+        let region = RegionFile::from_bytes(&data).unwrap();
+        let result = region.read_chunk(0, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn all_1024_chunks() {
+        let mut region = RegionFile::new();
+        for z in 0..32u8 {
+            for x in 0..32u8 {
+                let data = format!("({x},{z})");
+                region
+                    .write_chunk(x, z, data.as_bytes(), CompressionMethod::ZLib, 0)
+                    .unwrap();
+            }
+        }
+        assert_eq!(region.chunk_count(), 1024);
+
+        for z in 0..32u8 {
+            for x in 0..32u8 {
+                let expected = format!("({x},{z})");
+                let read = region.read_chunk(x, z).unwrap().unwrap();
+                assert_eq!(read, expected.as_bytes());
+            }
+        }
+
+        let bytes = region.to_bytes();
+        let reparsed = RegionFile::from_bytes(&bytes).unwrap();
+        assert_eq!(reparsed.chunk_count(), 1024);
+
+        assert_eq!(reparsed.read_chunk(0, 0).unwrap().unwrap(), b"(0,0)");
+        assert_eq!(
+            reparsed.read_chunk(31, 31).unwrap().unwrap(),
+            b"(31,31)"
+        );
+    }
+
+    #[test]
+    fn write_remove_rewrite() {
+        let mut region = RegionFile::new();
+
+        region
+            .write_chunk(0, 0, b"original", CompressionMethod::ZLib, 100)
+            .unwrap();
+        region
+            .write_chunk(1, 0, b"second", CompressionMethod::ZLib, 200)
+            .unwrap();
+        assert_eq!(region.chunk_count(), 2);
+
+        region.remove_chunk(0, 0).unwrap();
+        assert_eq!(region.chunk_count(), 1);
+
+        region
+            .write_chunk(0, 0, b"replaced", CompressionMethod::ZLib, 300)
+            .unwrap();
+        assert_eq!(region.chunk_count(), 2);
+        assert_eq!(region.read_chunk(0, 0).unwrap().unwrap(), b"replaced");
+        assert_eq!(region.read_chunk(1, 0).unwrap().unwrap(), b"second");
+    }
+
+    #[test]
+    fn timestamp_updates_correctly() {
+        let mut region = RegionFile::new();
+
+        region
+            .write_chunk(5, 5, b"data1", CompressionMethod::ZLib, 1000)
+            .unwrap();
+        assert_eq!(region.get_timestamp(5, 5).unwrap(), 1000);
+
+        region
+            .write_chunk(5, 5, b"data2", CompressionMethod::ZLib, 2000)
+            .unwrap();
+        assert_eq!(region.get_timestamp(5, 5).unwrap(), 2000);
+
+        let bytes = region.to_bytes();
+        let reparsed = RegionFile::from_bytes(&bytes).unwrap();
+        assert_eq!(reparsed.get_timestamp(5, 5).unwrap(), 2000);
+    }
+
+    #[test]
+    fn max_sector_offset() {
+        let loc = ChunkLocation {
+            offset: 0xFF_FFFF,
+            sector_count: 255,
+        };
+        let bytes = loc.to_bytes();
+        let decoded = ChunkLocation::from_bytes(bytes);
+        assert_eq!(decoded.offset, 0xFF_FFFF);
+        assert_eq!(decoded.sector_count, 255);
+    }
+
+    #[test]
+    fn write_to_writer() {
+        let mut region = RegionFile::new();
+        region
+            .write_chunk(0, 0, b"test", CompressionMethod::None, 0)
+            .unwrap();
+
+        let mut buf = Vec::new();
+        region.write_to(&mut buf).unwrap();
+        assert_eq!(buf, region.to_bytes());
+    }
+
+    #[test]
+    fn file_one_byte_too_small() {
+        let data = vec![0u8; DATA_OFFSET - 1];
+        assert!(RegionFile::from_bytes(&data).is_err());
+    }
+
     #[test]
     fn nbt_integration() {
         // Test with actual NBT data

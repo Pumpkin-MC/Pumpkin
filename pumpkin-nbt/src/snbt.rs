@@ -952,4 +952,77 @@ mod tests {
             NbtTag::LongArray(vec![-1, i64::MIN])
         );
     }
+
+    // --- Display escape roundtrip tests ---
+
+    #[test]
+    fn display_escape_roundtrip_backslash() {
+        let tag = NbtTag::String("back\\slash".to_string());
+        let snbt = format!("{tag}");
+        assert_eq!(snbt, "\"back\\\\slash\"");
+        let parsed = from_snbt(&snbt).unwrap();
+        assert_eq!(parsed, tag);
+    }
+
+    #[test]
+    fn display_escape_roundtrip_quotes() {
+        let tag = NbtTag::String("say \"hello\"".to_string());
+        let snbt = format!("{tag}");
+        assert_eq!(snbt, "\"say \\\"hello\\\"\"");
+        let parsed = from_snbt(&snbt).unwrap();
+        assert_eq!(parsed, tag);
+    }
+
+    #[test]
+    fn display_escape_roundtrip_newlines() {
+        let tag = NbtTag::String("line1\nline2\ttab\rcarriage".to_string());
+        let snbt = format!("{tag}");
+        assert_eq!(snbt, "\"line1\\nline2\\ttab\\rcarriage\"");
+        let parsed = from_snbt(&snbt).unwrap();
+        assert_eq!(parsed, tag);
+    }
+
+    #[test]
+    fn display_escape_compound_with_special_strings() {
+        let mut c = NbtCompound::new();
+        c.put_string("msg", "hello \"world\"\nnewline".to_string());
+        c.put_string("path", "C:\\Users\\test".to_string());
+        let tag = NbtTag::Compound(c);
+
+        let snbt = format!("{tag}");
+        let parsed = from_snbt(&snbt).unwrap();
+
+        if let (NbtTag::Compound(orig), NbtTag::Compound(pars)) = (&tag, &parsed) {
+            assert_eq!(orig.get_string("msg"), pars.get_string("msg"));
+            assert_eq!(orig.get_string("path"), pars.get_string("path"));
+        } else {
+            panic!("Expected compounds");
+        }
+    }
+
+    #[test]
+    fn display_array_roundtrip() {
+        let tag = NbtTag::ByteArray(vec![1, 2, 255].into_boxed_slice());
+        let snbt = format!("{tag}");
+        // ByteArray Display shows signed: 1b, 2b, -1b (255 as i8 = -1)
+        let parsed = from_snbt(&snbt).unwrap();
+        // Should match: -1i8 as u8 = 255
+        assert_eq!(parsed, tag);
+    }
+
+    #[test]
+    fn display_int_array_roundtrip() {
+        let tag = NbtTag::IntArray(vec![-1, 0, i32::MAX, i32::MIN]);
+        let snbt = format!("{tag}");
+        let parsed = from_snbt(&snbt).unwrap();
+        assert_eq!(parsed, tag);
+    }
+
+    #[test]
+    fn display_long_array_roundtrip() {
+        let tag = NbtTag::LongArray(vec![-1, 0, i64::MAX, i64::MIN]);
+        let snbt = format!("{tag}");
+        let parsed = from_snbt(&snbt).unwrap();
+        assert_eq!(parsed, tag);
+    }
 }

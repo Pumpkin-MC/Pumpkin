@@ -310,7 +310,20 @@ impl Display for NbtTag {
             Self::Long(v) => write!(f, "{v}L"),
             Self::Float(v) => write!(f, "{v}f"),
             Self::Double(v) => write!(f, "{v}d"),
-            Self::String(v) => write!(f, "\"{v}\""), // TODO: Proper escaping needed for robust SNBT
+            Self::String(v) => {
+                f.write_str("\"")?;
+                for ch in v.chars() {
+                    match ch {
+                        '\\' => f.write_str("\\\\")?,
+                        '"' => f.write_str("\\\"")?,
+                        '\n' => f.write_str("\\n")?,
+                        '\t' => f.write_str("\\t")?,
+                        '\r' => f.write_str("\\r")?,
+                        c => write!(f, "{c}")?,
+                    }
+                }
+                f.write_str("\"")
+            }
             Self::Compound(v) => write!(f, "{v}"),
             Self::ByteArray(v) => {
                 f.write_str("[B;")?;
@@ -318,7 +331,8 @@ impl Display for NbtTag {
                     if i > 0 {
                         f.write_str(",")?;
                     }
-                    write!(f, " {byte}b")?;
+                    // Display as signed i8 for valid SNBT (byte range: -128..127)
+                    write!(f, " {}b", *byte as i8)?;
                 }
                 f.write_str("]")
             }
