@@ -11,6 +11,7 @@ use crate::server::Server;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -24,6 +25,7 @@ pub trait ItemBehaviour: Send + Sync {
         &'a self,
         _item: &'a Item,
         _player: &'a Player,
+        _hand: Hand,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {})
     }

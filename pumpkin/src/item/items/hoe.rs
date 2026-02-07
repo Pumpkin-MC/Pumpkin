@@ -35,6 +35,7 @@ impl ItemBehaviour for HoeItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
+            let _ = item;
             // Yes, Minecraft does hardcode these
             if block == &Block::GRASS_BLOCK
                 || block == &Block::DIRT_PATH
@@ -96,7 +97,7 @@ impl ItemBehaviour for HoeItem {
                 }
 
                 if changed && player.gamemode.load() != GameMode::Creative {
-                    item.damage_item_with_context(1, false);
+                    player.damage_held_item(1).await;
                 }
             }
         })

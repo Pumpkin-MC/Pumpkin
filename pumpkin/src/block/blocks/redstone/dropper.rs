@@ -7,6 +7,7 @@ use crate::block::{
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 
+use pumpkin_data::Block;
 use pumpkin_data::FacingExt;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
@@ -206,6 +207,24 @@ impl BlockBehaviour for DropperBlock {
                         triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
                         triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
                     );
+                    let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade() {
+                        let event_block = Block::from_id(args.block.id);
+                        let event = crate::plugin::block::block_dispense::BlockDispenseEvent::new(
+                            event_block,
+                            *args.position,
+                            args.world.uuid,
+                            drop_item,
+                            velocity,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled || event.item_stack.is_empty() {
+                            item.item_count = item.item_count.saturating_add(1);
+                            return;
+                        }
+                        (event.item_stack, event.velocity)
+                    } else {
+                        (drop_item, velocity)
+                    };
                     let item_entity = Arc::new(
                         ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await,
                     );

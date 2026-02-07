@@ -18,37 +18,54 @@ use crate::entity::player::{ChatMode, ChatSession, Player};
 use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
+use crate::plugin::block::block_can_build::BlockCanBuildEvent;
+use crate::plugin::block::block_place::BlockPlaceEvent;
+use crate::plugin::block::sign_change::SignChangeEvent;
+use crate::plugin::player::player_animation::PlayerAnimationEvent;
+use crate::plugin::player::player_armor_stand_manipulate::PlayerArmorStandManipulateEvent;
+use crate::plugin::player::player_bucket_entity::PlayerBucketEntityEvent;
+use crate::plugin::player::player_changed_main_hand::PlayerChangedMainHandEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
-use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
+use crate::plugin::player::player_command_preprocess::PlayerCommandPreprocessEvent;
+use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
+use crate::plugin::player::player_interact_at_entity::PlayerInteractAtEntityEvent;
+use crate::plugin::player::player_interact_entity::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
+use crate::plugin::player::player_item_held::PlayerItemHeldEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
+use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
+use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
     BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
 };
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_macros::send_cancellable;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
-    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot, CSystemChatMessage,
-    CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
+    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetPlayerInventory, CSetSelectedSlot,
+    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
+    PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
     SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
-    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
-    SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
-    SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
-    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
-    SUpdateSign, SUseItem, SUseItemOn, Status,
+    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SCustomPayload,
+    SEditBook, SInteract, SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities,
+    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
+    SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
@@ -56,6 +73,7 @@ use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
@@ -558,15 +576,16 @@ impl JavaClient {
         let server_clone = server.clone();
         send_cancellable! {{
             server;
-            PlayerCommandSendEvent {
+            PlayerCommandPreprocessEvent {
                 player: player.clone(),
-                command: command.command.clone(),
+                command: format!("/{}", command.command),
                 cancelled: false
             };
 
             'after: {
                 let command = event.command;
-                let command_clone = command.clone();
+                let command_stripped = command.strip_prefix('/').unwrap_or(&command).to_string();
+                let command_clone = command_stripped.clone();
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
                 server.spawn_task(async move {
@@ -583,7 +602,7 @@ impl JavaClient {
                     log::info!(
                         "Player ({}): executed command /{}",
                         player.gameprofile.name,
-                        command
+                        command_stripped
                     );
                 }
             }
@@ -760,11 +779,31 @@ impl JavaClient {
             match action {
                 Action::StartSprinting => {
                     if !entity.sprinting.load(Ordering::Relaxed) {
+                        if let Some(server) = player.world().server.upgrade() {
+                            let event = crate::plugin::player::player_toggle_sprint::PlayerToggleSprintEvent::new(
+                                player.clone(),
+                                true,
+                            );
+                            let event = server.plugin_manager.fire(event).await;
+                            if event.cancelled {
+                                return;
+                            }
+                        }
                         entity.set_sprinting(true).await;
                     }
                 }
                 Action::StopSprinting => {
                     if entity.sprinting.load(Ordering::Relaxed) {
+                        if let Some(server) = player.world().server.upgrade() {
+                            let event = crate::plugin::player::player_toggle_sprint::PlayerToggleSprintEvent::new(
+                                player.clone(),
+                                false,
+                            );
+                            let event = server.plugin_manager.fire(event).await;
+                            if event.cancelled {
+                                return;
+                            }
+                        }
                         entity.set_sprinting(false).await;
                     }
                 }
@@ -789,6 +828,16 @@ impl JavaClient {
     pub async fn handle_player_input(&self, player: &Arc<Player>, input: SPlayerInput) {
         let sneak = input.input & SPlayerInput::SNEAK != 0;
         if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
+            if let Some(server) = player.world().server.upgrade() {
+                let event = crate::plugin::player::player_toggle_sneak::PlayerToggleSneakEvent::new(
+                    player.clone(),
+                    sneak,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
+                }
+            }
             player.get_entity().set_sneaking(sneak).await;
         }
     }
@@ -799,6 +848,12 @@ impl JavaClient {
             self.kick(TextComponent::text("Invalid hand")).await;
             return;
         };
+
+        let Some(server) = player.world().server.upgrade() else {
+            return;
+        };
+        let animation_event = PlayerAnimationEvent::new(player.clone(), "ARM_SWING".to_string());
+        server.plugin_manager.fire(animation_event).await;
 
         let inventory = player.inventory();
         let item = inventory.held_item();
@@ -818,25 +873,31 @@ impl JavaClient {
             )
             .await;
 
-        let event = if let Some((hit_pos, _hit_dir)) = hit_result {
+        let item_key = {
+            let item_guard = item.lock().await;
+            format!("minecraft:{}", item_guard.get_item().registry_key)
+        };
+        let event = if let Some((hit_pos, hit_dir)) = hit_result {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickBlock,
                 &item,
+                item_key.clone(),
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
+                Some(hit_dir),
             )
         } else {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickAir,
                 &item,
+                item_key,
                 &Block::AIR,
+                None,
                 None,
             )
         };
-
-        let server = player.world().server.upgrade().unwrap();
 
         send_cancellable! {{
             server;
@@ -1081,13 +1142,14 @@ impl JavaClient {
                 return;
             }
 
-            let (update_settings, update_watched) = {
+            let (update_settings, update_watched, main_hand_changed) = {
                 // 1. Load current snapshot
                 let current_config = player.config.load();
 
                 // 2. Calculate if settings changed before we overwrite
-                let update_settings = current_config.main_hand != main_hand
-                    || current_config.skin_parts != client_information.skin_parts;
+                let main_hand_changed = current_config.main_hand != main_hand;
+                let update_settings =
+                    main_hand_changed || current_config.skin_parts != client_information.skin_parts;
 
                 let old_view_distance = current_config.view_distance;
                 let new_view_distance_raw = client_information.view_distance as u8;
@@ -1125,11 +1187,16 @@ impl JavaClient {
                 // 4. Atomically swap the new config into the player
                 player.config.store(std::sync::Arc::new(new_config));
 
-                (update_settings, update_watched)
+                (update_settings, update_watched, main_hand_changed)
             };
 
             if update_watched {
                 chunker::update_position(player).await;
+            }
+
+            if main_hand_changed && let Some(server) = player.world().server.upgrade() {
+                let event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
+                let _ = server.plugin_manager.fire(event).await;
             }
 
             if update_settings {
@@ -1178,9 +1245,10 @@ impl JavaClient {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_interact(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         interact: SInteract,
         server: &Arc<Server>,
     ) {
@@ -1257,16 +1325,222 @@ impl JavaClient {
             }
             ActionType::Interact | ActionType::InteractAt => {
                 // TODO: split this up
-                let entity = player.world().get_player_by_id(entity_id.0);
+                let world = player.world();
+                let entity = world.get_player_by_id(entity_id.0);
+                let hand = interact.hand.and_then(|h| Hand::try_from(h.0).ok());
+                let hand_name = match hand {
+                    Some(Hand::Left) => "OFF_HAND",
+                    _ => "HAND",
+                }
+                .to_string();
+                let clicked_position = interact
+                    .target_position
+                    .unwrap_or_else(|| Vector3::new(0.0, 0.0, 0.0));
                 if let Some(entity) = entity {
+                    let entity_uuid = entity.living_entity.entity.entity_uuid;
+                    let entity_type = format!(
+                        "minecraft:{}",
+                        entity.living_entity.entity.entity_type.resource_name
+                    );
+                    if matches!(action, ActionType::InteractAt) {
+                        let event = PlayerInteractAtEntityEvent::new(
+                            player.clone(),
+                            entity_uuid,
+                            entity_type.clone(),
+                            hand_name.clone(),
+                            clicked_position,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                    }
+                    let event = PlayerInteractEntityEvent::new(
+                        player.clone(),
+                        entity_uuid,
+                        entity_type,
+                        hand_name.clone(),
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+
                     let held = player.inventory.held_item();
                     let mut stack = held.lock().await;
                     server
                         .item_registry
                         .use_on_entity(&mut stack, player, entity)
                         .await;
+                    return;
+                }
+
+                if let Some(entity) = world.get_entity_by_id(entity_id.0) {
+                    let entity_uuid = entity.get_entity().entity_uuid;
+                    let entity_type = format!(
+                        "minecraft:{}",
+                        entity.get_entity().entity_type.resource_name
+                    );
+                    if matches!(action, ActionType::InteractAt) {
+                        let event = PlayerInteractAtEntityEvent::new(
+                            player.clone(),
+                            entity_uuid,
+                            entity_type.clone(),
+                            hand_name.clone(),
+                            clicked_position,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                    }
+                    let event = PlayerInteractEntityEvent::new(
+                        player.clone(),
+                        entity_uuid,
+                        entity_type,
+                        hand_name.clone(),
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+
+                    let held = player.inventory.held_item();
+                    let item_key = {
+                        let item_guard = held.lock().await;
+                        format!("minecraft:{}", item_guard.get_item().registry_key)
+                    };
+                    if item_key.ends_with("_bucket") || item_key == "minecraft:bucket" {
+                        let event = PlayerBucketEntityEvent::new(
+                            player.clone(),
+                            entity.get_entity().entity_uuid,
+                            format!(
+                                "minecraft:{}",
+                                entity.get_entity().entity_type.resource_name
+                            ),
+                            item_key.clone(),
+                            String::new(),
+                            "HAND".to_string(),
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                    }
+                    if entity.get_entity().entity_type == &EntityType::ARMOR_STAND {
+                        let hand = interact.hand.and_then(|h| Hand::try_from(h.0).ok());
+                        let (slot, item_stack) = match hand {
+                            Some(Hand::Left) => {
+                                ("OFF_HAND", player.inventory.off_hand_item().await)
+                            }
+                            _ => ("HAND", player.inventory.held_item()),
+                        };
+                        let item_key = {
+                            let item_guard = item_stack.lock().await;
+                            format!("minecraft:{}", item_guard.get_item().registry_key)
+                        };
+                        let armor_uuid = entity.get_entity().entity_uuid;
+                        let event = PlayerArmorStandManipulateEvent::new(
+                            player.clone(),
+                            armor_uuid,
+                            item_key,
+                            "minecraft:air".to_string(),
+                            slot.to_string(),
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            player
+                                .current_screen_handler
+                                .lock()
+                                .await
+                                .lock()
+                                .await
+                                .send_content_updates()
+                                .await;
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    pub async fn handle_custom_payload(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        custom_payload: SCustomPayload,
+    ) {
+        let channel = custom_payload.channel.as_str();
+        let is_register = matches!(channel, "minecraft:register" | "REGISTER");
+        let is_unregister = matches!(channel, "minecraft:unregister" | "UNREGISTER");
+
+        if !is_register && !is_unregister {
+            return;
+        }
+
+        let Ok(payload_str) = std::str::from_utf8(&custom_payload.data) else {
+            return;
+        };
+
+        for registered_channel in payload_str.split('\0').filter(|entry| !entry.is_empty()) {
+            if is_register {
+                let event =
+                    PlayerRegisterChannelEvent::new(player.clone(), registered_channel.to_string());
+                let _ = server.plugin_manager.fire(event).await;
+            } else {
+                let event = PlayerUnregisterChannelEvent::new(
+                    player.clone(),
+                    registered_channel.to_string(),
+                );
+                let _ = server.plugin_manager.fire(event).await;
+            }
+        }
+    }
+
+    pub async fn handle_edit_book(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        edit_book: SEditBook,
+    ) {
+        let slot = edit_book.slot.0;
+        if slot < 0 {
+            return;
+        }
+
+        let slot_index = slot as usize;
+        if slot_index >= PlayerInventory::MAIN_SIZE {
+            return;
+        }
+        {
+            let slot_stack = player.inventory.get_stack(slot_index).await;
+            let slot_stack = slot_stack.lock().await;
+            if slot_stack.item.id != Item::WRITABLE_BOOK.id {
+                return;
+            }
+        }
+
+        let is_signing = edit_book.title.is_some();
+        let mut event = PlayerEditBookEvent::new(
+            player.clone(),
+            slot,
+            edit_book.pages,
+            edit_book.title,
+            is_signing,
+        );
+        event = server.plugin_manager.fire(event).await;
+        if event.cancelled {
+            return;
+        }
+
+        let item_key = if event.is_signing {
+            "written_book"
+        } else {
+            "writable_book"
+        };
+        if let Some(item) = Item::from_registry_key(item_key) {
+            let new_stack = ItemStack::new(1, item);
+            player.inventory.set_stack(slot_index, new_stack).await;
         }
     }
 
@@ -1337,8 +1611,23 @@ impl JavaClient {
                     );
                     if !state.is_air() {
                         let speed = block::calc_block_breaking(player, state, block).await;
+                        let item_stack = player.inventory.held_item().lock().await.clone();
+                        let block_damage_event =
+                            crate::plugin::block::block_damage::BlockDamageEvent::new(
+                                player.clone(),
+                                block,
+                                position,
+                                item_stack,
+                                speed >= 1.0,
+                            );
+                        let block_damage_event =
+                            server.plugin_manager.fire(block_damage_event).await;
+                        if block_damage_event.cancelled {
+                            self.update_sequence(player, player_action.sequence.0);
+                            return;
+                        }
                         // Instant break
-                        if speed >= 1.0 {
+                        if block_damage_event.insta_break {
                             let broken_state = world.get_block_state(&position).await;
                             world
                                 .break_block(
@@ -1381,6 +1670,20 @@ impl JavaClient {
                         .load()
                         .set_block_breaking(entity, player_action.position, -1)
                         .await;
+                    if let Some(server) = entity.world.load().server.upgrade() {
+                        let world = entity.world.load_full();
+                        let (block, _state) =
+                            world.get_block_and_state(&player_action.position).await;
+                        let item_stack = player.inventory.held_item().lock().await.clone();
+                        let event =
+                            crate::plugin::block::block_damage_abort::BlockDamageAbortEvent::new(
+                                player.clone(),
+                                block,
+                                player_action.position,
+                                item_stack,
+                            );
+                        let _ = server.plugin_manager.fire(event).await;
+                    }
                     self.update_sequence(player, player_action.sequence.0);
                 }
                 Status::FinishedDigging => {
@@ -1406,6 +1709,23 @@ impl JavaClient {
                     let (block, state) = world.get_block_and_state(&location).await;
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
+
+                    if block_drop && let Some(server) = world.server.upgrade() {
+                        let tool = player.inventory.held_item().lock().await.clone();
+                        let block_key = format!("minecraft:{}", block.name);
+                        let event = crate::plugin::player::player_harvest_block::PlayerHarvestBlockEvent::new(
+                                player.clone(),
+                                location,
+                                block_key,
+                                tool,
+                            );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            world.set_block_breaking(entity, location, -1).await;
+                            self.update_sequence(player, player_action.sequence.0);
+                            return;
+                        }
+                    }
 
                     let new_state = world
                         .break_block(
@@ -1438,7 +1758,47 @@ impl JavaClient {
                     player.living_entity.clear_active_hand().await;
                 }
                 Status::SwapItem => {
-                    player.swap_item().await;
+                    let main_hand = player.inventory.held_item().lock().await.clone();
+                    let off_hand = player.inventory.off_hand_item().await.lock().await.clone();
+                    if let Some(server) = player.world().server.upgrade() {
+                        let event = crate::plugin::player::player_swap_hand_items::PlayerSwapHandItemsEvent::new(
+                            player.clone(),
+                            off_hand.clone(),
+                            main_hand.clone(),
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            return;
+                        }
+                        let selected_slot = player.inventory.get_selected_slot() as usize;
+                        player
+                            .inventory
+                            .set_stack(selected_slot, event.main_hand_item.clone())
+                            .await;
+                        player
+                            .inventory
+                            .set_stack(pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT, event.off_hand_item.clone())
+                            .await;
+                        let equipment = &[
+                            (EquipmentSlot::MAIN_HAND, event.main_hand_item.clone()),
+                            (EquipmentSlot::OFF_HAND, event.off_hand_item.clone()),
+                        ];
+                        player.living_entity.send_equipment_changes(equipment).await;
+                        player
+                            .enqueue_slot_set_packet(&CSetPlayerInventory::new(
+                                (selected_slot as i32).into(),
+                                &ItemStackSerializer::from(event.main_hand_item),
+                            ))
+                            .await;
+                        player
+                            .enqueue_slot_set_packet(&CSetPlayerInventory::new(
+                                (pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT as i32).into(),
+                                &ItemStackSerializer::from(event.off_hand_item),
+                            ))
+                            .await;
+                    } else {
+                        player.swap_item().await;
+                    }
                 }
                 Status::SpearJab => {
                     log::debug!("todo");
@@ -1486,6 +1846,18 @@ impl JavaClient {
 
         // Set the flying ability
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
+        if abilities.flying != flying
+            && let Some(server) = player.world().server.upgrade()
+            && let Some(player_arc) = player.as_arc()
+        {
+            let event = crate::plugin::player::player_toggle_flight::PlayerToggleFlightEvent::new(
+                player_arc, flying,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
+            }
+        }
         if flying {
             player.living_entity.fall_distance.store(0.0);
         }
@@ -1688,16 +2060,44 @@ impl JavaClient {
             &sign_entity.back_text
         };
 
-        *text.messages.lock().unwrap() = [
+        let mut lines = vec![
             sign_data.line_1,
             sign_data.line_2,
             sign_data.line_3,
             sign_data.line_4,
         ];
+        if let Some(server) = world.server.upgrade()
+            && let Some(player_arc) = player.as_arc()
+        {
+            let block = world.get_block(&sign_data.location).await;
+            let event = SignChangeEvent::new(
+                player_arc,
+                block,
+                sign_data.location,
+                lines,
+                sign_data.is_front_text,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
+            }
+            lines = event.lines;
+        }
+
+        if lines.len() < 4 {
+            lines.resize(4, String::new());
+        }
+        *text.messages.lock().unwrap() = [
+            lines[0].clone(),
+            lines[1].clone(),
+            lines[2].clone(),
+            lines[3].clone(),
+        ];
         *sign_entity.currently_editing_player.lock().await = None;
         world.update_block_entity(&block_entity).await;
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_use_item(
         &self,
         player: &Arc<Player>,
@@ -1736,20 +2136,28 @@ impl JavaClient {
             )
             .await;
 
-        let event = if let Some((hit_pos, _hit_dir)) = hit_result {
+        let item_key = {
+            let item_guard = item_in_hand.lock().await;
+            format!("minecraft:{}", item_guard.get_item().registry_key)
+        };
+        let event = if let Some((hit_pos, hit_dir)) = hit_result {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickBlock,
                 &item_in_hand,
+                item_key.clone(),
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
+                Some(hit_dir),
             )
         } else {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickAir,
                 &item_in_hand,
+                item_key,
                 &Block::AIR,
+                None,
                 None,
             )
         };
@@ -1801,7 +2209,7 @@ impl JavaClient {
             server;
             event;
             'after: {
-                server.item_registry.on_use(item_for_use, player).await;
+                server.item_registry.on_use(item_for_use, player, hand).await;
             }
         }}
     }
@@ -1813,6 +2221,21 @@ impl JavaClient {
             self.kick(TextComponent::text("Invalid held slot")).await;
             return;
         }
+        let previous_slot = player.inventory.get_selected_slot() as i32;
+        if let Some(server) = player.world().server.upgrade()
+            && let Some(player_arc) = player.as_arc()
+        {
+            let event = PlayerItemHeldEvent::new(player_arc, previous_slot, slot as i32);
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                player
+                    .client
+                    .enqueue_packet(&CSetSelectedSlot::new(previous_slot as i8))
+                    .await;
+                return;
+            }
+        }
+
         let inv = player.inventory();
         inv.set_selected_slot(slot as u8);
         let stack = inv.held_item().lock().await.clone();
@@ -1876,7 +2299,7 @@ impl JavaClient {
             drop(player_screen_handler);
         } else if is_negative && is_legal {
             // Item drop
-            player.drop_item(item_stack).await;
+            let _ = player.drop_item_with_event(item_stack).await;
         }
         Ok(())
     }
@@ -2076,6 +2499,63 @@ impl JavaClient {
             .await
         {
             return Ok(false);
+        }
+
+        if let Some(server) = world.server.upgrade()
+            && let Some(player_arc) = player.as_arc()
+        {
+            let can_build_event = BlockCanBuildEvent {
+                player: player_arc.clone(),
+                block_to_build: block,
+                buildable: true,
+                block: clicked_block,
+                block_pos: final_block_pos,
+                cancelled: false,
+            };
+            let can_build_event = server
+                .plugin_manager
+                .fire::<BlockCanBuildEvent>(can_build_event)
+                .await;
+            if can_build_event.cancelled || !can_build_event.buildable {
+                return Ok(false);
+            }
+
+            let event = BlockPlaceEvent {
+                player: player_arc.clone(),
+                block_placed: block,
+                block_placed_against: clicked_block,
+                position: final_block_pos,
+                can_build: true,
+                cancelled: false,
+            };
+
+            let event = server.plugin_manager.fire::<BlockPlaceEvent>(event).await;
+            if event.cancelled || !event.can_build {
+                return Ok(false);
+            }
+
+            let mut multi_positions = Vec::new();
+            if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_DOORS) {
+                multi_positions.push(final_block_pos);
+                multi_positions.push(final_block_pos.offset(BlockDirection::Up.to_offset()));
+            } else if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
+                let facing = player.living_entity.entity.get_horizontal_facing();
+                multi_positions.push(final_block_pos);
+                multi_positions
+                    .push(final_block_pos.offset(facing.to_block_direction().to_offset()));
+            }
+            if multi_positions.len() > 1 {
+                let multi_event =
+                    crate::plugin::block::block_multi_place::BlockMultiPlaceEvent::new(
+                        player_arc,
+                        block,
+                        multi_positions,
+                    );
+                let multi_event = server.plugin_manager.fire(multi_event).await;
+                if multi_event.cancelled {
+                    return Ok(false);
+                }
+            }
         }
 
         let new_state = server

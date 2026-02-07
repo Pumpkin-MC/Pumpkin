@@ -11,6 +11,8 @@ use pumpkin_util::{
 };
 use tokio::sync::RwLock;
 
+use crate::plugin::server::service_register::ServiceRegisterEvent;
+use crate::plugin::server::service_unregister::ServiceUnregisterEvent;
 use crate::{
     entity::player::Player,
     plugin::{EventHandler, HandlerMap, PluginManager, TypedEventHandler},
@@ -109,8 +111,32 @@ impl Context {
         name: N,
         service: Arc<T>,
     ) {
+        let name = name.into();
         let mut services = self.plugin_manager.services.write().await;
-        services.insert(name.into(), service);
+        services.insert(name.clone(), service);
+        drop(services);
+
+        let event = ServiceRegisterEvent::new(self.metadata.name.to_string(), name);
+        let _ = self
+            .server
+            .plugin_manager
+            .fire::<ServiceRegisterEvent>(event)
+            .await;
+    }
+
+    /// Unregisters a service by name.
+    pub async fn unregister_service(&self, name: &str) {
+        let mut services = self.plugin_manager.services.write().await;
+        if services.remove(name).is_some() {
+            drop(services);
+            let event =
+                ServiceUnregisterEvent::new(self.metadata.name.to_string(), name.to_string());
+            let _ = self
+                .server
+                .plugin_manager
+                .fire::<ServiceUnregisterEvent>(event)
+                .await;
+        }
     }
 
     /// Retrieves a registered service by name and type.
