@@ -52,6 +52,7 @@ mod structures;
 mod tag;
 mod tracked_data;
 mod world_event;
+mod advancement;
 
 pub const OUT_DIR: &str = "src/generated";
 

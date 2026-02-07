@@ -1,4 +1,5 @@
 use colored::{ColoredString, Colorize};
+use quote::{quote, ToTokens};
 use serde::{Deserialize, Deserializer, Serialize};
 
 /// Text color
@@ -175,6 +176,20 @@ impl ARGBColor {
 impl Serialize for ARGBColor {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_bytes([self.alpha, self.red, self.green, self.blue].as_ref())
+    }
+}
+
+impl ToTokens for ARGBColor {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let ARGBColor { alpha, red, green, blue } = self;
+        tokens.extend(quote! {
+            ARGBColor{
+                alpha: #alpha,
+                red: #red,
+                green: #green,
+                blue: #blue,
+            }
+        })
     }
 }
 

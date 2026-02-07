@@ -38,6 +38,10 @@ mod sound_enum;
 pub mod recipes;
 
 #[rustfmt::skip]
+#[path = "generated/advancement.rs"]
+pub mod advancement;
+
+#[rustfmt::skip]
 #[path = "generated/data_component.rs"]
 pub mod data_component;
 pub mod data_component_impl;
