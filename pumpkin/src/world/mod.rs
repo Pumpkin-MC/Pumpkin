@@ -3282,6 +3282,20 @@ impl World {
             if let Some(neighbor_pumpkin_block) =
                 self.block_registry.get_pumpkin_block(neighbor_block.id)
             {
+                // Fire BlockPhysicsEvent for plugin cancellation support (ARCH-023)
+                if let Some(server) = self.server.upgrade() {
+                    let event = crate::plugin::api::events::block::block_physics::BlockPhysicsEvent::new(
+                        neighbor_block,
+                        neighbor_pos,
+                        source_block,
+                        *block_pos,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        continue;
+                    }
+                }
+
                 neighbor_pumpkin_block
                     .on_neighbor_update(OnNeighborUpdateArgs {
                         world: self,

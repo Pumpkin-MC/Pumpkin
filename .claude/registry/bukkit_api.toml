@@ -9,9 +9,9 @@ source_url = "https://hub.spigotmc.org/javadocs/bukkit/"
 total_events = 283
 total_interfaces = 9
 total_enums = 5
-pumpkin_implemented = 31
+pumpkin_implemented = 32
 pumpkin_stub = 1
-pumpkin_missing = 249
+pumpkin_missing = 248
 note = "Bukkit header says 318 but 37 of those are inner enums (DamageCause, SpawnReason, etc.), not events"
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -72,12 +72,17 @@ status = "implemented"
 name = "BlockPhysicsEvent"
 package = "org.bukkit.event.block"
 cancellable = true
-rust_equivalent = ""
-rust_path = ""
-fields = [{ name = "block", java_type = "Block", rust_type = "" }]
-status = "missing"
+rust_equivalent = "BlockPhysicsEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_physics.rs"
+fields = [
+    { name = "block", java_type = "Block", rust_type = "block: &'static Block" },
+    { name = "source_block", java_type = "Block", rust_type = "source_block: &'static Block" },
+    { name = "source_position", java_type = "BlockPos", rust_type = "source_position: BlockPos" },
+]
+status = "implemented"
 priority = "high"
 owner = "redstone"
+note = "Fires in world/mod.rs update_neighbors before each neighbor update. update_neighbor (single) not yet covered."
 
 [[events]]
 name = "BlockRedstoneEvent"
@@ -2393,15 +2398,15 @@ note = "ignoreCancelled stored as metadata; filtering in fire() ready to impleme
 
 [sprint]
 total_bukkit_events = 318
-implemented = 31
+implemented = 32
 stub = 1
-missing = 286
+missing = 285
 
 [sprint.by_owner]
 entity = 118
 items = 46
 world = 38
-redstone = 10
+redstone = 9
 protocol = 10
 core = 7
 plugin = 4

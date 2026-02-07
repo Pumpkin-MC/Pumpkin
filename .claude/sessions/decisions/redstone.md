@@ -31,3 +31,11 @@
 **Rationale:** ARCH-023 grants cross-agent event-firing write access. Plugin created the event types, Redstone wires the fire points.
 **Affects:** Redstone, Plugin
 **Status:** active
+
+## RED-005: BlockPhysicsEvent wired in update_neighbors
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/005_redstone_physics-event-wiring.md
+**Decision:** BlockPhysicsEvent fires in `world/mod.rs::update_neighbors` before dispatching each neighbor's `on_neighbor_update`. If cancelled, the neighbor update is skipped via `continue`. The `update_neighbor` (single) function does not fire the event because `source_position` is not available in its signature.
+**Rationale:** `update_neighbors` is the main multi-direction dispatch that has both source and target positions. Adding `source_position` to `update_neighbor` would require changing all callers across the codebase.
+**Affects:** Redstone, Plugin, Core
+**Status:** active
