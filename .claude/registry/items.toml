@@ -1,0 +1,368 @@
+# Minecraft 1.21.4 Item/Recipe/Loot/Enchantment Registry
+# Auto-generated from PrismarineJS + Mojang mcmeta data sources
+# Total items in item_components.json: 1385
+
+[meta]
+mc_version = "1.21.4"
+source = "PrismarineJS + Mojang mcmeta"
+total_items = 1385
+total_recipes = 1370
+total_loot_tables = 1237
+total_enchantments = 42
+
+# =============================================================================
+# Item Components
+# =============================================================================
+# Each component type with count of items that have it (out of 1385 total items)
+
+[item_components]
+# Universal components (present on all 1385 items)
+"minecraft:attribute_modifiers" = { items_with = 1385 }
+"minecraft:enchantments"        = { items_with = 1385 }
+"minecraft:item_model"          = { items_with = 1385 }
+"minecraft:item_name"           = { items_with = 1385 }
+"minecraft:lore"                = { items_with = 1385 }
+"minecraft:max_stack_size"      = { items_with = 1385 }
+"minecraft:rarity"              = { items_with = 1385 }
+"minecraft:repair_cost"         = { items_with = 1385 }
+
+# Common components
+"minecraft:damage"                     = { items_with = 68 }
+"minecraft:max_damage"                 = { items_with = 68 }
+"minecraft:enchantable"                = { items_with = 61 }
+"minecraft:repairable"                 = { items_with = 59 }
+"minecraft:equippable"                 = { items_with = 56 }
+"minecraft:consumable"                 = { items_with = 43 }
+"minecraft:food"                       = { items_with = 40 }
+"minecraft:tool"                       = { items_with = 33 }
+"minecraft:container"                  = { items_with = 32 }
+"minecraft:jukebox_playable"           = { items_with = 19 }
+"minecraft:banner_patterns"            = { items_with = 17 }
+"minecraft:bundle_contents"            = { items_with = 17 }
+"minecraft:damage_resistant"           = { items_with = 14 }
+
+# Uncommon components
+"minecraft:use_remainder"              = { items_with = 7 }
+"minecraft:enchantment_glint_override" = { items_with = 7 }
+"minecraft:bucket_entity_data"         = { items_with = 6 }
+"minecraft:potion_contents"            = { items_with = 4 }
+"minecraft:use_cooldown"               = { items_with = 3 }
+"minecraft:bees"                       = { items_with = 2 }
+
+# Singleton components (1 item each)
+"minecraft:charged_projectiles"        = { items_with = 1 }
+"minecraft:debug_stick_state"          = { items_with = 1 }
+"minecraft:pot_decorations"            = { items_with = 1 }
+"minecraft:glider"                     = { items_with = 1 }
+"minecraft:stored_enchantments"        = { items_with = 1 }
+"minecraft:map_color"                  = { items_with = 1 }
+"minecraft:map_decorations"            = { items_with = 1 }
+"minecraft:fireworks"                  = { items_with = 1 }
+"minecraft:recipes"                    = { items_with = 1 }
+"minecraft:block_state"                = { items_with = 1 }
+"minecraft:ominous_bottle_amplifier"   = { items_with = 1 }
+"minecraft:suspicious_stew_effects"    = { items_with = 1 }
+"minecraft:death_protection"           = { items_with = 1 }
+"minecraft:writable_book_content"      = { items_with = 1 }
+
+# =============================================================================
+# Enchantments (all 42 from PrismarineJS 1.21.4)
+# =============================================================================
+
+[[enchantments]]
+name = "aqua_affinity"
+max_level = 1
+category = "head_armor"
+
+[[enchantments]]
+name = "bane_of_arthropods"
+max_level = 5
+category = "weapon"
+
+[[enchantments]]
+name = "binding_curse"
+max_level = 1
+category = "equippable"
+
+[[enchantments]]
+name = "blast_protection"
+max_level = 4
+category = "armor"
+
+[[enchantments]]
+name = "breach"
+max_level = 4
+category = "mace"
+
+[[enchantments]]
+name = "channeling"
+max_level = 1
+category = "trident"
+
+[[enchantments]]
+name = "density"
+max_level = 5
+category = "mace"
+
+[[enchantments]]
+name = "depth_strider"
+max_level = 3
+category = "foot_armor"
+
+[[enchantments]]
+name = "efficiency"
+max_level = 5
+category = "mining"
+
+[[enchantments]]
+name = "feather_falling"
+max_level = 4
+category = "foot_armor"
+
+[[enchantments]]
+name = "fire_aspect"
+max_level = 2
+category = "fire_aspect"
+
+[[enchantments]]
+name = "fire_protection"
+max_level = 4
+category = "armor"
+
+[[enchantments]]
+name = "flame"
+max_level = 1
+category = "bow"
+
+[[enchantments]]
+name = "fortune"
+max_level = 3
+category = "mining_loot"
+
+[[enchantments]]
+name = "frost_walker"
+max_level = 2
+category = "foot_armor"
+
+[[enchantments]]
+name = "impaling"
+max_level = 5
+category = "trident"
+
+[[enchantments]]
+name = "infinity"
+max_level = 1
+category = "bow"
+
+[[enchantments]]
+name = "knockback"
+max_level = 2
+category = "sword"
+
+[[enchantments]]
+name = "looting"
+max_level = 3
+category = "sword"
+
+[[enchantments]]
+name = "loyalty"
+max_level = 3
+category = "trident"
+
+[[enchantments]]
+name = "luck_of_the_sea"
+max_level = 3
+category = "fishing"
+
+[[enchantments]]
+name = "lure"
+max_level = 3
+category = "fishing"
+
+[[enchantments]]
+name = "mending"
+max_level = 1
+category = "durability"
+
+[[enchantments]]
+name = "multishot"
+max_level = 1
+category = "crossbow"
+
+[[enchantments]]
+name = "piercing"
+max_level = 4
+category = "crossbow"
+
+[[enchantments]]
+name = "power"
+max_level = 5
+category = "bow"
+
+[[enchantments]]
+name = "projectile_protection"
+max_level = 4
+category = "armor"
+
+[[enchantments]]
+name = "protection"
+max_level = 4
+category = "armor"
+
+[[enchantments]]
+name = "punch"
+max_level = 2
+category = "bow"
+
+[[enchantments]]
+name = "quick_charge"
+max_level = 3
+category = "crossbow"
+
+[[enchantments]]
+name = "respiration"
+max_level = 3
+category = "head_armor"
+
+[[enchantments]]
+name = "riptide"
+max_level = 3
+category = "trident"
+
+[[enchantments]]
+name = "sharpness"
+max_level = 5
+category = "sharp_weapon"
+
+[[enchantments]]
+name = "silk_touch"
+max_level = 1
+category = "mining_loot"
+
+[[enchantments]]
+name = "smite"
+max_level = 5
+category = "weapon"
+
+[[enchantments]]
+name = "soul_speed"
+max_level = 3
+category = "foot_armor"
+
+[[enchantments]]
+name = "sweeping_edge"
+max_level = 3
+category = "sword"
+
+[[enchantments]]
+name = "swift_sneak"
+max_level = 3
+category = "leg_armor"
+
+[[enchantments]]
+name = "thorns"
+max_level = 3
+category = "armor"
+
+[[enchantments]]
+name = "unbreaking"
+max_level = 3
+category = "durability"
+
+[[enchantments]]
+name = "vanishing_curse"
+max_level = 1
+category = "vanishing"
+
+[[enchantments]]
+name = "wind_burst"
+max_level = 3
+category = "mace"
+
+# =============================================================================
+# Recipe Summary
+# =============================================================================
+# Don't enumerate all 1370 recipes -- just count by type
+
+[recipe_summary]
+total = 1370
+
+[recipe_summary.by_type]
+"minecraft:crafting_shaped"                    = 655
+"minecraft:crafting_shapeless"                 = 277
+"minecraft:stonecutting"                       = 254
+"minecraft:smelting"                           = 71
+"minecraft:crafting_transmute"                 = 32
+"minecraft:blasting"                           = 24
+"minecraft:smithing_trim"                      = 18
+"minecraft:smoking"                            = 9
+"minecraft:smithing_transform"                 = 9
+"minecraft:campfire_cooking"                   = 9
+"minecraft:crafting_decorated_pot"             = 1
+"minecraft:crafting_special_mapextending"      = 1
+"minecraft:crafting_special_firework_star_fade" = 1
+"minecraft:crafting_special_mapcloning"        = 1
+"minecraft:crafting_special_repairitem"        = 1
+"minecraft:crafting_special_bookcloning"       = 1
+"minecraft:crafting_special_tippedarrow"       = 1
+"minecraft:crafting_special_shielddecoration" = 1
+"minecraft:crafting_special_bannerduplicate"   = 1
+"minecraft:crafting_special_armordye"          = 1
+"minecraft:crafting_special_firework_star"     = 1
+"minecraft:crafting_special_firework_rocket"   = 1
+
+# Example: diamond_sword (crafting_shaped)
+# {
+#   "type": "minecraft:crafting_shaped",
+#   "category": "equipment",
+#   "key": { "#": "minecraft:stick", "X": "#minecraft:diamond_tool_materials" },
+#   "pattern": ["X", "X", "#"],
+#   "result": { "count": 1, "id": "minecraft:diamond_sword" }
+# }
+#
+# Example: stick (crafting_shaped)
+# {
+#   "type": "minecraft:crafting_shaped",
+#   "category": "misc",
+#   "group": "sticks",
+#   "key": { "#": "#minecraft:planks" },
+#   "pattern": ["#", "#"],
+#   "result": { "count": 4, "id": "minecraft:stick" }
+# }
+
+# =============================================================================
+# Loot Table Summary
+# =============================================================================
+
+[loot_table_summary]
+total = 1237
+
+# =============================================================================
+# Pumpkin Coverage Assessment
+# =============================================================================
+
+[pumpkin_coverage]
+inventory_files = 24
+inventory_lines = 5471
+item_files = 28
+item_lines = 2285
+
+# Recipe system: crafting_screen_handler.rs (687 lines) handles shaped, shapeless,
+# transmute, decorated_pot, and special recipes. Stonecutter (376 lines) and
+# smithing (426 lines) are also implemented. Smelting/blasting/smoking/campfire
+# cooking recipes are NOT wired up via screen handlers yet.
+recipe_system = "partial"
+
+# Loot system: pumpkin/src/world/loot.rs (248 lines) implements LootTableExt
+# with basic pool/entry/condition evaluation. pumpkin-util/src/loot_table.rs
+# (207 lines) defines the data structures. pumpkin-data/build/loot.rs (525 lines)
+# generates loot table data at build time. Covers block drops and basic entity
+# loot but does not implement all condition/function types.
+loot_system = "partial"
+
+# Enchantment system: /enchant command (164 lines), enchantment arg parser
+# (61 lines), build-time enchantment data (248 lines). Items support
+# get_enchantment_level() and enchant() methods. However, enchanting table UI,
+# anvil combining, grindstone removal, and enchantment-specific gameplay effects
+# (beyond unbreaking durability check) are not implemented.
+enchantment_system = "partial"
