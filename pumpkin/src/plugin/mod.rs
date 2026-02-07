@@ -665,8 +665,10 @@ impl PluginManager {
     /// 1. All handlers sorted by priority: Highest -> High -> Normal -> Low -> Lowest -> Monitor
     /// 2. Blocking handlers execute sequentially; non-blocking handlers run concurrently
     ///
-    /// Note: `ignore_cancelled` metadata is stored on handlers.
-    /// `Payload::is_cancelled()` is available — implement filtering in a follow-up.
+    /// `ignore_cancelled` filtering (PLUGIN-004, Bukkit-compatible):
+    /// - Handlers with `ignore_cancelled = true` are skipped if the event is already cancelled.
+    /// - Non-cancellable events always return `false` from `is_cancelled()`, so no handler
+    ///   is ever skipped for those events.
     pub async fn fire<E: Payload + Send + Sync + 'static>(&self, mut event: E) -> E {
         if let Some(server) = self.server.read().await.as_ref() {
             let handlers = self.handlers.read().await;
@@ -679,14 +681,24 @@ impl PluginManager {
                 non_blocking.sort_by(|a, b| a.get_priority().cmp(b.get_priority()));
 
                 // Process blocking handlers first (sequentially, in priority order)
-                for handler in blocking {
+                for handler in &blocking {
+                    // Skip handler if it has ignore_cancelled=true and event is cancelled
+                    if handler.ignore_cancelled() && event.is_cancelled() {
+                        continue;
+                    }
                     handler.handle_blocking_dyn(server, &mut event).await;
                 }
 
                 // Process non-blocking handlers (concurrently)
+                // Filter out handlers that should be skipped due to cancellation
+                let active_non_blocking: Vec<_> = non_blocking
+                    .into_iter()
+                    .filter(|h| !(h.ignore_cancelled() && event.is_cancelled()))
+                    .collect();
+
                 join_all(
-                    non_blocking
-                        .into_iter()
+                    active_non_blocking
+                        .iter()
                         .map(|h| h.handle_dyn(server, &event)),
                 )
                 .await;
