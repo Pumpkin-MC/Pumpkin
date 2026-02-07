@@ -145,7 +145,7 @@ impl Goal for MeleeAttackGoal {
             if let Some(target) = mob.get_mob_entity().target.lock().await.as_ref() {
                 let current_target_pos = target.get_entity().pos.load();
 
-                // Only update navigator if last postion is not set, or target has moved more than 1
+                // Only update navigator if last position is not set, or target has moved more than 1
                 // block
                 let should_update_nav = self.last_target_position.is_none_or(|last_pos| {
                     let distance_moved = ((current_target_pos.x - last_pos.x).powi(2)
