@@ -587,7 +587,7 @@ impl World {
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         let start = tokio::time::Instant::now();
 
-        // IMPORANT: send flush_block_updates first to prevent issues with CAcknowledgeBlockChange
+        // IMPORTANT: send flush_block_updates first to prevent issues with CAcknowledgeBlockChange
         self.flush_block_updates().await;
         self.flush_synced_block_events().await;
         self.tick_environment().await;
