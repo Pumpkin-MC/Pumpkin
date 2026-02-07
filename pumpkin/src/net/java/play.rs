@@ -869,9 +869,10 @@ impl JavaClient {
             return;
         };
 
-        let server = player.world().server.upgrade().unwrap();
-        let animation_event =
-            PlayerAnimationEvent::new(player.clone(), "ARM_SWING".to_string());
+        let Some(server) = player.world().server.upgrade() else {
+            return;
+        };
+        let animation_event = PlayerAnimationEvent::new(player.clone(), "ARM_SWING".to_string());
         server.plugin_manager.fire(animation_event).await;
 
         let inventory = player.inventory();
@@ -1309,7 +1310,6 @@ impl JavaClient {
                             if !config.enabled {
                                 return;
                             }
-
                             if entity_id.0 == player.entity_id() {
                                 self.kick(TextComponent::translate(
                                     translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
@@ -1514,6 +1514,13 @@ impl JavaClient {
         let slot_index = slot as usize;
         if slot_index >= PlayerInventory::MAIN_SIZE {
             return;
+        }
+        {
+            let slot_stack = player.inventory.get_stack(slot_index).await;
+            let slot_stack = slot_stack.lock().await;
+            if slot_stack.item.id != Item::WRITABLE_BOOK.id {
+                return;
+            }
         }
 
         let is_signing = edit_book.title.is_some();

@@ -2136,7 +2136,7 @@ impl World {
                             .chunk_manager
                             .lock()
                             .await
-                            .change_world(&self.level, found.clone());
+                            .change_world(&respawn_world.level, found.clone());
                         player.unload_watched_chunks(&respawn_world).await;
                     }
                     respawn_world = found;

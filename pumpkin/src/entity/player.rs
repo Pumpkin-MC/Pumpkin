@@ -2327,14 +2327,16 @@ impl Player {
     }
 
     pub async fn drop_item_with_event(&self, item_stack: ItemStack) -> bool {
+        let item_uuid = Uuid::new_v4();
         let Some(server) = self.world().server.upgrade() else {
-            return false;
+            self.spawn_dropped_item_with_uuid(item_uuid, item_stack).await;
+            return true;
         };
         let Some(player_arc) = self.as_arc() else {
-            return false;
+            self.spawn_dropped_item_with_uuid(item_uuid, item_stack).await;
+            return true;
         };
 
-        let item_uuid = Uuid::new_v4();
         let event = PlayerDropItemEvent::new(player_arc, item_uuid, item_stack);
         let event = server.plugin_manager.fire(event).await;
         if event.cancelled || event.item_stack.is_empty() {

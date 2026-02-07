@@ -435,7 +435,7 @@ impl EntityBase for ItemEntity {
             {
                 let event = PlayerPickupArrowEvent::new(
                     player.clone(),
-                    self.entity.entity_uuid,
+                    uuid::Uuid::nil(),
                     self.entity.entity_uuid,
                     item_stack_snapshot.clone(),
                     item_count as i32,
