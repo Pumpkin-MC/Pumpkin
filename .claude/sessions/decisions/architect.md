@@ -279,6 +279,34 @@ Key design:
 - Lance 2.0 includes its own query engine; `DataFusion` is NOT needed as a sidecar
 
 **Feature flags unchanged:** `default = ["toml-store"]`, `lance-store = []` (empty until Phase 4)
-**Tests:** 21 pass (9 static + 12 cached), clippy clean
+**Tests:** 23 pass (10 static + 13 cached), clippy clean
 **Affects:** All agents (future consumers of `GameDataStore`)
 **Status:** active
+
+## ARCH-026: Calcite Arrow Java Provider for PatchBukkit
+**Date:** 2026-02-07
+**Decision:** Future Phase 5 adds Apache Calcite as the Java-side query engine for transcoded PatchBukkit plugins. The full zero-copy chain:
+
+```
+PatchBukkit Java plugins (Bukkit API calls)
+    ↓
+Apache Calcite (Java SQL engine + optimizer)
+    ↓ Arrow IPC (zero-copy across JNI/FFI boundary)
+pumpkin-store LanceStore (Rust, Lance 2.0)
+    ↓ hydrate_from()
+StaticStore (pumpkin-data, compile-time)
+```
+
+- Calcite provides SQL parsing, optimization, and execution on the Java side
+- Arrow IPC provides zero-copy data sharing between Java and Rust (no serialization)
+- Lance 2.0 on Rust side serves Arrow `RecordBatch` natively
+- holograph XOR cache pattern guards against early zero-copy break at the boundary
+- This is the GEL (Graph Execution Language) substrate: Java `@lance` annotations compile to Calcite queries over Arrow storage
+
+**Prerequisites:**
+- Phase 4 (real Lance deps) must be complete
+- PatchBukkit proto definitions must be transcoded (Phase 3)
+- Arrow Java and Calcite versions must align with Arrow Rust (currently arrow 57)
+
+**Affects:** Plugin (PatchBukkit bridge), all agents (data consumers)
+**Status:** planned (Phase 5)
