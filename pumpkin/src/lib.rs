@@ -300,6 +300,21 @@ impl PumpkinServer {
         }
     }
 
+    /// Fires the ServerStartedEvent to notify plugins that the server is ready.
+    pub async fn fire_started_event(&self) {
+        let world_count = self.server.worlds.load().len();
+        let plugin_count = self.server.plugin_manager.loaded_plugins().await.len();
+        self.server
+            .plugin_manager
+            .fire(
+                plugin::server::server_started::ServerStartedEvent::new(
+                    world_count,
+                    plugin_count,
+                ),
+            )
+            .await;
+    }
+
     pub async fn unload_plugins(&self) {
         if let Err(err) = self.server.plugin_manager.unload_all_plugins().await {
             log::error!("Error unloading plugins: {err}");
@@ -323,6 +338,14 @@ impl PumpkinServer {
         }
 
         log::info!("Stopped accepting incoming connections");
+
+        // Notify plugins that the server is stopping
+        self.server
+            .plugin_manager
+            .fire(
+                plugin::server::server_stop::ServerStopEvent::new("Server shutting down".to_string()),
+            )
+            .await;
 
         if let Err(e) = self
             .server

@@ -98,6 +98,7 @@ async fn main() {
 
     let pumpkin_server = PumpkinServer::new(basic_config, advanced_config, vanilla_data).await;
     pumpkin_server.init_plugins().await;
+    pumpkin_server.fire_started_event().await;
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());
     let basic_config = &pumpkin_server.server.basic_config;

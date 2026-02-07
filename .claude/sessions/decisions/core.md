@@ -23,3 +23,19 @@
 **Rationale:** The tick loop is the hottest path in the server. Adding lock contention would defeat the purpose of profiling. The slight inaccuracy from relaxed ordering is acceptable for performance diagnostics.
 **Affects:** Core
 **Status:** active
+
+## CORE-004: ServerTickEvent fires after profiler recording
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/003_core_lifecycle-events.md
+**Decision:** ServerTickEvent fires at the end of Server::tick(), after tick profiler recording but still within the tick method.
+**Rationale:** Plugins get the most accurate tick count. Firing after profiler ensures the profiler measures actual game logic, not plugin event handling overhead.
+**Affects:** Core, Plugin
+**Status:** active
+
+## CORE-005: ServerStopEvent fires before player disconnect
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/003_core_lifecycle-events.md
+**Decision:** ServerStopEvent fires immediately after connection acceptance stops, before player data save, player kicks, plugin unload, or world save.
+**Rationale:** Matches Bukkit's ServerStopEvent behavior. Plugins may want to send final messages, save data, or clean up while players are still connected and the world is accessible.
+**Affects:** Core, Plugin
+**Status:** active
