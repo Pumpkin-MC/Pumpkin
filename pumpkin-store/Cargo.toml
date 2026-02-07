@@ -14,16 +14,22 @@ serde_json.workspace = true
 # TOML backend (default) — wraps pumpkin-data static arrays, zero new deps
 pumpkin-data = { workspace = true, optional = true }
 
-# Lance backend deps are NOT declared here yet — they will be added in Phase 4
-# when the implementation is ready. Declaring them now causes chrono version
-# conflicts between lancedb 0.21 (chrono =0.4.41) and datafusion 51 (chrono ^0.4.42).
-# Target versions (aligned with holograph): lancedb 0.21+, arrow 57, datafusion 51+
+# Lance backend deps — added in Phase 4 when implementation is ready.
+# Chrono conflict RESOLVED as of lance 2.0.0 (2026-02-05): chrono ^0.4.41.
+# Verified compatible versions: lance 2.0.0, lancedb 0.26.1, arrow 57, datafusion 51.
+# MSRV: lance requires 1.88+, Pumpkin requires 1.89 — compatible.
 # See: https://github.com/AdaWorldAPI/holograph
 
 [features]
 default = ["toml-store"]
 toml-store = ["dep:pumpkin-data"]
-lance-store = [] # Deps added in Phase 4 (lancedb, arrow 57, datafusion 51)
+lance-store = [] # Phase 4: lancedb 0.26+, lance 2.0, arrow 57, datafusion 51
+
+# Extended store — reserved for future columnar/vector deps (Lance, Arrow, Calcite).
+# All additive types (ZeroCopyGuard, GameMappingRecord, MobGoalState, CachedStore)
+# are zero-dep and always compiled. StoreProvider::open() is the runtime meta-switch.
+# Community default = toml-store + StoreProvider::Static.
+extended-store = []
 
 [lints]
 workspace = true

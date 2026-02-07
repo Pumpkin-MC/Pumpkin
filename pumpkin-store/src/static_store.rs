@@ -3,6 +3,8 @@
 //! Zero runtime cost — all lookups delegate to `Block::from_*`, `Item::from_*`, etc.
 //! No heap allocation, no I/O, no new dependencies beyond pumpkin-data.
 
+use std::borrow::Cow;
+
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -34,7 +36,7 @@ impl Default for StaticStore {
 fn block_to_record(b: &'static Block) -> BlockRecord {
     BlockRecord {
         id: b.id,
-        name: b.name,
+        name: Cow::Borrowed(b.name),
         hardness: b.hardness,
         blast_resistance: b.blast_resistance,
         is_air: b.is_air(),
@@ -67,7 +69,7 @@ fn item_to_record(item: &'static Item) -> ItemRecord {
 
     ItemRecord {
         id: item.id,
-        name: item.registry_key,
+        name: Cow::Borrowed(item.registry_key),
         max_stack_size: max_stack,
     }
 }
@@ -76,7 +78,7 @@ fn item_to_record(item: &'static Item) -> ItemRecord {
 const fn entity_to_record(e: &'static EntityType) -> EntityRecord {
     EntityRecord {
         id: e.id,
-        name: e.resource_name,
+        name: Cow::Borrowed(e.resource_name),
         max_health: e.max_health,
         is_mob: e.mob,
         width: e.dimension[0],
@@ -144,6 +146,20 @@ impl GameDataStore for StaticStore {
     fn recipe_count(&self) -> usize {
         // ~1470 recipes in 1.21.11
         1470
+    }
+
+    fn game_mappings(
+        &self,
+        _source_type: &str,
+        _source_key: &str,
+    ) -> StoreResult<Vec<crate::traits::GameMappingRecord>> {
+        // Game mappings are relationship data — not available in pumpkin-data statics.
+        // The Lance backend will populate this from registry TOML files and mob goal data.
+        Ok(Vec::new())
+    }
+
+    fn game_mapping_count(&self) -> usize {
+        0
     }
 }
 
@@ -214,5 +230,51 @@ mod tests {
         let store: Box<dyn GameDataStore> = Box::new(StaticStore::new());
         let block = store.block_by_name("stone").unwrap();
         assert_eq!(block.name, "stone");
+    }
+
+    /// Verify that `StaticStore` produces `Cow::Borrowed` (zero-copy pointers
+    /// into pumpkin-data statics), and that cloning preserves this invariant.
+    /// If this test fails, something is forcing heap allocation on the read path.
+    #[test]
+    fn zero_copy_invariant_preserved() {
+        let store = StaticStore::new();
+
+        // Block name must be Borrowed (pointer to static "stone")
+        let block = store.block_by_name("stone").unwrap();
+        assert!(
+            matches!(block.name, Cow::Borrowed(_)),
+            "block.name must be Cow::Borrowed, got Owned"
+        );
+
+        // Clone must preserve Borrowed — NOT heap-allocate.
+        // We intentionally clone here to test the invariant.
+        #[allow(clippy::redundant_clone)]
+        let cloned = block.clone();
+        assert!(
+            matches!(cloned.name, Cow::Borrowed(_)),
+            "cloned block.name must stay Cow::Borrowed"
+        );
+
+        // Item name
+        let item = store.item_by_name("diamond_sword").unwrap();
+        assert!(
+            matches!(item.name, Cow::Borrowed(_)),
+            "item.name must be Cow::Borrowed"
+        );
+
+        // Entity name
+        let entity = store.entity_by_name("zombie").unwrap();
+        assert!(
+            matches!(entity.name, Cow::Borrowed(_)),
+            "entity.name must be Cow::Borrowed"
+        );
+
+        // Cloned entity must still be Borrowed.
+        #[allow(clippy::redundant_clone)]
+        let cloned_entity = entity.clone();
+        assert!(
+            matches!(cloned_entity.name, Cow::Borrowed(_)),
+            "cloned entity.name must stay Cow::Borrowed"
+        );
     }
 }

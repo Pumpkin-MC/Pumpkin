@@ -263,3 +263,126 @@ They are orthogonal: Protocol DTO translates packets at the network edge, Storag
 When Lance backend is ready (Phase 4), Items will migrate recipe queries to `store.recipes_for_output()` and `store.sql("SELECT...")`. Until then, direct pumpkin-data access is correct.
 **Affects:** Items
 **Status:** active
+
+## ARCH-025: Tiered Store Provider Architecture
+**Date:** 2026-02-07
+**Decision:** pumpkin-store implements three provider tiers via `StoreProvider` enum:
+1. **Static** (default) — `StaticStore` wrapping pumpkin-data compile-time arrays. Zero runtime cost.
+2. **Cached** — `CachedStore<S>` wrapping any `GameDataStore` + `HashMap` memoization. Each entry is a transparent `CacheEntry<T>` DTO with method/key metadata for inspection.
+3. **Lance** — `LanceStore` hydrated FROM `StaticStore` via `hydrate_from()`. No external JSON files needed. Lance 2.0 native queries (no `DataFusion` sidecar).
+
+Key design:
+- `CacheEntry<T>` has `method: Cow<str>`, `key: Cow<str>`, `value: T` — transparent, serializable
+- `CacheSnapshot` tracks cache sizes across all maps
+- `LanceStore::hydrate_from(&dyn GameDataStore)` reads all records from source store, writes to Lance tables
+- Static is always the source of truth — Cache and Lance bootstrap from it
+- Lance 2.0 includes its own query engine; `DataFusion` is NOT needed as a sidecar
+
+**Feature flags unchanged:** `default = ["toml-store"]`, `lance-store = []` (empty until Phase 4)
+**Tests:** 23 pass (10 static + 13 cached), clippy clean
+**Affects:** All agents (future consumers of `GameDataStore`)
+**Status:** active
+
+## ARCH-026: Calcite Arrow Java Provider for PatchBukkit
+**Date:** 2026-02-07
+**Decision:** Future Phase 5 adds Apache Calcite as the Java-side query engine for transcoded PatchBukkit plugins. The full zero-copy chain:
+
+```
+PatchBukkit Java plugins (Bukkit API calls)
+    ↓
+Apache Calcite (Java SQL engine + optimizer)
+    ↓ Arrow IPC (zero-copy across JNI/FFI boundary)
+pumpkin-store LanceStore (Rust, Lance 2.0)
+    ↓ hydrate_from()
+StaticStore (pumpkin-data, compile-time)
+```
+
+- Calcite provides SQL parsing, optimization, and execution on the Java side
+- Arrow IPC provides zero-copy data sharing between Java and Rust (no serialization)
+- Lance 2.0 on Rust side serves Arrow `RecordBatch` natively
+- holograph XOR cache pattern guards against early zero-copy break at the boundary
+- This is the GEL (Graph Execution Language) substrate: Java `@lance` annotations compile to Calcite queries over Arrow storage
+
+**Prerequisites:**
+- Phase 4 (real Lance deps) must be complete
+- PatchBukkit proto definitions must be transcoded (Phase 3)
+- Arrow Java and Calcite versions must align with Arrow Rust (currently arrow 57)
+
+**Affects:** Plugin (PatchBukkit bridge), all agents (data consumers)
+**Status:** planned (Phase 5)
+
+## ARCH-027: Game Mapping Table + XOR for Mob Goal States
+**Date:** 2026-02-07
+**Decision:** Add a separate `game_mapping` table to Lance for cross-entity relationship data, and apply XOR write-through guard to mob goal state transitions.
+
+**Game Mapping Table:**
+A relationship table that cross-cuts entity tables (blocks, items, entities):
+- `source_type` + `source_key` → `target_type` + `target_key`
+- Examples: biome→entity_spawn, structure→loot_table, block→item_drop, mob→goal_state
+- Not a game-object table — a *mapping* table. Lives alongside blocks/items/entities in Lance.
+- Queryable via Lance 2.0 native API: `game_mapping.filter("source_type = 'biome' AND source_key = 'plains'")`
+
+**XOR for Mob Goal States:**
+The Entity agent's `GoalSelector` evaluates 16 goal types across 4 control slots (`MOVE`, `LOOK`, `JUMP`, `TARGET`) every tick, with priority-based switching. During tick evaluation:
+1. Goals are stopped/started (ephemeral switching)
+2. Goal state (target position, cooldown, entity refs) transfers between slots
+3. XOR tag on goal state records detects if `Cow::Borrowed` fields (entity type names, block names in goals) were silently materialized to `Cow::Owned` during the switch
+
+The `game_mapping` table stores the static goal→mob relationships (which goals each mob type has), while the XOR guard protects the runtime goal state during tick arbitration.
+
+**Implementation path:**
+1. Add `GameMappingRecord` to `pumpkin-store/src/traits.rs`
+2. Add `game_mappings()` query to `GameDataStore` trait
+3. In Phase 4, create `game_mapping` Lance table alongside blocks/items/entities
+4. Entity agent integrates XOR guard into `PrioritizedGoal` state for tick-level verification
+
+**Affects:** Entity (goal states), WorldGen (biome→spawn mappings), Items (block→drop mappings)
+**Status:** planned
+
+## ARCH-028: Three Store Scopes
+**Date:** 2026-02-07
+**Decision:** pumpkin-store data model has three distinct scopes with different storage strategies:
+
+1. **Entity Data** (Item/Mob/Recipe) — keyed by name/ID. `GameDataStore` trait methods: `block_by_id`, `item_by_name`, `entity_by_name`, `recipes_for_output`. All tiers (Static/Cached/Lance) implement these.
+
+2. **Worldmap** (Chunks/Regions/Biomes/Structures) — spatial data indexed by XYZ coordinates. Currently in pumpkin-world's Anvil format. Future: `WorldMapStore` trait for Lance columnar queries over spatial data (chunk sections, biome grids, structure bounding boxes).
+
+3. **Activity Overlay** (State Transitions/XOR) — `MobGoalState` Hamming XOR overlay, `GameMappingRecord` cross-entity relationships. Tracks ephemeral state changes per tick. Bind/unbind semantics for entities entering/leaving spatial regions.
+
+Each scope maps to different Lance tables and query patterns:
+- Scope 1: dense lookup tables (blocks, items, entities, recipes)
+- Scope 2: spatial index tables (world positions, chunk sections, biome grids)
+- Scope 3: sparse overlay tables (goal state transitions, relationship mappings)
+
+`StoreProvider::open()` is the meta-switch that NATs all commands to the right backend tier, transparent to callers.
+
+**Affects:** All agents
+**Status:** active
+
+## ARCH-029: SIMD Content-Addressable Memory Vision (AVX-512)
+**Date:** 2026-02-07
+**Decision:** Long-term vision to partially replace per-entity tick iteration with SIMD batch processing over content-addressable spatial memory:
+
+```text
+Current:  for entity in entities { entity.tick() }  // sequential O(n)
+
+Future:   CAM[x,y,z].bind(entity)     // entity enters spatial region
+          CAM[x,y,z].unbind(entity)    // entity leaves spatial region
+          AVX-512 batch tick per region // 16x f32 parallel per SIMD lane
+```
+
+Arrow columnar format is the substrate:
+- Columns: `[x: f32, y: f32, z: f32, entity_id: u32, goal_state: u64]`
+- AVX-512 `f32` lanes: 16 entities per instruction (512 bits / 32 bits)
+- Bind/unbind: insert/delete from spatial Arrow `RecordBatch`
+- Content-addressable: entities indexed by position, not linear entity ID
+- XOR overlay (ARCH-027) per SIMD batch detects state transition anomalies
+
+Prerequisites:
+- ARCH-028 Scope 2 (Worldmap spatial store) must exist
+- Lance Phase 4 (real Arrow `RecordBatch` in memory)
+- Rust `std::arch::x86_64` for AVX-512 intrinsics (or `packed_simd2` / `std::simd`)
+- Fallback to scalar for non-AVX-512 platforms (ARM NEON as Tier 2)
+
+**Affects:** Entity (tick loop), Core (scheduler), WorldGen (chunk spatial index)
+**Status:** vision (long-term)

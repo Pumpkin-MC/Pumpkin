@@ -63,11 +63,32 @@ Priority areas:
 ## Reference Data
 
 - `.claude/reference/world-data.md` — your agent reference package (biomes, structures, chunk format, Bukkit events)
-- `.claude/registry/blocks.toml` — full block registry with states and properties
 - `.claude/specs/data/mcdata-1.21.4.zip` — worldgen/, dimension/, structure/ data
 - `.claude/specs/data/1.21.4/summary/blocks.json` — block definitions
 - `.claude/specs/data/1.21.4/summary/block_definitions.json` — block states
-- `.claude/registry/bukkit_api.toml` — full Bukkit event registry with your 28 missing events
+
+### Registry TOML Databases (17K+ lines of structured game data)
+
+These TOML files in `.claude/registry/` are authoritative data sources with thousands of entries. Use them for lookups, validation, and cross-referencing:
+
+- `blocks.toml` (509 lines) — 1095 blocks, block types, biome associations, structure metadata
+- `entities.toml` (2228 lines) — 149 entities with id, name, width, height, category, pumpkin_status
+- `items.toml` (368 lines) — items with registry keys, categories
+- `bukkit_api.toml` (2397 lines) — 283 Bukkit events with owners, status, your 28 missing events
+- `protocol.toml` (2638 lines) — packet registry with status, direction, fields
+
+Multi-version variants also exist: `entities_1_16_5.toml`, `entities_1_18_2.toml`, `items_1_16_5.toml`, etc.
+
+### Game Data Store (`pumpkin-store/`)
+
+The `pumpkin-store` crate (ARCH-020) provides a `GameDataStore` trait for querying game data:
+```rust
+use pumpkin_store::{GameDataStore, open_default_store};
+let store = open_default_store(); // wraps pumpkin-data statics
+let block = store.block_by_name("stone");
+let entity = store.entity_by_name("zombie");
+```
+Future: Lance backend will enable SQL queries over these registries. For now, use `pumpkin-data` statics directly for hot-path lookups in structure generation.
 
 ## Before You Touch Code
 
