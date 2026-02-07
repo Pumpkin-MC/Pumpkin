@@ -79,3 +79,11 @@
 **Rationale:** No need for separate profiler instances. The tick profiler is already integrated into the tick loop (session 002). Both commands are just different entry points to the same profiler data.
 **Affects:** Core
 **Status:** active
+
+## CORE-011: log_admin_commands enforced at dispatcher level
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/007_core_gamerule-audit.md
+**Decision:** The `log_admin_commands` game rule is checked in `CommandDispatcher::dispatch()` after permission check. When enabled, logs `"{sender} issued server command: /{cmd}"` to the server console.
+**Rationale:** Centralized enforcement in the dispatcher ensures all commands are logged without per-command code. Matches vanilla behavior.
+**Affects:** Core
+**Status:** active
