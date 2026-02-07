@@ -214,9 +214,11 @@ Then in packet sending:
 
 ## Decisions Made
 
-### ARCH-017: 1.16.5 is the priority multi-version target
-**Decision:** Focus DTO development on 1.16.5 (protocol 754) as the first non-current version. It's the widest protocol gap (754→774), so if the DTO handles it, all intermediate versions (1.18, 1.19, 1.20) come nearly free.
-**Rationale:** 1.16.5 has the largest active player base of any non-current version (Nether Update). Testing against the hardest target first validates the entire DTO architecture.
+**REVISED:** Priority order changed from "1.16.5 first" to tiered rollback: **1.18 > 1.16.5 > (1.14.x > 1.12)**. Work backwards from current — smallest delta first.
+
+### ARCH-017: Tiered implementation — 1.18 first, then 1.16.5
+**Decision:** Tier 1 is 1.18.2 (protocol 758) — closest to current, validates DTO plumbing with minimal delta (packet ID remapping + minor field changes). Tier 2 is 1.16.5 (protocol 754) — adds Config state bypass, item component→NBT, dimension codec. Tier 3 is 1.14.x (protocol 477) — lower priority. Tier 4 is 1.12.2 (protocol 340) — pre-Flattening stretch goal.
+**Rationale:** Smallest delta first. Each tier adds one more translation layer incrementally. Avoids debugging all 5 layers at once.
 **Affects:** Protocol, Core, all agents
 **Status:** active — DEFERRED (Phase 2, scoped)
 

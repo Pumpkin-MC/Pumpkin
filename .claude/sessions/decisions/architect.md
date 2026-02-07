@@ -122,18 +122,18 @@ loot tables, mob drops, worldgen, and tags without guessing.
 **Affects:** Plugin, all agents that define events
 **Status:** active
 
-## ARCH-016: Multi-version support deferred — DTO layer when ready
+## ARCH-016: Multi-version support — tiered DTO rollback strategy
 **Date:** 2026-02-07 (revised 2026-02-07)
-**Decision:** Multi-version protocol support is deferred until 1.21.11 reaches ~90%+ feature completion. Pumpkin is currently single-version (protocol 772-774 window, 1.21.7-1.21.11). When ready, multi-version requires a DTO (Data Transfer Object) abstraction layer between internal game state and per-version wire format — one canonical internal model, version-specific serializers at the network boundary. All target milestones are post-Flattening (1.13+) to share the same block state ID system. Pre-1.13 (1.8, 1.12.2) requires a completely separate block ID mapping layer and is out of scope. Target milestones: 1.13.2 (Update Aquatic, protocol 404 — Flattening baseline), 1.16.5 (Nether Update, protocol 754 — massive player base), 1.18.2 (Caves & Cliffs, protocol 758 — world height change to -64..320), 1.21.11 (current, protocol 774).
-**Rationale:** 1.8 support is overkill — pre-Flattening block IDs are an entirely different system. Post-1.13 versions share block state IDs, making the DTO translation layer dramatically simpler. The four chosen milestones represent the biggest protocol shifts post-Flattening: 1.13 (the Flattening itself), 1.16 (Nether rewrite, piglins, basalt), 1.18 (world height expansion, cave gen overhaul), 1.21 (current). This covers the iconic releases without the cost of pre-Flattening compatibility.
+**Decision:** Multi-version protocol support via DTO (Data Transfer Object) abstraction layer. One canonical internal model (1.21.11), version-specific serializers at network boundary. Implementation order works backwards from current version — each tier adds one more translation layer. Priority order: **1.18 > 1.16.5 > (1.14.x > 1.12)**. Tier 1 (1.18.2, protocol 758): chunk height only. Tier 2 (1.16.5, protocol 754): + Config state bypass + dimension codec + item NBT. Tier 3 (1.14.x, protocol 477): + chunk format v1 + villager overhaul. Tier 4 (1.12.2, protocol 340): + pre-Flattening block IDs (stretch goal). Tiers 3-4 are parenthesized — lower priority, attempt only after Tiers 1-2 are solid.
+**Rationale:** Working backwards validates the DTO plumbing with the smallest delta first (1.18→1.21 is mostly chunk height). Each successive tier exercises harder translation layers incrementally. This avoids the risk of building all 5 layers at once and debugging a 20-variable system.
 **Affects:** Protocol, Core, all agents
 **Status:** active — DEFERRED (Phase 2, revised)
 
-## ARCH-017: 1.16.5 is the priority multi-version target
-**Date:** 2026-02-07
+## ARCH-017: Tiered implementation order — 1.18 first, then 1.16.5
+**Date:** 2026-02-07 (revised 2026-02-07)
 **Session:** .claude/sessions/2026-02-07/005_architect_dto-1165-scoping.md
-**Decision:** Focus DTO development on 1.16.5 (protocol 754) as the first non-current version. It's the widest protocol gap (754→774), so if the DTO handles it, all intermediate versions (1.18, 1.19, 1.20) come nearly free. 5 major translation layers identified: (1) Config state bypass for pre-1.20.2, (2) chunk format 16→24 sections, (3) item components→NBT, (4) packet ID remapping, (5) registry/login packet restructuring.
-**Rationale:** 1.16.5 has the largest active player base of any non-current version (Nether Update). Testing against the hardest target first validates the entire DTO architecture. Estimated ~2000-3000 lines of translation code across ~15-20 files.
+**Decision:** Tier 1 target is 1.18.2 (protocol 758), NOT 1.16.5. 1.18 is closest to current and only needs chunk height translation (-64..320 → 0..255 for old world format awareness, but 1.18 already has -64..320). The real translation needed is: packet ID remapping + minor field changes. This validates the DTO trait, the PacketId extension, and the version-conditional send path with minimal risk. Tier 2 (1.16.5) then adds the hard layers: Config state bypass, item component→NBT translation, dimension codec inline in Join Game. 5 total translation layers scoped in session 005.
+**Rationale:** Smallest delta first. 1.18→1.21 exercises the DTO wiring without the Config state nightmare. If the plumbing works for 1.18, adding 1.16.5 layers is incremental. Estimated: Tier 1 ~500-800 lines, Tier 2 ~2000-3000 lines additional.
 **Affects:** Protocol, Core, all agents
 **Status:** active — DEFERRED (Phase 2, scoped)
 
