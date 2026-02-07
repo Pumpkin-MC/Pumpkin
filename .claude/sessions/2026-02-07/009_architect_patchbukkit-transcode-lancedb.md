@@ -218,7 +218,36 @@ PatchBukkit remains the bridge for **actual Java Bukkit plugins** (.jar files). 
 
 ## Open Questions
 
-1. Should `pumpkin-store/` be a new workspace crate, or should this live in `pumpkin-util/`?
+1. ~~Should `pumpkin-store/` be a new workspace crate, or should this live in `pumpkin-util/`?~~ → RESOLVED: new crate, implemented
 2. Should LanceDB data files ship in the binary or be generated at first run from JSON?
 3. Does Arrow's MSRV conflict with Pumpkin's Rust 1.89 requirement? (Arrow targets latest stable, should be fine)
-4. Should the TOML backend be the default for development and Lance for production?
+4. Should the TOML backend be the default for development and Lance for production? → Yes, default=toml-store
+5. **chrono version conflict**: lancedb 0.21 pins chrono =0.4.41, datafusion 51 needs ^0.4.42. Wait for lancedb 0.22+ or vendor-import Lance like holograph.
+
+## Implementation Status (Phase 1-2 DONE)
+
+**Created `pumpkin-store/` crate** — 10th workspace member. Files:
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `Cargo.toml` | 30 | Feature-gated deps (default=toml-store, lance-store=empty stub) |
+| `src/lib.rs` | 70 | Crate docs, re-exports, `open_default_store()` |
+| `src/error.rs` | 25 | `StoreError` enum + `StoreResult<T>` alias |
+| `src/traits.rs` | 95 | `GameDataStore` trait + DTO records (Block, Item, Entity, Recipe) |
+| `src/static_store.rs` | 155 | `StaticStore` wrapping pumpkin-data (9 tests, all pass) |
+| `src/lance_store.rs` | 100 | `LanceStore` stub (all methods return `Err`, feature-gated) |
+
+**Test results:** 9/9 pass, clippy clean, full workspace builds
+
+**Key findings:**
+- lancedb 0.21 + datafusion 51 have a chrono version conflict → lance deps deferred to Phase 4
+- `lance-store` feature declared as empty (no deps yet) so `#[cfg]` gates compile cleanly
+- `StaticStore` is truly zero-cost: const constructor, direct delegation to pumpkin-data lookups
+- `MaxStackSizeImpl` can be extracted via `as_any().downcast_ref()` — works
+- holograph (AdaWorldAPI/holograph) patterns: Arrow IPC, zero-copy batch wrappers, feature-gated storage
+
+## Future: GEL (Graph Execution Language)
+
+Human operator's vision: compile Java imports to a database substrate via Graph Execution Language (GEL) — an artificial abstraction layer over Arrow columnar storage. Java `@lance` annotations would compile to graph execution backed by LanceDB/Arrow. The Lance backend in pumpkin-store is the substrate for this. See holograph for reference.
+
+A Java→Lance/Rust graph execution showcase would have significant blast radius if realized. This is tracked as a future direction beyond ARCH-020.
