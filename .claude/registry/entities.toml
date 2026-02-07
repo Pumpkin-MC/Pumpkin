@@ -1,0 +1,2228 @@
+# .claude/registry/entities.toml
+# Comprehensive entity, effect, food, and damage type registry for MC 1.21.4
+# Source: PrismarineJS minecraft-data + Mojang mcmeta
+# Date: 2026-02-07
+
+[meta]
+mc_version = "1.21.4"
+source = "PrismarineJS minecraft-data + Mojang mcmeta"
+total_entities = 149
+total_effects = 39
+total_foods = 40
+total_damage_types = 49
+
+# =============================================================================
+# ENTITIES (149 total)
+# =============================================================================
+# pumpkin_status values:
+#   "implemented" = dedicated .rs file with substantial logic (>= 30 lines)
+#   "partial"     = .rs file exists but is a thin stub (< 30 lines)
+#   "missing"     = no dedicated .rs file
+# metadata_keys included only for key mob types
+# =============================================================================
+
+[[entities]]
+id = 0
+name = "acacia_boat"
+display_name = "Acacia Boat"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 1
+name = "acacia_chest_boat"
+display_name = "Acacia Boat with Chest"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 2
+name = "allay"
+display_name = "Allay"
+width = 0.35
+height = 0.6
+type = "mob"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 3
+name = "area_effect_cloud"
+display_name = "Area Effect Cloud"
+width = 6.0
+height = 0.5
+type = "other"
+category = "UNKNOWN"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 4
+name = "armadillo"
+display_name = "Armadillo"
+width = 0.7
+height = 0.65
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 5
+name = "armor_stand"
+display_name = "Armor Stand"
+width = 0.5
+height = 1.975
+type = "living"
+category = "Immobile"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/decoration/armor_stand.rs"
+
+[[entities]]
+id = 6
+name = "arrow"
+display_name = "Arrow"
+width = 0.5
+height = 0.5
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 7
+name = "axolotl"
+display_name = "Axolotl"
+width = 0.75
+height = 0.42
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 8
+name = "bamboo_chest_raft"
+display_name = "Bamboo Raft with Chest"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 9
+name = "bamboo_raft"
+display_name = "Bamboo Raft"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 10
+name = "bat"
+display_name = "Bat"
+width = 0.5
+height = 0.9
+type = "ambient"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/bat.rs"
+
+[[entities]]
+id = 11
+name = "bee"
+display_name = "Bee"
+width = 0.7
+height = 0.6
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 12
+name = "birch_boat"
+display_name = "Birch Boat"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 13
+name = "birch_chest_boat"
+display_name = "Birch Boat with Chest"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 14
+name = "blaze"
+display_name = "Blaze"
+width = 0.6
+height = 1.8
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 15
+name = "block_display"
+display_name = "Block Display"
+width = 0.0
+height = 0.0
+type = "other"
+category = "Immobile"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 16
+name = "bogged"
+display_name = "Bogged"
+width = 0.6
+height = 1.99
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 17
+name = "breeze"
+display_name = "Breeze"
+width = 0.6
+height = 1.77
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 18
+name = "breeze_wind_charge"
+display_name = "Wind Charge"
+width = 0.3125
+height = 0.3125
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 19
+name = "camel"
+display_name = "Camel"
+width = 1.7
+height = 2.375
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 20
+name = "cat"
+display_name = "Cat"
+width = 0.6
+height = 0.7
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 21
+name = "cave_spider"
+display_name = "Cave Spider"
+width = 0.7
+height = 0.5
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "partial"
+pumpkin_path = "pumpkin/src/entity/mob/cave_spider.rs"
+
+[[entities]]
+id = 22
+name = "cherry_boat"
+display_name = "Cherry Boat"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 23
+name = "cherry_chest_boat"
+display_name = "Cherry Boat with Chest"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 24
+name = "chest_minecart"
+display_name = "Minecart with Chest"
+width = 0.98
+height = 0.7
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 25
+name = "chicken"
+display_name = "Chicken"
+width = 0.4
+height = 0.7
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/chicken.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "baby"]
+
+[[entities]]
+id = 26
+name = "cod"
+display_name = "Cod"
+width = 0.5
+height = 0.3
+type = "water_creature"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 27
+name = "command_block_minecart"
+display_name = "Minecart with Command Block"
+width = 0.98
+height = 0.7
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 28
+name = "cow"
+display_name = "Cow"
+width = 0.9
+height = 1.4
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/cow.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "baby"]
+
+[[entities]]
+id = 29
+name = "creaking"
+display_name = "Creaking"
+width = 0.9
+height = 2.7
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 30
+name = "creeper"
+display_name = "Creeper"
+width = 0.6
+height = 1.7
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/mob/creeper.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "swell_dir", "is_powered", "is_ignited"]
+
+[[entities]]
+id = 31
+name = "dark_oak_boat"
+display_name = "Dark Oak Boat"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 32
+name = "dark_oak_chest_boat"
+display_name = "Dark Oak Boat with Chest"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 33
+name = "dolphin"
+display_name = "Dolphin"
+width = 0.9
+height = 0.6
+type = "passive"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 34
+name = "donkey"
+display_name = "Donkey"
+width = 1.3964844
+height = 1.5
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 35
+name = "dragon_fireball"
+display_name = "Dragon Fireball"
+width = 1.0
+height = 1.0
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 36
+name = "drowned"
+display_name = "Drowned"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/mob/drowned.rs"
+
+[[entities]]
+id = 37
+name = "egg"
+display_name = "Thrown Egg"
+width = 0.25
+height = 0.25
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/projectile/egg.rs"
+
+[[entities]]
+id = 38
+name = "elder_guardian"
+display_name = "Elder Guardian"
+width = 1.9975
+height = 1.9975
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 39
+name = "enderman"
+display_name = "Enderman"
+width = 0.6
+height = 2.9
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/mob/enderman.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "carry_state", "creepy", "stared_at"]
+
+[[entities]]
+id = 40
+name = "endermite"
+display_name = "Endermite"
+width = 0.4
+height = 0.3
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 41
+name = "ender_dragon"
+display_name = "Ender Dragon"
+width = 16.0
+height = 8.0
+type = "mob"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 42
+name = "ender_pearl"
+display_name = "Thrown Ender Pearl"
+width = 0.25
+height = 0.25
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 43
+name = "end_crystal"
+display_name = "End Crystal"
+width = 2.0
+height = 2.0
+type = "other"
+category = "Immobile"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/decoration/end_crystal.rs"
+
+[[entities]]
+id = 44
+name = "evoker"
+display_name = "Evoker"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 45
+name = "evoker_fangs"
+display_name = "Evoker Fangs"
+width = 0.5
+height = 0.8
+type = "other"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 46
+name = "experience_bottle"
+display_name = "Thrown Bottle o' Enchanting"
+width = 0.25
+height = 0.25
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 47
+name = "experience_orb"
+display_name = "Experience Orb"
+width = 0.5
+height = 0.5
+type = "other"
+category = "UNKNOWN"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/experience_orb.rs"
+
+[[entities]]
+id = 48
+name = "eye_of_ender"
+display_name = "Eye of Ender"
+width = 0.25
+height = 0.25
+type = "other"
+category = "UNKNOWN"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 49
+name = "falling_block"
+display_name = "Falling Block"
+width = 0.98
+height = 0.98
+type = "other"
+category = "UNKNOWN"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/falling.rs"
+
+[[entities]]
+id = 50
+name = "fireball"
+display_name = "Fireball"
+width = 1.0
+height = 1.0
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 51
+name = "firework_rocket"
+display_name = "Firework Rocket"
+width = 0.25
+height = 0.25
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/projectile/firework_rocket.rs"
+
+[[entities]]
+id = 52
+name = "fox"
+display_name = "Fox"
+width = 0.6
+height = 0.7
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 53
+name = "frog"
+display_name = "Frog"
+width = 0.5
+height = 0.5
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 54
+name = "furnace_minecart"
+display_name = "Minecart with Furnace"
+width = 0.98
+height = 0.7
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 55
+name = "ghast"
+display_name = "Ghast"
+width = 4.0
+height = 4.0
+type = "mob"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 56
+name = "giant"
+display_name = "Giant"
+width = 3.6
+height = 12.0
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 57
+name = "glow_item_frame"
+display_name = "Glow Item Frame"
+width = 0.5
+height = 0.5
+type = "other"
+category = "Immobile"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 58
+name = "glow_squid"
+display_name = "Glow Squid"
+width = 0.8
+height = 0.8
+type = "passive"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 59
+name = "goat"
+display_name = "Goat"
+width = 0.9
+height = 1.3
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 60
+name = "guardian"
+display_name = "Guardian"
+width = 0.85
+height = 0.85
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 61
+name = "hoglin"
+display_name = "Hoglin"
+width = 1.3964844
+height = 1.4
+type = "animal"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 62
+name = "hopper_minecart"
+display_name = "Minecart with Hopper"
+width = 0.98
+height = 0.7
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 63
+name = "horse"
+display_name = "Horse"
+width = 1.3964844
+height = 1.6
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 64
+name = "husk"
+display_name = "Husk"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "partial"
+pumpkin_path = "pumpkin/src/entity/mob/husk.rs"
+
+[[entities]]
+id = 65
+name = "illusioner"
+display_name = "Illusioner"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 66
+name = "interaction"
+display_name = "Interaction"
+width = 0.0
+height = 0.0
+type = "other"
+category = "Immobile"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 67
+name = "iron_golem"
+display_name = "Iron Golem"
+width = 1.4
+height = 2.7
+type = "mob"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/iron_golem.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "flags"]
+
+[[entities]]
+id = 68
+name = "item"
+display_name = "Item"
+width = 0.25
+height = 0.25
+type = "other"
+category = "UNKNOWN"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/item.rs"
+
+[[entities]]
+id = 69
+name = "item_display"
+display_name = "Item Display"
+width = 0.0
+height = 0.0
+type = "other"
+category = "Immobile"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 70
+name = "item_frame"
+display_name = "Item Frame"
+width = 0.5
+height = 0.5
+type = "other"
+category = "Immobile"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 71
+name = "jungle_boat"
+display_name = "Jungle Boat"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 72
+name = "jungle_chest_boat"
+display_name = "Jungle Boat with Chest"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 73
+name = "leash_knot"
+display_name = "Leash Knot"
+width = 0.375
+height = 0.5
+type = "other"
+category = "Immobile"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 74
+name = "lightning_bolt"
+display_name = "Lightning Bolt"
+width = 0.0
+height = 0.0
+type = "other"
+category = "UNKNOWN"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 75
+name = "llama"
+display_name = "Llama"
+width = 0.9
+height = 1.87
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 76
+name = "llama_spit"
+display_name = "Llama Spit"
+width = 0.25
+height = 0.25
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 77
+name = "magma_cube"
+display_name = "Magma Cube"
+width = 0.52
+height = 0.52
+type = "mob"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 78
+name = "mangrove_boat"
+display_name = "Mangrove Boat"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 79
+name = "mangrove_chest_boat"
+display_name = "Mangrove Boat with Chest"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 80
+name = "marker"
+display_name = "Marker"
+width = 0.0
+height = 0.0
+type = "other"
+category = "UNKNOWN"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 81
+name = "minecart"
+display_name = "Minecart"
+width = 0.98
+height = 0.7
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 82
+name = "mooshroom"
+display_name = "Mooshroom"
+width = 0.9
+height = 1.4
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 83
+name = "mule"
+display_name = "Mule"
+width = 1.3964844
+height = 1.6
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 84
+name = "oak_boat"
+display_name = "Oak Boat"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 85
+name = "oak_chest_boat"
+display_name = "Oak Boat with Chest"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 86
+name = "ocelot"
+display_name = "Ocelot"
+width = 0.6
+height = 0.7
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/ocelot.rs"
+
+[[entities]]
+id = 87
+name = "ominous_item_spawner"
+display_name = "Ominous Item Spawner"
+width = 0.25
+height = 0.25
+type = "other"
+category = "UNKNOWN"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 88
+name = "painting"
+display_name = "Painting"
+width = 0.5
+height = 0.5
+type = "other"
+category = "Immobile"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/decoration/painting.rs"
+
+[[entities]]
+id = 89
+name = "pale_oak_boat"
+display_name = "Pale Oak Boat"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 90
+name = "pale_oak_chest_boat"
+display_name = "Pale Oak Boat with Chest"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 91
+name = "panda"
+display_name = "Panda"
+width = 1.3
+height = 1.25
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 92
+name = "parrot"
+display_name = "Parrot"
+width = 0.5
+height = 0.9
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 93
+name = "phantom"
+display_name = "Phantom"
+width = 0.9
+height = 0.5
+type = "mob"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 94
+name = "pig"
+display_name = "Pig"
+width = 0.9
+height = 0.9
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/pig.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "baby", "saddle", "boost_time"]
+
+[[entities]]
+id = 95
+name = "piglin"
+display_name = "Piglin"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 96
+name = "piglin_brute"
+display_name = "Piglin Brute"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 97
+name = "pillager"
+display_name = "Pillager"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 98
+name = "polar_bear"
+display_name = "Polar Bear"
+width = 1.4
+height = 1.4
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 99
+name = "potion"
+display_name = "Potion"
+width = 0.25
+height = 0.25
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 100
+name = "pufferfish"
+display_name = "Pufferfish"
+width = 0.7
+height = 0.7
+type = "water_creature"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 101
+name = "rabbit"
+display_name = "Rabbit"
+width = 0.4
+height = 0.5
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/rabbit.rs"
+
+[[entities]]
+id = 102
+name = "ravager"
+display_name = "Ravager"
+width = 1.95
+height = 2.2
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 103
+name = "salmon"
+display_name = "Salmon"
+width = 0.7
+height = 0.4
+type = "water_creature"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 104
+name = "sheep"
+display_name = "Sheep"
+width = 0.9
+height = 1.3
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/sheep.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "baby", "wool"]
+
+[[entities]]
+id = 105
+name = "shulker"
+display_name = "Shulker"
+width = 1.0
+height = 1.0
+type = "mob"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 106
+name = "shulker_bullet"
+display_name = "Shulker Bullet"
+width = 0.3125
+height = 0.3125
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 107
+name = "silverfish"
+display_name = "Silverfish"
+width = 0.4
+height = 0.3
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/mob/silverfish.rs"
+
+[[entities]]
+id = 108
+name = "skeleton"
+display_name = "Skeleton"
+width = 0.6
+height = 1.99
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/mob/skeleton/mod.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "stray_conversion"]
+
+[[entities]]
+id = 109
+name = "skeleton_horse"
+display_name = "Skeleton Horse"
+width = 1.3964844
+height = 1.6
+type = "animal"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 110
+name = "slime"
+display_name = "Slime"
+width = 0.52
+height = 0.52
+type = "mob"
+category = "Hostile mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/mob/slime.rs"
+
+[[entities]]
+id = 111
+name = "small_fireball"
+display_name = "Small Fireball"
+width = 0.3125
+height = 0.3125
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 112
+name = "sniffer"
+display_name = "Sniffer"
+width = 1.9
+height = 1.75
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 113
+name = "snowball"
+display_name = "Snowball"
+width = 0.25
+height = 0.25
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/projectile/snowball.rs"
+
+[[entities]]
+id = 114
+name = "snow_golem"
+display_name = "Snow Golem"
+width = 0.7
+height = 1.9
+type = "mob"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/snow_golem.rs"
+
+[[entities]]
+id = 115
+name = "spawner_minecart"
+display_name = "Minecart with Monster Spawner"
+width = 0.98
+height = 0.7
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 116
+name = "spectral_arrow"
+display_name = "Spectral Arrow"
+width = 0.5
+height = 0.5
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 117
+name = "spider"
+display_name = "Spider"
+width = 1.4
+height = 0.9
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/mob/spider.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "flags"]
+
+[[entities]]
+id = 118
+name = "spruce_boat"
+display_name = "Spruce Boat"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 119
+name = "spruce_chest_boat"
+display_name = "Spruce Boat with Chest"
+width = 1.375
+height = 0.5625
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 120
+name = "squid"
+display_name = "Squid"
+width = 0.8
+height = 0.8
+type = "passive"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/squid.rs"
+
+[[entities]]
+id = 121
+name = "stray"
+display_name = "Stray"
+width = 0.6
+height = 1.99
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "partial"
+pumpkin_path = "pumpkin/src/entity/mob/stray.rs"
+
+[[entities]]
+id = 122
+name = "strider"
+display_name = "Strider"
+width = 0.9
+height = 1.7
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 123
+name = "tadpole"
+display_name = "Tadpole"
+width = 0.4
+height = 0.3
+type = "water_creature"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 124
+name = "text_display"
+display_name = "Text Display"
+width = 0.0
+height = 0.0
+type = "other"
+category = "Immobile"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 125
+name = "tnt"
+display_name = "Primed TNT"
+width = 0.98
+height = 0.98
+type = "other"
+category = "UNKNOWN"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/tnt.rs"
+
+[[entities]]
+id = 126
+name = "tnt_minecart"
+display_name = "Minecart with TNT"
+width = 0.98
+height = 0.7
+type = "other"
+category = "Vehicles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 127
+name = "trader_llama"
+display_name = "Trader Llama"
+width = 0.9
+height = 1.87
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 128
+name = "trident"
+display_name = "Trident"
+width = 0.5
+height = 0.5
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 129
+name = "tropical_fish"
+display_name = "Tropical Fish"
+width = 0.5
+height = 0.4
+type = "water_creature"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 130
+name = "turtle"
+display_name = "Turtle"
+width = 1.2
+height = 0.4
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 131
+name = "vex"
+display_name = "Vex"
+width = 0.4
+height = 0.8
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 132
+name = "villager"
+display_name = "Villager"
+width = 0.6
+height = 1.95
+type = "passive"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "baby", "unhappy_counter", "villager_data"]
+
+[[entities]]
+id = 133
+name = "vindicator"
+display_name = "Vindicator"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 134
+name = "wandering_trader"
+display_name = "Wandering Trader"
+width = 0.6
+height = 1.95
+type = "passive"
+category = "Passive mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 135
+name = "warden"
+display_name = "Warden"
+width = 0.9
+height = 2.9
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 136
+name = "wind_charge"
+display_name = "Wind Charge"
+width = 0.3125
+height = 0.3125
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/projectile/wind_charge.rs"
+
+[[entities]]
+id = 137
+name = "witch"
+display_name = "Witch"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/mob/witch.rs"
+
+[[entities]]
+id = 138
+name = "wither"
+display_name = "Wither"
+width = 0.9
+height = 3.5
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "partial"
+pumpkin_path = "pumpkin/src/entity/boss/wither.rs"
+
+[[entities]]
+id = 139
+name = "wither_skeleton"
+display_name = "Wither Skeleton"
+width = 0.7
+height = 2.4
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 140
+name = "wither_skull"
+display_name = "Wither Skull"
+width = 0.3125
+height = 0.3125
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 141
+name = "wolf"
+display_name = "Wolf"
+width = 0.6
+height = 0.85
+type = "animal"
+category = "Passive mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/passive/wolf.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "baby", "flags", "owneruuid", "interested", "collar_color", "remaining_anger_time", "variant"]
+
+[[entities]]
+id = 142
+name = "zoglin"
+display_name = "Zoglin"
+width = 1.3964844
+height = 1.4
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 143
+name = "zombie"
+display_name = "Zombie"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/mob/zombie.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "mob_flags", "baby", "special_type", "drowned_conversion"]
+
+[[entities]]
+id = 144
+name = "zombie_horse"
+display_name = "Zombie Horse"
+width = 1.3964844
+height = 1.6
+type = "animal"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 145
+name = "zombie_villager"
+display_name = "Zombie Villager"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "partial"
+pumpkin_path = "pumpkin/src/entity/mob/zombie_villager.rs"
+
+[[entities]]
+id = 146
+name = "zombified_piglin"
+display_name = "Zombified Piglin"
+width = 0.6
+height = 1.95
+type = "hostile"
+category = "Hostile mobs"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+[[entities]]
+id = 147
+name = "player"
+display_name = "Player"
+width = 0.6
+height = 1.8
+type = "player"
+category = "UNKNOWN"
+pumpkin_status = "implemented"
+pumpkin_path = "pumpkin/src/entity/player.rs"
+metadata_keys = ["shared_flags", "air_supply", "custom_name", "custom_name_visible", "silent", "no_gravity", "pose", "ticks_frozen", "living_entity_flags", "health", "effect_particles", "effect_ambience", "arrow_count", "stinger_count", "sleeping_pos", "player_absorption", "score", "player_mode_customisation", "player_main_hand", "shoulder_left", "shoulder_right"]
+
+[[entities]]
+id = 148
+name = "fishing_bobber"
+display_name = "Fishing Bobber"
+width = 0.25
+height = 0.25
+type = "projectile"
+category = "Projectiles"
+pumpkin_status = "missing"
+pumpkin_path = ""
+
+# =============================================================================
+# STATUS EFFECTS (39 total)
+# =============================================================================
+
+[[effects]]
+id = 0
+name = "Speed"
+type = "good"
+
+[[effects]]
+id = 1
+name = "Slowness"
+type = "bad"
+
+[[effects]]
+id = 2
+name = "Haste"
+type = "good"
+
+[[effects]]
+id = 3
+name = "MiningFatigue"
+type = "bad"
+
+[[effects]]
+id = 4
+name = "Strength"
+type = "good"
+
+[[effects]]
+id = 5
+name = "InstantHealth"
+type = "good"
+
+[[effects]]
+id = 6
+name = "InstantDamage"
+type = "bad"
+
+[[effects]]
+id = 7
+name = "JumpBoost"
+type = "good"
+
+[[effects]]
+id = 8
+name = "Nausea"
+type = "bad"
+
+[[effects]]
+id = 9
+name = "Regeneration"
+type = "good"
+
+[[effects]]
+id = 10
+name = "Resistance"
+type = "good"
+
+[[effects]]
+id = 11
+name = "FireResistance"
+type = "good"
+
+[[effects]]
+id = 12
+name = "WaterBreathing"
+type = "good"
+
+[[effects]]
+id = 13
+name = "Invisibility"
+type = "good"
+
+[[effects]]
+id = 14
+name = "Blindness"
+type = "bad"
+
+[[effects]]
+id = 15
+name = "NightVision"
+type = "good"
+
+[[effects]]
+id = 16
+name = "Hunger"
+type = "bad"
+
+[[effects]]
+id = 17
+name = "Weakness"
+type = "bad"
+
+[[effects]]
+id = 18
+name = "Poison"
+type = "bad"
+
+[[effects]]
+id = 19
+name = "Wither"
+type = "bad"
+
+[[effects]]
+id = 20
+name = "HealthBoost"
+type = "good"
+
+[[effects]]
+id = 21
+name = "Absorption"
+type = "good"
+
+[[effects]]
+id = 22
+name = "Saturation"
+type = "good"
+
+[[effects]]
+id = 23
+name = "Glowing"
+type = "bad"
+
+[[effects]]
+id = 24
+name = "Levitation"
+type = "bad"
+
+[[effects]]
+id = 25
+name = "Luck"
+type = "good"
+
+[[effects]]
+id = 26
+name = "Unluck"
+type = "bad"
+
+[[effects]]
+id = 27
+name = "SlowFalling"
+type = "good"
+
+[[effects]]
+id = 28
+name = "ConduitPower"
+type = "good"
+
+[[effects]]
+id = 29
+name = "DolphinsGrace"
+type = "good"
+
+[[effects]]
+id = 30
+name = "BadOmen"
+type = "bad"
+
+[[effects]]
+id = 31
+name = "HeroOfTheVillage"
+type = "good"
+
+[[effects]]
+id = 32
+name = "Darkness"
+type = "bad"
+
+[[effects]]
+id = 33
+name = "TrialOmen"
+type = "bad"
+
+[[effects]]
+id = 34
+name = "RaidOmen"
+type = "bad"
+
+[[effects]]
+id = 35
+name = "WindCharged"
+type = "bad"
+
+[[effects]]
+id = 36
+name = "Weaving"
+type = "bad"
+
+[[effects]]
+id = 37
+name = "Oozing"
+type = "bad"
+
+[[effects]]
+id = 38
+name = "Infested"
+type = "bad"
+
+# =============================================================================
+# FOODS (40 total)
+# =============================================================================
+
+[[foods]]
+name = "apple"
+food_points = 4.0
+saturation = 19.2
+
+[[foods]]
+name = "mushroom_stew"
+food_points = 6.0
+saturation = 86.4
+
+[[foods]]
+name = "bread"
+food_points = 5.0
+saturation = 60.0
+
+[[foods]]
+name = "porkchop"
+food_points = 3.0
+saturation = 10.8
+
+[[foods]]
+name = "cooked_porkchop"
+food_points = 8.0
+saturation = 204.8
+
+[[foods]]
+name = "golden_apple"
+food_points = 4.0
+saturation = 76.8
+
+[[foods]]
+name = "enchanted_golden_apple"
+food_points = 4.0
+saturation = 76.8
+
+[[foods]]
+name = "cod"
+food_points = 2.0
+saturation = 1.6
+
+[[foods]]
+name = "salmon"
+food_points = 2.0
+saturation = 1.6
+
+[[foods]]
+name = "tropical_fish"
+food_points = 1.0
+saturation = 0.4
+
+[[foods]]
+name = "pufferfish"
+food_points = 1.0
+saturation = 0.4
+
+[[foods]]
+name = "cooked_cod"
+food_points = 5.0
+saturation = 60.0
+
+[[foods]]
+name = "cooked_salmon"
+food_points = 6.0
+saturation = 115.200005
+
+[[foods]]
+name = "cookie"
+food_points = 2.0
+saturation = 1.6
+
+[[foods]]
+name = "melon_slice"
+food_points = 2.0
+saturation = 4.8
+
+[[foods]]
+name = "dried_kelp"
+food_points = 1.0
+saturation = 1.2
+
+[[foods]]
+name = "beef"
+food_points = 3.0
+saturation = 10.8
+
+[[foods]]
+name = "cooked_beef"
+food_points = 8.0
+saturation = 204.8
+
+[[foods]]
+name = "chicken"
+food_points = 2.0
+saturation = 4.8
+
+[[foods]]
+name = "cooked_chicken"
+food_points = 6.0
+saturation = 86.4
+
+[[foods]]
+name = "rotten_flesh"
+food_points = 4.0
+saturation = 6.4
+
+[[foods]]
+name = "spider_eye"
+food_points = 2.0
+saturation = 12.8
+
+[[foods]]
+name = "carrot"
+food_points = 3.0
+saturation = 21.6
+
+[[foods]]
+name = "potato"
+food_points = 1.0
+saturation = 1.2
+
+[[foods]]
+name = "baked_potato"
+food_points = 5.0
+saturation = 60.0
+
+[[foods]]
+name = "poisonous_potato"
+food_points = 2.0
+saturation = 4.8
+
+[[foods]]
+name = "golden_carrot"
+food_points = 6.0
+saturation = 172.8
+
+[[foods]]
+name = "pumpkin_pie"
+food_points = 8.0
+saturation = 76.8
+
+[[foods]]
+name = "rabbit"
+food_points = 3.0
+saturation = 10.8
+
+[[foods]]
+name = "cooked_rabbit"
+food_points = 5.0
+saturation = 60.0
+
+[[foods]]
+name = "rabbit_stew"
+food_points = 10.0
+saturation = 240.0
+
+[[foods]]
+name = "mutton"
+food_points = 2.0
+saturation = 4.8
+
+[[foods]]
+name = "cooked_mutton"
+food_points = 6.0
+saturation = 115.200005
+
+[[foods]]
+name = "chorus_fruit"
+food_points = 4.0
+saturation = 19.2
+
+[[foods]]
+name = "beetroot"
+food_points = 1.0
+saturation = 2.4
+
+[[foods]]
+name = "beetroot_soup"
+food_points = 6.0
+saturation = 86.4
+
+[[foods]]
+name = "suspicious_stew"
+food_points = 6.0
+saturation = 86.4
+
+[[foods]]
+name = "sweet_berries"
+food_points = 2.0
+saturation = 1.6
+
+[[foods]]
+name = "glow_berries"
+food_points = 2.0
+saturation = 1.6
+
+[[foods]]
+name = "honey_bottle"
+food_points = 6.0
+saturation = 14.400001
+
+# =============================================================================
+# DAMAGE TYPES (49 total)
+# =============================================================================
+
+[[damage_types]]
+name = "arrow"
+
+[[damage_types]]
+name = "bad_respawn_point"
+
+[[damage_types]]
+name = "cactus"
+
+[[damage_types]]
+name = "campfire"
+
+[[damage_types]]
+name = "cramming"
+
+[[damage_types]]
+name = "dragon_breath"
+
+[[damage_types]]
+name = "drown"
+
+[[damage_types]]
+name = "dry_out"
+
+[[damage_types]]
+name = "ender_pearl"
+
+[[damage_types]]
+name = "explosion"
+
+[[damage_types]]
+name = "fall"
+
+[[damage_types]]
+name = "falling_anvil"
+
+[[damage_types]]
+name = "falling_block"
+
+[[damage_types]]
+name = "falling_stalactite"
+
+[[damage_types]]
+name = "fireball"
+
+[[damage_types]]
+name = "fireworks"
+
+[[damage_types]]
+name = "fly_into_wall"
+
+[[damage_types]]
+name = "freeze"
+
+[[damage_types]]
+name = "generic"
+
+[[damage_types]]
+name = "generic_kill"
+
+[[damage_types]]
+name = "hot_floor"
+
+[[damage_types]]
+name = "in_fire"
+
+[[damage_types]]
+name = "in_wall"
+
+[[damage_types]]
+name = "indirect_magic"
+
+[[damage_types]]
+name = "lava"
+
+[[damage_types]]
+name = "lightning_bolt"
+
+[[damage_types]]
+name = "mace_smash"
+
+[[damage_types]]
+name = "magic"
+
+[[damage_types]]
+name = "mob_attack"
+
+[[damage_types]]
+name = "mob_attack_no_aggro"
+
+[[damage_types]]
+name = "mob_projectile"
+
+[[damage_types]]
+name = "on_fire"
+
+[[damage_types]]
+name = "out_of_world"
+
+[[damage_types]]
+name = "outside_border"
+
+[[damage_types]]
+name = "player_attack"
+
+[[damage_types]]
+name = "player_explosion"
+
+[[damage_types]]
+name = "sonic_boom"
+
+[[damage_types]]
+name = "spit"
+
+[[damage_types]]
+name = "stalagmite"
+
+[[damage_types]]
+name = "starve"
+
+[[damage_types]]
+name = "sting"
+
+[[damage_types]]
+name = "sweet_berry_bush"
+
+[[damage_types]]
+name = "thorns"
+
+[[damage_types]]
+name = "thrown"
+
+[[damage_types]]
+name = "trident"
+
+[[damage_types]]
+name = "unattributed_fireball"
+
+[[damage_types]]
+name = "wind_charge"
+
+[[damage_types]]
+name = "wither"
+
+[[damage_types]]
+name = "wither_skull"

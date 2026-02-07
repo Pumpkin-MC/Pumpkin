@@ -6,11 +6,13 @@
 [meta]
 bukkit_version = "1.21.4"
 source_url = "https://hub.spigotmc.org/javadocs/bukkit/"
-total_events = 318
-total_interfaces = 8
+total_events = 283
+total_interfaces = 9
 total_enums = 5
 pumpkin_implemented = 28
-pumpkin_missing = 290
+pumpkin_stub = 1
+pumpkin_missing = 252
+note = "Bukkit header says 318 but 37 of those are inner enums (DamageCause, SpawnReason, etc.), not events"
 
 # ═══════════════════════════════════════════════════════════════════════
 # EVENTS — block (50 events)
@@ -139,7 +141,7 @@ fields = [
 ]
 status = "missing"
 priority = "medium"
-owner = "plugin"
+owner = "world"
 
 [[events]]
 name = "BlockExplodeEvent"
@@ -2385,11 +2387,11 @@ stub = 1
 missing = 289
 
 [sprint.by_owner]
-entity = 82
-items = 32
-world = 28
-redstone = 15
-plugin = 6
-protocol = 8
+entity = 118
+items = 46
+world = 38
+redstone = 13
+protocol = 10
 core = 7
-unassigned = 111
+plugin = 4
+# Note: some events have no owner (abstract bases). Total owners assigned = 236

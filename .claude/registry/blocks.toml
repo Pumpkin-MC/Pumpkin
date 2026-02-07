@@ -1,0 +1,509 @@
+# Block Registry — auto-generated from Mojang mcmeta + PrismarineJS data
+# Source specs: block_definitions.json, materials.json, mcdata-1.21.4.zip
+# Block ownership: .claude/contracts/block-ownership.toml
+
+[meta]
+mc_version = "1.21.4"
+source = "Mojang mcmeta + PrismarineJS"
+total_blocks = 1095
+total_biomes = 135
+total_structures = 47
+
+# =============================================================================
+# Block Types — minecraft:type → count, sorted by count descending
+# Extracted from block_definitions.json (1095 blocks, 198 distinct types)
+# =============================================================================
+[block_types]
+block = 172
+slab = 58
+rotated_pillar = 56
+stair = 54
+flower_pot = 38
+wall = 26
+door = 17
+trapdoor = 17
+candle = 17
+candle_cake = 17
+shulker_box = 17
+banner = 16
+bed = 16
+wool_carpet = 16
+concrete_powder = 16
+glazed_terracotta = 16
+stained_glass = 16
+stained_glass_pane = 16
+wall_banner = 16
+drop_experience = 16
+button = 14
+pressure_plate = 14
+fence = 13
+flower = 13
+fence_gate = 12
+ceiling_hanging_sign = 12
+standing_sign = 12
+wall_hanging_sign = 12
+wall_sign = 12
+weathering_copper_full = 12
+leaves = 8
+sapling = 8
+infested = 6
+coral_plant = 5
+coral = 5
+coral_fan = 5
+coral_wall_fan = 5
+skull = 5
+base_coral_plant = 5
+base_coral_fan = 5
+base_coral_wall_fan = 5
+amethyst_cluster = 4
+weathering_copper_bulb = 4
+weathering_copper_door = 4
+weathering_copper_grate = 4
+weathering_copper_trap_door = 4
+wall_skull = 4
+weathering_copper_slab = 4
+weathering_copper_stair = 4
+tall_flower = 4
+copper_bulb_block = 4
+waterlogged_transparent = 4
+air = 3
+anvil = 3
+huge_mushroom = 3
+command = 3
+colored_falling = 3
+double_plant = 3
+powered_rail = 2
+attached_stem = 2
+azalea = 2
+beehive = 2
+mushroom = 2
+campfire = 2
+jack_o_lantern = 2
+particle_leaves = 2
+eyeblossom = 2
+fungus = 2
+nylium = 2
+roots = 2
+redstone_ore = 2
+tall_grass = 2
+iron_bars = 2
+weighted_pressure_plate = 2
+lantern = 2
+liquid = 2
+stem = 2
+bonemealable_feature_placer = 2
+piston_base = 2
+layered_cauldron = 2
+torch = 2
+wall_torch = 2
+brushable = 2
+# --- Singleton types (count = 1 each) ---
+amethyst = 1
+bamboo_stalk = 1
+bamboo_sapling = 1
+barrel = 1
+barrier = 1
+beacon = 1
+beetroot = 1
+bell = 1
+big_dripleaf = 1
+big_dripleaf_stem = 1
+blast_furnace = 1
+half_transparent = 1
+brewing_stand = 1
+bubble_column = 1
+budding_amethyst = 1
+cactus = 1
+cake = 1
+calibrated_sculk_sensor = 1
+carrot = 1
+cartography_table = 1
+cauldron = 1
+cave_vines = 1
+cave_vines_plant = 1
+chain = 1
+chest = 1
+chiseled_book_shelf = 1
+chorus_flower = 1
+chorus_plant = 1
+web = 1
+cocoa = 1
+comparator = 1
+composter = 1
+conduit = 1
+crafter = 1
+crafting_table = 1
+creaking_heart = 1
+crying_obsidian = 1
+daylight_detector = 1
+dead_bush = 1
+decorated_pot = 1
+detector_rail = 1
+dirt_path = 1
+dispenser = 1
+dragon_egg = 1
+dropper = 1
+enchantment_table = 1
+end_gateway = 1
+end_portal = 1
+end_portal_frame = 1
+end_rod = 1
+ender_chest = 1
+farm = 1
+fire = 1
+fletching_table = 1
+frogspawn = 1
+frosted_ice = 1
+furnace = 1
+transparent = 1
+glow_lichen = 1
+grass = 1
+grindstone = 1
+hanging_roots = 1
+hay = 1
+heavy_core = 1
+honey = 1
+hopper = 1
+ice = 1
+infested_rotated_pillar = 1
+jigsaw = 1
+jukebox = 1
+kelp = 1
+kelp_plant = 1
+ladder = 1
+lava_cauldron = 1
+lectern = 1
+lever = 1
+light = 1
+lightning_rod = 1
+waterlily = 1
+loom = 1
+magma = 1
+mangrove_leaves = 1
+mangrove_propagule = 1
+mangrove_roots = 1
+carpet = 1
+moving_piston = 1
+mud = 1
+mycelium = 1
+nether_portal = 1
+nether_sprouts = 1
+nether_wart = 1
+netherrack = 1
+note = 1
+observer = 1
+hanging_moss = 1
+mossy_carpet = 1
+piglinwallskull = 1
+pink_petals = 1
+piston_head = 1
+pitcher_crop = 1
+player_head = 1
+player_wall_head = 1
+snowy_dirt = 1
+pointed_dripstone = 1
+potato = 1
+powder_snow = 1
+pumpkin = 1
+rail = 1
+powered = 1
+redstone_lamp = 1
+redstone_torch = 1
+redstone_wall_torch = 1
+redstone_wire = 1
+repeater = 1
+multiface = 1
+respawn_anchor = 1
+rooted_dirt = 1
+scaffolding = 1
+sculk = 1
+sculk_catalyst = 1
+sculk_sensor = 1
+sculk_shrieker = 1
+sculk_vein = 1
+sea_pickle = 1
+seagrass = 1
+slime = 1
+small_dripleaf = 1
+smithing_table = 1
+smoker = 1
+sniffer_egg = 1
+snow_layer = 1
+soul_fire = 1
+soul_sand = 1
+spawner = 1
+sponge = 1
+spore_blossom = 1
+stonecutter = 1
+structure = 1
+structure_void = 1
+sugar_cane = 1
+sweet_berry_bush = 1
+tall_seagrass = 1
+target = 1
+tinted_glass = 1
+tnt = 1
+torchflower_crop = 1
+trapped_chest = 1
+trial_spawner = 1
+tripwire = 1
+trip_wire_hook = 1
+turtle_egg = 1
+twisting_vines = 1
+twisting_vines_plant = 1
+vault = 1
+vine = 1
+weeping_vines = 1
+weeping_vines_plant = 1
+wet_sponge = 1
+crop = 1
+wither_rose = 1
+wither_skull = 1
+wither_wall_skull = 1
+
+# =============================================================================
+# Mining Speeds — from PrismarineJS materials.json
+# Keys are block material categories. Values are tables of tool_id → multiplier.
+# Tool IDs: 850=wooden_shovel, 851=wooden_pickaxe, 852=wooden_axe, 853=wooden_hoe,
+#   855=stone_shovel, 856=stone_pickaxe, 857=stone_axe, 858=stone_hoe,
+#   860=gold_shovel, 861=gold_pickaxe, 862=gold_axe, 863=gold_hoe,
+#   865=iron_shovel, 866=iron_pickaxe, 867=iron_axe, 868=iron_hoe,
+#   870=diamond_shovel, 871=diamond_pickaxe, 872=diamond_axe, 873=diamond_hoe,
+#   875=netherite_shovel, 876=netherite_pickaxe, 877=netherite_axe, 878=netherite_hoe,
+#   1032=shears
+# =============================================================================
+[mining_speeds]
+
+[mining_speeds.leaves]
+shears = 15.0
+
+[mining_speeds.cobweb]
+shears = 15.0
+
+[mining_speeds.vine_or_glow_lichen]
+shears = 2.0
+
+[mining_speeds.wool]
+shears = 5.0
+
+[mining_speeds."mineable/shovel"]
+wooden = 2.0
+stone = 4.0
+gold = 12.0
+iron = 6.0
+diamond = 8.0
+netherite = 9.0
+
+[mining_speeds."mineable/pickaxe"]
+wooden = 2.0
+stone = 4.0
+gold = 12.0
+iron = 6.0
+diamond = 8.0
+netherite = 9.0
+
+[mining_speeds."mineable/axe"]
+wooden = 2.0
+stone = 4.0
+gold = 12.0
+iron = 6.0
+diamond = 8.0
+netherite = 9.0
+
+[mining_speeds."mineable/hoe"]
+wooden = 2.0
+stone = 4.0
+gold = 12.0
+iron = 6.0
+diamond = 8.0
+netherite = 9.0
+
+[mining_speeds.incorrect_for_wooden_tool]
+# These tool tiers do NOT get their speed bonus on certain blocks
+wooden_shovel = 1.0
+wooden_pickaxe = 1.0
+wooden_axe = 1.0
+wooden_hoe = 1.0
+
+[mining_speeds.incorrect_for_stone_tool]
+stone_shovel = 4.0
+stone_pickaxe = 4.0
+stone_axe = 4.0
+stone_hoe = 4.0
+
+[mining_speeds.incorrect_for_gold_tool]
+gold_shovel = 12.0
+gold_pickaxe = 12.0
+gold_axe = 12.0
+gold_hoe = 12.0
+
+[mining_speeds.incorrect_for_iron_tool]
+iron_shovel = 6.0
+iron_pickaxe = 6.0
+iron_axe = 6.0
+iron_hoe = 6.0
+
+[mining_speeds.incorrect_for_diamond_tool]
+diamond_shovel = 8.0
+diamond_pickaxe = 8.0
+diamond_axe = 8.0
+diamond_hoe = 8.0
+
+[mining_speeds.incorrect_for_netherite_tool]
+netherite_shovel = 9.0
+netherite_pickaxe = 9.0
+netherite_axe = 9.0
+netherite_hoe = 9.0
+
+[mining_speeds."plant;mineable/axe"]
+# Compound: plant material + axe-mineable
+axe_all_tiers = 1.0
+
+[mining_speeds."gourd;mineable/axe"]
+# Compound: gourd material + axe-mineable
+axe_all_tiers = 1.0
+
+[mining_speeds."leaves;mineable/hoe"]
+# Compound: leaves + hoe-mineable
+shears = 15.0
+hoe_all_tiers = 1.0
+
+[mining_speeds."leaves;mineable/axe;mineable/hoe"]
+# Compound: leaves + axe + hoe-mineable
+shears = 15.0
+axe_all_tiers = 1.0
+hoe_all_tiers = 1.0
+
+[mining_speeds."vine_or_glow_lichen;plant;mineable/axe"]
+# Compound: vine/glow_lichen + plant + axe-mineable
+shears = 2.0
+axe_all_tiers = 1.0
+
+# =============================================================================
+# Worldgen Inventory — file counts from mcdata-1.21.4.zip
+# =============================================================================
+[worldgen_inventory]
+biomes = 135
+configured_features = 204
+placed_features = 238
+structures = 47
+dimensions = 3
+
+# =============================================================================
+# Block Ownership — which agent owns which block paths
+# Source: .claude/contracts/block-ownership.toml (decision ARCH-001)
+# =============================================================================
+[block_ownership]
+
+[block_ownership.redstone]
+# Signal propagation, components, quasi-connectivity
+paths = [
+    "pumpkin/src/block/blocks/redstone/",
+    "pumpkin/src/block/blocks/piston/",
+]
+
+[block_ownership.world]
+# Block registry, block state management, placement rules
+paths = [
+    "pumpkin/src/block/registry.rs",
+    "pumpkin/src/block/blocks/plant/",
+    "pumpkin/src/block/blocks/falling.rs",
+    "pumpkin/src/block/blocks/farmland.rs",
+    "pumpkin/src/block/blocks/dirt_path.rs",
+    "pumpkin/src/block/blocks/snow.rs",
+    "pumpkin/src/block/blocks/vine.rs",
+    "pumpkin/src/block/blocks/mangrove_roots.rs",
+    "pumpkin/src/block/blocks/powder_snow.rs",
+    "pumpkin/src/block/fluid/",
+]
+
+[block_ownership.entity]
+# Blocks with entity interaction
+paths = [
+    "pumpkin/src/block/blocks/bed.rs",
+    "pumpkin/src/block/blocks/spawner.rs",
+    "pumpkin/src/block/blocks/skull_block.rs",
+    "pumpkin/src/block/blocks/tnt.rs",
+    "pumpkin/src/block/blocks/wither_skull.rs",
+]
+
+[block_ownership.items]
+# Blocks with inventory/crafting behavior
+paths = [
+    "pumpkin/src/block/blocks/anvil.rs",
+    "pumpkin/src/block/blocks/barrel.rs",
+    "pumpkin/src/block/blocks/blast_furnace.rs",
+    "pumpkin/src/block/blocks/cake.rs",
+    "pumpkin/src/block/blocks/campfire.rs",
+    "pumpkin/src/block/blocks/chests.rs",
+    "pumpkin/src/block/blocks/chiseled_bookshelf.rs",
+    "pumpkin/src/block/blocks/composter.rs",
+    "pumpkin/src/block/blocks/crafting_table.rs",
+    "pumpkin/src/block/blocks/ender_chest.rs",
+    "pumpkin/src/block/blocks/furnace.rs",
+    "pumpkin/src/block/blocks/grindstone.rs",
+    "pumpkin/src/block/blocks/hopper.rs",
+    "pumpkin/src/block/blocks/jukebox.rs",
+    "pumpkin/src/block/blocks/lectern.rs",
+    "pumpkin/src/block/blocks/shulker_box.rs",
+    "pumpkin/src/block/blocks/smoker.rs",
+    "pumpkin/src/block/blocks/shelf.rs",
+    "pumpkin/src/block/blocks/flower_pots.rs",
+    "pumpkin/src/block/blocks/banners.rs",
+]
+
+[block_ownership.core]
+# Blocks with command/server interaction
+paths = [
+    "pumpkin/src/block/blocks/command.rs",
+    "pumpkin/src/block/blocks/barrier.rs",
+    "pumpkin/src/block/blocks/end_portal.rs",
+    "pumpkin/src/block/blocks/end_portal_frame.rs",
+    "pumpkin/src/block/blocks/nether_portal.rs",
+]
+
+[block_ownership.shared_structural]
+# Building blocks — no agent owns exclusively; write requires Architect approval
+owner = "architect"
+paths = [
+    "pumpkin/src/block/mod.rs",
+    "pumpkin/src/block/blocks/mod.rs",
+    "pumpkin/src/block/blocks/abstract_wall_mounting.rs",
+    "pumpkin/src/block/blocks/candles.rs",
+    "pumpkin/src/block/blocks/candle_cakes.rs",
+    "pumpkin/src/block/blocks/carpet.rs",
+    "pumpkin/src/block/blocks/carved_pumpkin.rs",
+    "pumpkin/src/block/blocks/chain.rs",
+    "pumpkin/src/block/blocks/doors.rs",
+    "pumpkin/src/block/blocks/end_rod.rs",
+    "pumpkin/src/block/blocks/fences.rs",
+    "pumpkin/src/block/blocks/fence_gates.rs",
+    "pumpkin/src/block/blocks/fire/",
+    "pumpkin/src/block/blocks/glass_panes.rs",
+    "pumpkin/src/block/blocks/glazed_terracotta.rs",
+    "pumpkin/src/block/blocks/hay.rs",
+    "pumpkin/src/block/blocks/infested.rs",
+    "pumpkin/src/block/blocks/iron_bars.rs",
+    "pumpkin/src/block/blocks/ladder.rs",
+    "pumpkin/src/block/blocks/lanterns.rs",
+    "pumpkin/src/block/blocks/logs.rs",
+    "pumpkin/src/block/blocks/note.rs",
+    "pumpkin/src/block/blocks/pumpkin.rs",
+    "pumpkin/src/block/blocks/signs.rs",
+    "pumpkin/src/block/blocks/slabs.rs",
+    "pumpkin/src/block/blocks/slime.rs",
+    "pumpkin/src/block/blocks/sponge.rs",
+    "pumpkin/src/block/blocks/stairs.rs",
+    "pumpkin/src/block/blocks/torches.rs",
+    "pumpkin/src/block/blocks/trapdoor.rs",
+    "pumpkin/src/block/blocks/walls.rs",
+]
+
+# =============================================================================
+# Pumpkin Implementation Coverage
+# =============================================================================
+[pumpkin_coverage]
+block_files = 138
+block_lines = 21143
+world_files = 216
+world_lines = 38396
