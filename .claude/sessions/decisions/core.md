@@ -71,3 +71,11 @@
 **Rationale:** In vanilla, save-off disables periodic autosave, not chunk unload saves. Pumpkin's chunk saves happen on unload (not on a timer), so save-off primarily affects player data autosave. `/save-all` always saves regardless of the autosave state, matching vanilla.
 **Affects:** Core
 **Status:** active
+
+## CORE-010: debug and perf commands share tick profiler
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/006_core_debug-perf-commands.md
+**Decision:** Both /debug and /perf commands use the same TickProfiler instance. They cannot run simultaneously (starting one while the other is active returns an error). This matches the profiler being a single server-wide resource.
+**Rationale:** No need for separate profiler instances. The tick profiler is already integrated into the tick loop (session 002). Both commands are just different entry points to the same profiler data.
+**Affects:** Core
+**Status:** active
