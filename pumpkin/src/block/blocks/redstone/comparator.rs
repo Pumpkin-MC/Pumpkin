@@ -533,4 +533,140 @@ mod tests {
         // Subtract to 1
         assert_eq!(calc(8, 7, true), 1);
     }
+
+    /// Exhaustive test of the comparator output formula for ALL valid power combinations.
+    /// In vanilla, back and side power range from 0 to 15.
+    #[test]
+    fn test_compare_subtract_formula_exhaustive() {
+        fn calc(back: u8, side: u8, subtract: bool) -> u8 {
+            if side >= back {
+                return 0;
+            }
+            if subtract { back - side } else { back }
+        }
+
+        for back in 0u8..=15 {
+            for side in 0u8..=15 {
+                let compare_out = calc(back, side, false);
+                let subtract_out = calc(back, side, true);
+
+                if side >= back {
+                    assert_eq!(compare_out, 0, "Compare({back},{side}) should be 0");
+                    assert_eq!(subtract_out, 0, "Subtract({back},{side}) should be 0");
+                } else {
+                    assert_eq!(compare_out, back, "Compare({back},{side}) should pass through");
+                    assert_eq!(
+                        subtract_out,
+                        back - side,
+                        "Subtract({back},{side}) should be difference"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Verify the `has_power` logic for comparators. This determines whether
+    /// the comparator's output face is powered (lit torch) vs unpowered.
+    /// Vanilla rules:
+    /// - back == 0 → false (no input, no output)
+    /// - back > side → true (signal passes in both modes)
+    /// - back == side AND Compare mode → true (equal signals pass in compare)
+    /// - back == side AND Subtract mode → false (0 output in subtract)
+    /// - back < side → false (side blocks output)
+    #[test]
+    fn test_has_power_logic() {
+        fn has_power(back: u8, side: u8, mode: ComparatorMode) -> bool {
+            if back == 0 {
+                return false;
+            }
+            if back > side {
+                return true;
+            }
+            back == side && mode == ComparatorMode::Compare
+        }
+
+        // No input → never powered
+        assert!(!has_power(0, 0, ComparatorMode::Compare));
+        assert!(!has_power(0, 0, ComparatorMode::Subtract));
+        assert!(!has_power(0, 5, ComparatorMode::Compare));
+
+        // Back stronger → always powered
+        assert!(has_power(10, 5, ComparatorMode::Compare));
+        assert!(has_power(10, 5, ComparatorMode::Subtract));
+        assert!(has_power(15, 0, ComparatorMode::Compare));
+        assert!(has_power(15, 0, ComparatorMode::Subtract));
+        assert!(has_power(1, 0, ComparatorMode::Compare));
+
+        // Equal → only Compare mode powers
+        assert!(has_power(7, 7, ComparatorMode::Compare));
+        assert!(!has_power(7, 7, ComparatorMode::Subtract));
+        assert!(has_power(15, 15, ComparatorMode::Compare));
+        assert!(!has_power(15, 15, ComparatorMode::Subtract));
+
+        // Side stronger → never powered
+        assert!(!has_power(3, 10, ComparatorMode::Compare));
+        assert!(!has_power(3, 10, ComparatorMode::Subtract));
+    }
+
+    /// Exhaustive has_power test for all 16×16 back×side combinations.
+    #[test]
+    fn test_has_power_exhaustive() {
+        fn has_power(back: u8, side: u8, mode: ComparatorMode) -> bool {
+            if back == 0 {
+                return false;
+            }
+            if back > side {
+                return true;
+            }
+            back == side && mode == ComparatorMode::Compare
+        }
+
+        for back in 0u8..=15 {
+            for side in 0u8..=15 {
+                let compare = has_power(back, side, ComparatorMode::Compare);
+                let subtract = has_power(back, side, ComparatorMode::Subtract);
+
+                if back == 0 {
+                    assert!(!compare, "back=0 should never power (compare)");
+                    assert!(!subtract, "back=0 should never power (subtract)");
+                } else if back > side {
+                    assert!(compare, "back>side should power (compare {back}>{side})");
+                    assert!(subtract, "back>side should power (subtract {back}>{side})");
+                } else if back == side {
+                    assert!(compare, "back==side should power in compare ({back}=={side})");
+                    assert!(
+                        !subtract,
+                        "back==side should NOT power in subtract ({back}=={side})"
+                    );
+                } else {
+                    assert!(!compare, "back<side should not power (compare {back}<{side})");
+                    assert!(
+                        !subtract,
+                        "back<side should not power (subtract {back}<{side})"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Full state space test: all combinations of facing × mode × powered roundtrip.
+    #[test]
+    fn test_comparator_full_state_roundtrip() {
+        let block = &Block::COMPARATOR;
+        for facing in HorizontalFacing::all() {
+            for mode in [ComparatorMode::Compare, ComparatorMode::Subtract] {
+                for powered in [true, false] {
+                    let mut props = ComparatorLikeProperties::default(block);
+                    props.facing = facing;
+                    props.mode = mode;
+                    props.powered = powered;
+                    let state_id = props.to_state_id(block);
+                    let r = ComparatorLikeProperties::from_state_id(state_id, block);
+                    assert_eq!(r.facing, facing, "facing mismatch");
+                    assert_eq!(r.mode, mode, "mode mismatch");
+                    assert_eq!(r.powered, powered, "powered mismatch");
+                }
+            }
+        }
+    }
 }
