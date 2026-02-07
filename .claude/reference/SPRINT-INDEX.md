@@ -35,29 +35,58 @@ All reference packages below are tagged **MC 1.21.4** unless noted.
 
 ---
 
-## Agent Reference Packages
+## TOML Registries (machine-queryable)
 
-| Agent | File | Key Contents | Raw Data Sources |
-|-------|------|-------------|-----------------|
-| **Entity** | [entity-data.md](entity-data.md) | 149 entities, hitboxes, metadata, damage types, effects, foods, AI | entities.json, effects.json, foods.json, damage_type/*.json |
-| **World** | [world-data.md](world-data.md) | 1095 blocks, states, biomes, worldgen structures, mining speeds | blocks.json, block_definitions.json, materials.json, worldgen/ |
-| **Items** | [items-data.md](items-data.md) | Item components, 1370 recipes, 1237 loot tables, enchantments | item_components.json, recipes.json, loot_table/, enchantments.json |
-| **Protocol** | [protocol-data.md](protocol-data.md) | Registries, command tree, entity metadata, packet coverage | registries.json, commands.json, entities.json metadata |
-| **Plugin** | [plugin-data.md](plugin-data.md) | 318 Bukkit events mapped to Pumpkin, lifecycle, scheduler | BUKKIT-API-REFERENCE.md, bukkit-api-ref.zip |
-| **Redstone** | [redstone-data.md](redstone-data.md) | Redstone block states, component types, signal propagation | blocks.json (redstone subset), block_definitions.json |
-| **Core** | [core-data.md](core-data.md) | Vanilla commands, tick loop, server lifecycle, config | commands.json, Bukkit.txt, BukkitScheduler.txt |
-| **Storage** | *(covered by World)* | NBT format, Anvil regions | pumpkin-nbt/ (already implemented) |
-| **Architect** | *(reads all)* | Cross-agent coordination, trait definitions | All of the above |
+The source of truth. Agents grep these to find their backlog.
+
+| Registry | Path | Key Counts |
+|----------|------|-----------|
+| **Bukkit API** | `.claude/registry/bukkit_api.toml` | 283 events (28 implemented, 252 missing), 9 interfaces, 5 enums |
+| **Entities** | `.claude/registry/entities.toml` | 149 entities, 39 effects, 40 foods, 49 damage types |
+| **Items** | `.claude/registry/items.toml` | 1385 items, 42 enchantments, 1370 recipes, 1237 loot tables |
+| **Blocks** | `.claude/registry/blocks.toml` | 1095 blocks (198 types), 135 biomes, 47 structures |
+
+**How to query your backlog:**
+```bash
+# Entity agent: what events do I need to fire?
+grep -B5 'owner = "entity"' .claude/registry/bukkit_api.toml | grep 'name ='
+
+# What entities are missing implementations?
+grep -B2 'pumpkin_status = "missing"' .claude/registry/entities.toml | grep 'name ='
+
+# Block type categories:
+grep -v '#' .claude/registry/blocks.toml | grep -A1 '\[block_types\]'
+```
+
+---
+
+## Markdown References (human-readable)
+
+Detailed briefings with gap analysis. Read YOUR file on session start.
+
+| Agent | File | Key Contents |
+|-------|------|-------------|
+| **Entity** | [entity-data.md](entity-data.md) | 149 entities, hitboxes, metadata, damage types, effects, foods, gap analysis |
+| **World** | [world-data.md](world-data.md) | 1095 blocks, biomes, worldgen, mining speeds, gap analysis |
+| **Items** | [items-data.md](items-data.md) | Item components, 1370 recipes, 1237 loot tables, enchantments, gap analysis |
+| **Protocol** | [protocol-data.md](protocol-data.md) | Registries, command tree, entity metadata, packet coverage |
+| **Plugin** | [plugin-data.md](plugin-data.md) | 283 Bukkit events mapped to Pumpkin, lifecycle, scheduler |
+| **Redstone** | [redstone-data.md](redstone-data.md) | Redstone block states, component types, signal propagation |
+| **Core** | [core-data.md](core-data.md) | Vanilla commands, tick loop, server lifecycle, config |
+| **Storage** | *(covered by World)* | NBT format, Anvil regions — pumpkin-nbt/ already implemented |
+| **Architect** | *(reads all)* | Cross-agent coordination, trait definitions |
 
 ---
 
 ## How Agents Should Use This
 
-1. **On session start:** Read YOUR reference file + this index
-2. **Before implementing:** Check the Gap Analysis section — it tells you what exists vs what's missing
-3. **Sprint priorities:** Each file ends with prioritized work items
-4. **Version awareness:** All data is 1.21.4. If implementing version-sensitive features, note the version pinning point
-5. **Raw data deep-dive:** File paths to original JSON/zip sources are included for when you need exact values
+1. **On session start:** Read YOUR reference `.md` file + this index
+2. **Query your backlog:** `grep 'owner = "YOUR_AGENT"' .claude/registry/bukkit_api.toml`
+3. **Before implementing:** Check the Gap Analysis section in your `.md` file
+4. **Sprint priorities:** Each `.md` file ends with prioritized work items
+5. **Version awareness:** All data is 1.21.4. If implementing version-sensitive features, note the version pinning point
+6. **Raw data deep-dive:** File paths to original JSON/zip sources are included for when you need exact values
+7. **Update registries:** When you implement something, update the `status` field in the relevant `.toml`
 
 ## Raw Data Locations
 
