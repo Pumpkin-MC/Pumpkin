@@ -39,10 +39,9 @@ impl ClientPacket for CBlockUpdate {
         let mut write = write;
         write.write_block_pos(&self.location)?;
 
-        let remapped_state = match u16::try_from(self.state_id.0) {
-            Ok(state_id) => i32::from(remap_block_state_for_version(state_id, *version)),
-            Err(_) => self.state_id.0,
-        };
+        let remapped_state = u16::try_from(self.state_id.0).map_or(self.state_id.0, |state_id| {
+            i32::from(remap_block_state_for_version(state_id, *version))
+        });
         write.write_var_int(&VarInt(remapped_state))?;
 
         Ok(())

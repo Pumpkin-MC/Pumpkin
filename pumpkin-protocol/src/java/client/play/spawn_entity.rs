@@ -78,12 +78,9 @@ impl ClientPacket for CSpawnEntity {
         write.write_u8(self.head_yaw)?;
 
         let data = if self.r#type.0 == i32::from(EntityType::FALLING_BLOCK.id) {
-            match u16::try_from(self.data.0) {
-                Ok(state_id) => {
-                    VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
-                }
-                Err(_) => self.data,
-            }
+            u16::try_from(self.data.0).map_or(self.data, |state_id| {
+                VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
+            })
         } else {
             self.data
         };

@@ -76,19 +76,16 @@ impl<T> Metadata<T> {
                 let mut serializer = serializer::Serializer::new(&mut serialized_value);
                 self.value
                     .serialize(&mut serializer)
-                    .map_err(|e| WritingError::Serde(e.to_string()))?;
-            }
+                    .map_err(|e| WritingError::Serde(e.to_string()))?
+            };
 
             let mut cursor = Cursor::new(serialized_value);
             let decoded_state = VarInt::decode(&mut cursor).map_err(|e| {
                 WritingError::Message(format!("Failed to decode block state metadata: {e}"))
             })?;
-            let remapped_state = match u16::try_from(decoded_state.0) {
-                Ok(state_id) => {
-                    VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
-                }
-                Err(_) => decoded_state,
-            };
+            let remapped_state = u16::try_from(decoded_state.0).map_or(decoded_state, |state_id| {
+                VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
+            });
             writer.write_var_int(&remapped_state)?;
             return Ok(());
         }

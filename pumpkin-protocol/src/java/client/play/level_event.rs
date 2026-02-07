@@ -60,10 +60,9 @@ impl ClientPacket for CLevelEvent {
         write.write_block_pos(&self.location)?;
 
         let data = if self.event == WorldEvent::BlockBroken as i32 {
-            match u16::try_from(self.data) {
-                Ok(state_id) => i32::from(remap_block_state_for_version(state_id, *version)),
-                Err(_) => self.data,
-            }
+            u16::try_from(self.data).map_or(self.data, |state_id| {
+                i32::from(remap_block_state_for_version(state_id, *version))
+            })
         } else {
             self.data
         };
