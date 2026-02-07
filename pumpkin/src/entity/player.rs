@@ -48,6 +48,9 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_inventory::sync_handler::SyncHandler;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
+
+use crate::plugin::api::events::player::player_death::PlayerDeathEvent;
+use crate::plugin::api::events::player::player_drop_item::PlayerDropItemEvent;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -1898,16 +1901,38 @@ impl Player {
         }
     }
 
-    async fn handle_killed(&self, death_msg: TextComponent) {
+    async fn handle_killed(&self, mut death_msg: TextComponent) {
         self.set_client_loaded(false);
         let block_pos = self.position().to_block_pos();
+        let world = self.world();
 
-        let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
+        let mut keep_inventory = world.level_info.load().game_rules.keep_inventory;
+
+        // Fire PlayerDeathEvent — plugins can cancel death or modify keep_inventory/message
+        if let Some(server) = world.server.upgrade() {
+            if let Some(player_arc) = world
+                .players
+                .load()
+                .iter()
+                .find(|p| p.entity_id() == self.entity_id())
+                .cloned()
+            {
+                let mut event = PlayerDeathEvent::new(player_arc, death_msg.clone());
+                event.keep_inventory = keep_inventory;
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    self.living_entity.health.store(1.0);
+                    return;
+                }
+                keep_inventory = event.keep_inventory;
+                death_msg = event.death_message;
+            }
+        }
 
         if !keep_inventory {
             for item in &self.inventory().main_inventory {
                 let mut lock = item.lock().await;
-                self.world()
+                world
                     .drop_stack(
                         &block_pos,
                         mem::replace(&mut *lock, ItemStack::EMPTY.clone()),
@@ -2136,8 +2161,27 @@ impl Player {
 
         if !item_stack.is_empty() {
             let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            self.drop_item(item_stack.copy_with_count(drop_amount))
-                .await;
+            let drop_item = item_stack.copy_with_count(drop_amount);
+
+            // Fire PlayerDropItemEvent — if cancelled, don't drop
+            if let Some(server) = self.world().server.upgrade() {
+                if let Some(player_arc) = self
+                    .world()
+                    .players
+                    .load()
+                    .iter()
+                    .find(|p| p.entity_id() == self.entity_id())
+                    .cloned()
+                {
+                    let event = PlayerDropItemEvent::new(player_arc, drop_item.clone());
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                }
+            }
+
+            self.drop_item(drop_item).await;
             item_stack.decrement(drop_amount);
             let selected_slot = self.inventory.get_selected_slot();
             let inv: Arc<dyn Inventory> = self.inventory.clone();

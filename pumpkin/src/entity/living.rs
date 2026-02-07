@@ -24,6 +24,7 @@ use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::plugin::api::events::entity::entity_damage::EntityDamageEvent;
 use crate::plugin::api::events::entity::entity_damage_by_entity::EntityDamageByEntityEvent;
 use crate::plugin::api::events::entity::entity_death::EntityDeathEvent;
+use crate::plugin::api::events::player::player_item_consume::PlayerItemConsumeEvent;
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
@@ -1383,22 +1384,44 @@ impl EntityBase for LivingEntity {
                 if let Some(item) = item_in_use.as_ref()
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
-                    // Consume item
-                    if let Some(food) = item.get_data_component::<FoodImpl>()
-                        && let Some(player) = caller.get_player()
-                    {
-                        player
-                            .hunger_manager
-                            .eat(player, food.nutrition as u8, food.saturation)
-                            .await;
+                    // Fire PlayerItemConsumeEvent — if cancelled, skip consumption
+                    let mut consume_cancelled = false;
+                    if let Some(player_ref) = caller.get_player() {
+                        let world = self.entity.world.load();
+                        if let Some(server) = world.server.upgrade() {
+                            if let Some(player_arc) = world
+                                .players
+                                .load()
+                                .iter()
+                                .find(|p| p.entity_id() == player_ref.entity_id())
+                                .cloned()
+                            {
+                                let event =
+                                    PlayerItemConsumeEvent::new(player_arc, item.clone());
+                                let event = server.plugin_manager.fire(event).await;
+                                consume_cancelled = event.cancelled;
+                            }
+                        }
                     }
-                    if let Some(player) = caller.get_player() {
-                        player
-                            .inventory
-                            .held_item()
-                            .lock()
-                            .await
-                            .decrement_unless_creative(player.gamemode.load(), 1);
+
+                    if !consume_cancelled {
+                        // Consume item
+                        if let Some(food) = item.get_data_component::<FoodImpl>()
+                            && let Some(player) = caller.get_player()
+                        {
+                            player
+                                .hunger_manager
+                                .eat(player, food.nutrition as u8, food.saturation)
+                                .await;
+                        }
+                        if let Some(player) = caller.get_player() {
+                            player
+                                .inventory
+                                .held_item()
+                                .lock()
+                                .await
+                                .decrement_unless_creative(player.gamemode.load(), 1);
+                        }
                     }
 
                     self.clear_active_hand().await;
