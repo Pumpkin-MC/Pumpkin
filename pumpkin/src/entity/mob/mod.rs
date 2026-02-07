@@ -17,12 +17,17 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use tokio::sync::Mutex;
 
+pub mod cave_spider;
 pub mod creeper;
 pub mod drowned;
 pub mod enderman;
+pub mod husk;
 pub mod silverfish;
 pub mod skeleton;
+pub mod slime;
 pub mod spider;
+pub mod stray;
+pub mod witch;
 pub mod zombie;
 pub mod zombie_villager;
 

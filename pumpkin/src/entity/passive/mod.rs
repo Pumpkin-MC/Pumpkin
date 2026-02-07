@@ -1,7 +1,11 @@
+pub mod bat;
 pub mod chicken;
 pub mod cow;
 pub mod iron_golem;
+pub mod ocelot;
 pub mod pig;
+pub mod rabbit;
 pub mod sheep;
 pub mod snow_golem;
+pub mod squid;
 pub mod wolf;

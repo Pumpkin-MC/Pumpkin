@@ -20,3 +20,15 @@ Standard scale: Swim=0, Panic=1, Attack=2, Special=4-5, Wander=6, LookAt=7, Look
 **Session:** entity-005
 **Decision:** PanicGoal detects damage by comparing current health to last-known health each tick, rather than relying on a damage event callback.
 **Rationale:** The Goal trait's `can_start()` method doesn't receive damage events. Health comparison is a pragmatic approach that works within the existing goal system.
+
+## ENT-004: Mob Variants Delegate to Parent Entity
+**Date:** 2026-02-07
+**Session:** entity-006
+**Decision:** Mob variants (CaveSpider, Husk, Stray) wrap their parent entity type and delegate `get_mob_entity()` rather than duplicating AI setup code.
+**Rationale:** Ensures AI changes to parent mobs (Spider, Zombie, Skeleton) automatically propagate to their variants. Reduces code duplication and maintenance burden.
+
+## ENT-005: Navigator::is_idle() Fix
+**Date:** 2026-02-07
+**Session:** entity-006
+**Decision:** `Navigator::is_idle()` returns `self.current_goal.is_none()` instead of hardcoded `false`. Per ARCH-008 authorization.
+**Rationale:** The existing hardcoded `false` broke goal lifecycle — movement goals could never detect arrival. This is the minimal correct fix: idle when no goal is active.
