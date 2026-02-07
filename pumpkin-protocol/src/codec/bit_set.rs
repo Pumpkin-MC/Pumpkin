@@ -98,6 +98,9 @@ mod test {
         let mut ser = NetSerializer::new(&mut serde_buf);
         bs.serialize(&mut ser).unwrap();
 
-        assert_eq!(manual_buf, serde_buf, "Serde serialize should match manual encode");
+        assert_eq!(
+            manual_buf, serde_buf,
+            "Serde serialize should match manual encode"
+        );
     }
 }

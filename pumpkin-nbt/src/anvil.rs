@@ -44,9 +44,9 @@
 
 use std::io::{self, Read, Write};
 
+use flate2::Compression;
 use flate2::read::{GzDecoder, ZlibDecoder};
 use flate2::write::{GzEncoder, ZlibEncoder};
-use flate2::Compression;
 
 /// Number of chunks per region side (32×32 = 1024 chunks per region).
 pub const REGION_SIZE: usize = 32;
@@ -120,10 +120,16 @@ impl std::fmt::Display for AnvilError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::FileTooSmall(size) => {
-                write!(f, "Region file too small: {size} bytes (minimum {DATA_OFFSET})")
+                write!(
+                    f,
+                    "Region file too small: {size} bytes (minimum {DATA_OFFSET})"
+                )
             }
             Self::ChunkOutOfBounds(x, z) => {
-                write!(f, "Chunk coordinates out of bounds: ({x}, {z}), must be 0..31")
+                write!(
+                    f,
+                    "Chunk coordinates out of bounds: ({x}, {z}), must be 0..31"
+                )
             }
             Self::SectorOutOfBounds {
                 chunk_x,
@@ -240,7 +246,12 @@ impl RegionFile {
         // Parse location table (first 4096 bytes)
         for i in 0..CHUNK_COUNT {
             let base = i * 4;
-            let entry_bytes = [bytes[base], bytes[base + 1], bytes[base + 2], bytes[base + 3]];
+            let entry_bytes = [
+                bytes[base],
+                bytes[base + 1],
+                bytes[base + 2],
+                bytes[base + 3],
+            ];
             locations[i] = ChunkLocation::from_bytes(entry_bytes);
         }
 
@@ -697,7 +708,13 @@ mod tests {
         for i in 0..10u8 {
             let data = format!("chunk data {i}");
             region
-                .write_chunk(i, 0, data.as_bytes(), CompressionMethod::ZLib, i as u32 * 100)
+                .write_chunk(
+                    i,
+                    0,
+                    data.as_bytes(),
+                    CompressionMethod::ZLib,
+                    i as u32 * 100,
+                )
                 .unwrap();
         }
 
@@ -781,18 +798,12 @@ mod tests {
         let reparsed = RegionFile::from_bytes(&bytes).unwrap();
 
         assert_eq!(reparsed.chunk_count(), 3);
-        assert_eq!(
-            reparsed.read_chunk(0, 0).unwrap().unwrap(),
-            b"chunk 0,0"
-        );
+        assert_eq!(reparsed.read_chunk(0, 0).unwrap().unwrap(), b"chunk 0,0");
         assert_eq!(
             reparsed.read_chunk(15, 15).unwrap().unwrap(),
             b"chunk 15,15"
         );
-        assert_eq!(
-            reparsed.read_chunk(31, 0).unwrap().unwrap(),
-            b"chunk 31,0"
-        );
+        assert_eq!(reparsed.read_chunk(31, 0).unwrap().unwrap(), b"chunk 31,0");
         assert_eq!(reparsed.get_timestamp(0, 0).unwrap(), 100);
         assert_eq!(reparsed.get_timestamp(15, 15).unwrap(), 200);
         assert_eq!(reparsed.get_timestamp(31, 0).unwrap(), 300);
@@ -806,9 +817,18 @@ mod tests {
 
     #[test]
     fn compression_method_roundtrip() {
-        assert_eq!(CompressionMethod::from_id(1).unwrap(), CompressionMethod::GZip);
-        assert_eq!(CompressionMethod::from_id(2).unwrap(), CompressionMethod::ZLib);
-        assert_eq!(CompressionMethod::from_id(3).unwrap(), CompressionMethod::None);
+        assert_eq!(
+            CompressionMethod::from_id(1).unwrap(),
+            CompressionMethod::GZip
+        );
+        assert_eq!(
+            CompressionMethod::from_id(2).unwrap(),
+            CompressionMethod::ZLib
+        );
+        assert_eq!(
+            CompressionMethod::from_id(3).unwrap(),
+            CompressionMethod::None
+        );
         assert!(CompressionMethod::from_id(0).is_err());
         assert!(CompressionMethod::from_id(4).is_err());
     }
@@ -830,9 +850,9 @@ mod tests {
     #[test]
     fn nbt_integration() {
         // Test with actual NBT data
+        use crate::Nbt;
         use crate::compound::NbtCompound;
         use crate::tag::NbtTag;
-        use crate::Nbt;
 
         let mut compound = NbtCompound::new();
         compound.put_int("DataVersion", 4671);

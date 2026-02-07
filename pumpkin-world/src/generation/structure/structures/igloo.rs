@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::Block;
-use pumpkin_util::{
-    math::position::BlockPos,
-    random::RandomGenerator,
-};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::{
     ProtoChunk,
@@ -109,14 +106,7 @@ impl StructurePieceBase for IglooPiece {
             6,
             &box_limit,
         );
-        p.add_block(
-            chunk,
-            Block::FURNACE.default_state,
-            5,
-            1,
-            6,
-            &box_limit,
-        );
+        p.add_block(chunk, Block::FURNACE.default_state, 5, 1, 6, &box_limit);
 
         // Torch for light
         p.add_block(chunk, Block::TORCH.default_state, 3, 2, 6, &box_limit);

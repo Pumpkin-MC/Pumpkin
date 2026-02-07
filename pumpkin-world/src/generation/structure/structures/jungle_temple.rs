@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::Block;
-use pumpkin_util::{
-    math::position::BlockPos,
-    random::RandomGenerator,
-};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::{
     ProtoChunk,
@@ -154,22 +151,8 @@ impl StructurePieceBase for JungleTemplePiece {
         );
 
         // Lower level treasure room with chests
-        p.add_block(
-            chunk,
-            Block::CHEST.default_state,
-            8,
-            2,
-            12,
-            &box_limit,
-        );
-        p.add_block(
-            chunk,
-            Block::CHEST.default_state,
-            3,
-            2,
-            12,
-            &box_limit,
-        );
+        p.add_block(chunk, Block::CHEST.default_state, 8, 2, 12, &box_limit);
+        p.add_block(chunk, Block::CHEST.default_state, 3, 2, 12, &box_limit);
 
         // Lever (trap mechanism placeholder)
         p.add_block(chunk, Block::LEVER.default_state, 5, 3, 12, &box_limit);

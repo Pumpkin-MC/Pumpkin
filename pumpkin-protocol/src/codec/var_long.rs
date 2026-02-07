@@ -223,7 +223,17 @@ mod test {
 
     #[test]
     fn varlong_roundtrip_all_sizes() {
-        let values = [0i64, 1, 127, 128, -1, i64::MAX, i64::MIN, 2147483647, -2147483648];
+        let values = [
+            0i64,
+            1,
+            127,
+            128,
+            -1,
+            i64::MAX,
+            i64::MIN,
+            2147483647,
+            -2147483648,
+        ];
         for &val in &values {
             let mut buf = Vec::new();
             VarLong(val).encode(&mut buf).unwrap();

@@ -55,7 +55,10 @@ impl RollingAverage {
     }
 
     fn average_nanos(&self) -> u64 {
-        let count = self.index.load(Ordering::Relaxed).min(Self::WINDOW_SIZE as u64);
+        let count = self
+            .index
+            .load(Ordering::Relaxed)
+            .min(Self::WINDOW_SIZE as u64);
         if count == 0 {
             return 0;
         }
@@ -72,7 +75,10 @@ impl RollingAverage {
     }
 
     fn peak_nanos(&self) -> u64 {
-        let count = self.index.load(Ordering::Relaxed).min(Self::WINDOW_SIZE as u64) as usize;
+        let count = self
+            .index
+            .load(Ordering::Relaxed)
+            .min(Self::WINDOW_SIZE as u64) as usize;
         let mut peak = 0u64;
         for i in 0..count {
             let val = self.samples[i].load(Ordering::Relaxed);
@@ -201,8 +207,7 @@ impl TickProfiler {
         let elapsed_nanos = start.elapsed().as_nanos() as u64;
         self.total_tick_nanos.record(elapsed_nanos);
 
-        let threshold_nanos =
-            self.slow_tick_threshold_ms.load(Ordering::Relaxed) * 1_000_000;
+        let threshold_nanos = self.slow_tick_threshold_ms.load(Ordering::Relaxed) * 1_000_000;
         if elapsed_nanos > threshold_nanos {
             self.slow_tick_count.fetch_add(1, Ordering::Relaxed);
         }

@@ -270,12 +270,7 @@ impl<'a> SnbtParser<'a> {
         while self.pos < self.input.len() {
             let ch = self.input[self.pos];
             // Unquoted strings can contain alphanumeric, underscore, hyphen, dot, plus
-            if ch.is_ascii_alphanumeric()
-                || ch == b'_'
-                || ch == b'-'
-                || ch == b'.'
-                || ch == b'+'
-            {
+            if ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'-' || ch == b'.' || ch == b'+' {
                 self.pos += 1;
             } else {
                 break;
@@ -386,10 +381,12 @@ impl<'a> SnbtParser<'a> {
             &text
         };
 
-        num_text.parse::<i8>().map_err(|_| SnbtError::InvalidNumber {
-            text: text.clone(),
-            pos: start,
-        })
+        num_text
+            .parse::<i8>()
+            .map_err(|_| SnbtError::InvalidNumber {
+                text: text.clone(),
+                pos: start,
+            })
     }
 
     fn parse_int_array(&mut self) -> Result<NbtTag, SnbtError> {
@@ -453,13 +450,12 @@ impl<'a> SnbtParser<'a> {
                 &text
             };
 
-            let value =
-                num_text
-                    .parse::<i64>()
-                    .map_err(|_| SnbtError::InvalidNumber {
-                        text: text.clone(),
-                        pos: start,
-                    })?;
+            let value = num_text
+                .parse::<i64>()
+                .map_err(|_| SnbtError::InvalidNumber {
+                    text: text.clone(),
+                    pos: start,
+                })?;
             values.push(value);
 
             self.skip_whitespace();
@@ -522,12 +518,7 @@ impl<'a> SnbtParser<'a> {
         let start = self.pos;
         while self.pos < self.input.len() {
             let ch = self.input[self.pos];
-            if ch.is_ascii_alphanumeric()
-                || ch == b'_'
-                || ch == b'-'
-                || ch == b'.'
-                || ch == b'+'
-            {
+            if ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'-' || ch == b'.' || ch == b'+' {
                 self.pos += 1;
             } else {
                 break;
@@ -653,14 +644,8 @@ mod tests {
         assert_eq!(from_snbt("4313").unwrap(), NbtTag::Int(4313));
         assert_eq!(from_snbt("-999").unwrap(), NbtTag::Int(-999));
         assert_eq!(from_snbt("0").unwrap(), NbtTag::Int(0));
-        assert_eq!(
-            from_snbt("2147483647").unwrap(),
-            NbtTag::Int(i32::MAX)
-        );
-        assert_eq!(
-            from_snbt("-2147483648").unwrap(),
-            NbtTag::Int(i32::MIN)
-        );
+        assert_eq!(from_snbt("2147483647").unwrap(), NbtTag::Int(i32::MAX));
+        assert_eq!(from_snbt("-2147483648").unwrap(), NbtTag::Int(i32::MIN));
     }
 
     #[test]
@@ -860,9 +845,7 @@ mod tests {
 
     #[test]
     fn parse_compound_mixed_types() {
-        let tag =
-            from_snbt("{name: \"Steve\", health: 20.0f, level: 5, alive: true}")
-                .unwrap();
+        let tag = from_snbt("{name: \"Steve\", health: 20.0f, level: 5, alive: true}").unwrap();
         if let NbtTag::Compound(compound) = tag {
             assert_eq!(compound.get_string("name"), Some("Steve"));
             assert_eq!(compound.get_float("health"), Some(20.0));

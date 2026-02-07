@@ -2,7 +2,7 @@ use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::{
-    inventory::{split_stack, Clearable, Inventory, InventoryFuture},
+    inventory::{Clearable, Inventory, InventoryFuture, split_stack},
     item::ItemStack,
 };
 use tokio::sync::Mutex;
@@ -233,10 +233,7 @@ impl SmithingScreenHandler {
 }
 
 impl ScreenHandler for SmithingScreenHandler {
-    fn on_closed<'a>(
-        &'a mut self,
-        player: &'a dyn InventoryPlayer,
-    ) -> ScreenHandlerFuture<'a, ()> {
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
             self.default_on_closed(player).await;
             self.drop_inventory(player, self.input_inventory.clone())
@@ -339,7 +336,10 @@ mod tests {
         // Slot 0: Template
         inv.set_stack(
             0,
-            ItemStack::new(1, &pumpkin_data::item::Item::NETHERITE_UPGRADE_SMITHING_TEMPLATE),
+            ItemStack::new(
+                1,
+                &pumpkin_data::item::Item::NETHERITE_UPGRADE_SMITHING_TEMPLATE,
+            ),
         )
         .await;
         // Slot 1: Base
@@ -383,8 +383,11 @@ mod tests {
     #[tokio::test]
     async fn smithing_inventory_remove_stack() {
         let inv = SmithingInventory::new();
-        inv.set_stack(1, ItemStack::new(1, &pumpkin_data::item::Item::DIAMOND_SWORD))
-            .await;
+        inv.set_stack(
+            1,
+            ItemStack::new(1, &pumpkin_data::item::Item::DIAMOND_SWORD),
+        )
+        .await;
 
         let removed = inv.remove_stack(1).await;
         assert_eq!(removed.item_count, 1);

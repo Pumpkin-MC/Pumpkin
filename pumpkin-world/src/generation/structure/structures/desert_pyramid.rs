@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::Block;
-use pumpkin_util::{
-    math::position::BlockPos,
-    random::RandomGenerator,
-};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::{
     ProtoChunk,
@@ -148,39 +145,9 @@ impl StructurePieceBase for DesertPyramidPiece {
 
         // Orange terracotta decorations on towers
         p.fill(chunk, &box_limit, 1, 10, 1, 3, 10, 3, orange_terracotta);
-        p.fill(
-            chunk,
-            &box_limit,
-            17,
-            10,
-            1,
-            19,
-            10,
-            3,
-            orange_terracotta,
-        );
-        p.fill(
-            chunk,
-            &box_limit,
-            1,
-            10,
-            17,
-            3,
-            10,
-            19,
-            orange_terracotta,
-        );
-        p.fill(
-            chunk,
-            &box_limit,
-            17,
-            10,
-            17,
-            19,
-            10,
-            19,
-            orange_terracotta,
-        );
+        p.fill(chunk, &box_limit, 17, 10, 1, 19, 10, 3, orange_terracotta);
+        p.fill(chunk, &box_limit, 1, 10, 17, 3, 10, 19, orange_terracotta);
+        p.fill(chunk, &box_limit, 17, 10, 17, 19, 10, 19, orange_terracotta);
 
         // Front entrance
         p.fill(chunk, &box_limit, 8, 1, 0, 12, 4, 0, cut_sandstone);
@@ -229,38 +196,10 @@ impl StructurePieceBase for DesertPyramidPiece {
         p.add_block(chunk, sandstone_slab, 10, -2, 10, &box_limit);
 
         // 4 chests in underground chamber
-        p.add_block(
-            chunk,
-            Block::CHEST.default_state,
-            8,
-            -3,
-            10,
-            &box_limit,
-        );
-        p.add_block(
-            chunk,
-            Block::CHEST.default_state,
-            12,
-            -3,
-            10,
-            &box_limit,
-        );
-        p.add_block(
-            chunk,
-            Block::CHEST.default_state,
-            10,
-            -3,
-            8,
-            &box_limit,
-        );
-        p.add_block(
-            chunk,
-            Block::CHEST.default_state,
-            10,
-            -3,
-            12,
-            &box_limit,
-        );
+        p.add_block(chunk, Block::CHEST.default_state, 8, -3, 10, &box_limit);
+        p.add_block(chunk, Block::CHEST.default_state, 12, -3, 10, &box_limit);
+        p.add_block(chunk, Block::CHEST.default_state, 10, -3, 8, &box_limit);
+        p.add_block(chunk, Block::CHEST.default_state, 10, -3, 12, &box_limit);
 
         // Central shaft from surface to underground
         p.fill(chunk, &box_limit, 10, -5, 10, 10, 0, 10, air);

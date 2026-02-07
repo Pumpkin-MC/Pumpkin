@@ -2,7 +2,7 @@ use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::{
-    inventory::{split_stack, Clearable, Inventory, InventoryFuture},
+    inventory::{Clearable, Inventory, InventoryFuture, split_stack},
     item::ItemStack,
 };
 use tokio::sync::Mutex;
@@ -212,10 +212,7 @@ impl StonecutterScreenHandler {
 }
 
 impl ScreenHandler for StonecutterScreenHandler {
-    fn on_closed<'a>(
-        &'a mut self,
-        player: &'a dyn InventoryPlayer,
-    ) -> ScreenHandlerFuture<'a, ()> {
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
             self.default_on_closed(player).await;
             self.drop_inventory(player, self.input_inventory.clone())

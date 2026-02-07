@@ -2,9 +2,9 @@ use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{BlockBehaviour, BlockFuture, OnNeighborUpdateArgs, OnPlaceArgs};
 use pumpkin_data::block_properties::{BlockProperties, DispenserLikeProperties};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::world::BlockFlags;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
+use pumpkin_world::world::BlockFlags;
 
 #[pumpkin_block("minecraft:dispenser")]
 pub struct DispenserBlock;

@@ -60,7 +60,11 @@ impl Goal for FleeEntityGoal {
             let pos = mob_entity.living_entity.entity.pos.load();
             let world = mob_entity.living_entity.entity.world.load();
 
-            let closest = world.get_closest_entity(pos, self.flee_distance.into(), Some(&[self.flee_from_type]));
+            let closest = world.get_closest_entity(
+                pos,
+                self.flee_distance.into(),
+                Some(&[self.flee_from_type]),
+            );
 
             if let Some(threat) = closest {
                 let threat_pos = threat.get_entity().pos.load();

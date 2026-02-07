@@ -326,7 +326,21 @@ mod test {
 
     #[test]
     fn varint_roundtrip_all_sizes() {
-        let values = [0, 1, 127, 128, 16383, 16384, 2097151, 2097152, 268435455, 268435456, i32::MAX, -1, i32::MIN];
+        let values = [
+            0,
+            1,
+            127,
+            128,
+            16383,
+            16384,
+            2097151,
+            2097152,
+            268435455,
+            268435456,
+            i32::MAX,
+            -1,
+            i32::MIN,
+        ];
         for &val in &values {
             let mut buf = Vec::new();
             VarInt(val).encode(&mut buf).unwrap();

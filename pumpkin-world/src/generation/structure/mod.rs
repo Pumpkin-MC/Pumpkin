@@ -56,9 +56,7 @@ pub fn try_generate_structure(
         StructureKeys::JunglePyramid => {
             JungleTempleGenerator::get_structure_position(&JungleTempleGenerator, context)
         }
-        StructureKeys::Igloo => {
-            IglooGenerator::get_structure_position(&IglooGenerator, context)
-        }
+        StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
         // TODO: Implement other structure types
         _ => None,
     };

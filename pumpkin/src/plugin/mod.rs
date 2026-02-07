@@ -751,7 +751,11 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let manager = PluginManager::new();
         let loaders = rt.block_on(manager.get_loaders());
-        assert_eq!(loaders.len(), 1, "Default manager should have one loader (NativePluginLoader)");
+        assert_eq!(
+            loaders.len(),
+            1,
+            "Default manager should have one loader (NativePluginLoader)"
+        );
     }
 
     #[test]
