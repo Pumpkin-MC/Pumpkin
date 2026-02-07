@@ -55,3 +55,17 @@
 **Rationale:** Core requested Plugin verification of lifecycle event wiring (session 003_core).
 **Affects:** Plugin, Core
 **Status:** VERIFIED
+
+## PLUGIN-009: Event firing coverage audit — 25/39 (64%)
+**Date:** 2026-02-07
+**Decision:** Comprehensive audit of all 39 event types. 25 are fired (via `plugin_manager.fire()` or `send_cancellable!` macro). 14 remain unfired — all require wiring from code outside Plugin's write_paths:
+
+**Wiring roadmap for remaining 14 events:**
+- **Entity agent** → PlayerDeathEvent (entity/player.rs death handling), PlayerRespawnEvent (entity/player.rs respawn), PlayerDropItemEvent (entity/player.rs drop_held_item), PlayerItemConsumeEvent (entity/living.rs food consumption)
+- **Core/WorldGen agent** → BlockPlaceEvent (world/mod.rs set_block), BlockCanBuildEvent (world/mod.rs place validation), ChunkLoad/ChunkSave/ChunkSend (world/mod.rs chunk lifecycle)
+- **Redstone/Block agent** → BlockBurnEvent (fire spread), BlockPhysicsEvent (neighbor updates), BlockFromToEvent (liquid flow), BlockGrowEvent (crop ticks), BlockFadeEvent (ice/snow decay)
+
+**Coverage by category:** Server 7/7 (100%), Entity 4/4 (100%), Player 10/14 (71%), Block 4/11 (36%), World 0/3 (0%)
+**Rationale:** Plugin agent has maximized coverage within ARCH-023 scope. Remaining events require cross-agent coordination.
+**Affects:** All agents
+**Status:** active — handovers needed
