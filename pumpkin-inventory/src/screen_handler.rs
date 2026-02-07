@@ -4,7 +4,6 @@ use crate::{
     slot::{NormalSlot, Slot},
     sync_handler::{SyncHandler, TrackedStack},
 };
-use log::warn;
 use pumpkin_data::{
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
@@ -29,6 +28,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
 use std::{cmp::max, pin::Pin};
 use tokio::sync::Mutex;
+use tracing::warn;
 
 const SLOT_INDEX_OUTSIDE: i32 = -999;
 

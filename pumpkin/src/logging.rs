@@ -2,7 +2,6 @@
 #![allow(clippy::print_stdout)]
 
 use flate2::write::GzEncoder;
-use log::LevelFilter;
 use rustyline::completion::Completer;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
@@ -18,10 +17,24 @@ use std::sync::Arc;
 use time::{Duration, OffsetDateTime};
 use tracing::Subscriber;
 use tracing_subscriber::Layer;
+use tracing_subscriber::filter::LevelFilter;
 
 use crate::command::CommandSender;
 use crate::command::tree::NodeType;
 use crate::server::Server;
+
+#[macro_export]
+macro_rules! log_at_level {
+    ($level:expr, $($arg:tt)*) => {
+        match $level {
+            Level::TRACE => tracing::trace!($($arg)*),
+            Level::DEBUG => tracing::debug!($($arg)*),
+            Level::INFO => tracing::info!($($arg)*),
+            Level::WARN => tracing::warn!($($arg)*),
+            Level::ERROR => tracing::error!($($arg)*),
+        }
+    };
+}
 
 const LOG_DIR: &str = "logs";
 const MAX_ATTEMPTS: u32 = 100;
@@ -175,11 +188,11 @@ where
 
         // Check if we should log this event based on level
         let should_log = match *level {
-            tracing::Level::ERROR => self.log_level >= LevelFilter::Error,
-            tracing::Level::WARN => self.log_level >= LevelFilter::Warn,
-            tracing::Level::INFO => self.log_level >= LevelFilter::Info,
-            tracing::Level::DEBUG => self.log_level >= LevelFilter::Debug,
-            tracing::Level::TRACE => self.log_level >= LevelFilter::Trace,
+            tracing::Level::ERROR => self.log_level >= LevelFilter::ERROR,
+            tracing::Level::WARN => self.log_level >= LevelFilter::WARN,
+            tracing::Level::INFO => self.log_level >= LevelFilter::INFO,
+            tracing::Level::DEBUG => self.log_level >= LevelFilter::DEBUG,
+            tracing::Level::TRACE => self.log_level >= LevelFilter::TRACE,
         };
 
         if !should_log {

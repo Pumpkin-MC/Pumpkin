@@ -5,6 +5,7 @@ use crate::command::tree::RawArgs;
 use crate::server::Server;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
+use tracing::debug;
 
 pub struct TextComponentArgConsumer;
 
@@ -62,7 +63,7 @@ impl FindArg<'_> for TextComponentArgConsumer {
 fn parse_text_component(input: &str) -> Option<TextComponent> {
     let result = serde_json::from_str(input);
     if let Err(e) = result {
-        log::debug!("Failed to parse text component: {e}");
+        debug!("Failed to parse text component: {e}");
         None
     } else {
         result.unwrap()

@@ -8,6 +8,8 @@ use crate::server::Server;
 use crate::world::World;
 use args::ConsumedArgs;
 
+use tracing::info;
+
 use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
@@ -70,7 +72,7 @@ impl fmt::Display for CommandSender {
 impl CommandSender {
     pub async fn send_message(&self, text: TextComponent) {
         match self {
-            Self::Console => log::info!("{}", text.to_pretty_console()),
+            Self::Console => info!("{}", text.to_pretty_console()),
             Self::Player(c) => c.send_system_message(&text).await,
             Self::Rcon(s) => s.lock().await.push(text.to_pretty_console()),
             Self::CommandBlock(block_entity, _) => {

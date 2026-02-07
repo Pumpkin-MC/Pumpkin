@@ -308,7 +308,7 @@ impl Context {
 
         if let Some(Some((_logger_impl, level))) = static_logger.get() {
             // TODO
-            log::set_max_level(*level);
+            //log::set_max_level(*level);
         }
     }
 }

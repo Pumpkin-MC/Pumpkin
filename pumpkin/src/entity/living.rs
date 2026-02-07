@@ -15,6 +15,7 @@ use std::sync::atomic::{
     Ordering::{Relaxed, SeqCst},
 };
 use std::{collections::HashMap, sync::atomic::AtomicI32};
+use tracing::warn;
 
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
@@ -1171,7 +1172,7 @@ impl NBTStorage for LivingEntity {
                         if let NbtTag::Compound(effect_nbt) = effect {
                             let effect = Effect::create_from_nbt(&mut effect_nbt.clone()).await;
                             if effect.is_none() {
-                                log::warn!("Unable to read effect from nbt");
+                                warn!("Unable to read effect from nbt");
                                 continue;
                             }
                             let mut effect = effect.unwrap();

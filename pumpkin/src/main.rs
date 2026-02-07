@@ -21,6 +21,7 @@ use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_ser
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::time::Instant;
+use tracing::{debug, info, warn};
 
 // Setup some tokens to allow us to identify which event is for which socket.
 
@@ -67,9 +68,9 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
+    info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
 
-    log::debug!(
+    debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
         std::env::consts::FAMILY,
         std::env::consts::OS,
@@ -81,9 +82,9 @@ async fn main() {
         }
     );
 
-    log::warn!("Pumpkin is currently under heavy development!");
-    log::info!("Report issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
-    log::info!("Join our Discord for community support: https://discord.com/invite/wT8XjrjKkf");
+    warn!("Pumpkin is currently under heavy development!");
+    info!("Report issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
+    info!("Join our Discord for community support: https://discord.com/invite/wT8XjrjKkf");
 
     tokio::spawn(async {
         setup_sighandler()
@@ -94,9 +95,9 @@ async fn main() {
     let pumpkin_server = PumpkinServer::new(basic_config, advanced_config, vanilla_data).await;
     pumpkin_server.init_plugins().await;
 
-    log::info!("Started server; took {}ms", time.elapsed().as_millis());
+    info!("Started server; took {}ms", time.elapsed().as_millis());
     let basic_config = &pumpkin_server.server.basic_config;
-    log::info!(
+    info!(
         "Server is now running. Connect using port: {}{}{}",
         if basic_config.java_edition {
             format!("Java Edition: {}", basic_config.java_edition_address)
@@ -116,11 +117,11 @@ async fn main() {
     );
 
     pumpkin_server.start().await;
-    log::info!("The server has stopped.");
+    info!("The server has stopped.");
 }
 
 fn handle_interrupt() {
-    log::warn!(
+    warn!(
         "{}",
         TextComponent::text("Received interrupt signal; stopping server...")
             .color_named(NamedColor::Red)

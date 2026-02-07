@@ -12,6 +12,7 @@ use pumpkin_protocol::query::{
 use pumpkin_world::CURRENT_MC_VERSION;
 use rand::RngExt;
 use tokio::{net::UdpSocket, sync::RwLock, time};
+use tracing::{error, info};
 
 use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
@@ -35,7 +36,7 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
         }
     });
 
-    log::info!(
+    info!(
         "Server query running on port {}",
         socket
             .local_addr()
@@ -69,7 +70,7 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
             )
             .await
             {
-                log::error!("Interior 0 bytes found! Cannot encode query response! {err}");
+                error!("Interior 0 bytes found! Cannot encode query response! {err}");
             }
         });
     }

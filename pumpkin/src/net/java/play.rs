@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
+use tracing::{Level, debug, error, info, trace, warn};
 
 use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
@@ -16,6 +17,7 @@ use crate::command::CommandSender;
 use crate::entity::EntityBase;
 use crate::entity::player::{ChatMode, ChatSession, Player};
 use crate::error::PumpkinError;
+use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::player::player_chat::PlayerChatEvent;
@@ -87,10 +89,10 @@ impl PumpkinError for BlockPlacingError {
         }
     }
 
-    fn severity(&self) -> log::Level {
+    fn severity(&self) -> Level {
         match self {
-            Self::BlockOutOfWorld | Self::InvalidGamemode => log::Level::Trace,
-            Self::BlockOutOfReach | Self::InvalidBlockFace | Self::InvalidHand => log::Level::Warn,
+            Self::BlockOutOfWorld | Self::InvalidGamemode => Level::TRACE,
+            Self::BlockOutOfReach | Self::InvalidBlockFace | Self::InvalidHand => Level::WARN,
         }
     }
 
@@ -128,8 +130,8 @@ impl PumpkinError for ChatError {
         true
     }
 
-    fn severity(&self) -> log::Level {
-        log::Level::Warn
+    fn severity(&self) -> Level {
+        Level::WARN
     }
 
     fn client_kick_reason(&self) -> Option<String> {
@@ -580,7 +582,7 @@ impl JavaClient {
                 });
 
                 if server.advanced_config.commands.log_console {
-                    log::info!(
+                    info!(
                         "Player ({}): executed command /{}",
                         player.gameprofile.name,
                         command
@@ -664,9 +666,7 @@ impl JavaClient {
         let pos = command.pos;
         if let Some(block_entity) = player.world().get_block_entity(&pos).await {
             if block_entity.resource_location() != CommandBlockEntity::ID {
-                log::warn!(
-                    "Client tried to change Command block but not Command block entity found"
-                );
+                warn!("Client tried to change Command block but not Command block entity found");
                 return;
             }
 
@@ -771,7 +771,7 @@ impl JavaClient {
                 Action::LeaveBed => player.wake_up().await,
 
                 Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
-                    log::debug!("todo");
+                    debug!("todo");
                 }
                 Action::StartFlyingElytra => {
                     let fall_flying = entity.check_fall_flying();
@@ -860,7 +860,7 @@ impl JavaClient {
             .validate_chat_message(server, player, &chat_message)
             .await
         {
-            log::log!(
+            log_at_level!(
                 err.severity(),
                 "{} (uuid {}) {}",
                 gameprofile.name,
@@ -880,7 +880,7 @@ impl JavaClient {
             PlayerChatEvent::new(player.clone(), chat_message.message.clone(), vec![]);
 
             'after: {
-                log::info!("<chat> {}: {}", gameprofile.name, event.message);
+                info!("<chat> {}: {}", gameprofile.name, event.message);
 
                 let config = &server.advanced_config;
 
@@ -985,7 +985,7 @@ impl JavaClient {
         }
 
         if let Err(err) = self.validate_chat_session(player, server, &session) {
-            log::log!(
+            log_at_level!(
                 err.severity(),
                 "{} (uuid {}) {}",
                 player.gameprofile.name,
@@ -1095,12 +1095,9 @@ impl JavaClient {
                 let update_watched = if old_view_distance.get() == new_view_distance_raw {
                     false
                 } else {
-                    log::debug!(
+                    debug!(
                         "Player {} ({}) updated their render distance: {} -> {}.",
-                        player.gameprofile.name,
-                        self.id,
-                        old_view_distance,
-                        new_view_distance_raw
+                        player.gameprofile.name, self.id, old_view_distance, new_view_distance_raw
                     );
                     true
                 };
@@ -1133,10 +1130,9 @@ impl JavaClient {
             }
 
             if update_settings {
-                log::debug!(
+                debug!(
                     "Player {} ({}) updated their skin.",
-                    player.gameprofile.name,
-                    self.id,
+                    player.gameprofile.name, self.id,
                 );
                 player.send_client_information().await;
             }
@@ -1169,7 +1165,7 @@ impl JavaClient {
             }
             1 => {
                 // Request stats
-                log::debug!("todo");
+                debug!("todo");
             }
             _ => {
                 self.kick(TextComponent::text("Invalid client status"))
@@ -1243,7 +1239,7 @@ impl JavaClient {
                 } else if let Some(entity_victim) = world.get_entity_by_id(entity_id.0) {
                     player.attack(entity_victim).await;
                 } else {
-                    log::error!(
+                    error!(
                         "Player id {} interacted with entity id {}, which was not found.",
                         player.entity_id(),
                         entity_id.0
@@ -1285,10 +1281,9 @@ impl JavaClient {
             Ok(status) => match status {
                 Status::StartedDigging => {
                     if !player.can_interact_with_block_at(&player_action.position, 1.0) {
-                        log::warn!(
+                        warn!(
                             "Player {0} tried to interact with block out of reach at {1}",
-                            player.gameprofile.name,
-                            player_action.position
+                            player.gameprofile.name, player_action.position
                         );
                         return;
                     }
@@ -1365,10 +1360,9 @@ impl JavaClient {
                 }
                 Status::CancelledDigging => {
                     if !player.can_interact_with_block_at(&player_action.position, 1.0) {
-                        log::warn!(
+                        warn!(
                             "Player {0} tried to interact with block out of reach at {1}",
-                            player.gameprofile.name,
-                            player_action.position
+                            player.gameprofile.name, player_action.position
                         );
                         return;
                     }
@@ -1385,10 +1379,9 @@ impl JavaClient {
                     // TODO: do validation
                     let location = player_action.position;
                     if !player.can_interact_with_block_at(&location, 1.0) {
-                        log::warn!(
+                        warn!(
                             "Player {0} tried to interact with block out of reach at {1}",
-                            player.gameprofile.name,
-                            player_action.position
+                            player.gameprofile.name, player_action.position
                         );
                         return;
                     }
@@ -1438,7 +1431,7 @@ impl JavaClient {
                     player.swap_item().await;
                 }
                 Status::SpearJab => {
-                    log::debug!("todo");
+                    debug!("todo");
                 }
             },
             Err(_) => self.kick(TextComponent::text("Invalid status")).await,
@@ -1466,7 +1459,7 @@ impl JavaClient {
 
     pub fn update_sequence(&self, player: &Player, sequence: i32) {
         if sequence < 0 {
-            log::error!("Expected packet sequence >= 0");
+            error!("Expected packet sequence >= 0");
         }
         player.packet_sequence.store(
             player.packet_sequence.load(Ordering::Relaxed).max(sequence),
@@ -1884,7 +1877,7 @@ impl JavaClient {
             .lock()
             .await
             .handle_acknowledge(packet.chunks_per_tick);
-        log::trace!(
+        trace!(
             "Client requested {} chunks per tick",
             packet.chunks_per_tick
         );
@@ -1934,7 +1927,7 @@ impl JavaClient {
 
     pub fn handle_cookie_response(&self, packet: &SPCookieResponse) {
         // TODO: allow plugins to access this
-        log::debug!(
+        debug!(
             "Received cookie_response[play]: key: \"{}\", payload_length: \"{:?}\"",
             packet.key,
             packet.payload.as_ref().map(|p| p.len())

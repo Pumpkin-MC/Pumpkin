@@ -44,7 +44,7 @@ significant_drop_in_scrutinee = "deny"
 print_stdout = "deny"
 print_stderr = "deny"
 
-# Expected/Allowed 
+# Expected/Allowed
 cargo_common_metadata = "allow"
 cast_precision_loss = "allow"
 multiple_crate_versions = "allow"
@@ -87,7 +87,6 @@ debug = true
 strip = false
 
 [workspace.dependencies]
-log = "0.4"
 tokio = { version = "1.49", default-features = false }
 syn = { version = "2.0", default-features = false, features=["printing"] }
 
