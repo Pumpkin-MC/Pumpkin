@@ -33,8 +33,23 @@ tests = "cargo test --lib -p pumpkin -- block::blocks::redstone"
 
 ## Your Progress So Far
 
-- **Session 001 (2026-02-07):** Fixed `update_wire_neighbors` to use vanilla update order (W,E,D,U,N,S). Added dispenser quasi-connectivity (`on_neighbor_update` checks power at self and one block above). Added 28 unit tests for redstone signal helpers. Decisions RED-001, RED-002.
+- **Session 001 (2026-02-07):** Fixed vanilla update order (W,E,D,U,N,S). Dispenser quasi-connectivity. 28 tests. RED-001, RED-002.
+- **Session 002 (2026-02-07):** Component verification — repeater, comparator, observer, piston validation. 30 tests.
+- **Session 003 (2026-02-07):** Wired BlockRedstoneEvent, BlockPistonExtendEvent, BlockPistonRetractEvent (ARCH-023).
+- **Total:** vanilla update order, quasi-connectivity, event wiring, 28+ tests
 - Current Pumpkin redstone: ~6284 lines across 20+ files. Partially complete.
+
+## CRITICAL: Rebase Before Working
+
+Your branch is **14 commits behind master**. Run `git fetch origin master && git rebase origin/master` before starting any new work.
+
+## Your Priority (P1 — High Value)
+
+**Comparator and observer completion** — these are the key missing pieces for functional redstone. Completes the core logic.
+
+## ARCH-031: Redstone Computer Benchmark
+
+The Architect has set a long-term benchmark target (ARCH-031): a redstone computer using 1-block pyramid/reverse-pyramid signal propagation displaying video at 8 FPS. This is the vision target for SIMD CAM optimization (ARCH-029). Your immediate work on comparator/observer parity directly enables this goal. Vanilla redstone computers run at <1 FPS — we aim for 8x improvement.
 
 ## Active Decisions
 

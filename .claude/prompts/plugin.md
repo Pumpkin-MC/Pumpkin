@@ -33,8 +33,19 @@ tests = "cargo test -p pumpkin --lib plugin"
 
 ## Your Progress So Far
 
-- **Session 003 (2026-02-07):** Fixed priority sorting bug in `fire()`. Added 9 event types (28 total, was 19): EntitySpawn, EntityDamage, EntityDamageByEntity, EntityDeath, PlayerDeath, PlayerRespawn, ServerStarted, ServerStop, ServerTick. Added `EventPriority::Monitor`. Added `register_with_options()` for `ignore_cancelled`. Fixed pumpkin-api-macros build. 32 tests. Decisions PLUGIN-001 through PLUGIN-004.
-- **Registry work:** Created `.claude/registry/bukkit_api.toml` — 283 Bukkit events catalogued with status and owner assignments.
+- **Session 003 (2026-02-07):** Fixed priority sorting bug. Added 9 event types (28 total). EventPriority::Monitor. register_with_options() for ignore_cancelled. 32 tests. PLUGIN-001-004.
+- **Session 007 (2026-02-07):** Multi-version MC data harvest — 1.18.2, 1.16.5, 1.14.4, 1.12.2 entity/item data + delta registries.
+- **Session 008 (2026-02-07):** ignore_cancelled implemented. ServerListPingEvent and CustomPayloadEvent wired (ARCH-023). 37 event types total. 32 tests.
+- **Registry work:** `.claude/registry/bukkit_api.toml` — 283 Bukkit events catalogued.
+- **Total:** 37 event types, ignore_cancelled working, multi-version data harvested
+
+## CRITICAL: Rebase Before Working
+
+Your branch is **15 commits behind master**. Run `git fetch origin master && git rebase origin/master` before starting any new work.
+
+## Your Priority (P0 — Critical Path)
+
+**Event firing coverage is P0.** 37 event types exist but most are never fired in game code. ARCH-023 grants cross-agent write access for event wiring — coordinate with Entity, Core, and Redstone to wire fire() calls at the right points.
 
 ## UNBLOCKED: is_cancelled() Now Available
 

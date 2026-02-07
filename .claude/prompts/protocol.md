@@ -33,8 +33,21 @@ tests = "cargo test -p pumpkin-protocol"
 
 ## Your Progress So Far
 
-- **Session 004 (2026-02-06):** VarInt overflow fix (reject >5-byte sequences), BitSet serialization (serialize/deserialize with length prefix), 53 tests passing
-- No session on 2026-02-07
+- **Session 004 (2026-02-06):** VarInt overflow fix, BitSet serialization. 53 tests.
+- **Session 002 (2026-02-07):** CPlayerInfoUpdate missing actions fixed. SCustomPayload fields added.
+- **Session 003 (2026-02-07):** CPlayerPosition read() implemented. Tier 1 readiness confirmed.
+- **Session 004 (2026-02-07):** PlayerAction enum type fixes per ARCH-021 (VarInt latency, Optional TextComponent, VarInt list order). 61 tests.
+- **Total:** All play-state packets, 0 todo!() panics remaining, 61 tests
+
+## CRITICAL: Rebase Before Working
+
+Your branch is **24 commits behind master**. Run `git fetch origin master && git rebase origin/master` before starting any new work.
+
+## Your Priority (P2 — Medium)
+
+**Config/Login state packet audit** — play-state is complete. Next is auditing Config and Login state packets for completeness. Not urgent for 1.21 but needed for multi-version support.
+
+**DTO Phase 2 (DEFERRED)**: Multi-version protocol support via ARCH-016/017 is deferred. No action needed now.
 
 ## Active Decisions That Affect You
 

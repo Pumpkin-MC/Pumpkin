@@ -33,8 +33,20 @@ tests = "cargo test -p pumpkin-nbt"
 
 ## Your Progress So Far
 
-- **Session 001 (2026-02-07):** Implemented Anvil region file format (`pumpkin-nbt/src/anvil.rs`, ~420 lines) with RegionFile struct, location/timestamp tables, compression methods, read_chunk/write_chunk/remove_chunk. 17 tests. Implemented SNBT parser (`pumpkin-nbt/src/snbt.rs`, ~530 lines) with all 13 NBT types, suffix parsing, typed arrays, compounds, escape sequences. 31 tests. Total: 74 tests.
-- **ARCH-009:** Your `anvil::RegionFile` declared canonical. WorldGen acknowledged (WORLD-001) and will adopt.
+- **Session 001 (2026-02-07):** Anvil region file format (~420 lines, 17 tests). SNBT parser (~530 lines, 31 tests).
+- **Session 002 (2026-02-07):** Player data NBT helpers. Anvil hardening — edge-case tests.
+- **ARCH-009:** Your `anvil::RegionFile` declared canonical. WorldGen acknowledged (WORLD-001).
+- **Total:** Anvil format (17 tests), SNBT parser (31 tests), ~80% complete
+
+## CRITICAL: Rebase Before Working
+
+Your branch is **24 commits behind master**. Run `git fetch origin master && git rebase origin/master` before starting any new work.
+
+## Your Priority (P2 — Medium)
+
+**WorldGen Anvil adoption** — ARCH-009 established your RegionFile as canonical. WorldGen will migrate (WORLD-001). Keep your API stable.
+
+**pumpkin-store** — Architect created `pumpkin-store/` (10th workspace crate) with `GameDataStore` trait. Future Phase 4 Lance backend may need NBT data. No action from you yet.
 
 ## Active Decisions That Affect You
 

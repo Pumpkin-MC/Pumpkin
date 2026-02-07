@@ -33,9 +33,28 @@ tests = "cargo test -p pumpkin --lib entity"
 
 ## Your Progress So Far
 
-- **Session 005 (2026-02-06):** Created WanderAroundGoal, SwimGoal, PanicGoal. Added initial 16 mobs: Zombie, Spider, Chicken, Cow, Pig, Sheep, Creeper, Skeleton, Enderman, Wolf, Iron Golem, Villager, Phantom, Blaze, Ghast, Wither Skeleton. Decisions ENT-001 through ENT-003.
-- **Session 006 (2026-02-07):** Fixed Navigator::is_idle() (ARCH-008). Created FleeEntityGoal. Added 9 mobs: CaveSpider, Husk, Stray (variants delegating to parent), Witch, Slime, Bat, Squid, Rabbit, Ocelot. Decisions ENT-004, ENT-005.
-- **Total:** ~25 mobs of ~79+ vanilla, 4 AI goals (Wander, Swim, Panic, Flee)
+- **Session 005 (2026-02-06):** Created WanderAroundGoal, SwimGoal, PanicGoal. Added initial 16 mobs. Decisions ENT-001 through ENT-003.
+- **Session 006 (2026-02-07):** Fixed Navigator::is_idle() (ARCH-008). Created FleeEntityGoal. Added 9 mobs: CaveSpider, Husk, Stray, Witch, Slime, Bat, Squid, Rabbit, Ocelot. Decisions ENT-004, ENT-005.
+- **Session 007 (2026-02-07):** Wired EntitySpawnEvent in spawn_entity and natural_spawner (ARCH-023). Damage/death events.
+- **Session 008 (2026-02-07):** Mass mob implementation — 45 more mob entities added. **81 total types registered.**
+- **Total:** 81 mob types registered, 4 AI goals (Wander, Swim, Panic, Flee), EntitySpawnEvent wired
+
+## CRITICAL: Rebase Before Working
+
+Your branch is **19 commits behind master**. Run `git fetch origin master && git rebase origin/master` before starting any new work. pumpkin-store and other agent work has been merged.
+
+## Your Priority (P0 — Critical Path)
+
+**AI goal expansion is P0.** You have 81 mob types registered but only 4 AI goals. Mobs are idle. This is the single biggest gameplay gap.
+
+Next goals to implement (vanilla priority order):
+1. **MeleeAttackGoal** — zombies, spiders, skeletons need this
+2. **RangedAttackGoal** — skeletons, blazes, ghasts
+3. **TemptGoal** — passive mobs follow food items
+4. **BreedGoal** — passive mob breeding
+5. **FollowOwnerGoal** — wolves, cats follow tamed owner
+6. **LookAtPlayerGoal** — most mobs look at nearby players
+7. **AvoidEntityGoal** — villagers flee zombies, cats flee creepers
 
 ## Active Decisions That Affect You
 
