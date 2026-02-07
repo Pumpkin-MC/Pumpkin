@@ -9,14 +9,17 @@ use crate::{
         biome_coords,
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
+            ancient_city::AncientCityGenerator,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
             desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator,
             jungle_temple::JungleTempleGenerator,
+            mineshaft::{MineshaftGenerator, MineshaftMesaGenerator},
             nether_fossil::NetherFossilGenerator,
             ocean_ruin::{ColdOceanRuinGenerator, WarmOceanRuinGenerator},
             pillager_outpost::PillagerOutpostGenerator,
             ruined_portal::RuinedPortalGenerator, shipwreck::ShipwreckGenerator,
             stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
+            trail_ruins::TrailRuinsGenerator,
             woodland_mansion::WoodlandMansionGenerator,
         },
     },
@@ -88,6 +91,18 @@ pub fn try_generate_structure(
         }
         StructureKeys::Mansion => {
             WoodlandMansionGenerator::get_structure_position(&WoodlandMansionGenerator, context)
+        }
+        StructureKeys::Mineshaft => {
+            MineshaftGenerator::get_structure_position(&MineshaftGenerator, context)
+        }
+        StructureKeys::MineshaftMesa => {
+            MineshaftMesaGenerator::get_structure_position(&MineshaftMesaGenerator, context)
+        }
+        StructureKeys::AncientCity => {
+            AncientCityGenerator::get_structure_position(&AncientCityGenerator, context)
+        }
+        StructureKeys::TrailRuins => {
+            TrailRuinsGenerator::get_structure_position(&TrailRuinsGenerator, context)
         }
         // TODO: Implement other structure types
         _ => None,

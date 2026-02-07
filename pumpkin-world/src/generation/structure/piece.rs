@@ -69,4 +69,8 @@ pub enum StructurePieceType {
     Jigsaw,
     OceanRuin,
     PillagerOutpost,
+
+    // Deep Dark / Archaeology
+    AncientCity,
+    TrailRuins,
 }
