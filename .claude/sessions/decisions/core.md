@@ -54,4 +54,20 @@
 **Decision:** Of 39 missing vanilla commands, 7 fall under Core scope: execute, function, schedule, return, save-all, save-off, save-on. Save-* are simple. Execute/function/schedule/return require dispatcher work.
 **Rationale:** Execute is most impactful missing command but also most complex. Needs Architect guidance.
 **Affects:** Core, Architect
+**Status:** active (save-* implemented in CORE-008/009, 4 remaining: execute, function, schedule, return)
+
+## CORE-008: save-all uses should_save flag for non-destructive chunk save
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/005_core_save-commands.md
+**Decision:** The save-all command triggers chunk saves by setting `level.should_save = true` and notifying the chunk system, rather than calling `Level::shutdown()`. The `flush` variant additionally waits for pending IO to complete.
+**Rationale:** `Level::shutdown()` cancels the chunk system and joins threads — it's destructive and can only be called once. The `should_save` flag is the designed mechanism for on-demand saves: it triggers `save_all_chunk()` in the chunk system thread without shutting anything down.
+**Affects:** Core
+**Status:** active
+
+## CORE-009: save-off/save-on control autosave_enabled on Server
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/005_core_save-commands.md
+**Decision:** The save-off/save-on commands toggle `server.autosave_enabled` (AtomicBool). When disabled, `tick_worlds()` skips `player_data_storage.tick()`. Chunk saves on unload still happen (managed by chunk system, not tick loop).
+**Rationale:** In vanilla, save-off disables periodic autosave, not chunk unload saves. Pumpkin's chunk saves happen on unload (not on a timer), so save-off primarily affects player data autosave. `/save-all` always saves regardless of the autosave state, matching vanilla.
+**Affects:** Core
 **Status:** active
