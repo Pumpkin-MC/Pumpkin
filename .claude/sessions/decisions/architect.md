@@ -128,3 +128,27 @@ loot tables, mob drops, worldgen, and tags without guessing.
 **Rationale:** 1.8 support is overkill — pre-Flattening block IDs are an entirely different system. Post-1.13 versions share block state IDs, making the DTO translation layer dramatically simpler. The four chosen milestones represent the biggest protocol shifts post-Flattening: 1.13 (the Flattening itself), 1.16 (Nether rewrite, piglins, basalt), 1.18 (world height expansion, cave gen overhaul), 1.21 (current). This covers the iconic releases without the cost of pre-Flattening compatibility.
 **Affects:** Protocol, Core, all agents
 **Status:** active — DEFERRED (Phase 2, revised)
+
+## ARCH-017: 1.16.5 is the priority multi-version target
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/005_architect_dto-1165-scoping.md
+**Decision:** Focus DTO development on 1.16.5 (protocol 754) as the first non-current version. It's the widest protocol gap (754→774), so if the DTO handles it, all intermediate versions (1.18, 1.19, 1.20) come nearly free. 5 major translation layers identified: (1) Config state bypass for pre-1.20.2, (2) chunk format 16→24 sections, (3) item components→NBT, (4) packet ID remapping, (5) registry/login packet restructuring.
+**Rationale:** 1.16.5 has the largest active player base of any non-current version (Nether Update). Testing against the hardest target first validates the entire DTO architecture. Estimated ~2000-3000 lines of translation code across ~15-20 files.
+**Affects:** Protocol, Core, all agents
+**Status:** active — DEFERRED (Phase 2, scoped)
+
+## ARCH-018: Config state bypass for pre-1.20.2 clients
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/005_architect_dto-1165-scoping.md
+**Decision:** Clients with protocol < 764 (pre-1.20.2) skip the Config connection state entirely. Registry data, tags, and feature flags are embedded in the Join Game packet or sent during early Play, matching vanilla 1.16.5 behavior. Pumpkin's connection state machine in `net/java/mod.rs` must branch on version after Login.
+**Rationale:** The Config state was added in 1.20.2. 1.16.5 clients go Handshake→Login→Play. Trying to force old clients through Config would break the connection.
+**Affects:** Protocol, Core
+**Status:** active — DEFERRED (Phase 2)
+
+## ARCH-019: DTO module lives in pumpkin-protocol/src/dto/
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/005_architect_dto-1165-scoping.md
+**Decision:** All version translation code lives in `pumpkin-protocol/src/dto/`. Protocol agent owns it. The DTO module imports internal types but does not modify them. Existing packet definitions stay untouched (ARCH-011 compliant). Structure: `dto/mod.rs` (VersionAdapter trait), `dto/v1_21.rs` (passthrough), `dto/v1_16_5/` (translation modules for chunks, items, login, player_info).
+**Rationale:** The DTO is a protocol concern — it translates wire formats. Keeping it in pumpkin-protocol/ maintains the single-crate boundary for network serialization. Purely additive module, zero changes to existing code.
+**Affects:** Protocol
+**Status:** active — DEFERRED (Phase 2)
