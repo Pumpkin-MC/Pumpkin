@@ -113,6 +113,14 @@ pub struct BasicConfiguration {
     pub white_list: bool,
     /// Whether to enforce the whitelist
     pub enforce_whitelist: bool,
+    /// Whether to allow flight in Survival mode (vanilla: allow-flight)
+    pub allow_flight: bool,
+    /// Radius of spawn protection (0 = disabled, vanilla default: 16)
+    pub spawn_protection: u32,
+    /// Whether structures (villages, temples, etc.) are generated (vanilla: generate-structures)
+    pub generate_structures: bool,
+    /// Minutes before kicking idle players (0 = disabled, vanilla: player-idle-timeout)
+    pub player_idle_timeout: u32,
 }
 
 impl Default for BasicConfiguration {
@@ -144,6 +152,10 @@ impl Default for BasicConfiguration {
             allow_chat_reports: false,
             white_list: false,
             enforce_whitelist: false,
+            allow_flight: false,
+            spawn_protection: 16,
+            generate_structures: true,
+            player_idle_timeout: 0,
         }
     }
 }
