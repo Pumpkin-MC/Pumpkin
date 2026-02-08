@@ -221,3 +221,28 @@ pub static TEMPT_ARMADILLO: &[u16] = &[Item::SPIDER_EYE.id];
 
 /// Torchflower seeds — tempts sniffers.
 pub static TEMPT_SNIFFER: &[u16] = &[Item::TORCHFLOWER_SEEDS.id];
+
+/// Hay bale — tempts llamas.
+pub static TEMPT_LLAMA: &[u16] = &[Item::HAY_BLOCK.id];
+
+/// Flowers — tempts bees.
+pub static TEMPT_BEE: &[u16] = &[
+    Item::DANDELION.id,
+    Item::POPPY.id,
+    Item::BLUE_ORCHID.id,
+    Item::ALLIUM.id,
+    Item::AZURE_BLUET.id,
+    Item::RED_TULIP.id,
+    Item::ORANGE_TULIP.id,
+    Item::WHITE_TULIP.id,
+    Item::PINK_TULIP.id,
+    Item::OXEYE_DAISY.id,
+    Item::CORNFLOWER.id,
+    Item::LILY_OF_THE_VALLEY.id,
+    Item::SUNFLOWER.id,
+    Item::LILAC.id,
+    Item::ROSE_BUSH.id,
+    Item::PEONY.id,
+    Item::TORCHFLOWER.id,
+    Item::WITHER_ROSE.id,
+];

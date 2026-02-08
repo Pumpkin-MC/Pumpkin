@@ -105,3 +105,9 @@ Standard scale: Swim=0, Panic=1, Attack=2, Special=4-5, Wander=6, LookAt=7, Look
 **Session:** entity-013
 **Decision:** FollowOwnerGoal stores `owner_id: Option<i32>` in the goal struct (ENT-014 pattern). Priority 6 — after FollowParent(5), before Wander(7). Teleports when >12 blocks, follows when >10 blocks, stops when <2 blocks. Wired to Wolf and Cat.
 **Rationale:** MobEntity has no owner/tamed fields (ARCH-011). Storing owner state in the goal itself follows the BreedGoal pattern. External code calls `set_owner()` when taming occurs.
+
+## ENT-018: Only Llama and Bee Need Breeding Goals Among Remaining Passives
+**Date:** 2026-02-08
+**Session:** entity-015
+**Decision:** Among remaining passive mobs audited (Llama, Bee, Ocelot, Parrot, Polar Bear, Dolphin, Allay), only Llama and Bee are breedable in vanilla. Ocelot lost breeding in 1.14 (trust-only). Parrot, Polar Bear, Dolphin, and Allay are not breedable.
+**Rationale:** Vanilla 1.21 game mechanics. Only breedable mobs should have BreedGoal/FollowParentGoal. Ocelot has TemptGoal for trust-building but no breed. Also added FleeEntityGoal(Ocelot) to Creeper/Phantom since vanilla mobs flee both Cat and Ocelot.

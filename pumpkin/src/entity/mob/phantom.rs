@@ -40,6 +40,10 @@ impl PhantomEntity {
                 1,
                 FleeEntityGoal::new(&EntityType::CAT, 16.0, 1.0, 1.2),
             );
+            goal_selector.add_goal(
+                1,
+                FleeEntityGoal::new(&EntityType::OCELOT, 16.0, 1.0, 1.2),
+            );
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(6, WanderAroundGoal::new(1.0));
             goal_selector.add_goal(
