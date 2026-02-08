@@ -10,6 +10,7 @@ members = [
     "pumpkin-world",
     "pumpkin/",
     "pumpkin-data",
+    "pumpkin-datafixerupper"
 ]
 
 
