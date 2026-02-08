@@ -7,20 +7,17 @@ use crate::serialization::{
     map_like::MapLike,
 };
 
-/// Generates default implementations for numeric creators.
-macro_rules! create_numbers_impl {
-    (
-        $(
-            $(#[$meta:meta])*
-            fn $name:ident($arg:ident : $ty:ty) => $variant:ident
-        ),* $(,)?
-    ) => {
-        $(
-            $(#[$meta])*
-            fn $name(&self, $arg: $ty) -> Self::Value {
-                self.create_number(Number::$variant($arg))
-            }
-        )*
+/// Generates a default implementation for a create_*number* function.
+macro_rules! create_number_impl {
+    ($name:ident, $ty:ty, $number_ty:ident, $func:ident) => {
+        /// Returns how a generic
+        #[doc = concat!("`", stringify!($name), "`")]
+        /// in Java (equivalent to
+        #[doc = concat!("[`", stringify!($ty), "`])")]
+        /// is represented by this `DynamicOps`.
+        fn $func(&self, data: $ty) -> Self::Value {
+            self.create_number(Number::$number_ty(data))
+        }
     };
 }
 
@@ -45,25 +42,12 @@ pub trait DynamicOps {
     /// Returns how a generic number is represented by this `DynamicOps`.
     fn create_number(&self, n: Number) -> Self::Value;
 
-    create_numbers_impl! {
-        /// Returns how a generic `byte` in Java (equivalent to [`i8`]) is represented by this `DynamicOps`.
-        fn create_byte(data: i8) => Byte,
-
-        /// Returns how a generic `short` in Java (equivalent to [`i16`]) is represented by this `DynamicOps`.
-        fn create_short(data: i16) => Short,
-
-        /// Returns how a generic `int` in Java (equivalent to [`i32`]) is represented by this `DynamicOps`.
-        fn create_int(data: i32) => Int,
-
-        /// Returns how a generic `long` in Java (equivalent to [`i64`]) is represented by this `DynamicOps`.
-        fn create_long(data: i64) => Long,
-
-        /// Returns how a generic `float` in Java (equivalent to [`f32`]) is represented by this `DynamicOps`.
-        fn create_float(data: f32) => Float,
-
-        /// Returns how a generic `double` in Java (equivalent to [`f64`]) is represented by this `DynamicOps`.
-        fn create_double(data: f64) => Double,
-    }
+    create_number_impl!(byte, i8, Byte, create_byte);
+    create_number_impl!(short, i16, Short, create_short);
+    create_number_impl!(int, i32, Int, create_int);
+    create_number_impl!(long, i64, Long, create_long);
+    create_number_impl!(float, f32, Float, create_float);
+    create_number_impl!(double, f64, Double, create_double);
 
     /// Returns how a boolean is represented by this `DynamicOps`.
     fn create_bool(&self, data: bool) -> Self::Value {

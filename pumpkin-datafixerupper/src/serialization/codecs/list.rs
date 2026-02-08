@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::serialization::{
     HasValue,
     codec::Codec,
@@ -13,32 +15,36 @@ use crate::serialization::{
 /// - Also, `MIN` specifies the minimum number of element this codec has (inclusive), while
 ///   `MIN` specifies the maximum number of element this codec has (inclusive).
 #[derive(Debug)]
-pub struct ListCodec<C, const MIN: usize, const MAX: usize>
+pub struct ListCodec<C>
 where
-    C: Codec,
+    C: Codec + ?Sized,
 {
-    element_codec: &'static C,
+    pub(crate) element_codec: &'static C,
+    pub(crate) min_size: usize,
+    pub(crate) max_size: usize,
 }
 
-impl<C: Codec, const MIN: usize, const MAX: usize> ListCodec<C, MIN, MAX> {
-    fn create_too_short_error<T>(size: usize) -> DataResult<T> {
+impl<C: Codec> ListCodec<C> {
+    fn create_too_short_error<T>(&self, size: usize) -> DataResult<T> {
         DataResult::error(format!(
-            "List is too short: {size}, expected range [{MIN}-{MAX}]"
+            "List is too short: {size}, expected range [{}-{}]",
+            self.min_size, self.max_size
         ))
     }
 
-    fn create_too_long_error<T>(size: usize) -> DataResult<T> {
+    fn create_too_long_error<T>(&self, size: usize) -> DataResult<T> {
         DataResult::error(format!(
-            "List is too short: {size}, expected range [{MIN}-{MAX}]"
+            "List is too long: {size}, expected range [{}-{}]",
+            self.min_size, self.max_size
         ))
     }
 }
 
-impl<C: Codec, const MIN: usize, const MAX: usize> HasValue for ListCodec<C, MIN, MAX> {
+impl<C: Codec> HasValue for ListCodec<C> {
     type Value = Vec<C::Value>;
 }
 
-impl<C: Codec, const MIN: usize, const MAX: usize> Encoder for ListCodec<C, MIN, MAX> {
+impl<C: Codec> Encoder for ListCodec<C> {
     fn encode<T: PartialEq + Clone>(
         &self,
         input: &Self::Value,
@@ -46,10 +52,10 @@ impl<C: Codec, const MIN: usize, const MAX: usize> Encoder for ListCodec<C, MIN,
         prefix: T,
     ) -> DataResult<T> {
         let size = input.len();
-        if size < MIN {
-            Self::create_too_short_error(size)
-        } else if size > MAX {
-            Self::create_too_long_error(size)
+        if size < self.min_size {
+            self.create_too_short_error(size)
+        } else if size > self.max_size {
+            self.create_too_long_error(size)
         } else {
             let mut builder = ops.list_builder();
             for e in input {
@@ -60,7 +66,7 @@ impl<C: Codec, const MIN: usize, const MAX: usize> Encoder for ListCodec<C, MIN,
     }
 }
 
-impl<C, const MIN: usize, const MAX: usize> Decoder for ListCodec<C, MIN, MAX>
+impl<C> Decoder for ListCodec<C>
 where
     C: Codec,
 {
@@ -73,31 +79,48 @@ where
         iter.set_lifecycle(Lifecycle::Stable);
         iter.flat_map(|i| {
             let mut total_count = 0;
-            let elements: Self::Value = vec![];
+            let mut elements: Self::Value = vec![];
             let mut failed: Vec<T> = vec![];
+            // This is used to keep track of the overall `DataResult`.
+            // If any one element has a partial result, this turns into a partial result.
+            // If any one element has no result, this turns into a non-result.
             let mut result = DataResult::success(());
 
             for element in i {
                 total_count += 1;
-                if elements.len() > MAX {
-                    return Self::create_too_long_error(elements.len());
+                if elements.len() >= self.max_size {
+                    failed.push(element.clone());
+                    continue;
                 }
                 let element_result = self.element_codec.decode(element.clone(), ops);
-                if element_result.is_error() {
-                    failed.push(element.clone());
+                result = result.add_message(&element_result);
+                if let Some(element) = element_result.into_result_or_partial() {
+                    elements.push(element.0);
                 }
-                result = result.apply_2_and_make_stable(|r, _| r, element_result);
             }
 
-            if elements.len() < MIN {
-                return Self::create_too_short_error(elements.len());
+            if elements.len() < self.min_size {
+                return self.create_too_short_error(elements.len());
             }
 
             let pair = (elements, ops.create_list(failed));
-            if total_count > MAX {
-                result = Self::create_too_long_error(total_count);
+            if total_count > self.max_size {
+                result = self.create_too_long_error(total_count);
             }
             result.with_complete_or_partial(pair)
         })
+    }
+}
+
+/// Creates a [`ListCodec`] of another [`Codec`].
+pub const fn list_of<C: Codec>(
+    codec: &'static C,
+    min_size: usize,
+    max_size: usize,
+) -> ListCodec<C> {
+    ListCodec {
+        element_codec: codec,
+        min_size,
+        max_size,
     }
 }
