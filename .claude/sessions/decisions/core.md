@@ -111,3 +111,11 @@
 **Rationale:** Commonly used vanilla server.properties fields. Declared before runtime enforcement to allow operators to configure them.
 **Affects:** Core
 **Status:** active
+
+## CORE-015: broadcast_console_to_ops enforced in lib.rs
+**Date:** 2026-02-07
+**Session:** .claude/sessions/2026-02-07/009_core_broadcast-ops-enforcement.md
+**Decision:** When `broadcast_console_to_ops` is true, console commands are broadcast to all online operators (permission level >= 2) as gray italic system messages `[Server: /{command}]`. Applied to both stdin and readline console paths in lib.rs.
+**Rationale:** Completes enforcement for CORE-014 config field. Operators need visibility into console activity. Matches vanilla behavior.
+**Affects:** Core
+**Status:** active
