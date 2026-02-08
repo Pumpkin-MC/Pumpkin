@@ -156,6 +156,20 @@ impl BlockBehaviour for PistonBlock {
 
             // Extend Piston
             if r#type == 0 {
+                // Fire BlockPistonExtendEvent for plugin cancellation support
+                if let Some(server) = world.server.upgrade() {
+                    let static_block = Block::from_state_id(state.id);
+                    let event = crate::plugin::api::events::block::block_piston_extend::BlockPistonExtendEvent::new(
+                        static_block,
+                        *pos,
+                        dir.to_index() as u8,
+                        sticky,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return false;
+                    }
+                }
                 if !move_piston(world, dir, pos, true, sticky).await {
                     return false;
                 }
@@ -181,6 +195,21 @@ impl BlockBehaviour for PistonBlock {
                 return true;
             }
             // Reduce Piston
+
+            // Fire BlockPistonRetractEvent for plugin cancellation support
+            if let Some(server) = world.server.upgrade() {
+                let static_block = Block::from_state_id(state.id);
+                let event = crate::plugin::api::events::block::block_piston_retract::BlockPistonRetractEvent::new(
+                    static_block,
+                    *pos,
+                    dir.to_index() as u8,
+                    sticky,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return false;
+                }
+            }
 
             let extended_pos = pos.offset(dir.to_offset());
 

@@ -55,6 +55,19 @@ trait CropBlockBase: PlantBlockBase {
         if age < self.max_age() {
             let f = get_available_moisture(world, pos, block).await;
             if rand::rng().random_range(0..=(25.0 / f).floor() as i64) == 0 {
+                // Fire BlockGrowEvent before advancing crop age (ARCH-023)
+                if let Some(server) = world.server.upgrade() {
+                    let event = crate::plugin::api::events::block::block_grow::BlockGrowEvent::new(
+                        block,
+                        *pos,
+                        block, // same block type, different state
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                }
+
                 world
                     .set_block_state(
                         pos,

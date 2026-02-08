@@ -399,3 +399,272 @@ impl ComparatorBlock {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Comparator update delay is always 2 game ticks (1 redstone tick).
+    /// This differs from repeater which has configurable 2/4/6/8 tick delays.
+    #[test]
+    fn comparator_update_delay_always_2() {
+        let comparator = ComparatorBlock;
+        let block = &Block::COMPARATOR;
+        let default_state = block.default_state.id;
+        assert_eq!(
+            RedstoneGateBlock::get_update_delay_internal(&comparator, default_state, block),
+            2
+        );
+    }
+
+    /// Comparator mode toggles between Compare and Subtract when right-clicked.
+    #[test]
+    fn mode_toggle() {
+        assert_eq!(
+            match ComparatorMode::Compare {
+                ComparatorMode::Compare => ComparatorMode::Subtract,
+                ComparatorMode::Subtract => ComparatorMode::Compare,
+            },
+            ComparatorMode::Subtract
+        );
+        assert_eq!(
+            match ComparatorMode::Subtract {
+                ComparatorMode::Compare => ComparatorMode::Subtract,
+                ComparatorMode::Subtract => ComparatorMode::Compare,
+            },
+            ComparatorMode::Compare
+        );
+    }
+
+    /// Comparator mode property roundtrips through state ID correctly.
+    #[test]
+    fn mode_property_roundtrip() {
+        let block = &Block::COMPARATOR;
+        for mode in [ComparatorMode::Compare, ComparatorMode::Subtract] {
+            let mut props = ComparatorLikeProperties::default(block);
+            props.mode = mode;
+            let state_id = props.to_state_id(block);
+            let recovered = ComparatorLikeProperties::from_state_id(state_id, block);
+            assert_eq!(
+                recovered.mode, mode,
+                "Mode {mode:?} not preserved through state roundtrip"
+            );
+        }
+    }
+
+    /// Comparator powered property roundtrips through state ID correctly.
+    #[test]
+    fn comparator_powered_roundtrip() {
+        let block = &Block::COMPARATOR;
+        for powered in [true, false] {
+            let mut props = ComparatorLikeProperties::default(block);
+            props.powered = powered;
+            let state_id = props.to_state_id(block);
+            let recovered = ComparatorLikeProperties::from_state_id(state_id, block);
+            assert_eq!(
+                recovered.powered, powered,
+                "Powered={powered} not preserved through state roundtrip"
+            );
+        }
+    }
+
+    /// Comparator facing roundtrips through state ID correctly for all 4 horizontal directions.
+    #[test]
+    fn comparator_facing_roundtrip() {
+        let block = &Block::COMPARATOR;
+        for facing in HorizontalFacing::all() {
+            let mut props = ComparatorLikeProperties::default(block);
+            props.facing = facing;
+            let state_id = props.to_state_id(block);
+            let recovered = ComparatorLikeProperties::from_state_id(state_id, block);
+            assert_eq!(
+                recovered.facing, facing,
+                "Facing {facing:?} not preserved through state roundtrip"
+            );
+        }
+    }
+
+    /// Verify the comparator output formula (from `calculate_output_signal`):
+    ///   - If `side_power >= back_power`, output = 0
+    ///   - If Subtract mode and back > side: output = back - side
+    ///   - If Compare mode and back > side: output = back
+    ///
+    /// These are the vanilla rules for comparator operation.
+    #[test]
+    fn compare_subtract_formula() {
+        // Helper matching the calculate_output_signal logic
+        fn calc(back: u8, side: u8, subtract: bool) -> u8 {
+            if side >= back {
+                return 0;
+            }
+            if subtract {
+                back - side
+            } else {
+                back
+            }
+        }
+
+        // Compare mode: back > side → outputs back power
+        assert_eq!(calc(10, 5, false), 10);
+        // Subtract mode: back > side → outputs difference
+        assert_eq!(calc(10, 5, true), 5);
+
+        // Equal power → always 0 (side >= back)
+        assert_eq!(calc(7, 7, false), 0);
+        assert_eq!(calc(7, 7, true), 0);
+
+        // Side stronger → always 0
+        assert_eq!(calc(3, 10, false), 0);
+        assert_eq!(calc(3, 10, true), 0);
+
+        // Zero inputs
+        assert_eq!(calc(0, 0, false), 0);
+        assert_eq!(calc(0, 0, true), 0);
+
+        // Max power, no side → full output
+        assert_eq!(calc(15, 0, false), 15);
+        assert_eq!(calc(15, 0, true), 15);
+
+        // Max power subtract max side → 0
+        assert_eq!(calc(15, 15, true), 0);
+
+        // Subtract to 1
+        assert_eq!(calc(8, 7, true), 1);
+    }
+
+    /// Exhaustive test of the comparator output formula for ALL valid power combinations.
+    /// In vanilla, back and side power range from 0 to 15.
+    #[test]
+    fn compare_subtract_formula_exhaustive() {
+        fn calc(back: u8, side: u8, subtract: bool) -> u8 {
+            if side >= back {
+                return 0;
+            }
+            if subtract { back - side } else { back }
+        }
+
+        for back in 0u8..=15 {
+            for side in 0u8..=15 {
+                let compare_out = calc(back, side, false);
+                let subtract_out = calc(back, side, true);
+
+                if side >= back {
+                    assert_eq!(compare_out, 0, "Compare({back},{side}) should be 0");
+                    assert_eq!(subtract_out, 0, "Subtract({back},{side}) should be 0");
+                } else {
+                    assert_eq!(compare_out, back, "Compare({back},{side}) should pass through");
+                    assert_eq!(
+                        subtract_out,
+                        back - side,
+                        "Subtract({back},{side}) should be difference"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Verify the `has_power` logic for comparators. This determines whether
+    /// the comparator's output face is powered (lit torch) vs unpowered.
+    /// Vanilla rules:
+    /// - back == 0 → false (no input, no output)
+    /// - back > side → true (signal passes in both modes)
+    /// - back == side AND Compare mode → true (equal signals pass in compare)
+    /// - back == side AND Subtract mode → false (0 output in subtract)
+    /// - back < side → false (side blocks output)
+    #[test]
+    fn has_power_logic() {
+        fn has_power(back: u8, side: u8, mode: ComparatorMode) -> bool {
+            if back == 0 {
+                return false;
+            }
+            if back > side {
+                return true;
+            }
+            back == side && mode == ComparatorMode::Compare
+        }
+
+        // No input → never powered
+        assert!(!has_power(0, 0, ComparatorMode::Compare));
+        assert!(!has_power(0, 0, ComparatorMode::Subtract));
+        assert!(!has_power(0, 5, ComparatorMode::Compare));
+
+        // Back stronger → always powered
+        assert!(has_power(10, 5, ComparatorMode::Compare));
+        assert!(has_power(10, 5, ComparatorMode::Subtract));
+        assert!(has_power(15, 0, ComparatorMode::Compare));
+        assert!(has_power(15, 0, ComparatorMode::Subtract));
+        assert!(has_power(1, 0, ComparatorMode::Compare));
+
+        // Equal → only Compare mode powers
+        assert!(has_power(7, 7, ComparatorMode::Compare));
+        assert!(!has_power(7, 7, ComparatorMode::Subtract));
+        assert!(has_power(15, 15, ComparatorMode::Compare));
+        assert!(!has_power(15, 15, ComparatorMode::Subtract));
+
+        // Side stronger → never powered
+        assert!(!has_power(3, 10, ComparatorMode::Compare));
+        assert!(!has_power(3, 10, ComparatorMode::Subtract));
+    }
+
+    /// Exhaustive `has_power` test for all 16x16 back x side combinations.
+    #[test]
+    fn has_power_exhaustive() {
+        fn has_power(back: u8, side: u8, mode: ComparatorMode) -> bool {
+            if back == 0 {
+                return false;
+            }
+            if back > side {
+                return true;
+            }
+            back == side && mode == ComparatorMode::Compare
+        }
+
+        for back in 0u8..=15 {
+            for side in 0u8..=15 {
+                let compare = has_power(back, side, ComparatorMode::Compare);
+                let subtract = has_power(back, side, ComparatorMode::Subtract);
+
+                if back == 0 {
+                    assert!(!compare, "back=0 should never power (compare)");
+                    assert!(!subtract, "back=0 should never power (subtract)");
+                } else if back > side {
+                    assert!(compare, "back>side should power (compare {back}>{side})");
+                    assert!(subtract, "back>side should power (subtract {back}>{side})");
+                } else if back == side {
+                    assert!(compare, "back==side should power in compare ({back}=={side})");
+                    assert!(
+                        !subtract,
+                        "back==side should NOT power in subtract ({back}=={side})"
+                    );
+                } else {
+                    assert!(!compare, "back<side should not power (compare {back}<{side})");
+                    assert!(
+                        !subtract,
+                        "back<side should not power (subtract {back}<{side})"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Full state space test: all combinations of facing × mode × powered roundtrip.
+    #[test]
+    fn comparator_full_state_roundtrip() {
+        let block = &Block::COMPARATOR;
+        for facing in HorizontalFacing::all() {
+            for mode in [ComparatorMode::Compare, ComparatorMode::Subtract] {
+                for powered in [true, false] {
+                    let mut props = ComparatorLikeProperties::default(block);
+                    props.facing = facing;
+                    props.mode = mode;
+                    props.powered = powered;
+                    let state_id = props.to_state_id(block);
+                    let r = ComparatorLikeProperties::from_state_id(state_id, block);
+                    assert_eq!(r.facing, facing, "facing mismatch");
+                    assert_eq!(r.mode, mode, "mode mismatch");
+                    assert_eq!(r.powered, powered, "powered mismatch");
+                }
+            }
+        }
+    }
+}

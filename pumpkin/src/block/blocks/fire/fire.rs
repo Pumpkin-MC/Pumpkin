@@ -118,6 +118,20 @@ impl FireBlock {
             .into();
         if rand::rng().random_range(0..spread_factor) < spread_chance {
             let block = world.get_block(pos).await;
+
+            // Fire BlockBurnEvent before consuming the block (ARCH-023)
+            if let Some(server) = world.server.upgrade() {
+                let event = crate::plugin::api::events::block::block_burn::BlockBurnEvent {
+                    igniting_block: &Block::FIRE,
+                    block,
+                    cancelled: false,
+                };
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
+                }
+            }
+
             if rand::rng().random_range(0..current_age + 10) < 5 {
                 let new_age = (current_age + rand::rng().random_range(0..5) / 4).min(15);
                 let state_id = self.get_state_for_position(world, &Block::FIRE, pos).await;
