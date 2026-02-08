@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
 pub struct FunConfig {
-    /// Whether the April fools are enabled.
+    /// Whether April Fools features are enabled.
     pub april_fools: bool,
 }
 

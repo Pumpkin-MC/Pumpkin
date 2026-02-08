@@ -103,7 +103,6 @@ pub struct TextureTypes {
     /// Use player capes.
     pub cape: bool,
     /// Use player elytras.
-    /// (Custom elytras exist, not widely known.)
     pub elytra: bool,
 }
 
