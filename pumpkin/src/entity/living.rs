@@ -1095,8 +1095,12 @@ impl LivingEntity {
         self.entity_equipment.lock().await.get(slot)
     }
 
+    pub fn can_take_damage(&self) -> bool {
+        !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
+    }
+
     pub fn is_part_of_game(&self) -> bool {
-        self.is_spectator() && self.entity.is_alive()
+        !self.is_spectator() && self.entity.is_alive()
     }
 
     pub async fn reset_state(&self) {

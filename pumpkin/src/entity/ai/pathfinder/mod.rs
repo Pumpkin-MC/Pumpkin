@@ -71,7 +71,7 @@ const NODE_REACH_Y: f64 = 1.0;
 const MOB_STEP_HEIGHT: f64 = 0.6;
 
 // TODO: Read from entity attributes (zombie = 0.23, default = 0.25)
-const DEFAULT_MOVEMENT_SPEED: f64 = 0.25;
+const DEFAULT_MOVEMENT_SPEED: f64 = 0.23;
 
 const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 

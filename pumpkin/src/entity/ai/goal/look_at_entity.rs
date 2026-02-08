@@ -56,8 +56,8 @@ impl LookAtEntityGoal {
         target_type: &'static EntityType,
         range: f32,
     ) -> TargetPredicate {
-        let mut target_predicate = TargetPredicate::non_attackable();
-        target_predicate.base_max_distance = range;
+        let mut target_predicate = TargetPredicate::create_non_attackable();
+        target_predicate.base_max_distance = range as f64; // TODO
         if target_type == &EntityType::PLAYER {
             target_predicate.set_predicate(move |living_entity, _world| {
                 let mob_weak = mob_weak.clone();

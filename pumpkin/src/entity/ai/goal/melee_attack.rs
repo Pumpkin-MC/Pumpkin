@@ -29,7 +29,7 @@ impl MeleeAttackGoal {
     pub fn new(speed: f64, pause_when_mob_idle: bool) -> Self {
         Self {
             goal_control: Controls::MOVE | Controls::LOOK,
-            speed: speed.max(0.25), // Ensure minimum visible speed
+            speed: speed.max(0.23), // Ensure minimum visible speed
             pause_when_mob_idle,
             target_location: Vector3::new(0.0, 0.0, 0.0),
             update_countdown_ticks: 0,
@@ -60,7 +60,6 @@ impl Goal for MeleeAttackGoal {
             }
             self.last_update_time = time;
 
-            // 💡 FIX: Await lock operation
             let target = mob.get_mob_entity().target.lock().await;
 
             let Some(target) = target.as_ref() else {
