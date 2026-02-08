@@ -1,4 +1,7 @@
-use pumpkin_data::{packet::{CURRENT_MC_VERSION, LOWEST_SUPPORTED_MC_VERSION}, translation};
+use pumpkin_data::{
+    packet::{CURRENT_MC_VERSION, LOWEST_SUPPORTED_MC_VERSION},
+    translation,
+};
 use pumpkin_protocol::{ConnectionState, java::server::handshake::SHandShake};
 use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
 

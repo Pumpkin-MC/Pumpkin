@@ -17,6 +17,7 @@ pub struct Packets {
 
 pub(crate) fn build() -> TokenStream {
     let assets = [
+        (MinecraftVersion::V_1_21_2, "1_21_2_packets.json"),
         (MinecraftVersion::V_1_21_4, "1_21_4_packets.json"),
         (MinecraftVersion::V_1_21_5, "1_21_5_packets.json"),
         (MinecraftVersion::V_1_21_6, "1_21_6_packets.json"),
