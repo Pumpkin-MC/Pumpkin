@@ -172,7 +172,6 @@ impl UniformFloatProvider {
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // Use the random range in [min_inclusive, max_exclusive)
         let range = self.max_exclusive - self.min_inclusive;
         random.next_f32().mul_add(range, self.min_inclusive)
     }
@@ -225,11 +224,8 @@ impl ClampedNormalFloatProvider {
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // Generate normal distribution value
         let gaussian = random.next_gaussian() as f32;
         let value = gaussian.mul_add(self.deviation, self.mean);
-
-        // Clamp to min/max range
         value.clamp(self.min, self.max)
     }
 
@@ -273,29 +269,15 @@ impl TrapezoidFloatProvider {
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // Trapezoid distribution: flat plateau in the middle, linear ramps on sides
         let range = self.max - self.min;
-        let plateau_range = range * self.plateau;
-        let ramp_range = (range - plateau_range) * 0.5;
-
-        let random_value = random.next_f32();
-
-        if random_value < self.plateau.mul_add(-0.5, 0.5) {
-            // Left ramp: quadratic distribution biased toward plateau
-            let scaled = random_value / self.plateau.mul_add(-0.5, 0.5);
-            let sqrt_scaled = scaled.sqrt();
-            self.min + ramp_range * sqrt_scaled
-        } else if random_value > self.plateau.mul_add(0.5, 0.5) {
-            // Right ramp: quadratic distribution biased toward plateau
-            let scaled =
-                (random_value - self.plateau.mul_add(0.5, 0.5)) / self.plateau.mul_add(-0.5, 0.5);
-            let sqrt_scaled = (1.0 - scaled).sqrt();
-            self.max - ramp_range * sqrt_scaled
-        } else {
-            // Plateau: uniform distribution
-            let plateau_pos = (random_value - self.plateau.mul_add(-0.5, 0.5)) / self.plateau;
-            self.min + ramp_range + plateau_pos * plateau_range
+        if range <= 0.0 {
+            return self.min;
         }
+        let plateau = self.plateau.clamp(0.0, range);
+        let ramp_range = (range - plateau) * 0.5;
+        let plateau_range = range - ramp_range;
+
+        self.min + random.next_f32() * plateau_range + random.next_f32() * ramp_range
     }
 
     #[must_use]
@@ -319,7 +301,7 @@ mod tests {
         assert_eq!(provider.get_min(), 5.5);
         assert_eq!(provider.get_max(), 5.5);
         assert_eq!(provider.get(&mut random), 5.5);
-        assert_eq!(provider.get(&mut random), 5.5); // Should always return the same value
+        assert_eq!(provider.get(&mut random), 5.5);
     }
 
     #[test]
@@ -332,7 +314,6 @@ mod tests {
         assert_eq!(provider.get_min(), 1.0);
         assert_eq!(provider.get_max(), 5.0);
 
-        // Test that values are within range
         for _ in 0..100 {
             let value = provider.get(&mut random);
             assert!(
@@ -352,7 +333,6 @@ mod tests {
         assert_eq!(provider.get_min(), 1.0);
         assert_eq!(provider.get_max(), 5.0);
 
-        // Test that values are within range
         for _ in 0..100 {
             let value = provider.get(&mut random);
             assert!(
@@ -372,7 +352,6 @@ mod tests {
         assert_eq!(provider.get_min(), 0.0);
         assert_eq!(provider.get_max(), 10.0);
 
-        // Test that values are within range
         for _ in 0..100 {
             let value = provider.get(&mut random);
             assert!(
