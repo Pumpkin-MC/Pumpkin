@@ -225,7 +225,7 @@ mod tests {
     }
 
     /// Vanilla update order is West, East, Down, Up, North, South.
-    /// This differs from BlockDirection::all() which is Down, Up, North, South, West, East.
+    /// This differs from `BlockDirection::all()` which is Down, Up, North, South, West, East.
     /// Technical redstone builds depend on this specific order.
     #[test]
     fn vanilla_update_order() {
@@ -238,22 +238,22 @@ mod tests {
         assert_eq!(order[5], BlockDirection::South);
     }
 
-    /// Verify that all() and update_order() contain the same directions
+    /// Verify that `all()` and `update_order()` contain the same directions
     /// but in different order. This is important for signal propagation:
-    /// - all() is used for power queries (order doesn't matter, max is taken)
-    /// - update_order() is used for neighbor notifications (order matters)
+    ///   - `all()` is used for power queries (order doesn't matter, max is taken)
+    ///   - `update_order()` is used for neighbor notifications (order matters)
     #[test]
     fn all_vs_update_order_same_elements() {
         let mut all: Vec<BlockDirection> = BlockDirection::all().to_vec();
         let mut update: Vec<BlockDirection> = BlockDirection::update_order().to_vec();
-        all.sort_by_key(|d| d.to_index());
-        update.sort_by_key(|d| d.to_index());
+        all.sort_by_key(BlockDirection::to_index);
+        update.sort_by_key(BlockDirection::to_index);
         assert_eq!(all, update);
     }
 
     /// Solid blocks pass through strong power from neighbors.
     /// In `get_redstone_power`, if the block is solid, the result is
-    /// max(max_strong_power_from_neighbors, weak_power_from_self).
+    /// `max(max_strong_power_from_neighbors, weak_power_from_self)`.
     /// This is the fundamental rule that makes signal pass through opaque blocks.
     #[test]
     fn solid_block_power_propagation_rule() {
@@ -273,10 +273,10 @@ mod tests {
         assert_eq!(std::cmp::max(15u8, 15u8), 15);
     }
 
-    /// Redstone wire is excluded from power queries when dust_power=false.
+    /// Redstone wire is excluded from power queries when `dust_power=false`.
     /// This prevents infinite loops where wire powers itself through blocks.
     /// The `get_weak_power` and `get_strong_power` functions return 0 for
-    /// redstone wire when dust_power=false.
+    /// redstone wire when `dust_power=false`.
     #[test]
     fn wire_excluded_from_non_dust_queries() {
         // The guard in get_weak_power/get_strong_power:
@@ -295,7 +295,7 @@ mod tests {
         );
     }
 
-    /// block_receives_redstone_power checks ALL 6 directions for any power source.
+    /// `block_receives_redstone_power` checks ALL 6 directions for any power source.
     /// Returns true if ANY neighbor emits power toward the block.
     #[test]
     fn block_receives_power_checks_all_six() {
@@ -312,8 +312,8 @@ mod tests {
         assert!(dirs.contains(&BlockDirection::East));
     }
 
-    /// The is_diode function recognizes exactly repeaters and comparators.
-    /// No other block is a diode. This is used by abstract_redstone_gate
+    /// The `is_diode` function recognizes exactly repeaters and comparators.
+    /// No other block is a diode. This is used by `abstract_redstone_gate`
     /// to determine locking behavior (repeaters lock when powered by diodes from the side).
     #[test]
     fn diode_exhaustive_redstone_blocks() {
@@ -348,7 +348,7 @@ mod tests {
             &Block::COPPER_BULB,
         ];
         for block in non_diodes {
-            assert!(!is_diode(block), "{:?} should not be a diode", block);
+            assert!(!is_diode(block), "{block:?} should not be a diode");
         }
     }
 }

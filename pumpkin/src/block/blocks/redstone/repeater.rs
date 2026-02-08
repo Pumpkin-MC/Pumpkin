@@ -317,7 +317,7 @@ mod tests {
     use pumpkin_data::block_properties::Integer1To4;
 
     /// In vanilla, repeater delay settings 1-4 map to game tick delays of 2, 4, 6, 8.
-    /// Formula: (delay.to_index() + 1) * 2
+    /// Formula: `(delay.to_index() + 1) * 2`
     #[test]
     fn repeater_delay_calculation() {
         let repeater = RepeaterBlock;
@@ -335,8 +335,7 @@ mod tests {
             let actual = RedstoneGateBlock::get_update_delay_internal(&repeater, state_id, block);
             assert_eq!(
                 actual, expected_ticks,
-                "Delay {:?} should produce {} game ticks, got {}",
-                delay, expected_ticks, actual
+                "Delay {delay:?} should produce {expected_ticks} game ticks, got {actual}"
             );
         }
     }
@@ -391,8 +390,7 @@ mod tests {
             let recovered = RepeaterProperties::from_state_id(state_id, block);
             assert_eq!(
                 recovered.delay, delay,
-                "Delay {:?} not preserved through state roundtrip",
-                delay
+                "Delay {delay:?} not preserved through state roundtrip"
             );
         }
     }
@@ -408,8 +406,7 @@ mod tests {
             let recovered = RepeaterProperties::from_state_id(state_id, block);
             assert_eq!(
                 recovered.powered, powered,
-                "Powered={} not preserved through state roundtrip",
-                powered
+                "Powered={powered} not preserved through state roundtrip"
             );
         }
     }
@@ -425,8 +422,7 @@ mod tests {
             let recovered = RepeaterProperties::from_state_id(state_id, block);
             assert_eq!(
                 recovered.locked, locked,
-                "Locked={} not preserved through state roundtrip",
-                locked
+                "Locked={locked} not preserved through state roundtrip"
             );
         }
     }
@@ -442,8 +438,7 @@ mod tests {
             let recovered = RepeaterProperties::from_state_id(state_id, block);
             assert_eq!(
                 recovered.facing, facing,
-                "Facing {:?} not preserved through state roundtrip",
-                facing
+                "Facing {facing:?} not preserved through state roundtrip"
             );
         }
     }

@@ -171,8 +171,7 @@ mod tests {
             let recovered = ObserverLikeProperties::from_state_id(state_id, block);
             assert_eq!(
                 recovered.powered, powered,
-                "Powered={} not preserved through state roundtrip",
-                powered
+                "Powered={powered} not preserved through state roundtrip"
             );
         }
     }
@@ -196,8 +195,7 @@ mod tests {
             let recovered = ObserverLikeProperties::from_state_id(state_id, block);
             assert_eq!(
                 recovered.facing, facing,
-                "Facing {:?} not preserved through state roundtrip",
-                facing
+                "Facing {facing:?} not preserved through state roundtrip"
             );
         }
     }
@@ -214,7 +212,7 @@ mod tests {
         assert_eq!(unpowered_level, 0);
     }
 
-    /// Observer emits_redstone_power is true ONLY when the query direction matches
+    /// Observer `emits_redstone_power` is true ONLY when the query direction matches
     /// the observer's facing direction (output is from the back face).
     /// Tests all 36 combinations of facing × query direction.
     #[test]
@@ -234,10 +232,7 @@ mod tests {
                 let should_emit = facing.to_block_direction() == dir;
                 assert!(
                     should_emit == (facing.to_block_direction() == dir),
-                    "Observer facing {:?} queried from {:?}: emit={}",
-                    facing,
-                    dir,
-                    should_emit
+                    "Observer facing {facing:?} queried from {dir:?}: emit={should_emit}"
                 );
             }
         }
@@ -272,8 +267,7 @@ mod tests {
                         else { 0u8 };
                     assert_eq!(
                         actual, expected,
-                        "facing={:?} powered={} dir={:?}: expected {} got {}",
-                        facing, powered, dir, expected, actual
+                        "facing={facing:?} powered={powered} dir={dir:?}: expected {expected} got {actual}"
                     );
                 }
             }
@@ -282,7 +276,7 @@ mod tests {
 
     /// Observer detection trigger condition: only when the neighbor update
     /// comes from the observed direction AND the observer is not already powered.
-    /// This test verifies the boolean condition in get_state_for_neighbor_update.
+    /// This test verifies the boolean condition in `get_state_for_neighbor_update`.
     #[test]
     fn detection_trigger_condition() {
         let block = &Block::OBSERVER;
@@ -308,14 +302,12 @@ mod tests {
                     if facing.to_block_direction() == update_dir && !powered {
                         assert!(
                             triggers,
-                            "Should trigger: facing={:?} powered={} update_dir={:?}",
-                            facing, powered, update_dir
+                            "Should trigger: facing={facing:?} powered={powered} update_dir={update_dir:?}"
                         );
                     } else {
                         assert!(
                             !triggers,
-                            "Should NOT trigger: facing={:?} powered={} update_dir={:?}",
-                            facing, powered, update_dir
+                            "Should NOT trigger: facing={facing:?} powered={powered} update_dir={update_dir:?}"
                         );
                     }
                 }
@@ -353,7 +345,7 @@ mod tests {
             } else {
                 0u8
             };
-            assert_eq!(power, 15, "Facing {:?} should output 15 when powered", facing);
+            assert_eq!(power, 15, "Facing {facing:?} should output 15 when powered");
         }
     }
 
@@ -383,10 +375,11 @@ mod tests {
         }
     }
 
-    /// Observer on_scheduled_tick state machine:
-    /// - If powered: set powered=false (end of pulse)
-    /// - If not powered: set powered=true, schedule another tick (start of pulse)
-    /// This creates a 2-tick pulse: tick 1 (powered=true) → tick 2 (powered=false).
+    /// Observer `on_scheduled_tick` state machine:
+    ///   - If powered: set `powered=false` (end of pulse)
+    ///   - If not powered: set `powered=true`, schedule another tick (start of pulse)
+    ///
+    /// This creates a 2-tick pulse: tick 1 (`powered=true`) → tick 2 (`powered=false`).
     #[test]
     fn pulse_state_machine() {
         // Simulate the on_scheduled_tick logic without a world:

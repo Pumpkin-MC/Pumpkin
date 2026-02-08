@@ -718,7 +718,7 @@ mod tests {
         for i in 0..=15 {
             let power = Integer0To15::from_index(i);
             let cross = make_cross(power);
-            assert_eq!(cross.power, power, "Power level {} not preserved", i);
+            assert_eq!(cross.power, power, "Power level {i} not preserved");
         }
     }
 
@@ -847,7 +847,7 @@ mod tests {
         }
     }
 
-    /// Verify that a cross shape created with make_cross has all 4 sides connected
+    /// Verify that a cross shape created with `make_cross` has all 4 sides connected
     /// and a dot shape has no sides connected.
     #[test]
     fn cross_all_sides_connected() {
