@@ -201,8 +201,7 @@ impl ClientPacket for CChunkData<'_> {
             // Write Block Light arrays
             write.write_var_int(&VarInt(block_light_mask.count_ones() as i32))?;
             for section_index in 0..num_sections {
-                if let LightContainer::Full(data) = &light_engine.block_light[section_index]
-                {
+                if let LightContainer::Full(data) = &light_engine.block_light[section_index] {
                     write.write_var_int(&light_data_size)?;
                     write.write_slice(data.as_ref())?;
                 }

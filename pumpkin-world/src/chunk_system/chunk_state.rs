@@ -97,7 +97,8 @@ impl StagedChunkEnum {
             Self::None
         }
     }
-    pub const FULL_DEPENDENCIES: &'static [Self] = &[Self::Full, Self::Lighting, Self::Features, Self::Surface];
+    pub const FULL_DEPENDENCIES: &'static [Self] =
+        &[Self::Full, Self::Lighting, Self::Features, Self::Surface];
     pub const FULL_RADIUS: i32 = 2;
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
@@ -173,19 +174,22 @@ impl Chunk {
     pub fn upgrade_to_level_chunk(&mut self, dimension: &Dimension) {
         // Take ownership of the ProtoChunk by temporarily replacing with a dummy value
         // This allows us to move the light data instead of cloning it
-        let proto_chunk_box = match std::mem::replace(self, Chunk::Level(Arc::new(ChunkData {
-            section: ChunkSections::new(0, 0),
-            heightmap: Default::default(),
-            x: 0,
-            z: 0,
-            block_ticks: Default::default(),
-            fluid_ticks: Default::default(),
-            block_entities: Default::default(),
-            light_engine: Mutex::new(ChunkLight::default()),
-            light_populated: AtomicBool::new(false),
-            status: ChunkStatus::Empty,
-            dirty: AtomicBool::new(false),
-        }))) {
+        let proto_chunk_box = match std::mem::replace(
+            self,
+            Chunk::Level(Arc::new(ChunkData {
+                section: ChunkSections::new(0, 0),
+                heightmap: Default::default(),
+                x: 0,
+                z: 0,
+                block_ticks: Default::default(),
+                fluid_ticks: Default::default(),
+                block_entities: Default::default(),
+                light_engine: Mutex::new(ChunkLight::default()),
+                light_populated: AtomicBool::new(false),
+                status: ChunkStatus::Empty,
+                dirty: AtomicBool::new(false),
+            })),
+        ) {
             Chunk::Proto(proto) => proto,
             Chunk::Level(_) => panic!("Cannot upgrade a Level chunk"),
         };

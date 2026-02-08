@@ -3,11 +3,12 @@ use crate::block::RawBlockState;
 use crate::chunk::ChunkHeightmapType;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{BlockStateId, GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
+use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockState};
@@ -16,7 +17,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::future::Future;
 use std::pin::Pin;
-use pumpkin_config::lighting::LightingEngineConfig;
 
 pub struct Cache {
     pub x: i32,

@@ -13,6 +13,6 @@ pub struct LevelConfig {
     // TODO: More options
 }
 
-fn default_autosave_ticks() -> u64 {
+const fn default_autosave_ticks() -> u64 {
     6000 // Default to 5 minutes at 20 TPS
 }

@@ -49,9 +49,7 @@ impl SingleChunkDataSerializer for ChunkData {
     fn to_bytes(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { 
-            self.internal_to_bytes().await 
-        })
+        Box::pin(async move { self.internal_to_bytes().await })
     }
 
     #[inline]
@@ -170,7 +168,9 @@ impl ChunkData {
     }
 
     async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        let is_light_correct = self.light_populated.load(std::sync::atomic::Ordering::Relaxed);
+        let is_light_correct = self
+            .light_populated
+            .load(std::sync::atomic::Ordering::Relaxed);
 
         let sections = {
             let light_lock = self.light_engine.lock().unwrap();
@@ -179,31 +179,29 @@ impl ChunkData {
             let min_section_y = (self.section.min_y >> 4) as i8;
 
             (0..self.section.count)
-                .map(|i| {
-                    ChunkSectionNBT {
-                        y: i as i8 + min_section_y,
-                        block_states: Some(block_lock[i].to_disk_nbt()),
-                        biomes: Some(biome_lock[i].to_disk_nbt()),
-                        
-                        block_light: match light_lock.block_light.get(i) {
-                            Some(LightContainer::Empty(default)) if *default == 0 => None,
-                            Some(LightContainer::Empty(default)) => {
-                                let value = (*default << 4) | *default;
-                                Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
-                            }
-                            Some(LightContainer::Full(data)) => Some(data.clone()),
-                            None => None,
-                        },
-                        sky_light: match light_lock.sky_light.get(i) {
-                            Some(LightContainer::Empty(default)) if *default == 0 => None,
-                            Some(LightContainer::Empty(default)) => {
-                                let value = (*default << 4) | *default;
-                                Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
-                            }
-                            Some(LightContainer::Full(data)) => Some(data.clone()),
-                            None => None,
-                        },
-                    }
+                .map(|i| ChunkSectionNBT {
+                    y: i as i8 + min_section_y,
+                    block_states: Some(block_lock[i].to_disk_nbt()),
+                    biomes: Some(biome_lock[i].to_disk_nbt()),
+
+                    block_light: match light_lock.block_light.get(i) {
+                        Some(LightContainer::Empty(default)) if *default == 0 => None,
+                        Some(LightContainer::Empty(default)) => {
+                            let value = (*default << 4) | *default;
+                            Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
+                        }
+                        Some(LightContainer::Full(data)) => Some(data.clone()),
+                        None => None,
+                    },
+                    sky_light: match light_lock.sky_light.get(i) {
+                        Some(LightContainer::Empty(default)) if *default == 0 => None,
+                        Some(LightContainer::Empty(default)) => {
+                            let value = (*default << 4) | *default;
+                            Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
+                        }
+                        Some(LightContainer::Full(data)) => Some(data.clone()),
+                        None => None,
+                    },
                 })
                 .collect::<Vec<_>>()
         };

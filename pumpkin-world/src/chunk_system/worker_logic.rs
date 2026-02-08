@@ -2,17 +2,17 @@ use super::chunk_state::{Chunk, StagedChunkEnum};
 use super::generation_cache::Cache;
 use super::{ChunkPos, IOLock};
 use crate::ProtoChunk;
+use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData;
 use crate::chunk::io::LoadedData::Loaded;
-use crate::chunk::format::LightContainer;
 use crate::level::Level;
 use crossfire::compat::AsyncRx;
 use itertools::Itertools;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use std::sync::atomic::Ordering::Relaxed;
 
 pub enum RecvChunk {
@@ -41,16 +41,12 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConf
     let engine = chunk.light_engine.lock().expect("Mutex poisoned");
 
     // Scan for any complex lighting data
-    let has_complex_light = engine.sky_light.iter().any(|lc| {
-        match lc {
-            LightContainer::Full(data) => data.iter().any(|&b| b != 0x00 && b != 0xFF),
-            LightContainer::Empty(val) => *val != 0 && *val != 15,
-        }
-    }) || engine.block_light.iter().any(|lc| {
-        match lc {
-            LightContainer::Full(data) => data.iter().any(|&b| b != 0x00 && b != 0xFF),
-            LightContainer::Empty(val) => *val != 0 && *val != 15,
-        }
+    let has_complex_light = engine.sky_light.iter().any(|lc| match lc {
+        LightContainer::Full(data) => data.iter().any(|&b| b != 0x00 && b != 0xFF),
+        LightContainer::Empty(val) => *val != 0 && *val != 15,
+    }) || engine.block_light.iter().any(|lc| match lc {
+        LightContainer::Full(data) => data.iter().any(|&b| b != 0x00 && b != 0xFF),
+        LightContainer::Empty(val) => *val != 0 && *val != 15,
     });
 
     // If it has complex light, we don't need to relight.
@@ -96,8 +92,10 @@ pub async fn io_read_work(
                     let needs_relight = needs_relighting(&chunk, &level.lighting_config);
 
                     if needs_relight {
-                        log::debug!("Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting");
-                        
+                        log::debug!(
+                            "Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting"
+                        );
+
                         // Create ProtoChunk using the async method
                         let mut proto = ProtoChunk::from_chunk_data(
                             &chunk,
@@ -105,7 +103,7 @@ pub async fn io_read_work(
                             level.world_gen.default_block,
                             biome_mixer_seed,
                         )
-                        .await; 
+                        .await;
 
                         // Clear all lighting data
                         let section_count = proto.light.sky_light.len();
@@ -119,7 +117,10 @@ pub async fn io_read_work(
                         // Set stage to Features
                         proto.stage = StagedChunkEnum::Features;
 
-                        if send.send((pos, RecvChunk::IO(Chunk::Proto(Box::new(proto))))).is_err() {
+                        if send
+                            .send((pos, RecvChunk::IO(Chunk::Proto(Box::new(proto)))))
+                            .is_err()
+                        {
                             break;
                         }
                     } else {
@@ -217,7 +218,10 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                     }
                 }
                 Entry::Vacant(_) => {
-                    log::warn!("io_write: attempted to release missing lock entry for {:?}", i);
+                    log::warn!(
+                        "io_write: attempted to release missing lock entry for {:?}",
+                        i
+                    );
                     // continue without panicking to avoid crashing on shutdown races
                 }
             }
@@ -231,7 +235,7 @@ pub fn generation_work(
     level: Arc<Level>,
 ) {
     let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
-    
+
     loop {
         let (pos, mut cache, stage) = match recv.recv() {
             Ok(data) => data,
@@ -247,7 +251,7 @@ pub fn generation_work(
                 stage,
                 &level.lighting_config,
                 level.block_registry.as_ref(),
-                &settings,
+                settings,
                 &level.world_gen.random_config,
                 &level.world_gen.terrain_cache,
                 &level.world_gen.base_router,
@@ -263,18 +267,23 @@ pub fn generation_work(
                 }
             }
             Err(payload) => {
-                let msg = payload.downcast_ref::<&str>().copied()
+                let msg = payload
+                    .downcast_ref::<&str>()
+                    .copied()
                     .or_else(|| payload.downcast_ref::<String>().map(|s| s.as_str()))
                     .unwrap_or("Unknown panic payload");
 
                 log::error!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");
 
                 // Send failure notification
-                let _ = send.send((pos, RecvChunk::GenerationFailure { 
-                    pos, 
-                    stage, 
-                    error: msg.to_string() 
-                }));
+                let _ = send.send((
+                    pos,
+                    RecvChunk::GenerationFailure {
+                        pos,
+                        stage,
+                        error: msg.to_string(),
+                    },
+                ));
             }
         }
     }

@@ -1,5 +1,6 @@
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
 use crate::generation::generator::VanillaGenerator;
+use crate::lighting::DynamicLightEngine;
 use crate::{
     BlockStateId,
     block::{RawBlockState, entities::BlockEntity},
@@ -25,9 +26,6 @@ use pumpkin_util::world_seed::Seed;
 use rustc_hash::FxHashMap;
 use std::sync::Mutex;
 use std::time::Duration;
-use tokio::time::timeout;
-use tokio_util::sync::CancellationToken;
-use crate::lighting::DynamicLightEngine;
 use std::{
     path::PathBuf,
     sync::{
@@ -36,6 +34,8 @@ use std::{
     },
     thread,
 };
+use tokio::time::timeout;
+use tokio_util::sync::CancellationToken;
 // use tokio::runtime::Handle;
 use tokio::{
     select,
@@ -307,7 +307,11 @@ impl Level {
         match timeout(Duration::from_secs(3), join_task).await {
             Ok(Ok(failed_count)) => {
                 if failed_count > 0 {
-                    log::warn!("{} threads failed to join properly for {}.", failed_count, world_id);
+                    log::warn!(
+                        "{} threads failed to join properly for {}.",
+                        failed_count,
+                        world_id
+                    );
                 }
             }
             Ok(Err(_)) => {

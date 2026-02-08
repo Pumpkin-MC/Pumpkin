@@ -4,8 +4,8 @@ use crate::{ClientPacket, VarInt, ser::NetworkWriteExt};
 use pumpkin_data::packet::clientbound::PLAY_LIGHT_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::MinecraftVersion;
-use pumpkin_world::chunk::format::LightContainer;
 use pumpkin_world::chunk::ChunkData;
+use pumpkin_world::chunk::format::LightContainer;
 use std::io::Write;
 
 /// Sent by the server to update light levels (block light and sky light) for a chunk.
@@ -78,7 +78,7 @@ impl ClientPacket for CLightUpdate<'_> {
                 // by swapping high/low nibbles per byte.
                 write.write_var_int(&light_data_size)?;
                 let mut swapped = Vec::with_capacity(data.len());
-                for &b in data.iter() {
+                for &b in data {
                     swapped.push(b.rotate_right(4));
                 }
                 write.write_slice(&swapped)?;
@@ -91,7 +91,7 @@ impl ClientPacket for CLightUpdate<'_> {
             if let LightContainer::Full(data) = &light_engine.block_light[section_index] {
                 write.write_var_int(&light_data_size)?;
                 let mut swapped = Vec::with_capacity(data.len());
-                for &b in data.iter() {
+                for &b in data {
                     swapped.push(b.rotate_right(4));
                 }
                 write.write_slice(&swapped)?;

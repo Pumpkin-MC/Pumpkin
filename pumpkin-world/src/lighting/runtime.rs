@@ -1,11 +1,11 @@
-use crossbeam::queue::SegQueue;
-use std::sync::Arc;
+use crate::chunk::io::Dirtiable;
+use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
-use pumpkin_util::math::position::BlockPos;
+use crossbeam::queue::SegQueue;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
-use crate::chunk::palette::BlockPalette;
-use crate::chunk::io::Dirtiable;
+use pumpkin_util::math::position::BlockPos;
+use std::sync::Arc;
 
 pub struct DynamicLightEngine {
     decrease_block_light_queue: SegQueue<(BlockPos, u8)>,
@@ -24,6 +24,11 @@ impl DynamicLightEngine {
         }
     }
 }
+impl Default for DynamicLightEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl DynamicLightEngine {
     /// Handles all lighting updates triggered by a block change (placement/break).
     /// This updates Block Light, Sky Light, and ensures the source block is valid.
@@ -37,11 +42,11 @@ impl DynamicLightEngine {
         self.perform_sky_light_updates(level).await;
 
         // 3. Final Safety Check
-        // Ensure the source block itself has the correct light level 
+        // Ensure the source block itself has the correct light level
         // (e.g. if we just placed a torch, force it to 14 even if propagation was weird)
         // let final_state = level.get_block_state(&pos).await;
         // let final_expected_light = final_state.luminance;
-        
+
         // We unwrap here because if we can't set light on a loaded block, the chunk is broken
         // self.set_block_light_level(level, &pos, final_expected_light)
         //     .await
@@ -72,9 +77,9 @@ impl DynamicLightEngine {
         loop {
             let decrease_updates = self.perform_block_light_decrease_updates(level).await;
             let increase_updates = self.perform_block_light_increase_updates(level).await;
-            
+
             updates += decrease_updates + increase_updates;
-            
+
             // Stop when no more updates were processed
             if decrease_updates == 0 && increase_updates == 0 {
                 break;
@@ -108,7 +113,12 @@ impl DynamicLightEngine {
         updates
     }
 
-    async fn propagate_block_light_increase(&self, level: &Arc<Level>, pos: &BlockPos, light_level: u8) {
+    async fn propagate_block_light_increase(
+        &self,
+        level: &Arc<Level>,
+        pos: &BlockPos,
+        light_level: u8,
+    ) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
@@ -132,13 +142,14 @@ impl DynamicLightEngine {
     }
 
     async fn propagate_block_light_decrease(
-        &self, level: &Arc<Level>,
+        &self,
+        level: &Arc<Level>,
         pos: &BlockPos,
         removed_light_level: u8,
     ) {
         // Check what the current light level actually is at this position
         let current_level = self.get_block_light_level(level, pos).await.unwrap_or(0);
-        
+
         // Only propagate decrease if this position hasn't already been reset to 0
         // This prevents positions that were intentionally set to 0 from propagating light
         if current_level == 0 && removed_light_level > 0 {
@@ -146,7 +157,8 @@ impl DynamicLightEngine {
             for dir in BlockDirection::all() {
                 let neighbor_pos = pos.offset(dir.to_offset());
 
-                if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos).await {
+                if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos).await
+                {
                     if neighbor_light == 0 {
                         continue; // Skip if already 0
                     }
@@ -161,7 +173,9 @@ impl DynamicLightEngine {
 
                         if neighbor_luminance == 0 {
                             // No self-emission, darken it completely and continue propagation
-                            self.set_block_light_level(level, &neighbor_pos, 0).await.unwrap();
+                            self.set_block_light_level(level, &neighbor_pos, 0)
+                                .await
+                                .unwrap();
                             self.queue_block_light_decrease(neighbor_pos, neighbor_light);
                         } else {
                             // Has self-emission, set to its own light and re-propagate from it
@@ -199,7 +213,9 @@ impl DynamicLightEngine {
         // Handle light decrease (removing light source or placing opaque block)
         if expected_light < current_light {
             // Set to expected value immediately, then queue decrease to darken neighbors
-            self.set_block_light_level(level, &pos, expected_light).await.unwrap();
+            self.set_block_light_level(level, &pos, expected_light)
+                .await
+                .unwrap();
             self.queue_block_light_decrease(pos, current_light);
         } else if expected_light > current_light {
             // Handle light increase (placing light source)
@@ -212,11 +228,17 @@ impl DynamicLightEngine {
         // Only check neighbors if we didn't trigger a decrease
         // Decrease propagation handles re-validating neighbors
         if expected_light >= current_light {
-            self.check_neighbors_light_updates(level, pos, expected_light).await;
+            self.check_neighbors_light_updates(level, pos, expected_light)
+                .await;
         }
     }
 
-    pub async fn check_neighbors_light_updates(&self, level: &Arc<Level>, pos: BlockPos, current_light: u8) {
+    pub async fn check_neighbors_light_updates(
+        &self,
+        level: &Arc<Level>,
+        pos: BlockPos,
+        current_light: u8,
+    ) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
             if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos).await
@@ -232,9 +254,9 @@ impl DynamicLightEngine {
         loop {
             let decrease_updates = self.perform_sky_light_decrease_updates(level).await;
             let increase_updates = self.perform_sky_light_increase_updates(level).await;
-            
+
             updates += decrease_updates + increase_updates;
-            
+
             if decrease_updates == 0 && increase_updates == 0 {
                 break;
             }
@@ -245,7 +267,8 @@ impl DynamicLightEngine {
     async fn perform_sky_light_decrease_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
         while let Some((pos, expected_light)) = self.decrease_sky_light_queue.pop() {
-            self.propagate_sky_light_decrease(level, &pos, expected_light).await;
+            self.propagate_sky_light_decrease(level, &pos, expected_light)
+                .await;
             updates += 1;
         }
         updates
@@ -254,13 +277,19 @@ impl DynamicLightEngine {
     async fn perform_sky_light_increase_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
         while let Some((pos, expected_light)) = self.increase_sky_light_queue.pop() {
-            self.propagate_sky_light_increase(level, &pos, expected_light).await;
+            self.propagate_sky_light_increase(level, &pos, expected_light)
+                .await;
             updates += 1;
         }
         updates
     }
 
-    async fn propagate_sky_light_increase(&self, level: &Arc<Level>, pos: &BlockPos, light_level: u8) {
+    async fn propagate_sky_light_increase(
+        &self,
+        level: &Arc<Level>,
+        pos: &BlockPos,
+        light_level: u8,
+    ) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
             if let Some(neighbor_light) = self.get_sky_light_level(level, &neighbor_pos).await {
@@ -277,45 +306,58 @@ impl DynamicLightEngine {
 
                 // Only propagate if new light is brighter than current light
                 if new_light > neighbor_light {
-                    self.set_sky_light_level(level, &neighbor_pos, new_light).await.unwrap();
+                    self.set_sky_light_level(level, &neighbor_pos, new_light)
+                        .await
+                        .unwrap();
                     self.queue_sky_light_increase(neighbor_pos, new_light);
                 }
             }
         }
     }
 
-    async fn propagate_sky_light_decrease(&self, level: &Arc<Level>, pos: &BlockPos, removed_light: u8) {
-         let current_light = self.get_sky_light_level(level, pos).await.unwrap_or(0);
+    async fn propagate_sky_light_decrease(
+        &self,
+        level: &Arc<Level>,
+        pos: &BlockPos,
+        removed_light: u8,
+    ) {
+        let current_light = self.get_sky_light_level(level, pos).await.unwrap_or(0);
 
-         // If we are brighter now (maybe re-illuminated), don't propagate darkness
-         if current_light >= removed_light { return; }
+        // If we are brighter now (maybe re-illuminated), don't propagate darkness
+        if current_light >= removed_light {
+            return;
+        }
 
-         for dir in BlockDirection::all() {
-             let neighbor_pos = pos.offset(dir.to_offset());
-             if let Some(neighbor_light) = self.get_sky_light_level(level, &neighbor_pos).await {
-                 if neighbor_light == 0 { continue; }
+        for dir in BlockDirection::all() {
+            let neighbor_pos = pos.offset(dir.to_offset());
+            if let Some(neighbor_light) = self.get_sky_light_level(level, &neighbor_pos).await {
+                if neighbor_light == 0 {
+                    continue;
+                }
 
-                 // Check if neighbor was likely lit by us
-                 // Inverse of increase logic
-                 let potential_from_us = if removed_light == 15 && dir == BlockDirection::Down {
-                     15
-                 } else {
-                     removed_light.saturating_sub(1)
-                 };
-                 let neighbor_state = level.get_block_state(&neighbor_pos).await.to_state();
-                 let opacity = neighbor_state.opacity;
-                 let expected = potential_from_us.saturating_sub(opacity);
+                // Check if neighbor was likely lit by us
+                // Inverse of increase logic
+                let potential_from_us = if removed_light == 15 && dir == BlockDirection::Down {
+                    15
+                } else {
+                    removed_light.saturating_sub(1)
+                };
+                let neighbor_state = level.get_block_state(&neighbor_pos).await.to_state();
+                let opacity = neighbor_state.opacity;
+                let expected = potential_from_us.saturating_sub(opacity);
 
-                 if neighbor_light == expected || neighbor_light < removed_light {
-                     // Darken and propagate
-                     self.set_sky_light_level(level, &neighbor_pos, 0).await.unwrap();
-                     self.queue_sky_light_decrease(neighbor_pos, neighbor_light);
-                 } else if neighbor_light >= removed_light {
-                     // Neighbor is a source/brighter, re-propagate
-                     self.queue_sky_light_increase(neighbor_pos, neighbor_light);
-                 }
-             }
-         }
+                if neighbor_light == expected || neighbor_light < removed_light {
+                    // Darken and propagate
+                    self.set_sky_light_level(level, &neighbor_pos, 0)
+                        .await
+                        .unwrap();
+                    self.queue_sky_light_decrease(neighbor_pos, neighbor_light);
+                } else if neighbor_light >= removed_light {
+                    // Neighbor is a source/brighter, re-propagate
+                    self.queue_sky_light_increase(neighbor_pos, neighbor_light);
+                }
+            }
+        }
     }
 
     pub async fn check_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
@@ -330,10 +372,10 @@ impl DynamicLightEngine {
             }
             LightingEngineConfig::Default => {}
         }
-        
+
         let current_light = self.get_sky_light_level(level, &pos).await.unwrap_or(0);
         let block_state = level.get_block_state(&pos).await.to_state();
-        
+
         let mut best_light = 0;
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
@@ -344,7 +386,9 @@ impl DynamicLightEngine {
                 } else {
                     n_light.saturating_sub(1)
                 };
-                if pot > best_light { best_light = pot; }
+                if pot > best_light {
+                    best_light = pot;
+                }
             }
         }
 
@@ -353,25 +397,39 @@ impl DynamicLightEngine {
         let expected_light = best_light.saturating_sub(opacity);
 
         if expected_light < current_light {
-            self.set_sky_light_level(level, &pos, expected_light).await.unwrap();
+            self.set_sky_light_level(level, &pos, expected_light)
+                .await
+                .unwrap();
             self.queue_sky_light_decrease(pos, current_light);
         } else if expected_light > current_light {
-             self.set_sky_light_level(level, &pos, expected_light).await.unwrap();
-             self.queue_sky_light_increase(pos, expected_light);
+            self.set_sky_light_level(level, &pos, expected_light)
+                .await
+                .unwrap();
+            self.queue_sky_light_increase(pos, expected_light);
         }
 
-        // Only check/notify neighbors if we didn't just cause a massive drop 
+        // Only check/notify neighbors if we didn't just cause a massive drop
         // (decrease queue handles notifying neighbors to drop their light)
         if expected_light >= current_light {
-             self.check_neighbors_sky_light_updates(level, pos, expected_light).await;
+            self.check_neighbors_sky_light_updates(level, pos, expected_light)
+                .await;
         }
     }
 
-    pub async fn check_neighbors_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos, current_light: u8) {
+    pub async fn check_neighbors_sky_light_updates(
+        &self,
+        level: &Arc<Level>,
+        pos: BlockPos,
+        current_light: u8,
+    ) {
         // Kickstart neighbors
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
-            if self.get_sky_light_level(level, &neighbor_pos).await.is_some() {
+            if self
+                .get_sky_light_level(level, &neighbor_pos)
+                .await
+                .is_some()
+            {
                 // Simply queueing self will force re-propagation to neighbors
                 self.queue_sky_light_increase(pos, current_light);
                 break;
@@ -379,7 +437,11 @@ impl DynamicLightEngine {
         }
     }
 
-    pub async fn get_block_light_level(&self, level: &Arc<Level>, position: &BlockPos) -> Option<u8> {
+    pub async fn get_block_light_level(
+        &self,
+        level: &Arc<Level>,
+        position: &BlockPos,
+    ) -> Option<u8> {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = level.get_chunk(chunk_coordinate).await;
 
@@ -396,7 +458,6 @@ impl DynamicLightEngine {
         ))
     }
 
-    #[expect(clippy::unused_async)]
     pub async fn set_block_light_level(
         &self,
         level: &Arc<Level>,
@@ -419,7 +480,7 @@ impl DynamicLightEngine {
             light_level,
         );
         // Mark chunk as dirty so lighting changes are saved to disk
-        if !chunk.is_dirty() { 
+        if !chunk.is_dirty() {
             chunk.mark_dirty(true);
         }
         Ok(())
@@ -463,7 +524,7 @@ impl DynamicLightEngine {
             light_level,
         );
         // Mark chunk as dirty so lighting changes are saved to disk
-        if !chunk.is_dirty() { 
+        if !chunk.is_dirty() {
             chunk.mark_dirty(true);
         }
         Ok(())

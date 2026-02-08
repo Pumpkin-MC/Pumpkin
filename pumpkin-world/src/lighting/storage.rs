@@ -41,7 +41,7 @@ pub fn get_block_light(cache: &Cache, pos: BlockPos) -> u8 {
     match chunk {
         Chunk::Level(c) => {
             let light_engine = c.light_engine.lock().unwrap();
-            
+
             if section_y >= light_engine.block_light.len() {
                 return 0;
             }
@@ -75,10 +75,10 @@ pub fn set_block_light(cache: &mut Cache, pos: BlockPos, level: u8) {
     match chunk {
         Chunk::Level(c) => {
             let mut light_engine = c.light_engine.lock().unwrap();
-            
+
             if section_y < light_engine.block_light.len() {
                 light_engine.block_light[section_y].set(x, y, z, level);
-                
+
                 c.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
             }
         }
@@ -110,7 +110,7 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     match chunk {
         Chunk::Level(c) => {
             let light_engine = c.light_engine.lock().unwrap();
-            
+
             if section_y >= light_engine.sky_light.len() {
                 return 0;
             }
@@ -144,10 +144,10 @@ pub fn set_sky_light(cache: &mut Cache, pos: BlockPos, level: u8) {
     match chunk {
         Chunk::Level(c) => {
             let mut light_engine = c.light_engine.lock().unwrap();
-            
+
             if section_y < light_engine.sky_light.len() {
                 light_engine.sky_light[section_y].set(x, y, z, level);
-                
+
                 c.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
             }
         }

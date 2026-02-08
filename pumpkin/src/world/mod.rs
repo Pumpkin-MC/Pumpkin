@@ -96,8 +96,8 @@ use pumpkin_protocol::{
 use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{
-        CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn,
-        CSetBlockDestroyStage, CWorldEvent,
+        CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage,
+        CWorldEvent,
     },
 };
 use pumpkin_util::resource_location::ResourceLocation;
@@ -2721,8 +2721,11 @@ impl World {
         }
 
         let (_chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
-        
-        level.light_engine.update_lighting_at(level, *position).await;
+
+        level
+            .light_engine
+            .update_lighting_at(level, *position)
+            .await;
 
         replaced_block_state_id
     }
