@@ -1,13 +1,19 @@
+use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::packet::clientbound::PLAY_SECTION_BLOCKS_UPDATE;
 use pumpkin_util::math::{
     position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section},
     vector3::{self},
 };
+use pumpkin_util::version::MinecraftVersion;
 
 use pumpkin_macros::java_packet;
-use serde::{Serialize, ser::SerializeTuple};
+use std::io::Write;
 
-use crate::codec::{var_int::VarInt, var_long::VarLong};
+use crate::{
+    ClientPacket,
+    codec::{var_int::VarInt, var_long::VarLong},
+    ser::{NetworkWriteExt, WritingError},
+};
 
 /// Updates multiple blocks within a single 16x16x16 chunk section.
 ///
@@ -45,18 +51,25 @@ impl CMultiBlockUpdate {
         }
     }
 }
-
-impl Serialize for CMultiBlockUpdate {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut tuple = serializer.serialize_tuple(2 + self.updates.len())?;
-
-        tuple.serialize_element(&self.chunk_section)?;
-        tuple.serialize_element(&VarInt(self.updates.len() as i32))?;
+impl ClientPacket for CMultiBlockUpdate {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let mut write = write;
+        write.write_i64_be(self.chunk_section)?;
+        write.write_var_int(&VarInt(self.updates.len() as i32))?;
 
         for update in &self.updates {
-            tuple.serialize_element(update)?;
+            let packed_update = update.0 as u64;
+            let local_pos = packed_update & 0xFFF;
+            let state_id = (packed_update >> 12) as u16;
+            let remapped_state_id = remap_block_state_for_version(state_id, *version);
+            let remapped_packed = (u64::from(remapped_state_id) << 12) | local_pos;
+            write.write_var_long(&VarLong(remapped_packed as i64))?;
         }
 
-        tuple.end()
+        Ok(())
     }
 }

@@ -45,7 +45,7 @@ pub(crate) fn build() -> TokenStream {
         impl TrackedId {
             pub fn get(&self, version: &MinecraftVersion) -> u8 {
                 match version {
-                    MinecraftVersion::V_1_21_7 => self.v1_21_7,
+                    MinecraftVersion::V_1_21_7 | MinecraftVersion::V_1_21_9 => self.v1_21_7,
                     _ => self.latest,
                 }
             }
