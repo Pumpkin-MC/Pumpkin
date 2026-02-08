@@ -4,6 +4,7 @@ use crate::server::Server;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -62,6 +63,22 @@ impl ItemRegistry {
         if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item.use_on_entity(stack, player, entity).await;
         }
+    }
+
+    pub async fn release_use(
+        &self,
+        stack: &mut ItemStack,
+        player: &Player,
+        used_ticks: i32,
+        hand: Hand,
+    ) -> bool {
+        let pumpkin_item = self.get_pumpkin_item(stack.item.id);
+        if let Some(pumpkin_item) = pumpkin_item {
+            return pumpkin_item
+                .release_use(stack, player, used_ticks, hand)
+                .await;
+        }
+        false
     }
 
     pub fn can_mine(&self, item: &Item, player: &Player) -> bool {

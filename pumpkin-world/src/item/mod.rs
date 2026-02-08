@@ -223,6 +223,9 @@ impl ItemStack {
 
     #[must_use]
     pub fn get_max_use_time(&self) -> i32 {
+        if self.item.id == Item::TRIDENT.id {
+            return 72_000;
+        }
         if let Some(value) = self.get_data_component::<ConsumableImpl>() {
             return value.consume_ticks();
         }
