@@ -63,7 +63,7 @@ impl ToTokens for ItemComponents {
         let TextContent::Translate {
             translate: text,
             with: _,
-        } = self.item_name.clone().0.content
+        } = *self.item_name.clone().0.content
         else {
             unreachable!()
         };
