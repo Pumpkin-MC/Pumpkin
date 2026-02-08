@@ -1,14 +1,24 @@
+pub mod anvil;
+pub mod beacon;
+pub mod brewing_stand;
+pub mod cartography_table;
 pub mod container_click;
 pub mod crafting;
 pub mod double;
 pub mod drag_handler;
+pub mod enchanting_table;
 pub mod entity_equipment;
 mod error;
 pub mod furnace_like;
 pub mod generic_container_screen_handler;
+pub mod grindstone;
+pub mod lectern;
+pub mod loom;
 pub mod player;
 pub mod screen_handler;
 pub mod slot;
+pub mod smithing;
+pub mod stonecutter;
 pub mod sync_handler;
 pub mod window_property;
 

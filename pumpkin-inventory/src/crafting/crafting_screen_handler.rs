@@ -21,6 +21,8 @@ use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
+use super::special_recipes;
+
 /// CraftingResultSlot.java
 ///
 /// Note: This implementation is different from the original Minecraft code.
@@ -313,10 +315,15 @@ impl ResultSlot {
     }
 
     async fn refill_output(&self) -> ItemStack {
-        let result = self
-            .match_recipe()
-            .await
-            .map_or(ItemStack::EMPTY.clone(), |x| ItemStack::from(x.0));
+        let result = if let Some(matched) = self.match_recipe().await {
+            ItemStack::from(matched.0)
+        } else if let Some((special_result, _recipe_type)) =
+            special_recipes::try_special_recipe(&*self.inventory).await
+        {
+            special_result
+        } else {
+            ItemStack::EMPTY.clone()
+        };
         *self.result.lock().await = result.clone();
         result
     }
@@ -612,3 +619,76 @@ impl ScreenHandler for CraftingTableScreenHandler {
 }
 
 impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn symmetrical_single_column_pattern() {
+        // A single-column pattern is always symmetrical
+        static PATTERN: &[&str] = &["#", "#", "#"];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn symmetrical_single_row_pattern() {
+        // "###" is symmetric
+        static PATTERN: &[&str] = &["###"];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn symmetrical_3x3_cross() {
+        // Cross pattern is symmetric
+        static PATTERN: &[&str] = &[" # ", "###", " # "];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn asymmetrical_boat_pattern() {
+        // Boat pattern "# #" / "###" is symmetric
+        static PATTERN: &[&str] = &["# #", "###"];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn asymmetrical_axe_pattern() {
+        // Axe pattern "##" / "#X" / " X" is not symmetric
+        static PATTERN: &[&str] = &["##", "#X", " X"];
+        assert!(!is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn symmetrical_empty_pattern() {
+        static PATTERN: &[&str] = &[];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn asymmetrical_hoe_pattern() {
+        // Hoe pattern "##" / " X" is not symmetric
+        static PATTERN: &[&str] = &["##", " X"];
+        assert!(!is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn symmetrical_door_pattern() {
+        // Door pattern "##" / "##" / "##" is symmetric
+        static PATTERN: &[&str] = &["##", "##", "##"];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn asymmetrical_single_char_side() {
+        // Pattern where one side differs: "AB"
+        static PATTERN: &[&str] = &["AB"];
+        assert!(!is_symmetrical_horizontally(PATTERN));
+    }
+
+    #[test]
+    fn symmetrical_single_cell() {
+        static PATTERN: &[&str] = &["#"];
+        assert!(is_symmetrical_horizontally(PATTERN));
+    }
+}
