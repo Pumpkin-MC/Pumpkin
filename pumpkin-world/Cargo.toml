@@ -60,8 +60,6 @@ crossfire.workspace = true
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
 temp-dir.workspace = true
-# Print log info inside tests when needed
-env_logger.workspace = true
 # Allows us to modify the config
 pumpkin-config = { workspace = true, features = ["test_helper"] }
 # Deserialize NaN and Inf
