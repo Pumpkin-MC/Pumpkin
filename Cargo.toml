@@ -148,7 +148,7 @@ pumpkin-protocol = { path = "pumpkin-protocol" }
 pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
-rand = { git = "https://github.com/rust-random/rand"}
+rand = { git = "https://github.com/rust-random/rand" }
 rsa = "=0.10.0-rc.15"
 rustc-hash = "2.1.1"
 rustyline = "17.0.2"

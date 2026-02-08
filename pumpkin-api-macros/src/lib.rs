@@ -34,7 +34,7 @@ pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
             crate::GLOBAL_RUNTIME.block_on(async move {
                 Box::pin(async move {
                     #fn_body
-                }).await
+                })
             })
         }
     }
