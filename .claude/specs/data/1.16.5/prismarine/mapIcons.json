@@ -1,0 +1,164 @@
+[
+  {
+    "id": 0,
+    "name": "player",
+    "appearance": "White marker",
+    "visibleInItemFrame": false
+  },
+  {
+    "id": 1,
+    "name": "frame",
+    "appearance": "Green marker",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 2,
+    "name": "red_marker",
+    "appearance": "Red marker",
+    "visibleInItemFrame": false
+  },
+  {
+    "id": 3,
+    "name": "blue_marker",
+    "appearance": "Blue marker",
+    "visibleInItemFrame": false
+  },
+  {
+    "id": 4,
+    "name": "target_x",
+    "appearance": "White X",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 5,
+    "name": "target_point",
+    "appearance": "Red triangle",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 6,
+    "name": "player_off_map",
+    "appearance": "Large white dot",
+    "visibleInItemFrame": false
+  },
+  {
+    "id": 7,
+    "name": "player_off_limits",
+    "appearance": "Small white dot",
+    "visibleInItemFrame": false
+  },
+  {
+    "id": 8,
+    "name": "mansion",
+    "appearance": "Woodland mansion",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 9,
+    "name": "monument",
+    "appearance": "Ocean monument",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 10,
+    "name": "banner_white",
+    "appearance": "White banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 11,
+    "name": "banner_orange",
+    "appearance": "Orange banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 12,
+    "name": "banner_magenta",
+    "appearance": "Magenta banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 13,
+    "name": "banner_light_blue",
+    "appearance": "Light blue banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 14,
+    "name": "banner_yellow",
+    "appearance": "Yellow banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 15,
+    "name": "banner_lime",
+    "appearance": "Lime banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 16,
+    "name": "banner_pink",
+    "appearance": "Pink banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 17,
+    "name": "banner_gray",
+    "appearance": "Gray banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 18,
+    "name": "banner_light_gray",
+    "appearance": "Light gray banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 19,
+    "name": "banner_cyan",
+    "appearance": "Cyan banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 20,
+    "name": "banner_purple",
+    "appearance": "Purple banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 21,
+    "name": "banner_blue",
+    "appearance": "Blue banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 22,
+    "name": "banner_brown",
+    "appearance": "Brown banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 23,
+    "name": "banner_green",
+    "appearance": "Green banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 24,
+    "name": "banner_red",
+    "appearance": "Red banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 25,
+    "name": "banner_black",
+    "appearance": "Black banner",
+    "visibleInItemFrame": true
+  },
+  {
+    "id": 26,
+    "name": "red_x",
+    "appearance": "Red X",
+    "visibleInItemFrame": true
+  }
+]

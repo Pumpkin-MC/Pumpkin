@@ -1,0 +1,354 @@
+[
+  {
+    "id": 0,
+    "name": "ambient_entity_effect"
+  },
+  {
+    "id": 1,
+    "name": "angry_villager"
+  },
+  {
+    "id": 2,
+    "name": "block"
+  },
+  {
+    "id": 3,
+    "name": "block_marker"
+  },
+  {
+    "id": 4,
+    "name": "bubble"
+  },
+  {
+    "id": 5,
+    "name": "cloud"
+  },
+  {
+    "id": 6,
+    "name": "crit"
+  },
+  {
+    "id": 7,
+    "name": "damage_indicator"
+  },
+  {
+    "id": 8,
+    "name": "dragon_breath"
+  },
+  {
+    "id": 9,
+    "name": "dripping_lava"
+  },
+  {
+    "id": 10,
+    "name": "falling_lava"
+  },
+  {
+    "id": 11,
+    "name": "landing_lava"
+  },
+  {
+    "id": 12,
+    "name": "dripping_water"
+  },
+  {
+    "id": 13,
+    "name": "falling_water"
+  },
+  {
+    "id": 14,
+    "name": "dust"
+  },
+  {
+    "id": 15,
+    "name": "dust_color_transition"
+  },
+  {
+    "id": 16,
+    "name": "effect"
+  },
+  {
+    "id": 17,
+    "name": "elder_guardian"
+  },
+  {
+    "id": 18,
+    "name": "enchanted_hit"
+  },
+  {
+    "id": 19,
+    "name": "enchant"
+  },
+  {
+    "id": 20,
+    "name": "end_rod"
+  },
+  {
+    "id": 21,
+    "name": "entity_effect"
+  },
+  {
+    "id": 22,
+    "name": "explosion_emitter"
+  },
+  {
+    "id": 23,
+    "name": "explosion"
+  },
+  {
+    "id": 24,
+    "name": "falling_dust"
+  },
+  {
+    "id": 25,
+    "name": "firework"
+  },
+  {
+    "id": 26,
+    "name": "fishing"
+  },
+  {
+    "id": 27,
+    "name": "flame"
+  },
+  {
+    "id": 28,
+    "name": "soul_fire_flame"
+  },
+  {
+    "id": 29,
+    "name": "soul"
+  },
+  {
+    "id": 30,
+    "name": "flash"
+  },
+  {
+    "id": 31,
+    "name": "happy_villager"
+  },
+  {
+    "id": 32,
+    "name": "composter"
+  },
+  {
+    "id": 33,
+    "name": "heart"
+  },
+  {
+    "id": 34,
+    "name": "instant_effect"
+  },
+  {
+    "id": 35,
+    "name": "item"
+  },
+  {
+    "id": 36,
+    "name": "vibration"
+  },
+  {
+    "id": 37,
+    "name": "item_slime"
+  },
+  {
+    "id": 38,
+    "name": "item_snowball"
+  },
+  {
+    "id": 39,
+    "name": "large_smoke"
+  },
+  {
+    "id": 40,
+    "name": "lava"
+  },
+  {
+    "id": 41,
+    "name": "mycelium"
+  },
+  {
+    "id": 42,
+    "name": "note"
+  },
+  {
+    "id": 43,
+    "name": "poof"
+  },
+  {
+    "id": 44,
+    "name": "portal"
+  },
+  {
+    "id": 45,
+    "name": "rain"
+  },
+  {
+    "id": 46,
+    "name": "smoke"
+  },
+  {
+    "id": 47,
+    "name": "sneeze"
+  },
+  {
+    "id": 48,
+    "name": "spit"
+  },
+  {
+    "id": 49,
+    "name": "squid_ink"
+  },
+  {
+    "id": 50,
+    "name": "sweep_attack"
+  },
+  {
+    "id": 51,
+    "name": "totem_of_undying"
+  },
+  {
+    "id": 52,
+    "name": "underwater"
+  },
+  {
+    "id": 53,
+    "name": "splash"
+  },
+  {
+    "id": 54,
+    "name": "witch"
+  },
+  {
+    "id": 55,
+    "name": "bubble_pop"
+  },
+  {
+    "id": 56,
+    "name": "current_down"
+  },
+  {
+    "id": 57,
+    "name": "bubble_column_up"
+  },
+  {
+    "id": 58,
+    "name": "nautilus"
+  },
+  {
+    "id": 59,
+    "name": "dolphin"
+  },
+  {
+    "id": 60,
+    "name": "campfire_cosy_smoke"
+  },
+  {
+    "id": 61,
+    "name": "campfire_signal_smoke"
+  },
+  {
+    "id": 62,
+    "name": "dripping_honey"
+  },
+  {
+    "id": 63,
+    "name": "falling_honey"
+  },
+  {
+    "id": 64,
+    "name": "landing_honey"
+  },
+  {
+    "id": 65,
+    "name": "falling_nectar"
+  },
+  {
+    "id": 66,
+    "name": "falling_spore_blossom"
+  },
+  {
+    "id": 67,
+    "name": "ash"
+  },
+  {
+    "id": 68,
+    "name": "crimson_spore"
+  },
+  {
+    "id": 69,
+    "name": "warped_spore"
+  },
+  {
+    "id": 70,
+    "name": "spore_blossom_air"
+  },
+  {
+    "id": 71,
+    "name": "dripping_obsidian_tear"
+  },
+  {
+    "id": 72,
+    "name": "falling_obsidian_tear"
+  },
+  {
+    "id": 73,
+    "name": "landing_obsidian_tear"
+  },
+  {
+    "id": 74,
+    "name": "reverse_portal"
+  },
+  {
+    "id": 75,
+    "name": "white_ash"
+  },
+  {
+    "id": 76,
+    "name": "small_flame"
+  },
+  {
+    "id": 77,
+    "name": "snowflake"
+  },
+  {
+    "id": 78,
+    "name": "dripping_dripstone_lava"
+  },
+  {
+    "id": 79,
+    "name": "falling_dripstone_lava"
+  },
+  {
+    "id": 80,
+    "name": "dripping_dripstone_water"
+  },
+  {
+    "id": 81,
+    "name": "falling_dripstone_water"
+  },
+  {
+    "id": 82,
+    "name": "glow_squid_ink"
+  },
+  {
+    "id": 83,
+    "name": "glow"
+  },
+  {
+    "id": 84,
+    "name": "wax_on"
+  },
+  {
+    "id": 85,
+    "name": "wax_off"
+  },
+  {
+    "id": 86,
+    "name": "electric_spark"
+  },
+  {
+    "id": 87,
+    "name": "scrape"
+  }
+]

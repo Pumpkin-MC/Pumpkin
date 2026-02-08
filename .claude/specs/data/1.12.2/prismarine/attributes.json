@@ -1,0 +1,93 @@
+[
+  {
+    "name": "maxHealth",
+    "resource": "generic.maxHealth",
+    "default": 20,
+    "min": 1,
+    "max": 1024
+  },
+  {
+    "name": "followRange",
+    "resource": "generic.followRange",
+    "default": 32,
+    "min": 0,
+    "max": 2048
+  },
+  {
+    "name": "knockbackResistance",
+    "resource": "generic.knockbackResistance",
+    "default": 0,
+    "min": 0,
+    "max": 1
+  },
+  {
+    "name": "movementSpeed",
+    "resource": "generic.movementSpeed",
+    "default": 0.7,
+    "min": 0,
+    "max": 1024
+  },
+  {
+    "name": "attackDamage",
+    "resource": "generic.attackDamage",
+    "default": 2,
+    "min": 0,
+    "max": 2048
+  },
+  {
+    "name": "horseJumpStrength",
+    "resource": "horse.jumpStrength",
+    "default": 0.7,
+    "min": 0,
+    "max": 2
+  },
+  {
+    "name": "zombieSpawnReinforcements",
+    "resource": "zombie.spawnReinforcements",
+    "default": 0,
+    "min": 0,
+    "max": 1
+  },
+  {
+    "name": "attackSpeed",
+    "resource": "generic.attackSpeed",
+    "default": 4,
+    "min": 0,
+    "max": 1024
+  },
+  {
+    "name": "flyingSpeed",
+    "resource": "generic.flyingSpeed",
+    "default": 0.4,
+    "min": 0,
+    "max": 1024
+  },
+  {
+    "name": "attackKnockback",
+    "resource": "generic.attackKnockback",
+    "default": 0,
+    "min": 0,
+    "max": 5
+  },
+  {
+    "name": "armorHealth",
+    "resource": "generic.armor",
+    "default": 0,
+    "min": 0,
+    "max": 30
+  },
+  {
+    "name": "armorToughness",
+    "resource": "generic.armorToughness",
+    "default": 0,
+    "min": 0,
+    "max": 20
+  },
+  {
+    "name": "luck",
+    "resource": "generic.luck",
+    "default": 0,
+    "min": -1024,
+    "max": 1024
+  }
+]

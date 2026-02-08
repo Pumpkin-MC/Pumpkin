@@ -1,0 +1,2415 @@
+# .claude/registry/bukkit_api.toml
+# Source: https://hub.spigotmc.org/javadocs/bukkit/ (Spigot-API 1.21.11-R0.2-SNAPSHOT)
+# Scraped from: .claude/specs/data/bukkit-api/
+# Date: 2026-02-07
+
+[meta]
+bukkit_version = "1.21.4"
+source_url = "https://hub.spigotmc.org/javadocs/bukkit/"
+total_events = 283
+total_interfaces = 9
+total_enums = 5
+pumpkin_implemented = 34
+pumpkin_stub = 1
+pumpkin_missing = 246
+note = "Bukkit header says 318 but 37 of those are inner enums (DamageCause, SpawnReason, etc.), not events"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — block (50 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "BlockBreakEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = "BlockBreakEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_break.rs"
+fields = [
+    { name = "block", java_type = "Block", rust_type = "block_id: u16" },
+    { name = "player", java_type = "Player", rust_type = "player: Arc<Player>" },
+    { name = "expToDrop", java_type = "int", rust_type = "" },
+]
+status = "implemented"
+
+[[events]]
+name = "BlockPlaceEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = "BlockPlaceEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_place.rs"
+fields = [
+    { name = "block", java_type = "Block", rust_type = "block_id: u16" },
+    { name = "player", java_type = "Player", rust_type = "player: Arc<Player>" },
+    { name = "blockAgainst", java_type = "Block", rust_type = "" },
+]
+status = "implemented"
+
+[[events]]
+name = "BlockBurnEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = "BlockBurnEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_burn.rs"
+fields = [
+    { name = "block", java_type = "Block", rust_type = "" },
+    { name = "ignitingBlock", java_type = "Block", rust_type = "" },
+]
+status = "implemented"
+
+[[events]]
+name = "BlockCanBuildEvent"
+package = "org.bukkit.event.block"
+cancellable = false
+rust_equivalent = "BlockCanBuildEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_can_build.rs"
+fields = [
+    { name = "block", java_type = "Block", rust_type = "" },
+    { name = "buildable", java_type = "boolean", rust_type = "" },
+]
+status = "implemented"
+
+[[events]]
+name = "BlockPhysicsEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = "BlockPhysicsEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_physics.rs"
+fields = [
+    { name = "block", java_type = "Block", rust_type = "block: &'static Block" },
+    { name = "source_block", java_type = "Block", rust_type = "source_block: &'static Block" },
+    { name = "source_position", java_type = "BlockPos", rust_type = "source_position: BlockPos" },
+]
+status = "implemented"
+priority = "high"
+owner = "redstone"
+note = "Fires in world/mod.rs update_neighbors before each neighbor update. update_neighbor (single) not yet covered."
+
+[[events]]
+name = "BlockRedstoneEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = "BlockRedstoneEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_redstone.rs"
+fields = [
+    { name = "oldCurrent", java_type = "int", rust_type = "old_current: u8" },
+    { name = "newCurrent", java_type = "int", rust_type = "new_current: u8" },
+]
+status = "implemented"
+priority = "high"
+owner = "redstone"
+note = "Fires in redstone_wire.rs on_neighbor_update when power level changes"
+
+[[events]]
+name = "BlockPistonExtendEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = "BlockPistonExtendEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_piston_extend.rs"
+fields = [
+    { name = "block", java_type = "Block", rust_type = "block: &'static Block" },
+    { name = "direction", java_type = "BlockFace", rust_type = "direction: u8" },
+    { name = "sticky", java_type = "boolean", rust_type = "sticky: bool" },
+]
+status = "implemented"
+priority = "high"
+owner = "redstone"
+note = "Fires in piston.rs on_synced_block_event before extend. blocks list not yet populated."
+
+[[events]]
+name = "BlockPistonRetractEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = "BlockPistonRetractEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_piston_retract.rs"
+fields = [
+    { name = "block", java_type = "Block", rust_type = "block: &'static Block" },
+    { name = "direction", java_type = "BlockFace", rust_type = "direction: u8" },
+    { name = "sticky", java_type = "boolean", rust_type = "sticky: bool" },
+]
+status = "implemented"
+priority = "high"
+owner = "redstone"
+note = "Fires in piston.rs on_synced_block_event before retract. blocks list not yet populated."
+
+[[events]]
+name = "BlockFromToEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = ""
+rust_path = ""
+fields = [
+    { name = "block", java_type = "Block", rust_type = "" },
+    { name = "toBlock", java_type = "Block", rust_type = "" },
+]
+status = "missing"
+priority = "medium"
+owner = "world"
+
+[[events]]
+name = "SignChangeEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = ""
+rust_path = ""
+fields = [
+    { name = "player", java_type = "Player", rust_type = "" },
+    { name = "lines", java_type = "String[]", rust_type = "" },
+]
+status = "missing"
+priority = "medium"
+owner = "world"
+
+[[events]]
+name = "BlockExplodeEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = ""
+rust_path = ""
+fields = [
+    { name = "block", java_type = "Block", rust_type = "" },
+    { name = "blockList", java_type = "List<Block>", rust_type = "" },
+    { name = "yield", java_type = "float", rust_type = "" },
+]
+status = "missing"
+priority = "medium"
+owner = "world"
+
+[[events]]
+name = "BlockGrowEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = "BlockGrowEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_grow.rs"
+fields = [{ name = "newState", java_type = "BlockState", rust_type = "" }]
+status = "implemented"
+priority = "medium"
+owner = "world"
+
+# Remaining block events — status: missing
+[[events]]
+name = "BellResonateEvent"
+package = "org.bukkit.event.block"
+cancellable = false
+status = "missing"
+owner = "redstone"
+
+[[events]]
+name = "BellRingEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "redstone"
+
+[[events]]
+name = "BlockBrushEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "BlockCookEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "BlockDamageAbortEvent"
+package = "org.bukkit.event.block"
+cancellable = false
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "BlockDamageEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "BlockDispenseArmorEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "redstone"
+
+[[events]]
+name = "BlockDispenseEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "redstone"
+
+[[events]]
+name = "BlockDispenseLootEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "BlockDropItemEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "BlockEvent"
+package = "org.bukkit.event.block"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "BlockExpEvent"
+package = "org.bukkit.event.block"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "BlockFadeEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+rust_equivalent = "BlockFadeEvent"
+rust_path = "pumpkin/src/plugin/api/events/block/block_fade.rs"
+status = "implemented"
+owner = "world"
+
+[[events]]
+name = "BlockFertilizeEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "BlockFormEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "BlockIgniteEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "BlockMultiPlaceEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "BlockPistonEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+note = "abstract base class"
+owner = "redstone"
+
+[[events]]
+name = "BlockReceiveGameEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "redstone"
+
+[[events]]
+name = "BlockShearEntityEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "BlockSpreadEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "BrewingStartEvent"
+package = "org.bukkit.event.block"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "CampfireStartEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "CauldronLevelChangeEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "CrafterCraftEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "EntityBlockFormEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "FluidLevelChangeEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "InventoryBlockStartEvent"
+package = "org.bukkit.event.block"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "LeavesDecayEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "MoistureChangeEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "NotePlayEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "redstone"
+
+[[events]]
+name = "SculkBloomEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "redstone"
+
+[[events]]
+name = "SpongeAbsorbEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "TNTPrimeEvent"
+package = "org.bukkit.event.block"
+cancellable = true
+status = "missing"
+owner = "redstone"
+
+[[events]]
+name = "VaultDisplayItemEvent"
+package = "org.bukkit.event.block"
+cancellable = false
+status = "missing"
+owner = "items"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — enchantment (2 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "EnchantItemEvent"
+package = "org.bukkit.event.enchantment"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PrepareItemEnchantEvent"
+package = "org.bukkit.event.enchantment"
+cancellable = true
+status = "missing"
+owner = "items"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — entity (92 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "EntityDamageEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+rust_equivalent = "EntityDamageEvent"
+rust_path = "pumpkin/src/plugin/api/events/entity/entity_damage.rs"
+fields = [
+    { name = "entity", java_type = "Entity", rust_type = "entity_id: i32" },
+    { name = "cause", java_type = "DamageCause", rust_type = "damage_type: String" },
+    { name = "damage", java_type = "double", rust_type = "damage: f32" },
+]
+status = "implemented"
+
+[[events]]
+name = "EntityDamageByEntityEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+rust_equivalent = "EntityDamageByEntityEvent"
+rust_path = "pumpkin/src/plugin/api/events/entity/entity_damage_by_entity.rs"
+fields = [
+    { name = "damager", java_type = "Entity", rust_type = "attacker_id: i32" },
+    { name = "entity", java_type = "Entity", rust_type = "entity_id: i32" },
+    { name = "damage", java_type = "double", rust_type = "damage: f32" },
+]
+status = "implemented"
+
+[[events]]
+name = "EntityDeathEvent"
+package = "org.bukkit.event.entity"
+cancellable = false
+rust_equivalent = "EntityDeathEvent"
+rust_path = "pumpkin/src/plugin/api/events/entity/entity_death.rs"
+fields = [
+    { name = "entity", java_type = "LivingEntity", rust_type = "entity_id: i32" },
+    { name = "drops", java_type = "List<ItemStack>", rust_type = "" },
+    { name = "droppedExp", java_type = "int", rust_type = "" },
+]
+status = "implemented"
+
+[[events]]
+name = "EntitySpawnEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+rust_equivalent = "EntitySpawnEvent"
+rust_path = "pumpkin/src/plugin/api/events/entity/entity_spawn.rs"
+fields = [
+    { name = "entity", java_type = "Entity", rust_type = "entity_id: i32" },
+    { name = "entityType", java_type = "EntityType", rust_type = "entity_type: &'static EntityType" },
+]
+status = "implemented"
+
+[[events]]
+name = "CreatureSpawnEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+rust_equivalent = ""
+rust_path = ""
+fields = [
+    { name = "spawnReason", java_type = "SpawnReason", rust_type = "" },
+]
+status = "missing"
+priority = "high"
+owner = "entity"
+
+[[events]]
+name = "EntityExplodeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "entity"
+
+[[events]]
+name = "ProjectileHitEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "entity"
+
+[[events]]
+name = "EntityTargetEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "entity"
+
+[[events]]
+name = "EntityTeleportEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "entity"
+
+[[events]]
+name = "FoodLevelChangeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "entity"
+
+[[events]]
+name = "PlayerDeathEvent"
+package = "org.bukkit.event.entity"
+cancellable = false
+rust_equivalent = "PlayerDeathEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_death.rs"
+fields = [
+    { name = "deathMessage", java_type = "String", rust_type = "death_message: String" },
+    { name = "keepInventory", java_type = "boolean", rust_type = "keep_inventory: bool" },
+]
+status = "implemented"
+
+# Remaining entity events — status: missing
+[[events]]
+name = "AreaEffectCloudApplyEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "ArrowBodyCountChangeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "BatToggleSleepEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "CreeperPowerEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EnderDragonChangePhaseEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityAirChangeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityBreakDoorEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityBreedEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityChangeBlockEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityCombustByBlockEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityCombustByEntityEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityCombustEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityCreatePortalEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityDamageByBlockEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityDismountEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityDropItemEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityEnterBlockEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityEnterLoveModeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityEvent"
+package = "org.bukkit.event.entity"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "EntityExhaustionEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityInteractEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityKnockbackByEntityEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityKnockbackEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityMountEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityPickupItemEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityPlaceEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityPortalEnterEvent"
+package = "org.bukkit.event.entity"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityPortalEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityPortalExitEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityPoseChangeEvent"
+package = "org.bukkit.event.entity"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityPotionEffectEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityRegainHealthEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityRemoveEvent"
+package = "org.bukkit.event.entity"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityResurrectEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityShootBowEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntitySpellCastEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityTameEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityTargetBlockEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityTargetLivingEntityEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityToggleGlideEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityToggleSwimEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityTransformEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntityUnleashEvent"
+package = "org.bukkit.event.entity"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "ExpBottleEvent"
+package = "org.bukkit.event.entity"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "ExplosionPrimeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "FireworkExplodeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "HorseJumpEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "ItemDespawnEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "ItemMergeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "ItemSpawnEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "LingeringPotionSplashEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PigZapEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PigZombieAngerEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PiglinBarterEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerLeashEntityEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PotionSplashEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "ProjectileLaunchEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "SheepDyeWoolEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "SheepRegrowWoolEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "SlimeSplitEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "SpawnerSpawnEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "StriderTemperatureChangeEvent"
+package = "org.bukkit.event.entity"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "TrialSpawnerSpawnEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VillagerAcquireTradeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VillagerCareerChangeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VillagerReplenishTradeEvent"
+package = "org.bukkit.event.entity"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VillagerReputationChangeEvent"
+package = "org.bukkit.event.entity"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — hanging (5 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "HangingBreakByEntityEvent"
+package = "org.bukkit.event.hanging"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "HangingBreakEvent"
+package = "org.bukkit.event.hanging"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "HangingEvent"
+package = "org.bukkit.event.hanging"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "HangingPlaceEvent"
+package = "org.bukkit.event.hanging"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — inventory (25 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "InventoryClickEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "items"
+
+[[events]]
+name = "InventoryOpenEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "items"
+
+[[events]]
+name = "InventoryCloseEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+priority = "high"
+owner = "items"
+
+[[events]]
+name = "CraftItemEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "items"
+
+[[events]]
+name = "FurnaceSmeltEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "items"
+
+[[events]]
+name = "InventoryMoveItemEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "items"
+
+[[events]]
+name = "BrewEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "BrewingStandFuelEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "FurnaceBurnEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "FurnaceExtractEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "FurnaceStartSmeltEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "HopperInventorySearchEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "InventoryCreativeEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "InventoryDragEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "InventoryEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "InventoryInteractEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "InventoryPickupItemEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PrepareAnvilEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PrepareGrindstoneEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PrepareInventoryResultEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PrepareItemCraftEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PrepareSmithingEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "SmithItemEvent"
+package = "org.bukkit.event.inventory"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "TradeSelectEvent"
+package = "org.bukkit.event.inventory"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — player (85 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "PlayerJoinEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+rust_equivalent = "PlayerJoinEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_join.rs"
+fields = [
+    { name = "joinMessage", java_type = "String", rust_type = "String" },
+    { name = "player", java_type = "Player", rust_type = "player: Arc<Player>" },
+]
+status = "implemented"
+
+[[events]]
+name = "PlayerQuitEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+rust_equivalent = "PlayerLeaveEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_leave.rs"
+fields = [
+    { name = "quitMessage", java_type = "String", rust_type = "leave_message: String" },
+    { name = "player", java_type = "Player", rust_type = "player: Arc<Player>" },
+]
+status = "implemented"
+
+[[events]]
+name = "PlayerMoveEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+rust_equivalent = "PlayerMoveEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_move.rs"
+fields = [
+    { name = "from", java_type = "Location", rust_type = "" },
+    { name = "to", java_type = "Location", rust_type = "" },
+]
+status = "implemented"
+
+[[events]]
+name = "PlayerInteractEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+rust_equivalent = "PlayerInteractEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_interact_event.rs"
+status = "implemented"
+
+[[events]]
+name = "AsyncPlayerChatEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+rust_equivalent = "PlayerChatEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_chat.rs"
+fields = [
+    { name = "message", java_type = "String", rust_type = "message: String" },
+    { name = "player", java_type = "Player", rust_type = "player: Arc<Player>" },
+]
+status = "implemented"
+
+[[events]]
+name = "PlayerCommandPreprocessEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+rust_equivalent = "PlayerCommandSendEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_command_send.rs"
+status = "implemented"
+
+[[events]]
+name = "PlayerLoginEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+rust_equivalent = "PlayerLoginEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_login.rs"
+status = "implemented"
+
+[[events]]
+name = "PlayerTeleportEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+rust_equivalent = "PlayerTeleportEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_teleport.rs"
+status = "implemented"
+
+[[events]]
+name = "PlayerRespawnEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+rust_equivalent = "PlayerRespawnEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_respawn.rs"
+fields = [
+    { name = "respawnLocation", java_type = "Location", rust_type = "respawn_position: Vector3<f64>" },
+]
+status = "implemented"
+
+[[events]]
+name = "PlayerChangedWorldEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+rust_equivalent = "PlayerChangeWorldEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_change_world.rs"
+status = "implemented"
+
+[[events]]
+name = "PlayerGameModeChangeEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+rust_equivalent = "PlayerGamemodeChangeEvent"
+rust_path = "pumpkin/src/plugin/api/events/player/player_gamemode_change.rs"
+status = "implemented"
+
+# Key missing player events
+[[events]]
+name = "PlayerDropItemEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "entity"
+
+[[events]]
+name = "PlayerItemConsumeEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+priority = "high"
+owner = "entity"
+
+[[events]]
+name = "PlayerChatEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+note = "deprecated — use AsyncPlayerChatEvent"
+
+# Remaining player events — status: missing
+[[events]]
+name = "AsyncPlayerChatPreviewEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+
+[[events]]
+name = "AsyncPlayerPreLoginEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "protocol"
+
+[[events]]
+name = "PlayerAdvancementDoneEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "core"
+
+[[events]]
+name = "PlayerAnimationEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerArmorStandManipulateEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerBedEnterEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerBedLeaveEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerBucketEmptyEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "PlayerBucketEntityEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerBucketEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "PlayerBucketFillEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "PlayerBucketFishEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerChangedMainHandEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerChannelEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "protocol"
+
+[[events]]
+name = "PlayerChatTabCompleteEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "core"
+
+[[events]]
+name = "PlayerCommandSendEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "core"
+
+[[events]]
+name = "PlayerCustomClickEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "protocol"
+
+[[events]]
+name = "PlayerEditBookEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PlayerEggThrowEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "PlayerExpChangeEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerExpCooldownChangeEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerFishEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerHarvestBlockEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "PlayerHideEntityEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerInputEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "protocol"
+
+[[events]]
+name = "PlayerInteractAtEntityEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerInteractEntityEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerItemBreakEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PlayerItemDamageEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PlayerItemHeldEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PlayerItemMendEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PlayerKickEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "core"
+
+[[events]]
+name = "PlayerLevelChangeEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerLinksSendEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "protocol"
+
+[[events]]
+name = "PlayerLocaleChangeEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "protocol"
+
+[[events]]
+name = "PlayerPickupArrowEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerPickupItemEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerPortalEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "PlayerPreLoginEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+note = "deprecated — use AsyncPlayerPreLoginEvent"
+
+[[events]]
+name = "PlayerRecipeBookClickEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PlayerRecipeBookSettingsChangeEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PlayerRecipeDiscoverEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PlayerRegisterChannelEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "protocol"
+
+[[events]]
+name = "PlayerResourcePackStatusEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "protocol"
+
+[[events]]
+name = "PlayerRiptideEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerShearEntityEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerShowEntityEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerSignOpenEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "PlayerSpawnChangeEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "PlayerStatisticIncrementEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "core"
+
+[[events]]
+name = "PlayerSwapHandItemsEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PlayerTakeLecternBookEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PlayerToggleFlightEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerToggleSneakEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerToggleSprintEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerUnleashEntityEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "PlayerUnregisterChannelEvent"
+package = "org.bukkit.event.player"
+cancellable = false
+status = "missing"
+owner = "protocol"
+
+[[events]]
+name = "PlayerVelocityEvent"
+package = "org.bukkit.event.player"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — raid (6 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "RaidEvent"
+package = "org.bukkit.event.raid"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "RaidFinishEvent"
+package = "org.bukkit.event.raid"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "RaidSpawnWaveEvent"
+package = "org.bukkit.event.raid"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "RaidStopEvent"
+package = "org.bukkit.event.raid"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "RaidTriggerEvent"
+package = "org.bukkit.event.raid"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — server (15 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "ServerCommandEvent"
+package = "org.bukkit.event.server"
+cancellable = true
+rust_equivalent = "ServerCommandEvent"
+rust_path = "pumpkin/src/plugin/api/events/server/server_command.rs"
+status = "implemented"
+
+[[events]]
+name = "ServerLoadEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+rust_equivalent = "ServerStartedEvent"
+rust_path = "pumpkin/src/plugin/api/events/server/server_started.rs"
+status = "implemented"
+
+[[events]]
+name = "BroadcastMessageEvent"
+package = "org.bukkit.event.server"
+cancellable = true
+rust_equivalent = "ServerBroadcastEvent"
+rust_path = "pumpkin/src/plugin/api/events/server/server_broadcast.rs"
+status = "implemented"
+
+[[events]]
+name = "ServerListPingEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+status = "missing"
+priority = "high"
+owner = "protocol"
+
+[[events]]
+name = "PluginEnableEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+status = "missing"
+priority = "high"
+owner = "plugin"
+
+[[events]]
+name = "PluginDisableEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+status = "missing"
+priority = "high"
+owner = "plugin"
+
+[[events]]
+name = "TabCompleteEvent"
+package = "org.bukkit.event.server"
+cancellable = true
+status = "missing"
+owner = "core"
+
+[[events]]
+name = "MapInitializeEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PluginEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "RemoteServerCommandEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+status = "missing"
+owner = "core"
+
+[[events]]
+name = "ServerEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "ServiceEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "ServiceRegisterEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+status = "missing"
+owner = "plugin"
+
+[[events]]
+name = "ServiceUnregisterEvent"
+package = "org.bukkit.event.server"
+cancellable = false
+status = "missing"
+owner = "plugin"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — vehicle (11 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "VehicleBlockCollisionEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VehicleCollisionEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "VehicleCreateEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VehicleDamageEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VehicleDestroyEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VehicleEnterEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VehicleEntityCollisionEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VehicleEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "VehicleExitEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = true
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VehicleMoveEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "VehicleUpdateEvent"
+package = "org.bukkit.event.vehicle"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — weather (5 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "LightningStrikeEvent"
+package = "org.bukkit.event.weather"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "ThunderChangeEvent"
+package = "org.bukkit.event.weather"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "WeatherChangeEvent"
+package = "org.bukkit.event.weather"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "WeatherEvent"
+package = "org.bukkit.event.weather"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — world (22 events)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "ChunkLoadEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+rust_equivalent = "ChunkLoadEvent"
+rust_path = "pumpkin/src/plugin/api/events/world/chunk_load.rs"
+status = "implemented"
+
+[[events]]
+name = "ChunkUnloadEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+rust_equivalent = "ChunkSaveEvent"
+rust_path = "pumpkin/src/plugin/api/events/world/chunk_save.rs"
+note = "Pumpkin uses ChunkSaveEvent instead of ChunkUnloadEvent"
+status = "implemented"
+
+[[events]]
+name = "WorldLoadEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+rust_equivalent = "ChunkSendEvent"
+rust_path = "pumpkin/src/plugin/api/events/world/chunk_send.rs"
+note = "Pumpkin has ChunkSendEvent — WorldLoadEvent may need separate impl"
+status = "stub"
+
+[[events]]
+name = "StructureGrowEvent"
+package = "org.bukkit.event.world"
+cancellable = true
+status = "missing"
+priority = "medium"
+owner = "world"
+
+[[events]]
+name = "AsyncStructureGenerateEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "AsyncStructureSpawnEvent"
+package = "org.bukkit.event.world"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "ChunkEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "ChunkPopulateEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "EntitiesLoadEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "EntitiesUnloadEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+status = "missing"
+owner = "entity"
+
+[[events]]
+name = "GenericGameEvent"
+package = "org.bukkit.event.world"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "LootGenerateEvent"
+package = "org.bukkit.event.world"
+cancellable = true
+status = "missing"
+owner = "items"
+
+[[events]]
+name = "PortalCreateEvent"
+package = "org.bukkit.event.world"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "SpawnChangeEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "TimeSkipEvent"
+package = "org.bukkit.event.world"
+cancellable = true
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "WorldEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+status = "missing"
+note = "abstract base class"
+
+[[events]]
+name = "WorldInitEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "WorldSaveEvent"
+package = "org.bukkit.event.world"
+cancellable = false
+status = "missing"
+owner = "world"
+
+[[events]]
+name = "WorldUnloadEvent"
+package = "org.bukkit.event.world"
+cancellable = true
+status = "missing"
+owner = "world"
+
+# ═══════════════════════════════════════════════════════════════════════
+# EVENTS — Pumpkin-specific (no Bukkit equivalent)
+# ═══════════════════════════════════════════════════════════════════════
+
+[[events]]
+name = "ServerStopEvent"
+package = "pumpkin.event.server"
+cancellable = false
+rust_equivalent = "ServerStopEvent"
+rust_path = "pumpkin/src/plugin/api/events/server/server_stop.rs"
+note = "Pumpkin-specific — no direct Bukkit equivalent"
+status = "implemented"
+
+[[events]]
+name = "ServerTickEvent"
+package = "pumpkin.event.server"
+cancellable = false
+rust_equivalent = "ServerTickEvent"
+rust_path = "pumpkin/src/plugin/api/events/server/server_tick.rs"
+note = "Pumpkin-specific — no direct Bukkit equivalent"
+status = "implemented"
+
+# ═══════════════════════════════════════════════════════════════════════
+# INTERFACES
+# ═══════════════════════════════════════════════════════════════════════
+
+[[interfaces]]
+name = "Cancellable"
+package = "org.bukkit.event"
+methods = [
+    { name = "isCancelled", returns = "boolean", rust_name = "is_cancelled", rust_trait = "Payload" },
+    { name = "setCancelled", returns = "void", rust_name = "set_cancelled", rust_trait = "Cancellable" },
+]
+status = "implemented"
+
+[[interfaces]]
+name = "EntityEvent"
+package = "org.bukkit.event.entity"
+methods = [
+    { name = "getEntity", returns = "Entity", rust_name = "get_entity_id", rust_trait = "EntityEvent" },
+    { name = "getEntityType", returns = "EntityType", rust_name = "get_entity_type", rust_trait = "EntityEvent" },
+]
+status = "implemented"
+
+[[interfaces]]
+name = "Player"
+package = "org.bukkit.entity"
+methods = [
+    { name = "sendMessage", returns = "void", rust_name = "", rust_trait = "" },
+    { name = "getLocation", returns = "Location", rust_name = "", rust_trait = "" },
+    { name = "teleport", returns = "boolean", rust_name = "", rust_trait = "" },
+    { name = "getInventory", returns = "PlayerInventory", rust_name = "", rust_trait = "" },
+    { name = "getHealth", returns = "double", rust_name = "", rust_trait = "" },
+    { name = "kickPlayer", returns = "void", rust_name = "", rust_trait = "" },
+    { name = "getUniqueId", returns = "UUID", rust_name = "", rust_trait = "" },
+    { name = "getName", returns = "String", rust_name = "", rust_trait = "" },
+]
+status = "partial"
+note = "Player exists as pumpkin entity but not exposed as plugin API trait"
+
+[[interfaces]]
+name = "World"
+package = "org.bukkit"
+methods = [
+    { name = "getBlockAt", returns = "Block", rust_name = "", rust_trait = "" },
+    { name = "spawnEntity", returns = "Entity", rust_name = "", rust_trait = "" },
+    { name = "getPlayers", returns = "List<Player>", rust_name = "", rust_trait = "" },
+    { name = "getTime", returns = "long", rust_name = "", rust_trait = "" },
+    { name = "setTime", returns = "void", rust_name = "", rust_trait = "" },
+    { name = "getName", returns = "String", rust_name = "", rust_trait = "" },
+]
+status = "partial"
+note = "World exists internally but not exposed as plugin API trait"
+
+[[interfaces]]
+name = "Block"
+package = "org.bukkit.block"
+methods = [
+    { name = "getType", returns = "Material", rust_name = "", rust_trait = "" },
+    { name = "setType", returns = "void", rust_name = "", rust_trait = "" },
+    { name = "getLocation", returns = "Location", rust_name = "", rust_trait = "" },
+    { name = "getState", returns = "BlockState", rust_name = "", rust_trait = "" },
+    { name = "breakNaturally", returns = "boolean", rust_name = "", rust_trait = "" },
+]
+status = "missing"
+
+[[interfaces]]
+name = "ItemStack"
+package = "org.bukkit.inventory"
+methods = [
+    { name = "getType", returns = "Material", rust_name = "", rust_trait = "" },
+    { name = "getAmount", returns = "int", rust_name = "", rust_trait = "" },
+    { name = "getItemMeta", returns = "ItemMeta", rust_name = "", rust_trait = "" },
+    { name = "getMaxStackSize", returns = "int", rust_name = "", rust_trait = "" },
+]
+status = "missing"
+
+[[interfaces]]
+name = "Inventory"
+package = "org.bukkit.inventory"
+methods = [
+    { name = "getSize", returns = "int", rust_name = "", rust_trait = "" },
+    { name = "getItem", returns = "ItemStack", rust_name = "", rust_trait = "" },
+    { name = "setItem", returns = "void", rust_name = "", rust_trait = "" },
+    { name = "addItem", returns = "HashMap", rust_name = "", rust_trait = "" },
+    { name = "removeItem", returns = "HashMap", rust_name = "", rust_trait = "" },
+]
+status = "missing"
+
+[[interfaces]]
+name = "CommandExecutor"
+package = "org.bukkit.command"
+methods = [
+    { name = "onCommand", returns = "boolean", rust_name = "", rust_trait = "" },
+]
+status = "missing"
+
+[[interfaces]]
+name = "BukkitScheduler"
+package = "org.bukkit.scheduler"
+methods = [
+    { name = "runTask", returns = "BukkitTask", rust_name = "", rust_trait = "" },
+    { name = "runTaskLater", returns = "BukkitTask", rust_name = "", rust_trait = "" },
+    { name = "runTaskTimer", returns = "BukkitTask", rust_name = "", rust_trait = "" },
+    { name = "runTaskAsynchronously", returns = "BukkitTask", rust_name = "", rust_trait = "" },
+    { name = "runTaskLaterAsynchronously", returns = "BukkitTask", rust_name = "", rust_trait = "" },
+    { name = "runTaskTimerAsynchronously", returns = "BukkitTask", rust_name = "", rust_trait = "" },
+    { name = "cancelTask", returns = "void", rust_name = "", rust_trait = "" },
+]
+status = "missing"
+
+# ═══════════════════════════════════════════════════════════════════════
+# ENUMS
+# ═══════════════════════════════════════════════════════════════════════
+
+[[enums]]
+name = "EventPriority"
+package = "org.bukkit.event"
+values = ["LOWEST", "LOW", "NORMAL", "HIGH", "HIGHEST", "MONITOR"]
+rust_equivalent = "EventPriority"
+rust_path = "pumpkin/src/plugin/api/events/mod.rs"
+status = "implemented"
+
+[[enums]]
+name = "GameMode"
+package = "org.bukkit"
+values = ["SURVIVAL", "CREATIVE", "ADVENTURE", "SPECTATOR"]
+rust_equivalent = "GameMode"
+rust_path = "pumpkin-util/"
+status = "implemented"
+
+[[enums]]
+name = "EntityType"
+package = "org.bukkit.entity"
+values = ["149 entity types — see entities.toml"]
+rust_equivalent = "EntityType"
+rust_path = "pumpkin-data/"
+status = "implemented"
+
+[[enums]]
+name = "Material"
+package = "org.bukkit"
+values = ["~1500 constants — see items.toml"]
+rust_equivalent = ""
+rust_path = ""
+status = "missing"
+note = "Pumpkin uses separate Block/Item registries in pumpkin-data, not a unified Material enum"
+
+[[enums]]
+name = "DamageCause"
+package = "org.bukkit.event.entity.EntityDamageEvent"
+values = ["CONTACT", "ENTITY_ATTACK", "ENTITY_SWEEP_ATTACK", "PROJECTILE", "SUFFOCATION", "FALL", "FIRE", "FIRE_TICK", "MELTING", "LAVA", "DROWNING", "BLOCK_EXPLOSION", "ENTITY_EXPLOSION", "VOID", "LIGHTNING", "SUICIDE", "STARVATION", "POISON", "MAGIC", "WITHER", "FALLING_BLOCK", "THORNS", "DRAGON_BREATH", "CUSTOM", "FLY_INTO_WALL", "HOT_FLOOR", "CRAMMING", "DRYOUT", "FREEZE", "SONIC_BOOM", "KILL"]
+rust_equivalent = ""
+rust_path = ""
+status = "missing"
+note = "Pumpkin uses damage_type: String instead of enum"
+
+# ═══════════════════════════════════════════════════════════════════════
+# ANNOTATIONS
+# ═══════════════════════════════════════════════════════════════════════
+
+[[annotations]]
+name = "EventHandler"
+package = "org.bukkit.event"
+parameters = [
+    { name = "priority", type = "EventPriority", default = "NORMAL", rust_equivalent = "register_with_options priority arg" },
+    { name = "ignoreCancelled", type = "boolean", default = "false", rust_equivalent = "register_with_options ignore_cancelled arg" },
+]
+status = "implemented"
+note = "ignoreCancelled stored as metadata; filtering in fire() ready to implement (PLUGIN-004)"
+
+# ═══════════════════════════════════════════════════════════════════════
+# SPRINT SUMMARY
+# ═══════════════════════════════════════════════════════════════════════
+
+[sprint]
+total_bukkit_events = 318
+implemented = 32
+stub = 1
+missing = 285
+
+[sprint.by_owner]
+entity = 118
+items = 46
+world = 38
+redstone = 9
+protocol = 10
+core = 7
+plugin = 4
+# Note: some events have no owner (abstract bases). Total owners assigned = 236

@@ -1,0 +1,31 @@
+[identity]
+name = "core"
+responsibility = "Server tick loop, scheduler, configuration, server bootstrap, command system, player management lifecycle, lib.rs decomposition"
+
+[boundaries]
+write_paths = ["pumpkin/src/server/", "pumpkin/src/command/", "pumpkin/src/main.rs", "pumpkin/src/lib.rs", "pumpkin/src/logging.rs", "pumpkin/src/error.rs", "pumpkin-config/", "pumpkin/src/world/mod.rs"]
+read_paths = [
+    "pumpkin/src/",
+    "pumpkin-util/",
+    "pumpkin-data/",
+    "pumpkin-config/",
+    ".claude/sessions/",
+    "contracts/",
+]
+forbidden_paths = ["pumpkin-protocol/", "pumpkin-world/", "pumpkin-nbt/", "pumpkin-inventory/"]
+
+[interfaces]
+implements = ["TickScheduler", "ServerConfig", "CommandDispatcher"]
+consumes = ["PacketHandler", "ChunkProvider", "EntityTracker", "RecipeRegistry", "RedstoneEngine"]
+
+[tests]
+must_pass = "cargo test -p pumpkin --lib server"
+
+[notes]
+# Core owns the most critical file: pumpkin/src/lib.rs (607 lines, not 23K).
+# The tick loop (server/ticker.rs) must maintain 20 TPS under load.
+# Tick order: packets → entities → redstone → chunks → outgoing packets
+# Core also owns the command system (89 files, 13K lines).
+# ARCH-023: Event-firing write access to world/mod.rs
+# ONLY for wiring lifecycle event fire() calls (save, tick).
+# Do NOT modify terrain generation, chunk loading, or structure placement.

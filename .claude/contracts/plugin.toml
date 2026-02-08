@@ -1,0 +1,31 @@
+[identity]
+name = "plugin"
+responsibility = "Plugin loading, event system, mod API surface, Mindcraft compatibility layer"
+
+[boundaries]
+write_paths = ["pumpkin/src/plugin/", "pumpkin-api-macros/", "pumpkin/src/net/java/play.rs", "pumpkin/src/net/java/status.rs"]
+read_paths = [
+    "pumpkin/src/plugin/",
+    "pumpkin-api-macros/",
+    "pumpkin-util/",
+    "pumpkin-data/",
+    ".claude/sessions/",
+    "contracts/",
+]
+forbidden_paths = ["pumpkin-protocol/", "pumpkin-world/", "pumpkin-nbt/", "pumpkin-inventory/", "pumpkin/src/entity/", "pumpkin/src/world/", "pumpkin/src/block/"]
+
+[interfaces]
+implements = ["PluginManager", "EventBus"]
+consumes = ["CommandDispatcher", "EntityTracker", "ChunkProvider"]
+
+[tests]
+must_pass = "cargo test -p pumpkin --lib plugin"
+
+[notes]
+# This agent is Phase 3-4. Don't start until Core and Entity are stable.
+# The Mindcraft compatibility layer is a strategic differentiator.
+# Design the event system to be async-friendly from day one.
+# Current Pumpkin plugin system: 29 files, 2196 lines. Has loader + API basics.
+# ARCH-023: Event-firing write access to net/java/play.rs and net/java/status.rs
+# ONLY for wiring event fire() calls (ServerListPingEvent, CustomPayloadEvent).
+# Do NOT modify packet parsing, connection state machine, or crypto.

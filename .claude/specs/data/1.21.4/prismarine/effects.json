@@ -1,0 +1,236 @@
+[
+  {
+    "id": 0,
+    "name": "Speed",
+    "displayName": "Speed",
+    "type": "good"
+  },
+  {
+    "id": 1,
+    "name": "Slowness",
+    "displayName": "Slowness",
+    "type": "bad"
+  },
+  {
+    "id": 2,
+    "name": "Haste",
+    "displayName": "Haste",
+    "type": "good"
+  },
+  {
+    "id": 3,
+    "name": "MiningFatigue",
+    "displayName": "Mining Fatigue",
+    "type": "bad"
+  },
+  {
+    "id": 4,
+    "name": "Strength",
+    "displayName": "Strength",
+    "type": "good"
+  },
+  {
+    "id": 5,
+    "name": "InstantHealth",
+    "displayName": "Instant Health",
+    "type": "good"
+  },
+  {
+    "id": 6,
+    "name": "InstantDamage",
+    "displayName": "Instant Damage",
+    "type": "bad"
+  },
+  {
+    "id": 7,
+    "name": "JumpBoost",
+    "displayName": "Jump Boost",
+    "type": "good"
+  },
+  {
+    "id": 8,
+    "name": "Nausea",
+    "displayName": "Nausea",
+    "type": "bad"
+  },
+  {
+    "id": 9,
+    "name": "Regeneration",
+    "displayName": "Regeneration",
+    "type": "good"
+  },
+  {
+    "id": 10,
+    "name": "Resistance",
+    "displayName": "Resistance",
+    "type": "good"
+  },
+  {
+    "id": 11,
+    "name": "FireResistance",
+    "displayName": "Fire Resistance",
+    "type": "good"
+  },
+  {
+    "id": 12,
+    "name": "WaterBreathing",
+    "displayName": "Water Breathing",
+    "type": "good"
+  },
+  {
+    "id": 13,
+    "name": "Invisibility",
+    "displayName": "Invisibility",
+    "type": "good"
+  },
+  {
+    "id": 14,
+    "name": "Blindness",
+    "displayName": "Blindness",
+    "type": "bad"
+  },
+  {
+    "id": 15,
+    "name": "NightVision",
+    "displayName": "Night Vision",
+    "type": "good"
+  },
+  {
+    "id": 16,
+    "name": "Hunger",
+    "displayName": "Hunger",
+    "type": "bad"
+  },
+  {
+    "id": 17,
+    "name": "Weakness",
+    "displayName": "Weakness",
+    "type": "bad"
+  },
+  {
+    "id": 18,
+    "name": "Poison",
+    "displayName": "Poison",
+    "type": "bad"
+  },
+  {
+    "id": 19,
+    "name": "Wither",
+    "displayName": "Wither",
+    "type": "bad"
+  },
+  {
+    "id": 20,
+    "name": "HealthBoost",
+    "displayName": "Health Boost",
+    "type": "good"
+  },
+  {
+    "id": 21,
+    "name": "Absorption",
+    "displayName": "Absorption",
+    "type": "good"
+  },
+  {
+    "id": 22,
+    "name": "Saturation",
+    "displayName": "Saturation",
+    "type": "good"
+  },
+  {
+    "id": 23,
+    "name": "Glowing",
+    "displayName": "Glowing",
+    "type": "bad"
+  },
+  {
+    "id": 24,
+    "name": "Levitation",
+    "displayName": "Levitation",
+    "type": "bad"
+  },
+  {
+    "id": 25,
+    "name": "Luck",
+    "displayName": "Luck",
+    "type": "good"
+  },
+  {
+    "id": 26,
+    "name": "Unluck",
+    "displayName": "Bad Luck",
+    "type": "bad"
+  },
+  {
+    "id": 27,
+    "name": "SlowFalling",
+    "displayName": "Slow Falling",
+    "type": "good"
+  },
+  {
+    "id": 28,
+    "name": "ConduitPower",
+    "displayName": "Conduit Power",
+    "type": "good"
+  },
+  {
+    "id": 29,
+    "name": "DolphinsGrace",
+    "displayName": "Dolphin's Grace",
+    "type": "good"
+  },
+  {
+    "id": 30,
+    "name": "BadOmen",
+    "displayName": "Bad Omen",
+    "type": "bad"
+  },
+  {
+    "id": 31,
+    "name": "HeroOfTheVillage",
+    "displayName": "Hero of the Village",
+    "type": "good"
+  },
+  {
+    "id": 32,
+    "name": "Darkness",
+    "displayName": "Darkness",
+    "type": "bad"
+  },
+  {
+    "id": 33,
+    "name": "TrialOmen",
+    "displayName": "Trial Omen",
+    "type": "bad"
+  },
+  {
+    "id": 34,
+    "name": "RaidOmen",
+    "displayName": "Raid Omen",
+    "type": "bad"
+  },
+  {
+    "id": 35,
+    "name": "WindCharged",
+    "displayName": "Wind Charged",
+    "type": "bad"
+  },
+  {
+    "id": 36,
+    "name": "Weaving",
+    "displayName": "Weaving",
+    "type": "bad"
+  },
+  {
+    "id": 37,
+    "name": "Oozing",
+    "displayName": "Oozing",
+    "type": "bad"
+  },
+  {
+    "id": 38,
+    "name": "Infested",
+    "displayName": "Infested",
+    "type": "bad"
+  }
+]

@@ -1,0 +1,1148 @@
+[
+  {
+    "entity": "armor_stand",
+    "drops": []
+  },
+  {
+    "entity": "bat",
+    "drops": []
+  },
+  {
+    "entity": "bee",
+    "drops": []
+  },
+  {
+    "entity": "blaze",
+    "drops": [
+      {
+        "item": "blaze_rod",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "cat",
+    "drops": [
+      {
+        "item": "string",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "cave_spider",
+    "drops": [
+      {
+        "item": "string",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "spider_eye",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "chicken",
+    "drops": [
+      {
+        "item": "feather",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "chicken",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "cod",
+    "drops": [
+      {
+        "item": "cod",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "bone_meal",
+        "dropChance": 0.05,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "cow",
+    "drops": [
+      {
+        "item": "leather",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "beef",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "creeper",
+    "drops": [
+      {
+        "item": "gunpowder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "dolphin",
+    "drops": [
+      {
+        "item": "cod",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "donkey",
+    "drops": [
+      {
+        "item": "leather",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "drowned",
+    "drops": [
+      {
+        "item": "rotten_flesh",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "gold_ingot",
+        "dropChance": 0.05,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "elder_guardian",
+    "drops": [
+      {
+        "item": "prismarine_shard",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "cod",
+        "dropChance": 0.6,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "prismarine_crystals",
+        "dropChance": 0.4,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "wet_sponge",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "ender_dragon",
+    "drops": []
+  },
+  {
+    "entity": "enderman",
+    "drops": [
+      {
+        "item": "ender_pearl",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "endermite",
+    "drops": []
+  },
+  {
+    "entity": "evoker",
+    "drops": [
+      {
+        "item": "totem_of_undying",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "emerald",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "fox",
+    "drops": []
+  },
+  {
+    "entity": "ghast",
+    "drops": [
+      {
+        "item": "ghast_tear",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "gunpowder",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "giant",
+    "drops": []
+  },
+  {
+    "entity": "guardian",
+    "drops": [
+      {
+        "item": "prismarine_shard",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "cod",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "prismarine_crystals",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "hoglin",
+    "drops": [
+      {
+        "item": "porkchop",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "leather",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "horse",
+    "drops": [
+      {
+        "item": "leather",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "husk",
+    "drops": [
+      {
+        "item": "rotten_flesh",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "iron_ingot",
+        "dropChance": 0.008333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      },
+      {
+        "item": "carrot",
+        "dropChance": 0.008333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      },
+      {
+        "item": "potato",
+        "dropChance": 0.008333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "illusioner",
+    "drops": []
+  },
+  {
+    "entity": "iron_golem",
+    "drops": [
+      {
+        "item": "poppy",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "iron_ingot",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "llama",
+    "drops": [
+      {
+        "item": "leather",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "magma_cube",
+    "drops": [
+      {
+        "item": "magma_cream",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "mooshroom",
+    "drops": [
+      {
+        "item": "leather",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "beef",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "mule",
+    "drops": [
+      {
+        "item": "leather",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "ocelot",
+    "drops": []
+  },
+  {
+    "entity": "panda",
+    "drops": [
+      {
+        "item": "bamboo",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "parrot",
+    "drops": [
+      {
+        "item": "feather",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "phantom",
+    "drops": [
+      {
+        "item": "phantom_membrane",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "pig",
+    "drops": [
+      {
+        "item": "porkchop",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "piglin",
+    "drops": []
+  },
+  {
+    "entity": "piglin_brute",
+    "drops": []
+  },
+  {
+    "entity": "pillager",
+    "drops": []
+  },
+  {
+    "entity": "player",
+    "drops": []
+  },
+  {
+    "entity": "polar_bear",
+    "drops": [
+      {
+        "item": "cod",
+        "dropChance": 0.75,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "salmon",
+        "dropChance": 0.25,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "pufferfish",
+    "drops": [
+      {
+        "item": "pufferfish",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "bone_meal",
+        "dropChance": 0.05,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "rabbit",
+    "drops": [
+      {
+        "item": "rabbit_hide",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "rabbit",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "rabbit_foot",
+        "dropChance": 0.1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "ravager",
+    "drops": [
+      {
+        "item": "saddle",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "salmon",
+    "drops": [
+      {
+        "item": "salmon",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "bone_meal",
+        "dropChance": 0.05,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "sheep",
+    "drops": [
+      {
+        "item": "mutton",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "shulker",
+    "drops": [
+      {
+        "item": "shulker_shell",
+        "dropChance": 0.5,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "silverfish",
+    "drops": []
+  },
+  {
+    "entity": "skeleton",
+    "drops": [
+      {
+        "item": "arrow",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "bone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "skeleton_horse",
+    "drops": [
+      {
+        "item": "bone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "slime",
+    "drops": [
+      {
+        "item": "slime_ball",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "snow_golem",
+    "drops": [
+      {
+        "item": "snowball",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "spider",
+    "drops": [
+      {
+        "item": "string",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "spider_eye",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "squid",
+    "drops": [
+      {
+        "item": "ink_sac",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "stray",
+    "drops": [
+      {
+        "item": "arrow",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "bone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "tipped_arrow",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "strider",
+    "drops": [
+      {
+        "item": "string",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "trader_llama",
+    "drops": [
+      {
+        "item": "leather",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "tropical_fish",
+    "drops": [
+      {
+        "item": "tropical_fish",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "bone_meal",
+        "dropChance": 0.05,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "turtle",
+    "drops": [
+      {
+        "item": "seagrass",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "bowl",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "vex",
+    "drops": []
+  },
+  {
+    "entity": "villager",
+    "drops": []
+  },
+  {
+    "entity": "vindicator",
+    "drops": [
+      {
+        "item": "emerald",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "wandering_trader",
+    "drops": []
+  },
+  {
+    "entity": "witch",
+    "drops": [
+      {
+        "item": "glowstone_dust",
+        "dropChance": 0.125,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "sugar",
+        "dropChance": 0.125,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "redstone",
+        "dropChance": 0.125,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "spider_eye",
+        "dropChance": 0.125,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "glass_bottle",
+        "dropChance": 0.125,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "gunpowder",
+        "dropChance": 0.125,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "stick",
+        "dropChance": 0.25,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "wither",
+    "drops": []
+  },
+  {
+    "entity": "wither_skeleton",
+    "drops": [
+      {
+        "item": "coal",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "bone",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "wither_skeleton_skull",
+        "dropChance": 0.025,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "wolf",
+    "drops": []
+  },
+  {
+    "entity": "zoglin",
+    "drops": [
+      {
+        "item": "rotten_flesh",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "zombie",
+    "drops": [
+      {
+        "item": "rotten_flesh",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "iron_ingot",
+        "dropChance": 0.008333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      },
+      {
+        "item": "carrot",
+        "dropChance": 0.008333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      },
+      {
+        "item": "potato",
+        "dropChance": 0.008333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "zombie_horse",
+    "drops": [
+      {
+        "item": "rotten_flesh",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "entity": "zombie_villager",
+    "drops": [
+      {
+        "item": "rotten_flesh",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "iron_ingot",
+        "dropChance": 0.008333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      },
+      {
+        "item": "carrot",
+        "dropChance": 0.008333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      },
+      {
+        "item": "potato",
+        "dropChance": 0.008333333333333333,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  },
+  {
+    "entity": "zombified_piglin",
+    "drops": [
+      {
+        "item": "rotten_flesh",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "gold_nugget",
+        "dropChance": 1,
+        "stackSizeRange": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "gold_ingot",
+        "dropChance": 0.025,
+        "stackSizeRange": [
+          1,
+          1
+        ],
+        "playerKill": true
+      }
+    ]
+  }
+]

@@ -134,6 +134,11 @@ run/
 result
 result-*
 
+
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Generated Data
 pumpkin-data/src/generated
 
@@ -158,3 +163,4 @@ spigot.yml
 version_history.json
 world_nether/
 world_the_end/
+
