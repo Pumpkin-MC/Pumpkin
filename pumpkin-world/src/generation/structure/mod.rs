@@ -9,8 +9,28 @@ use crate::{
         biome_coords,
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
+            ancient_city::AncientCityGenerator,
+            bastion_remnant::BastionRemnantGenerator,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
+            desert_pyramid::DesertPyramidGenerator,
+            end_city::EndCityGenerator,
+            igloo::IglooGenerator,
+            jungle_temple::JungleTempleGenerator,
+            mineshaft::{MineshaftGenerator, MineshaftMesaGenerator},
+            nether_fortress::NetherFortressGenerator,
+            nether_fossil::NetherFossilGenerator,
+            ocean_monument::OceanMonumentGenerator,
+            ocean_ruin::{ColdOceanRuinGenerator, WarmOceanRuinGenerator},
+            pillager_outpost::PillagerOutpostGenerator,
+            ruined_portal::RuinedPortalGenerator, shipwreck::ShipwreckGenerator,
             stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
+            trail_ruins::TrailRuinsGenerator,
+            trial_chambers::TrialChambersGenerator,
+            village::{
+                VillageDesertGenerator, VillagePlainsGenerator, VillageSavannaGenerator,
+                VillageSnowyGenerator, VillageTaigaGenerator,
+            },
+            woodland_mansion::WoodlandMansionGenerator,
         },
     },
 };
@@ -48,8 +68,82 @@ pub fn try_generate_structure(
         StructureKeys::Stronghold => {
             StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
         }
-        // TODO: Implement other structure types
-        _ => None,
+        StructureKeys::DesertPyramid => {
+            DesertPyramidGenerator::get_structure_position(&DesertPyramidGenerator, context)
+        }
+        StructureKeys::JunglePyramid => {
+            JungleTempleGenerator::get_structure_position(&JungleTempleGenerator, context)
+        }
+        StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
+        StructureKeys::Shipwreck | StructureKeys::ShipwreckBeached => {
+            ShipwreckGenerator::get_structure_position(&ShipwreckGenerator, context)
+        }
+        StructureKeys::OceanRuinCold => {
+            ColdOceanRuinGenerator::get_structure_position(&ColdOceanRuinGenerator, context)
+        }
+        StructureKeys::OceanRuinWarm => {
+            WarmOceanRuinGenerator::get_structure_position(&WarmOceanRuinGenerator, context)
+        }
+        StructureKeys::PillagerOutpost => {
+            PillagerOutpostGenerator::get_structure_position(&PillagerOutpostGenerator, context)
+        }
+        StructureKeys::NetherFossil => {
+            NetherFossilGenerator::get_structure_position(&NetherFossilGenerator, context)
+        }
+        StructureKeys::RuinedPortal
+        | StructureKeys::RuinedPortalDesert
+        | StructureKeys::RuinedPortalJungle
+        | StructureKeys::RuinedPortalSwamp
+        | StructureKeys::RuinedPortalMountain
+        | StructureKeys::RuinedPortalOcean
+        | StructureKeys::RuinedPortalNether => {
+            RuinedPortalGenerator::get_structure_position(&RuinedPortalGenerator, context)
+        }
+        StructureKeys::Mansion => {
+            WoodlandMansionGenerator::get_structure_position(&WoodlandMansionGenerator, context)
+        }
+        StructureKeys::Mineshaft => {
+            MineshaftGenerator::get_structure_position(&MineshaftGenerator, context)
+        }
+        StructureKeys::MineshaftMesa => {
+            MineshaftMesaGenerator::get_structure_position(&MineshaftMesaGenerator, context)
+        }
+        StructureKeys::AncientCity => {
+            AncientCityGenerator::get_structure_position(&AncientCityGenerator, context)
+        }
+        StructureKeys::TrailRuins => {
+            TrailRuinsGenerator::get_structure_position(&TrailRuinsGenerator, context)
+        }
+        StructureKeys::TrialChambers => {
+            TrialChambersGenerator::get_structure_position(&TrialChambersGenerator, context)
+        }
+        StructureKeys::VillagePlains => {
+            VillagePlainsGenerator::get_structure_position(&VillagePlainsGenerator, context)
+        }
+        StructureKeys::VillageDesert => {
+            VillageDesertGenerator::get_structure_position(&VillageDesertGenerator, context)
+        }
+        StructureKeys::VillageSavanna => {
+            VillageSavannaGenerator::get_structure_position(&VillageSavannaGenerator, context)
+        }
+        StructureKeys::VillageSnowy => {
+            VillageSnowyGenerator::get_structure_position(&VillageSnowyGenerator, context)
+        }
+        StructureKeys::VillageTaiga => {
+            VillageTaigaGenerator::get_structure_position(&VillageTaigaGenerator, context)
+        }
+        StructureKeys::Monument => {
+            OceanMonumentGenerator::get_structure_position(&OceanMonumentGenerator, context)
+        }
+        StructureKeys::Fortress => {
+            NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
+        }
+        StructureKeys::EndCity => {
+            EndCityGenerator::get_structure_position(&EndCityGenerator, context)
+        }
+        StructureKeys::BastionRemnant => {
+            BastionRemnantGenerator::get_structure_position(&BastionRemnantGenerator, context)
+        }
     };
 
     if let Some(pos) = structure_pos {

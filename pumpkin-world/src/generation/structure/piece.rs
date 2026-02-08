@@ -67,4 +67,14 @@ pub enum StructurePieceType {
     Shipwreck,
     NetherFossil,
     Jigsaw,
+    OceanRuin,
+    PillagerOutpost,
+
+    // Deep Dark / Archaeology
+    AncientCity,
+    TrailRuins,
+    TrialChambers,
+
+    // Nether
+    BastionRemnant,
 }
