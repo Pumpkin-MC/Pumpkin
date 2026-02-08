@@ -102,8 +102,7 @@ pub async fn io_read_work(
                             dimension,
                             level.world_gen.default_block,
                             biome_mixer_seed,
-                        )
-                        .await;
+                        );
 
                         // Clear all lighting data
                         let section_count = proto.light.sky_light.len();
@@ -134,15 +133,12 @@ pub async fn io_read_work(
                     }
                 } else {
                     // Standard ProtoChunk handling for non-full chunks
-                    let val = RecvChunk::IO(Chunk::Proto(Box::new(
-                        ProtoChunk::from_chunk_data(
-                            &chunk,
-                            dimension,
-                            level.world_gen.default_block,
-                            biome_mixer_seed,
-                        )
-                        .await,
-                    )));
+                    let val = RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
+                        &chunk,
+                        dimension,
+                        level.world_gen.default_block,
+                        biome_mixer_seed,
+                    ))));
                     if send.send((pos, val)).is_err() {
                         break;
                     }

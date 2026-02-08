@@ -11,7 +11,6 @@ use super::{
 use crate::level::{Level, SyncChunk};
 use dashmap::DashMap;
 use log::error;
-use num_traits::abs;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_util::math::vector2::Vector2;
 use slotmap::Key;
@@ -108,7 +107,7 @@ impl GenerationSchedule {
             let level_clone = level.clone();
 
             let handle = thread::Builder::new()
-                .name(format!("Gen-{}", i)) // Identifying dim helps debugging
+                .name(format!("Gen-{i}")) // Identifying dim helps debugging
                 .spawn(move || {
                     generation_work(recv_gen, send_chunk, level_clone);
                 })
@@ -117,8 +116,8 @@ impl GenerationSchedule {
             thread_tracker.push(handle);
         }
 
-        let level_sched = level.clone();
-        let lighting_config = level.lighting_config;
+        let level_sched = level;
+        let lighting_config = level_sched.lighting_config;
         let handle = thread::Builder::new()
             .name("Schedule".to_string())
             .spawn(move || {
@@ -187,7 +186,7 @@ impl GenerationSchedule {
             return *last_level.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL) + (stage as i8);
         }
         for i in last_high_priority {
-            let dst = max(abs(i.x - pos.x), abs(i.y - pos.y));
+            let dst = max((i.x - pos.x).abs(), (i.y - pos.y).abs());
             if dst <= StagedChunkEnum::FULL_RADIUS
                 && stage <= StagedChunkEnum::FULL_DEPENDENCIES[dst as usize]
             {

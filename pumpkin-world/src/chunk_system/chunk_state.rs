@@ -204,7 +204,7 @@ impl Chunk {
         let total_sections = dimension.height as usize / 16;
         let sections = ChunkSections::new(total_sections, dimension.min_y);
 
-        let proto_biome_height = biome_coords::from_block(proto_chunk.height());
+        let proto_biome_height = biome_coords::from_block(proto_chunk.height() as i32);
         let biome_min_y = biome_coords::from_block(dimension.min_y);
 
         for y_offset in 0..proto_biome_height {
@@ -217,7 +217,7 @@ impl Chunk {
                 .unwrap()
                 .get_mut(section_index)
             {
-                let absolute_biome_y = biome_min_y + y_offset as i32;
+                let absolute_biome_y = biome_min_y + y_offset;
 
                 for z in 0..4 {
                     for x in 0..4 {

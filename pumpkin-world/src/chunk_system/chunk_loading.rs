@@ -2,7 +2,6 @@ use super::{ChunkLevel, ChunkPos, HashMapType, LevelChannel};
 use crate::chunk_system::chunk_state::StagedChunkEnum; // Fixed path
 use itertools::Itertools;
 use log::debug;
-use num_traits::abs;
 use std::cmp::{Ordering, PartialEq, min};
 use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry;
@@ -139,7 +138,7 @@ impl ChunkLoading {
             for dx in -range..=range {
                 for dy in -range..=range {
                     let new_pos = ticket_pos.add_raw(dx as i32, dy as i32);
-                    let level_from_source = level + abs(dx).max(abs(dy));
+                    let level_from_source = level + dx.abs().max(dy.abs());
                     let i = temp.entry(new_pos).or_insert(Self::MAX_LEVEL);
                     *i = min(*i, level_from_source);
                 }
@@ -302,7 +301,7 @@ impl ChunkLoading {
         }
 
         for (ticket_pos, levels) in &self.ticket {
-            if abs(ticket_pos.x - pos.x) <= range && abs(ticket_pos.y - pos.y) <= range {
+            if (ticket_pos.x - pos.x).abs() <= range && (ticket_pos.y - pos.y).abs() <= range {
                 let level = *levels.iter().min().unwrap();
                 debug_assert!(level < Self::MAX_LEVEL);
                 let old = self.cache.get(&self.pos_level, *ticket_pos);
