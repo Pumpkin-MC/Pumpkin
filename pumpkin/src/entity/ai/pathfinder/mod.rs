@@ -9,7 +9,6 @@ use crate::entity::ai::pathfinder::node_evaluator::{MobData, NodeEvaluator};
 use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::ai::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
-use pumpkin_protocol::java::client::play::CEntityPositionSync;
 use pumpkin_util::math::wrap_degrees;
 use std::sync::atomic::Ordering;
 
@@ -65,14 +64,14 @@ const TARGET_DISTANCE_MULTIPLIER: f32 = 1.5;
 // TODO: Read from mob attributes
 const FOLLOW_RANGE: f32 = 35.0;
 
-// TODO: Calculate from mob attributes
-const SPEED_PER_TICK: f64 = 0.1;
-
 const NODE_REACH_XZ: f64 = 0.5;
 const NODE_REACH_Y: f64 = 1.0;
 
 // TODO: Read from mob attributes
 const MOB_STEP_HEIGHT: f64 = 1.0;
+
+// TODO: Read from entity attributes (zombie = 0.23, default = 0.25)
+const DEFAULT_MOVEMENT_SPEED: f64 = 0.25;
 
 const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 
@@ -217,11 +216,14 @@ impl Navigator {
     #[allow(clippy::too_many_lines)]
     pub async fn tick(&mut self, entity: &LivingEntity) {
         let Some(goal) = self.current_goal.take() else {
+            // Idle: stop the mob
+            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
             return;
         };
 
         if goal.current_progress == goal.destination {
             self.current_path = None;
+            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
             return;
         }
 
@@ -235,12 +237,14 @@ impl Navigator {
         }
 
         if self.current_path.is_none() {
+            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
             self.current_goal = Some(goal);
             return;
         }
 
         if let Some(path) = &mut self.current_path {
             if path.is_done() || !path.is_valid() {
+                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
                 self.current_goal = Some(goal);
                 return;
             }
@@ -256,6 +260,7 @@ impl Navigator {
             if self.ticks_on_current_node > 100 {
                 self.current_path = None;
                 self.ticks_on_current_node = 0;
+                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
                 self.current_goal = Some(goal);
                 return;
             }
@@ -270,12 +275,15 @@ impl Navigator {
                     if dist_sq < 2.0 * 2.0 {
                         self.current_path = None;
                         self.ticks_on_current_node = 0;
+                        entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
                         self.current_goal = Some(goal);
                         return;
                     }
                 }
                 self.path_start_pos = Some(entity.entity.pos.load());
             }
+
+            let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
 
             if let Some(next_block) = path.get_next_node_pos() {
                 let target_pos = Vector3::new(
@@ -292,8 +300,22 @@ impl Navigator {
                 let horizontal_dist_sq = dx * dx + dz * dz;
                 let horizontal_dist = horizontal_dist_sq.sqrt();
 
+                // Skip node if we're above it on the same XZ column and airborne (falling toward it)
+                if !on_ground && horizontal_dist < NODE_REACH_XZ && dy < -0.5 {
+                    path.advance();
+                    self.current_goal = Some(goal);
+                    return;
+                }
+
                 if horizontal_dist < NODE_REACH_XZ && dy.abs() < NODE_REACH_Y {
                     path.advance();
+                    self.current_goal = Some(goal);
+                    return;
+                }
+
+                // Don't try to path-follow while airborne — let gravity handle it
+                if !on_ground {
+                    entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
                     self.current_goal = Some(goal);
                     return;
                 }
@@ -307,52 +329,26 @@ impl Navigator {
                 entity.entity.head_yaw.store(target_yaw);
                 entity.entity.body_yaw.store(target_yaw);
 
-                let speed = goal.speed * SPEED_PER_TICK;
-                let (move_x, move_z) = if horizontal_dist > 1e-6 {
-                    let nx = dx / horizontal_dist;
-                    let nz = dz / horizontal_dist;
-                    let step = speed.min(horizontal_dist);
-                    (nx * step, nz * step)
-                } else {
-                    (0.0, 0.0)
-                };
+                // Vanilla sets both movementSpeed and forwardSpeed to the same value
+                let mob_speed = goal.speed * DEFAULT_MOVEMENT_SPEED;
+                entity.movement_speed.store(mob_speed);
+                entity
+                    .movement_input
+                    .store(Vector3::new(0.0, 0.0, mob_speed));
 
-                // Step-ups within MOB_STEP_HEIGHT snap Y directly (no physics-based collision yet)
-                let move_y = if dy > MOB_STEP_HEIGHT {
+                // Jump when the next node is above step height and we're close enough horizontally
+                if dy > MOB_STEP_HEIGHT && horizontal_dist < 2.0 {
                     entity
                         .jumping
                         .store(true, std::sync::atomic::Ordering::SeqCst);
-                    speed.min(dy)
-                } else if dy.abs() > 0.01 {
-                    dy
                 } else {
-                    0.0
-                };
-
-                let new_pos = Vector3::new(
-                    current_pos.x + move_x,
-                    current_pos.y + move_y,
-                    current_pos.z + move_z,
-                );
-
-                entity.entity.set_pos(new_pos);
-
-                let delta = Vector3::new(move_x, move_y, move_z);
-                entity
-                    .entity
-                    .world
-                    .load()
-                    .broadcast_packet_all(&CEntityPositionSync::new(
-                        entity.entity.entity_id.into(),
-                        new_pos,
-                        delta,
-                        target_yaw,
-                        entity.entity.pitch.load(),
-                        entity.entity.on_ground.load(Ordering::Relaxed),
-                    ))
-                    .await;
+                    entity
+                        .jumping
+                        .store(false, std::sync::atomic::Ordering::SeqCst);
+                }
             } else {
                 self.current_path = None;
+                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
             }
         }
 

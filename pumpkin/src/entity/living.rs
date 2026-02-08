@@ -789,7 +789,7 @@ impl LivingEntity {
     }
 
     async fn get_jump_velocity(&self, mut strength: f64) -> f64 {
-        strength *= 1.0; // TODO: Entity Attribute jump strength
+        strength *= 0.42; // TODO: Read from Entity Attribute JUMP_STRENGTH (default 0.42)
 
         strength *= f64::from(self.entity.get_jump_velocity_multiplier().await);
 
@@ -1340,8 +1340,7 @@ impl EntityBase for LivingEntity {
             }
             // TODO
             if caller.get_player().is_none() {
-                // self.entity.send_pos_rot().await;
-                // self.entity.send_velocity().await;
+                self.entity.send_pos_rot().await;
             }
             self.tick_effects().await;
             // Current active item

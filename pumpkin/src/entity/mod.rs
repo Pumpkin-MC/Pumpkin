@@ -1207,7 +1207,7 @@ impl Entity {
         }
 
         let input = if dist > 1.0 {
-            movement_input.normalize()
+            movement_input.normalize() * speed
         } else {
             movement_input * speed
         };
