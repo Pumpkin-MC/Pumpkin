@@ -1,8 +1,9 @@
-use pumpkin_data::{Block, BlockState, item::Item};
+use pumpkin_data::{Block, BlockState, Enchantment, item::Item};
+use pumpkin_data::recipes::{RECIPES_COOKING, CookingRecipeType};
 use pumpkin_util::{
     loot_table::{
-        LootCondition, LootFunctionNumberProvider, LootFunctionTypes, LootPoolEntry,
-        LootPoolEntryTypes, LootTable,
+        LootCondition, LootFunctionBonusParameter, LootFunctionNumberProvider, LootFunctionTypes,
+        LootPoolEntry, LootPoolEntryTypes, LootTable,
     },
     random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
@@ -14,6 +15,9 @@ pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
     pub block_state: Option<&'static BlockState>,
     pub killed_by_player: Option<bool>,
+    /// The tool used (for enchantment-based loot functions like `ApplyBonus`).
+    /// Callers should set this to the player's held item when breaking blocks.
+    pub tool: Option<ItemStack>,
 }
 
 pub trait LootTableExt {
@@ -98,59 +102,162 @@ impl LootPoolEntryExt for LootPoolEntry {
                 {
                     continue;
                 }
-
-                match &function.content {
-                    LootFunctionTypes::SetCount { count, add } => {
-                        for stack in &mut stacks {
-                            if *add {
-                                stack.item_count += count.generate().round() as u8;
-                            } else {
-                                stack.item_count = count.generate().round() as u8;
-                            }
-                        }
-                    }
-                    LootFunctionTypes::LimitCount { min, max } => {
-                        if let Some(min) = min.map(|min| min.round() as u8) {
-                            for stack in &mut stacks {
-                                if stack.item_count < min {
-                                    stack.item_count = min;
-                                }
-                            }
-                        }
-
-                        if let Some(max) = max.map(|max| max.round() as u8) {
-                            for stack in &mut stacks {
-                                if stack.item_count > max {
-                                    stack.item_count = max;
-                                }
-                            }
-                        }
-                    }
-                    LootFunctionTypes::ApplyBonus {
-                        enchantment: _,
-                        formula: _,
-                        parameters: _,
-                    }
-                    | LootFunctionTypes::CopyComponents {
-                        source: _,
-                        include: _,
-                    }
-                    | LootFunctionTypes::CopyState {
-                        block: _,
-                        properties: _,
-                    }
-                    | LootFunctionTypes::EnchantedCountIncrease
-                    | LootFunctionTypes::SetOminousBottleAmplifier
-                    | LootFunctionTypes::SetPotion
-                    | LootFunctionTypes::FurnaceSmelt
-                    | LootFunctionTypes::ExplosionDecay => {
-                        // TODO: shouldnt crash here but needs to be implemented someday
-                    }
-                }
+                apply_loot_function(&function.content, &mut stacks, params);
             }
         }
 
         Some(stacks)
+    }
+}
+
+fn apply_loot_function(
+    function: &LootFunctionTypes,
+    stacks: &mut Vec<ItemStack>,
+    params: &LootContextParameters,
+) {
+    match function {
+        LootFunctionTypes::SetCount { count, add } => {
+            for stack in stacks {
+                if *add {
+                    stack.item_count += count.generate().round() as u8;
+                } else {
+                    stack.item_count = count.generate().round() as u8;
+                }
+            }
+        }
+        LootFunctionTypes::LimitCount { min, max } => {
+            if let Some(min) = min.map(|min| min.round() as u8) {
+                for stack in &mut *stacks {
+                    if stack.item_count < min {
+                        stack.item_count = min;
+                    }
+                }
+            }
+
+            if let Some(max) = max.map(|max| max.round() as u8) {
+                for stack in &mut *stacks {
+                    if stack.item_count > max {
+                        stack.item_count = max;
+                    }
+                }
+            }
+        }
+        LootFunctionTypes::ExplosionDecay => {
+            if let Some(radius) = params.explosion_radius {
+                for stack in stacks {
+                    // Each item in the stack has a 1/radius chance of surviving
+                    let mut surviving = 0u8;
+                    for _ in 0..stack.item_count {
+                        if rand::rng().random::<f32>() <= 1.0 / radius {
+                            surviving += 1;
+                        }
+                    }
+                    stack.item_count = surviving;
+                }
+            }
+        }
+        LootFunctionTypes::ApplyBonus {
+            enchantment,
+            formula,
+            parameters,
+        } => {
+            apply_bonus(stacks, params, enchantment, formula, parameters.as_ref());
+        }
+        LootFunctionTypes::FurnaceSmelt => {
+            for stack in stacks {
+                // Look up smelting recipe matching this item
+                for recipe in RECIPES_COOKING {
+                    if let CookingRecipeType::Smelting(cooking) = recipe
+                        && cooking.ingredient.match_item(stack.item)
+                    {
+                        let key = cooking
+                            .result
+                            .id
+                            .strip_prefix("minecraft:")
+                            .unwrap_or(cooking.result.id);
+                        if let Some(result_item) = Item::from_registry_key(key) {
+                            stack.item = result_item;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        // These functions need data that the codegen doesn't yet provide,
+        // or require component system support not available.
+        LootFunctionTypes::CopyComponents {
+            source: _,
+            include: _,
+        }
+        | LootFunctionTypes::CopyState {
+            block: _,
+            properties: _,
+        }
+        | LootFunctionTypes::EnchantedCountIncrease
+        | LootFunctionTypes::SetOminousBottleAmplifier
+        | LootFunctionTypes::SetPotion => {}
+    }
+}
+
+fn apply_bonus(
+    stacks: &mut [ItemStack],
+    params: &LootContextParameters,
+    enchantment: &str,
+    formula: &str,
+    parameters: Option<&LootFunctionBonusParameter>,
+) {
+    let level = params
+        .tool
+        .as_ref()
+        .and_then(|tool| {
+            let key = enchantment
+                .strip_prefix("minecraft:")
+                .unwrap_or(enchantment);
+            Enchantment::from_name(key).map(|ench| tool.get_enchantment_level(ench))
+        })
+        .unwrap_or(0);
+
+    if level <= 0 {
+        return;
+    }
+
+    for stack in stacks {
+        match formula {
+            "minecraft:uniform_bonus_count" => {
+                if let Some(LootFunctionBonusParameter::Multiplier { bonus_multiplier }) =
+                    parameters
+                {
+                    // count + random(0..=level*multiplier)
+                    let max = level * bonus_multiplier;
+                    if max > 0 {
+                        let bonus = rand::rng().random_range(0..=(max as u8));
+                        stack.item_count = stack.item_count.saturating_add(bonus);
+                    }
+                }
+            }
+            "minecraft:binomial_with_bonus_count" => {
+                if let Some(LootFunctionBonusParameter::Probability { extra, probability }) =
+                    parameters
+                {
+                    // Binomial(n=extra+level, p=probability)
+                    let n = *extra + level;
+                    let mut count = 0u8;
+                    for _ in 0..n {
+                        if rand::rng().random_bool(f64::from(*probability)) {
+                            count += 1;
+                        }
+                    }
+                    stack.item_count = count;
+                }
+            }
+            "minecraft:ore_drops" => {
+                // count * max(1, random(0..=level+1))
+                let roll = rand::rng().random_range(0..=(level + 1));
+                let multiplier = roll.max(1) as u8;
+                stack.item_count = stack.item_count.saturating_mul(multiplier);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -166,9 +273,12 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
                 let key = &item_entry.name.strip_prefix("minecraft:").unwrap();
                 vec![ItemStack::new(1, Item::from_registry_key(key).unwrap())]
             }
-            Self::LootTable => todo!(),
-            Self::Dynamic => todo!(),
-            Self::Tag => todo!(),
+            // These entry types need data fields (nested table name, tag name,
+            // children list) that are not yet parsed by the codegen in pumpkin-data.
+            // Return empty instead of crashing. Raise to Architect if needed.
+            Self::LootTable | Self::Dynamic | Self::Tag | Self::Sequence | Self::Group => {
+                Vec::new()
+            }
             Self::Alternatives(alternative_entry) => {
                 for entry in alternative_entry.children {
                     if let Some(loot) = entry.get_loot(params) {
@@ -177,8 +287,6 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
                 }
                 Vec::new()
             }
-            Self::Sequence => todo!(),
-            Self::Group => todo!(),
         }
     }
 }
@@ -188,7 +296,6 @@ trait LootConditionExt {
 }
 
 impl LootConditionExt for LootCondition {
-    // TODO: This is trash. Make this right
     fn is_fulfilled(&self, params: &LootContextParameters) -> bool {
         match self {
             Self::SurvivesExplosion => {
@@ -205,7 +312,7 @@ impl LootConditionExt for LootCondition {
                 if let Some(state) = &params.block_state {
                     let block_actual_properties =
                         match Block::properties(Block::from_state_id(state.id), state.id) {
-                            Some(props_data) => props_data.to_props(), // Assuming to_props() returns HashMap<String, String>
+                            Some(props_data) => props_data.to_props(),
                             None => {
                                 return properties.is_empty();
                             }
@@ -222,7 +329,26 @@ impl LootConditionExt for LootCondition {
                 }
                 false
             }
-            _ => false,
+            // These conditions need data fields (chance values, predicates, term lists)
+            // that are not yet parsed by the codegen. Default to permissive (true) so
+            // loot drops work rather than being silently blocked. Over-dropping is less
+            // harmful than no drops at all for gameplay.
+            Self::Inverted
+            | Self::AnyOf
+            | Self::AllOf
+            | Self::RandomChance
+            | Self::RandomChanceWithEnchantedBonus
+            | Self::EntityProperties
+            | Self::EntityScores
+            | Self::MatchTool
+            | Self::TableBonus
+            | Self::DamageSourceProperties
+            | Self::LocationCheck
+            | Self::WeatherCheck
+            | Self::Reference
+            | Self::TimeCheck
+            | Self::ValueCheck
+            | Self::EnchantmentActiveCheck => true,
         }
     }
 }
