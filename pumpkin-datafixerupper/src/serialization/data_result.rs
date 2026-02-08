@@ -1,5 +1,25 @@
 use crate::serialization::lifecycle::Lifecycle;
 
+/// Collects the partial value and message from a `DataResult` if it is an error.
+/// Returns an [`Option`] of the provided `DataResult`.
+/// - The partial value is stored into `$partial_name`.
+/// - If a message is found, it is pushed to `$messages_vec`.
+macro_rules! collect_partial_and_message {
+    ($partial_name:ident, $result:ident, $messages_vec:ident) => {
+        let $partial_name = match $result {
+            DataResult::Success { result, .. } => Some(result),
+            DataResult::Error {
+                message,
+                partial_result,
+                ..
+            } => {
+                $messages_vec.push(message);
+                partial_result
+            }
+        };
+    };
+}
+
 // TODO: maybe use pub(crate) for certain functions? (certain functions here are not used outside the library)
 // TODO: when codecs are implemented, add doc examples
 
@@ -73,8 +93,8 @@ impl<R> DataResult<R> {
     /// Returns an *errored* `DataResult` with no result and a given lifecycle.
     #[inline]
     #[must_use]
-    pub const fn error_with_lifecycle(message: String, lifecycle: Lifecycle) -> Self {
-        Self::Error {
+    pub const fn error_with_lifecycle<T>(message: String, lifecycle: Lifecycle) -> DataResult<T> {
+        DataResult::Error {
             partial_result: None,
             lifecycle,
             message,
@@ -193,6 +213,8 @@ impl<R> DataResult<R> {
     /// - Otherwise, if there is an error with no result, this propagates this error `DataResult`.
     ///
     /// In other words, `f` will process the complete or partial result of this `DataResult` (if any), appending errors if necessary.
+    ///
+    /// The name of this function is equivalent to `and_then`.
     #[must_use]
     pub fn flat_map<T>(self, f: impl FnOnce(R) -> DataResult<T>) -> DataResult<T> {
         match self {
@@ -212,20 +234,18 @@ impl<R> DataResult<R> {
                     let second_result = f(result);
                     let new_lifecycle = second_result.lifecycle().add(lifecycle);
                     match second_result {
-                        DataResult::Success { result, .. } => DataResult::Error {
-                            partial_result: Some(result),
-                            lifecycle: new_lifecycle,
-                            message,
-                        },
+                        DataResult::Success { result, .. } => {
+                            DataResult::error_partial_with_lifecycle(message, result, new_lifecycle)
+                        }
                         DataResult::Error {
                             partial_result,
                             message: second_message,
                             ..
-                        } => DataResult::Error {
+                        } => DataResult::error_any_with_lifecycle(
+                            Self::append_messages(&message, &second_message),
                             partial_result,
-                            lifecycle: new_lifecycle,
-                            message: Self::append_messages(&message, &second_message),
-                        },
+                            new_lifecycle,
+                        ),
                     }
                 } else {
                     // Return this same Error.
@@ -241,18 +261,90 @@ impl<R> DataResult<R> {
 
     /// Applies a function wrapped in a `DataResult` to the value wrapped in this `DataResult`.
     #[must_use]
-    pub fn apply<R2>(self, function_result: DataResult<impl FnOnce(R) -> R2>) -> DataResult<R2> {
-        function_result.flat_map(|func| self.map(func))
+    pub fn apply<T>(self, function_result: DataResult<impl FnOnce(R) -> T>) -> DataResult<T> {
+        let lifecycle = self.lifecycle().add(function_result.lifecycle());
+        match (self, function_result) {
+            (Self::Success { result, .. }, DataResult::Success { result: f, .. }) => {
+                DataResult::success_with_lifecycle(f(result), lifecycle)
+            }
+            (
+                Self::Success { result, .. },
+                DataResult::Error {
+                    partial_result,
+                    message: func_message,
+                    ..
+                },
+            ) => DataResult::error_any_with_lifecycle(
+                func_message,
+                partial_result.map(|f| f(result)),
+                lifecycle,
+            ),
+            (
+                Self::Error {
+                    partial_result,
+                    message,
+                    ..
+                },
+                DataResult::Success { result: f, .. },
+            ) => DataResult::error_any_with_lifecycle(message, partial_result.map(f), lifecycle),
+            (
+                Self::Error {
+                    partial_result,
+                    message,
+                    ..
+                },
+                DataResult::Error {
+                    partial_result: partial_func_result,
+                    message: func_message,
+                    ..
+                },
+            ) => DataResult::error_any_with_lifecycle(
+                Self::append_messages(&message, &func_message),
+                partial_result.and_then(|r| partial_func_result.map(|f| f(r))),
+                lifecycle,
+            ),
+        }
     }
 
     /// Applies a function to each result of two `DataResult`s of different types.
     #[must_use]
-    pub fn apply_2<R2, T>(
+    pub fn apply_2<A, T>(
         self,
-        f: impl FnOnce(R, R2) -> T,
-        second_result: DataResult<R2>,
+        f: impl FnOnce(R, A) -> T,
+        second_result: DataResult<A>,
     ) -> DataResult<T> {
-        self.flat_map(|r1| second_result.map(|r2| f(r1, r2)))
+        // TODO: make an Applicative trait and move this to be implemented to Applicative in some way.
+        match (self, second_result) {
+            // Both results are successful, just apply f.
+            (Self::Success { result: r, .. }, DataResult::Success { result: a, .. }) => {
+                DataResult::success(f(r, a))
+            }
+
+            // Both results are errors, append their messages and apply f if both have a partial result.
+            (
+                Self::Error {
+                    partial_result: p1,
+                    message: m1,
+                    ..
+                },
+                DataResult::Error {
+                    partial_result: p2,
+                    message: m2,
+                    ..
+                },
+            ) => DataResult::error_any_with_lifecycle(
+                Self::append_messages(&m1, &m2),
+                match (p1, p2) {
+                    (Some(p1), Some(p2)) => Some(f(p1, p2)),
+                    _ => None,
+                },
+                Lifecycle::Experimental,
+            ),
+
+            // Exactly one of both results is an error, just return its message without any partial value.
+            (Self::Error { message: m1, .. }, _) => DataResult::error(m1),
+            (_, DataResult::Error { message: m2, .. }) => DataResult::error(m2),
+        }
     }
 
     /// Applies a function to each result of two `DataResult`s of different types, marking the resulting `DataResult` as [`Lifecycle::Stable`].
@@ -269,13 +361,47 @@ impl<R> DataResult<R> {
 
     /// Applies a function to each result of three `DataResult`s of different types.
     #[must_use]
-    pub fn apply_3<R2, R3, T>(
+    pub fn apply_3<A, B, T>(
         self,
-        f: impl FnOnce(R, R2, R3) -> T,
-        second_result: DataResult<R2>,
-        third_result: DataResult<R3>,
+        second_result: DataResult<A>,
+        third_result: DataResult<B>,
+        f: impl FnOnce(R, A, B) -> T,
     ) -> DataResult<T> {
-        self.flat_map(|r1| second_result.flat_map(|r2| third_result.map(|r3| f(r1, r2, r3))))
+        let r: DataResult<R> = self;
+        let a = second_result;
+        let b = third_result;
+
+        let has_error = r.is_error() || a.is_error() || b.is_error();
+
+        if !has_error {
+            // All 3 results are successful.
+            let DataResult::Success { result: r, .. } = r else {
+                unreachable!()
+            };
+            let DataResult::Success { result: a, .. } = a else {
+                unreachable!()
+            };
+            let DataResult::Success { result: b, .. } = b else {
+                unreachable!()
+            };
+            return DataResult::success(f(r, a, b));
+        }
+
+        let mut messages: Vec<String> = vec![];
+
+        // Collect any found errors.
+        collect_partial_and_message!(r_partial, r, messages);
+        collect_partial_and_message!(a_partial, a, messages);
+        collect_partial_and_message!(b_partial, b, messages);
+
+        DataResult::error_any_with_lifecycle(
+            messages.join("; "),
+            match (r_partial, a_partial, b_partial) {
+                (Some(r), Some(a), Some(b)) => Some(f(r, a, b)),
+                _ => None,
+            },
+            Lifecycle::Experimental,
+        )
     }
 
     /// Applies a function to `DataResult` errors, leaving successes untouched.
@@ -321,6 +447,27 @@ impl<R> DataResult<R> {
             Self::Error {
                 message, lifecycle, ..
             } => Self::error_partial_with_lifecycle(message, partial_value, lifecycle),
+        }
+    }
+
+    /// Returns a `DataResult` with a new result/partial result, depending on the type of `DataResult` this is.
+    /// - For a complete result, this returns another `DataResult` whose complete result is `value`.
+    /// - For a partial result, this returns another `DataResult` whose partial result is `value`.
+    /// - For no result, this returns itself.
+    #[must_use]
+    pub fn with_complete_or_partial<T>(self, value: T) -> DataResult<T> {
+        match self {
+            Self::Success { lifecycle, .. } => DataResult::success_with_lifecycle(value, lifecycle),
+            Self::Error {
+                message,
+                lifecycle,
+                partial_result: Some(_),
+            } => DataResult::error_partial_with_lifecycle(message, value, lifecycle),
+            Self::Error {
+                message,
+                lifecycle,
+                partial_result: None,
+            } => Self::error_with_lifecycle(message, lifecycle),
         }
     }
 

@@ -1,50 +1,44 @@
-use std::marker::PhantomData;
-
 use crate::serialization::{
-    data_result::DataResult, decoder::Decoder, dynamic_ops::DynamicOps, encoder::Encoder,
+    coders::{Decoder, Encoder},
+    data_result::DataResult,
+    dynamic_ops::DynamicOps,
 };
 
-/// A trait describing the way to **encode and decode** something of a type `A` into something else  (`A -> ?` and `?` -> `A`).
-pub trait Codec<A, Kind>: Encoder<A> + Decoder<A> {}
+/// A trait describing the way to **encode from and decode into** something of a type `Value`  (`Value -> ?` and `?` -> `Value`).
+pub trait Codec: Encoder + Decoder {}
 
 // Any struct implementing Encoder<A> and Decoder<A> will also implement Codec<A>.
-impl<A, T, Kind> Codec<A, Kind> for T
-where
-    T: Encoder<A> + Decoder<A> + 'static,
-    A: 'static,
-{
-}
+impl<T> Codec for T where T: Encoder + Decoder {}
 
-fn new<A: 'static, Kind, E, D>(encoder: E, decoder: D) -> impl Codec<A, Kind>
+/*
+
+/// Creates a new `Codec` with a provided [`Encoder`] and [`Decoder`].
+fn new<A: 'static, E, D>(encoder: E, decoder: D) -> impl Codec<Value = A>
 where
-    E: Encoder<A>,
-    D: Decoder<A>,
+    E: Encoder<Value = A>,
+    D: Decoder<Value = A>,
 {
-    BaseCodec {
-        encoder,
-        decoder,
-        phantom: PhantomData,
-    }
+    BaseCodec { encoder, decoder }
 }
 
 /// A base codec type, which accepts an [`Encoder`] and [`Decoder`] of the same type.
 /// This is used by more complex codec types.
 #[derive(Debug)]
-struct BaseCodec<A, E, D> {
+struct BaseCodec<E, D> {
     encoder: E,
     decoder: D,
-    phantom: PhantomData<A>,
 }
 
-impl<A, E, D> Encoder<A> for BaseCodec<A, E, D>
+impl<E, D> Encoder for BaseCodec<E, D>
 where
-    A: 'static,
-    E: Encoder<A>,
-    D: Decoder<A>,
+    E: Encoder,
+    D: Decoder,
 {
+    type Value = E::Value;
+
     fn encode<T: PartialEq>(
         &self,
-        input: &A,
+        input: &Self::Value,
         ops: &impl DynamicOps<Value = T>,
         prefix: T,
     ) -> DataResult<T> {
@@ -52,17 +46,20 @@ where
     }
 }
 
-impl<A, E, D> Decoder<A> for BaseCodec<A, E, D>
+impl<E, D> Decoder for BaseCodec<E, D>
 where
-    A: 'static,
-    E: Encoder<A>,
-    D: Decoder<A>,
+    E: Encoder,
+    D: Decoder,
 {
+    type Value = E::Value;
+
     fn decode<T: PartialEq>(
         &self,
         input: T,
         ops: &impl DynamicOps<Value = T>,
-    ) -> DataResult<(A, T)> {
+    ) -> DataResult<(Self::Value, T)> {
         self.decoder.decode(input, ops)
     }
 }
+
+*/

@@ -1,11 +1,16 @@
 pub mod codec;
 pub mod codecs;
+pub mod coders;
 pub mod data_result;
-pub mod decoder;
 pub mod dynamic_ops;
-pub mod encoder;
 pub mod lifecycle;
+pub mod list_builder;
 pub mod map_like;
+
+/// A trait specifying a single type.
+pub trait HasValue {
+    type Value;
+}
 
 /// Represents a generic number in Java.
 pub enum Number {
