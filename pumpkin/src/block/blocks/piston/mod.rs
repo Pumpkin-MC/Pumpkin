@@ -218,24 +218,24 @@ mod tests {
 
     /// Vanilla push limit is 12 blocks.
     #[test]
-    fn test_max_movable_blocks() {
+    fn max_movable_blocks() {
         assert_eq!(MAX_MOVABLE_BLOCKS, 12);
     }
 
     // === is_block_sticky tests ===
 
     #[test]
-    fn test_slime_block_is_sticky() {
+    fn slime_block_is_sticky() {
         assert!(PistonHandler::is_block_sticky(&Block::SLIME_BLOCK));
     }
 
     #[test]
-    fn test_honey_block_is_sticky() {
+    fn honey_block_is_sticky() {
         assert!(PistonHandler::is_block_sticky(&Block::HONEY_BLOCK));
     }
 
     #[test]
-    fn test_regular_blocks_not_sticky() {
+    fn regular_blocks_not_sticky() {
         assert!(!PistonHandler::is_block_sticky(&Block::STONE));
         assert!(!PistonHandler::is_block_sticky(&Block::DIRT));
         assert!(!PistonHandler::is_block_sticky(&Block::REDSTONE_BLOCK));
@@ -248,7 +248,7 @@ mod tests {
     /// In vanilla, slime and honey blocks do NOT stick to each other.
     /// This is crucial for flying machines that use both block types.
     #[test]
-    fn test_slime_honey_dont_stick() {
+    fn slime_honey_dont_stick() {
         assert!(!PistonHandler::is_adjacent_block_stuck(
             &Block::HONEY_BLOCK,
             &Block::SLIME_BLOCK
@@ -261,7 +261,7 @@ mod tests {
 
     /// Same sticky type blocks DO stick together.
     #[test]
-    fn test_same_sticky_blocks_stick() {
+    fn same_sticky_blocks_stick() {
         assert!(PistonHandler::is_adjacent_block_stuck(
             &Block::SLIME_BLOCK,
             &Block::SLIME_BLOCK
@@ -274,7 +274,7 @@ mod tests {
 
     /// A sticky block sticks to a regular block.
     #[test]
-    fn test_sticky_sticks_to_regular() {
+    fn sticky_sticks_to_regular() {
         assert!(PistonHandler::is_adjacent_block_stuck(
             &Block::SLIME_BLOCK,
             &Block::STONE
@@ -295,7 +295,7 @@ mod tests {
 
     /// Two regular blocks don't stick.
     #[test]
-    fn test_regular_blocks_dont_stick() {
+    fn regular_blocks_dont_stick() {
         assert!(!PistonHandler::is_adjacent_block_stuck(
             &Block::STONE,
             &Block::DIRT
@@ -310,7 +310,7 @@ mod tests {
 
     /// Air is always movable (treated as empty space).
     #[test]
-    fn test_air_is_movable() {
+    fn air_is_movable() {
         assert!(PistonBlock::is_movable(
             &Block::AIR,
             Block::AIR.default_state,
@@ -323,7 +323,7 @@ mod tests {
     /// Obsidian, crying obsidian, respawn anchor, and reinforced deepslate are NEVER movable.
     /// These are hardcoded in vanilla — no exceptions.
     #[test]
-    fn test_immovable_hardcoded_blocks() {
+    fn immovable_hardcoded_blocks() {
         for block in [
             &Block::OBSIDIAN,
             &Block::CRYING_OBSIDIAN,
@@ -346,7 +346,7 @@ mod tests {
 
     /// Regular blocks (stone, dirt, etc.) should be movable.
     #[test]
-    fn test_regular_blocks_movable() {
+    fn regular_blocks_movable() {
         for block in [&Block::STONE, &Block::DIRT, &Block::SAND, &Block::GRAVEL] {
             assert!(
                 PistonBlock::is_movable(
@@ -364,7 +364,7 @@ mod tests {
 
     /// Redstone block is movable (important for piston-based redstone clocks).
     #[test]
-    fn test_redstone_block_movable() {
+    fn redstone_block_movable() {
         assert!(PistonBlock::is_movable(
             &Block::REDSTONE_BLOCK,
             Block::REDSTONE_BLOCK.default_state,
@@ -376,7 +376,7 @@ mod tests {
 
     /// Slime and honey blocks are movable (essential for flying machines).
     #[test]
-    fn test_sticky_blocks_movable() {
+    fn sticky_blocks_movable() {
         assert!(PistonBlock::is_movable(
             &Block::SLIME_BLOCK,
             Block::SLIME_BLOCK.default_state,

@@ -45,7 +45,7 @@ pub enum PacketAction {
     /// Suppress the packet entirely (doesn't exist in this version).
     Suppress,
     /// The packet needs version-specific translation before sending.
-    /// The caller should use the VersionAdapter to transform it.
+    /// The caller should use the `VersionAdapter` to transform it.
     Translate,
 }
 
@@ -56,7 +56,7 @@ pub enum PacketAction {
 /// based solely on whether the packet ID exists in the target version
 /// (i.e., `PacketId::to_id(version) != -1`).
 #[must_use]
-pub fn packet_action_for(packet_id_in_version: i32) -> PacketAction {
+pub const fn packet_action_for(packet_id_in_version: i32) -> PacketAction {
     if packet_id_in_version == -1 {
         PacketAction::Suppress
     } else {

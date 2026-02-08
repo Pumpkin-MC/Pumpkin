@@ -203,17 +203,17 @@ mod tests {
     use pumpkin_data::BlockDirection;
 
     #[test]
-    fn test_is_diode_repeater() {
+    fn is_diode_repeater() {
         assert!(is_diode(&Block::REPEATER));
     }
 
     #[test]
-    fn test_is_diode_comparator() {
+    fn is_diode_comparator() {
         assert!(is_diode(&Block::COMPARATOR));
     }
 
     #[test]
-    fn test_is_diode_non_diode_blocks() {
+    fn is_diode_non_diode_blocks() {
         assert!(!is_diode(&Block::REDSTONE_WIRE));
         assert!(!is_diode(&Block::REDSTONE_TORCH));
         assert!(!is_diode(&Block::REDSTONE_BLOCK));
@@ -228,7 +228,7 @@ mod tests {
     /// This differs from BlockDirection::all() which is Down, Up, North, South, West, East.
     /// Technical redstone builds depend on this specific order.
     #[test]
-    fn test_vanilla_update_order() {
+    fn vanilla_update_order() {
         let order = BlockDirection::update_order();
         assert_eq!(order[0], BlockDirection::West);
         assert_eq!(order[1], BlockDirection::East);
@@ -243,7 +243,7 @@ mod tests {
     /// - all() is used for power queries (order doesn't matter, max is taken)
     /// - update_order() is used for neighbor notifications (order matters)
     #[test]
-    fn test_all_vs_update_order_same_elements() {
+    fn all_vs_update_order_same_elements() {
         let mut all: Vec<BlockDirection> = BlockDirection::all().to_vec();
         let mut update: Vec<BlockDirection> = BlockDirection::update_order().to_vec();
         all.sort_by_key(|d| d.to_index());
@@ -256,7 +256,7 @@ mod tests {
     /// max(max_strong_power_from_neighbors, weak_power_from_self).
     /// This is the fundamental rule that makes signal pass through opaque blocks.
     #[test]
-    fn test_solid_block_power_propagation_rule() {
+    fn solid_block_power_propagation_rule() {
         // The rule encoded in get_redstone_power:
         // if state.is_solid_block() {
         //     max(get_max_strong_power(world, pos, dust_power), get_weak_power(...))
@@ -278,7 +278,7 @@ mod tests {
     /// The `get_weak_power` and `get_strong_power` functions return 0 for
     /// redstone wire when dust_power=false.
     #[test]
-    fn test_wire_excluded_from_non_dust_queries() {
+    fn wire_excluded_from_non_dust_queries() {
         // The guard in get_weak_power/get_strong_power:
         // if !dust_power && block == &Block::REDSTONE_WIRE { return 0; }
         // This prevents wire-through-block-to-wire infinite power loops.
@@ -298,7 +298,7 @@ mod tests {
     /// block_receives_redstone_power checks ALL 6 directions for any power source.
     /// Returns true if ANY neighbor emits power toward the block.
     #[test]
-    fn test_block_receives_power_checks_all_six() {
+    fn block_receives_power_checks_all_six() {
         // block_receives_redstone_power iterates BlockDirection::all() (6 directions)
         // and returns true on the first positive result.
         // Verify all 6 directions are checked:
@@ -316,7 +316,7 @@ mod tests {
     /// No other block is a diode. This is used by abstract_redstone_gate
     /// to determine locking behavior (repeaters lock when powered by diodes from the side).
     #[test]
-    fn test_diode_exhaustive_redstone_blocks() {
+    fn diode_exhaustive_redstone_blocks() {
         // Positive cases (diodes)
         assert!(is_diode(&Block::REPEATER));
         assert!(is_diode(&Block::COMPARATOR));

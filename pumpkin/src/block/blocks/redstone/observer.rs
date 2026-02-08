@@ -154,7 +154,7 @@ mod tests {
     /// When triggered: first tick powers on, schedules 2nd tick to power off.
     /// This creates a 2-tick pulse, matching vanilla behavior.
     #[test]
-    fn test_observer_uses_2_tick_delay() {
+    fn observer_uses_2_tick_delay() {
         // The schedule_tick function hardcodes 2 ticks and Normal priority.
         // This test documents that the vanilla 2-tick pulse is preserved.
         assert_eq!(2u8, 2u8); // Pulse duration in game ticks
@@ -162,7 +162,7 @@ mod tests {
 
     /// Observer powered property roundtrips through state ID correctly.
     #[test]
-    fn test_observer_powered_roundtrip() {
+    fn observer_powered_roundtrip() {
         let block = &Block::OBSERVER;
         for powered in [true, false] {
             let mut props = ObserverLikeProperties::default(block);
@@ -179,7 +179,7 @@ mod tests {
 
     /// Observer facing property roundtrips through state ID correctly for all 6 directions.
     #[test]
-    fn test_observer_facing_roundtrip() {
+    fn observer_facing_roundtrip() {
         let block = &Block::OBSERVER;
         let all_facings = [
             Facing::North,
@@ -205,7 +205,7 @@ mod tests {
     /// Observer outputs power level 15 when powered, 0 when not.
     /// Power is only emitted from the output face (opposite of observed face).
     #[test]
-    fn test_observer_power_levels() {
+    fn observer_power_levels() {
         // In vanilla, observer weak/strong power = 15 when powered AND facing matches direction
         // Otherwise 0. This is a design verification.
         let powered_level: u8 = 15;
@@ -218,7 +218,7 @@ mod tests {
     /// the observer's facing direction (output is from the back face).
     /// Tests all 36 combinations of facing × query direction.
     #[test]
-    fn test_emits_power_direction_specificity() {
+    fn emits_power_direction_specificity() {
         let all_facings = [
             Facing::North,
             Facing::East,
@@ -246,7 +246,7 @@ mod tests {
     /// Observer weak power output: returns 15 when powered AND the query direction
     /// matches the facing, 0 in all other cases. Tests the full truth table.
     #[test]
-    fn test_weak_power_truth_table() {
+    fn weak_power_truth_table() {
         let block = &Block::OBSERVER;
         let all_facings = [
             Facing::North,
@@ -284,7 +284,7 @@ mod tests {
     /// comes from the observed direction AND the observer is not already powered.
     /// This test verifies the boolean condition in get_state_for_neighbor_update.
     #[test]
-    fn test_detection_trigger_condition() {
+    fn detection_trigger_condition() {
         let block = &Block::OBSERVER;
         let all_facings = [
             Facing::North,
@@ -327,7 +327,7 @@ mod tests {
     /// In vanilla this is true: observer provides the same signal strength
     /// for both strong and weak power queries.
     #[test]
-    fn test_strong_equals_weak_power() {
+    fn strong_equals_weak_power() {
         // The implementation is: get_strong_redstone_power delegates to get_weak_redstone_power
         // This means the observer provides strong power through blocks, just like repeaters.
         // This is vanilla-correct: observers strongly power the block they output into.
@@ -359,7 +359,7 @@ mod tests {
 
     /// Observer full state space: facing × powered roundtrip for all 12 combinations.
     #[test]
-    fn test_observer_full_state_roundtrip() {
+    fn observer_full_state_roundtrip() {
         let block = &Block::OBSERVER;
         let all_facings = [
             Facing::North,
@@ -388,18 +388,17 @@ mod tests {
     /// - If not powered: set powered=true, schedule another tick (start of pulse)
     /// This creates a 2-tick pulse: tick 1 (powered=true) → tick 2 (powered=false).
     #[test]
-    fn test_pulse_state_machine() {
+    fn pulse_state_machine() {
         // Simulate the on_scheduled_tick logic without a world:
         // State 1: not powered → becomes powered, schedules 2nd tick
         let mut powered = false;
-        let scheduled_next_tick;
-        if powered {
+        let scheduled_next_tick = if powered {
             powered = false;
-            scheduled_next_tick = false;
+            false
         } else {
             powered = true;
-            scheduled_next_tick = true; // schedules another tick at delay 2
-        }
+            true // schedules another tick at delay 2
+        };
         assert!(powered, "First tick should power on");
         assert!(
             scheduled_next_tick,
@@ -407,14 +406,13 @@ mod tests {
         );
 
         // State 2: powered → becomes unpowered, no more ticks
-        let scheduled_next_tick;
-        if powered {
+        let scheduled_next_tick = if powered {
             powered = false;
-            scheduled_next_tick = false;
+            false
         } else {
             powered = true;
-            scheduled_next_tick = true;
-        }
+            true
+        };
         assert!(!powered, "Second tick should power off");
         assert!(
             !scheduled_next_tick,

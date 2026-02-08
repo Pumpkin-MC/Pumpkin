@@ -11,7 +11,7 @@ const MAX_PAYLOAD_SIZE: usize = 1_048_576;
 
 /// Serverbound plugin message (custom payload) sent during Play state.
 ///
-/// Used by mods, plugins, or proxy software (e.g. Velocity, BungeeCord)
+/// Used by mods, plugins, or proxy software (e.g. Velocity, `BungeeCord`)
 /// to send proprietary data over the standard Minecraft protocol.
 /// Common channels: `minecraft:brand`, `velocity:player_info`.
 // TODO: hook up handler in pumpkin/src/net/java/mod.rs
