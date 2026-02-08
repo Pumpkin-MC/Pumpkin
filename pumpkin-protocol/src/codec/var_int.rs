@@ -51,11 +51,15 @@ impl VarInt {
         Ok(())
     }
 
-    // TODO: Validate that the first byte will not overflow a i32
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
+            // On the 5th byte (i=4), only the lower 4 bits are valid (bits 28-31 of i32).
+            // Upper bits would overflow the i32 representation.
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0xF0 != 0 {
+                return Err(ReadingError::TooLarge("VarInt".to_string()));
+            }
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -76,6 +80,10 @@ impl VarInt {
                     ReadingError::Incomplete(err.to_string())
                 }
             })?;
+            // On the 5th byte (i=4), only the lower 4 bits are valid (bits 28-31 of i32).
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0xF0 != 0 {
+                return Err(ReadingError::TooLarge("VarInt".to_string()));
+            }
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -184,6 +192,10 @@ impl<'de> Deserialize<'de> for VarInt {
                 let mut val = 0;
                 for i in 0..VarInt::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
+                        // On the 5th byte (i=4), only the lower 4 bits are valid.
+                        if i == VarInt::MAX_SIZE.get() - 1 && byte & 0xF0 != 0 {
+                            return Err(serde::de::Error::custom("VarInt was too large"));
+                        }
                         val |= (i32::from(byte) & 0b0111_1111) << (i * 7);
                         if byte & 0b1000_0000 == 0 {
                             return Ok(VarInt(val));
@@ -225,5 +237,115 @@ impl PacketRead for VarInt {
             }
         }
         Err(Error::new(ErrorKind::InvalidData, ""))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn varint_encode_decode_zero() {
+        let mut buf = Vec::new();
+        VarInt(0).encode(&mut buf).unwrap();
+        assert_eq!(buf, vec![0x00]);
+        let decoded = VarInt::decode(&mut Cursor::new(&buf)).unwrap();
+        assert_eq!(decoded, VarInt(0));
+    }
+
+    #[test]
+    fn varint_encode_decode_positive() {
+        let mut buf = Vec::new();
+        VarInt(1).encode(&mut buf).unwrap();
+        assert_eq!(buf, vec![0x01]);
+        let decoded = VarInt::decode(&mut Cursor::new(&buf)).unwrap();
+        assert_eq!(decoded, VarInt(1));
+    }
+
+    #[test]
+    fn varint_encode_decode_large() {
+        let mut buf = Vec::new();
+        VarInt(300).encode(&mut buf).unwrap();
+        assert_eq!(buf, vec![0xAC, 0x02]);
+        let decoded = VarInt::decode(&mut Cursor::new(&buf)).unwrap();
+        assert_eq!(decoded, VarInt(300));
+    }
+
+    #[test]
+    fn varint_encode_decode_negative() {
+        let mut buf = Vec::new();
+        VarInt(-1).encode(&mut buf).unwrap();
+        assert_eq!(buf, vec![0xFF, 0xFF, 0xFF, 0xFF, 0x0F]);
+        let decoded = VarInt::decode(&mut Cursor::new(&buf)).unwrap();
+        assert_eq!(decoded, VarInt(-1));
+    }
+
+    #[test]
+    fn varint_encode_decode_max() {
+        let mut buf = Vec::new();
+        VarInt(i32::MAX).encode(&mut buf).unwrap();
+        let decoded = VarInt::decode(&mut Cursor::new(&buf)).unwrap();
+        assert_eq!(decoded, VarInt(i32::MAX));
+    }
+
+    #[test]
+    fn varint_encode_decode_min() {
+        let mut buf = Vec::new();
+        VarInt(i32::MIN).encode(&mut buf).unwrap();
+        let decoded = VarInt::decode(&mut Cursor::new(&buf)).unwrap();
+        assert_eq!(decoded, VarInt(i32::MIN));
+    }
+
+    #[test]
+    fn varint_overflow_rejected() {
+        // 5th byte with upper bits set (0x10 = bit 4 set, would be bit 32 of i32)
+        let buf = vec![0xFF, 0xFF, 0xFF, 0xFF, 0x1F];
+        let result = VarInt::decode(&mut Cursor::new(&buf));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn varint_too_many_bytes() {
+        // 6 continuation bytes — exceeds max size
+        let buf = vec![0x80, 0x80, 0x80, 0x80, 0x80, 0x00];
+        let result = VarInt::decode(&mut Cursor::new(&buf));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn varint_written_size() {
+        assert_eq!(VarInt(0).written_size(), 1);
+        assert_eq!(VarInt(1).written_size(), 1);
+        assert_eq!(VarInt(127).written_size(), 1);
+        assert_eq!(VarInt(128).written_size(), 2);
+        assert_eq!(VarInt(255).written_size(), 2);
+        assert_eq!(VarInt(i32::MAX).written_size(), 5);
+        assert_eq!(VarInt(-1).written_size(), 5);
+    }
+
+    #[test]
+    fn varint_roundtrip_all_sizes() {
+        let values = [
+            0,
+            1,
+            127,
+            128,
+            16383,
+            16384,
+            2097151,
+            2097152,
+            268435455,
+            268435456,
+            i32::MAX,
+            -1,
+            i32::MIN,
+        ];
+        for &val in &values {
+            let mut buf = Vec::new();
+            VarInt(val).encode(&mut buf).unwrap();
+            let decoded = VarInt::decode(&mut Cursor::new(&buf)).unwrap();
+            assert_eq!(decoded, VarInt(val), "Roundtrip failed for {val}");
+        }
     }
 }

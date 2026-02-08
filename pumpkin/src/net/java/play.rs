@@ -21,6 +21,8 @@ use crate::net::java::JavaClient;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
+use crate::plugin::block::block_can_build::BlockCanBuildEvent;
+use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -1499,7 +1501,7 @@ impl JavaClient {
 
     pub async fn handle_use_item_on(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         use_item_on: SUseItemOn,
         server: &Arc<Server>,
     ) -> Result<(), BlockPlacingError> {
@@ -1947,7 +1949,7 @@ impl JavaClient {
     #[expect(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         block: &'static Block,
         server: &Server,
         use_item_on: SUseItemOn,
@@ -2060,21 +2062,35 @@ impl JavaClient {
                 }
             };
 
-        if !server
+        let can_build = server
             .block_registry
             .can_place_at(
                 Some(server),
                 Some(&*world),
                 &*world,
-                Some(player),
+                Some(&**player),
                 block,
                 block.default_state,
                 &final_block_pos,
                 Some(final_face),
                 Some(&use_item_on),
             )
-            .await
-        {
+            .await;
+
+        // Fire BlockCanBuildEvent — plugins may override buildability
+        let (existing_block, _) = world.get_block_and_state(&final_block_pos).await;
+        let event = server
+            .plugin_manager
+            .fire::<BlockCanBuildEvent>(BlockCanBuildEvent {
+                block_to_build: block,
+                buildable: can_build,
+                player: player.clone(),
+                block: existing_block,
+                cancelled: false,
+            })
+            .await;
+
+        if event.cancelled || !event.buildable {
             return Ok(false);
         }
 
@@ -2101,6 +2117,22 @@ impl JavaClient {
                     return Ok(false);
                 }
             }
+        }
+
+        // Fire BlockPlaceEvent — plugins may cancel block placement
+        let event = server
+            .plugin_manager
+            .fire::<BlockPlaceEvent>(BlockPlaceEvent {
+                player: player.clone(),
+                block_placed: block,
+                block_placed_against: clicked_block,
+                can_build: true,
+                cancelled: false,
+            })
+            .await;
+
+        if event.cancelled {
+            return Ok(false);
         }
 
         let _replaced_id = world

@@ -1,12 +1,17 @@
 use pumpkin_data::packet::serverbound::CONFIG_SELECT_KNOWN_PACKS;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::VarInt;
+/// A single known pack entry received from the client.
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct KnownPackEntry {
+    pub namespace: String,
+    pub id: String,
+    pub version: String,
+}
 
-#[derive(serde::Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 #[java_packet(CONFIG_SELECT_KNOWN_PACKS)]
 pub struct SKnownPacks {
-    pub known_pack_count: VarInt,
-    // known_packs: &'a [KnownPack]
+    pub known_packs: Vec<KnownPackEntry>,
 }

@@ -105,9 +105,17 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                     }
                     PlayerAction::UpdateGameMode(gamemode) => p.write_var_int(gamemode)?,
                     PlayerAction::UpdateListed(listed) => p.write_bool(*listed)?,
-                    PlayerAction::UpdateLatency(_) => todo!(),
-                    PlayerAction::UpdateDisplayName(_) => todo!(),
-                    PlayerAction::UpdateListOrder => todo!(),
+                    PlayerAction::UpdateLatency(latency) => {
+                        p.write_var_int(latency)?;
+                    }
+                    PlayerAction::UpdateDisplayName(display_name) => {
+                        p.write_option(display_name, |p, name| {
+                            p.write_slice(&name.encode())
+                        })?;
+                    }
+                    PlayerAction::UpdateListOrder(priority) => {
+                        p.write_var_int(priority)?;
+                    }
                 }
             }
 

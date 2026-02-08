@@ -1,3 +1,5 @@
+use pumpkin_util::text::TextComponent;
+
 use crate::{Property, VarInt};
 
 pub enum PlayerAction<'a> {
@@ -8,9 +10,9 @@ pub enum PlayerAction<'a> {
     InitializeChat(Option<InitChat>),
     UpdateGameMode(VarInt),
     UpdateListed(bool),
-    UpdateLatency(u8),
-    UpdateDisplayName(u8),
-    UpdateListOrder,
+    UpdateLatency(VarInt),
+    UpdateDisplayName(Option<TextComponent>),
+    UpdateListOrder(VarInt),
 }
 
 pub struct InitChat {

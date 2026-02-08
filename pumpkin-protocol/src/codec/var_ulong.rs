@@ -52,17 +52,21 @@ impl VarULong {
         Ok(())
     }
 
-    // TODO: Validate that the first byte will not overflow a i64
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
+            // On the 10th byte (i=9), only the lowest bit is valid (bit 63 of u64).
+            // Upper bits would overflow the u64 representation.
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0xFE != 0 {
+                return Err(ReadingError::TooLarge("VarULong".to_string()));
+            }
             val |= (u64::from(byte) & 0b0111_1111) << (i * 7);
             if byte & 0b1000_0000 == 0 {
                 return Ok(Self(val));
             }
         }
-        Err(ReadingError::TooLarge("VarLong".to_string()))
+        Err(ReadingError::TooLarge("VarULong".to_string()))
     }
 }
 
@@ -141,6 +145,10 @@ impl<'de> Deserialize<'de> for VarULong {
                 let mut val = 0;
                 for i in 0..VarULong::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
+                        // On the 10th byte (i=9), only the lowest bit is valid.
+                        if i == VarULong::MAX_SIZE.get() - 1 && byte & 0xFE != 0 {
+                            return Err(de::Error::custom("VarULong was too large"));
+                        }
                         val |= (u64::from(byte) & 0b0111_1111) << (i * 7);
                         if byte & 0b1000_0000 == 0 {
                             return Ok(VarULong(val));
@@ -149,7 +157,7 @@ impl<'de> Deserialize<'de> for VarULong {
                         break;
                     }
                 }
-                Err(de::Error::custom("VarInt was too large"))
+                Err(de::Error::custom("VarULong was too large"))
             }
         }
 

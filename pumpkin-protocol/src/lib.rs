@@ -25,6 +25,7 @@ use crate::packet::{MultiVersionJavaPacket, Packet};
 
 pub mod bedrock;
 pub mod codec;
+pub mod dto;
 pub mod java;
 pub mod packet;
 #[cfg(feature = "query")]
@@ -465,6 +466,25 @@ impl PositionFlag {
     #[must_use]
     pub fn get_bitfield(flags: &[Self]) -> i32 {
         flags.iter().fold(0, |acc, flag| acc | flag.get_mask())
+    }
+
+    /// Decodes a bitfield into a list of `PositionFlag` variants.
+    #[must_use]
+    pub fn from_bitfield(bitfield: i32) -> Vec<Self> {
+        let all = [
+            Self::X,
+            Self::Y,
+            Self::Z,
+            Self::YRot,
+            Self::XRot,
+            Self::DeltaX,
+            Self::DeltaY,
+            Self::DeltaZ,
+            Self::RotateDelta,
+        ];
+        all.into_iter()
+            .filter(|flag| bitfield & flag.get_mask() != 0)
+            .collect()
     }
 }
 
