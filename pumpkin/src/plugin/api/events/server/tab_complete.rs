@@ -23,7 +23,7 @@ pub struct TabCompleteEvent {
 
 impl TabCompleteEvent {
     #[must_use]
-    pub fn new(player: Arc<Player>, buffer: String, completions: Vec<String>) -> Self {
+    pub const fn new(player: Arc<Player>, buffer: String, completions: Vec<String>) -> Self {
         Self {
             player,
             buffer,

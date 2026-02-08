@@ -14,7 +14,7 @@ pub struct RemoteServerCommandEvent {
 
 impl RemoteServerCommandEvent {
     #[must_use]
-    pub fn new(command: String) -> Self {
+    pub const fn new(command: String) -> Self {
         Self {
             command,
             cancelled: false,

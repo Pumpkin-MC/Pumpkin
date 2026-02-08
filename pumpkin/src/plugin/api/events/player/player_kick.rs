@@ -22,7 +22,7 @@ pub struct PlayerKickEvent {
 
 impl PlayerKickEvent {
     #[must_use]
-    pub fn new(player: Arc<Player>, reason: String) -> Self {
+    pub const fn new(player: Arc<Player>, reason: String) -> Self {
         Self {
             player,
             reason,

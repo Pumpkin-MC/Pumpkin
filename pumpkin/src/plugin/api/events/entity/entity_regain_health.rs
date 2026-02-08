@@ -26,7 +26,7 @@ pub struct EntityRegainHealthEvent {
 
 impl EntityRegainHealthEvent {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         entity_id: i32,
         entity_type: &'static EntityType,
         amount: f32,

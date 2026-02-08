@@ -21,7 +21,7 @@ pub struct CraftItemEvent {
 
 impl CraftItemEvent {
     #[must_use]
-    pub fn new(player: Arc<Player>, result: ItemStack) -> Self {
+    pub const fn new(player: Arc<Player>, result: ItemStack) -> Self {
         Self {
             player,
             result,

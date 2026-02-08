@@ -20,7 +20,7 @@ pub struct WeatherChangeEvent {
 
 impl WeatherChangeEvent {
     #[must_use]
-    pub fn new(world: Arc<World>, to_raining: bool) -> Self {
+    pub const fn new(world: Arc<World>, to_raining: bool) -> Self {
         Self {
             world,
             to_raining,

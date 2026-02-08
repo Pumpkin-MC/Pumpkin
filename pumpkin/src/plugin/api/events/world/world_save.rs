@@ -16,7 +16,7 @@ pub struct WorldSaveEvent {
 
 impl WorldSaveEvent {
     #[must_use]
-    pub fn new(world: Arc<World>) -> Self {
+    pub const fn new(world: Arc<World>) -> Self {
         Self { world }
     }
 }
