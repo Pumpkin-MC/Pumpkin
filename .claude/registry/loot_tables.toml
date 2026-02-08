@@ -72,8 +72,8 @@ notes = "Not used in any current loot table"
 
 # Entry-level fields stripped by codegen
 [entry_types._meta]
-weight_field_missing = true
-weight_occurrences = 604         # 596 chest + 8 entity
+weight_field_missing = false
+weight_occurrences = 604         # 596 chest + 8 entity — NOW PARSED
 quality_field_missing = true
 quality_occurrences = 3          # only fishing tables
 
@@ -97,22 +97,16 @@ occurrences = 252
 notes = "block + properties preserved, compared against block_state param"
 
 [conditions.MatchTool]
-status = "bare_true"
+status = "done"
 occurrences = 148
-missing_fields = ["predicate"]
-json_shapes = 3
-shape_1 = "enchantment check (153x): predicate.predicates.minecraft:enchantments[{enchantments, levels}]"
-shape_2 = "item match (43x): predicate.items = 'minecraft:shears'"
-shape_3 = "tag match (1x): predicate.items = '#minecraft:cluster_max_harvestables'"
-priority = "P0"
-notes = "Critical for silk touch / shears drops. 21% of all conditions."
+notes = "Predicate with items (direct + tag via is_tagged_with) and enchantments (level check). All 3 shapes handled."
+priority = "P0 — DONE"
 
 [conditions.AnyOf]
-status = "bare_true"
+status = "done"
 occurrences = 39
-missing_fields = ["terms"]
-json_format = '{ "condition": "minecraft:any_of", "terms": [...conditions...] }'
-priority = "P1"
+notes = "Recursive terms array, any() logic"
+priority = "P1 — DONE"
 
 [conditions.TableBonus]
 status = "bare_true"
@@ -134,12 +128,10 @@ occurrences = 24
 notes = "Uses killed_by_player param"
 
 [conditions.Inverted]
-status = "bare_true"
+status = "done"
 occurrences = 15
-missing_fields = ["term"]
-json_format = '{ "condition": "minecraft:inverted", "term": { ...inner condition... } }'
-priority = "P1"
-notes = "Wraps another condition, returns opposite. Critical for silk touch alternatives."
+notes = "Recursive term (Box in codegen, &'static in runtime), negation logic"
+priority = "P1 — DONE"
 
 [conditions.RandomChanceWithEnchantedBonus]
 status = "bare_true"
@@ -148,11 +140,10 @@ missing_fields = ["enchanted_chance", "unenchanted_chance", "enchantment"]
 priority = "P2"
 
 [conditions.RandomChance]
-status = "bare_true"
+status = "done"
 occurrences = 11
-missing_fields = ["chance"]
-json_format = '{ "condition": "minecraft:random_chance", "chance": 0.1 }'
-priority = "P1"
+notes = "chance: f32 field, random < chance"
+priority = "P1 — DONE"
 
 [conditions.DamageSourceProperties]
 status = "bare_true"
@@ -168,9 +159,9 @@ priority = "P3"
 
 # Unused conditions (0 occurrences in codegen data)
 [conditions.AllOf]
-status = "bare_true"
+status = "done"
 occurrences = 0
-missing_fields = ["terms"]
+notes = "Recursive terms array, all() logic"
 
 [conditions.EntityScores]
 status = "bare_true"
@@ -221,12 +212,10 @@ occurrences = 94
 notes = "source + include fields preserved, but no component system to actually copy"
 
 [functions.EnchantedCountIncrease]
-status = "bare"
+status = "done"
 occurrences = 80
-missing_fields = ["enchantment", "count", "limit"]
-json_format = '{ "function": "minecraft:enchanted_count_increase", "enchantment": "minecraft:looting", "count": { "type": "minecraft:uniform", "min": 0.0, "max": 1.0 }, "limit": 1 }'
-priority = "P0"
-notes = "Always minecraft:looting. Adds count*level extra drops. 11% of all functions."
+notes = "enchantment + count (NumberProvider) + limit parsed. Execute: stack += round(count * level), cap at limit."
+priority = "P0 — DONE"
 
 [functions.ApplyBonus]
 status = "done"
@@ -312,17 +301,18 @@ priority = "P3"
 # =============================================================================
 
 [priority_order]
-# Codegen fixes — add missing fields to existing enum variants
-P0_codegen = [
-    "MatchTool predicate (148 conditions, 21%)",
-    "EnchantedCountIncrease enchantment+count+limit (80 functions, 11%)",
-    "Entry weight field (604 entries)",
-    "RandomChance chance field (11 conditions)",
+# P0 — ALL DONE (session 008)
+P0_done = [
+    "MatchTool predicate (148 conditions) — DONE",
+    "EnchantedCountIncrease enchantment+count+limit (80 functions) — DONE",
+    "Entry weight field (604 entries) — DONE",
+    "RandomChance chance field (11 conditions) — DONE",
+    "Inverted term field (15 conditions) — DONE",
+    "AnyOf terms field (39 conditions) — DONE",
+    "AllOf terms field (0 conditions) — DONE",
 ]
 
-P1_codegen = [
-    "Inverted term field (15 conditions)",
-    "AnyOf terms field (39 conditions)",
+P1_next = [
     "TableBonus enchantment+chances (29 conditions)",
     "LootTable value field (18 entries)",
 ]
