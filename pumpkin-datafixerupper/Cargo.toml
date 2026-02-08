@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true

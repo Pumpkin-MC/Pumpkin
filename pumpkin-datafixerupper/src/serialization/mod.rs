@@ -1,8 +1,12 @@
+use core::fmt;
+use std::fmt::{Display, Formatter};
+
 pub mod codec;
 pub mod codecs;
 pub mod coders;
 pub mod data_result;
 pub mod dynamic_ops;
+pub mod json_ops;
 pub mod lifecycle;
 pub mod list_builder;
 pub mod map_like;
@@ -85,5 +89,63 @@ impl From<Number> for f64 {
             Number::Float(f) => f as Self,
             Number::Double(d) => d,
         }
+    }
+}
+
+impl Display for Number {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Byte(v) => write!(f, "{v}"),
+            Self::Short(v) => write!(f, "{v}"),
+            Self::Int(v) => write!(f, "{v}"),
+            Self::Long(v) => write!(f, "{v}"),
+            Self::Float(v) => write!(f, "{v}"),
+            Self::Double(v) => write!(f, "{v}"),
+        }
+    }
+}
+
+impl From<Number> for serde_json::Value {
+    fn from(num: Number) -> Self {
+        match num {
+            Number::Byte(n) => n.into(),
+            Number::Short(n) => n.into(),
+            Number::Int(n) => n.into(),
+            Number::Long(n) => n.into(),
+            // Serde JSON doesn't support infinity/NAN, so make those null.
+            Number::Float(n) => n.into(),
+            Number::Double(n) => n.into(),
+        }
+    }
+}
+
+/// An error struct returned for an invalid conversion to [`Number`] from a [`serde_json::Value`].
+pub struct FromJsonValueError;
+
+impl TryFrom<&serde_json::Value> for Number {
+    type Error = FromJsonValueError;
+
+    fn try_from(num: &serde_json::Value) -> Result<Self, Self::Error> {
+        num.clone().try_into()
+    }
+}
+
+impl TryFrom<serde_json::Value> for Number {
+    type Error = FromJsonValueError;
+
+    fn try_from(num: serde_json::Value) -> Result<Self, Self::Error> {
+        match num {
+            serde_json::Value::Number(n) => n.try_into(),
+            _ => Err(FromJsonValueError),
+        }
+    }
+}
+
+impl TryFrom<serde_json::Number> for Number {
+    type Error = FromJsonValueError;
+
+    fn try_from(num: serde_json::Number) -> Result<Self, Self::Error> {
+        num.as_f64()
+            .map_or(Err(FromJsonValueError), |f| Ok(Self::Double(f)))
     }
 }
