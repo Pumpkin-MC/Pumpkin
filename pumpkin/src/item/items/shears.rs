@@ -42,10 +42,10 @@ impl ItemBehaviour for ShearsItem {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
-            let mut changed = false;
 
             // Pumpkin → Carved Pumpkin + drop pumpkin seeds
-            if block == &Block::PUMPKIN {
+            let carved = block == &Block::PUMPKIN;
+            if carved {
                 // Carved pumpkin faces toward the player (use the clicked face)
                 let facing = match face {
                     BlockDirection::North => HorizontalFacing::North,
@@ -104,11 +104,10 @@ impl ItemBehaviour for ShearsItem {
                         seed,
                     )
                     .await;
-                changed = true;
             }
 
             // Beehive / Bee Nest with honey_level 5 → harvest 3 honeycombs
-            if (block == &Block::BEEHIVE || block == &Block::BEE_NEST)
+            let harvested = if (block == &Block::BEEHIVE || block == &Block::BEE_NEST)
                 && BeeNestLikeProperties::handles_block_id(block.id)
             {
                 let state_id = world.get_block_state(&location).await.id;
@@ -132,11 +131,15 @@ impl ItemBehaviour for ShearsItem {
                     );
                     world.spawn_entity(item_entity).await;
 
-                    changed = true;
+                    true
+                } else {
+                    false
                 }
-            }
+            } else {
+                false
+            };
 
-            if changed && player.gamemode.load() != GameMode::Creative {
+            if (carved || harvested) && player.gamemode.load() != GameMode::Creative {
                 item.damage_item_with_context(1, false);
             }
         })
