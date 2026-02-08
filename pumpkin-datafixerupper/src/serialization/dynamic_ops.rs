@@ -1,6 +1,11 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::serialization::{Number, data_result::DataResult, map_like::MapLike};
+use crate::serialization::{
+    Number,
+    data_result::DataResult,
+    list_builder::{ListBuilder, new_list_builder_impl},
+    map_like::MapLike,
+};
 
 /// Generates default implementations for numeric creators.
 macro_rules! create_numbers_impl {
@@ -66,7 +71,7 @@ pub trait DynamicOps {
     }
 
     /// Returns how a string is represented by this `DynamicOps`.
-    fn create_string(&self, data: &String) -> Self::Value;
+    fn create_string(&self, data: &str) -> Self::Value;
 
     /// Returns how a list is represented by this `DynamicOps`.
     fn create_list<I>(&self, values: I) -> Self::Value
@@ -360,5 +365,13 @@ where {
                 .flatten()
                 .map(|(k, v)| (self.convert_to(out_ops, k), self.convert_to(out_ops, v))),
         )
+    }
+
+    /// Returns a [`ListBuilder`] for this `DynamicOps`.
+    fn list_builder(&'static self) -> impl ListBuilder<Value = Self::Value>
+    where
+        Self: Sized,
+    {
+        new_list_builder_impl(self)
     }
 }
