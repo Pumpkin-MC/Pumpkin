@@ -300,6 +300,7 @@ impl JavaClient {
                 let entity = &player.living_entity.entity;
                 let last_pos = entity.pos.load();
                 player.living_entity.entity.set_pos(pos);
+                player.update_player_pose().await;
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed) && packet.collision & FLAG_ON_GROUND == 0 && height_difference > 0.0 {
@@ -413,6 +414,7 @@ impl JavaClient {
                 let entity = &player.living_entity.entity;
                 let last_pos = entity.pos.load();
                 player.living_entity.entity.set_pos(pos);
+                player.update_player_pose().await;
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed)
@@ -777,6 +779,7 @@ impl JavaClient {
                     let fall_flying = entity.check_fall_flying();
                     if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
                         entity.set_fall_flying(fall_flying).await;
+                        player.update_player_pose().await;
                     }
                 } // TODO
             }
@@ -790,6 +793,7 @@ impl JavaClient {
         let sneak = input.input & SPlayerInput::SNEAK != 0;
         if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
             player.get_entity().set_sneaking(sneak).await;
+            player.update_player_pose().await;
         }
     }
 
@@ -1194,6 +1198,7 @@ impl JavaClient {
         let player_entity = &player.living_entity.entity;
         if player_entity.sneaking.load(Ordering::Relaxed) != sneaking {
             player_entity.set_sneaking(sneaking).await;
+            player.update_player_pose().await;
         }
         let Ok(action) = ActionType::try_from(interact.r#type.0) else {
             self.kick(TextComponent::text("Invalid action type")).await;
