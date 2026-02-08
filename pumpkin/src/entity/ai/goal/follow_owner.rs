@@ -9,7 +9,7 @@ use crate::entity::mob::Mob;
 /// its owner, it navigates toward them. If the distance exceeds the
 /// teleport threshold, the mob teleports directly to the owner.
 ///
-/// Owner state is stored in the goal struct (not on MobEntity) and
+/// Owner state is stored in the goal struct (not on `MobEntity`) and
 /// is activated externally via `set_owner()` when taming occurs.
 ///
 /// Used by: Wolf, Cat (when tamed).
@@ -36,12 +36,12 @@ impl FollowOwnerGoal {
     }
 
     /// Set the owner entity ID. Called externally when the mob is tamed.
-    pub fn set_owner(&mut self, entity_id: i32) {
+    pub const fn set_owner(&mut self, entity_id: i32) {
         self.owner_id = Some(entity_id);
     }
 
     /// Clear the owner. Called when the mob is untamed or owner leaves.
-    pub fn clear_owner(&mut self) {
+    pub const fn clear_owner(&mut self) {
         self.owner_id = None;
     }
 }
