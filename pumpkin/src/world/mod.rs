@@ -1690,15 +1690,18 @@ impl World {
                     existing_player.inventory.held_item().lock().await.clone(),
                 ));
 
-                for (slot, item_arc_mutex) in &existing_player
-                    .inventory
-                    .entity_equipment
-                    .lock()
-                    .await
-                    .equipment
-                {
+                let equipment_stacks = {
+                    let equipment = existing_player.inventory.entity_equipment.lock().await;
+                    equipment
+                        .equipment
+                        .iter()
+                        .map(|(slot, item_arc_mutex)| (slot.discriminant(), item_arc_mutex.clone()))
+                        .collect::<Vec<_>>()
+                };
+
+                for (slot, item_arc_mutex) in equipment_stacks {
                     let item_stack = item_arc_mutex.lock().await.clone();
-                    equipment_list.push((slot.discriminant(), item_stack));
+                    equipment_list.push((slot, item_stack));
                 }
 
                 let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
@@ -1804,9 +1807,18 @@ impl World {
             from.inventory.held_item().lock().await.clone(),
         ));
 
-        for (slot, item_arc_mutex) in &from.inventory.entity_equipment.lock().await.equipment {
+        let equipment_stacks = {
+            let equipment = from.inventory.entity_equipment.lock().await;
+            equipment
+                .equipment
+                .iter()
+                .map(|(slot, item_arc_mutex)| (slot.discriminant(), item_arc_mutex.clone()))
+                .collect::<Vec<_>>()
+        };
+
+        for (slot, item_arc_mutex) in equipment_stacks {
             let item_stack = item_arc_mutex.lock().await.clone();
-            equipment_list.push((slot.discriminant(), item_stack));
+            equipment_list.push((slot, item_stack));
         }
 
         let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
