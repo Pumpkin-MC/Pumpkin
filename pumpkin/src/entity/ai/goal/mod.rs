@@ -3,14 +3,17 @@ use std::{any::TypeId, ops::BitOr, pin::Pin, ptr};
 
 pub mod active_target;
 pub mod ambient_stand;
+pub mod breed;
 pub mod creeper_ignite;
 pub mod flee_entity;
+pub mod follow_parent;
 pub mod goal_selector;
 pub mod look_around;
 pub mod look_at_entity;
 pub mod melee_attack;
 pub mod move_to_target_pos;
 pub mod panic;
+pub mod ranged_attack;
 pub mod step_and_destroy_block;
 pub mod swim;
 pub mod tempt;
