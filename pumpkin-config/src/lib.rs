@@ -127,6 +127,20 @@ pub struct BasicConfiguration {
     pub white_list: bool,
     /// Whether to enforce the whitelist.
     pub enforce_whitelist: bool,
+    /// Whether to allow flight in Survival mode (vanilla: allow-flight)
+    pub allow_flight: bool,
+    /// Radius of spawn protection (0 = disabled, vanilla default: 16)
+    pub spawn_protection: u32,
+    /// Whether structures (villages, temples, etc.) are generated (vanilla: generate-structures)
+    pub generate_structures: bool,
+    /// Minutes before kicking idle players (0 = disabled, vanilla: player-idle-timeout)
+    pub player_idle_timeout: u32,
+    /// Whether console command output is broadcast to online operators (vanilla: broadcast-console-to-ops)
+    pub broadcast_console_to_ops: bool,
+    /// Maximum world border radius in blocks (vanilla: max-world-size, default: 29999984)
+    pub max_world_size: u32,
+    /// Permission level for function command execution (vanilla: function-permission-level, default: 2)
+    pub function_permission_level: PermissionLvl,
 }
 
 impl Default for BasicConfiguration {
@@ -158,6 +172,13 @@ impl Default for BasicConfiguration {
             allow_chat_reports: false,
             white_list: false,
             enforce_whitelist: false,
+            allow_flight: false,
+            spawn_protection: 16,
+            generate_structures: true,
+            player_idle_timeout: 0,
+            broadcast_console_to_ops: true,
+            max_world_size: 29_999_984,
+            function_permission_level: PermissionLvl::Two,
         }
     }
 }

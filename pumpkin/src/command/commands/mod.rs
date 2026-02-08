@@ -14,6 +14,7 @@ mod bossbar;
 mod clear;
 mod damage;
 mod data;
+mod debug;
 pub mod defaultgamemode;
 mod deop;
 mod difficulty;
@@ -34,11 +35,15 @@ mod op;
 mod pardon;
 mod pardonip;
 mod particle;
+mod perf;
 mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
 mod rotate;
+mod save_all;
+mod save_off;
+mod save_on;
 mod say;
 mod seed;
 mod setblock;
@@ -66,7 +71,12 @@ pub async fn default_dispatcher(
     let mut dispatcher = CommandDispatcher::default();
 
     register_permissions(registry).await;
+    register_commands(&mut dispatcher, basic_config);
 
+    dispatcher
+}
+
+fn register_commands(dispatcher: &mut CommandDispatcher, basic_config: &BasicConfiguration) {
     // Zero
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
     dispatcher.register(help::init_command_tree(), "minecraft:command.help");
@@ -152,10 +162,22 @@ pub async fn default_dispatcher(
         setidletimeout::init_command_tree(),
         "minecraft:command.setidletimeout",
     );
+    dispatcher.register(debug::init_command_tree(), "minecraft:command.debug");
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
-
-    dispatcher
+    dispatcher.register(perf::init_command_tree(), "minecraft:command.perf");
+    dispatcher.register(
+        save_all::init_command_tree(),
+        "minecraft:command.save-all",
+    );
+    dispatcher.register(
+        save_off::init_command_tree(),
+        "minecraft:command.save-off",
+    );
+    dispatcher.register(
+        save_on::init_command_tree(),
+        "minecraft:command.save-on",
+    );
 }
 
 async fn register_permissions(permission_registry: &RwLock<PermissionRegistry>) {
@@ -529,6 +551,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.debug",
+            "Starts or stops a debugging session",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
 }
 
 fn register_level_4_permissions(registry: &mut PermissionRegistry) {
@@ -537,6 +566,34 @@ fn register_level_4_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.stop",
             "Stops the server",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.save-all",
+            "Forces the server to save all data to disk",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.save-off",
+            "Disables automatic server saving",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.save-on",
+            "Enables automatic server saving",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.perf",
+            "Captures performance metrics",
             PermissionDefault::Op(PermissionLvl::Four),
         ))
         .unwrap();

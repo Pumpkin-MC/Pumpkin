@@ -10,6 +10,7 @@ use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile,
 use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
+use crate::server::tick_profiler::TickProfiler;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{command::dispatcher::CommandDispatcher, entity::player::Player, world::World};
@@ -50,6 +51,7 @@ use tokio_util::task::TaskTracker;
 mod connection_cache;
 mod key_store;
 pub mod seasonal_events;
+pub mod tick_profiler;
 pub mod tick_rate_manager;
 pub mod ticker;
 
@@ -103,6 +105,8 @@ pub struct Server {
     pub white_list: AtomicBool,
     /// Manages the server's tick rate, freezing, and sprinting
     pub tick_rate_manager: Arc<ServerTickRateManager>,
+    /// Per-tick performance profiler for diagnosing slow ticks
+    pub tick_profiler: Arc<TickProfiler>,
     /// Stores the duration of the last 100 ticks for performance analysis
     pub tick_times_nanos: Mutex<[i64; 100]>,
     /// Aggregated tick times for efficient rolling average calculation
@@ -113,6 +117,8 @@ pub struct Server {
     pub server_guid: u64,
     /// Player idle timeout in minutes (0 = disabled)
     pub player_idle_timeout: AtomicI32,
+    /// Whether automatic world/player saving is enabled (toggled by save-off/save-on)
+    pub autosave_enabled: AtomicBool,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
@@ -191,6 +197,7 @@ impl Server {
         let white_list = AtomicBool::new(basic_config.white_list);
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
+        let tick_profiler = Arc::new(TickProfiler::new());
 
         let mojang_keys_task = tokio::spawn({
             let auth_config = advanced_config.networking.authentication.clone();
@@ -234,12 +241,14 @@ impl Server {
             player_data_storage,
             white_list,
             tick_rate_manager,
+            tick_profiler,
             tick_times_nanos: Mutex::new([0; 100]),
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
+            autosave_enabled: AtomicBool::new(true),
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
@@ -402,6 +411,11 @@ impl Server {
             player.read_nbt(&mut nbt_data).await;
         }
 
+        // Enforce force_gamemode: override saved gamemode with the server default on every login
+        if self.basic_config.force_gamemode {
+            player.gamemode.store(gamemode);
+        }
+
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
 
@@ -460,6 +474,44 @@ impl Server {
             log::error!("Failed to save level.dat: {err}");
         }
         log::info!("Completed worlds");
+    }
+
+    /// Saves all player data, triggers chunk saves on all worlds, and writes level.dat.
+    /// This is the non-destructive save used by the /save-all command.
+    /// Unlike `shutdown()`, this does not cancel tasks or join threads.
+    pub async fn save_all(&self, flush: bool) {
+        log::info!("Saving all player data...");
+        if let Err(e) = self.player_data_storage.save_all_players(self).await {
+            log::error!("Error saving player data: {e}");
+        }
+
+        // Trigger chunk saves on all worlds via the should_save flag
+        for world in self.worlds.load().iter() {
+            world.level.should_save.store(true, Ordering::Relaxed);
+            world.level.level_channel.notify();
+        }
+
+        // If flush requested, wait for all pending chunk writes to complete
+        if flush {
+            for world in self.worlds.load().iter() {
+                world
+                    .level
+                    .chunk_saver
+                    .block_and_await_ongoing_tasks()
+                    .await;
+            }
+        }
+
+        // Save level.dat
+        let level_data = self.level_info.load();
+        if let Err(err) = self
+            .world_info_writer
+            .write_world_info(&level_data, &self.basic_config.get_world_path())
+        {
+            log::error!("Failed to save level.dat: {err}");
+        }
+
+        log::info!("Save complete.");
     }
 
     /// Broadcasts a packet to all players in all worlds.
@@ -699,17 +751,31 @@ impl Server {
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub async fn tick(self: &Arc<Self>) {
+        let tick_start = std::time::Instant::now();
+
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds().await;
             // Always run player and network ticking, even when game is frozen
         } else {
             self.tick_players_and_network().await;
         }
+
+        self.tick_profiler.record_total_tick(tick_start);
+
+        // Fire server tick event for plugins
+        let tick_count = self.tick_count.load(Ordering::Relaxed);
+        self.plugin_manager
+            .fire(crate::plugin::api::events::server::server_tick::ServerTickEvent::new(
+                tick_count as i64,
+            ))
+            .await;
     }
 
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
     pub async fn tick_players_and_network(&self) {
+        let phase_start = std::time::Instant::now();
+
         // First, flush pending block updates and synced block events to clients
         for world in self.worlds.load().iter() {
             world.flush_block_updates().await;
@@ -720,9 +786,13 @@ impl Server {
         for player in players_to_tick {
             player.tick(self).await;
         }
+
+        self.tick_profiler.record_player_tick(phase_start);
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
+        let phase_start = std::time::Instant::now();
+
         let mut set = JoinSet::new();
 
         for world in self.worlds.load().iter() {
@@ -736,10 +806,14 @@ impl Server {
 
         set.join_all().await;
 
-        // Global tasks
-        if let Err(e) = self.player_data_storage.tick(self).await {
+        // Global tasks (only autosave when enabled — /save-off disables this)
+        if self.autosave_enabled.load(Ordering::Relaxed)
+            && let Err(e) = self.player_data_storage.tick(self).await
+        {
             log::error!("Error ticking player data: {e}");
         }
+
+        self.tick_profiler.record_world_tick(phase_start);
     }
 
     /// Updates the tick time statistics with the duration of the last tick.

@@ -307,6 +307,21 @@ impl PumpkinServer {
         }
     }
 
+    /// Fires the `ServerStartedEvent` to notify plugins that the server is ready.
+    pub async fn fire_started_event(&self) {
+        let world_count = self.server.worlds.load().len();
+        let plugin_count = self.server.plugin_manager.loaded_plugins().await.len();
+        self.server
+            .plugin_manager
+            .fire(
+                plugin::server::server_started::ServerStartedEvent::new(
+                    world_count,
+                    plugin_count,
+                ),
+            )
+            .await;
+    }
+
     pub async fn unload_plugins(&self) {
         if let Err(err) = self.server.plugin_manager.unload_all_plugins().await {
             log::error!("Error unloading plugins: {err}");
@@ -330,6 +345,14 @@ impl PumpkinServer {
         }
 
         log::info!("Stopped accepting incoming connections");
+
+        // Notify plugins that the server is stopping
+        self.server
+            .plugin_manager
+            .fire(
+                plugin::server::server_stop::ServerStopEvent::new("Server shutting down".to_string()),
+            )
+            .await;
 
         if let Err(e) = self
             .server
@@ -530,6 +553,7 @@ fn setup_stdin_console(server: Arc<Server>) {
                         server.command_dispatcher.read().await
                             .handle_command(&command::CommandSender::Console, &server, command.as_str())
                             .await;
+                        broadcast_console_command_to_ops(&server, &command).await;
                     };
                 }}
             }
@@ -597,6 +621,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                         server.command_dispatcher.read().await
                             .handle_command(&command::CommandSender::Console, &server, &line)
                             .await;
+                        broadcast_console_command_to_ops(&server, &line).await;
                     }
                 }}
             } else {
@@ -605,6 +630,22 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
         }
         log::debug!("Stopped console commands task");
     });
+}
+
+/// When `broadcast_console_to_ops` is enabled, notify all online operators
+/// that a console command was executed.
+async fn broadcast_console_command_to_ops(server: &Server, command: &str) {
+    if !server.basic_config.broadcast_console_to_ops {
+        return;
+    }
+    let msg = TextComponent::text(format!("[Server: /{command}]"))
+        .color_named(pumpkin_util::text::color::NamedColor::Gray)
+        .italic();
+    for player in server.get_all_players() {
+        if player.permission_lvl.load() >= pumpkin_util::PermissionLvl::Two {
+            player.send_system_message(&msg).await;
+        }
+    }
 }
 
 fn scrub_address(ip: &str) -> String {
