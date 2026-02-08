@@ -1984,7 +1984,7 @@ impl World {
             // Unload watched chunks from current world
             player.unload_watched_chunks(self).await;
 
-            (new_world.as_ref(), position)
+            (new_world.clone(), position)
         } else if respawn_dimension != self.dimension {
             // Cross-dimension failed - fall back to current world's spawn
             log::warn!(
@@ -2000,10 +2000,13 @@ impl World {
                 (top + 1).into(),
                 f64::from(spawn_z) + 0.5,
             );
-            (self.as_ref(), fallback_pos)
+            (Arc::clone(self), fallback_pos)
         } else {
-            (self.as_ref(), position)
+            (Arc::clone(self), position)
         };
+
+        // Keep the entity's world reference consistent with chunk manager/world lists.
+        player.living_entity.entity.set_world(target_world.clone());
 
         // Send respawn packet with target dimension (using send_packet_now to ensure proper order)
         player

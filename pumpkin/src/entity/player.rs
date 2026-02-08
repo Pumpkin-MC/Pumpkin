@@ -87,7 +87,7 @@ use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
-use crate::world::World;
+use crate::world::{World, chunker};
 
 use super::breath::BreathManager;
 use super::combat::{self, AttackType, player_attack_sound};
@@ -269,7 +269,7 @@ impl ChunkManager {
 
     pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
         self.batches_sent_since_ack = BatchState::Count(0);
-        self.chunks_per_tick = chunks_per_tick.ceil() as usize;
+        self.chunks_per_tick = chunks_per_tick.ceil().max(1.0) as usize;
     }
 
     pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
@@ -1751,8 +1751,22 @@ impl Player {
 
                 self.send_permission_lvl_update().await;
 
+                // Update position before chunk loading so the right chunks are watched.
+                self.living_entity.entity.set_pos(position);
+                self.living_entity.entity.set_rotation(yaw, pitch);
+                self.living_entity.entity.last_pos.store(position);
+
+                // Send world info/chunks first, then teleport packet (mirrors respawn flow).
+                new_world.send_world_info(&player, position, yaw, pitch).await;
+                if let ClientPlatform::Java(java_client) = &self.client {
+                    let center_chunk = self.living_entity.entity.chunk_pos.load();
+                    let chunk = new_world.level.get_chunk(center_chunk).await;
+                    java_client.send_packet_now(&CChunkBatchStart).await;
+                    java_client.send_packet_now(&CChunkData(&chunk)).await;
+                    java_client.send_packet_now(&CChunkBatchEnd::new(1u16)).await;
+                }
+
                 player.clone().request_teleport(position, yaw, pitch).await;
-                player.living_entity.entity.last_pos.store(position);
 
                 self.send_abilities_update().await;
 
@@ -1763,8 +1777,6 @@ impl Player {
                 self.on_screen_handler_opened(self.player_screen_handler.clone()).await;
 
                 self.send_health().await;
-
-                new_world.send_world_info(&player, position, yaw, pitch).await;
             }
         }}
     }
@@ -2939,6 +2951,7 @@ impl EntityBase for Player {
                         let position = event.to;
                         let entity = self.get_entity();
                         self.request_teleport(position, yaw, pitch).await;
+                        chunker::update_position(&self).await;
                         entity
                             .world
                             .load()
