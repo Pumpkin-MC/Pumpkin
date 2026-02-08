@@ -1,9 +1,6 @@
 use std::io::Write;
 
-use crate::{
-    WritingError,
-    ser::NetworkWriteExt,
-};
+use crate::{WritingError, ser::NetworkWriteExt};
 use pumpkin_data::packet::clientbound::PLAY_SET_EQUIPMENT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::MinecraftVersion;

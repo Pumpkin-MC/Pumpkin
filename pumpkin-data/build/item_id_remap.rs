@@ -30,97 +30,97 @@ fn parse_mappings(mappings: &NbtCompound, path: &str, section: &str) -> ParsedMa
         .get_byte("id")
         .unwrap_or_else(|| panic!("Missing `{section}.id` in {path}"));
 
-    let forward = match strategy {
-        // Direct
-        0 => mappings
-            .get_int_array("val")
-            .unwrap_or_else(|| panic!("Missing `{section}.val` for direct mapping in {path}"))
-            .to_vec(),
-        // Shifts
-        1 => {
-            let shifts_at = mappings
-                .get_int_array("at")
-                .unwrap_or_else(|| panic!("Missing `{section}.at` for shift mapping in {path}"));
-            let shifts_to = mappings
-                .get_int_array("to")
-                .unwrap_or_else(|| panic!("Missing `{section}.to` for shift mapping in {path}"));
-            let size = mappings
-                .get_int("size")
-                .unwrap_or_else(|| panic!("Missing `{section}.size` for shift mapping in {path}"))
-                as usize;
+    let forward =
+        match strategy {
+            // Direct
+            0 => mappings
+                .get_int_array("val")
+                .unwrap_or_else(|| panic!("Missing `{section}.val` for direct mapping in {path}"))
+                .to_vec(),
+            // Shifts
+            1 => {
+                let shifts_at = mappings.get_int_array("at").unwrap_or_else(|| {
+                    panic!("Missing `{section}.at` for shift mapping in {path}")
+                });
+                let shifts_to = mappings.get_int_array("to").unwrap_or_else(|| {
+                    panic!("Missing `{section}.to` for shift mapping in {path}")
+                });
+                let size = mappings.get_int("size").unwrap_or_else(|| {
+                    panic!("Missing `{section}.size` for shift mapping in {path}")
+                }) as usize;
 
-            assert_eq!(
-                shifts_at.len(),
-                shifts_to.len(),
-                "Shift mapping length mismatch in {path}"
-            );
+                assert_eq!(
+                    shifts_at.len(),
+                    shifts_to.len(),
+                    "Shift mapping length mismatch in {path}"
+                );
 
-            let mut result = vec![-1; size];
+                let mut result = vec![-1; size];
 
-            if !shifts_at.is_empty() && shifts_at[0] != 0 {
-                for id in 0..shifts_at[0] {
-                    result[id as usize] = id;
-                }
-            }
-
-            for (index, from) in shifts_at.iter().enumerate() {
-                let to = if index + 1 == shifts_at.len() {
-                    size as i32
-                } else {
-                    shifts_at[index + 1]
-                };
-                let mut mapped_id = shifts_to[index];
-                for id in *from..to {
-                    result[id as usize] = mapped_id;
-                    mapped_id += 1;
-                }
-            }
-
-            result
-        }
-        // Changes
-        2 => {
-            let changes_at = mappings
-                .get_int_array("at")
-                .unwrap_or_else(|| panic!("Missing `{section}.at` for change mapping in {path}"));
-            let values = mappings.get_int_array("val").unwrap_or_else(|| {
-                panic!("Missing `{section}.val` for change mapping in {path}")
-            });
-            let size = mappings.get_int("size").unwrap_or_else(|| {
-                panic!("Missing `{section}.size` for change mapping in {path}")
-            }) as usize;
-            let fill_between = mappings.get("nofill").is_none();
-
-            assert_eq!(
-                changes_at.len(),
-                values.len(),
-                "Change mapping length mismatch in {path}"
-            );
-
-            let mut result = vec![-1; size];
-            let mut next_unhandled_id = 0;
-
-            for (index, changed_id) in changes_at.iter().enumerate() {
-                if fill_between {
-                    for id in next_unhandled_id..*changed_id {
+                if !shifts_at.is_empty() && shifts_at[0] != 0 {
+                    for id in 0..shifts_at[0] {
                         result[id as usize] = id;
                     }
-                    next_unhandled_id = changed_id + 1;
                 }
-                result[*changed_id as usize] = values[index];
-            }
 
-            result
-        }
-        // Identity
-        3 => {
-            let size = mappings.get_int("size").unwrap_or_else(|| {
-                panic!("Missing `{section}.size` for identity mapping in {path}")
-            }) as usize;
-            (0..size as i32).collect::<Vec<_>>()
-        }
-        _ => panic!("Unknown {section} mapping strategy {strategy} in {path}"),
-    };
+                for (index, from) in shifts_at.iter().enumerate() {
+                    let to = if index + 1 == shifts_at.len() {
+                        size as i32
+                    } else {
+                        shifts_at[index + 1]
+                    };
+                    let mut mapped_id = shifts_to[index];
+                    for id in *from..to {
+                        result[id as usize] = mapped_id;
+                        mapped_id += 1;
+                    }
+                }
+
+                result
+            }
+            // Changes
+            2 => {
+                let changes_at = mappings.get_int_array("at").unwrap_or_else(|| {
+                    panic!("Missing `{section}.at` for change mapping in {path}")
+                });
+                let values = mappings.get_int_array("val").unwrap_or_else(|| {
+                    panic!("Missing `{section}.val` for change mapping in {path}")
+                });
+                let size = mappings.get_int("size").unwrap_or_else(|| {
+                    panic!("Missing `{section}.size` for change mapping in {path}")
+                }) as usize;
+                let fill_between = mappings.get("nofill").is_none();
+
+                assert_eq!(
+                    changes_at.len(),
+                    values.len(),
+                    "Change mapping length mismatch in {path}"
+                );
+
+                let mut result = vec![-1; size];
+                let mut next_unhandled_id = 0;
+
+                for (index, changed_id) in changes_at.iter().enumerate() {
+                    if fill_between {
+                        for id in next_unhandled_id..*changed_id {
+                            result[id as usize] = id;
+                        }
+                        next_unhandled_id = changed_id + 1;
+                    }
+                    result[*changed_id as usize] = values[index];
+                }
+
+                result
+            }
+            // Identity
+            3 => {
+                let size = mappings.get_int("size").unwrap_or_else(|| {
+                    panic!("Missing `{section}.size` for identity mapping in {path}")
+                }) as usize;
+                (0..size as i32).collect::<Vec<_>>()
+            }
+            _ => panic!("Unknown {section} mapping strategy {strategy} in {path}"),
+        };
 
     ParsedMappings {
         mapped_size: mapped_size as usize,
@@ -164,9 +164,7 @@ fn forward_with_default_to_u16(forward: &[i32], name: &str) -> Vec<u16> {
             let mapped = usize::try_from(*mapped_id).ok().unwrap_or(old_id);
             u16::try_from(mapped).unwrap_or_else(|_| {
                 u16::try_from(old_id).unwrap_or_else(|_| {
-                    panic!(
-                        "{name}: mapped id {mapped} and fallback id {old_id} do not fit in u16"
-                    )
+                    panic!("{name}: mapped id {mapped} and fallback id {old_id} do not fit in u16")
                 })
             })
         })
@@ -184,10 +182,14 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt");
     println!("cargo:rerun-if-changed=../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt");
 
-    let mappings_7_to_9 =
-        parse_mapping_file("../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt", "items");
-    let mappings_9_to_11 =
-        parse_mapping_file("../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt", "items");
+    let mappings_7_to_9 = parse_mapping_file(
+        "../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt",
+        "items",
+    );
+    let mappings_9_to_11 = parse_mapping_file(
+        "../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt",
+        "items",
+    );
 
     let remap_9_to_7 = invert_with_default_to_u16(
         &mappings_7_to_9.forward,
