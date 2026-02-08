@@ -8,7 +8,7 @@ use crate::net::java::{JavaClient, PacketHandlerResult};
 use crate::net::{ClientPlatform, DisconnectReason};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
-use log::{Level, LevelFilter};
+use log::LevelFilter;
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_macros::send_cancellable;
@@ -29,6 +29,8 @@ use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 pub mod block;
 pub mod command;
@@ -46,36 +48,12 @@ pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter)>;
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
+#[expect(clippy::print_stderr)]
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
-    use simplelog::{ConfigBuilder, SharedLogger, SimpleLogger, WriteLogger};
+    use tracing_subscriber::EnvFilter;
+    use tracing_subscriber::fmt;
 
     let logger = advanced_config.logging.enabled.then(|| {
-        let mut config = ConfigBuilder::new();
-
-        if advanced_config.logging.timestamp {
-            config.set_time_format_custom(time::macros::format_description!(
-                "[year]-[month]-[day] [hour]:[minute]:[second]"
-            ));
-            config.set_time_level(LevelFilter::Error);
-            let _ = config.set_time_offset_to_local();
-        } else {
-            config.set_time_level(LevelFilter::Off);
-        }
-
-        if advanced_config.logging.color {
-            config.set_write_log_enable_colors(true);
-        } else {
-            for level in Level::iter() {
-                config.set_level_color(level, None);
-            }
-        }
-
-        if advanced_config.logging.threads {
-            config.set_thread_level(LevelFilter::Info);
-        } else {
-            config.set_thread_level(LevelFilter::Off);
-        }
-
         let level = std::env::var("RUST_LOG")
             .ok()
             .as_deref()
@@ -83,29 +61,29 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
-        let file_logger: Option<Box<dyn SharedLogger + 'static>> =
-            if advanced_config.logging.file.is_empty() {
-                None
-            } else {
-                Some(
-                    GzipRollingLogger::new(
-                        level,
-                        {
-                            let mut config = config.clone();
-                            for level in Level::iter() {
-                                config.set_level_color(level, None);
-                            }
-                            config.build()
-                        },
-                        advanced_config.logging.file.clone(),
-                    )
-                    .expect("Failed to initialize file logger.")
-                        as Box<dyn SharedLogger>,
-                )
+        let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            let level_str = match level {
+                LevelFilter::Off => "off",
+                LevelFilter::Error => "error",
+                LevelFilter::Warn => "warn",
+                LevelFilter::Info => "info",
+                LevelFilter::Debug => "debug",
+                LevelFilter::Trace => "trace",
             };
+            EnvFilter::new(level_str)
+        });
+
+        let file_logger: Option<GzipRollingLogger> = if advanced_config.logging.file.is_empty() {
+            None
+        } else {
+            Some(
+                GzipRollingLogger::new(level, advanced_config.logging.file.clone())
+                    .expect("Failed to initialize file logger."),
+            )
+        };
 
         let (logger, rl): (
-            Box<dyn SharedLogger + 'static>,
+            Box<dyn std::io::Write + Send + 'static>,
             Option<Editor<PumpkinCommandCompleter, FileHistory>>,
         ) = if advanced_config.commands.use_tty && stdin().is_terminal() {
             let rl_config = Config::builder()
@@ -118,22 +96,51 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             match Editor::with_config(rl_config) {
                 Ok(mut rl) => {
                     rl.set_helper(Some(helper));
-                    (
-                        WriteLogger::new(level, config.build(), std::io::stdout()),
-                        Some(rl),
-                    )
+                    (Box::new(std::io::stdout()), Some(rl))
                 }
                 Err(e) => {
-                    log::warn!(
+                    eprintln!(
                         "Failed to initialize console input ({e}); falling back to simple logger"
                     );
-                    (SimpleLogger::new(level, config.build()), None)
+                    (Box::new(std::io::stdout()), None)
                 }
             }
         } else {
-            (SimpleLogger::new(level, config.build()), None)
+            (Box::new(std::io::stdout()), None)
         };
-        (ReadlineLogWrapper::new(logger, file_logger, rl), level)
+
+        let fmt_layer = fmt::layer()
+            .with_writer(std::sync::Mutex::new(logger))
+            .with_ansi(advanced_config.logging.color)
+            .with_target(false)
+            .with_thread_names(advanced_config.logging.threads)
+            .with_thread_ids(advanced_config.logging.threads);
+
+        if advanced_config.logging.timestamp {
+            let fmt_layer = fmt_layer.with_timer(fmt::time::UtcTime::new(
+                time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
+            ));
+            let registry = tracing_subscriber::registry()
+                .with(env_filter)
+                .with(fmt_layer);
+            if let Some(file_logger) = file_logger {
+                registry.with(file_logger).init();
+            } else {
+                registry.init();
+            }
+        } else {
+            let fmt_layer = fmt_layer.without_time();
+            let registry = tracing_subscriber::registry()
+                .with(env_filter)
+                .with(fmt_layer);
+            if let Some(file_logger) = file_logger {
+                registry.with(file_logger).init();
+            } else {
+                registry.init();
+            }
+        }
+
+        (ReadlineLogWrapper::new(rl), level)
     });
 
     assert!(

@@ -9,17 +9,13 @@ use std::net::{Ipv4Addr, SocketAddr};
 pub struct RCONConfig {
     /// Whether RCON is enabled.
     pub enabled: bool,
-
     /// The network address and port where the RCON server will listen for connections.
     pub address: SocketAddr,
-
     /// The password required for RCON authentication.
     pub password: String,
-
     /// The maximum number of concurrent RCON connections allowed.
     /// A value of `0` indicates no limit.
     pub max_connections: u32,
-
     /// Logging configuration for RCON events.
     pub logging: RCONLogging,
 }

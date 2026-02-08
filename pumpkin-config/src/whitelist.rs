@@ -8,7 +8,6 @@ use uuid::Uuid;
 pub struct WhitelistEntry {
     /// The UUID of the whitelisted player.
     pub uuid: Uuid,
-
     /// The username of the whitelisted player.
     pub name: String,
 }

@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 pub struct QueryConfig {
     /// Whether the query protocol is enabled.
     pub enabled: bool,
-
     /// The address and port the query service binds to.
     pub address: SocketAddr,
 }

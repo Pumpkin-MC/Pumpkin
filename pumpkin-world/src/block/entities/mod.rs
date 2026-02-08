@@ -18,6 +18,7 @@ use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity;
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
+use crate::block::entities::jukebox::JukeboxBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::block::entities::smoker::SmokerBlockEntity;
@@ -39,6 +40,7 @@ pub mod ender_chest;
 pub mod furnace;
 pub mod furnace_like_block_entity;
 pub mod hopper;
+pub mod jukebox;
 pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
@@ -136,6 +138,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         EnderChestBlockEntity::ID => {
             Arc::new(block_entity_from_generic::<EnderChestBlockEntity>(nbt))
         }
+        JukeboxBlockEntity::ID => Arc::new(block_entity_from_generic::<JukeboxBlockEntity>(nbt)),
         SignBlockEntity::ID => Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt)),
         BedBlockEntity::ID => Arc::new(block_entity_from_generic::<BedBlockEntity>(nbt)),
         ComparatorBlockEntity::ID => {
