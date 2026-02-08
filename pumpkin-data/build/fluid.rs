@@ -31,7 +31,7 @@ impl PropertyCollectionData {
         self.fluid_names.push(fluid_name);
     }
 
-    pub fn from_mappings(variant_mappings: Vec<PropertyVariantMapping>) -> Self {
+    pub const fn from_mappings(variant_mappings: Vec<PropertyVariantMapping>) -> Self {
         Self {
             variant_mappings,
             fluid_names: Vec::new(),
@@ -330,15 +330,15 @@ pub struct Fluid {
     can_convert_to_source: bool,
 }
 
-fn default_flow_speed() -> u32 {
+const fn default_flow_speed() -> u32 {
     5 // Default to water's speed
 }
 
-fn default_flow_distance() -> u32 {
+const fn default_flow_distance() -> u32 {
     4 // Default to water's distance
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/fluids.json");
 
     let fluids: Vec<Fluid> =

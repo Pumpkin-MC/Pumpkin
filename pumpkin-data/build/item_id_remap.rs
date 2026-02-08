@@ -178,7 +178,7 @@ fn compose_with_default(first: &[u16], second: &[u16]) -> Vec<u16> {
         .collect()
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt");
     println!("cargo:rerun-if-changed=../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt");
 

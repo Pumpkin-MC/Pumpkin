@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::{collections::BTreeMap, fs};
 use syn::LitInt;
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/recipe_remainder.json");
 
     let remainder: BTreeMap<u16, u16> =

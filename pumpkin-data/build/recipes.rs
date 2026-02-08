@@ -46,7 +46,7 @@ pub struct CookingRecipeStruct {
 
 impl CookingRecipeStruct {
     /// Generate a recipe ID based on result, ingredient, and cooking type
-    /// Format: minecraft:{result}_from_{cooking_type}_{ingredient}
+    /// Format: minecraft:{result}_from_{`cooking_type`}_{ingredient}
     fn generate_recipe_id(&self, cooking_type: &str) -> String {
         let result_name = self
             .result
@@ -66,8 +66,7 @@ impl CookingRecipeStruct {
                 // Use first item for ID generation
                 items
                     .first()
-                    .map(|s| s.strip_prefix("minecraft:").unwrap_or(s))
-                    .unwrap_or("unknown")
+                    .map_or("unknown", |s| s.strip_prefix("minecraft:").unwrap_or(s))
                     .to_string()
             }
         };
@@ -367,7 +366,7 @@ impl ToTokens for RecipeCategoryTypes {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/recipes.json");
 
     let recipes_assets: Vec<RecipeTypes> =

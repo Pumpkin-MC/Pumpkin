@@ -108,7 +108,7 @@ pub fn bench_create_and_populate_noise(
         biome_coords::from_block(start_z),
     );
     let horizontal_biome_end = biome_coords::from_block(
-        horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
     );
     let surface_config = SurfaceHeightSamplerBuilderOptions::new(
         biome_pos.x,
@@ -154,7 +154,7 @@ pub fn bench_create_and_populate_biome(
         biome_coords::from_block(start_z),
     );
     let horizontal_biome_end = biome_coords::from_block(
-        horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
     );
     let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
         biome_pos.x,
@@ -198,7 +198,7 @@ pub fn bench_create_and_populate_noise_with_surface(
         biome_coords::from_block(start_z),
     );
     let horizontal_biome_end = biome_coords::from_block(
-        horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
     );
     let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
         biome_pos.x,

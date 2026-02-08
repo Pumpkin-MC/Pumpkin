@@ -98,12 +98,10 @@ impl ChunkData {
                 // When loading light data, missing data should default to 0 (no light)
                 let block_light = section
                     .block_light
-                    .map(LightContainer::Full)
-                    .unwrap_or(LightContainer::Empty(0));
+                    .map_or(LightContainer::Empty(0), LightContainer::Full);
                 let sky_light = section
                     .sky_light
-                    .map(LightContainer::Full)
-                    .unwrap_or(LightContainer::Empty(0));
+                    .map_or(LightContainer::Empty(0), LightContainer::Full);
 
                 // Convert NBT to Palettes
                 let block_palette = section

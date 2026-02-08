@@ -10,7 +10,7 @@ pub struct Packets {
     clientbound: BTreeMap<String, BTreeMap<String, i32>>,
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/packet/1_21_7_packets.json");
     println!("cargo:rerun-if-changed=../assets/packet/1_21_11_packets.json");
 

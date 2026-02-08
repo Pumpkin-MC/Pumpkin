@@ -24,7 +24,7 @@ pub struct RawChatType {
 //     parameters: Vec<String>,
 // }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/message_type.json");
 
     let json: BTreeMap<String, RawChatType> =

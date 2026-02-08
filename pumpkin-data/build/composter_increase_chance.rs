@@ -4,7 +4,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::LitInt;
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/composter_increase_chance.json");
 
     let composter_increase_chance: BTreeMap<u16, f32> = serde_json::from_str(
