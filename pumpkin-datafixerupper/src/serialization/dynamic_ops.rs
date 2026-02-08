@@ -96,22 +96,22 @@ pub trait DynamicOps {
 
     /// Gets an [`Iterator`] from a map represented by this `DynamicOps`.
     fn get_map_iter<'a>(
-        &'a self,
+        &self,
         input: &'a Self::Value,
-    ) -> DataResult<impl Iterator<Item = (&'a Self::Value, &'a Self::Value)>>;
+    ) -> DataResult<impl Iterator<Item = (Self::Value, &'a Self::Value)> + 'a>;
 
     /// Tries to get a [`MapLike`] for a map represented by this `DynamicOps`.
     fn get_map<'a>(
-        &'a self,
+        &self,
         input: &'a Self::Value,
-    ) -> DataResult<&'a impl MapLike<Value = Self::Value>>;
+    ) -> DataResult<impl MapLike<Value = Self::Value> + 'a>;
 
     /// Gets an [`Iterator`] from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getStream()` function in `DynamicOps`.
     fn get_iter<'a>(
         &self,
         input: &'a Self::Value,
-    ) -> DataResult<impl Iterator<Item = &'a Self::Value>>;
+    ) -> DataResult<impl Iterator<Item = &'a Self::Value> + 'a>;
 
     /// Gets a `Vec<i8>` from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getByteBuffer()` function in `DynamicOps`.
@@ -211,7 +211,7 @@ pub trait DynamicOps {
     /// This is only valid if `map` is an actual map or is empty. This returns a new map.
     fn merge_into_map(
         &self,
-        map: &Self::Value,
+        map: Self::Value,
         key: Self::Value,
         value: Self::Value,
     ) -> DataResult<Self::Value>
@@ -220,15 +220,15 @@ pub trait DynamicOps {
 
     /// Merges a map represented by this `DynamicOps` to another such map.
     /// This is only valid if `map` is an actual map or is empty. This returns a new map.
-    fn merge_entries_into_map<I>(&self, map: &Self::Value, entries: I) -> DataResult<Self::Value>
+    fn merge_entries_into_map<I>(&self, map: Self::Value, entries: I) -> DataResult<Self::Value>
     where
         I: IntoIterator<Item = (Self::Value, Self::Value)>,
         Self::Value: Clone,
     {
-        let mut result = DataResult::success(map.clone());
+        let mut result = DataResult::success(map);
 
         for (key, value) in entries {
-            result = result.flat_map(|list_value| self.merge_into_map(&list_value, key, value));
+            result = result.flat_map(|list_value| self.merge_into_map(list_value, key, value));
         }
 
         result
@@ -238,19 +238,18 @@ pub trait DynamicOps {
     /// This is only valid if `map` is an actual map or is empty. This returns a new map.
     fn merge_map_like_into_map<M>(
         &self,
-        map: &Self::Value,
-        other_map_like: &M,
+        map: Self::Value,
+        other_map_like: M,
     ) -> DataResult<Self::Value>
     where
         M: MapLike<Value = Self::Value>,
         Self::Value: Clone,
     {
-        let mut result = DataResult::success(map.clone());
+        let mut result = DataResult::success(map);
 
-        for (key, value) in other_map_like.entries() {
-            result = result.flat_map(|list_value| {
-                self.merge_into_map(&list_value, key.clone(), value.clone())
-            });
+        for (key, value) in other_map_like.iter() {
+            result =
+                result.flat_map(|list_value| self.merge_into_map(list_value, key, value.clone()));
         }
 
         result
@@ -275,29 +274,29 @@ pub trait DynamicOps {
     }
 
     /// Tries to remove something from a value represented by this `DynamicOps` using a key.
-    fn remove(&self, input: &mut Self::Value, key: &str);
+    /// This returns the new value if successful, otherwise, this returns itself.
+    fn remove(&self, input: Self::Value, key: &str) -> Self::Value;
 
     /// Whether maps should be compressed under this `DynamicOps`.
-    fn compress_maps(&self);
+    fn compress_maps(&self) -> bool;
 
     /// Tries to get a value from a value represented by this `DynamicOps` using a key.
     /// Only works for values that can be [`MapLike`]-viewed.
-    fn get_element<'a>(&'a self, input: &'a Self::Value, key: &str) -> DataResult<&'a Self::Value> {
-        self.get_element_generic(input, self.create_string(&key.to_string()))
+    fn get_element<'a>(&self, input: &'a Self::Value, key: &str) -> DataResult<&'a Self::Value> {
+        self.get_element_generic(input, &self.create_string(key))
     }
 
     /// Tries to get a value from a value represented by this `DynamicOps` using a key also represented by this `DynamicOps`.
-    /// Only works for values that can be [`MapLike`]-viewed.
     fn get_element_generic<'a>(
-        &'a self,
+        &self,
         input: &'a Self::Value,
-        key: Self::Value,
+        key: &Self::Value,
     ) -> DataResult<&'a Self::Value>
 where {
-        self.get_map(input).flat_map(|map| {
-            map.get(&key).map_or_else(
+        self.get_map_iter(input).flat_map(|mut iter| {
+            iter.find(|(k, _)| k == key).map_or_else(
                 || DataResult::error(format!("No element {key} in the map")),
-                DataResult::success,
+                |(_, v)| DataResult::success(v),
             )
         })
     }
@@ -309,7 +308,7 @@ where {
     where
         Self::Value: Clone,
     {
-        self.merge_into_map(input, self.create_string(&key.to_owned()), value)
+        self.merge_into_map(input.clone(), self.create_string(key), value)
             .into_result()
             .unwrap_or(input.clone())
     }
@@ -318,28 +317,28 @@ where {
     /// a key and a mapper function (`f`) whose return value will be the new key's value.
     /// - It this was successful, this returns the newly manipulated map.
     /// - Otherwise, this simply returns `input`.
-    fn update_element<F>(&self, input: Self::Value, key: &str, f: F) -> Self::Value
+    fn update_element<F>(&self, input: &Self::Value, key: &str, f: F) -> Self::Value
     where
         F: FnOnce(&Self::Value) -> Self::Value,
     {
-        self.get_element(&input, key)
-            .map(|v| self.set_element(&input, key, f(v)))
+        self.get_element(input, key)
+            .map(|v| self.set_element(input, key, f(v)))
             .into_result()
-            .unwrap_or(input)
+            .unwrap_or(input.clone())
     }
 
     /// Tries to update a value represented by this `DynamicOps` of a map also represented by this `DynamicOps`, with
     /// a key also represented by this `DynamicOps` and a mapper function (`f`) whose return value will be the new key's value.
     /// - It this was successful, this returns the newly manipulated map.
     /// - Otherwise, this simply returns `input`.
-    fn update_element_generic<F>(&self, input: Self::Value, key: Self::Value, f: F) -> Self::Value
+    fn update_element_generic<F>(&self, input: &Self::Value, key: &Self::Value, f: F) -> Self::Value
     where
         F: FnOnce(&Self::Value) -> Self::Value,
     {
-        self.get_element_generic(&input, key.clone())
-            .flat_map(|v| self.merge_into_map(&input, key, f(v)))
+        self.get_element_generic(input, key)
+            .flat_map(|v| self.merge_into_map(input.clone(), key.clone(), f(v)))
             .into_result()
-            .unwrap_or(input)
+            .unwrap_or(input.clone())
     }
 
     /// Converts a value represented by this `DynamicOps` to another value represented by another `DynamicOps`.
@@ -363,7 +362,7 @@ where {
                 .into_result()
                 .into_iter()
                 .flatten()
-                .map(|(k, v)| (self.convert_to(out_ops, k), self.convert_to(out_ops, v))),
+                .map(|(k, v)| (self.convert_to(out_ops, &k), self.convert_to(out_ops, v))),
         )
     }
 
@@ -374,4 +373,6 @@ where {
     {
         new_list_builder_impl(self)
     }
+
+    // TODO: add a map builder.
 }
