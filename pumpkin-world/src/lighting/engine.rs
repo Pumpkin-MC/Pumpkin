@@ -2,7 +2,6 @@ use crate::chunk_system::generation_cache::Cache;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::height_limit::HeightLimitView;
 use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
-use crate::lighting::fast_cache::FastLightCache;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::HeightMap;
@@ -19,9 +18,6 @@ type FastHashMap<K, V> = HashMap<K, V>;
 pub trait LightProvider {
     fn get_light(cache: &Cache, pos: BlockPos) -> u8;
     fn set_light(cache: &mut Cache, pos: BlockPos, level: u8);
-    // Cache methods
-    fn get_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos) -> u8;
-    fn set_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos, level: u8);
     fn propagate_level(current_level: u8, opacity: u8, dir: BlockDirection) -> u8;
 }
 
@@ -38,16 +34,6 @@ impl LightProvider for BlockLightProvider {
     #[inline(always)]
     fn propagate_level(current_level: u8, opacity: u8, _dir: BlockDirection) -> u8 {
         current_level.saturating_sub(opacity.max(1))
-    }
-
-    #[inline(always)]
-    fn get_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos) -> u8 {
-        fast_cache.get_block_light(pos)
-    }
-
-    #[inline(always)]
-    fn set_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos, level: u8) {
-        fast_cache.set_block_light(pos, level)
     }
 }
 
@@ -68,16 +54,6 @@ impl LightProvider for SkyLightProvider {
         }
 
         current_level.saturating_sub(opacity.max(1))
-    }
-
-    #[inline(always)]
-    fn get_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos) -> u8 {
-        fast_cache.get_sky_light(pos)
-    }
-
-    #[inline(always)]
-    fn set_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos, level: u8) {
-        fast_cache.set_sky_light(pos, level)
     }
 }
 
@@ -119,14 +95,14 @@ impl<P: LightProvider> LightPropagator<P> {
     }
 
     /// Flushes pending updates to chunk storage
-    fn apply_updates(&mut self, fast_cache: &mut FastLightCache) {
+    fn apply_updates(&mut self, cache: &mut Cache) {
         if self.pending_updates.is_empty() {
             return;
         }
 
         for (_, updates) in self.pending_updates.drain() {
             for (pos, val) in updates {
-                P::set_light_cached(fast_cache, pos, val);
+                P::set_light(cache, pos, val);
             }
         }
     }
@@ -135,22 +111,20 @@ impl<P: LightProvider> LightPropagator<P> {
     pub fn propagate(&mut self, cache: &mut Cache) {
         self.shadow_cache.clear();
 
-        // Lazily create a FastLightCache to avoid simultaneous mutable/immutable borrows of `cache`.
-            // Cache some immutable cache metadata before creating the fast mutable cache
-            let cache_x = cache.x;
-            let cache_z = cache.z;
-            let cache_size = cache.size;
-
-            // Create FastLightCache for fast light reads/writes
-            let mut fast_cache = FastLightCache::new(cache);
+        // Cache metadata for bounds checking
+        let cache_x = cache.x;
+        let cache_z = cache.z;
+        let cache_size = cache.size;
 
         while let Some(entry) = self.queue.pop_front() {
             let pos = entry.pos;
-            let current_light = if let Some(v) = self.shadow_cache.get(&pos).copied() {
-                v
-            } else {
-                    P::get_light_cached(&mut fast_cache, pos)
-            };
+
+            // Check shadow cache first, fall back to storage
+            let current_light = self
+                .shadow_cache
+                .get(&pos)
+                .copied()
+                .unwrap_or_else(|| P::get_light(cache, pos));
 
             if current_light <= 1 {
                 continue;
@@ -179,19 +153,24 @@ impl<P: LightProvider> LightPropagator<P> {
                     continue;
                 }
 
-                let opacity = fast_cache.get_block_opacity(neighbor_pos);
+                // Get block opacity
+                let state = cache.get_block_state(&neighbor_pos.0);
+                let opacity = state.to_state().opacity;
 
                 let new_level = P::propagate_level(current_light, opacity, dir);
 
-                let neighbor_light = if let Some(v) = self.shadow_cache.get(&neighbor_pos).copied() {
-                    v
-                } else {
-                        P::get_light_cached(&mut fast_cache, neighbor_pos)
-                };
+                // Check shadow cache first, fall back to storage
+                let neighbor_light = self
+                    .shadow_cache
+                    .get(&neighbor_pos)
+                    .copied()
+                    .unwrap_or_else(|| P::get_light(cache, neighbor_pos));
 
                 if new_level > neighbor_light {
+                    // Update shadow cache for this propagation cycle
                     self.shadow_cache.insert(neighbor_pos, new_level);
 
+                    // Queue for batch write
                     let chunk_x = neighbor_pos.0.x >> 4;
                     let chunk_z = neighbor_pos.0.z >> 4;
                     self.pending_updates
@@ -199,8 +178,8 @@ impl<P: LightProvider> LightPropagator<P> {
                         .or_default()
                         .push((neighbor_pos, new_level));
 
+                    // Add to propagation queue if bright enough
                     if new_level > 1 && self.visited.insert(neighbor_pos) {
-                        // Propagate but skip going back in the opposite direction
                         self.queue.push_back(PropagationEntry {
                             pos: neighbor_pos,
                             skip_direction: Some(dir.opposite()),
@@ -209,38 +188,50 @@ impl<P: LightProvider> LightPropagator<P> {
                 }
             }
 
+            // Batch write every 64 chunks worth of updates
             if self.pending_updates.len() > 64 {
-                self.apply_updates(&mut fast_cache);
+                self.apply_updates(cache);
             }
         }
-            if !self.pending_updates.is_empty() {
-                self.apply_updates(&mut fast_cache);
-        }
+        
+        // Final flush of any remaining updates
+        self.apply_updates(cache);
     }
 
     /// Handle light removal
     pub fn process_decrease_queue(&mut self, cache: &mut Cache) {
         {
-            let mut fast_cache = FastLightCache::new(cache);
+            // Cache metadata for bounds checking
+            let cache_x = cache.x;
+            let cache_z = cache.z;
+            let cache_size = cache.size;
 
             while let Some((pos, old_val)) = self.decrease_queue.pop_front() {
                 for dir in BlockDirection::all() {
                     let neighbor_pos = pos.offset(dir.to_offset());
 
-                    // Bounds check could be added here similar to propagate
+                    // Bounds check
+                    let (cx, _rel) = neighbor_pos.chunk_and_chunk_relative_position();
+                    let rel_x = cx.x - cache_x;
+                    let rel_z = cx.y - cache_z;
 
-                    let neighbor_light = P::get_light_cached(&mut fast_cache, neighbor_pos);
+                    if rel_x < 0 || rel_x >= cache_size || rel_z < 0 || rel_z >= cache_size {
+                        continue;
+                    }
+
+                    let neighbor_light = P::get_light(cache, neighbor_pos);
                     if neighbor_light == 0 {
                         continue;
                     }
 
-                    let opacity = fast_cache.get_block_opacity(neighbor_pos);
+                    let state = cache.get_block_state(&neighbor_pos.0);
+                    let opacity = state.to_state().opacity;
 
                     let predicted = P::propagate_level(old_val, opacity, dir);
 
                     if neighbor_light == predicted || neighbor_light < old_val {
                         // Darken
-                        P::set_light_cached(&mut fast_cache, neighbor_pos, 0);
+                        P::set_light(cache, neighbor_pos, 0);
                         self.decrease_queue
                             .push_back((neighbor_pos, neighbor_light));
                     } else if neighbor_light >= old_val {
@@ -425,37 +416,30 @@ impl SkyLightPropagator {
             for x in start_x..end_x {
                 let top_y = surface_heights[&(x, z)];
                 
-                // Get neighbor heights with bounds checking
                 let north_top = surface_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
                 let south_top = surface_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
                 let west_top = surface_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
                 let east_top = surface_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
                 
-                let max_neighbor = north_top.max(south_top).max(west_top).max(east_top);
+                // We must check up to the highest neighbor to catch the "air sources"
+                let max_check_y = top_y.max(north_top).max(south_top).max(west_top).max(east_top);
                 
-                // Only check down to the minimum relevant height
-                // No need to check blocks that won't need horizontal propagation
-                let min_check_y = top_y.min(max_neighbor);
-                
-                // Start from top and break early when we hit 0 light
-                for y in (bottom_y..=min_check_y).rev() {
+                for y in (bottom_y..=max_check_y).rev() {
                     let pos = BlockPos(Vector3::new(x, y, z));
                     let light = get_sky_light(cache, pos);
                     
+                    // Use continue, or only break if we are safely below all possible side-light
                     if light == 0 {
-                        break; // No more light below this point in column
+                        if y <= top_y { break; } // Safe to break if we're under our own roof
+                        else { continue; } 
                     }
                     
                     let is_at_surface = y == top_y;
-                    let below_neighbor = y < max_neighbor;
+                    let below_neighbor = y < north_top || y < south_top || y < west_top || y < east_top;
                     
                     if is_at_surface || below_neighbor {
                         if self.visited.insert(pos) {
-                            let skip_dir = if is_at_surface {
-                                Some(BlockDirection::Up)
-                            } else {
-                                None
-                            };
+                            let skip_dir = if y >= top_y { Some(BlockDirection::Up) } else { None };
                             
                             self.queue.push_back(PropagationEntry {
                                 pos,
