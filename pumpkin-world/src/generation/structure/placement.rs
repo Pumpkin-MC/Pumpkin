@@ -141,7 +141,7 @@ fn is_start_chunk_concentric_rings(
     _salt: u32,
 ) -> bool {
     // TODO: Implement proper concentric rings logic
-    rand::random_bool(1.0 / 100.0)
+    rand::random_bool(1.0 / 1000.0)
 }
 
 #[cfg(test)]

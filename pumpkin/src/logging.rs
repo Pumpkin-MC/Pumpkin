@@ -27,11 +27,11 @@ use crate::server::Server;
 macro_rules! log_at_level {
     ($level:expr, $($arg:tt)*) => {
         match $level {
-            Level::TRACE => tracing::trace!($($arg)*),
-            Level::DEBUG => tracing::debug!($($arg)*),
-            Level::INFO => tracing::info!($($arg)*),
-            Level::WARN => tracing::warn!($($arg)*),
-            Level::ERROR => tracing::error!($($arg)*),
+            tracing::Level::TRACE => tracing::trace!($($arg)*),
+            tracing::Level::DEBUG => tracing::debug!($($arg)*),
+            tracing::Level::INFO => tracing::info!($($arg)*),
+            tracing::Level::WARN => tracing::warn!($($arg)*),
+            tracing::Level::ERROR => tracing::error!($($arg)*),
         }
     };
 }

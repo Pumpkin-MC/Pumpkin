@@ -24,12 +24,12 @@ use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
@@ -889,7 +889,7 @@ impl LivingEntity {
             DeathMessageType::FallVariants => {
                 //TODO
                 TextComponent::translate(
-                    "death.fell.accident.generic",
+                    translation::DEATH_FELL_ACCIDENT_GENERIC,
                     [dyn_self.get_display_name().await],
                 )
             }

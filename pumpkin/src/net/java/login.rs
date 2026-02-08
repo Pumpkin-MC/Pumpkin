@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_protocol::{
     ConnectionState, KnownPack, Label, Link, LinkType,
     java::client::{
@@ -34,7 +35,7 @@ impl JavaClient {
         let max_players = server.basic_config.max_players;
         if max_players > 0 && server.get_player_count() >= max_players as usize {
             self.kick(TextComponent::translate(
-                "multiplayer.disconnect.server_full",
+                translation::MULTIPLAYER_DISCONNECT_SERVER_FULL,
                 [],
             ))
             .await;
@@ -136,11 +137,12 @@ impl JavaClient {
                 Ok(new_profile) => *profile = new_profile,
                 Err(error) => {
                     self.kick(match error {
-                        AuthError::FailedResponse => {
-                            TextComponent::translate("multiplayer.disconnect.authservers_down", [])
-                        }
+                        AuthError::FailedResponse => TextComponent::translate(
+                            translation::MULTIPLAYER_DISCONNECT_AUTHSERVERS_DOWN,
+                            [],
+                        ),
                         AuthError::UnverifiedUsername => TextComponent::translate(
-                            "multiplayer.disconnect.unverified_username",
+                            translation::MULTIPLAYER_DISCONNECT_UNVERIFIED_USERNAME,
                             [],
                         ),
                         e => TextComponent::text(e.to_string()),
@@ -160,7 +162,7 @@ impl JavaClient {
                 &online_player.gameprofile.name
             );
             self.kick(TextComponent::translate(
-                "multiplayer.disconnect.duplicate_login",
+                translation::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
                 [],
             ))
             .await;
@@ -177,7 +179,7 @@ impl JavaClient {
                 &online_player.gameprofile.name
             );
             self.kick(TextComponent::translate(
-                "multiplayer.disconnect.duplicate_login",
+                translation::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
                 [],
             ))
             .await;
