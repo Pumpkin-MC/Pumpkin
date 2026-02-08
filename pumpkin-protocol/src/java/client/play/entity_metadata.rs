@@ -12,6 +12,42 @@ use crate::{
     ser::{NetworkWriteExt, WritingError, network_serialize_no_prefix, serializer},
 };
 
+fn remap_metadata_type_id_for_version(
+    type_id: i32,
+    version: pumpkin_util::version::MinecraftVersion,
+) -> Option<i32> {
+    use pumpkin_util::version::MinecraftVersion;
+
+    match version {
+        // 1.21.7 / 1.21.8 (protocol 772) has a different metadata type table than 1.21.11.
+        MinecraftVersion::V_1_21_7 => match type_id {
+            // `compound_tag` exists at 16 in 1.21.7, so later ids are shifted.
+            16..=27 => Some(type_id + 1),
+            // 1.21.11-only variant.
+            28 => None,
+            // These ids are unchanged in 1.21.7.
+            0..=15 | 29..=32 => Some(type_id),
+            // 1.21.7 has no copper/weathering/profile/arm metadata types.
+            33 | 34 | 37 | 38 => None,
+            // `vector_3f` and `quaternion_f` are lower in 1.21.7.
+            35 => Some(33),
+            36 => Some(34),
+            _ => Some(type_id),
+        },
+        // 1.21.9 / 1.21.10 (protocol 773) is close to latest but lacks some tail variants.
+        MinecraftVersion::V_1_21_9 => match type_id {
+            // 1.21.11-only variant.
+            28 => None,
+            // Everything after that is shifted by one.
+            29..=37 => Some(type_id - 1),
+            // `arm` does not exist in this protocol.
+            38 => None,
+            _ => Some(type_id),
+        },
+        _ => Some(type_id),
+    }
+}
+
 /// Updates the "Data Tracker" values for an entity.
 ///
 /// Entity Metadata (or `DataWatchers`) controls persistent visual states that
@@ -67,8 +103,14 @@ impl<T> Metadata<T> {
             return Ok(());
         }
 
+        let Some(remapped_type_id) = remap_metadata_type_id_for_version(self.r#type.0, *version)
+        else {
+            // Metadata type does not exist in this protocol version.
+            return Ok(());
+        };
+
         writer.write_u8(resolved_index)?;
-        self.r#type.encode(&mut writer)?;
+        writer.write_var_int(&VarInt(remapped_type_id))?;
 
         if self.r#type.0 == MetaDataType::BlockState as i32 {
             let mut serialized_value = Vec::new();
