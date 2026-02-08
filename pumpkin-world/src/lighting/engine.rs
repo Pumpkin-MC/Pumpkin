@@ -56,8 +56,14 @@ impl LightProvider for SkyLightProvider {
     }
 }
 
+#[derive(Clone, Copy)]
+struct PropagationEntry {
+    pos: BlockPos,
+    skip_direction: Option<BlockDirection>, // direction from which the light came, used to prevent back-propagation
+}
+
 pub struct LightPropagator<P: LightProvider> {
-    pub(crate) queue: VecDeque<BlockPos>,
+    pub(crate) queue: VecDeque<PropagationEntry>,
     pub(crate) visited: FastHashSet<BlockPos>,
     pub(crate) decrease_queue: VecDeque<(BlockPos, u8)>,
 
@@ -104,7 +110,8 @@ impl<P: LightProvider> LightPropagator<P> {
     pub fn propagate(&mut self, cache: &mut Cache) {
         self.shadow_cache.clear();
 
-        while let Some(pos) = self.queue.pop_front() {
+        while let Some(entry) = self.queue.pop_front() {
+            let pos = entry.pos;
             let current_light = self
                 .shadow_cache
                 .get(&pos)
@@ -116,6 +123,13 @@ impl<P: LightProvider> LightPropagator<P> {
             }
 
             for dir in BlockDirection::all() {
+                // Skip the direction we came from (if specified)
+                if let Some(skip_dir) = entry.skip_direction {
+                    if dir == skip_dir {
+                        continue;
+                    }
+                }
+
                 let neighbor_pos = pos.offset(dir.to_offset());
 
                 // Skip if already visited (critical early-exit optimization)
@@ -153,7 +167,11 @@ impl<P: LightProvider> LightPropagator<P> {
                         .push((neighbor_pos, new_level));
 
                     if new_level > 1 && self.visited.insert(neighbor_pos) {
-                        self.queue.push_back(neighbor_pos);
+                        // Propagate but skip going back in the opposite direction
+                        self.queue.push_back(PropagationEntry {
+                            pos: neighbor_pos,
+                            skip_direction: Some(dir.opposite()),
+                        });
                     }
                 }
             }
@@ -190,7 +208,10 @@ impl<P: LightProvider> LightPropagator<P> {
                         .push_back((neighbor_pos, neighbor_light));
                 } else if neighbor_light >= old_val {
                     // Re-illuminate from this bright neighbor
-                    self.queue.push_back(neighbor_pos);
+                    self.queue.push_back(PropagationEntry {
+                        pos: neighbor_pos,
+                        skip_direction: None,
+                    });
                     self.visited.insert(neighbor_pos);
                 }
             }
@@ -232,7 +253,11 @@ impl BlockLightPropagator {
                         let pos = BlockPos(pos_vec);
                         set_block_light(cache, pos, emission);
                         if self.visited.insert(pos) {
-                            self.queue.push_back(pos);
+                            // Block light propagates in all directions
+                            self.queue.push_back(PropagationEntry {
+                                pos,
+                                skip_direction: None,
+                            });
                         }
                     }
                 }
@@ -255,50 +280,85 @@ impl SkyLightPropagator {
         let bottom_y = cache.bottom_y() as i32;
         let max_y = bottom_y + cache.height() as i32;
 
+        // First pass: set vertical light and collect surface heights
+        let mut surface_heights: FastHashMap<(i32, i32), i32> = FastHashMap::default();
+        
         for x in start_x..end_x {
             for z in start_z..end_z {
-                // Get the highest block that blocks light (ex. grass)
                 let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
+                surface_heights.insert((x, z), top_y);
 
                 let mut light: i32 = 15;
 
-                // Scan from the sky limit down to bedrock
                 for y in (bottom_y..max_y).rev() {
                     let pos = BlockPos(Vector3::new(x, y, z));
 
-                    // If we are above the heightmap, we know it is air (opacity 0).
-                    // This saves thousands of expensive block lookups per chunk.
                     let opacity = if y > top_y {
                         0
                     } else {
-                        // We hit the surface, start checking real blocks
                         let state = cache.get_block_state(&pos.0);
                         state.to_state().opacity
                     };
 
-                    // Calculate light reduction
                     light = light.saturating_sub(opacity as i32);
 
                     if light <= 0 {
-                        // We hit a solid block or depth that killed the light.
                         set_sky_light(cache, pos, 0);
                     } else {
-                        // We have light! Set it.
                         set_sky_light(cache, pos, light as u8);
+                    }
+                }
+            }
+        }
 
-                        // If we still have light, add to BFS queue for sideways propagation
-                        if light > 1 {
-                            // Only add if we haven't visited it (optimization)
-                            if self.visited.insert(pos) {
-                                self.queue.push_back(pos);
-                            }
+        // Second pass: enqueue positions that need horizontal propagation
+        for x in start_x..end_x {
+            for z in start_z..end_z {
+                let top_y = surface_heights.get(&(x, z)).copied().unwrap_or(bottom_y);
+                
+                // Get neighbor heights (with bounds checking)
+                let north_top = surface_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
+                let south_top = surface_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
+                let west_top = surface_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
+                let east_top = surface_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
+
+                // Process column from top to bottom
+                for y in (bottom_y..=max_y).rev() {
+                    let pos = BlockPos(Vector3::new(x, y, z));
+                    let light = get_sky_light(cache, pos);
+                    
+                    if light == 0 {
+                        continue;
+                    }
+
+                    // Enqueue if we're at the surface OR below a neighbor's surface
+                    // This enables horizontal propagation at terrain boundaries
+                    let is_at_surface = y == top_y;
+                    let below_north = y < north_top;
+                    let below_south = y < south_top;
+                    let below_west = y < west_top;
+                    let below_east = y < east_top;
+
+                    if is_at_surface || below_north || below_south || below_west || below_east {
+                        if self.visited.insert(pos) {
+                            // For surface blocks, propagate down but not up
+                            let skip_dir = if is_at_surface {
+                                Some(BlockDirection::Up)
+                            } else {
+                                None
+                            };
+                            
+                            self.queue.push_back(PropagationEntry {
+                                pos,
+                                skip_direction: skip_dir,
+                            });
                         }
                     }
                 }
             }
         }
 
-        // Now let the BFS engine handle the sideways spread
+        // Now let the BFS engine handle the propagation
         self.propagate(cache);
     }
 }
@@ -358,7 +418,10 @@ impl LightEngine {
         if new_luminance > 0 {
             set_block_light(cache, pos, new_luminance);
             if self.block_light.visited.insert(pos) {
-                self.block_light.queue.push_back(pos);
+                self.block_light.queue.push_back(PropagationEntry {
+                    pos,
+                    skip_direction: None,
+                });
             }
         }
     }
