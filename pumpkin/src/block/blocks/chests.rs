@@ -5,7 +5,7 @@ use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
 use pumpkin_data::entity::EntityPose;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -57,9 +57,9 @@ impl ScreenHandlerFactory for ChestScreenFactory {
 
     fn get_display_name(&self) -> TextComponent {
         if self.0.size() > 27 {
-            TextComponent::translate("container.chestDouble", &[])
+            TextComponent::translate(translation::CONTAINER_CHESTDOUBLE, &[])
         } else {
-            TextComponent::translate("container.chest", &[])
+            TextComponent::translate(translation::CONTAINER_CHEST, &[])
         }
     }
 }

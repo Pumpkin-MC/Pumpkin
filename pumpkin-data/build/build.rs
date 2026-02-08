@@ -53,6 +53,7 @@ mod spawn_egg;
 mod structures;
 mod tag;
 mod tracked_data;
+mod translations;
 mod world_event;
 
 pub const OUT_DIR: &str = "src/generated";
@@ -74,6 +75,7 @@ pub fn main() {
         (game_rules::build, "game_rules.rs"),
         (registry::build, "registry.rs"),
         (dimension::build, "dimension.rs"),
+        (translations::build, "translation.rs"),
         (jukebox_song::build, "jukebox_song.rs"),
         (sound_category::build, "sound_category.rs"),
         (entity_pose::build, "entity_pose.rs"),

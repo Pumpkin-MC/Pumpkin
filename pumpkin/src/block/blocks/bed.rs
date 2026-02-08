@@ -5,6 +5,7 @@ use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::translation;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
@@ -243,7 +244,7 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate("block.minecraft.bed.obstructed", []),
+                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_OBSTRUCTED, []),
                         true,
                     )
                     .await;
@@ -256,7 +257,7 @@ impl BlockBehaviour for BedBlock {
 
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate("block.minecraft.bed.occupied", []),
+                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_OCCUPIED, []),
                         true,
                     )
                     .await;
@@ -275,7 +276,10 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate("block.minecraft.bed.too_far_away", []),
+                        &TextComponent::translate(
+                            translation::BLOCK_MINECRAFT_BED_TOO_FAR_AWAY,
+                            [],
+                        ),
                         true,
                     )
                     .await;
@@ -294,7 +298,10 @@ impl BlockBehaviour for BedBlock {
                 .await
             {
                 args.player
-                    .send_system_message(&TextComponent::translate("block.minecraft.set_spawn", []))
+                    .send_system_message(&TextComponent::translate(
+                        translation::BLOCK_MINECRAFT_SET_SPAWN,
+                        [],
+                    ))
                     .await;
             }
 
@@ -302,7 +309,7 @@ impl BlockBehaviour for BedBlock {
             if !can_sleep(args.world).await {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate("block.minecraft.bed.no_sleep", []),
+                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_NO_SLEEP, []),
                         true,
                     )
                     .await;
@@ -321,7 +328,10 @@ impl BlockBehaviour for BedBlock {
                 {
                     args.player
                         .send_system_message_raw(
-                            &TextComponent::translate("block.minecraft.bed.not_safe", []),
+                            &TextComponent::translate(
+                                translation::BLOCK_MINECRAFT_BED_NOT_SAFE,
+                                [],
+                            ),
                             true,
                         )
                         .await;

@@ -101,7 +101,7 @@ pub fn reorder_substitutions(
     let mut substitutions: Vec<TextComponentBase> = indices
         .iter()
         .map(|_| TextComponentBase {
-            content: TextContent::Text { text: "".into() },
+            content: Box::new(TextContent::Text { text: "".into() }),
             style: Box::new(Style::default()),
             extra: vec![],
         })

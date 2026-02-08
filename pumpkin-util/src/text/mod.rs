@@ -35,9 +35,9 @@ impl<'de> Deserialize<'de> for TextComponent {
 
             fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(TextComponentBase {
-                    content: TextContent::Text {
+                    content: Box::new(TextContent::Text {
                         text: Cow::from(v.to_string()),
-                    },
+                    }),
                     style: Box::default(),
                     extra: vec![],
                 })
@@ -50,7 +50,7 @@ impl<'de> Deserialize<'de> for TextComponent {
                 }
 
                 Ok(TextComponentBase {
-                    content: TextContent::Text { text: "".into() },
+                    content: Box::new(TextContent::Text { text: "".into() }),
                     style: Box::default(),
                     extra: bases,
                 })
@@ -78,7 +78,7 @@ impl Serialize for TextComponent {
 pub struct TextComponentBase {
     /// The actual text
     #[serde(flatten)]
-    pub content: TextContent,
+    pub content: Box<TextContent>,
     #[serde(flatten)]
     pub style: Box<Style>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -89,7 +89,7 @@ pub struct TextComponentBase {
 impl TextComponentBase {
     #[must_use]
     pub fn to_pretty_console(self) -> String {
-        let mut text = match self.content {
+        let mut text = match *self.content {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate { translate, with } => {
                 translation_to_pretty(format!("minecraft:{translate}"), Locale::EnUs, with)
@@ -126,7 +126,7 @@ impl TextComponentBase {
 
     #[must_use]
     pub fn get_text(self, locale: Locale) -> String {
-        match self.content {
+        match *self.content {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate { translate, with } => {
                 get_translation_text(format!("minecraft:{translate}"), locale, with)
@@ -143,7 +143,7 @@ impl TextComponentBase {
     #[must_use]
     pub fn to_translated(self) -> Self {
         // Divide the translation into slices and inserts the substitutions
-        let component = match self.content {
+        let component = match *self.content {
             TextContent::Custom { key, with, locale } => {
                 let translation = get_translation(&key, locale);
                 let mut translation_parent = translation.clone();
@@ -161,7 +161,7 @@ impl TextComponentBase {
                         }
 
                         translation_slices.push(Self {
-                            content: TextContent::Text {
+                            content: Box::new(TextContent::Text {
                                 text: if idx == ranges.len() - 1 {
                                     // Last substitution, append the rest of the translation
                                     Cow::Owned(translation[range.end + 1..].to_string())
@@ -171,7 +171,7 @@ impl TextComponentBase {
                                             .to_string(),
                                     )
                                 },
-                            },
+                            }),
                             style: Box::new(Style::default()),
                             extra: vec![],
                         });
@@ -181,9 +181,9 @@ impl TextComponentBase {
                     translation_slices.push(i);
                 }
                 Self {
-                    content: TextContent::Text {
+                    content: Box::new(TextContent::Text {
                         text: translation_parent.into(),
-                    },
+                    }),
                     style: self.style,
                     extra: translation_slices,
                 }
@@ -248,7 +248,7 @@ impl TextComponentBase {
 impl TextComponent {
     pub fn text<P: Into<Cow<'static, str>>>(plain: P) -> Self {
         Self(TextComponentBase {
-            content: TextContent::Text { text: plain.into() },
+            content: Box::new(TextContent::Text { text: plain.into() }),
             style: Box::new(Style::default()),
             extra: vec![],
         })
@@ -256,10 +256,10 @@ impl TextComponent {
 
     pub fn translate<K: Into<Cow<'static, str>>, W: Into<Vec<Self>>>(key: K, with: W) -> Self {
         Self(TextComponentBase {
-            content: TextContent::Translate {
+            content: Box::new(TextContent::Translate {
                 translate: key.into(),
                 with: with.into().into_iter().map(|x| x.0).collect(),
-            },
+            }),
             style: Box::new(Style::default()),
             extra: vec![],
         })
@@ -272,13 +272,13 @@ impl TextComponent {
         with: W,
     ) -> Self {
         Self(TextComponentBase {
-            content: TextContent::Custom {
+            content: Box::new(TextContent::Custom {
                 key: format!("{}:{}", namespace.into(), key.into())
                     .to_lowercase()
                     .into(),
                 locale,
                 with: with.into().into_iter().map(|x| x.0).collect(),
-            },
+            }),
             style: Box::new(Style::default()),
             extra: vec![],
         })
@@ -396,7 +396,7 @@ impl TextComponent {
     #[must_use]
     pub fn from_content(content: TextContent) -> Self {
         Self(TextComponentBase {
-            content,
+            content: Box::new(content),
             style: Box::new(Style::default()),
             extra: vec![],
         })
@@ -405,7 +405,7 @@ impl TextComponent {
     #[must_use]
     pub fn add_text<P: Into<Cow<'static, str>>>(mut self, text: P) -> Self {
         self.0.extra.push(TextComponentBase {
-            content: TextContent::Text { text: text.into() },
+            content: Box::new(TextContent::Text { text: text.into() }),
             style: Box::new(Style::default()),
             extra: vec![],
         });
@@ -426,9 +426,9 @@ impl TextComponent {
             .replace("{MESSAGE}", content);
 
         Self(TextComponentBase {
-            content: TextContent::Text {
+            content: Box::new(TextContent::Text {
                 text: Cow::Owned(with_resolved_fields),
-            },
+            }),
             style: Box::new(Style::default()),
             extra: vec![],
         })
@@ -543,9 +543,9 @@ impl TextComponent {
             let rgb = color_gen(i, len);
 
             let mut char_base = TextComponentBase {
-                content: TextContent::Text {
+                content: Box::new(TextContent::Text {
                     text: Cow::Owned(c.to_string()),
-                },
+                }),
                 style: self.0.style.clone(),
                 extra: vec![],
             };
@@ -553,7 +553,7 @@ impl TextComponent {
             colored_extra.push(char_base);
         }
 
-        self.0.content = TextContent::Text { text: "".into() };
+        self.0.content = Box::new(TextContent::Text { text: "".into() });
         self.0.extra = colored_extra;
         self
     }

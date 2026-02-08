@@ -13,6 +13,10 @@ pub mod packet;
 pub mod jukebox_song;
 
 #[rustfmt::skip]
+#[path = "generated/translation.rs"]
+pub mod translation;
+
+#[rustfmt::skip]
 #[path = "generated/registry.rs"]
 pub mod registry;
 
