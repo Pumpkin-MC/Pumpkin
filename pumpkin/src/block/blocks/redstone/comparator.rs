@@ -407,7 +407,7 @@ mod tests {
     /// Comparator update delay is always 2 game ticks (1 redstone tick).
     /// This differs from repeater which has configurable 2/4/6/8 tick delays.
     #[test]
-    fn test_comparator_update_delay_always_2() {
+    fn comparator_update_delay_always_2() {
         let comparator = ComparatorBlock;
         let block = &Block::COMPARATOR;
         let default_state = block.default_state.id;
@@ -419,7 +419,7 @@ mod tests {
 
     /// Comparator mode toggles between Compare and Subtract when right-clicked.
     #[test]
-    fn test_mode_toggle() {
+    fn mode_toggle() {
         assert_eq!(
             match ComparatorMode::Compare {
                 ComparatorMode::Compare => ComparatorMode::Subtract,
@@ -438,7 +438,7 @@ mod tests {
 
     /// Comparator mode property roundtrips through state ID correctly.
     #[test]
-    fn test_mode_property_roundtrip() {
+    fn mode_property_roundtrip() {
         let block = &Block::COMPARATOR;
         for mode in [ComparatorMode::Compare, ComparatorMode::Subtract] {
             let mut props = ComparatorLikeProperties::default(block);
@@ -455,7 +455,7 @@ mod tests {
 
     /// Comparator powered property roundtrips through state ID correctly.
     #[test]
-    fn test_comparator_powered_roundtrip() {
+    fn comparator_powered_roundtrip() {
         let block = &Block::COMPARATOR;
         for powered in [true, false] {
             let mut props = ComparatorLikeProperties::default(block);
@@ -472,7 +472,7 @@ mod tests {
 
     /// Comparator facing roundtrips through state ID correctly for all 4 horizontal directions.
     #[test]
-    fn test_comparator_facing_roundtrip() {
+    fn comparator_facing_roundtrip() {
         let block = &Block::COMPARATOR;
         for facing in HorizontalFacing::all() {
             let mut props = ComparatorLikeProperties::default(block);
@@ -493,7 +493,7 @@ mod tests {
     /// - If Compare mode and back > side: output = back
     /// These are the vanilla rules for comparator operation.
     #[test]
-    fn test_compare_subtract_formula() {
+    fn compare_subtract_formula() {
         // Helper matching the calculate_output_signal logic
         fn calc(back: u8, side: u8, subtract: bool) -> u8 {
             if side >= back {
@@ -537,7 +537,7 @@ mod tests {
     /// Exhaustive test of the comparator output formula for ALL valid power combinations.
     /// In vanilla, back and side power range from 0 to 15.
     #[test]
-    fn test_compare_subtract_formula_exhaustive() {
+    fn compare_subtract_formula_exhaustive() {
         fn calc(back: u8, side: u8, subtract: bool) -> u8 {
             if side >= back {
                 return 0;
@@ -574,7 +574,7 @@ mod tests {
     /// - back == side AND Subtract mode → false (0 output in subtract)
     /// - back < side → false (side blocks output)
     #[test]
-    fn test_has_power_logic() {
+    fn has_power_logic() {
         fn has_power(back: u8, side: u8, mode: ComparatorMode) -> bool {
             if back == 0 {
                 return false;
@@ -610,7 +610,7 @@ mod tests {
 
     /// Exhaustive has_power test for all 16×16 back×side combinations.
     #[test]
-    fn test_has_power_exhaustive() {
+    fn has_power_exhaustive() {
         fn has_power(back: u8, side: u8, mode: ComparatorMode) -> bool {
             if back == 0 {
                 return false;
@@ -651,7 +651,7 @@ mod tests {
 
     /// Full state space test: all combinations of facing × mode × powered roundtrip.
     #[test]
-    fn test_comparator_full_state_roundtrip() {
+    fn comparator_full_state_roundtrip() {
         let block = &Block::COMPARATOR;
         for facing in HorizontalFacing::all() {
             for mode in [ComparatorMode::Compare, ComparatorMode::Subtract] {

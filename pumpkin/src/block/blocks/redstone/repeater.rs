@@ -319,7 +319,7 @@ mod tests {
     /// In vanilla, repeater delay settings 1-4 map to game tick delays of 2, 4, 6, 8.
     /// Formula: (delay.to_index() + 1) * 2
     #[test]
-    fn test_repeater_delay_calculation() {
+    fn repeater_delay_calculation() {
         let repeater = RepeaterBlock;
         let block = &Block::REPEATER;
 
@@ -343,7 +343,7 @@ mod tests {
 
     /// Repeater always outputs signal strength 15 (unlike comparator which varies).
     #[tokio::test]
-    async fn test_repeater_output_level_always_15() {
+    async fn repeater_output_level_always_15() {
         // RepeaterBlock::get_output_level ignores world state and always returns 15
         // We can't easily construct a World for unit tests, but we can verify the
         // constant behavior through the trait implementation structure.
@@ -354,7 +354,7 @@ mod tests {
 
     /// Repeater delay cycles through 1 → 2 → 3 → 4 → 1 when right-clicked.
     #[test]
-    fn test_delay_cycling() {
+    fn delay_cycling() {
         assert_eq!(
             match Integer1To4::L1 {
                 Integer1To4::L1 => Integer1To4::L2,
@@ -377,7 +377,7 @@ mod tests {
 
     /// Repeater delay property roundtrips through state ID correctly for all 4 delay values.
     #[test]
-    fn test_delay_property_roundtrip() {
+    fn delay_property_roundtrip() {
         let block = &Block::REPEATER;
         for delay in [
             Integer1To4::L1,
@@ -399,7 +399,7 @@ mod tests {
 
     /// Repeater powered state roundtrips through state ID correctly.
     #[test]
-    fn test_powered_property_roundtrip() {
+    fn powered_property_roundtrip() {
         let block = &Block::REPEATER;
         for powered in [true, false] {
             let mut props = RepeaterProperties::default(block);
@@ -416,7 +416,7 @@ mod tests {
 
     /// Repeater locked state roundtrips through state ID correctly.
     #[test]
-    fn test_locked_property_roundtrip() {
+    fn locked_property_roundtrip() {
         let block = &Block::REPEATER;
         for locked in [true, false] {
             let mut props = RepeaterProperties::default(block);
@@ -433,7 +433,7 @@ mod tests {
 
     /// Repeater facing roundtrips through state ID correctly for all 4 horizontal directions.
     #[test]
-    fn test_facing_property_roundtrip() {
+    fn facing_property_roundtrip() {
         let block = &Block::REPEATER;
         for facing in HorizontalFacing::all() {
             let mut props = RepeaterProperties::default(block);
