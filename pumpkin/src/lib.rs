@@ -546,6 +546,7 @@ fn setup_stdin_console(server: Arc<Server>) {
                         server.command_dispatcher.read().await
                             .handle_command(&command::CommandSender::Console, &server, command.as_str())
                             .await;
+                        broadcast_console_command_to_ops(&server, &command).await;
                     };
                 }}
             }
@@ -613,6 +614,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                         server.command_dispatcher.read().await
                             .handle_command(&command::CommandSender::Console, &server, &line)
                             .await;
+                        broadcast_console_command_to_ops(&server, &line).await;
                     }
                 }}
             } else {
@@ -621,6 +623,22 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
         }
         log::debug!("Stopped console commands task");
     });
+}
+
+/// When `broadcast_console_to_ops` is enabled, notify all online operators
+/// that a console command was executed.
+async fn broadcast_console_command_to_ops(server: &Server, command: &str) {
+    if !server.basic_config.broadcast_console_to_ops {
+        return;
+    }
+    let msg = TextComponent::text(format!("[Server: /{command}]"))
+        .color_named(pumpkin_util::text::color::NamedColor::Gray)
+        .italic();
+    for player in server.get_all_players() {
+        if player.permission_lvl.load() >= pumpkin_util::PermissionLvl::Two {
+            player.send_system_message(&msg).await;
+        }
+    }
 }
 
 fn scrub_address(ip: &str) -> String {
