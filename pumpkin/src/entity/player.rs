@@ -2876,7 +2876,7 @@ impl EntityBase for Player {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
+            if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL && damage_type != DamageType::OUT_OF_WORLD {
                 return false;
             }
             let result = self
@@ -2977,6 +2977,12 @@ impl EntityBase for Player {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    fn tick_in_void<'a>(&'a self, dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.living_entity.tick_in_void(dyn_self).await;
+        })
     }
 }
 
