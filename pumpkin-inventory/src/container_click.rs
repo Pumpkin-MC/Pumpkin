@@ -171,13 +171,13 @@ pub enum MouseDragState {
 mod tests {
     use super::*;
 
-    fn click(mode: SlotActionType, button: i8, slot: i16) -> Result<Click, InventoryError> {
-        Click::new(&mode, button, slot)
+    fn click(mode: &SlotActionType, button: i8, slot: i16) -> Result<Click, InventoryError> {
+        Click::new(mode, button, slot)
     }
 
     #[test]
     fn normal_left_click_on_slot() {
-        let c = click(SlotActionType::Pickup, 0, 5).unwrap();
+        let c = click(&SlotActionType::Pickup, 0, 5).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::MouseClick(MouseClick::Left)
@@ -187,7 +187,7 @@ mod tests {
 
     #[test]
     fn normal_right_click_on_slot() {
-        let c = click(SlotActionType::Pickup, 1, 10).unwrap();
+        let c = click(&SlotActionType::Pickup, 1, 10).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::MouseClick(MouseClick::Right)
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn normal_click_outside_inventory() {
-        let c = click(SlotActionType::Pickup, 0, -999).unwrap();
+        let c = click(&SlotActionType::Pickup, 0, -999).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::MouseClick(MouseClick::Left)
@@ -207,20 +207,20 @@ mod tests {
 
     #[test]
     fn normal_click_invalid_button() {
-        let result = click(SlotActionType::Pickup, 2, 5);
+        let result = click(&SlotActionType::Pickup, 2, 5);
         assert!(result.is_err());
     }
 
     #[test]
     fn shift_click_normal_slot() {
-        let c = click(SlotActionType::QuickMove, 0, 3).unwrap();
+        let c = click(&SlotActionType::QuickMove, 0, 3).unwrap();
         assert!(matches!(c.click_type, ClickType::ShiftClick));
         assert!(matches!(c.slot, Slot::Normal(3)));
     }
 
     #[test]
     fn key_click_hotbar_slot_0() {
-        let c = click(SlotActionType::Swap, 0, 5).unwrap();
+        let c = click(&SlotActionType::Swap, 0, 5).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::KeyClick(KeyClick::Slot(0))
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn key_click_hotbar_slot_8() {
-        let c = click(SlotActionType::Swap, 8, 5).unwrap();
+        let c = click(&SlotActionType::Swap, 8, 5).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::KeyClick(KeyClick::Slot(8))
@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn key_click_offhand() {
-        let c = click(SlotActionType::Swap, 40, 5).unwrap();
+        let c = click(&SlotActionType::Swap, 40, 5).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::KeyClick(KeyClick::Offhand)
@@ -248,20 +248,20 @@ mod tests {
 
     #[test]
     fn key_click_invalid_button() {
-        let result = click(SlotActionType::Swap, 41, 5);
+        let result = click(&SlotActionType::Swap, 41, 5);
         assert!(result.is_err());
     }
 
     #[test]
     fn creative_pick_item() {
-        let c = click(SlotActionType::Clone, 2, 7).unwrap();
+        let c = click(&SlotActionType::Clone, 2, 7).unwrap();
         assert!(matches!(c.click_type, ClickType::CreativePickItem));
         assert!(matches!(c.slot, Slot::Normal(7)));
     }
 
     #[test]
     fn drop_single_item() {
-        let c = click(SlotActionType::Throw, 0, 5).unwrap();
+        let c = click(&SlotActionType::Throw, 0, 5).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::DropType(DropType::SingleItem)
@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn drop_full_stack() {
-        let c = click(SlotActionType::Throw, 1, 5).unwrap();
+        let c = click(&SlotActionType::Throw, 1, 5).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::DropType(DropType::FullStack)
@@ -279,13 +279,13 @@ mod tests {
 
     #[test]
     fn drop_invalid_button() {
-        let result = click(SlotActionType::Throw, 2, 5);
+        let result = click(&SlotActionType::Throw, 2, 5);
         assert!(result.is_err());
     }
 
     #[test]
     fn drag_start_left() {
-        let c = click(SlotActionType::QuickCraft, 0, -999).unwrap();
+        let c = click(&SlotActionType::QuickCraft, 0, -999).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::MouseDrag {
@@ -296,7 +296,7 @@ mod tests {
 
     #[test]
     fn drag_start_right() {
-        let c = click(SlotActionType::QuickCraft, 4, -999).unwrap();
+        let c = click(&SlotActionType::QuickCraft, 4, -999).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::MouseDrag {
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn drag_start_middle() {
-        let c = click(SlotActionType::QuickCraft, 8, -999).unwrap();
+        let c = click(&SlotActionType::QuickCraft, 8, -999).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::MouseDrag {
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn drag_add_slot() {
-        let c = click(SlotActionType::QuickCraft, 1, 5).unwrap();
+        let c = click(&SlotActionType::QuickCraft, 1, 5).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::MouseDrag {
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn drag_end() {
-        let c = click(SlotActionType::QuickCraft, 2, -999).unwrap();
+        let c = click(&SlotActionType::QuickCraft, 2, -999).unwrap();
         assert!(matches!(
             c.click_type,
             ClickType::MouseDrag {
@@ -341,13 +341,13 @@ mod tests {
 
     #[test]
     fn drag_invalid_button() {
-        let result = click(SlotActionType::QuickCraft, 3, -999);
+        let result = click(&SlotActionType::QuickCraft, 3, -999);
         assert!(result.is_err());
     }
 
     #[test]
     fn double_click() {
-        let c = click(SlotActionType::PickupAll, 0, 5).unwrap();
+        let c = click(&SlotActionType::PickupAll, 0, 5).unwrap();
         assert!(matches!(c.click_type, ClickType::DoubleClick));
         assert!(matches!(c.slot, Slot::Normal(5)));
     }

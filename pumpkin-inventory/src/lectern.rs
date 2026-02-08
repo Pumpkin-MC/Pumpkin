@@ -32,6 +32,12 @@ pub struct LecternInventory {
     dirty: std::sync::atomic::AtomicBool,
 }
 
+impl Default for LecternInventory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LecternInventory {
     #[must_use]
     pub fn new() -> Self {
@@ -93,6 +99,7 @@ impl Clearable for LecternInventory {
 }
 
 /// Check if an item is a valid book for the lectern.
+#[must_use]
 pub fn is_lectern_book(item: &'static Item) -> bool {
     item == &Item::WRITTEN_BOOK || item == &Item::WRITABLE_BOOK
 }
@@ -109,7 +116,7 @@ pub struct LecternBookSlot {
 
 impl LecternBookSlot {
     #[must_use]
-    pub fn new(inventory: Arc<LecternInventory>, index: usize) -> Self {
+    pub const fn new(inventory: Arc<LecternInventory>, index: usize) -> Self {
         Self {
             inventory,
             index,
@@ -196,7 +203,7 @@ impl Slot for LecternBookSlot {
 /// button, which is handled as a container button click by the block entity.
 ///
 /// TODO: Page navigation button clicks and "Take Book" action require
-/// block entity integration (ButtonClickHandler in the block code).
+/// block entity integration (`ButtonClickHandler` in the block code).
 pub struct LecternScreenHandler {
     behaviour: ScreenHandlerBehaviour,
     /// The lectern's book inventory. Kept for block entity sync;
@@ -207,6 +214,7 @@ pub struct LecternScreenHandler {
 }
 
 impl LecternScreenHandler {
+    #[allow(clippy::unused_async)]
     pub async fn new(sync_id: u8, player_inventory: &Arc<PlayerInventory>) -> Self {
         let inventory = Arc::new(LecternInventory::new());
 
@@ -217,7 +225,7 @@ impl LecternScreenHandler {
         };
 
         // Slot 0: Book
-        handler.add_slot(Arc::new(LecternBookSlot::new(inventory.clone(), 0)));
+        handler.add_slot(Arc::new(LecternBookSlot::new(inventory, 0)));
 
         // Slots 1-36: Player inventory
         let player_inv: Arc<dyn Inventory> = player_inventory.clone();

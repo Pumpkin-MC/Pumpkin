@@ -35,6 +35,12 @@ pub struct BeaconInventory {
     dirty: std::sync::atomic::AtomicBool,
 }
 
+impl Default for BeaconInventory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BeaconInventory {
     #[must_use]
     pub fn new() -> Self {
@@ -96,6 +102,7 @@ impl Clearable for BeaconInventory {
 }
 
 /// Check if an item is a valid beacon payment.
+#[must_use]
 pub fn is_beacon_payment(item: &'static Item) -> bool {
     item == &Item::IRON_INGOT
         || item == &Item::GOLD_INGOT
@@ -113,7 +120,7 @@ pub struct BeaconPaymentSlot {
 
 impl BeaconPaymentSlot {
     #[must_use]
-    pub fn new(inventory: Arc<BeaconInventory>, index: usize) -> Self {
+    pub const fn new(inventory: Arc<BeaconInventory>, index: usize) -> Self {
         Self {
             inventory,
             index,
@@ -212,6 +219,7 @@ pub struct BeaconScreenHandler {
 }
 
 impl BeaconScreenHandler {
+    #[allow(clippy::unused_async)]
     pub async fn new(sync_id: u8, player_inventory: &Arc<PlayerInventory>) -> Self {
         let inventory = Arc::new(BeaconInventory::new());
 
@@ -224,7 +232,7 @@ impl BeaconScreenHandler {
         };
 
         // Slot 0: Payment
-        handler.add_slot(Arc::new(BeaconPaymentSlot::new(inventory.clone(), 0)));
+        handler.add_slot(Arc::new(BeaconPaymentSlot::new(inventory, 0)));
 
         // Slots 1-36: Player inventory
         let player_inv: Arc<dyn Inventory> = player_inventory.clone();

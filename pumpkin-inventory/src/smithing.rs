@@ -32,6 +32,7 @@ pub enum SmithingMatch {
 }
 
 /// Finds a smithing transform recipe matching the given template, base, and addition items.
+#[must_use]
 pub fn find_smithing_transform(
     template: &Item,
     base: &Item,
@@ -45,6 +46,7 @@ pub fn find_smithing_transform(
 }
 
 /// Finds a smithing trim recipe matching the given template, base, and addition items.
+#[must_use]
 pub fn find_smithing_trim(
     template: &Item,
     base: &Item,
@@ -58,6 +60,7 @@ pub fn find_smithing_trim(
 }
 
 /// Finds any smithing recipe (transform or trim) matching the given inputs.
+#[must_use]
 pub fn find_smithing_recipe(
     template: &Item,
     base: &Item,
@@ -77,7 +80,14 @@ pub struct SmithingInventory {
     pub items: [Arc<Mutex<ItemStack>>; 3],
 }
 
+impl Default for SmithingInventory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SmithingInventory {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             items: [
@@ -151,6 +161,7 @@ pub struct SmithingOutputSlot {
 }
 
 impl SmithingOutputSlot {
+    #[must_use]
     pub fn new(input_inventory: Arc<SmithingInventory>) -> Self {
         Self {
             input_inventory,
@@ -237,7 +248,7 @@ impl Slot for SmithingOutputSlot {
     }
 }
 
-/// SmithingScreenHandler — vanilla SmithingMenu equivalent.
+/// `SmithingScreenHandler` — vanilla `SmithingMenu` equivalent.
 ///
 /// Layout:
 /// - Slot 0: Template slot (smithing template item)
@@ -251,7 +262,7 @@ impl Slot for SmithingOutputSlot {
 /// When any input slot changes, `update_result()` checks all transform and trim
 /// recipes. If a match is found, the output slot is populated. Transform recipes
 /// produce a new item (e.g., netherite upgrade). Trim recipes produce the base
-/// item with an armor trim applied (TODO: trim component on ItemStack).
+/// item with an armor trim applied (TODO: trim component on `ItemStack`).
 pub struct SmithingScreenHandler {
     pub input_inventory: Arc<SmithingInventory>,
     pub output_slot: Arc<SmithingOutputSlot>,
@@ -259,6 +270,8 @@ pub struct SmithingScreenHandler {
 }
 
 impl SmithingScreenHandler {
+    #[must_use]
+    #[allow(clippy::unused_async)]
     pub async fn new(sync_id: u8, player_inventory: &Arc<PlayerInventory>) -> Self {
         let input_inventory = Arc::new(SmithingInventory::new());
         let output_slot = Arc::new(SmithingOutputSlot::new(input_inventory.clone()));
@@ -274,7 +287,7 @@ impl SmithingScreenHandler {
         // Slot 1: Base
         handler.add_slot(Arc::new(NormalSlot::new(input_inventory.clone(), 1)));
         // Slot 2: Addition
-        handler.add_slot(Arc::new(NormalSlot::new(input_inventory.clone(), 2)));
+        handler.add_slot(Arc::new(NormalSlot::new(input_inventory, 2)));
         // Slot 3: Output
         handler.add_slot(output_slot);
 

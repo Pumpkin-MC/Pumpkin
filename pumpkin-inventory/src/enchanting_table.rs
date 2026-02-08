@@ -27,6 +27,12 @@ pub struct EnchantingTableInventory {
     dirty: std::sync::atomic::AtomicBool,
 }
 
+impl Default for EnchantingTableInventory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EnchantingTableInventory {
     #[must_use]
     pub fn new() -> Self {
@@ -108,7 +114,7 @@ pub struct LapisSlot {
 
 impl LapisSlot {
     #[must_use]
-    pub fn new(inventory: Arc<EnchantingTableInventory>, index: usize) -> Self {
+    pub const fn new(inventory: Arc<EnchantingTableInventory>, index: usize) -> Self {
         Self {
             inventory,
             index,
@@ -210,6 +216,7 @@ pub struct EnchantingTableScreenHandler {
 }
 
 impl EnchantingTableScreenHandler {
+    #[allow(clippy::unused_async)]
     pub async fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -231,7 +238,7 @@ impl EnchantingTableScreenHandler {
             0,
         )));
         // Slot 1: Lapis lazuli
-        handler.add_slot(Arc::new(LapisSlot::new(inventory.clone(), 1)));
+        handler.add_slot(Arc::new(LapisSlot::new(inventory, 1)));
 
         // Slots 2-37: Player inventory
         let player_inv: Arc<dyn Inventory> = player_inventory.clone();
@@ -328,6 +335,7 @@ impl ScreenHandler for EnchantingTableScreenHandler {
 
 /// Check if an item can be enchanted at an enchanting table.
 /// Accepts books and any item with the `enchantable/durability` tag (tools, armor, weapons).
+#[must_use]
 pub fn can_enchant(item: &'static Item) -> bool {
     item == &Item::BOOK || item.has_tag(&tag::Item::MINECRAFT_ENCHANTABLE_DURABILITY)
 }

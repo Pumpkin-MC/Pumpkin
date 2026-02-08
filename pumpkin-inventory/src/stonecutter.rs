@@ -21,6 +21,7 @@ use crate::{
 use std::sync::atomic::{AtomicU8, Ordering};
 
 /// Returns all stonecutting recipes whose ingredient matches the given item.
+#[must_use]
 pub fn get_stonecutting_recipes_for(
     item: &Item,
 ) -> Vec<&'static StonecuttingRecipe> {
@@ -35,7 +36,14 @@ pub struct StonecutterInventory {
     pub items: [Arc<Mutex<ItemStack>>; 1],
 }
 
+impl Default for StonecutterInventory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StonecutterInventory {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             items: [Arc::new(Mutex::new(ItemStack::EMPTY.clone()))],
@@ -96,6 +104,7 @@ pub struct StonecutterOutputSlot {
 }
 
 impl StonecutterOutputSlot {
+    #[must_use]
     pub fn new(input_inventory: Arc<StonecutterInventory>) -> Self {
         Self {
             input_inventory,
@@ -181,7 +190,7 @@ impl Slot for StonecutterOutputSlot {
     }
 }
 
-/// StonecutterScreenHandler — vanilla StonecutterMenu equivalent.
+/// `StonecutterScreenHandler` — vanilla `StonecutterMenu` equivalent.
 ///
 /// Layout:
 /// - Slot 0: Input slot (1 item)
@@ -204,6 +213,8 @@ pub struct StonecutterScreenHandler {
 }
 
 impl StonecutterScreenHandler {
+    #[must_use]
+    #[allow(clippy::unused_async)]
     pub async fn new(sync_id: u8, player_inventory: &Arc<PlayerInventory>) -> Self {
         let input_inventory = Arc::new(StonecutterInventory::new());
         let output_slot = Arc::new(StonecutterOutputSlot::new(input_inventory.clone()));
@@ -217,7 +228,7 @@ impl StonecutterScreenHandler {
         };
 
         // Slot 0: Input
-        handler.add_slot(Arc::new(NormalSlot::new(input_inventory.clone(), 0)));
+        handler.add_slot(Arc::new(NormalSlot::new(input_inventory, 0)));
         // Slot 1: Output
         handler.add_slot(output_slot);
 
@@ -309,7 +320,7 @@ impl ScreenHandler for StonecutterScreenHandler {
 
     fn quick_move<'a>(
         &'a mut self,
-        _player: &'a dyn InventoryPlayer,
+        player: &'a dyn InventoryPlayer,
         slot_index: i32,
     ) -> ItemStackFuture<'a> {
         Box::pin(async move {
@@ -328,7 +339,7 @@ impl ScreenHandler for StonecutterScreenHandler {
                 if !self.insert_item(&mut slot_stack, 2, 38, true).await {
                     return ItemStack::EMPTY.clone();
                 }
-                slot.on_take_item(_player, &stack_prev).await;
+                slot.on_take_item(player, &stack_prev).await;
             } else if slot_index == 0 {
                 // From input slot — move to player inventory (2..38)
                 if !self.insert_item(&mut slot_stack, 2, 38, false).await {

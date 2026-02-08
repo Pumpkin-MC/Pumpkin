@@ -27,6 +27,12 @@ pub struct GrindstoneInventory {
     dirty: std::sync::atomic::AtomicBool,
 }
 
+impl Default for GrindstoneInventory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GrindstoneInventory {
     #[must_use]
     pub fn new() -> Self {
@@ -105,6 +111,12 @@ pub struct GrindstoneOutputSlot {
     result: Arc<Mutex<ItemStack>>,
 }
 
+impl Default for GrindstoneOutputSlot {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GrindstoneOutputSlot {
     #[must_use]
     pub fn new() -> Self {
@@ -180,6 +192,7 @@ impl Slot for GrindstoneOutputSlot {
 /// 1. Single enchanted item → same item with enchantments removed (curses kept)
 /// 2. Two same-type items → combined durability, enchantments removed (curses kept)
 /// 3. Returns XP proportional to removed enchantment levels (not computed here)
+#[must_use]
 pub fn compute_grindstone_result(
     top: &ItemStack,
     bottom: &ItemStack,
@@ -294,6 +307,7 @@ pub struct GrindstoneScreenHandler {
 }
 
 impl GrindstoneScreenHandler {
+    #[allow(clippy::unused_async)]
     pub async fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -314,7 +328,7 @@ impl GrindstoneScreenHandler {
         )));
         // Slot 1: Bottom input
         handler.add_slot(Arc::new(crate::slot::NormalSlot::new(
-            inventory.clone(),
+            inventory,
             1,
         )));
         // Slot 2: Output

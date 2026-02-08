@@ -26,6 +26,12 @@ pub struct BrewingStandInventory {
     dirty: std::sync::atomic::AtomicBool,
 }
 
+impl Default for BrewingStandInventory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BrewingStandInventory {
     #[must_use]
     pub fn new() -> Self {
@@ -107,7 +113,7 @@ pub struct PotionSlot {
 
 impl PotionSlot {
     #[must_use]
-    pub fn new(inventory: Arc<BrewingStandInventory>, index: usize) -> Self {
+    pub const fn new(inventory: Arc<BrewingStandInventory>, index: usize) -> Self {
         Self {
             inventory,
             index,
@@ -117,6 +123,7 @@ impl PotionSlot {
 }
 
 /// Check if an item can go into a potion bottle slot.
+#[must_use]
 pub fn is_potion_slot_item(item: &'static Item) -> bool {
     item == &Item::POTION
         || item == &Item::SPLASH_POTION
@@ -197,7 +204,7 @@ pub struct FuelSlot {
 
 impl FuelSlot {
     #[must_use]
-    pub fn new(inventory: Arc<BrewingStandInventory>, index: usize) -> Self {
+    pub const fn new(inventory: Arc<BrewingStandInventory>, index: usize) -> Self {
         Self {
             inventory,
             index,
@@ -295,6 +302,7 @@ pub struct BrewingStandScreenHandler {
 }
 
 impl BrewingStandScreenHandler {
+    #[allow(clippy::unused_async)]
     pub async fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -318,7 +326,7 @@ impl BrewingStandScreenHandler {
             3,
         )));
         // Slot 4: Fuel (blaze powder)
-        handler.add_slot(Arc::new(FuelSlot::new(inventory.clone(), 4)));
+        handler.add_slot(Arc::new(FuelSlot::new(inventory, 4)));
 
         // Slots 5-40: Player inventory
         let player_inv: Arc<dyn Inventory> = player_inventory.clone();
