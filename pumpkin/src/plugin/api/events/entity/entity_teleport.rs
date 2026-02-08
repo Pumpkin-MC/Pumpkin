@@ -33,7 +33,7 @@ pub struct EntityTeleportEvent {
 
 impl EntityTeleportEvent {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         entity_id: i32,
         entity_type: &'static EntityType,
         from: Vector3<f64>,

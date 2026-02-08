@@ -16,7 +16,7 @@ pub struct PluginEnableEvent {
 
 impl PluginEnableEvent {
     #[must_use]
-    pub fn new(plugin_name: String, plugin_version: String) -> Self {
+    pub const fn new(plugin_name: String, plugin_version: String) -> Self {
         Self {
             plugin_name,
             plugin_version,

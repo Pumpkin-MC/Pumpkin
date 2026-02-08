@@ -17,13 +17,13 @@ pub struct InventoryClickEvent {
     /// The slot number that was clicked (-999 for outside click).
     pub slot: i32,
 
-    /// The click type (e.g. "LEFT", "RIGHT", "SHIFT_LEFT", "SHIFT_RIGHT", "MIDDLE", "DROP").
+    /// The click type (e.g. `LEFT`, `RIGHT`, `SHIFT_LEFT`, `SHIFT_RIGHT`, `MIDDLE`, `DROP`).
     pub click_type: String,
 }
 
 impl InventoryClickEvent {
     #[must_use]
-    pub fn new(player: Arc<Player>, slot: i32, click_type: String) -> Self {
+    pub const fn new(player: Arc<Player>, slot: i32, click_type: String) -> Self {
         Self {
             player,
             slot,

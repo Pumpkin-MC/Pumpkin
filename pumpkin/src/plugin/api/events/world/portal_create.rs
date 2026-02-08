@@ -18,13 +18,13 @@ pub struct PortalCreateEvent {
     /// The position of the portal.
     pub position: BlockPos,
 
-    /// The reason for the portal creation (e.g. "fire", "end_platform").
+    /// The reason for the portal creation (e.g. `fire`, `end_platform`).
     pub reason: String,
 }
 
 impl PortalCreateEvent {
     #[must_use]
-    pub fn new(world: Arc<World>, position: BlockPos, reason: String) -> Self {
+    pub const fn new(world: Arc<World>, position: BlockPos, reason: String) -> Self {
         Self {
             world,
             position,

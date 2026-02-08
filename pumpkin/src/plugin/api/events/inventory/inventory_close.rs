@@ -19,7 +19,7 @@ pub struct InventoryCloseEvent {
 
 impl InventoryCloseEvent {
     #[must_use]
-    pub fn new(player: Arc<Player>, inventory_title: String) -> Self {
+    pub const fn new(player: Arc<Player>, inventory_title: String) -> Self {
         Self {
             player,
             inventory_title,
