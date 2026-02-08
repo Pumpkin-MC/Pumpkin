@@ -9,16 +9,12 @@ use serde::{Deserialize, Serialize};
 pub struct ResourcePackConfig {
     /// Whether the resource pack system is enabled.
     pub enabled: bool,
-
     /// The URL to the resource pack.
     pub url: String,
-
     /// The SHA1 hash (40 characters) of the resource pack.
     pub sha1: String,
-
     /// Custom prompt text component shown to players; leave blank for none.
     pub prompt_message: String,
-
     /// Whether players are forced to accept the resource pack.
     pub force: bool,
 }

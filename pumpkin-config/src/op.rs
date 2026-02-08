@@ -9,13 +9,10 @@ use uuid::Uuid;
 pub struct Op {
     /// The UUID of the operator.
     pub uuid: Uuid,
-
     /// The name of the operator.
     pub name: String,
-
     /// The permission level assigned to this operator.
     pub level: PermissionLvl,
-
     /// Whether this operator bypasses the server's player limit.
     pub bypasses_player_limit: bool,
 }

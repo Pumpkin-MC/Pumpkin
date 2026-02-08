@@ -8,16 +8,12 @@ use serde::{Deserialize, Serialize};
 pub struct PVPConfig {
     /// Whether PVP is enabled on the server.
     pub enabled: bool,
-
     /// Whether to show the red hurt animation and FOV bobbing when hit.
     pub hurt_animation: bool,
-
     /// Whether players in creative mode are protected from PVP.
     pub protect_creative: bool,
-
     /// Whether knockback from attacks is applied.
     pub knockback: bool,
-
     /// Whether players swing their hand when attacking.
     pub swing: bool,
 }
