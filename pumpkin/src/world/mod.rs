@@ -609,7 +609,8 @@ impl World {
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         let start = tokio::time::Instant::now();
 
-        // 1. Block & Environment
+        // IMPORTANT: send flush_block_updates first to prevent issues with CAcknowledgeBlockChange
+        self.flush_block_updates().await;
         self.flush_synced_block_events().await;
         self.tick_environment().await;
 
@@ -649,7 +650,6 @@ impl World {
         }
         let entity_elapsed = entity_start.elapsed();
 
-        self.flush_block_updates().await;
         //self.level.chunk_loading.lock().unwrap().send_change();
 
         let total_elapsed = start.elapsed();

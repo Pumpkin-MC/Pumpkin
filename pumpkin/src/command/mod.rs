@@ -20,6 +20,8 @@ pub mod args;
 pub mod client_suggestions;
 pub mod commands;
 pub mod dispatcher;
+pub mod errors;
+pub mod string_reader;
 pub mod tree;
 
 /// Represents the source of a command execution.
@@ -76,7 +78,7 @@ impl CommandSender {
                     block_entity.as_any().downcast_ref().unwrap();
                 let mut last_output = command_entity.last_output.lock().await;
 
-                let now = time::OffsetDateTime::now_local().unwrap();
+                let now = time::OffsetDateTime::now_utc();
                 let format = time::macros::format_description!("[hour]:[minute]:[second]");
                 let timestamp = now.format(&format).unwrap();
 
