@@ -8,7 +8,9 @@ use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};
 use crate::entity::{
     Entity, NBTStorage,
-    ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
+    ai::goal::{
+        active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+    },
 };
 use crate::world::World;
 use pumpkin_data::Block;
@@ -37,6 +39,7 @@ impl ZombieEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
+            goal_selector.add_goal(0, SwimGoal::new());
             goal_selector.add_goal(4, DestroyEggGoal::new(1.0, 3));
             goal_selector.add_goal(
                 8,

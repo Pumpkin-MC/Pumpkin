@@ -6,7 +6,7 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::LookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -34,6 +34,7 @@ impl CreakingEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
+            goal_selector.add_goal(0, SwimGoal::new());
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(6, WanderAroundGoal::new(0.5));
             goal_selector.add_goal(
