@@ -4,7 +4,7 @@ use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
     Entity, NBTStorage,
-    ai::goal::active_target::ActiveTargetGoal,
+    ai::goal::{active_target::ActiveTargetGoal, ranged_attack::RangedAttackGoal},
     mob::{Mob, MobEntity, zombie::ZombieEntity},
 };
 
@@ -19,9 +19,14 @@ impl DrownedEntity {
         let mob_arc = Arc::new(zombie);
 
         {
+            let mut goal_selector = mob_arc.entity.mob_entity.goals_selector.lock().await;
             let mut target_selector = mob_arc.entity.mob_entity.target_selector.lock().await;
 
-            // TODO
+            goal_selector.add_goal(
+                2,
+                RangedAttackGoal::new(1.0, 20, 10.0),
+            );
+
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(

@@ -26,7 +26,15 @@ use crate::{
     net::ClientPlatform,
     plugin::{
         block::block_break::BlockBreakEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
+        entity::entity_spawn::EntitySpawnEvent,
+        player::{
+            player_join::PlayerJoinEvent,
+            player_leave::PlayerLeaveEvent,
+            player_respawn::PlayerRespawnEvent,
+        },
+        world::{
+            chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend,
+        },
     },
     server::Server,
 };
@@ -246,9 +254,23 @@ impl World {
         }
     }
 
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(self: &Arc<Self>) {
         for entity in self.entities.load().iter() {
             self.save_entity(entity).await;
+        }
+
+        // Fire ChunkSave events for all loaded chunks
+        if let Some(server) = self.server.upgrade() {
+            for entry in self.level.loaded_chunks.iter() {
+                let _ = server
+                    .plugin_manager
+                    .fire(ChunkSave {
+                        world: self.clone(),
+                        chunk: entry.value().clone(),
+                        cancelled: false,
+                    })
+                    .await;
+            }
         }
 
         // Save portal POI to disk
@@ -1959,7 +1981,7 @@ impl World {
         };
 
         // Handle cross-dimension transfer if we found a different target world
-        let (target_world, position) = if let Some(ref new_world) = target_world {
+        let (target_world, mut position) = if let Some(ref new_world) = target_world {
             log::debug!(
                 "Cross-dimension respawn: {} -> {}",
                 self.dimension.minecraft_name,
@@ -2004,6 +2026,15 @@ impl World {
         } else {
             (self.as_ref(), position)
         };
+
+        // Fire PlayerRespawnEvent — plugins can modify respawn position
+        if let Some(server) = self.server.upgrade() {
+            let event = PlayerRespawnEvent::new(player.clone(), position);
+            let event = server.plugin_manager.fire(event).await;
+            if !event.cancelled {
+                position = event.respawn_position;
+            }
+        }
 
         // Send respawn packet with target dimension (using send_packet_now to ensure proper order)
         player
@@ -2069,11 +2100,39 @@ impl World {
         if let crate::net::ClientPlatform::Java(java_client) = &player.client {
             let center_chunk = player.living_entity.entity.chunk_pos.load();
             let chunk = target_world.level.get_chunk(center_chunk).await;
-            java_client.send_packet_now(&CChunkBatchStart).await;
-            java_client.send_packet_now(&CChunkData(&chunk)).await;
-            java_client
-                .send_packet_now(&CChunkBatchEnd::new(1u16))
-                .await;
+
+            // Fire ChunkSend event — if cancelled, skip sending
+            let send_cancelled = if let Some(server) = target_world.server.upgrade() {
+                if let Some(world_arc) = server
+                    .worlds
+                    .load()
+                    .iter()
+                    .find(|w| w.dimension == target_world.dimension)
+                    .cloned()
+                {
+                    server
+                        .plugin_manager
+                        .fire(ChunkSend {
+                            world: world_arc,
+                            chunk: chunk.clone(),
+                            cancelled: false,
+                        })
+                        .await
+                        .cancelled
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if !send_cancelled {
+                java_client.send_packet_now(&CChunkBatchStart).await;
+                java_client.send_packet_now(&CChunkData(&chunk)).await;
+                java_client
+                    .send_packet_now(&CChunkBatchEnd::new(1u16))
+                    .await;
+            }
         }
 
         // Send teleport packet after at least the center chunk was delivered
@@ -2209,6 +2268,22 @@ impl World {
 
                     continue 'main;
                 };
+
+                // Fire ChunkLoad event — if cancelled, skip this chunk
+                if let Some(server) = world.server.upgrade() {
+                    let terrain_chunk = level.get_chunk(position).await;
+                    let event = server
+                        .plugin_manager
+                        .fire(ChunkLoad {
+                            world: world.clone(),
+                            chunk: terrain_chunk,
+                            cancelled: false,
+                        })
+                        .await;
+                    if event.cancelled {
+                        continue 'main;
+                    }
+                }
 
                 // Add all new Entities to the world
                 let mut entities_to_add: Vec<Arc<dyn EntityBase>> = Vec::new();
@@ -2564,8 +2639,23 @@ impl World {
         removed_player
     }
 
-    pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
+    pub async fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
+
+        // Fire EntitySpawnEvent — if cancelled, skip spawning
+        if let Some(server) = self.server.upgrade() {
+            let event = EntitySpawnEvent::new(
+                base_entity.entity_id,
+                base_entity.entity_type,
+                base_entity.pos.load(),
+                self.clone(),
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
+            }
+        }
+
         self.broadcast_packet_all(&base_entity.create_spawn_packet())
             .await;
         entity.init_data_tracker().await;
@@ -3253,6 +3343,20 @@ impl World {
             if let Some(neighbor_pumpkin_block) =
                 self.block_registry.get_pumpkin_block(neighbor_block.id)
             {
+                // Fire BlockPhysicsEvent for plugin cancellation support (ARCH-023)
+                if let Some(server) = self.server.upgrade() {
+                    let event = crate::plugin::api::events::block::block_physics::BlockPhysicsEvent::new(
+                        neighbor_block,
+                        neighbor_pos,
+                        source_block,
+                        *block_pos,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        continue;
+                    }
+                }
+
                 neighbor_pumpkin_block
                     .on_neighbor_update(OnNeighborUpdateArgs {
                         world: self,

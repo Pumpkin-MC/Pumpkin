@@ -80,8 +80,7 @@ impl Navigator {
 
     #[must_use]
     pub const fn is_idle(&self) -> bool {
-        // TODO: implement
-        false
+        self.current_goal.is_none()
     }
 }
 
