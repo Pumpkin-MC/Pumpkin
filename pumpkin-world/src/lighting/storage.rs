@@ -3,6 +3,7 @@ use crate::chunk_system::generation_cache::Cache;
 use crate::generation::height_limit::HeightLimitView;
 use pumpkin_util::math::position::BlockPos;
 
+#[inline(always)]
 fn get_chunk_index(cache: &Cache, chunk_x: i32, chunk_z: i32) -> Option<usize> {
     let rel_x = chunk_x - cache.x;
     let rel_z = chunk_z - cache.z;
@@ -12,6 +13,7 @@ fn get_chunk_index(cache: &Cache, chunk_x: i32, chunk_z: i32) -> Option<usize> {
     Some((rel_x * cache.size + rel_z) as usize)
 }
 
+#[inline(always)]
 fn get_section_y(cache: &Cache, pos_y: i32) -> Option<usize> {
     let bottom = cache.bottom_y() as i32;
     if pos_y < bottom {
@@ -21,6 +23,7 @@ fn get_section_y(cache: &Cache, pos_y: i32) -> Option<usize> {
     Some(section)
 }
 
+#[inline(always)]
 pub fn get_block_light(cache: &Cache, pos: BlockPos) -> u8 {
     let chunk_x = pos.0.x >> 4;
     let chunk_z = pos.0.z >> 4;
@@ -28,7 +31,6 @@ pub fn get_block_light(cache: &Cache, pos: BlockPos) -> u8 {
     let Some(idx) = get_chunk_index(cache, chunk_x, chunk_z) else {
         return 0;
     };
-    let chunk = &cache.chunks[idx];
 
     let Some(section_y) = get_section_y(cache, pos.0.y) else {
         return 0;
@@ -38,10 +40,9 @@ pub fn get_block_light(cache: &Cache, pos: BlockPos) -> u8 {
     let y = (pos.0.y & 15) as usize;
     let z = (pos.0.z & 15) as usize;
 
-    match chunk {
+    match &cache.chunks[idx] {
         Chunk::Level(c) => {
             let light_engine = c.light_engine.lock().unwrap();
-
             if section_y >= light_engine.block_light.len() {
                 return 0;
             }
@@ -56,6 +57,7 @@ pub fn get_block_light(cache: &Cache, pos: BlockPos) -> u8 {
     }
 }
 
+#[inline(always)]
 pub fn set_block_light(cache: &mut Cache, pos: BlockPos, level: u8) {
     let chunk_x = pos.0.x >> 4;
     let chunk_z = pos.0.z >> 4;
@@ -70,15 +72,12 @@ pub fn set_block_light(cache: &mut Cache, pos: BlockPos, level: u8) {
     let x = (pos.0.x & 15) as usize;
     let y = (pos.0.y & 15) as usize;
     let z = (pos.0.z & 15) as usize;
-    let chunk = &mut cache.chunks[idx];
 
-    match chunk {
+    match &mut cache.chunks[idx] {
         Chunk::Level(c) => {
             let mut light_engine = c.light_engine.lock().unwrap();
-
             if section_y < light_engine.block_light.len() {
                 light_engine.block_light[section_y].set(x, y, z, level);
-
                 c.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
             }
         }
@@ -90,6 +89,7 @@ pub fn set_block_light(cache: &mut Cache, pos: BlockPos, level: u8) {
     }
 }
 
+#[inline(always)]
 pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     let chunk_x = pos.0.x >> 4;
     let chunk_z = pos.0.z >> 4;
@@ -97,7 +97,6 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     let Some(idx) = get_chunk_index(cache, chunk_x, chunk_z) else {
         return 0;
     };
-    let chunk = &cache.chunks[idx];
 
     let Some(section_y) = get_section_y(cache, pos.0.y) else {
         return 0;
@@ -107,10 +106,9 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     let y = (pos.0.y & 15) as usize;
     let z = (pos.0.z & 15) as usize;
 
-    match chunk {
+    match &cache.chunks[idx] {
         Chunk::Level(c) => {
             let light_engine = c.light_engine.lock().unwrap();
-
             if section_y >= light_engine.sky_light.len() {
                 return 0;
             }
@@ -125,6 +123,7 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     }
 }
 
+#[inline(always)]
 pub fn set_sky_light(cache: &mut Cache, pos: BlockPos, level: u8) {
     let chunk_x = pos.0.x >> 4;
     let chunk_z = pos.0.z >> 4;
@@ -139,15 +138,12 @@ pub fn set_sky_light(cache: &mut Cache, pos: BlockPos, level: u8) {
     let x = (pos.0.x & 15) as usize;
     let y = (pos.0.y & 15) as usize;
     let z = (pos.0.z & 15) as usize;
-    let chunk = &mut cache.chunks[idx];
 
-    match chunk {
+    match &mut cache.chunks[idx] {
         Chunk::Level(c) => {
             let mut light_engine = c.light_engine.lock().unwrap();
-
             if section_y < light_engine.sky_light.len() {
                 light_engine.sky_light[section_y].set(x, y, z, level);
-
                 c.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
             }
         }

@@ -1,14 +1,16 @@
 use crate::chunk_system::generation_cache::Cache;
 use crate::generation::proto_chunk::GenerationCache;
-// [FIX] Added HeightLimitView import
 use crate::generation::height_limit::HeightLimitView;
 use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
+use crate::lighting::fast_cache::FastLightCache;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::collections::{HashMap, HashSet, VecDeque};
+use crate::chunk_system::Chunk;
+//use std::time::Instant;
 
 type FastHashSet<K> = HashSet<K>;
 type FastHashMap<K, V> = HashMap<K, V>;
@@ -17,6 +19,9 @@ type FastHashMap<K, V> = HashMap<K, V>;
 pub trait LightProvider {
     fn get_light(cache: &Cache, pos: BlockPos) -> u8;
     fn set_light(cache: &mut Cache, pos: BlockPos, level: u8);
+    // Cache methods
+    fn get_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos) -> u8;
+    fn set_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos, level: u8);
     fn propagate_level(current_level: u8, opacity: u8, dir: BlockDirection) -> u8;
 }
 
@@ -33,6 +38,16 @@ impl LightProvider for BlockLightProvider {
     #[inline(always)]
     fn propagate_level(current_level: u8, opacity: u8, _dir: BlockDirection) -> u8 {
         current_level.saturating_sub(opacity.max(1))
+    }
+
+    #[inline(always)]
+    fn get_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos) -> u8 {
+        fast_cache.get_block_light(pos)
+    }
+
+    #[inline(always)]
+    fn set_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos, level: u8) {
+        fast_cache.set_block_light(pos, level)
     }
 }
 
@@ -54,10 +69,20 @@ impl LightProvider for SkyLightProvider {
 
         current_level.saturating_sub(opacity.max(1))
     }
+
+    #[inline(always)]
+    fn get_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos) -> u8 {
+        fast_cache.get_sky_light(pos)
+    }
+
+    #[inline(always)]
+    fn set_light_cached(fast_cache: &mut FastLightCache, pos: BlockPos, level: u8) {
+        fast_cache.set_sky_light(pos, level)
+    }
 }
 
 #[derive(Clone, Copy)]
-struct PropagationEntry {
+pub struct PropagationEntry {
     pos: BlockPos,
     skip_direction: Option<BlockDirection>, // direction from which the light came, used to prevent back-propagation
 }
@@ -94,14 +119,14 @@ impl<P: LightProvider> LightPropagator<P> {
     }
 
     /// Flushes pending updates to chunk storage
-    fn apply_updates(&mut self, cache: &mut Cache) {
+    fn apply_updates(&mut self, fast_cache: &mut FastLightCache) {
         if self.pending_updates.is_empty() {
             return;
         }
 
         for (_, updates) in self.pending_updates.drain() {
             for (pos, val) in updates {
-                P::set_light(cache, pos, val);
+                P::set_light_cached(fast_cache, pos, val);
             }
         }
     }
@@ -110,13 +135,22 @@ impl<P: LightProvider> LightPropagator<P> {
     pub fn propagate(&mut self, cache: &mut Cache) {
         self.shadow_cache.clear();
 
+        // Lazily create a FastLightCache to avoid simultaneous mutable/immutable borrows of `cache`.
+            // Cache some immutable cache metadata before creating the fast mutable cache
+            let cache_x = cache.x;
+            let cache_z = cache.z;
+            let cache_size = cache.size;
+
+            // Create FastLightCache for fast light reads/writes
+            let mut fast_cache = FastLightCache::new(cache);
+
         while let Some(entry) = self.queue.pop_front() {
             let pos = entry.pos;
-            let current_light = self
-                .shadow_cache
-                .get(&pos)
-                .copied()
-                .unwrap_or_else(|| P::get_light(cache, pos));
+            let current_light = if let Some(v) = self.shadow_cache.get(&pos).copied() {
+                v
+            } else {
+                    P::get_light_cached(&mut fast_cache, pos)
+            };
 
             if current_light <= 1 {
                 continue;
@@ -138,23 +172,22 @@ impl<P: LightProvider> LightPropagator<P> {
                 }
 
                 let (cx, _rel) = neighbor_pos.chunk_and_chunk_relative_position();
-                let rel_x = cx.x - cache.x;
-                let rel_z = cx.y - cache.z;
+                let rel_x = cx.x - cache_x;
+                let rel_z = cx.y - cache_z;
 
-                if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
+                if rel_x < 0 || rel_x >= cache_size || rel_z < 0 || rel_z >= cache_size {
                     continue;
                 }
 
-                let state = cache.get_block_state(&neighbor_pos.0);
-                let opacity = state.to_state().opacity;
+                let opacity = fast_cache.get_block_opacity(neighbor_pos);
 
                 let new_level = P::propagate_level(current_light, opacity, dir);
 
-                let neighbor_light = self
-                    .shadow_cache
-                    .get(&neighbor_pos)
-                    .copied()
-                    .unwrap_or_else(|| P::get_light(cache, neighbor_pos));
+                let neighbor_light = if let Some(v) = self.shadow_cache.get(&neighbor_pos).copied() {
+                    v
+                } else {
+                        P::get_light_cached(&mut fast_cache, neighbor_pos)
+                };
 
                 if new_level > neighbor_light {
                     self.shadow_cache.insert(neighbor_pos, new_level);
@@ -177,45 +210,51 @@ impl<P: LightProvider> LightPropagator<P> {
             }
 
             if self.pending_updates.len() > 64 {
-                self.apply_updates(cache);
+                self.apply_updates(&mut fast_cache);
             }
         }
-        self.apply_updates(cache);
+            if !self.pending_updates.is_empty() {
+                self.apply_updates(&mut fast_cache);
+        }
     }
 
     /// Handle light removal
     pub fn process_decrease_queue(&mut self, cache: &mut Cache) {
-        while let Some((pos, old_val)) = self.decrease_queue.pop_front() {
-            for dir in BlockDirection::all() {
-                let neighbor_pos = pos.offset(dir.to_offset());
+        {
+            let mut fast_cache = FastLightCache::new(cache);
 
-                // Bounds check could be added here similar to propagate
+            while let Some((pos, old_val)) = self.decrease_queue.pop_front() {
+                for dir in BlockDirection::all() {
+                    let neighbor_pos = pos.offset(dir.to_offset());
 
-                let neighbor_light = P::get_light(cache, neighbor_pos);
-                if neighbor_light == 0 {
-                    continue;
-                }
+                    // Bounds check could be added here similar to propagate
 
-                let state = cache.get_block_state(&neighbor_pos.0);
-                let opacity = state.to_state().opacity;
+                    let neighbor_light = P::get_light_cached(&mut fast_cache, neighbor_pos);
+                    if neighbor_light == 0 {
+                        continue;
+                    }
 
-                let predicted = P::propagate_level(old_val, opacity, dir);
+                    let opacity = fast_cache.get_block_opacity(neighbor_pos);
 
-                if neighbor_light == predicted || neighbor_light < old_val {
-                    // Darken
-                    P::set_light(cache, neighbor_pos, 0);
-                    self.decrease_queue
-                        .push_back((neighbor_pos, neighbor_light));
-                } else if neighbor_light >= old_val {
-                    // Re-illuminate from this bright neighbor
-                    self.queue.push_back(PropagationEntry {
-                        pos: neighbor_pos,
-                        skip_direction: None,
-                    });
-                    self.visited.insert(neighbor_pos);
+                    let predicted = P::propagate_level(old_val, opacity, dir);
+
+                    if neighbor_light == predicted || neighbor_light < old_val {
+                        // Darken
+                        P::set_light_cached(&mut fast_cache, neighbor_pos, 0);
+                        self.decrease_queue
+                            .push_back((neighbor_pos, neighbor_light));
+                    } else if neighbor_light >= old_val {
+                        // Re-illuminate from this bright neighbor
+                        self.queue.push_back(PropagationEntry {
+                            pos: neighbor_pos,
+                            skip_direction: None,
+                        });
+                        self.visited.insert(neighbor_pos);
+                    }
                 }
             }
         }
+
         self.propagate(cache); // Re-propagate from survivors
     }
 }
@@ -232,6 +271,8 @@ impl<P: LightProvider> Default for LightPropagator<P> {
 impl BlockLightPropagator {
     pub fn propagate_light(&mut self, cache: &mut Cache) {
         self.clear();
+
+        //let scan_start = Instant::now();
 
         let min_y = cache.bottom_y() as i32;
         let max_y = min_y + cache.height() as i32;
@@ -263,13 +304,22 @@ impl BlockLightPropagator {
                 }
             }
         }
+        //let scan_elapsed = scan_start.elapsed();
+        //let propagate_start = Instant::now();
+
         self.propagate(cache);
+
+        //let propagate_elapsed = propagate_start.elapsed();
+        //log::info!("Block light timing - Scan: {:?}, Propagate: {:?}", scan_elapsed, propagate_elapsed);
     }
 }
 
 impl SkyLightPropagator {
     pub fn convert_light(&mut self, cache: &mut Cache) {
         self.clear();
+        
+        //let scan_start = Instant::now();
+
         let center_x = cache.x + (cache.size / 2);
         let center_z = cache.z + (cache.size / 2);
         let start_x = center_x * 16 - 1;
@@ -280,68 +330,127 @@ impl SkyLightPropagator {
         let bottom_y = cache.bottom_y() as i32;
         let max_y = bottom_y + cache.height() as i32;
 
-        // First pass: set vertical light and collect surface heights
-        let mut surface_heights: FastHashMap<(i32, i32), i32> = FastHashMap::default();
+        // Pre-allocate with exact size needed
+        let capacity = ((end_x - start_x) * (end_z - start_z)) as usize;
+        let mut surface_heights = FastHashMap::with_capacity_and_hasher(capacity, Default::default());
         
-        for x in start_x..end_x {
-            for z in start_z..end_z {
+        // Process in Z-outer, X-inner order for better cache locality
+        for z in start_z..end_z {
+            let chunk_z = z >> 4;
+            let local_z = (z & 15) as usize;
+            
+            for x in start_x..end_x {
+                let chunk_x = x >> 4;
+                let local_x = (x & 15) as usize;
+                
+                // Get heightmap (top solid blocks)
                 let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
                 surface_heights.insert((x, z), top_y);
-
+                
+                // Get chunk index once per column
+                let rel_x = chunk_x - cache.x;
+                let rel_z = chunk_z - cache.z;
+                
+                if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
+                    continue;
+                }
+                
+                let chunk_idx = (rel_x * cache.size + rel_z) as usize;
+                
+                // Fill everything above heightmap with 15 immediately
+                for y in (top_y + 1)..max_y {
+                    let section_idx = ((y - bottom_y) >> 4) as usize;
+                    let local_y = (y & 15) as usize;
+                    
+                    // Direct array access - skip all function call overhead
+                    match &mut cache.chunks[chunk_idx] {
+                        Chunk::Proto(c) => {
+                            if section_idx < c.light.sky_light.len() {
+                                c.light.sky_light[section_idx].set(local_x, local_y, local_z, 15);
+                            }
+                        }
+                        Chunk::Level(c) => {
+                            let mut light_engine = c.light_engine.lock().unwrap();
+                            if section_idx < light_engine.sky_light.len() {
+                                light_engine.sky_light[section_idx].set(local_x, local_y, local_z, 15);
+                            }
+                        }
+                    }
+                }
+                
+                // Only iterate from top_y DOWN - not from max_y
                 let mut light: i32 = 15;
-
-                for y in (bottom_y..max_y).rev() {
-                    let pos = BlockPos(Vector3::new(x, y, z));
-
-                    let opacity = if y > top_y {
-                        0
-                    } else {
-                        let state = cache.get_block_state(&pos.0);
+                
+                for y in (bottom_y..=top_y).rev() {
+                    let section_idx = ((y - bottom_y) >> 4) as usize;
+                    let local_y = (y & 15) as usize;
+                    
+                    // Get block opacity
+                    let opacity = {
+                        let pos_vec = Vector3::new(x, y, z);
+                        let state = cache.get_block_state(&pos_vec);
                         state.to_state().opacity
-                    };
-
-                    light = light.saturating_sub(opacity as i32);
-
+                    } as i32;
+                    
+                    // Reduce light by opacity
+                    light = light.saturating_sub(opacity);
+                    
+                    // Set the light value directly
+                    let light_val = if light <= 0 { 0 } else { light as u8 };
+                    
+                    match &mut cache.chunks[chunk_idx] {
+                        Chunk::Proto(c) => {
+                            if section_idx < c.light.sky_light.len() {
+                                c.light.sky_light[section_idx].set(local_x, local_y, local_z, light_val);
+                            }
+                        }
+                        Chunk::Level(c) => {
+                            let mut light_engine = c.light_engine.lock().unwrap();
+                            if section_idx < light_engine.sky_light.len() {
+                                light_engine.sky_light[section_idx].set(local_x, local_y, local_z, light_val);
+                            }
+                        }
+                    }
+                    
+                    // Early exit when light hits 0
                     if light <= 0 {
-                        set_sky_light(cache, pos, 0);
-                    } else {
-                        set_sky_light(cache, pos, light as u8);
+                        break;
                     }
                 }
             }
         }
 
-        // Second pass: enqueue positions that need horizontal propagation
-        for x in start_x..end_x {
-            for z in start_z..end_z {
-                let top_y = surface_heights.get(&(x, z)).copied().unwrap_or(bottom_y);
+        // Enqueue horizontal propagation
+        for z in start_z..end_z {
+            for x in start_x..end_x {
+                let top_y = surface_heights[&(x, z)];
                 
-                // Get neighbor heights (with bounds checking)
+                // Get neighbor heights with bounds checking
                 let north_top = surface_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
                 let south_top = surface_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
                 let west_top = surface_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
                 let east_top = surface_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
-
-                // Process column from top to bottom
-                for y in (bottom_y..=max_y).rev() {
+                
+                let max_neighbor = north_top.max(south_top).max(west_top).max(east_top);
+                
+                // Only check down to the minimum relevant height
+                // No need to check blocks that won't need horizontal propagation
+                let min_check_y = top_y.min(max_neighbor);
+                
+                // Start from top and break early when we hit 0 light
+                for y in (bottom_y..=min_check_y).rev() {
                     let pos = BlockPos(Vector3::new(x, y, z));
                     let light = get_sky_light(cache, pos);
                     
                     if light == 0 {
-                        continue;
+                        break; // No more light below this point in column
                     }
-
-                    // Enqueue if we're at the surface OR below a neighbor's surface
-                    // This enables horizontal propagation at terrain boundaries
+                    
                     let is_at_surface = y == top_y;
-                    let below_north = y < north_top;
-                    let below_south = y < south_top;
-                    let below_west = y < west_top;
-                    let below_east = y < east_top;
-
-                    if is_at_surface || below_north || below_south || below_west || below_east {
+                    let below_neighbor = y < max_neighbor;
+                    
+                    if is_at_surface || below_neighbor {
                         if self.visited.insert(pos) {
-                            // For surface blocks, propagate down but not up
                             let skip_dir = if is_at_surface {
                                 Some(BlockDirection::Up)
                             } else {
@@ -358,8 +467,13 @@ impl SkyLightPropagator {
             }
         }
 
-        // Now let the BFS engine handle the propagation
+        //let propagate_start = Instant::now();
+
         self.propagate(cache);
+
+        //let propagate_elapsed = propagate_start.elapsed();
+        //let scan_elapsed = scan_start.elapsed();
+        //log::info!("Sky light timing - Scan: {:?}, Propagate: {:?}", scan_elapsed, propagate_elapsed);
     }
 }
 
