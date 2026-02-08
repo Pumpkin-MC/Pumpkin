@@ -83,13 +83,178 @@ The Entity agent also depends on the tick loop being correct for entity AI and p
 
 The gap analysis said lib.rs was 23K lines. It's actually 607. CORE-001 confirms no decomposition needed. Do not revisit this.
 
+## ARCHITECT GUIDANCE: `/execute` Command Design (ARCH-033)
+
+The `/execute` command is Minecraft's most complex command — it chains context-modifying subcommands before a final `run`. Here is the approved architecture.
+
+### Core Concept: `ExecutionContext`
+
+Create `pumpkin/src/command/commands/execute.rs`. The key abstraction is a mutable execution context that each subcommand modifier transforms:
+
+```rust
+/// Execution context threaded through /execute subcommand chain.
+/// Each modifier (as, at, positioned, etc.) transforms this before `run`.
+pub struct ExecutionContext {
+    /// Who is executing — changes with `as`
+    pub executor: CommandSender,
+    /// Where execution happens — changes with `at`, `positioned`, `align`
+    pub position: Option<Vector3<f64>>,
+    /// Look direction — changes with `rotated`, `facing`
+    pub rotation: Option<(f32, f32)>,
+    /// Which anchor point (eyes vs feet) — changes with `anchored`
+    pub anchor: EntityAnchor,
+    /// Which dimension — changes with `in`
+    pub dimension: Option<Arc<World>>,
+}
+
+impl ExecutionContext {
+    /// Create from a CommandSender (initial context)
+    pub fn from_sender(sender: &CommandSender) -> Self { ... }
+}
+```
+
+### Architecture: Recursive Dispatch, NOT Deep Tree
+
+Do NOT try to build `/execute` as one giant `CommandTree` with all combinations. The subcommand chain is recursive (any modifier can follow any other). Instead:
+
+1. **Register `/execute` as a shallow tree** with one level of literal subcommands
+2. **Each modifier executor** parses its args, mutates `ExecutionContext`, then **re-dispatches** the remaining args as a new `/execute` subcommand chain
+3. **`run` executor** takes the final `ExecutionContext` and dispatches the inner command through `CommandDispatcher::dispatch()` with the modified sender
+
+```
+/execute as @a at @s positioned ~1 ~0 ~1 run say Hello
+         ^^^^ step 1: change executor to all players
+              ^^^^ step 2: move position to each player's location
+                   ^^^^^^^^^^^^^^^^^ step 3: offset position by (1,0,1)
+                                     ^^^^^^^^^^^ step 4: dispatch "say Hello" with modified context
+```
+
+### Implementation Phases (build incrementally)
+
+**Phase 1 — Skeleton + `run` + `as` + `at`:**
+- `ExecutionContext` struct
+- `run <command>` — dispatch inner command with modified sender. Use a `CommandArgumentConsumer` that consumes all remaining args as the command string, then call `dispatcher.dispatch(&ctx.executor, server, &inner_cmd)`
+- `as <targets>` — resolve entity selector, loop over entities, create new `ExecutionContext` with each entity as executor
+- `at <targets>` — like `as` but only changes position/rotation/dimension, not executor
+
+**Phase 2 — Position/rotation modifiers:**
+- `positioned <x> <y> <z>` — set `ctx.position` (supports `~` relative coords)
+- `positioned as <targets>` — set position to entity's position
+- `rotated <yaw> <pitch>` — set `ctx.rotation`
+- `rotated as <targets>` — set rotation to entity's rotation
+- `facing <x> <y> <z>` — compute rotation to face position
+- `facing entity <target> <anchor>` — face entity's eyes/feet
+- `align <axes>` — floor position on specified axes ("xz" → align to block grid)
+- `anchored <anchor>` — set anchor to eyes or feet
+- `in <dimension>` — change dimension
+
+**Phase 3 — Conditionals:**
+- `if block <pos> <block>` — check block at position
+- `if entity <targets>` — check entity exists
+- `if score <target> <objective> <op> <source> <objective>` — compare scores
+- `unless` — negated `if`
+- Other `if` variants (blocks, biome, data, predicate) can be added incrementally
+
+**Phase 4 — Store + advanced:**
+- `store result|success block|entity|storage <target> <path> <type> <scale>` — store command result into NBT
+- `on <relation>` — execute on related entities (1.20.5+)
+- `summon <entity>` — spawn and execute as new entity
+
+### Key Constraint: Multi-Target Fan-Out
+
+When `as @a` resolves to 5 players, the command runs 5 times (once per player). Each execution gets its own `ExecutionContext` clone. Handle this with a loop:
+
+```rust
+// In AsExecutor::execute():
+let targets = resolve_entities(args)?;
+for target in targets {
+    let mut ctx = current_ctx.clone();
+    ctx.executor = CommandSender::Player(target);
+    // re-dispatch remaining subcommand chain with modified ctx
+    execute_remaining(server, &ctx, remaining_args).await?;
+}
+```
+
+### How `run` Dispatches the Inner Command
+
+The `run` subcommand needs to take the full remaining raw string and dispatch it through the existing `CommandDispatcher`. You need a new method or wrapper:
+
+```rust
+// RunExecutor takes everything after "run" as the command string
+// and dispatches it with the modified ExecutionContext's sender
+server.command_dispatcher.dispatch(&ctx.executor, server, inner_command).await
+```
+
+### What NOT To Build Yet
+
+- **Scoreboard integration** — `store result score` and `if score` need the scoreboard system which doesn't exist yet. Stub these with clear error messages.
+- **NBT path parsing** — `store result entity/block/storage` needs NBT path access. Stub with TODO.
+- **Predicates** — `if predicate` needs the advancement predicate system. Skip for now.
+
+### Testing Strategy
+
+Test each modifier in isolation first:
+```rust
+#[test] fn execute_run_say() { ... }           // /execute run say hello
+#[test] fn execute_as_run() { ... }            // /execute as @p run say hello
+#[test] fn execute_positioned_run() { ... }    // /execute positioned 0 64 0 run tp @s ~ ~ ~
+#[test] fn execute_if_block_run() { ... }      // /execute if block 0 64 0 stone run say found
+#[test] fn execute_chain() { ... }             // /execute as @a at @s run say hi
+```
+
+## ARCHITECT GUIDANCE: `/function`, `/schedule`, `/return` (ARCH-034)
+
+### `/function <namespace:name>`
+
+Functions are lists of commands stored in datapacks at `data/<namespace>/function/<name>.mcfunction`. Each line is a command (without `/` prefix).
+
+**Implementation:**
+1. Create `pumpkin/src/command/commands/function.rs`
+2. Load `.mcfunction` files from datapack directories during world load
+3. Store in a `FxHashMap<ResourceLocation, Vec<String>>` on `Server`
+4. `/function <name>` iterates lines and dispatches each through `CommandDispatcher::dispatch()`
+5. Permission level: use `function_permission_level` from config (CORE-014, default: `Two`)
+6. Limit recursion depth (vanilla: 65536 commands per tick, configurable via `maxCommandChainLength` game rule)
+
+### `/schedule function <name> <time> [append|replace]`
+
+Schedules a function to run after a delay.
+
+**Implementation:**
+1. Create `pumpkin/src/command/commands/schedule.rs`
+2. Add a `ScheduledFunctions` collection to `Server` (sorted by tick number)
+3. Each tick, check for due functions and dispatch them
+4. `append` adds another execution; `replace` cancels previous schedule for same function
+5. `/schedule clear <name>` cancels pending schedules
+
+### `/return <value>` and `/return run <command>`
+
+Controls the return value of a function (1.20.3+).
+
+**Implementation:**
+1. Create `pumpkin/src/command/commands/return_cmd.rs` (avoid keyword clash)
+2. `/return <value>` — sets the function's return value and stops execution of remaining lines
+3. `/return run <command>` — runs the command and uses its result as the return value
+4. This requires the function executor to check for early return after each command dispatch
+5. Use a `FunctionExecutionState` with an `Option<i32>` return value field
+
+### Implementation Order
+
+1. `/execute` Phase 1 (run + as + at) — most impactful
+2. `/function` — enables datapacks
+3. `/execute` Phase 2 (position/rotation modifiers)
+4. `/schedule` — depends on function
+5. `/execute` Phase 3 (conditionals)
+6. `/return` — depends on function execution state
+7. `/execute` Phase 4 (store) — needs scoreboard/NBT
+
 ## Your Task This Session
 
 Priority areas:
-1. **FIRE PLUGIN LIFECYCLE EVENTS** — wire ServerStartedEvent, ServerStopEvent, ServerTickEvent into server lifecycle. This is the #1 cross-agent blocker.
-2. **Tick loop review** — verify tick order matches vanilla: packets -> entities -> redstone -> chunks -> outgoing packets. Integrate tick profiler timing points.
-3. **Command system** — review `pumpkin/src/command/` (~89 files, ~13K lines) for completeness against vanilla 1.21.4 commands.
-4. **Configuration** — review `pumpkin-config/` for missing server properties (difficulty, game rules, spawn protection, etc.)
+1. **`/execute` Phase 1** — `ExecutionContext` struct + `run` + `as` + `at` subcommands per ARCH-033 above.
+2. **`/function`** — `.mcfunction` file loading and dispatch per ARCH-034.
+3. **Command audit completion** — continue the remaining high-traffic commands.
+4. **Configuration** — review `pumpkin-config/` for missing server properties.
 
 ## Vanilla Tick Order (your bible)
 

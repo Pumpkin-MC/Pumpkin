@@ -445,3 +445,17 @@ Prerequisites:
 
 **Affects:** Redstone (expanded scope), WorldGen (loses plant/, snow.rs, fluid/ write access — READ still allowed)
 **Status:** active
+
+## ARCH-033: `/execute` Command Architecture
+**Date:** 2026-02-08
+**Decision:** `/execute` uses recursive dispatch with `ExecutionContext` struct, NOT a deep command tree. Each subcommand modifier (as, at, positioned, rotated, facing, align, anchored, in) transforms the context then re-dispatches. `run` dispatches the inner command through existing `CommandDispatcher::dispatch()` with the modified sender. Multi-target (`as @a`) fans out with cloned contexts. Implementation in 4 phases: (1) skeleton+run+as+at, (2) position/rotation modifiers, (3) conditionals, (4) store+advanced.
+**Rationale:** The recursive nature of `/execute` subcommand chaining makes a flat tree impossible — any modifier can follow any other. Recursive dispatch matches vanilla behavior and keeps each modifier self-contained.
+**Affects:** Core (implements), Plugin (event firing from execute)
+**Status:** active
+
+## ARCH-034: `/function`, `/schedule`, `/return` Command Design
+**Date:** 2026-02-08
+**Decision:** `/function` loads `.mcfunction` files from datapacks into `FxHashMap<ResourceLocation, Vec<String>>`, dispatches each line. Permission level from `function_permission_level` config (CORE-014). `/schedule` adds `ScheduledFunctions` to Server, checked each tick. `/return` uses `FunctionExecutionState` with early-exit. Implementation order: execute P1 → function → execute P2 → schedule → execute P3 → return → execute P4.
+**Rationale:** Functions enable datapacks (critical for vanilla parity). Schedule depends on function. Return depends on function execution state. Execute phases interleave to provide incremental value.
+**Affects:** Core (implements)
+**Status:** active
