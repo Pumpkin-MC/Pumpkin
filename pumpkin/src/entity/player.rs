@@ -250,6 +250,12 @@ impl ChunkManager {
         let (_rx, tx) = crossbeam::channel::unbounded();
         // drop old channel
         self.chunk_listener = tx;
+
+        // Drop any held chunk references to allow chunks to be unloaded.
+        self.chunk_sent.clear();
+        self.chunk_queue.clear();
+        self.entity_chunk_queue.clear();
+        self.batches_sent_since_ack = BatchState::Initial;
     }
 
     pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
