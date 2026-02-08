@@ -9,14 +9,17 @@ use pumpkin_data::{
     tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::{
+    position::BlockPos,
+    vector3::Vector3
+};
 use pumpkin_world::{
     BlockStateId,
     item::ItemStack,
     world::{BlockAccessor, BlockFlags},
 };
 use rand::RngExt;
-
+use pumpkin_data::world::WorldEvent;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
@@ -69,10 +72,14 @@ impl BlockBehaviour for SweetBerryBushBlock {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position).await;
             let props = NetherWartLikeProperties::from_state_id(state_id, &Block::SWEET_BERRY_BUSH);
+            let mut lock = args.item_stack.lock().await;
             if props.age != Integer0To3::L3
-                && args.item_stack.lock().await.get_item() == &Item::BONE_MEAL
+                && lock.get_item() == &Item::BONE_MEAL
             {
-                BlockActionResult::Pass
+                <Self as PlantBlockBase>::grow(self, args.world, args.position).await;
+                lock.decrement(1);
+                args.world.sync_world_event(WorldEvent::BoneMealUsed, *args.position, 15).await;
+                BlockActionResult::Success
             } else {
                 BlockActionResult::PassToDefaultBlockAction
             }
@@ -103,21 +110,27 @@ impl BlockBehaviour for SweetBerryBushBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let entity = args.entity.get_entity();
-
-            if entity.entity_type == &EntityType::FOX || entity.entity_type == &EntityType::BEE {
+            let living_entity_opt = args.entity.get_living_entity();
+            if living_entity_opt.is_none() || entity.entity_type == &EntityType::FOX || entity.entity_type == &EntityType::BEE {
                 return;
             }
+            let living_entity = living_entity_opt.expect("Living entity should exist");
 
+            living_entity.fall_distance.store(0f32);
+            entity.movement_multiplier.store(Vector3::new(0.8, 0.75, 0.8));
+            let mov = if living_entity.is_controlled_by_player() {
+                living_entity.get_movement()
+            } else {
+                entity.last_pos.load() - entity.pos.load()
+            };
             let state_id = args.world.get_block_state_id(args.position).await;
             let props = NetherWartLikeProperties::from_state_id(state_id, args.block);
             if props.age == Integer0To3::L0 {
                 return;
             }
 
-            let velocity = entity.velocity.load(); // FIXME: velocity != momentum/movement
-
-            if velocity.horizontal_length_squared() <= 0.0
-                || (velocity.x.abs() < 0.003 && velocity.z.abs() < 0.003)
+            if mov.horizontal_length_squared() <= 0.0
+                || (mov.x.abs() < 0.003 && mov.z.abs() < 0.003)
             {
                 return;
             }
@@ -157,6 +170,18 @@ impl PlantBlockBase for SweetBerryBushBlock {
 
     async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
         <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down()).await
+    }
+
+    async fn grow(&self, world: &Arc<World>, pos: &BlockPos) {
+        let (block, state) = world.get_block_and_state_id(pos).await;
+        let age = self.get_age(state, block);
+        world
+            .set_block_state(
+                pos,
+                self.state_with_age(block, state, 3.min(age + 1)),
+                BlockFlags::NOTIFY_LISTENERS,
+            )
+            .await;
     }
 }
 

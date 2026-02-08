@@ -362,10 +362,16 @@ impl EntityBase for ItemEntity {
     fn damage<'a>(
         &'a self,
         _caller: &'a dyn EntityBase,
-        _amount: f32,
+        amount: f32,
         _damage_type: DamageType,
     ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async { false })
+        Box::pin(async move {
+            self.health.store(self.health.load() - amount);
+            if self.health.load() <= 0.0 {
+                self.entity.remove().await;
+            }
+            true
+        })
     }
 
     fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {

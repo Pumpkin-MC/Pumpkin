@@ -318,6 +318,8 @@ pub struct Entity {
     pub pos: AtomicCell<Vector3<f64>>,
     /// The last known position of the entity.
     pub last_pos: AtomicCell<Vector3<f64>>,
+    /// The last movement vector
+    pub movement: AtomicCell<Vector3<f64>>,
     /// The entity's position rounded to the nearest block coordinates
     pub block_pos: AtomicCell<BlockPos>,
     /// The block supporting the entity
@@ -435,6 +437,7 @@ impl Entity {
             horizontal_collision: AtomicBool::new(false),
             pos: AtomicCell::new(position),
             last_pos: AtomicCell::new(position),
+            movement: AtomicCell::new(Vector3::default()),
             block_pos: AtomicCell::new(BlockPos(Vector3::new(floor_x, floor_y, floor_z))),
             supporting_block_pos: AtomicCell::new(None),
             chunk_pos: AtomicCell::new(Vector2::new(
@@ -863,31 +866,34 @@ impl Entity {
         */
     }
 
-    async fn tick_block_collisions(&self, caller: &Arc<dyn EntityBase>, server: &Server) -> bool {
+    async fn tick_block_collisions(
+        &self,
+        caller: &Arc<dyn EntityBase>,
+        server: &Server,
+    ) -> bool {
         let bounding_box = self.bounding_box.load();
-        let aabb = bounding_box.expand(-0.001, -0.001, -0.001);
 
-        let min = aabb.min_block_pos();
-        let max = aabb.max_block_pos();
+        let min = bounding_box.min_block_pos();
+        let max = bounding_box.max_block_pos();
 
         let eye_height = f64::from(self.entity_dimension.load().eye_height);
-        let mut eye_level_box = aabb;
+        let mut eye_level_box = bounding_box;
         eye_level_box.min.y += eye_height;
         eye_level_box.max.y = eye_level_box.min.y;
 
         let mut suffocating = false;
-        let pos_iter = BlockPos::iterate(min, max);
         let world = self.world.load();
 
-        for pos in pos_iter {
+        for pos in BlockPos::iterate(min, max) {
             let (block, state) = world.get_block_and_state(&pos).await;
             if state.is_air() {
                 continue;
             }
 
-            let check_suffocation = !suffocating && state.is_solid();
+            // TODO: mcs code has stuff like .suffocates(Blocks::never) when registering block settings
+            let check_suffocation = !suffocating && state.is_solid() && state.is_full_cube();
 
-            let collided = World::check_outline(
+            World::check_collision(
                 &bounding_box,
                 pos,
                 state,
@@ -899,15 +905,33 @@ impl Entity {
                 },
             );
 
-            if collided {
+            let block_aabb = BoundingBox::from_block(&pos);
+
+            if bounding_box.intersects(&block_aabb) {
                 world
                     .block_registry
-                    .on_entity_collision(block, &world, caller.as_ref(), &pos, state, server)
+                    .on_entity_collision(
+                        block,
+                        &world,
+                        caller.as_ref(),
+                        &pos,
+                        state,
+                        server,
+                    )
                     .await;
             }
         }
 
         suffocating
+    }
+
+    fn tick_last_pos(&self) {
+        let last_pos = self.last_pos.load();
+        if last_pos == Vector3::default() {
+            self.last_pos.store(self.pos.load());
+        }
+        self.movement.store(self.pos.load() - self.last_pos.load());
+        self.last_pos.store(self.pos.load());
     }
 
     pub async fn send_pos_rot(&self) {
@@ -2144,6 +2168,7 @@ impl EntityBase for Entity {
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
+            self.tick_last_pos();
             self.tick_portal(&caller).await;
             self.update_fluid_state(&caller).await;
             self.check_out_of_world(&*caller).await;
