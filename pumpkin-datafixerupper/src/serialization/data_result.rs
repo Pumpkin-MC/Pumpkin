@@ -367,7 +367,7 @@ impl<R> DataResult<R> {
         third_result: DataResult<B>,
         f: impl FnOnce(R, A, B) -> T,
     ) -> DataResult<T> {
-        let r: DataResult<R> = self;
+        let r = self;
         let a = second_result;
         let b = third_result;
 
@@ -375,7 +375,7 @@ impl<R> DataResult<R> {
 
         if !has_error {
             // All 3 results are successful.
-            let DataResult::Success { result: r, .. } = r else {
+            let Self::Success { result: r, .. } = r else {
                 unreachable!()
             };
             let DataResult::Success { result: a, .. } = a else {
@@ -480,4 +480,23 @@ impl<R> DataResult<R> {
     pub const fn is_error(&self) -> bool {
         !self.is_success()
     }
+}
+
+/// Asserts that the `$left` `DataResult` is a complete result (success) whose stored result is `$right`.
+#[macro_export]
+macro_rules! assert_success {
+    ($left:expr, $right:expr $(,)?) => {{
+        let result = $left;
+        assert!(
+            result.is_success(),
+            "Expected a successful `DataResult`, got: {:?}",
+            result
+        );
+        let value = result.unwrap();
+        assert_eq!(
+            value,
+            $right,
+            "DataResult was successful but the value doesn't match"
+        );
+    }};
 }
