@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
@@ -35,7 +36,7 @@ impl CommandExecutor for Executor {
 
             let reason = match args.get(&ARG_REASON) {
                 Some(Arg::Msg(r)) => TextComponent::text(r.clone()),
-                _ => TextComponent::translate("multiplayer.disconnect.kicked", []),
+                _ => TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_KICKED, []),
             };
 
             for target in targets {
