@@ -67,8 +67,8 @@ const FOLLOW_RANGE: f32 = 35.0;
 const NODE_REACH_XZ: f64 = 0.5;
 const NODE_REACH_Y: f64 = 1.0;
 
-// TODO: Read from mob attributes
-const MOB_STEP_HEIGHT: f64 = 1.0;
+// TODO: Read from entity attributes (vanilla default 0.6)
+const MOB_STEP_HEIGHT: f64 = 0.6;
 
 // TODO: Read from entity attributes (zombie = 0.23, default = 0.25)
 const DEFAULT_MOVEMENT_SPEED: f64 = 0.25;
