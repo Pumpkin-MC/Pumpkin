@@ -1909,24 +1909,23 @@ impl Player {
         let mut keep_inventory = world.level_info.load().game_rules.keep_inventory;
 
         // Fire PlayerDeathEvent — plugins can cancel death or modify keep_inventory/message
-        if let Some(server) = world.server.upgrade() {
-            if let Some(player_arc) = world
+        if let Some(server) = world.server.upgrade()
+            && let Some(player_arc) = world
                 .players
                 .load()
                 .iter()
                 .find(|p| p.entity_id() == self.entity_id())
                 .cloned()
-            {
-                let mut event = PlayerDeathEvent::new(player_arc, death_msg.clone());
-                event.keep_inventory = keep_inventory;
-                let event = server.plugin_manager.fire(event).await;
-                if event.cancelled {
-                    self.living_entity.health.store(1.0);
-                    return;
-                }
-                keep_inventory = event.keep_inventory;
-                death_msg = event.death_message;
+        {
+            let mut event = PlayerDeathEvent::new(player_arc, death_msg.clone());
+            event.keep_inventory = keep_inventory;
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                self.living_entity.health.store(1.0);
+                return;
             }
+            keep_inventory = event.keep_inventory;
+            death_msg = event.death_message;
         }
 
         if !keep_inventory {
@@ -2164,20 +2163,19 @@ impl Player {
             let drop_item = item_stack.copy_with_count(drop_amount);
 
             // Fire PlayerDropItemEvent — if cancelled, don't drop
-            if let Some(server) = self.world().server.upgrade() {
-                if let Some(player_arc) = self
+            if let Some(server) = self.world().server.upgrade()
+                && let Some(player_arc) = self
                     .world()
                     .players
                     .load()
                     .iter()
                     .find(|p| p.entity_id() == self.entity_id())
                     .cloned()
-                {
-                    let event = PlayerDropItemEvent::new(player_arc, drop_item.clone());
-                    let event = server.plugin_manager.fire(event).await;
-                    if event.cancelled {
-                        return;
-                    }
+            {
+                let event = PlayerDropItemEvent::new(player_arc, drop_item.clone());
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
                 }
             }
 

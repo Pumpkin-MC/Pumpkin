@@ -300,7 +300,7 @@ impl PumpkinServer {
         }
     }
 
-    /// Fires the ServerStartedEvent to notify plugins that the server is ready.
+    /// Fires the `ServerStartedEvent` to notify plugins that the server is ready.
     pub async fn fire_started_event(&self) {
         let world_count = self.server.worlds.load().len();
         let plugin_count = self.server.plugin_manager.loaded_plugins().await.len();

@@ -7,7 +7,7 @@ use crate::entity::{
 
 /// Piglin Brute — a stronger piglin that always attacks players.
 ///
-/// Delegates to PiglinEntity for base AI behavior.
+/// Delegates to `PiglinEntity` for base AI behavior.
 pub struct PiglinBruteEntity {
     piglin: Arc<PiglinEntity>,
 }

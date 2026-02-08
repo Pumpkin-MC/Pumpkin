@@ -478,7 +478,7 @@ impl Server {
 
     /// Saves all player data, triggers chunk saves on all worlds, and writes level.dat.
     /// This is the non-destructive save used by the /save-all command.
-    /// Unlike shutdown(), this does not cancel tasks or join threads.
+    /// Unlike `shutdown()`, this does not cancel tasks or join threads.
     pub async fn save_all(&self, flush: bool) {
         log::info!("Saving all player data...");
         if let Err(e) = self.player_data_storage.save_all_players(self).await {
@@ -807,10 +807,10 @@ impl Server {
         set.join_all().await;
 
         // Global tasks (only autosave when enabled — /save-off disables this)
-        if self.autosave_enabled.load(Ordering::Relaxed) {
-            if let Err(e) = self.player_data_storage.tick(self).await {
-                log::error!("Error ticking player data: {e}");
-            }
+        if self.autosave_enabled.load(Ordering::Relaxed)
+            && let Err(e) = self.player_data_storage.tick(self).await
+        {
+            log::error!("Error ticking player data: {e}");
         }
 
         self.tick_profiler.record_world_tick(phase_start);

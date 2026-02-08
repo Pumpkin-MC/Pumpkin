@@ -7,7 +7,7 @@ use crate::entity::{
 
 /// Elder Guardian — a larger, more powerful variant of the Guardian.
 ///
-/// Delegates to GuardianEntity for base AI behavior.
+/// Delegates to `GuardianEntity` for base AI behavior.
 /// Mining fatigue effect is a future addition.
 pub struct ElderGuardianEntity {
     guardian: Arc<GuardianEntity>,

@@ -21,7 +21,7 @@ pub struct CustomPayloadEvent {
 
 impl CustomPayloadEvent {
     #[must_use]
-    pub fn new(channel: String, data: Vec<u8>) -> Self {
+    pub const fn new(channel: String, data: Vec<u8>) -> Self {
         Self {
             channel,
             data,

@@ -421,70 +421,80 @@ pub async fn spawn_category_for_position(
         }
     }
 
-    // Spawn in batch
     if !batch_buffer.is_empty() {
-        // Fire EntitySpawnEvent for each entity; skip cancelled ones
-        if let Some(server) = world.server.upgrade() {
-            let mut approved = Vec::with_capacity(batch_buffer.len());
-            for entity in batch_buffer {
-                let base = entity.get_entity();
-                let event = EntitySpawnEvent::new(
-                    base.entity_id,
-                    base.entity_type,
-                    base.pos.load(),
-                    world.clone(),
-                );
-                let event = server.plugin_manager.fire(event).await;
-                if !event.cancelled {
-                    approved.push(entity);
+        spawn_entity_batch(batch_buffer, world, chunk_pos).await;
+    }
+}
+
+/// Fires `EntitySpawnEvent` for each entity in the batch, persists approved
+/// entities into the chunk, registers them in the world, and broadcasts
+/// their spawn packets to all players.
+async fn spawn_entity_batch(
+    mut batch_buffer: Vec<Arc<dyn EntityBase>>,
+    world: &Arc<World>,
+    chunk_pos: &Vector2<i32>,
+) {
+    // Fire EntitySpawnEvent for each entity; skip cancelled ones
+    if let Some(server) = world.server.upgrade() {
+        let mut approved = Vec::with_capacity(batch_buffer.len());
+        for entity in batch_buffer {
+            let base = entity.get_entity();
+            let event = EntitySpawnEvent::new(
+                base.entity_id,
+                base.entity_type,
+                base.pos.load(),
+                world.clone(),
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if !event.cancelled {
+                approved.push(entity);
+            }
+        }
+        batch_buffer = approved;
+    }
+    if batch_buffer.is_empty() {
+        return;
+    }
+
+    let mut prepared_data = Vec::with_capacity(batch_buffer.len());
+
+    for entity in &batch_buffer {
+        entity.init_data_tracker().await;
+        let base_entity = entity.get_entity();
+        let packet = base_entity.create_spawn_packet();
+        let mut nbt = NbtCompound::new();
+        entity.write_nbt(&mut nbt).await;
+        // Keep the entity reference here so we don't have to "find" it later
+        prepared_data.push((base_entity.entity_uuid, nbt, packet, entity.clone()));
+    }
+
+    {
+        let chunk_handle = world.level.get_entity_chunk(*chunk_pos).await;
+        let mut data = chunk_handle.data.lock().await;
+
+        for (uuid, nbt, _, _) in &prepared_data {
+            data.insert(*uuid, nbt.clone());
+        }
+        drop(data);
+        chunk_handle.mark_dirty(true);
+
+        world.entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
+
+            for (uuid, _, _, entity_ref) in &prepared_data {
+                if !new_entities
+                    .iter()
+                    .any(|e| e.get_entity().entity_uuid == *uuid)
+                {
+                    new_entities.push(entity_ref.clone());
                 }
             }
-            batch_buffer = approved;
-        }
-        if batch_buffer.is_empty() {
-            return;
-        }
+            new_entities
+        });
+    };
 
-        let mut prepared_data = Vec::with_capacity(batch_buffer.len());
-
-        for entity in &batch_buffer {
-            entity.init_data_tracker().await;
-            let base_entity = entity.get_entity();
-            let packet = base_entity.create_spawn_packet();
-            let mut nbt = NbtCompound::new();
-            entity.write_nbt(&mut nbt).await;
-            // Keep the entity reference here so we don't have to "find" it later
-            prepared_data.push((base_entity.entity_uuid, nbt, packet, entity.clone()));
-        }
-
-        {
-            let chunk_handle = world.level.get_entity_chunk(*chunk_pos).await;
-            let mut data = chunk_handle.data.lock().await;
-
-            for (uuid, nbt, _, _) in &prepared_data {
-                data.insert(*uuid, nbt.clone());
-            }
-            drop(data);
-            chunk_handle.mark_dirty(true);
-
-            world.entities.rcu(|current_entities| {
-                let mut new_entities = (**current_entities).clone();
-
-                for (uuid, _, _, entity_ref) in &prepared_data {
-                    if !new_entities
-                        .iter()
-                        .any(|e| e.get_entity().entity_uuid == *uuid)
-                    {
-                        new_entities.push(entity_ref.clone());
-                    }
-                }
-                new_entities
-            });
-        };
-
-        for (_, _, packet, _) in prepared_data {
-            world.broadcast_packet_all(&packet).await;
-        }
+    for (_, _, packet, _) in prepared_data {
+        world.broadcast_packet_all(&packet).await;
     }
 }
 

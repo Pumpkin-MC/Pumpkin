@@ -7,7 +7,7 @@ use crate::entity::{
 
 /// Bogged — a poisonous skeleton variant found in swamps and trial chambers.
 ///
-/// Delegates to SkeletonEntityBase for base AI behavior.
+/// Delegates to `SkeletonEntityBase` for base AI behavior.
 /// Tipped arrow (poison) is a future addition.
 pub struct BoggedEntity {
     skeleton: Arc<SkeletonEntityBase>,

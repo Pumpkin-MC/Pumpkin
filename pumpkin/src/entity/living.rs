@@ -1209,10 +1209,7 @@ impl NBTStorage for LivingEntity {
 /// Returns a `&'static DamageType` for a given owned value, using a lock-free cache
 /// indexed by damage-type id (max 256 entries).
 fn damage_type_static(dt: DamageType) -> &'static DamageType {
-    static CACHE: [OnceLock<DamageType>; 256] = {
-        const EMPTY: OnceLock<DamageType> = OnceLock::new();
-        [EMPTY; 256]
-    };
+    static CACHE: [OnceLock<DamageType>; 256] = [const { OnceLock::new() }; 256];
     CACHE[dt.id as usize].get_or_init(|| dt)
 }
 
@@ -1388,19 +1385,18 @@ impl EntityBase for LivingEntity {
                     let mut consume_cancelled = false;
                     if let Some(player_ref) = caller.get_player() {
                         let world = self.entity.world.load();
-                        if let Some(server) = world.server.upgrade() {
-                            if let Some(player_arc) = world
+                        if let Some(server) = world.server.upgrade()
+                            && let Some(player_arc) = world
                                 .players
                                 .load()
                                 .iter()
                                 .find(|p| p.entity_id() == player_ref.entity_id())
                                 .cloned()
-                            {
-                                let event =
-                                    PlayerItemConsumeEvent::new(player_arc, item.clone());
-                                let event = server.plugin_manager.fire(event).await;
-                                consume_cancelled = event.cancelled;
-                            }
+                        {
+                            let event =
+                                PlayerItemConsumeEvent::new(player_arc, item.clone());
+                            let event = server.plugin_manager.fire(event).await;
+                            consume_cancelled = event.cancelled;
                         }
                     }
 

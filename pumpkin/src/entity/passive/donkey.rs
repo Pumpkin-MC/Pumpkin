@@ -8,7 +8,7 @@ use crate::entity::{
 
 /// Donkey — a smaller rideable animal that can carry chests.
 ///
-/// Delegates to HorseEntity for base AI behavior.
+/// Delegates to `HorseEntity` for base AI behavior.
 pub struct DonkeyEntity {
     horse: Arc<HorseEntity>,
 }

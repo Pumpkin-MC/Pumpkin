@@ -8,7 +8,7 @@ use crate::entity::{
 
 /// Trader Llama — a llama that accompanies wandering traders.
 ///
-/// Delegates to LlamaEntity for base AI behavior.
+/// Delegates to `LlamaEntity` for base AI behavior.
 pub struct TraderLlamaEntity {
     llama: Arc<LlamaEntity>,
 }

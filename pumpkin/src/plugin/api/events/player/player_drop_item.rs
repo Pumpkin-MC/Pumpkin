@@ -23,7 +23,7 @@ pub struct PlayerDropItemEvent {
 
 impl PlayerDropItemEvent {
     #[must_use]
-    pub fn new(player: Arc<Player>, item: ItemStack) -> Self {
+    pub const fn new(player: Arc<Player>, item: ItemStack) -> Self {
         Self {
             player,
             item,

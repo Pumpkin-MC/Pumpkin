@@ -14,7 +14,7 @@ use crate::entity::{
 /// Ocelot — a shy passive mob found in jungles.
 ///
 /// Ocelots panic when hurt and wander. In vanilla they scare
-/// creepers and phantoms; that behavior requires FleeEntityGoal
+/// creepers and phantoms; that behavior requires `FleeEntityGoal`
 /// on those mobs targeting ocelots.
 pub struct OcelotEntity {
     pub mob_entity: MobEntity,

@@ -32,7 +32,7 @@ pub struct EntityDeathEvent {
 impl EntityDeathEvent {
     /// Creates a new instance of `EntityDeathEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         entity_id: i32,
         entity_type: &'static EntityType,
         position: Vector3<f64>,

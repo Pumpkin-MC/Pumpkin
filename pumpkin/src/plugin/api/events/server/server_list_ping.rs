@@ -29,7 +29,7 @@ pub struct ServerListPingEvent {
 
 impl ServerListPingEvent {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         motd: String,
         max_players: u32,
         online_players: u32,
