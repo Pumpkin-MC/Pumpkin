@@ -5,11 +5,14 @@ pub trait ListBuilder {
     type Value;
 
     /// Builds the final list and returns the result.
+    #[must_use]
     fn build(self, prefix: Self::Value) -> DataResult<Self::Value>;
 
     /// Adds a direct value to this [`ListBuilder`].
+    #[must_use]
     fn add(self, value: Self::Value) -> Self;
 
+    #[must_use]
     /// Adds a [`DataResult`] to this [`ListBuilder`].
     fn add_data_result(self, value: DataResult<Self::Value>) -> Self;
 }

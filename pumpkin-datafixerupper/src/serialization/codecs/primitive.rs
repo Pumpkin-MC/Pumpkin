@@ -6,7 +6,7 @@ use crate::serialization::{
     dynamic_ops::DynamicOps,
 };
 
-/// Helper macro to generate the struct and HasValue trait implementation for a PrimitiveCodec struct.
+/// Helper macro to generate the struct and [`HasValue`] trait implementation for a `PrimitiveCodec` struct.
 macro_rules! impl_primitive_codec_start {
     ($name:ident, $prim:ty) => {
         pub struct $name;
@@ -17,7 +17,7 @@ macro_rules! impl_primitive_codec_start {
     };
 }
 
-/// Helper macro to generate an entire implementation for a number PrimitiveCodec.
+/// Helper macro to generate an entire implementation for a number `PrimitiveCodec`.
 macro_rules! impl_primitive_number_codec {
     ($name:ident, $prim:ty, $create_func:ident) => {
         impl_primitive_codec_start!($name, $prim);
@@ -37,7 +37,7 @@ macro_rules! impl_primitive_number_codec {
     };
 }
 
-/// Helper macro to generate an entire implementation for a list PrimitiveCodec.
+/// Helper macro to generate an entire implementation for a list `PrimitiveCodec`.
 macro_rules! impl_primitive_list_codec {
     ($name:ident, $elem:ty, $get_func:ident, $create_func:ident) => {
         impl_primitive_codec_start!($name, Vec<$elem>);
