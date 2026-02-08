@@ -9,28 +9,20 @@ use serde::{Deserialize, Serialize};
 pub struct AuthenticationConfig {
     /// Whether to use Mojang authentication.
     pub enabled: bool,
-
     /// Optional custom authentication URL.
     pub url: Option<String>,
-
     /// Connection timeout in milliseconds.
     pub connect_timeout: u32,
-
     /// Read timeout in milliseconds.
     pub read_timeout: u32,
-
     /// Whether to prevent connections via proxy.
     pub prevent_proxy_connections: bool,
-
     /// Optional auth URL used when preventing proxy connections.
     pub prevent_proxy_connection_auth_url: Option<String>,
-
     /// Public services URL (used by Drasl and Mojang).
     pub services_url: Option<String>,
-
     /// Player profile handling.
     pub player_profile: PlayerProfileConfig,
-
     /// Texture handling configuration.
     pub textures: TextureConfig,
 }
@@ -59,7 +51,6 @@ impl Default for AuthenticationConfig {
 pub struct PlayerProfileConfig {
     /// Allow players flagged by Mojang (e.g. banned, forced name change).
     pub allow_banned_players: bool,
-
     /// Depends on [`PlayerProfileConfig::allow_banned_players`].
     pub allowed_actions: Vec<ProfileAction>,
 }
@@ -84,13 +75,10 @@ impl Default for PlayerProfileConfig {
 pub struct TextureConfig {
     /// Whether to use player textures.
     pub enabled: bool,
-
     /// Allowed URL schemes for texture URLs.
     pub allowed_url_schemes: Vec<String>,
-
     /// Allowed URL domains for texture URLs.
     pub allowed_url_domains: Vec<String>,
-
     /// Specific texture types.
     pub types: TextureTypes,
 }
@@ -112,10 +100,8 @@ impl Default for TextureConfig {
 pub struct TextureTypes {
     /// Use player skins.
     pub skin: bool,
-
     /// Use player capes.
     pub cape: bool,
-
     /// Use player elytras.
     /// (Custom elytras exist, not widely known.)
     pub elytra: bool,

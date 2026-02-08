@@ -9,17 +9,13 @@ use std::net::{Ipv4Addr, SocketAddr};
 pub struct RCONConfig {
     /// Whether RCON is enabled.
     pub enabled: bool,
-
     /// The network address and port where the RCON server will listen for connections.
     pub address: SocketAddr,
-
     /// The password required for RCON authentication.
     pub password: String,
-
     /// The maximum number of concurrent RCON connections allowed.
     /// A value of `0` indicates no limit.
     pub max_connections: u32,
-
     /// Logging configuration for RCON events.
     pub logging: RCONLogging,
 }
@@ -44,13 +40,10 @@ impl Default for RCONConfig {
 pub struct RCONLogging {
     /// Whether successful RCON logins should be logged.
     pub logged_successfully: bool,
-
     /// Whether failed RCON login attempts with incorrect passwords should be logged.
     pub wrong_password: bool,
-
     /// Whether all RCON commands, regardless of success or failure, should be logged.
     pub commands: bool,
-
     /// Whether RCON quit commands should be logged.
     pub quit: bool,
 }
