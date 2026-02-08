@@ -99,3 +99,9 @@ Standard scale: Swim=0, Panic=1, Attack=2, Special=4-5, Wander=6, LookAt=7, Look
 **Session:** entity-012
 **Decision:** Wired 5 vanilla-accurate flee relationships: Creeper→Cat(p1), Phantom→Cat(p1), Rabbit→Wolf(p2), Fox→Wolf(p2), Skeleton→Wolf(p3). Flee priority is always above attack priority for the same mob.
 **Rationale:** In vanilla, flee behavior overrides attack behavior. A creeper will always run from a cat rather than try to explode near it. Skeleton flees wolves at p3 (above its p4 ranged attack).
+
+## ENT-017: FollowOwnerGoal at Priority 6 for Tamed Mobs
+**Date:** 2026-02-08
+**Session:** entity-013
+**Decision:** FollowOwnerGoal stores `owner_id: Option<i32>` in the goal struct (ENT-014 pattern). Priority 6 — after FollowParent(5), before Wander(7). Teleports when >12 blocks, follows when >10 blocks, stops when <2 blocks. Wired to Wolf and Cat.
+**Rationale:** MobEntity has no owner/tamed fields (ARCH-011). Storing owner state in the goal itself follows the BreedGoal pattern. External code calls `set_owner()` when taming occurs.

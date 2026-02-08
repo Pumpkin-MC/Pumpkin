@@ -5,9 +5,9 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        breed, follow_parent, look_around::LookAroundGoal,
-        look_at_entity::LookAtEntityGoal, panic::PanicGoal, swim::SwimGoal, tempt,
-        wander_around::WanderAroundGoal,
+        breed, follow_owner::FollowOwnerGoal, follow_parent,
+        look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal, panic::PanicGoal,
+        swim::SwimGoal, tempt, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -35,12 +35,13 @@ impl CatEntity {
             goal_selector.add_goal(3, tempt::TemptGoal::new(0.6, tempt::TEMPT_CAT, 10.0));
             goal_selector.add_goal(4, breed::BreedGoal::new(1.0));
             goal_selector.add_goal(5, follow_parent::FollowParentGoal::new(1.1));
-            goal_selector.add_goal(6, WanderAroundGoal::new(0.8));
+            goal_selector.add_goal(6, FollowOwnerGoal::new(1.0));
+            goal_selector.add_goal(7, WanderAroundGoal::new(0.8));
             goal_selector.add_goal(
-                7,
+                8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
             );
-            goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(9, Box::new(LookAroundGoal::default()));
         };
 
         mob_arc

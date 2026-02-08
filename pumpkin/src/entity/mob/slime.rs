@@ -5,8 +5,9 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, look_around::LookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -40,6 +41,7 @@ impl SlimeEntity {
                 7,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
+            goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
 
             target_selector.add_goal(
                 1,
