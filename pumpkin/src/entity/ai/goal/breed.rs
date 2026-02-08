@@ -6,10 +6,10 @@ use std::sync::atomic::Ordering;
 
 /// AI goal for breedable passive mobs.
 ///
-/// When the mob is "in love" (love_ticks > 0), it searches for a nearby mob
-/// of the same entity type that is also in love. If found, navigates toward
-/// the partner. When within 2.5 blocks, both mobs' love_ticks are reset and
-/// the breed_cooldown is set to 6000 ticks (5 minutes), matching vanilla.
+/// When the mob is "in love" (`love_ticks` > 0), it searches for a nearby mob
+/// of the same `entity_type` that is also in love. If found, navigates toward
+/// the partner. When within 2.5 blocks, both mobs' `love_ticks` are reset and
+/// the `breed_cooldown` is set to 6000 ticks (5 minutes), matching vanilla.
 ///
 /// Love mode is activated externally (e.g. when a player feeds the mob its
 /// breeding food). The goal only handles the pathfinding/mating AI.
@@ -47,7 +47,7 @@ impl BreedGoal {
     }
 
     /// Activate love mode. Called when a player feeds the mob its breeding food.
-    pub fn set_in_love(&mut self) {
+    pub const fn set_in_love(&mut self) {
         if self.breed_cooldown <= 0 {
             self.love_ticks = Self::LOVE_DURATION;
         }
@@ -55,13 +55,13 @@ impl BreedGoal {
 
     /// Whether this mob is currently in love mode.
     #[must_use]
-    pub fn is_in_love(&self) -> bool {
+    pub const fn is_in_love(&self) -> bool {
         self.love_ticks > 0
     }
 
     /// Whether this mob can breed (in love and not on cooldown).
     #[must_use]
-    pub fn can_breed(&self) -> bool {
+    pub const fn can_breed(&self) -> bool {
         self.love_ticks > 0 && self.breed_cooldown <= 0
     }
 }
@@ -127,14 +127,14 @@ impl Goal for BreedGoal {
             let world = mob_entity.living_entity.entity.world.load();
 
             // Check that the partner still exists
-            if let Some(partner) = world.get_entity_by_id(self.partner_id) {
-                let partner_ent = partner.get_entity();
-                partner_ent.is_alive()
-                    && partner_ent.entity_type
-                        == mob_entity.living_entity.entity.entity_type
-            } else {
-                false
-            }
+            world
+                .get_entity_by_id(self.partner_id)
+                .is_some_and(|partner| {
+                    let partner_ent = partner.get_entity();
+                    partner_ent.is_alive()
+                        && partner_ent.entity_type
+                            == mob_entity.living_entity.entity.entity_type
+                })
         })
     }
 
