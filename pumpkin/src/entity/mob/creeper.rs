@@ -21,7 +21,7 @@ pub struct CreeperEntity {
 }
 
 impl CreeperEntity {
-    pub async fn make(entity: Entity) -> Arc<Self> {
+    pub async fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let entity = Self {
             mob_entity,

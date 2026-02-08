@@ -777,7 +777,7 @@ pub(crate) fn build() -> TokenStream {
 
         impl FromResourceLocation for &'static Fluid {
             fn from_resource_location(resource_location: &ResourceLocation) -> Option<Self> {
-                Fluid::from_registry_key(resource_location.strip_prefix(resource_location).unwrap_or(resource_location))
+                Fluid::from_registry_key(resource_location.strip_prefix("minecraft:").unwrap_or(resource_location))
             }
         }
 

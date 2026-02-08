@@ -8,8 +8,8 @@ pub struct ZombieVillagerEntity {
 }
 
 impl ZombieVillagerEntity {
-    pub async fn make(entity: Entity) -> Arc<Self> {
-        let mob_entity = ZombieEntity::make(entity).await;
+    pub async fn new(entity: Entity) -> Arc<Self> {
+        let mob_entity = ZombieEntity::new(entity).await;
         let zombie = Self { mob_entity };
         Arc::new(zombie)
     }

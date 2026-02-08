@@ -88,7 +88,7 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                             top_middle.to_centered_f64(),
                             &EntityType::WITHER,
                         );
-                        let wither = WitherEntity::make(entity).await;
+                        let wither = WitherEntity::new(entity).await;
                         world.spawn_entity(wither).await;
                         return;
                     }

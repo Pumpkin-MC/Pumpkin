@@ -18,11 +18,13 @@ use std::sync::Arc;
 
 use crate::block::BlockBehaviour;
 use crate::block::BlockFuture;
+use crate::block::BrokenArgs;
 use crate::block::CanPlaceAtArgs;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::NormalUseArgs;
 use crate::block::OnNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
+use crate::block::OnStateReplacedArgs;
 use crate::block::PlacedArgs;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
@@ -30,6 +32,7 @@ use crate::entity::player::Player;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 
 use crate::world::World;
+use pumpkin_util::GameMode;
 
 type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 
@@ -212,6 +215,33 @@ impl BlockBehaviour for DoorBlock {
         })
     }
 
+    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let door_props = DoorProperties::from_state_id(args.state.id, args.block);
+            let other_half_pos = match door_props.half {
+                DoubleBlockHalf::Upper => args.position.down(),
+                DoubleBlockHalf::Lower => args.position.up(),
+            };
+
+            let neighbor_block_id = args.world.get_block_state_id(&other_half_pos).await;
+            if neighbor_block_id != args.block.id {
+                args.world.update_neighbors(&other_half_pos, None).await;
+                return; // Neighbor is already gone or is a different block
+            }
+
+            let is_creative = args.player.gamemode.load() == GameMode::Creative;
+            let flags = if door_props.half == DoubleBlockHalf::Upper && !is_creative {
+                BlockFlags::NOTIFY_ALL
+            } else {
+                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
+            };
+
+            args.world
+                .break_block(&other_half_pos, Some(args.player.clone()), flags)
+                .await;
+        })
+    }
+
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let block_state = args.world.get_block_state(args.position).await;
@@ -224,15 +254,7 @@ impl BlockBehaviour for DoorBlock {
             let other_pos = args.position.offset(other_half.to_offset());
             let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_pos).await;
 
-            // Check if destroyed and notify (water)
             if other_block.id != args.block.id {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
                 return;
             }
 
@@ -262,14 +284,14 @@ impl BlockBehaviour for DoorBlock {
                     .set_block_state(
                         args.position,
                         door_props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_LISTENERS,
+                        BlockFlags::NOTIFY_ALL,
                     )
                     .await;
                 args.world
                     .set_block_state(
                         &other_pos,
                         other_door_props.to_state_id(other_block),
-                        BlockFlags::NOTIFY_LISTENERS,
+                        BlockFlags::NOTIFY_ALL,
                     )
                     .await;
             }
@@ -302,6 +324,34 @@ impl BlockBehaviour for DoorBlock {
                 return 0;
             }
             args.state_id
+        })
+    }
+
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if args.moved {
+                return;
+            }
+
+            let new_state_id = args.world.get_block_state_id(args.position).await;
+            let new_block = Block::from_state_id(new_state_id);
+            if new_block == &Block::AIR {
+                return;
+            }
+
+            let door_props = DoorProperties::from_state_id(args.old_state_id, args.block);
+            let other_half_pos = match door_props.half {
+                DoubleBlockHalf::Upper => args.position.down(),
+                DoubleBlockHalf::Lower => args.position.up(),
+            };
+
+            args.world
+                .break_block(
+                    &other_half_pos,
+                    None,
+                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL,
+                )
+                .await;
         })
     }
 }

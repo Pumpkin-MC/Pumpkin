@@ -2,7 +2,10 @@ use std::{
     io::Cursor,
     path::PathBuf,
     pin::Pin,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use bytes::Bytes;
@@ -28,7 +31,7 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections, SubChunk,
+    ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections,
     palette::{BiomePalette, BlockPalette},
 };
 use crate::block::BlockStateCodec;
@@ -124,50 +127,48 @@ impl ChunkData {
                 position.x, position.y, chunk_data.x_pos, chunk_data.z_pos,
             )));
         }
-        let (block_lights, sky_lights, sub_chunks) = chunk_data
+        let (block_lights, sky_lights, block_palettes, biome_palettes) = chunk_data
             .sections
             .into_iter()
             .map(|section| {
+                // Map light data to the LightContainer enum
                 let block_light = section
                     .block_light
-                    .map(LightContainer::new)
-                    .unwrap_or_default();
+                    .map(LightContainer::Full)
+                    .unwrap_or(LightContainer::Empty(0)); // Standard default
                 let sky_light = section
                     .sky_light
-                    .map(LightContainer::new)
+                    .map(LightContainer::Full)
+                    .unwrap_or(LightContainer::Empty(15)); // Sky is usually bright
+
+                // Convert NBT to Palettes
+                let block_palette = section
+                    .block_states
+                    .map(BlockPalette::from_disk_nbt)
+                    .unwrap_or_default();
+                let biome_palette = section
+                    .biomes
+                    .map(BiomePalette::from_disk_nbt)
                     .unwrap_or_default();
 
-                let sub_chunk = SubChunk {
-                    block_states: section
-                        .block_states
-                        .map(BlockPalette::from_disk_nbt)
-                        .unwrap_or_default(),
-                    biomes: section
-                        .biomes
-                        .map(BiomePalette::from_disk_nbt)
-                        .unwrap_or_default(),
-                };
-
-                (block_light, sky_light, sub_chunk)
+                (block_light, sky_light, block_palette, biome_palette)
             })
             .fold(
-                (Vec::new(), Vec::new(), Vec::new()),
-                |(mut bl, mut sl, mut sc), (block_l, sky_l, sub_c)| {
-                    bl.push(block_l);
-                    sl.push(sky_l);
-                    sc.push(sub_c);
-                    (bl, sl, sc)
+                (Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+                |(mut bl, mut sl, mut bp, mut bip), (b_l, s_l, b_p, bi_p)| {
+                    bl.push(b_l);
+                    sl.push(s_l);
+                    bp.push(b_p);
+                    bip.push(bi_p);
+                    (bl, sl, bp, bip)
                 },
             );
 
-        // 2. Assemble the final structs using the collected vectors.
+        // 2. Assemble the LightEngine
         let light_engine = ChunkLight {
             block_light: block_lights.into_boxed_slice(),
             sky_light: sky_lights.into_boxed_slice(),
         };
-        let min_y = section_coords::section_to_block(chunk_data.min_y_section);
-        let section =
-            ChunkSections::new(std::sync::Mutex::new(sub_chunks.into_boxed_slice()), min_y);
 
         let (carving_mask_air, carving_mask_liquid) =
             if let Some(mask) = chunk_data.carving_mask.take() {
@@ -187,7 +188,14 @@ impl ChunkData {
                         .unwrap_or_default(),
                 )
             };
-
+        // 3. Assemble the ChunkSections using your specific struct fields
+        let min_y = section_coords::section_to_block(chunk_data.min_y_section);
+        let section = ChunkSections {
+            count: block_palettes.len(),
+            block_sections: RwLock::new(block_palettes.into_boxed_slice()),
+            biome_sections: RwLock::new(biome_palettes.into_boxed_slice()),
+            min_y,
+        };
         Ok(Self {
             section,
             heightmap: std::sync::Mutex::new(chunk_data.heightmaps),
@@ -221,42 +229,38 @@ impl ChunkData {
     }
 
     async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        // 1. Process sections (Standard Mutex)
-        // We do this in a block or just let the guard drop naturally
-        // before the first .await
-        let sections: Vec<_> = {
-            let sections_guard = self.section.sections.lock().unwrap();
-            sections_guard
-                .iter()
-                .enumerate()
-                .map(|(i, section)| ChunkSectionNBT {
-                    y: (i as i8) + section_coords::block_to_section(self.section.min_y) as i8,
-                    block_states: Some(section.block_states.to_disk_nbt()),
-                    biomes: Some(section.biomes.to_disk_nbt()),
-                    block_light: match self.light_engine.block_light[i].clone() {
-                        LightContainer::Empty(_) => None,
-                        LightContainer::Full(data) => Some(data),
-                    },
-                    sky_light: match self.light_engine.sky_light[i].clone() {
-                        LightContainer::Empty(_) => None,
-                        LightContainer::Full(data) => Some(data),
-                    },
+        let sections: Vec<ChunkSectionNBT> = {
+            let block_lock = self.section.block_sections.read().unwrap();
+            let biome_lock = self.section.biome_sections.read().unwrap();
+            let min_section_y = (self.section.min_y >> 4) as i8;
+
+            (0..self.section.count)
+                .map(|i| {
+                    ChunkSectionNBT {
+                        y: i as i8 + min_section_y,
+                        // Convert the palettes to their NBT disk representation
+                        block_states: Some(block_lock[i].to_disk_nbt()),
+                        biomes: Some(biome_lock[i].to_disk_nbt()),
+                        block_light: match self.light_engine.block_light.get(i) {
+                            Some(LightContainer::Full(data)) => Some(data.clone()),
+                            _ => None,
+                        },
+                        sky_light: match self.light_engine.sky_light.get(i) {
+                            Some(LightContainer::Full(data)) => Some(data.clone()),
+                            _ => None,
+                        },
+                    }
                 })
                 .collect()
         };
 
-        // 2. Clone heightmaps (Standard Mutex)
         let heightmaps = self.heightmap.lock().unwrap().clone();
 
-        // 3. Prepare block entities (CRITICAL: Must drop lock before .await)
         let entities_to_serialize = {
-            // We clone the Arcs out of the map while holding the lock
             let entities_guard = self.block_entities.lock().unwrap();
             entities_guard.values().cloned().collect::<Vec<_>>()
         };
-        // entities_guard drops here automatically!
 
-        // 4. Now we can safely .await because no MutexGuards are held
         let block_entities_nbt = join_all(entities_to_serialize.into_iter().map(
             |block_entity| async move {
                 let mut nbt = NbtCompound::new();

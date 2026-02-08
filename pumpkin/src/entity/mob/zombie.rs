@@ -24,7 +24,7 @@ pub struct ZombieEntity {
 }
 
 impl ZombieEntity {
-    pub async fn make(entity: Entity) -> Arc<Self> {
+    pub async fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let zombie = Self { mob_entity };
         let mob_arc = Arc::new(zombie);

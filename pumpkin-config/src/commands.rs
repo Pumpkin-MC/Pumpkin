@@ -1,6 +1,10 @@
 use pumpkin_util::PermissionLvl;
 use serde::{Deserialize, Serialize};
 
+/// Configuration for command handling and execution.
+///
+/// Controls how commands are accepted, logged, and which permission
+/// level non-operator players receive by default.
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
 pub struct CommandsConfig {
