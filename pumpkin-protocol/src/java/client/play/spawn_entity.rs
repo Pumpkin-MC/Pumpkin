@@ -142,16 +142,46 @@ mod tests {
 
     #[test]
     fn remaps_entity_types_for_1_21_9_like_viaversion() {
-        assert_eq!(remap_entity_type_for_version(0, MinecraftVersion::V_1_21_9), 0);
-        assert_eq!(remap_entity_type_for_version(19, MinecraftVersion::V_1_21_9), 19);
-        assert_eq!(remap_entity_type_for_version(20, MinecraftVersion::V_1_21_9), 20);
-        assert_eq!(remap_entity_type_for_version(21, MinecraftVersion::V_1_21_9), 20);
-        assert_eq!(remap_entity_type_for_version(87, MinecraftVersion::V_1_21_9), 86);
-        assert_eq!(remap_entity_type_for_version(88, MinecraftVersion::V_1_21_9), 88);
-        assert_eq!(remap_entity_type_for_version(89, MinecraftVersion::V_1_21_9), 87);
-        assert_eq!(remap_entity_type_for_version(96, MinecraftVersion::V_1_21_9), 94);
-        assert_eq!(remap_entity_type_for_version(97, MinecraftVersion::V_1_21_9), 97);
-        assert_eq!(remap_entity_type_for_version(98, MinecraftVersion::V_1_21_9), 95);
+        assert_eq!(
+            remap_entity_type_for_version(0, MinecraftVersion::V_1_21_9),
+            0
+        );
+        assert_eq!(
+            remap_entity_type_for_version(19, MinecraftVersion::V_1_21_9),
+            19
+        );
+        assert_eq!(
+            remap_entity_type_for_version(20, MinecraftVersion::V_1_21_9),
+            20
+        );
+        assert_eq!(
+            remap_entity_type_for_version(21, MinecraftVersion::V_1_21_9),
+            20
+        );
+        assert_eq!(
+            remap_entity_type_for_version(87, MinecraftVersion::V_1_21_9),
+            86
+        );
+        assert_eq!(
+            remap_entity_type_for_version(88, MinecraftVersion::V_1_21_9),
+            88
+        );
+        assert_eq!(
+            remap_entity_type_for_version(89, MinecraftVersion::V_1_21_9),
+            87
+        );
+        assert_eq!(
+            remap_entity_type_for_version(96, MinecraftVersion::V_1_21_9),
+            94
+        );
+        assert_eq!(
+            remap_entity_type_for_version(97, MinecraftVersion::V_1_21_9),
+            97
+        );
+        assert_eq!(
+            remap_entity_type_for_version(98, MinecraftVersion::V_1_21_9),
+            95
+        );
         assert_eq!(
             remap_entity_type_for_version(151, MinecraftVersion::V_1_21_9),
             148
@@ -172,22 +202,70 @@ mod tests {
 
     #[test]
     fn remaps_entity_types_for_1_21_7_like_viaversion() {
-        assert_eq!(remap_entity_type_for_version(0, MinecraftVersion::V_1_21_7), 0);
-        assert_eq!(remap_entity_type_for_version(19, MinecraftVersion::V_1_21_7), 19);
-        assert_eq!(remap_entity_type_for_version(20, MinecraftVersion::V_1_21_7), 20);
-        assert_eq!(remap_entity_type_for_version(21, MinecraftVersion::V_1_21_7), 20);
-        assert_eq!(remap_entity_type_for_version(27, MinecraftVersion::V_1_21_7), 26);
-        assert_eq!(remap_entity_type_for_version(28, MinecraftVersion::V_1_21_7), 28);
-        assert_eq!(remap_entity_type_for_version(29, MinecraftVersion::V_1_21_7), 27);
-        assert_eq!(remap_entity_type_for_version(82, MinecraftVersion::V_1_21_7), 80);
-        assert_eq!(remap_entity_type_for_version(83, MinecraftVersion::V_1_21_7), 83);
-        assert_eq!(remap_entity_type_for_version(84, MinecraftVersion::V_1_21_7), 81);
-        assert_eq!(remap_entity_type_for_version(87, MinecraftVersion::V_1_21_7), 84);
-        assert_eq!(remap_entity_type_for_version(88, MinecraftVersion::V_1_21_7), 88);
-        assert_eq!(remap_entity_type_for_version(89, MinecraftVersion::V_1_21_7), 85);
-        assert_eq!(remap_entity_type_for_version(96, MinecraftVersion::V_1_21_7), 92);
-        assert_eq!(remap_entity_type_for_version(97, MinecraftVersion::V_1_21_7), 97);
-        assert_eq!(remap_entity_type_for_version(98, MinecraftVersion::V_1_21_7), 93);
+        assert_eq!(
+            remap_entity_type_for_version(0, MinecraftVersion::V_1_21_7),
+            0
+        );
+        assert_eq!(
+            remap_entity_type_for_version(19, MinecraftVersion::V_1_21_7),
+            19
+        );
+        assert_eq!(
+            remap_entity_type_for_version(20, MinecraftVersion::V_1_21_7),
+            20
+        );
+        assert_eq!(
+            remap_entity_type_for_version(21, MinecraftVersion::V_1_21_7),
+            20
+        );
+        assert_eq!(
+            remap_entity_type_for_version(27, MinecraftVersion::V_1_21_7),
+            26
+        );
+        assert_eq!(
+            remap_entity_type_for_version(28, MinecraftVersion::V_1_21_7),
+            28
+        );
+        assert_eq!(
+            remap_entity_type_for_version(29, MinecraftVersion::V_1_21_7),
+            27
+        );
+        assert_eq!(
+            remap_entity_type_for_version(82, MinecraftVersion::V_1_21_7),
+            80
+        );
+        assert_eq!(
+            remap_entity_type_for_version(83, MinecraftVersion::V_1_21_7),
+            83
+        );
+        assert_eq!(
+            remap_entity_type_for_version(84, MinecraftVersion::V_1_21_7),
+            81
+        );
+        assert_eq!(
+            remap_entity_type_for_version(87, MinecraftVersion::V_1_21_7),
+            84
+        );
+        assert_eq!(
+            remap_entity_type_for_version(88, MinecraftVersion::V_1_21_7),
+            88
+        );
+        assert_eq!(
+            remap_entity_type_for_version(89, MinecraftVersion::V_1_21_7),
+            85
+        );
+        assert_eq!(
+            remap_entity_type_for_version(96, MinecraftVersion::V_1_21_7),
+            92
+        );
+        assert_eq!(
+            remap_entity_type_for_version(97, MinecraftVersion::V_1_21_7),
+            97
+        );
+        assert_eq!(
+            remap_entity_type_for_version(98, MinecraftVersion::V_1_21_7),
+            93
+        );
         assert_eq!(
             remap_entity_type_for_version(151, MinecraftVersion::V_1_21_7),
             146
