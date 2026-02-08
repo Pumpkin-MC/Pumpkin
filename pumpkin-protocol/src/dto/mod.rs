@@ -45,7 +45,7 @@ pub enum PacketAction {
     /// Suppress the packet entirely (doesn't exist in this version).
     Suppress,
     /// The packet needs version-specific translation before sending.
-    /// The caller should use the VersionAdapter to transform it.
+    /// The caller should use the `VersionAdapter` to transform it.
     Translate,
 }
 
@@ -56,7 +56,7 @@ pub enum PacketAction {
 /// based solely on whether the packet ID exists in the target version
 /// (i.e., `PacketId::to_id(version) != -1`).
 #[must_use]
-pub fn packet_action_for(packet_id_in_version: i32) -> PacketAction {
+pub const fn packet_action_for(packet_id_in_version: i32) -> PacketAction {
     if packet_id_in_version == -1 {
         PacketAction::Suppress
     } else {
@@ -108,18 +108,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_packet_action_send() {
+    fn packet_action_send() {
         assert_eq!(packet_action_for(42), PacketAction::Send);
         assert_eq!(packet_action_for(0), PacketAction::Send);
     }
 
     #[test]
-    fn test_packet_action_suppress() {
+    fn packet_action_suppress() {
         assert_eq!(packet_action_for(-1), PacketAction::Suppress);
     }
 
     #[test]
-    fn test_has_config_state() {
+    fn config_state_version_check() {
         // 1.20.2 (764) introduced Config state
         assert!(has_config_state(MinecraftVersion::V_1_20_2));
         assert!(has_config_state(MinecraftVersion::V_1_21_11));
@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn test_has_item_components() {
+    fn item_components_version_check() {
         // 1.20.5 (766) introduced item components
         assert!(has_item_components(MinecraftVersion::V_1_20_5));
         assert!(has_item_components(MinecraftVersion::V_1_21_11));
@@ -144,7 +144,7 @@ mod tests {
     }
 
     #[test]
-    fn test_has_extended_world_height() {
+    fn extended_world_height_version_check() {
         // 1.18 (757) introduced -64 to 320
         assert!(has_extended_world_height(MinecraftVersion::V_1_18));
         assert!(has_extended_world_height(MinecraftVersion::V_1_18_2));
@@ -155,20 +155,20 @@ mod tests {
     }
 
     #[test]
-    fn test_has_signed_chat() {
+    fn signed_chat_version_check() {
         assert!(has_signed_chat(MinecraftVersion::V_1_19));
         assert!(has_signed_chat(MinecraftVersion::V_1_21_11));
         assert!(!has_signed_chat(MinecraftVersion::V_1_18_2));
     }
 
     #[test]
-    fn test_has_chunk_batching() {
+    fn chunk_batching_version_check() {
         assert!(has_chunk_batching(MinecraftVersion::V_1_20_2));
         assert!(!has_chunk_batching(MinecraftVersion::V_1_20));
     }
 
     #[test]
-    fn test_has_bundle_delimiter() {
+    fn bundle_delimiter_version_check() {
         assert!(has_bundle_delimiter(MinecraftVersion::V_1_19_4));
         assert!(!has_bundle_delimiter(MinecraftVersion::V_1_19_3));
     }
