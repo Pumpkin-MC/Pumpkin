@@ -6,7 +6,7 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal,
-        wander_around::WanderAroundGoal,
+        ranged_attack::RangedAttackGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -33,6 +33,10 @@ impl GhastEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
+            goal_selector.add_goal(
+                4,
+                RangedAttackGoal::new(1.0, 40, 64.0),
+            );
             goal_selector.add_goal(6, WanderAroundGoal::new(1.0));
             goal_selector.add_goal(
                 7,

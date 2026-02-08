@@ -13,6 +13,7 @@ pub mod look_at_entity;
 pub mod melee_attack;
 pub mod move_to_target_pos;
 pub mod panic;
+pub mod ranged_attack;
 pub mod step_and_destroy_block;
 pub mod swim;
 pub mod tempt;

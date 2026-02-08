@@ -10,7 +10,9 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
-        look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal,
+        flee_entity::FleeEntityGoal, look_around::LookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -37,12 +39,18 @@ impl CreeperEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
+            goal_selector.add_goal(0, SwimGoal::new());
+            goal_selector.add_goal(
+                1,
+                FleeEntityGoal::new(&EntityType::CAT, 6.0, 1.0, 1.2),
+            );
             goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(5, WanderAroundGoal::new(0.8));
             goal_selector.add_goal(
                 6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(6, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(7, Box::new(LookAroundGoal::default()));
 
             target_selector.add_goal(
                 1,

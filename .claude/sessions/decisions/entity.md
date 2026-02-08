@@ -87,3 +87,15 @@ Standard scale: Swim=0, Panic=1, Attack=2, Special=4-5, Wander=6, LookAt=7, Look
 **Session:** entity-011
 **Decision:** BreedGoal stores `love_ticks` and `breed_cooldown` in the goal struct itself, not on MobEntity. External systems call `set_in_love()` on the goal directly.
 **Rationale:** Avoids modifying the shared MobEntity struct (ARCH-011). Goal-local state is sufficient since the GoalSelector owns the goal instances.
+
+## ENT-015: RangedAttackGoal Priority Varies by Mob
+**Date:** 2026-02-08
+**Session:** entity-012
+**Decision:** RangedAttackGoal priority is mob-dependent: Witch=2, Drowned=2, Pillager=3, Skeleton/Blaze/Ghast=4. Range varies from 8.0 (Pillager) to 64.0 (Ghast). Attack intervals: 20-60 ticks.
+**Rationale:** Matches vanilla parameter differences. Witch/Drowned are primary ranged attackers (low priority number = high importance). Skeleton/Blaze/Ghast have flee/other behaviors that should take precedence.
+
+## ENT-016: FleeEntityGoal Priority 1-3 for Vanilla Flee Relationships
+**Date:** 2026-02-08
+**Session:** entity-012
+**Decision:** Wired 5 vanilla-accurate flee relationships: Creeper→Cat(p1), Phantom→Cat(p1), Rabbit→Wolf(p2), Fox→Wolf(p2), Skeleton→Wolf(p3). Flee priority is always above attack priority for the same mob.
+**Rationale:** In vanilla, flee behavior overrides attack behavior. A creeper will always run from a cat rather than try to explode near it. Skeleton flees wolves at p3 (above its p4 ranged attack).
