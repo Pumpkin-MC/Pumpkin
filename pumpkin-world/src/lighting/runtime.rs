@@ -34,17 +34,17 @@ impl DynamicLightEngine {
     async fn has_open_sky_above(&self, level: &Arc<Level>, pos: &BlockPos) -> bool {
         let max_y = 319; // Maximum build height in Minecraft, can be adjusted if needed
         let mut current_pos = *pos;
-        
+
         // Scan upward until we hit sky or an opaque block
         while current_pos.0.y < max_y {
             current_pos.0.y += 1;
-            
+
             let state = level.get_block_state(&current_pos).await.to_state();
             if state.opacity > 0 {
                 return false; // Hit an opaque block before reaching sky
             }
         }
-        
+
         true // Reached sky without hitting opaque blocks
     }
 
@@ -299,13 +299,14 @@ impl DynamicLightEngine {
     ) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
-            
+
             if let Some(neighbor_light) = self.get_sky_light_level(level, &neighbor_pos).await {
                 let neighbor_state = level.get_block_state(&neighbor_pos).await.to_state();
                 let opacity = neighbor_state.opacity;
-                
+
                 // Calculate new light level for neighbor
-                let new_light = if light_level == 15 && dir == BlockDirection::Down && opacity == 0 {
+                let new_light = if light_level == 15 && dir == BlockDirection::Down && opacity == 0
+                {
                     // Special case: Sky light at 15 propagates down as 15 through transparent blocks
                     15
                 } else {
@@ -318,7 +319,7 @@ impl DynamicLightEngine {
                     self.set_sky_light_level(level, &neighbor_pos, new_light)
                         .await
                         .unwrap();
-                    
+
                     if new_light > 0 {
                         self.queue_sky_light_increase(neighbor_pos, new_light);
                     }
@@ -335,7 +336,7 @@ impl DynamicLightEngine {
     ) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
-            
+
             if let Some(neighbor_light) = self.get_sky_light_level(level, &neighbor_pos).await {
                 if neighbor_light == 0 {
                     continue; // Already dark
@@ -345,7 +346,8 @@ impl DynamicLightEngine {
                 let opacity = neighbor_state.opacity;
 
                 // Calculate what we would have given this neighbor
-                let expected = if removed_light == 15 && dir == BlockDirection::Down && opacity == 0 {
+                let expected = if removed_light == 15 && dir == BlockDirection::Down && opacity == 0
+                {
                     15
                 } else {
                     removed_light.saturating_sub(1).saturating_sub(opacity)
@@ -390,18 +392,20 @@ impl DynamicLightEngine {
         } else {
             // Check if there's open sky above
             let has_sky = self.has_open_sky_above(level, &pos).await;
-            
+
             if has_sky {
                 // Direct sunlight, reduced by opacity
                 15_u8.saturating_sub(opacity)
             } else {
                 // No direct sky, check neighbors for best light
                 let mut best_light = 0;
-                
+
                 for dir in BlockDirection::all() {
                     let neighbor_pos = pos.offset(dir.to_offset());
-                    
-                    if let Some(neighbor_light) = self.get_sky_light_level(level, &neighbor_pos).await {
+
+                    if let Some(neighbor_light) =
+                        self.get_sky_light_level(level, &neighbor_pos).await
+                    {
                         // Calculate potential light from this neighbor
                         let potential = if neighbor_light == 15 && dir == BlockDirection::Up {
                             // Sky light at 15 from above stays 15
@@ -410,11 +414,11 @@ impl DynamicLightEngine {
                             // Normal decay
                             neighbor_light.saturating_sub(1)
                         };
-                        
+
                         best_light = best_light.max(potential);
                     }
                 }
-                
+
                 // Apply opacity to the best incoming light
                 best_light.saturating_sub(opacity)
             }
@@ -442,11 +446,7 @@ impl DynamicLightEngine {
         }
     }
 
-    pub async fn check_neighbors_sky_light_updates(
-        &self,
-        pos: BlockPos,
-        current_light: u8,
-    ) {
+    pub async fn check_neighbors_sky_light_updates(&self, pos: BlockPos, current_light: u8) {
         // When we update a position, propagate to neighbors
         if current_light > 0 {
             self.queue_sky_light_increase(pos, current_light);

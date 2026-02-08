@@ -1,8 +1,8 @@
 use crate::chunk::{ChunkData, ChunkLight, ChunkSections};
 use crate::generation::biome_coords;
+use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::dimension::Dimension;
 use std::sync::Arc;
-use pumpkin_config::lighting::LightingEngineConfig;
 use std::sync::atomic::AtomicBool;
 
 use crate::ProtoChunk;
@@ -172,7 +172,11 @@ impl Chunk {
             Chunk::Proto(chunk) => chunk,
         }
     }
-    pub fn upgrade_to_level_chunk(&mut self, dimension: &Dimension, lighting_config: &LightingEngineConfig) {
+    pub fn upgrade_to_level_chunk(
+        &mut self,
+        dimension: &Dimension,
+        lighting_config: &LightingEngineConfig,
+    ) {
         // Take ownership of the ProtoChunk by temporarily replacing with a dummy value
         // This allows us to move the light data instead of cloning it
         let proto_chunk_box = match std::mem::replace(
@@ -252,7 +256,8 @@ impl Chunk {
         let light_data = proto_chunk.light;
 
         // Only mark lit if past the lighting stage, and the lighting config is "default" ("full" and "dark" modes skip proper lighting)
-        let is_lit = proto_chunk.stage >= StagedChunkEnum::Lighting && *lighting_config == LightingEngineConfig::Default;
+        let is_lit = proto_chunk.stage >= StagedChunkEnum::Lighting
+            && *lighting_config == LightingEngineConfig::Default;
 
         let mut chunk = ChunkData {
             light_engine: Mutex::new(light_data),

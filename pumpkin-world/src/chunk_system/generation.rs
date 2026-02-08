@@ -1,10 +1,10 @@
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 
+use crate::ProtoChunk;
 use crate::generation::generator::VanillaGenerator;
 use crate::world::BlockRegistryExt;
 use pumpkin_config::lighting::LightingEngineConfig;
-use crate::ProtoChunk;
 
 use super::{Cache, Chunk, StagedChunkEnum};
 

@@ -1,6 +1,7 @@
+use crate::chunk_system::Chunk;
 use crate::chunk_system::generation_cache::Cache;
-use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::height_limit::HeightLimitView;
+use crate::generation::proto_chunk::GenerationCache;
 use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
@@ -8,7 +9,6 @@ use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::collections::{HashMap, HashSet, VecDeque};
-use crate::chunk_system::Chunk;
 //use std::time::Instant;
 
 type FastHashSet<K> = HashSet<K>;
@@ -132,10 +132,10 @@ impl<P: LightProvider> LightPropagator<P> {
 
             for dir in BlockDirection::all() {
                 // Skip the direction we came from (if specified)
-                if let Some(skip_dir) = entry.skip_direction {
-                    if dir == skip_dir {
-                        continue;
-                    }
+                if let Some(skip_dir) = entry.skip_direction
+                    && dir == skip_dir
+                {
+                    continue;
                 }
 
                 let neighbor_pos = pos.offset(dir.to_offset());
@@ -193,7 +193,7 @@ impl<P: LightProvider> LightPropagator<P> {
                 self.apply_updates(cache);
             }
         }
-        
+
         // Final flush of any remaining updates
         self.apply_updates(cache);
     }
@@ -308,7 +308,7 @@ impl BlockLightPropagator {
 impl SkyLightPropagator {
     pub fn convert_light(&mut self, cache: &mut Cache) {
         self.clear();
-        
+
         //let scan_start = Instant::now();
 
         let center_x = cache.x + (cache.size / 2);
@@ -323,36 +323,37 @@ impl SkyLightPropagator {
 
         // Pre-allocate with exact size needed
         let capacity = ((end_x - start_x) * (end_z - start_z)) as usize;
-        let mut surface_heights = FastHashMap::with_capacity_and_hasher(capacity, Default::default());
-        
+        let mut surface_heights =
+            FastHashMap::with_capacity_and_hasher(capacity, Default::default());
+
         // Process in Z-outer, X-inner order for better cache locality
         for z in start_z..end_z {
             let chunk_z = z >> 4;
             let local_z = (z & 15) as usize;
-            
+
             for x in start_x..end_x {
                 let chunk_x = x >> 4;
                 let local_x = (x & 15) as usize;
-                
+
                 // Get heightmap (top solid blocks)
                 let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
                 surface_heights.insert((x, z), top_y);
-                
+
                 // Get chunk index once per column
                 let rel_x = chunk_x - cache.x;
                 let rel_z = chunk_z - cache.z;
-                
+
                 if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
                     continue;
                 }
-                
+
                 let chunk_idx = (rel_x * cache.size + rel_z) as usize;
-                
+
                 // Fill everything above heightmap with 15 immediately
                 for y in (top_y + 1)..max_y {
                     let section_idx = ((y - bottom_y) >> 4) as usize;
                     let local_y = (y & 15) as usize;
-                    
+
                     // Direct array access - skip all function call overhead
                     match &mut cache.chunks[chunk_idx] {
                         Chunk::Proto(c) => {
@@ -363,46 +364,49 @@ impl SkyLightPropagator {
                         Chunk::Level(c) => {
                             let mut light_engine = c.light_engine.lock().unwrap();
                             if section_idx < light_engine.sky_light.len() {
-                                light_engine.sky_light[section_idx].set(local_x, local_y, local_z, 15);
+                                light_engine.sky_light[section_idx]
+                                    .set(local_x, local_y, local_z, 15);
                             }
                         }
                     }
                 }
-                
+
                 // Only iterate from top_y DOWN - not from max_y
                 let mut light: i32 = 15;
-                
+
                 for y in (bottom_y..=top_y).rev() {
                     let section_idx = ((y - bottom_y) >> 4) as usize;
                     let local_y = (y & 15) as usize;
-                    
+
                     // Get block opacity
                     let opacity = {
                         let pos_vec = Vector3::new(x, y, z);
                         let state = cache.get_block_state(&pos_vec);
                         state.to_state().opacity
                     } as i32;
-                    
+
                     // Reduce light by opacity
                     light = light.saturating_sub(opacity);
-                    
+
                     // Set the light value directly
                     let light_val = if light <= 0 { 0 } else { light as u8 };
-                    
+
                     match &mut cache.chunks[chunk_idx] {
                         Chunk::Proto(c) => {
                             if section_idx < c.light.sky_light.len() {
-                                c.light.sky_light[section_idx].set(local_x, local_y, local_z, light_val);
+                                c.light.sky_light[section_idx]
+                                    .set(local_x, local_y, local_z, light_val);
                             }
                         }
                         Chunk::Level(c) => {
                             let mut light_engine = c.light_engine.lock().unwrap();
                             if section_idx < light_engine.sky_light.len() {
-                                light_engine.sky_light[section_idx].set(local_x, local_y, local_z, light_val);
+                                light_engine.sky_light[section_idx]
+                                    .set(local_x, local_y, local_z, light_val);
                             }
                         }
                     }
-                    
+
                     // Early exit when light hits 0
                     if light <= 0 {
                         break;
@@ -415,37 +419,49 @@ impl SkyLightPropagator {
         for z in start_z..end_z {
             for x in start_x..end_x {
                 let top_y = surface_heights[&(x, z)];
-                
+
                 let north_top = surface_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
                 let south_top = surface_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
                 let west_top = surface_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
                 let east_top = surface_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
-                
+
                 // We must check up to the highest neighbor to catch the "air sources"
-                let max_check_y = top_y.max(north_top).max(south_top).max(west_top).max(east_top);
-                
+                let max_check_y = top_y
+                    .max(north_top)
+                    .max(south_top)
+                    .max(west_top)
+                    .max(east_top);
+
                 for y in (bottom_y..=max_check_y).rev() {
                     let pos = BlockPos(Vector3::new(x, y, z));
                     let light = get_sky_light(cache, pos);
-                    
+
                     // Use continue, or only break if we are safely below all possible side-light
                     if light == 0 {
-                        if y <= top_y { break; } // Safe to break if we're under our own roof
-                        else { continue; } 
-                    }
-                    
-                    let is_at_surface = y == top_y;
-                    let below_neighbor = y < north_top || y < south_top || y < west_top || y < east_top;
-                    
-                    if is_at_surface || below_neighbor {
-                        if self.visited.insert(pos) {
-                            let skip_dir = if y >= top_y { Some(BlockDirection::Up) } else { None };
-                            
-                            self.queue.push_back(PropagationEntry {
-                                pos,
-                                skip_direction: skip_dir,
-                            });
+                        if y <= top_y {
+                            break;
                         }
+                        // Safe to break if we're under our own roof
+                        else {
+                            continue;
+                        }
+                    }
+
+                    let is_at_surface = y == top_y;
+                    let below_neighbor =
+                        y < north_top || y < south_top || y < west_top || y < east_top;
+
+                    if (is_at_surface || below_neighbor) && self.visited.insert(pos) {
+                        let skip_dir = if y >= top_y {
+                            Some(BlockDirection::Up)
+                        } else {
+                            None
+                        };
+
+                        self.queue.push_back(PropagationEntry {
+                            pos,
+                            skip_direction: skip_dir,
+                        });
                     }
                 }
             }
