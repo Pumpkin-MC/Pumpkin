@@ -447,8 +447,7 @@ mod tests {
             let recovered = ComparatorLikeProperties::from_state_id(state_id, block);
             assert_eq!(
                 recovered.mode, mode,
-                "Mode {:?} not preserved through state roundtrip",
-                mode
+                "Mode {mode:?} not preserved through state roundtrip"
             );
         }
     }
@@ -464,8 +463,7 @@ mod tests {
             let recovered = ComparatorLikeProperties::from_state_id(state_id, block);
             assert_eq!(
                 recovered.powered, powered,
-                "Powered={} not preserved through state roundtrip",
-                powered
+                "Powered={powered} not preserved through state roundtrip"
             );
         }
     }
@@ -481,16 +479,16 @@ mod tests {
             let recovered = ComparatorLikeProperties::from_state_id(state_id, block);
             assert_eq!(
                 recovered.facing, facing,
-                "Facing {:?} not preserved through state roundtrip",
-                facing
+                "Facing {facing:?} not preserved through state roundtrip"
             );
         }
     }
 
     /// Verify the comparator output formula (from `calculate_output_signal`):
-    /// - If side_power >= back_power, output = 0
-    /// - If Subtract mode and back > side: output = back - side
-    /// - If Compare mode and back > side: output = back
+    ///   - If `side_power >= back_power`, output = 0
+    ///   - If Subtract mode and back > side: output = back - side
+    ///   - If Compare mode and back > side: output = back
+    ///
     /// These are the vanilla rules for comparator operation.
     #[test]
     fn compare_subtract_formula() {
@@ -608,7 +606,7 @@ mod tests {
         assert!(!has_power(3, 10, ComparatorMode::Subtract));
     }
 
-    /// Exhaustive has_power test for all 16×16 back×side combinations.
+    /// Exhaustive `has_power` test for all 16x16 back x side combinations.
     #[test]
     fn has_power_exhaustive() {
         fn has_power(back: u8, side: u8, mode: ComparatorMode) -> bool {
