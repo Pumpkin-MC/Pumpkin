@@ -300,7 +300,7 @@ impl Context {
         after_count > before_count
     }
 
-    /// Initializes logging via the log crate for the plugin.
+    /// Initializes logging via the tracing crate for the plugin.
     pub fn init_log(&self) {
         let logger_arc = self.logger.clone();
 
