@@ -59,6 +59,19 @@ Your branch is **24 commits behind master**. Run `git fetch origin master && git
 - **WorldGen:** Will eventually delegate their `chunk/format/anvil.rs` to your `pumpkin_nbt::anvil::RegionFile`. Keep your API stable and well-documented.
 - **Entity/Core:** Need player data persistence — NBT serialization for player data (position, inventory, health, game mode).
 
+## URGENT: Clippy Fixes (7 errors blocking CI)
+
+Fix these before any other work. All in test code:
+
+| # | File | Line | Lint | Fix |
+|---|---|---|---|---|
+| 1 | `pumpkin-nbt/src/player_data.rs` | 335 | `separated_literal_suffix` | `90.0_f32` → `90.0f32`, `-45.0_f32` → `-45.0f32` |
+| 2 | `pumpkin-nbt/src/anvil.rs` | 1048 | `manual_string_new` | `"".to_string()` → `String::new()` |
+| 3-4 | `pumpkin-nbt/src/snbt.rs` | 668,670 | `approx_constant` | Add `#[allow(clippy::approx_constant)]` on `parse_double` test fn (3.14/2.718 are SNBT test values, not math) |
+| 5-6 | `pumpkin-nbt/src/snbt.rs` | 921,922 | `approx_constant` | Add `#[allow(clippy::approx_constant)]` on `display_then_parse_roundtrip` test fn |
+
+Verify: `RUSTFLAGS="-Dwarnings" cargo clippy -p pumpkin-nbt --all-targets`
+
 ## Your Task This Session
 
 Priority areas:

@@ -67,6 +67,19 @@ These are network-layer events (PlayerLoginEvent, AsyncPlayerPreLoginEvent, etc.
 - **Items:** Protocol-level recipe book packets for stonecutter/smithing recipe selection UI
 - **Plugin:** Player connection events fire through the network layer — you own the packet handling that triggers them
 
+## URGENT: Clippy Fixes (11 errors blocking CI)
+
+Fix these before any other work. dto/mod.rs is Architect-written code in your crate — you own the fix:
+
+| # | File | Line | Lint | Fix |
+|---|---|---|---|---|
+| 1 | `pumpkin-protocol/src/dto/mod.rs` | 48 | `doc_markdown` | Backtick `VersionAdapter` in doc comment |
+| 2 | `pumpkin-protocol/src/dto/mod.rs` | 59 | `missing_const_for_fn` | `pub fn packet_action_for` → `pub const fn packet_action_for` |
+| 3-10 | `pumpkin-protocol/src/dto/mod.rs` | 111-171 | `redundant_test_prefix` | Remove `test_` prefix from 8 test fns: `test_packet_action_send` → `packet_action_send`, `test_packet_action_suppress` → `packet_action_suppress`, `test_has_config_state` → `config_state`, `test_has_item_components` → `item_components`, `test_has_extended_world_height` → `extended_world_height`, `test_has_signed_chat` → `signed_chat`, `test_has_chunk_batching` → `chunk_batching`, `test_has_bundle_delimiter` → `bundle_delimiter` |
+| 11 | `pumpkin-protocol/src/java/server/play/custom_payload.rs` | 14 | `doc_markdown` | Backtick `BungeeCord` in doc comment |
+
+Verify: `RUSTFLAGS="-Dwarnings" cargo clippy -p pumpkin-protocol --all-targets --all-features`
+
 ## Your Task This Session
 
 Priority areas:

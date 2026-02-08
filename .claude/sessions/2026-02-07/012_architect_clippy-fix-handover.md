@@ -1,13 +1,21 @@
-# Session 012 — Architect — Clippy Fix Handover
+# Session 012 — Architect — Clippy Fix Handover (CORRECTED)
 
 **Date:** 2026-02-07
 **Agent:** Architect
 **Branch:** `claude/architect-setup-LkWIY` at `6b1dae4` (master HEAD)
-**Status:** HANDOVER — session dismissed, clippy fixes incomplete
+**Status:** HANDOVER — delegated to owning agents
 
-## What Was Attempted
+## Actual Error Count: 18 (NOT 81+)
 
-Rust 1.93 introduced new clippy lints that broke CI across 3 crates:
+The 63 pumpkin-inventory + 37 pumpkin binary errors reported earlier were
+self-inflicted by botched agent/script edits that weren't fully reverted.
+Actual errors are 7 (pumpkin-nbt) + 11 (pumpkin-protocol) = 18 total.
+
+Delegated to owners via prompt updates:
+- **Storage agent**: 7 pumpkin-nbt errors (test code only)
+- **Protocol agent**: 11 pumpkin-protocol errors (dto/mod.rs + custom_payload.rs)
+
+## What Went Wrong
 
 ### pumpkin-nbt (7 errors) — NOT COMMITTED
 - `player_data.rs:335`: `90.0_f32` → `90.0f32` (separated_literal_suffix)
