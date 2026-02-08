@@ -1,5 +1,6 @@
 use pumpkin_data::Block;
 use pumpkin_macros::{Event, cancellable};
+use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
@@ -24,6 +25,9 @@ pub struct BlockCanBuildEvent {
 
     /// The block being built upon.
     pub block: &'static Block,
+
+    /// The position being built at.
+    pub block_pos: BlockPos,
 }
 
 impl BlockEvent for BlockCanBuildEvent {

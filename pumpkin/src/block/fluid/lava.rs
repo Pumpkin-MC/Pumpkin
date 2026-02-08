@@ -40,15 +40,28 @@ impl FlowingLava {
         for dir in BlockDirection::flow_directions() {
             let neighbor_pos = block_pos.offset(dir.opposite().to_offset());
             if world.get_block(&neighbor_pos).await == &Block::WATER {
-                let block = if is_still {
-                    Block::OBSIDIAN
+                let mut formed_block = if is_still {
+                    Block::from_id(Block::OBSIDIAN.id)
                 } else {
-                    Block::COBBLESTONE
+                    Block::from_id(Block::COBBLESTONE.id)
                 };
+                if let Some(server) = world.server.upgrade() {
+                    let event = crate::plugin::block::block_form::BlockFormEvent::new(
+                        formed_block,
+                        &Block::LAVA,
+                        *block_pos,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return false;
+                    }
+                    formed_block = event.new_block;
+                }
                 world
                     .set_block_state(
                         block_pos,
-                        block.default_state.id,
+                        formed_block.default_state.id,
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
@@ -58,10 +71,24 @@ impl FlowingLava {
                 return false;
             }
             if below_is_soul_soil && world.get_block(&neighbor_pos).await == &Block::BLUE_ICE {
+                let mut formed_block = &Block::BASALT;
+                if let Some(server) = world.server.upgrade() {
+                    let event = crate::plugin::block::block_form::BlockFormEvent::new(
+                        formed_block,
+                        &Block::LAVA,
+                        *block_pos,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return false;
+                    }
+                    formed_block = event.new_block;
+                }
                 world
                     .set_block_state(
                         block_pos,
-                        Block::BASALT.default_state.id,
+                        formed_block.default_state.id,
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;

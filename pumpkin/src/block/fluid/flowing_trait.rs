@@ -1,4 +1,5 @@
 use super::{pathfinder, physics};
+use crate::plugin::block::fluid_level_change::FluidLevelChangeEvent;
 use crate::{block::BlockFuture, world::World};
 use pumpkin_data::{
     Block, BlockDirection,
@@ -87,9 +88,15 @@ pub trait FlowingFluid: Send + Sync {
                     let new_state_id = new_state.to_state_id(fluid);
 
                     if new_state_id != current_block_state_id {
-                        world
-                            .set_block_state(block_pos, new_state_id, BlockFlags::NOTIFY_ALL)
-                            .await;
+                        if let Some(target_state_id) =
+                            fire_fluid_level_change(world, block_pos, new_state_id).await
+                        {
+                            world
+                                .set_block_state(block_pos, target_state_id, BlockFlags::NOTIFY_ALL)
+                                .await;
+                        } else {
+                            return;
+                        }
 
                         // Schedule next tick for this position
                         let tick_delay = self.get_flow_speed(world);
@@ -106,13 +113,13 @@ pub trait FlowingFluid: Send + Sync {
                     // Use the new state for spreading
                     state_for_spreading = new_state;
                 } else {
-                    if !waterlogged {
+                    if !waterlogged
+                        && let Some(target_state_id) =
+                            fire_fluid_level_change(world, block_pos, Block::AIR.default_state.id)
+                                .await
+                    {
                         world
-                            .set_block_state(
-                                block_pos,
-                                Block::AIR.default_state.id,
-                                BlockFlags::NOTIFY_ALL,
-                            )
+                            .set_block_state(block_pos, target_state_id, BlockFlags::NOTIFY_ALL)
                             .await;
                     }
                     return; // Don't spread if fluid is gone
@@ -150,8 +157,31 @@ pub trait FlowingFluid: Send + Sync {
 
             // Try to flow down first
             if is_hole {
+                let mut target_pos = below_pos;
+                if let Some(server) = world.server.upgrade() {
+                    let source_block = world.get_block(block_pos).await;
+                    let to_block = world.get_block(&target_pos).await;
+                    let event = crate::plugin::block::block_from_to::BlockFromToEvent::new(
+                        source_block,
+                        *block_pos,
+                        to_block,
+                        target_pos,
+                        BlockDirection::Down,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return;
+                    }
+                    target_pos = event.to_pos;
+                    let target_state = world.get_block_state(&target_pos).await;
+                    let target_block = Block::from_state_id(target_state.id);
+                    if !physics::can_be_replaced(target_state, target_block, fluid) {
+                        return;
+                    }
+                }
                 let falling_props = self.get_flowing(fluid, Level::L8, true);
-                self.spread_to(world, fluid, &below_pos, falling_props.to_state_id(fluid))
+                self.spread_to(world, fluid, &target_pos, falling_props.to_state_id(fluid))
                     .await;
 
                 // Check if we should also spread to sides
@@ -342,9 +372,15 @@ pub trait FlowingFluid: Send + Sync {
                     if should_convert {
                         let source_props = self.get_source(fluid, false);
                         let source_state_id = source_props.to_state_id(fluid);
-                        world
-                            .set_block_state(pos, source_state_id, BlockFlags::NOTIFY_ALL)
-                            .await;
+                        if let Some(target_state_id) =
+                            fire_fluid_level_change(world, pos, source_state_id).await
+                        {
+                            world
+                                .set_block_state(pos, target_state_id, BlockFlags::NOTIFY_ALL)
+                                .await;
+                        } else {
+                            return;
+                        }
 
                         // Sources don't need ticks
                         return;
@@ -374,9 +410,13 @@ pub trait FlowingFluid: Send + Sync {
                 }
             }
 
-            world
-                .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
-                .await;
+            if let Some(target_state_id) = fire_fluid_level_change(world, pos, state_id).await {
+                world
+                    .set_block_state(pos, target_state_id, BlockFlags::NOTIFY_ALL)
+                    .await;
+            } else {
+                return;
+            }
 
             // Check for infinite source formation after placing new fluid
             if self.can_convert_to_source(world) {
@@ -387,9 +427,15 @@ pub trait FlowingFluid: Send + Sync {
                 if should_convert {
                     let source_props = self.get_source(fluid, false);
                     let source_state_id = source_props.to_state_id(fluid);
-                    world
-                        .set_block_state(pos, source_state_id, BlockFlags::NOTIFY_ALL)
-                        .await;
+                    if let Some(target_state_id) =
+                        fire_fluid_level_change(world, pos, source_state_id).await
+                    {
+                        world
+                            .set_block_state(pos, target_state_id, BlockFlags::NOTIFY_ALL)
+                            .await;
+                    } else {
+                        return;
+                    }
 
                     // Sources don't need ticks
                     return;
@@ -533,15 +579,58 @@ pub trait FlowingFluid: Send + Sync {
                     continue;
                 }
 
+                let mut target_pos = side_pos;
+                if let Some(server) = world.server.upgrade() {
+                    let source_block = world.get_block(block_pos).await;
+                    let to_block = world.get_block(&target_pos).await;
+                    let event = crate::plugin::block::block_from_to::BlockFromToEvent::new(
+                        source_block,
+                        *block_pos,
+                        to_block,
+                        target_pos,
+                        direction,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        continue;
+                    }
+                    target_pos = event.to_pos;
+                    let target_state = world.get_block_state(&target_pos).await;
+                    let target_block = Block::from_state_id(target_state.id);
+                    if !physics::can_be_replaced(target_state, target_block, fluid) {
+                        continue;
+                    }
+                }
+
                 // Calculate the new fluid state
                 let level_index = (effective_level as u16).saturating_sub(1);
                 let new_props = self.get_flowing(fluid, Level::from_index(level_index), false);
                 let final_state_id = new_props.to_state_id(fluid);
 
                 // Call spread_to with the calculated fluid state ID
-                self.spread_to(world, fluid, &side_pos, final_state_id)
+                self.spread_to(world, fluid, &target_pos, final_state_id)
                     .await;
             }
         }
+    }
+}
+
+async fn fire_fluid_level_change(
+    world: &Arc<World>,
+    pos: &BlockPos,
+    new_state_id: BlockStateId,
+) -> Option<BlockStateId> {
+    let Some(server) = world.server.upgrade() else {
+        return Some(new_state_id);
+    };
+
+    let block = world.get_block(pos).await;
+    let event = FluidLevelChangeEvent::new(block, *pos, world.uuid, new_state_id);
+    let event = server.plugin_manager.fire(event).await;
+    if event.cancelled {
+        None
+    } else {
+        Some(event.new_state_id)
     }
 }

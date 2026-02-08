@@ -84,7 +84,14 @@ use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
+use crate::plugin::player::player_drop_item::PlayerDropItemEvent;
+use crate::plugin::player::player_exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
+use crate::plugin::player::player_item_break::PlayerItemBreakEvent;
+use crate::plugin::player::player_item_damage::PlayerItemDamageEvent;
+use crate::plugin::player::player_item_mend::PlayerItemMendEvent;
+use crate::plugin::player::player_kick::PlayerKickEvent;
+use crate::plugin::player::player_level_change::PlayerLevelChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
@@ -366,6 +373,8 @@ pub struct Player {
     pub open_container: AtomicCell<Option<u64>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
+    /// Custom leave message to be used by the leave event after a kick.
+    pub pending_leave_message: Mutex<Option<TextComponent>>,
     /// The player's abilities and special powers.
     ///
     /// This field represents the various abilities that the player possesses, such as flight, invulnerability, and other special effects.
@@ -484,6 +493,7 @@ impl Player {
             packet_sequence: AtomicI32::new(-1),
             start_mining_time: AtomicI32::new(0),
             carried_item: Mutex::new(None),
+            pending_leave_message: Mutex::new(None),
             experience_pick_up_delay: Mutex::new(0),
             teleport_id_count: AtomicI32::new(0),
             mining: AtomicBool::new(false),
@@ -732,18 +742,64 @@ impl Player {
         ) {
             return false;
         }
+        if amount <= 0 {
+            return false;
+        }
 
         let slot_index = self.inventory.get_selected_slot() as usize;
         let stack_arc = self.inventory.held_item();
-        let updated = {
-            let mut stack = stack_arc.lock().await;
-            stack
-                .damage_item_with_context(amount, false)
-                .then_some(stack.clone())
+        let server = self.world().server.upgrade();
+        let player_arc = self.as_arc();
+
+        let current_stack = {
+            let stack = stack_arc.lock().await;
+            if stack.is_empty() {
+                return false;
+            }
+            stack.clone()
         };
 
-        if let Some(updated_stack) = updated {
+        let mut damage = amount;
+        if let (Some(server), Some(player_arc)) = (&server, player_arc.clone()) {
+            let event = PlayerItemDamageEvent::new(player_arc, current_stack, damage);
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return false;
+            }
+            damage = event.damage;
+        }
+
+        if damage <= 0 {
+            return false;
+        }
+
+        let mut updated_stack: Option<ItemStack> = None;
+        let mut broken_item: Option<ItemStack> = None;
+        {
+            let mut stack = stack_arc.lock().await;
+            if stack.is_empty() {
+                return false;
+            }
+            let before = stack.clone();
+            if stack.damage_item_with_context(damage, false) {
+                if stack.is_empty() {
+                    broken_item = Some(before);
+                }
+                updated_stack = Some(stack.clone());
+            }
+        }
+
+        if let Some(updated_stack) = updated_stack {
             self.sync_hand_slot(slot_index, updated_stack).await;
+            if let (Some(server), Some(broken_item), Some(player_arc)) =
+                (server, broken_item, player_arc)
+            {
+                let event = PlayerItemBreakEvent::new(player_arc, broken_item);
+                server
+                    .plugin_manager
+                    .fire::<PlayerItemBreakEvent>(event)
+                    .await;
+            }
             return true;
         }
 
@@ -1158,6 +1214,17 @@ impl Player {
 
         let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position).await;
         BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
+
+        if let Some(server) = world.server.upgrade() {
+            let bed_position = respawn_point.position.to_f64().add_raw(0.5, 0.0, 0.5);
+            if let Some(player) = server.get_player_by_uuid(self.gameprofile.id) {
+                let event = crate::plugin::player::player_bed_leave::PlayerBedLeaveEvent::new(
+                    player,
+                    bed_position,
+                );
+                let _ = server.plugin_manager.fire(event).await;
+            }
+        }
 
         self.living_entity
             .entity
@@ -1831,12 +1898,34 @@ impl Player {
     }
 
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
-        self.client.kick(reason, message).await;
+        let mut kick_message = message.clone();
+        let mut leave_message = message.clone();
+        let cause = "UNKNOWN".to_string();
+
+        if let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.as_arc()
+        {
+            let event = PlayerKickEvent::new(player_arc, kick_message, leave_message, cause);
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
+            }
+            kick_message = event.reason;
+            leave_message = event.leave_message;
+        }
+
+        *self.pending_leave_message.lock().await = Some(leave_message);
+        self.client.kick(reason, kick_message).await;
     }
 
     /// Updates the last action time to now. Call this on player actions like movement, chat, etc.
     pub fn update_last_action_time(&self) {
         self.last_action_time.store(std::time::Instant::now());
+    }
+
+    #[must_use]
+    pub fn as_arc(&self) -> Option<Arc<Self>> {
+        self.world().get_player_by_uuid(self.gameprofile.id)
     }
 
     pub fn can_food_heal(&self) -> bool {
@@ -2102,9 +2191,39 @@ impl Player {
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
+        let item_uuid = Uuid::new_v4();
+        self.spawn_dropped_item_with_uuid(item_uuid, item_stack)
+            .await;
+    }
+
+    pub async fn drop_item_with_event(&self, item_stack: ItemStack) -> bool {
+        let item_uuid = Uuid::new_v4();
+        let Some(server) = self.world().server.upgrade() else {
+            self.spawn_dropped_item_with_uuid(item_uuid, item_stack)
+                .await;
+            return true;
+        };
+        let Some(player_arc) = self.as_arc() else {
+            self.spawn_dropped_item_with_uuid(item_uuid, item_stack)
+                .await;
+            return true;
+        };
+
+        let event = PlayerDropItemEvent::new(player_arc, item_uuid, item_stack);
+        let event = server.plugin_manager.fire(event).await;
+        if event.cancelled || event.item_stack.is_empty() {
+            return false;
+        }
+
+        self.spawn_dropped_item_with_uuid(item_uuid, event.item_stack)
+            .await;
+        true
+    }
+
+    async fn spawn_dropped_item_with_uuid(&self, item_uuid: Uuid, item_stack: ItemStack) {
         let item_pos = self.living_entity.entity.pos.load()
             + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
-        let entity = Entity::new(self.world(), item_pos, &EntityType::ITEM);
+        let entity = Entity::from_uuid(item_uuid, self.world(), item_pos, &EntityType::ITEM);
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
         let yaw = f64::from(self.living_entity.entity.yaw.load()).to_radians();
@@ -2132,24 +2251,32 @@ impl Player {
         // should be locked first otherwise cause deadlock in tick() (this thread lock stack, that thread lock screen_handler)
 
         let binding = self.inventory.held_item();
+        let item_stack = binding.lock().await;
+
+        if item_stack.is_empty() {
+            return;
+        }
+
+        let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
+        let drop_stack = item_stack.copy_with_count(drop_amount);
+        drop(item_stack);
+
+        if !self.drop_item_with_event(drop_stack).await {
+            return;
+        }
+
         let mut item_stack = binding.lock().await;
+        item_stack.decrement(drop_amount);
+        let selected_slot = self.inventory.get_selected_slot();
+        let inv: Arc<dyn Inventory> = self.inventory.clone();
+        let screen_binding = self.current_screen_handler.lock().await;
+        let mut screen_handler = screen_binding.lock().await;
+        let slot_index = screen_handler
+            .get_slot_index(&inv, selected_slot as usize)
+            .await;
 
-        if !item_stack.is_empty() {
-            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            self.drop_item(item_stack.copy_with_count(drop_amount))
-                .await;
-            item_stack.decrement(drop_amount);
-            let selected_slot = self.inventory.get_selected_slot();
-            let inv: Arc<dyn Inventory> = self.inventory.clone();
-            let screen_binding = self.current_screen_handler.lock().await;
-            let mut screen_handler = screen_binding.lock().await;
-            let slot_index = screen_handler
-                .get_slot_index(&inv, selected_slot as usize)
-                .await;
-
-            if let Some(slot_index) = slot_index {
-                screen_handler.set_received_stack(slot_index, item_stack.clone());
-            }
+        if let Some(slot_index) = slot_index {
+            screen_handler.set_received_stack(slot_index, item_stack.clone());
         }
     }
 
@@ -2203,6 +2330,7 @@ impl Player {
     /// Sets the player's experience level and notifies the client.
     pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
         // TODO: These should be atomic together, not isolated; make a struct containing these. can cause ABA issues
+        let old_level = self.experience_level.load(Ordering::Relaxed);
         self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress.clamp(0.0, 1.0));
         self.experience_points.store(points, Ordering::Relaxed);
@@ -2216,6 +2344,17 @@ impl Player {
                 level.into(),
             ))
             .await;
+
+        if old_level != level
+            && let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.as_arc()
+        {
+            let event = PlayerLevelChangeEvent::new(player_arc, old_level, level);
+            server
+                .plugin_manager
+                .fire::<PlayerLevelChangeEvent>(event)
+                .await;
+        }
     }
 
     /// Sets the player's experience level directly.
@@ -2350,6 +2489,15 @@ impl Player {
 
     /// Add experience points to the player.
     pub async fn add_experience_points(&self, added_points: i32) {
+        let mut added_points = added_points;
+        if let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.as_arc()
+        {
+            let event = PlayerExpChangeEvent::new(player_arc, added_points);
+            let event = server.plugin_manager.fire(event).await;
+            added_points = event.amount;
+        }
+
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
         let total_exp = experience::points_to_level(current_level) + current_points;
@@ -2359,7 +2507,7 @@ impl Player {
         self.set_experience(new_level, progress, new_points).await;
     }
 
-    pub async fn apply_mending_from_xp(&self, mut xp: i32) -> i32 {
+    pub async fn apply_mending_from_xp(&self, mut xp: i32, orb_uuid: Option<uuid::Uuid>) -> i32 {
         if xp <= 0 {
             return xp;
         }
@@ -2407,9 +2555,44 @@ impl Player {
         let idx = rand::random::<u32>() as usize % candidates.len();
         let (slot_index, equipment_slot, stack) = candidates.swap_remove(idx);
 
+        let mut repair_amount = {
+            let stack = stack.lock().await;
+            let damage = stack.get_damage();
+            xp.saturating_mul(2).min(damage)
+        };
+
+        if repair_amount <= 0 {
+            return xp;
+        }
+
+        if let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.as_arc()
+        {
+            let item_stack = {
+                let stack = stack.lock().await;
+                stack.clone()
+            };
+            let event = PlayerItemMendEvent::new(
+                player_arc,
+                item_stack,
+                equipment_slot.clone(),
+                repair_amount,
+                orb_uuid,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return xp;
+            }
+            repair_amount = event.repair_amount;
+        }
+
+        if repair_amount <= 0 {
+            return xp;
+        }
+
         let (updated_stack, repaired) = {
             let mut stack = stack.lock().await;
-            let repaired = stack.repair_item(xp.saturating_mul(2));
+            let repaired = stack.repair_item(repair_amount);
             (stack.clone(), repaired)
         };
 

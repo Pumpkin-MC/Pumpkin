@@ -26,7 +26,10 @@ use crate::{
     net::ClientPlatform,
     plugin::{
         block::block_break::BlockBreakEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
+        player::{
+            player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
+            player_respawn::PlayerRespawnEvent, player_spawn_location::PlayerSpawnLocationEvent,
+        },
     },
     server::Server,
 };
@@ -1524,6 +1527,15 @@ impl World {
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
+        let mut position = position;
+        if let Some(server) = self.server.upgrade() {
+            let event = PlayerSpawnLocationEvent::new(player.clone(), position, self.uuid);
+            let event = server.plugin_manager.fire(event).await;
+            if event.world_uuid == self.uuid {
+                position = event.spawn_position;
+            }
+        }
+
         let velocity = player.living_entity.entity.velocity.load();
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
@@ -1906,13 +1918,14 @@ impl World {
         };
 
         // Get respawn position and dimension
-        let (position, yaw, pitch, respawn_dimension) =
+        let (position, yaw, pitch, respawn_dimension, has_respawn_point) =
             if let Some(respawn) = player.calculate_respawn_point().await {
                 (
                     respawn.position,
                     respawn.yaw,
                     respawn.pitch,
                     respawn.dimension,
+                    true,
                 )
             } else {
                 // No valid respawn point - send notification and use world spawn
@@ -1935,6 +1948,7 @@ impl World {
                     spawn_yaw,
                     spawn_pitch,
                     self.dimension,
+                    false,
                 )
             };
 
@@ -1984,7 +1998,7 @@ impl World {
             // Unload watched chunks from current world
             player.unload_watched_chunks(self).await;
 
-            (new_world.as_ref(), position)
+            (new_world.clone(), position)
         } else if respawn_dimension != self.dimension {
             // Cross-dimension failed - fall back to current world's spawn
             log::warn!(
@@ -2000,25 +2014,78 @@ impl World {
                 (top + 1).into(),
                 f64::from(spawn_z) + 0.5,
             );
-            (self.as_ref(), fallback_pos)
+            (Arc::clone(self), fallback_pos)
         } else {
-            (self.as_ref(), position)
+            (Arc::clone(self), position)
         };
+
+        let mut respawn_position = position;
+        let mut respawn_world = target_world;
+        let mut respawn_world_uuid = respawn_world.uuid;
+        let mut is_bed_spawn = has_respawn_point;
+        let mut is_anchor_spawn = false;
+        let mut is_missing_respawn_block = false;
+        let mut respawn_reason = "DEATH".to_string();
+
+        if let Some(server) = self.server.upgrade() {
+            let event = PlayerRespawnEvent::new(
+                player.clone(),
+                respawn_position,
+                respawn_world_uuid,
+                is_bed_spawn,
+                is_anchor_spawn,
+                is_missing_respawn_block,
+                respawn_reason.clone(),
+            );
+            let event = server.plugin_manager.fire(event).await;
+            respawn_position = event.respawn_position;
+            respawn_world_uuid = event.world_uuid;
+            is_bed_spawn = event.is_bed_spawn;
+            is_anchor_spawn = event.is_anchor_spawn;
+            is_missing_respawn_block = event.is_missing_respawn_block;
+            respawn_reason = event.reason;
+
+            if respawn_world_uuid != respawn_world.uuid {
+                let worlds = server.worlds.load();
+                if let Some(found) = worlds
+                    .iter()
+                    .find(|w| w.uuid == respawn_world_uuid)
+                    .cloned()
+                {
+                    if found.uuid != respawn_world.uuid {
+                        // Move player to the new respawn world chosen by the event.
+                        respawn_world.remove_player(player, false).await;
+                        found.players.rcu(|current_list| {
+                            let mut new_list = (**current_list).clone();
+                            new_list.push(player.clone());
+                            new_list
+                        });
+                        player
+                            .chunk_manager
+                            .lock()
+                            .await
+                            .change_world(&respawn_world.level, found.clone());
+                        player.unload_watched_chunks(&respawn_world).await;
+                    }
+                    respawn_world = found;
+                }
+            }
+        }
 
         // Send respawn packet with target dimension (using send_packet_now to ensure proper order)
         player
             .client
             .send_packet_now(&CRespawn::new(
-                (target_world.dimension.id).into(),
-                ResourceLocation::from(target_world.dimension.minecraft_name),
-                biome::hash_seed(target_world.level.seed.0),
+                (respawn_world.dimension.id).into(),
+                ResourceLocation::from(respawn_world.dimension.minecraft_name),
+                biome::hash_seed(respawn_world.level.seed.0),
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,
                 false,
                 false,
                 Some((death_dimension, death_location)),
                 VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
-                target_world.sea_level.into(),
+                respawn_world.sea_level.into(),
                 data_kept,
             ))
             .await;
@@ -2027,9 +2094,9 @@ impl World {
         // fall back to (0, 2, 0) while the world reloads (fixes rubberbanding).
         // This must be sent after the CRespawn packet for proper client positioning.
         let spawn_block_pos = BlockPos(Vector3::new(
-            position.x.round() as i32,
-            position.y.round() as i32,
-            position.z.round() as i32,
+            respawn_position.x.round() as i32,
+            respawn_position.y.round() as i32,
+            respawn_position.z.round() as i32,
         ));
         player
             .client
@@ -2037,7 +2104,7 @@ impl World {
                 spawn_block_pos,
                 yaw,
                 pitch,
-                target_world.dimension.minecraft_name.to_string(),
+                respawn_world.dimension.minecraft_name.to_string(),
             ))
             .await;
 
@@ -2052,23 +2119,30 @@ impl World {
             player.inventory.clear().await;
         }
 
+        let _ = (
+            is_bed_spawn,
+            is_anchor_spawn,
+            is_missing_respawn_block,
+            respawn_reason,
+        );
+
         // Set entity position BEFORE loading chunks, so chunks load at the right location
         // This mirrors the initial spawn flow where update_position is called before teleport
-        player.living_entity.entity.set_pos(position);
+        player.living_entity.entity.set_pos(respawn_position);
         player.living_entity.entity.set_rotation(yaw, pitch);
-        player.living_entity.entity.last_pos.store(position);
+        player.living_entity.entity.last_pos.store(respawn_position);
 
         // TODO: difficulty, exp bar, status effect
 
         // Load chunks and send world info FIRST (before teleport packet)
-        target_world
-            .send_world_info(player, position, yaw, pitch)
+        respawn_world
+            .send_world_info(player, respawn_position, yaw, pitch)
             .await;
 
         // Ensure at least the center chunk is sent synchronously before teleport.
-        if let crate::net::ClientPlatform::Java(java_client) = &player.client {
+        if let ClientPlatform::Java(java_client) = &player.client {
             let center_chunk = player.living_entity.entity.chunk_pos.load();
-            let chunk = target_world.level.get_chunk(center_chunk).await;
+            let chunk = respawn_world.level.get_chunk(center_chunk).await;
             java_client.send_packet_now(&CChunkBatchStart).await;
             java_client.send_packet_now(&CChunkData(&chunk)).await;
             java_client
@@ -2077,7 +2151,7 @@ impl World {
         }
 
         // Send teleport packet after at least the center chunk was delivered
-        player.request_teleport(position, yaw, pitch).await;
+        player.request_teleport(respawn_position, yaw, pitch).await;
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.
@@ -2538,11 +2612,17 @@ impl World {
                 .await;
 
             if fire_event {
-                let msg_comp = TextComponent::translate(
-                    "multiplayer.player.left",
-                    [TextComponent::text(player.gameprofile.name.clone())],
-                )
-                .color_named(NamedColor::Yellow);
+                let leave_override = player.pending_leave_message.lock().await.take();
+                let msg_comp = leave_override.map_or_else(
+                    || {
+                        TextComponent::translate(
+                            "multiplayer.player.left",
+                            [TextComponent::text(player.gameprofile.name.clone())],
+                        )
+                        .color_named(NamedColor::Yellow)
+                    },
+                    std::convert::identity,
+                );
                 let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
                 let event = self
@@ -2566,6 +2646,19 @@ impl World {
 
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
+        if let Some(server) = self.server.upgrade() {
+            let event = crate::plugin::entity::entity_spawn::EntitySpawnEvent::new(
+                base_entity.entity_uuid,
+                base_entity.entity_type,
+            );
+            let event = server
+                .plugin_manager
+                .fire::<crate::plugin::entity::entity_spawn::EntitySpawnEvent>(event)
+                .await;
+            if event.cancelled {
+                return;
+            }
+        }
         self.broadcast_packet_all(&base_entity.create_spawn_packet())
             .await;
         entity.init_data_tracker().await;
@@ -2958,7 +3051,13 @@ impl World {
         flags: BlockFlags,
     ) -> Option<u16> {
         let (broken_block, broken_block_state) = self.get_block_and_state_id(position).await;
-        let event = BlockBreakEvent::new(cause.clone(), broken_block, *position, 0, false);
+        let event = BlockBreakEvent::new(
+            cause.clone(),
+            broken_block,
+            *position,
+            0,
+            !flags.contains(BlockFlags::SKIP_DROPS),
+        );
 
         let event = self
             .server
@@ -2969,6 +3068,12 @@ impl World {
             .await;
 
         if !event.cancelled {
+            let mut flags = flags;
+            if event.drop {
+                flags.remove(BlockFlags::SKIP_DROPS);
+            } else {
+                flags.insert(BlockFlags::SKIP_DROPS);
+            }
             let new_state_id = if broken_block
                 .properties(broken_block_state)
                 .and_then(|properties| {
@@ -2998,7 +3103,7 @@ impl World {
                     false,
                 );
                 match cause {
-                    Some(player) => {
+                    Some(ref player) => {
                         self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
                             .await;
                     }
@@ -3011,7 +3116,26 @@ impl World {
                     block_state: Some(BlockState::from_id(broken_state_id)),
                     ..Default::default()
                 };
-                block::drop_loot(self, broken_block, position, true, params).await;
+                let mut stacks = block::collect_loot(broken_block, params);
+                if let Some(player) = cause.clone()
+                    && let Some(server) = self.server.upgrade()
+                {
+                    let event = crate::plugin::block::block_drop_item::BlockDropItemEvent::new(
+                        player,
+                        broken_block,
+                        *position,
+                        stacks,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return Some(new_state_id);
+                    }
+                    stacks = event.items;
+                }
+                for stack in stacks {
+                    self.drop_stack(position, stack).await;
+                }
+                block::drop_experience(self, broken_block, position, true).await;
             }
             return Some(new_state_id);
         }
@@ -3249,6 +3373,20 @@ impl World {
 
             let neighbor_pos = block_pos.offset(direction.to_offset());
             let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos).await;
+
+            if let Some(server) = self.server.upgrade() {
+                let event = crate::plugin::block::block_physics::BlockPhysicsEvent::new(
+                    neighbor_block,
+                    neighbor_pos,
+                    source_block,
+                    *block_pos,
+                    self.uuid,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    continue;
+                }
+            }
 
             if let Some(neighbor_pumpkin_block) =
                 self.block_registry.get_pumpkin_block(neighbor_block.id)

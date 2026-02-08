@@ -8,10 +8,11 @@ use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::java::server::play::{
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SKeepAlive, SPickItemFromBlock,
-    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded,
-    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
-    SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    SCookieResponse as SPCookieResponse, SCustomPayload, SEditBook, SInteract, SKeepAlive,
+    SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand,
+    SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
+    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
+    SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -664,6 +665,10 @@ impl JavaClient {
                 self.handle_use_item(player, &SUseItem::read(payload)?, server)
                     .await;
             }
+            id if id == SEditBook::PACKET_ID => {
+                self.handle_edit_book(player, server, SEditBook::read(payload)?)
+                    .await;
+            }
             id if id == SCommandSuggestion::PACKET_ID => {
                 self.handle_command_suggestion(player, SCommandSuggestion::read(payload)?, server)
                     .await;
@@ -684,7 +689,8 @@ impl JavaClient {
                     .await;
             }
             id if id == SCustomPayload::PACKET_ID => {
-                // TODO: this fixes Failed to handle player packet id for now
+                self.handle_custom_payload(player, server, SCustomPayload::read(payload)?)
+                    .await;
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);

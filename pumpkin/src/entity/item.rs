@@ -8,7 +8,9 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_data::{
+    damage::DamageType, item::Item, meta_data_type::MetaDataType, tracked_data::TrackedData,
+};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{CTakeItemEntity, Metadata},
@@ -17,7 +19,10 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::{entity::EntityBaseFuture, server::Server};
+use crate::{
+    entity::EntityBaseFuture, plugin::player::player_pickup_arrow::PlayerPickupArrowEvent,
+    server::Server,
+};
 
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
@@ -374,6 +379,29 @@ impl EntityBase for ItemEntity {
                 || player.living_entity.health.load() <= 0.0
             {
                 return;
+            }
+
+            let (item_stack_snapshot, item_id, item_count) = {
+                let stack = self.item_stack.lock().await;
+                (stack.clone(), stack.item.id, stack.item_count)
+            };
+
+            if (item_id == Item::ARROW.id
+                || item_id == Item::SPECTRAL_ARROW.id
+                || item_id == Item::TIPPED_ARROW.id)
+                && let Some(server) = player.world().server.upgrade()
+            {
+                let event = PlayerPickupArrowEvent::new(
+                    player.clone(),
+                    uuid::Uuid::nil(),
+                    self.entity.entity_uuid,
+                    item_stack_snapshot.clone(),
+                    item_count as i32,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
+                }
             }
 
             if player

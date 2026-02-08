@@ -16,6 +16,7 @@ impl Ignition {
         location: BlockPos,
         face: BlockDirection,
         block: &Block,
+        cause: &str,
     ) -> bool
     where
         F: FnOnce(Arc<World>, BlockPos, u16) -> Fut,
@@ -23,6 +24,7 @@ impl Ignition {
     {
         let world = player.world();
         let pos = location.offset(face.to_offset());
+        let igniting_block = Block::from_id(block.id);
 
         if world.get_fluid(&location).await.name != Fluid::EMPTY.name {
             return false;
@@ -32,6 +34,26 @@ impl Ignition {
         let state_id = world.get_block_state_id(&location).await;
 
         if let Some(new_state_id) = can_be_lit(block, state_id) {
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = player.as_arc()
+            {
+                let event = crate::plugin::block::block_ignite::BlockIgniteEvent {
+                    player: player_arc,
+                    block: igniting_block,
+                    igniting_block,
+                    block_pos: location,
+                    world_uuid: world.uuid,
+                    cause: cause.to_string(),
+                    cancelled: false,
+                };
+                let event = server
+                    .plugin_manager
+                    .fire::<crate::plugin::block::block_ignite::BlockIgniteEvent>(event)
+                    .await;
+                if event.cancelled {
+                    return false;
+                }
+            }
             ignite_logic(world.clone(), location, new_state_id).await;
             return true;
         }
@@ -40,6 +62,27 @@ impl Ignition {
             .get_state_for_position(&world, &fire_block, &pos)
             .await;
         if FireBlockBase::can_place_at(&world, &pos).await {
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = player.as_arc()
+            {
+                let fire_block = Block::from_id(fire_block.id);
+                let event = crate::plugin::block::block_ignite::BlockIgniteEvent {
+                    player: player_arc,
+                    block: fire_block,
+                    igniting_block,
+                    block_pos: pos,
+                    world_uuid: world.uuid,
+                    cause: cause.to_string(),
+                    cancelled: false,
+                };
+                let event = server
+                    .plugin_manager
+                    .fire::<crate::plugin::block::block_ignite::BlockIgniteEvent>(event)
+                    .await;
+                if event.cancelled {
+                    return false;
+                }
+            }
             ignite_logic(world.clone(), pos, state_id).await;
             return true;
         }

@@ -44,6 +44,10 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
+use crate::plugin::player::player_item_break::PlayerItemBreakEvent;
+use crate::plugin::player::player_item_consume::PlayerItemConsumeEvent;
+use crate::plugin::player::player_item_damage::PlayerItemDamageEvent;
+
 /// Represents a living entity within the game world.
 ///
 /// This struct encapsulates the core properties and behaviors of living entities, including players, mobs, and other creatures.
@@ -1020,14 +1024,44 @@ impl LivingEntity {
             }
 
             let equipment = self.entity_equipment.lock().await.get(slot);
+            let mut damage = armor_damage;
+            let mut broken_item: Option<ItemStack> = None;
+
+            if let Some(player) = caller.get_player() {
+                let snapshot = {
+                    let stack = equipment.lock().await;
+                    if stack.is_empty() {
+                        continue;
+                    }
+                    stack.clone()
+                };
+                if let Some(server) = player.world().server.upgrade()
+                    && let Some(player_arc) = player.as_arc()
+                {
+                    let event = PlayerItemDamageEvent::new(player_arc, snapshot, damage);
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        continue;
+                    }
+                    damage = event.damage;
+                }
+                if damage <= 0 {
+                    continue;
+                }
+            }
+
             let updated_stack = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
                     None
-                } else if stack.damage_item_with_context(armor_damage, true) {
-                    Some(stack.clone())
                 } else {
-                    None
+                    let before = stack.clone();
+                    stack.damage_item_with_context(damage, true).then(|| {
+                        if stack.is_empty() {
+                            broken_item = Some(before);
+                        }
+                        stack.clone()
+                    })
                 }
             };
 
@@ -1039,6 +1073,16 @@ impl LivingEntity {
                             (*slot_index as i32).into(),
                             &ItemStackSerializer::from(updated_stack),
                         ))
+                        .await;
+                }
+                if let (Some(player), Some(broken_item)) = (caller.get_player(), broken_item)
+                    && let Some(server) = player.world().server.upgrade()
+                    && let Some(player_arc) = player.as_arc()
+                {
+                    let event = PlayerItemBreakEvent::new(player_arc, broken_item);
+                    server
+                        .plugin_manager
+                        .fire::<PlayerItemBreakEvent>(event)
                         .await;
                 }
             }
@@ -1217,21 +1261,41 @@ impl EntityBase for LivingEntity {
             }
 
             let world = self.entity.world.load();
+            let effective_amount = if let Some(server) = world.server.upgrade() {
+                let event = crate::plugin::entity::entity_damage::EntityDamageEvent::new(
+                    self.entity.entity_uuid,
+                    amount,
+                    damage_type,
+                );
+                let event = server
+                    .plugin_manager
+                    .fire::<crate::plugin::entity::entity_damage::EntityDamageEvent>(event)
+                    .await;
+                if event.cancelled {
+                    return false;
+                }
+                if event.damage <= 0.0 {
+                    return false;
+                }
+                event.damage
+            } else {
+                amount
+            };
 
             let last_damage = self.last_damage_taken.load();
             let play_sound;
             let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 {
-                if amount <= last_damage {
+                if effective_amount <= last_damage {
                     return false;
                 }
                 play_sound = false;
-                amount - self.last_damage_taken.load()
+                effective_amount - self.last_damage_taken.load()
             } else {
                 self.hurt_cooldown.store(20, Relaxed);
                 play_sound = true;
-                amount
+                effective_amount
             };
-            self.last_damage_taken.store(amount);
+            self.last_damage_taken.store(effective_amount);
             damage_amount = damage_amount.max(0.0);
 
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
@@ -1273,6 +1337,16 @@ impl EntityBase for LivingEntity {
 
             if new_health <= 0.0 && !self.try_use_death_protector(caller).await {
                 self.on_death(damage_type, source, cause).await;
+                if let Some(server) = world.server.upgrade() {
+                    let event = crate::plugin::entity::entity_death::EntityDeathEvent::new(
+                        self.entity.entity_uuid,
+                        damage_type,
+                    );
+                    server
+                        .plugin_manager
+                        .fire::<crate::plugin::entity::entity_death::EntityDeathEvent>(event)
+                        .await;
+                }
             }
 
             if damage_amount > 0.0 {
@@ -1320,22 +1394,48 @@ impl EntityBase for LivingEntity {
                 if let Some(item) = item_in_use.as_ref()
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
-                    // Consume item
-                    if let Some(food) = item.get_data_component::<FoodImpl>()
-                        && let Some(player) = caller.get_player()
+                    let mut item_to_consume = item.clone();
+                    let hand = if self.livings_flags.load(Relaxed) & Self::OFF_HAND_ACTIVE_FLAG != 0
                     {
-                        player
-                            .hunger_manager
-                            .eat(player, food.nutrition as u8, food.saturation)
-                            .await;
+                        Hand::Left
+                    } else {
+                        Hand::Right
+                    };
+
+                    let mut cancelled = false;
+                    if let Some(player) = caller.get_player()
+                        && let Some(server) = player.world().server.upgrade()
+                        && let Some(player_arc) = player.as_arc()
+                    {
+                        let event =
+                            PlayerItemConsumeEvent::new(player_arc, item_to_consume.clone(), hand);
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            cancelled = true;
+                        } else {
+                            item_to_consume = event.item_stack;
+                        }
                     }
-                    if let Some(player) = caller.get_player() {
-                        player
-                            .inventory
-                            .held_item()
-                            .lock()
-                            .await
-                            .decrement_unless_creative(player.gamemode.load(), 1);
+
+                    if !cancelled {
+                        if let Some(food) = item_to_consume.get_data_component::<FoodImpl>()
+                            && let Some(player) = caller.get_player()
+                        {
+                            player
+                                .hunger_manager
+                                .eat(player, food.nutrition as u8, food.saturation)
+                                .await;
+                        }
+                        if let Some(player) = caller.get_player() {
+                            let stack = if hand == Hand::Left {
+                                player.inventory.off_hand_item().await
+                            } else {
+                                player.inventory.held_item()
+                            };
+                            let mut stack = stack.lock().await;
+                            *stack = item_to_consume.clone();
+                            stack.decrement_unless_creative(player.gamemode.load(), 1);
+                        }
                     }
 
                     self.clear_active_hand().await;
