@@ -1827,7 +1827,9 @@ impl JavaClient {
         }
         let is_negative = packet.slot < 0;
         let valid_slot = packet.slot >= 1 && packet.slot as usize <= 45;
-        let item_stack = packet.clicked_item.to_stack();
+        let item_stack = packet
+            .clicked_item
+            .to_stack_for_version(&self.version.load());
         let is_legal =
             item_stack.is_empty() || item_stack.item_count <= item_stack.get_max_stack_size();
 

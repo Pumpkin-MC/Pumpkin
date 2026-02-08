@@ -31,6 +31,7 @@ mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
+mod item_id_remap;
 mod jukebox_song;
 pub mod loot;
 mod message_type;
@@ -87,6 +88,7 @@ pub fn main() {
         (block::build, "block.rs"),
         (block_state_remap::build, "block_state_remap.rs"),
         (item::build, "item.rs"),
+        (item_id_remap::build, "item_id_remap.rs"),
         (structures::build, "structures.rs"),
         (chunk_gen_settings::build, "chunk_gen_settings.rs"),
         (fluid::build, "fluid.rs"),

@@ -151,6 +151,10 @@ pub mod block_properties;
 pub mod block_state_remap;
 
 #[rustfmt::skip]
+#[path = "generated/item_id_remap.rs"]
+pub mod item_id_remap;
+
+#[rustfmt::skip]
 #[path = "generated/tag.rs"]
 pub mod tag;
 
