@@ -1424,6 +1424,48 @@ impl JavaClient {
                     player.drop_held_item(true).await;
                 }
                 Status::ReleaseItemInUse => {
+                    let off_hand_active = player.living_entity.is_off_hand_active();
+                    let hand = if off_hand_active {
+                        Hand::Right
+                    } else {
+                        Hand::Left
+                    };
+
+                    let use_duration = {
+                        let item_in_use = player.living_entity.item_in_use.lock().await;
+                        item_in_use.as_ref().map_or(0, ItemStack::get_max_use_time)
+                    };
+                    let remaining_use_ticks = player
+                        .living_entity
+                        .item_use_time
+                        .load(Ordering::Relaxed)
+                        .max(0);
+                    let used_ticks = use_duration.saturating_sub(remaining_use_ticks);
+
+                    let inventory = player.inventory();
+                    let slot_index = if off_hand_active {
+                        PlayerInventory::OFF_HAND_SLOT
+                    } else {
+                        inventory.get_selected_slot() as usize
+                    };
+                    let item_slot = if off_hand_active {
+                        inventory.off_hand_item().await
+                    } else {
+                        inventory.held_item()
+                    };
+
+                    let mut stack = item_slot.lock().await;
+                    let before = stack.clone();
+                    server
+                        .item_registry
+                        .release_use(&mut stack, player, used_ticks, hand)
+                        .await;
+                    let after = stack.clone();
+                    drop(stack);
+
+                    if !after.are_equal(&before) {
+                        player.sync_hand_slot(slot_index, after).await;
+                    }
                     player.living_entity.clear_active_hand().await;
                 }
                 Status::SwapItem => {
@@ -1687,6 +1729,7 @@ impl JavaClient {
         world.update_block_entity(&block_entity).await;
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_use_item(
         &self,
         player: &Arc<Player>,
@@ -1761,6 +1804,16 @@ impl JavaClient {
                     .set_active_hand(hand, held.clone())
                     .await;
             }
+        }
+        if held.item.id == Item::TRIDENT.id
+            && held
+                .get_max_damage()
+                .is_none_or(|max_damage| held.get_damage() + 1 < max_damage)
+        {
+            player
+                .living_entity
+                .set_active_hand(hand, held.clone())
+                .await;
         }
         if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
             // If it can be equipped we want to make sure we can actually equip it

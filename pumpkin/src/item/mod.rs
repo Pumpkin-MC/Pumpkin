@@ -11,6 +11,7 @@ use crate::server::Server;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -49,6 +50,16 @@ pub trait ItemBehaviour: Send + Sync {
         _entity: Arc<dyn EntityBase>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {})
+    }
+
+    fn release_use<'a>(
+        &'a self,
+        _item: &'a mut ItemStack,
+        _player: &'a Player,
+        _used_ticks: i32,
+        _hand: Hand,
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+        Box::pin(async { false })
     }
 
     fn can_mine(&self, _player: &Player) -> bool {
