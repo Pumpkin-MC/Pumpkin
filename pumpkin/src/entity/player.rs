@@ -38,7 +38,7 @@ use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockState, Enchantment, tag};
+use pumpkin_data::{Block, BlockState, Enchantment, tag, translation};
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -1378,7 +1378,7 @@ impl Player {
             if idle_duration >= Duration::from_secs(idle_timeout_minutes as u64 * 60) {
                 self.kick(
                     DisconnectReason::KickedForIdle,
-                    TextComponent::translate("multiplayer.disconnect.idling", []),
+                    TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IDLING, []),
                 )
                 .await;
                 return;
@@ -1394,7 +1394,7 @@ impl Player {
             if self.wait_for_keep_alive.load(Ordering::Relaxed) {
                 self.kick(
                     DisconnectReason::Timeout,
-                    TextComponent::translate("disconnect.timeout", []),
+                    TextComponent::translate(translation::DISCONNECT_TIMEOUT, []),
                 )
                 .await;
                 return;

@@ -9,7 +9,7 @@ rust-version.workspace = true
 # FileDescription is handled as the Program name by Windows!
 FileDescription = "Pumpkin"
 OriginalFilename = "pumpkin.exe"
-LegalCopyright = "Copyright © 2025 Aleksander Medvedev"
+LegalCopyright = "Copyright © 2026 Aleksander Medvedev"
 
 # Required to expose pumpkin plugin API
 [lib]
@@ -63,7 +63,6 @@ pkcs8.workspace = true
 
 # authentication
 ureq = { workspace = true, features = ["json"] }
-
 
 sha1.workspace = true
 

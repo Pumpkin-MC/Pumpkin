@@ -23,18 +23,20 @@ use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{CHurtAnimation, CSetPlayerInventory, CTakeItemEntity};
+use pumpkin_protocol::java::client::play::{
+    Animation, CEntityAnimation, CHurtAnimation, CSetPlayerInventory, CTakeItemEntity,
+};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{CDamageEvent, CSetEquipment, Metadata},
@@ -358,6 +360,18 @@ impl LivingEntity {
         } else {
             final_gravity
         }
+    }
+
+    pub async fn swing_hand(&self) {
+        // TODO: radius
+        self.entity
+            .world
+            .load()
+            .broadcast_packet_all(&CEntityAnimation::new(
+                self.entity_id().into(),
+                Animation::SwingMainArm,
+            ))
+            .await;
     }
 
     async fn tick_movement(&self, server: &Server, caller: Arc<dyn EntityBase>) {
@@ -775,7 +789,7 @@ impl LivingEntity {
     }
 
     async fn get_jump_velocity(&self, mut strength: f64) -> f64 {
-        strength *= 1.0; // TODO: Entity Attribute jump strength
+        strength *= 0.42; // TODO: Read from Entity Attribute JUMP_STRENGTH (default 0.42)
 
         strength *= f64::from(self.entity.get_jump_velocity_multiplier().await);
 
@@ -888,7 +902,7 @@ impl LivingEntity {
             DeathMessageType::FallVariants => {
                 //TODO
                 TextComponent::translate(
-                    "death.fell.accident.generic",
+                    translation::DEATH_FELL_ACCIDENT_GENERIC,
                     [dyn_self.get_display_name().await],
                 )
             }
@@ -1081,8 +1095,12 @@ impl LivingEntity {
         self.entity_equipment.lock().await.get(slot)
     }
 
+    pub fn can_take_damage(&self) -> bool {
+        !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
+    }
+
     pub fn is_part_of_game(&self) -> bool {
-        self.is_spectator() && self.entity.is_alive()
+        !self.is_spectator() && self.entity.is_alive()
     }
 
     pub async fn reset_state(&self) {
@@ -1218,9 +1236,12 @@ impl EntityBase for LivingEntity {
 
             let world = self.entity.world.load();
 
+            let bypasses_cooldown =
+                damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
+
             let last_damage = self.last_damage_taken.load();
             let play_sound;
-            let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 {
+            let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown {
                 if amount <= last_damage {
                     return false;
                 }
@@ -1238,8 +1259,14 @@ impl EntityBase for LivingEntity {
 
             if config.hurt_animation {
                 let entity_id = VarInt(self.entity.entity_id);
+                let hurt_yaw = source.map_or(0.0, |source| {
+                    let src = source.get_entity().pos.load();
+                    let tgt = self.entity.pos.load();
+                    (src.z - tgt.z).atan2(src.x - tgt.x).to_degrees() as f32
+                        - self.entity.yaw.load()
+                });
                 world
-                    .broadcast_packet_all(&CHurtAnimation::new(entity_id, self.entity.yaw.load()))
+                    .broadcast_packet_all(&CHurtAnimation::new(entity_id, hurt_yaw))
                     .await;
             }
 
@@ -1256,13 +1283,20 @@ impl EntityBase for LivingEntity {
             if play_sound {
                 world
                     .play_sound(
-                        // Sound::EntityPlayerHurt,
                         Sound::EntityGenericHurt,
                         SoundCategory::Players,
                         &self.entity.pos.load(),
                     )
                     .await;
-                // todo: calculate knockback
+
+                if let Some(source) = source {
+                    let source_pos = source.get_entity().pos.load();
+                    let target_pos = self.entity.pos.load();
+                    let dx = source_pos.x - target_pos.x;
+                    let dz = source_pos.z - target_pos.z;
+                    self.entity.apply_knockback(0.4, dx, dz);
+                    self.entity.send_velocity().await;
+                }
             }
 
             let new_health = self.health.load() - damage_amount;
@@ -1310,8 +1344,7 @@ impl EntityBase for LivingEntity {
             }
             // TODO
             if caller.get_player().is_none() {
-                // self.entity.send_pos_rot().await;
-                // self.entity.send_velocity().await;
+                self.entity.send_pos_rot().await;
             }
             self.tick_effects().await;
             // Current active item

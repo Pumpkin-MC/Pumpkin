@@ -16,6 +16,7 @@ bytes.workspace = true
 
 tokio = { workspace = true, features = [
     "macros",
+    # Maybe remove this in the future
     "rt-multi-thread",
     "signal",
     "fs",
@@ -29,13 +30,10 @@ serde_json.workspace = true
 log.workspace = true
 crossbeam.workspace = true
 
-num-derive.workspace = true
 sha2.workspace = true
 bitflags.workspace = true
 
 dashmap.workspace = true
-
-num-traits.workspace = true
 
 # Compression
 flate2.workspace = true
@@ -58,10 +56,6 @@ crossfire.workspace = true
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
 temp-dir.workspace = true
-# Print log info inside tests when needed
-env_logger.workspace = true
-# Allows us to modify the config
-pumpkin-config = { workspace = true, features = ["test_helper"] }
 # Deserialize NaN and Inf
 json5.workspace = true
 
@@ -72,10 +66,10 @@ harness = false
 #[[bench]]
 #name = "chunk_io"
 #harness = false
-#
-#[[bench]]
-#name = "chunk_gen"
-#harness = false
+
+[[bench]]
+name = "chunk_gen"
+harness = false
 
 [[bench]]
 name = "noise_router"

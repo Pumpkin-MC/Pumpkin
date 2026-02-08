@@ -71,7 +71,7 @@ impl Recipes {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/potion_brewing.json");
 
     let json: PotionBrewing =

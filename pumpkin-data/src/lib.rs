@@ -13,6 +13,10 @@ pub mod packet;
 pub mod jukebox_song;
 
 #[rustfmt::skip]
+#[path = "generated/translation.rs"]
+pub mod translation;
+
+#[rustfmt::skip]
 #[path = "generated/registry.rs"]
 pub mod registry;
 
@@ -145,6 +149,14 @@ pub mod fluid;
 #[rustfmt::skip]
 #[path = "generated/block.rs"]
 pub mod block_properties;
+
+#[rustfmt::skip]
+#[path = "generated/block_state_remap.rs"]
+pub mod block_state_remap;
+
+#[rustfmt::skip]
+#[path = "generated/item_id_remap.rs"]
+pub mod item_id_remap;
 
 #[rustfmt::skip]
 #[path = "generated/tag.rs"]

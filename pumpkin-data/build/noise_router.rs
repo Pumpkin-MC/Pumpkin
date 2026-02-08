@@ -996,7 +996,7 @@ macro_rules! fix_final_density {
     }};
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/density_function.json");
 
     let mut reprs: NoiseRouterReprs =

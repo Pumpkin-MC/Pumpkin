@@ -13,6 +13,7 @@ use crate::{
     net::DisconnectReason,
 };
 use CommandError::InvalidConsumption;
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["ban"];
@@ -79,7 +80,7 @@ async fn ban_players(
 
     if count == 0 {
         Err(CommandError::CommandFailed(TextComponent::translate(
-            "commands.ban.failed",
+            translation::COMMANDS_BAN_FAILED,
             [],
         )))
     } else {
@@ -116,7 +117,7 @@ async fn ban_player(
     // Send messages
     sender
         .send_message(TextComponent::translate(
-            "commands.ban.success",
+            translation::COMMANDS_BAN_SUCCESS,
             [player.get_display_name().await, TextComponent::text(reason)],
         ))
         .await;
@@ -124,7 +125,7 @@ async fn ban_player(
     player
         .kick(
             DisconnectReason::Kicked,
-            TextComponent::translate("multiplayer.disconnect.banned", []),
+            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, []),
         )
         .await;
 

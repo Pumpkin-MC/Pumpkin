@@ -4,7 +4,7 @@ use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use std::fs;
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/data_component.json");
 
     let data_component: BTreeMap<String, u8> =

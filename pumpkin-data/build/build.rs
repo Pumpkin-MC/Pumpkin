@@ -13,6 +13,7 @@ mod attributes;
 mod biome;
 mod bitsets;
 mod block;
+mod block_state_remap;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
@@ -30,6 +31,7 @@ mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
+mod item_id_remap;
 mod jukebox_song;
 pub mod loot;
 mod message_type;
@@ -51,14 +53,15 @@ mod spawn_egg;
 mod structures;
 mod tag;
 mod tracked_data;
+mod translations;
 mod world_event;
 
 pub const OUT_DIR: &str = "src/generated";
 
 pub fn main() {
-    fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
-
     type BuilderFn = fn() -> TokenStream;
+
+    fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
 
     let build_functions: Vec<(BuilderFn, &str)> = vec![
         (packet::build, "packet.rs"),
@@ -72,6 +75,7 @@ pub fn main() {
         (game_rules::build, "game_rules.rs"),
         (registry::build, "registry.rs"),
         (dimension::build, "dimension.rs"),
+        (translations::build, "translation.rs"),
         (jukebox_song::build, "jukebox_song.rs"),
         (sound_category::build, "sound_category.rs"),
         (entity_pose::build, "entity_pose.rs"),
@@ -84,7 +88,9 @@ pub fn main() {
         (message_type::build, "message_type.rs"),
         (spawn_egg::build, "spawn_egg.rs"),
         (block::build, "block.rs"),
+        (block_state_remap::build, "block_state_remap.rs"),
         (item::build, "item.rs"),
+        (item_id_remap::build, "item_id_remap.rs"),
         (structures::build, "structures.rs"),
         (chunk_gen_settings::build, "chunk_gen_settings.rs"),
         (fluid::build, "fluid.rs"),
@@ -115,9 +121,10 @@ pub fn main() {
 
         let header = "/* This file is generated. Do not edit manually. */\n";
 
-        let final_code = format_code(&raw_code)
-            .map(|formatted| format!("{}{}", header, formatted))
-            .unwrap_or_else(|_| format!("{}{}", header, raw_code));
+        let final_code = format_code(&raw_code).map_or_else(
+            |_| format!("{header}{raw_code}"),
+            |formatted| format!("{header}{formatted}"),
+        );
 
         write_generated_file(&final_code, file);
     });
@@ -158,9 +165,8 @@ pub fn format_code(unformatted_code: &str) -> Result<String, RustFmtError> {
         .stderr(Stdio::null())
         .spawn();
 
-    let mut child = match child_result {
-        Ok(c) => c,
-        Err(_) => return Err(RustFmtError),
+    let Ok(mut child) = child_result else {
+        return Err(RustFmtError);
     };
 
     // Write the code to rustfmt's stdin

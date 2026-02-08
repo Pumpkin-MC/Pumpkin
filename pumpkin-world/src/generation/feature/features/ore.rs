@@ -208,7 +208,7 @@ impl OreFeature {
         target: &OreTarget,
         pos: &BlockPos,
     ) -> bool {
-        if !target.target.test(&state, random) {
+        if !target.target.test(state, random) {
             return false;
         }
         if Self::should_not_discard(random, self.discard_chance_on_air_exposure) {

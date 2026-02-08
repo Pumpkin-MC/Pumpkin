@@ -12,7 +12,7 @@ struct JukeboxSongData {
     comparator_output: u8,
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/jukebox_song.json");
     println!("cargo:rerun-if-changed=../assets/registry/1_21_11_synced_registries.json");
 
@@ -82,8 +82,7 @@ pub(crate) fn build() -> TokenStream {
             let variant_name = make_variant_ident(name);
             let length = song_data
                 .get(name)
-                .map(|d| d.length_in_seconds as u32)
-                .unwrap_or(0);
+                .map_or(0, |d| d.length_in_seconds as u32);
             quote! { Self::#variant_name => #length, }
         })
         .collect::<TokenStream>();
@@ -92,10 +91,7 @@ pub(crate) fn build() -> TokenStream {
         .keys()
         .map(|name| {
             let variant_name = make_variant_ident(name);
-            let output = song_data
-                .get(name)
-                .map(|d| d.comparator_output)
-                .unwrap_or(0);
+            let output = song_data.get(name).map_or(0, |d| d.comparator_output);
             quote! { Self::#variant_name => #output, }
         })
         .collect::<TokenStream>();

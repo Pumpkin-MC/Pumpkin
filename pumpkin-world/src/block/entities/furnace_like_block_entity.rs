@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// Trait for extracting smelting experience from cooking block entities.
-/// This is a separate dyn-compatible trait since CookingBlockEntityBase is not.
+/// This is a separate dyn-compatible trait since `CookingBlockEntityBase` is not.
 pub trait ExperienceContainer: Send + Sync {
     /// Extract and reset accumulated experience, returning the total as an integer
     fn extract_experience(&self) -> i32;
@@ -28,7 +28,7 @@ pub trait CookingBlockEntityBase:
     /// Uses the result item ID as the recipe identifier
     fn add_recipe_used(&self, recipe: &CookingRecipe);
     /// Extract and reset accumulated experience, returning the total as an integer
-    /// Calculates XP from tracked recipes and clears the recipes_used map
+    /// Calculates XP from tracked recipes and clears the `recipes_used` map
     fn extract_experience_from_recipes(&self) -> i32;
 
     fn get_input_item(&self) -> impl std::future::Future<Output = Arc<Mutex<ItemStack>>>;

@@ -49,7 +49,7 @@ impl Effect {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/potion.json");
 
     let potions: BTreeMap<String, Potion> =
