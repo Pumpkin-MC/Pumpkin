@@ -359,7 +359,7 @@ impl Cache {
                 let chunk = self.chunks[mid].get_proto_chunk_mut();
                 debug_assert_eq!(chunk.stage, StagedChunkEnum::Lighting);
                 chunk.stage = StagedChunkEnum::Full;
-                self.chunks[mid].upgrade_to_level_chunk(&dimension);
+                self.chunks[mid].upgrade_to_level_chunk(&dimension, lighting_config);
             }
             StagedChunkEnum::None => {}
         }
