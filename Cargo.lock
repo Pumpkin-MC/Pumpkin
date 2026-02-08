@@ -2266,6 +2266,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-store"
+version = "0.1.0-dev+1.21.11"
+dependencies = [
+ "pumpkin-data",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "pumpkin-util"
 version = "0.1.0-dev+1.21.11"
 dependencies = [
