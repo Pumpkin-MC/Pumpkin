@@ -12,7 +12,7 @@ use crate::{
     ser::{NetworkWriteExt, WritingError, network_serialize_no_prefix, serializer},
 };
 
-fn remap_metadata_type_id_for_version(
+const fn remap_metadata_type_id_for_version(
     type_id: i32,
     version: pumpkin_util::version::MinecraftVersion,
 ) -> Option<i32> {
@@ -23,12 +23,8 @@ fn remap_metadata_type_id_for_version(
         MinecraftVersion::V_1_21_7 => match type_id {
             // `compound_tag` exists at 16 in 1.21.7, so later ids are shifted.
             16..=27 => Some(type_id + 1),
-            // 1.21.11-only variant.
-            28 => None,
-            // These ids are unchanged in 1.21.7.
-            0..=15 | 29..=32 => Some(type_id),
             // 1.21.7 has no copper/weathering/profile/arm metadata types.
-            33 | 34 | 37 | 38 => None,
+            28 | 33 | 34 | 37 | 38 => None,
             // `vector_3f` and `quaternion_f` are lower in 1.21.7.
             35 => Some(33),
             36 => Some(34),
@@ -36,12 +32,10 @@ fn remap_metadata_type_id_for_version(
         },
         // 1.21.9 / 1.21.10 (protocol 773) is close to latest but lacks some tail variants.
         MinecraftVersion::V_1_21_9 => match type_id {
-            // 1.21.11-only variant.
-            28 => None,
             // Everything after that is shifted by one.
             29..=37 => Some(type_id - 1),
-            // `arm` does not exist in this protocol.
-            38 => None,
+            // 1.21.11-only variants.
+            28 | 38 => None,
             _ => Some(type_id),
         },
         _ => Some(type_id),

@@ -12,7 +12,7 @@ use crate::{
     ser::{NetworkWriteExt, WritingError},
 };
 
-fn remap_entity_type_for_version(type_id: i32, version: MinecraftVersion) -> i32 {
+const fn remap_entity_type_for_version(type_id: i32, version: MinecraftVersion) -> i32 {
     use MinecraftVersion::{V_1_21_7, V_1_21_9};
 
     match version {
