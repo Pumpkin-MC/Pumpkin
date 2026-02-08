@@ -22,6 +22,7 @@ pub mod chunk_loading;
 pub mod chunk_state;
 pub mod dag;
 pub mod generation_cache;
+pub mod generation;
 pub mod schedule;
 pub mod worker_logic;
 
@@ -32,4 +33,5 @@ pub use chunk_loading::ChunkLoading;
 pub use chunk_state::{Chunk, StagedChunkEnum};
 pub use dag::DAG;
 pub use generation_cache::Cache;
+pub use generation::generate_single_chunk;
 pub use schedule::GenerationSchedule;

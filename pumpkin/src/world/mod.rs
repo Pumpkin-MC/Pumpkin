@@ -51,7 +51,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{BlockDirection, BlockState};
+use pumpkin_data::{BlockDirection, BlockState, translation};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::set_actor_data::{
@@ -2486,7 +2486,7 @@ impl World {
         let current_players = self.players.load();
         player.clone().spawn_task(async move {
             let msg_comp = TextComponent::translate(
-                "multiplayer.player.joined",
+                translation::MULTIPLAYER_PLAYER_JOINED,
                 [TextComponent::text(player.gameprofile.name.clone())],
             )
             .color_named(NamedColor::Yellow);
@@ -2550,7 +2550,7 @@ impl World {
 
             if fire_event {
                 let msg_comp = TextComponent::translate(
-                    "multiplayer.player.left",
+                    translation::MULTIPLAYER_PLAYER_LEFT,
                     [TextComponent::text(player.gameprofile.name.clone())],
                 )
                 .color_named(NamedColor::Yellow);

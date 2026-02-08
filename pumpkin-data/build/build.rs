@@ -13,6 +13,7 @@ mod attributes;
 mod biome;
 mod bitsets;
 mod block;
+mod block_state_remap;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
@@ -30,6 +31,7 @@ mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
+mod item_id_remap;
 mod jukebox_song;
 pub mod loot;
 mod message_type;
@@ -51,6 +53,7 @@ mod spawn_egg;
 mod structures;
 mod tag;
 mod tracked_data;
+mod translations;
 mod world_event;
 
 pub const OUT_DIR: &str = "src/generated";
@@ -72,6 +75,7 @@ pub fn main() {
         (game_rules::build, "game_rules.rs"),
         (registry::build, "registry.rs"),
         (dimension::build, "dimension.rs"),
+        (translations::build, "translation.rs"),
         (jukebox_song::build, "jukebox_song.rs"),
         (sound_category::build, "sound_category.rs"),
         (entity_pose::build, "entity_pose.rs"),
@@ -84,7 +88,9 @@ pub fn main() {
         (message_type::build, "message_type.rs"),
         (spawn_egg::build, "spawn_egg.rs"),
         (block::build, "block.rs"),
+        (block_state_remap::build, "block_state_remap.rs"),
         (item::build, "item.rs"),
+        (item_id_remap::build, "item_id_remap.rs"),
         (structures::build, "structures.rs"),
         (chunk_gen_settings::build, "chunk_gen_settings.rs"),
         (fluid::build, "fluid.rs"),

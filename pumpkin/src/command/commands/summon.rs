@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 use uuid::Uuid;
 
@@ -65,7 +66,10 @@ impl CommandExecutor for Executor {
             let name = entity.get_display_name().await;
             world.spawn_entity(entity).await;
             sender
-                .send_message(TextComponent::translate("commands.summon.success", [name]))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_SUMMON_SUCCESS,
+                    [name],
+                ))
                 .await;
 
             Ok(1)
