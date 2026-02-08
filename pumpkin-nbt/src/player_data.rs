@@ -332,7 +332,7 @@ mod tests {
             uuid: 0xABCDEF01_23456789_ABCDEF01_23456789u128,
             pos: (100.5, 64.0, -200.25),
             motion: (0.1, -0.5, 0.3),
-            rotation: (90.0_f32, -45.0_f32),
+            rotation: (90.0f32, -45.0f32),
             on_ground: true,
             fire_ticks: 100,
         };
