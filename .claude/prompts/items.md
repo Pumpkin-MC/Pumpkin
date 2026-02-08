@@ -84,6 +84,76 @@ grep -B5 'owner = "items"' .claude/registry/bukkit_api.toml | grep 'name ='
 ```
 These are inventory events (InventoryClickEvent, InventoryDragEvent, CraftItemEvent, etc.) and enchantment events.
 
+## URGENT: Clippy Fixes (63 errors blocking CI)
+
+Fix these before any other work. All in pumpkin-inventory/:
+
+### Category 1: `new_without_default` (12 errors) — Add `Default` impls
+
+For each type, add a `Default` impl BEFORE the existing `impl` block:
+```rust
+impl Default for TypeName {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+```
+
+Types needing this: `AnvilInventory` (anvil.rs:34), `AnvilOutputSlot` (anvil.rs:112), `BrewingStandInventory` (brewing_stand.rs:31), `CartographyTableInventory` (cartography_table.rs:31), `CartographyOutputSlot` (cartography_table.rs:109), `EnchantingTableInventory` (enchanting_table.rs:32), `GrindstoneInventory` (grindstone.rs:32), `GrindstoneOutputSlot` (grindstone.rs:110), `LoomInventory` (loom.rs:34), `LoomOutputSlot` (loom.rs:113), `SmithingInventory` (smithing.rs:81), `StonecutterInventory` (stonecutter.rs:39)
+
+### Category 2: `must_use_candidate` (16 errors) — Add `#[must_use]`
+
+Add `#[must_use]` attribute to these public functions/methods:
+- anvil.rs:190 `compute_anvil_result`
+- brewing_stand.rs:120 `is_potion_slot_item`
+- cartography_table.rs:185 `compute_cartography_result`
+- enchanting_table.rs:331 `can_enchant`
+- grindstone.rs:183 `compute_grindstone_result`
+- loom.rs:181 `is_banner`, loom.rs:186 `is_dye`, loom.rs:207 `is_banner_pattern_item`
+- smithing.rs:35 `find_smithing_transform`, smithing.rs:48 `find_smithing_trim`, smithing.rs:61 `find_smithing_recipe`
+- smithing.rs:81 `SmithingInventory::new`, smithing.rs:154 `SmithingOutputSlot::new`
+- stonecutter.rs:24 `get_stonecutting_recipes_for`, stonecutter.rs:39 `StonecutterInventory::new`, stonecutter.rs:99 `StonecutterOutputSlot::new`
+
+### Category 3: `unused_async` (8 errors) — CRITICAL: Do NOT remove async!
+
+These screen handler `new()` methods are async for API consistency — they are called with `.await` in the main binary (e.g. `CraftingTableScreenHandler::new(sync_id, player_inventory).await`).
+
+Fix by adding `#[allow(clippy::unused_async)]` above each `pub async fn new(`:
+- anvil.rs:325, brewing_stand.rs:298, cartography_table.rs:226, enchanting_table.rs:213
+- grindstone.rs:297, loom.rs:244, smithing.rs:262, stonecutter.rs:207
+
+### Category 4: `redundant_clone` (8 errors) — Remove `.clone()` on last use
+
+Remove the final `.clone()` call before player slots in each screen handler:
+- anvil.rs:346, brewing_stand.rs:321, cartography_table.rs:249, enchanting_table.rs:234
+- grindstone.rs:317, loom.rs:270, smithing.rs:277, stonecutter.rs:220
+
+### Category 5: `const fn` (3 errors)
+
+Make these functions `const`: brewing_stand.rs:110 `PotionSlot::new`, brewing_stand.rs:200 `FuelSlot::new`, enchanting_table.rs:111 `LapisSlot::new`
+
+### Category 6: `doc_markdown` (10 errors) — Backtick type names in doc comments
+
+Add backticks around type names in doc comments:
+- anvil.rs:189 `MapIdImpl`, anvil.rs:284 `RepairableImpl`
+- cartography_table.rs:183 `MapIdImpl`
+- loom.rs:232 `BannerPatternsImpl`, loom.rs:284 `BannerPatternsImpl`
+- smithing.rs:240 `SmithingScreenHandler`+`SmithingMenu`, smithing.rs:254 `ItemStack`
+- stonecutter.rs:184 `StonecutterScreenHandler`+`StonecutterMenu`
+
+### Category 7: `doc_lazy_continuation` (2 errors)
+
+anvil.rs:188-189 — two TODO doc lines need `- ` prefix to form a proper list, or a blank line separator.
+
+### Category 8: Misc (3 errors)
+
+- special_recipes.rs:321 `redundant_continue` — remove the `continue` statement
+- special_recipes.rs:446,455,465 `used_underscore_prefixed_binding` — rename `_banner` → `banner`
+- stonecutter.rs:312,331 `used_underscore_prefixed_binding` — rename `_player` → `player`
+- container_click.rs:174 `needless_pass_by_value` — add `#[allow(clippy::needless_pass_by_value)]` on the test helper
+
+Verify: `RUSTFLAGS="-Dwarnings" cargo clippy -p pumpkin-inventory --all-targets --all-features`
+
 ## Your Task This Session
 
 Priority areas:
