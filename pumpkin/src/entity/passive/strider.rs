@@ -5,8 +5,9 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal, panic::PanicGoal,
-        tempt, wander_around::WanderAroundGoal,
+        breed, follow_parent, look_around::LookAroundGoal,
+        look_at_entity::LookAtEntityGoal, panic::PanicGoal, tempt,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -34,6 +35,8 @@ impl StriderEntity {
 
             goal_selector.add_goal(1, PanicGoal::new(1.65));
             goal_selector.add_goal(3, tempt::TemptGoal::new(1.4, tempt::TEMPT_STRIDER, 16.0));
+            goal_selector.add_goal(4, breed::BreedGoal::new(1.0));
+            goal_selector.add_goal(5, follow_parent::FollowParentGoal::new(1.1));
             goal_selector.add_goal(6, WanderAroundGoal::new(0.6));
             goal_selector.add_goal(
                 7,

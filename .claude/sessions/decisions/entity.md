@@ -51,3 +51,39 @@ Standard scale: Swim=0, Panic=1, Attack=2, Special=4-5, Wander=6, LookAt=7, Look
 **Session:** entity-007 (continued)
 **Decision:** EntitySpawnEvent fires in both `World::spawn_entity()` (world/mod.rs) and the natural spawner batch path (world/natural_spawner.rs). Per ARCH-023 cross-agent write authorization.
 **Rationale:** Natural spawner uses its own batch spawn logic (doesn't call `spawn_entity()`), so both paths need the event. Single `fire()` call per entity, no logic changes beyond the event check — per ARCH-023 rules.
+
+## ENT-009: Mass Mob Implementation Source of Truth
+**Date:** 2026-02-07
+**Session:** entity-008
+**Decision:** `.claude/registry/entities.toml` is the master checklist for mob implementation. New mobs are added by following the standard mob pattern and registering in type.rs.
+**Rationale:** Single source of truth prevents divergence between registry and implementation.
+
+## ENT-010: MeleeAttackGoal for Non-Zombie Hostile Mobs
+**Date:** 2026-02-07
+**Session:** entity-009
+**Decision:** Made `melee_attack` module public. Non-zombie hostile mobs use `MeleeAttackGoal` directly at priority 2.
+**Rationale:** `ZombieAttackGoal` wraps `MeleeAttackGoal` with zombie-specific behavior. Other melee hostiles should use the base goal directly.
+
+## ENT-011: TemptGoal Uses Static Slice Item Lists
+**Date:** 2026-02-07
+**Session:** entity-009
+**Decision:** `TemptGoal` accepts `&'static [u16]` item ID slices. 16 static lists defined in `tempt.rs` for vanilla-accurate food following.
+**Rationale:** Static slices avoid allocation and are zero-cost. Item IDs from `pumpkin_data::item::Item` constants are compile-time known.
+
+## ENT-012: Arc<Player> Lookup for &self Contexts
+**Date:** 2026-02-07
+**Session:** entity-010
+**Decision:** Use `world.players.load().iter().find(|p| p.entity_id() == self.entity_id()).cloned()` to get `Arc<Player>` from `&self` in event fire sites.
+**Rationale:** Avoids changing `EntityBase` trait signatures. Plugin events require `Arc<Player>` but `handle_killed`/`drop_held_item` only have `&self`.
+
+## ENT-013: BreedGoal Priority 4, FollowParentGoal Priority 5
+**Date:** 2026-02-08
+**Session:** entity-011
+**Decision:** BreedGoal at priority 4, FollowParentGoal at priority 5. Full layout: Swim=0, Panic=1, Attack=2, Tempt=3, Breed=4, FollowParent=5, Wander=6, LookAt=7, LookAround=8.
+**Rationale:** Breed has higher priority than FollowParent because mating behavior should override baby following. Both sit between Tempt (player interaction) and Wander (idle movement).
+
+## ENT-014: BreedGoal Stores State Internally
+**Date:** 2026-02-08
+**Session:** entity-011
+**Decision:** BreedGoal stores `love_ticks` and `breed_cooldown` in the goal struct itself, not on MobEntity. External systems call `set_in_love()` on the goal directly.
+**Rationale:** Avoids modifying the shared MobEntity struct (ARCH-011). Goal-local state is sufficient since the GoalSelector owns the goal instances.
