@@ -24,10 +24,10 @@ macro_rules! collect_partial_and_message {
 // TODO: when codecs are implemented, add doc examples
 
 /// A result that can either represent a successful result, or a
-/// *partial* or no result with an error.
+/// *partial* or non-result with an error.
 ///
 /// `R` is the type of result stored.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum DataResult<R> {
     /// Contains a complete result and has no error.
     Success { result: R, lifecycle: Lifecycle },
@@ -162,7 +162,7 @@ impl<R> DataResult<R> {
     }
 
     /// Whether this `DataResult` has a complete or partial result.
-    pub fn has_result_or_partial(self) -> bool {
+    pub const fn has_result_or_partial(&self) -> bool {
         !matches!(
             self,
             Self::Error {
@@ -464,9 +464,7 @@ impl<R> DataResult<R> {
                 partial_result: Some(_),
             } => DataResult::error_partial_with_lifecycle(message, value, lifecycle),
             Self::Error {
-                message,
-                lifecycle,
-                partial_result: None,
+                message, lifecycle, ..
             } => Self::error_with_lifecycle(message, lifecycle),
         }
     }
@@ -480,23 +478,79 @@ impl<R> DataResult<R> {
     pub const fn is_error(&self) -> bool {
         !self.is_success()
     }
+
+    /// Convenience method to add a message of another `DataResult` (`other_result`) to this `DataResult`.
+    /// This is useful for *unit tuple* `DataResult`s used simply for final results of complex objects.
+    /// - If `other_result` is a complete result, nothing happens.
+    /// - If both results are partial, the returned result is also partial. Otherwise, it is a non-result.
+    /// - Messages found in any `DataResult` error are concatenated and used in the returned result.
+    #[must_use]
+    pub fn add_message<T>(self, other_result: &DataResult<T>) -> Self {
+        match (self, other_result) {
+            // Both results are successful.
+            (Self::Success { result: r, .. }, DataResult::Success { .. }) => Self::success(r),
+
+            // Both results are errors.
+            (
+                Self::Error {
+                    partial_result: p1,
+                    message: m1,
+                    ..
+                },
+                DataResult::Error {
+                    partial_result: p2,
+                    message: m2,
+                    ..
+                },
+            ) => Self::error_any_with_lifecycle(
+                Self::append_messages(&m1, m2),
+                if matches!((&p1, &p2), (Some(_), Some(_))) {
+                    p1
+                } else {
+                    None
+                },
+                Lifecycle::Stable,
+            ),
+
+            // Exactly one of both results is an error.
+            (Self::Error { message: m1, .. }, _) => Self::error(m1),
+            (_, DataResult::Error { message: m2, .. }) => Self::error(m2.clone()),
+        }
+    }
 }
 
 /// Asserts that the `$left` `DataResult` is a complete result (success) whose stored result is `$right`.
 #[macro_export]
+#[cfg(test)]
 macro_rules! assert_success {
     ($left:expr, $right:expr $(,)?) => {{
         let result = $left;
         assert!(
             result.is_success(),
-            "Expected a successful `DataResult`, got: {:?}",
+            "Expected a `DataResult` success, got: {:?}",
             result
         );
         let value = result.unwrap();
         assert_eq!(
-            value,
-            $right,
-            "DataResult was successful but the value doesn't match"
+            value, $right,
+            "`DataResult` was successful but the value doesn't match"
         );
+    }};
+}
+
+/// Asserts that the decoding of some value by a [`DynamicOps`] via a [`Codec`] is a success/error.
+/// # Example
+/// ```
+/// use crate::serialization::codecs::primitive;
+///
+/// assert_decode!(primitive::INT_CODEC, json!(2), json_ops::INSTANCE, is_success);
+/// assert_decode!(primitive::STRING_CODEC, json!("hello"), json_ops::INSTANCE, is_success);
+/// assert_decode!(primitive::FLOAT_CODEC, json!(true), json_ops::INSTANCE, is_error);
+/// ```
+#[macro_export]
+#[cfg(test)]
+macro_rules! assert_decode {
+    ($codec:expr, $value:expr, $ops:expr, $assertion:ident) => {{
+        assert!($codec.decode($value, &$ops).$assertion());
     }};
 }
