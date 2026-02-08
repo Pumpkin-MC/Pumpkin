@@ -57,6 +57,16 @@ pub trait DynEventHandler: Send + Sync {
     /// # Returns
     /// The priority of the event handler.
     fn get_priority(&self) -> &EventPriority;
+
+    /// Whether this handler should be skipped when the event is already cancelled.
+    ///
+    /// Matches Bukkit's `@EventHandler(ignoreCancelled = true)` behavior.
+    /// When `true`, the handler is NOT called if the event has been cancelled
+    /// by a higher-priority handler.
+    ///
+    /// # Returns
+    /// `true` if this handler should be skipped when event is cancelled.
+    fn ignore_cancelled(&self) -> bool;
 }
 
 /// A trait for handling specific events.
@@ -95,6 +105,7 @@ where
     handler: Arc<H>,
     priority: EventPriority,
     blocking: bool,
+    ignore_cancelled: bool,
     _phantom: std::marker::PhantomData<E>,
 }
 
@@ -111,7 +122,6 @@ where
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             if let Some(typed_event) = <dyn Payload>::downcast_mut(event) {
-                // The handler.handle_blocking call now returns a Future, which we await.
                 self.handler.handle_blocking(server, typed_event).await;
             }
         })
@@ -125,7 +135,6 @@ where
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             if let Some(typed_event) = <dyn Payload>::downcast_ref(event) {
-                // The handler.handle call now returns a Future, which we await.
                 self.handler.handle(server, typed_event).await;
             }
         })
@@ -139,6 +148,11 @@ where
     /// Retrieves the priority of the handler.
     fn get_priority(&self) -> &EventPriority {
         &self.priority
+    }
+
+    /// Whether this handler should be skipped when the event is already cancelled.
+    fn ignore_cancelled(&self) -> bool {
+        self.ignore_cancelled
     }
 }
 
@@ -599,9 +613,34 @@ impl PluginManager {
         }
     }
 
-    /// Register an event handler
+    /// Register an event handler.
+    ///
+    /// This is the original registration method. Handlers registered this way
+    /// will always be called regardless of cancellation state (`ignore_cancelled = false`).
     pub async fn register<E, H>(&self, handler: Arc<H>, priority: EventPriority, blocking: bool)
     where
+        E: Payload + Send + Sync + 'static,
+        H: EventHandler<E> + 'static,
+    {
+        self.register_with_options::<E, H>(handler, priority, blocking, false)
+            .await;
+    }
+
+    /// Register an event handler with full Bukkit-compatible options.
+    ///
+    /// # Arguments
+    /// - `handler`: The event handler implementation.
+    /// - `priority`: The priority level (matches Bukkit's `EventPriority`).
+    /// - `blocking`: Whether this handler needs mutable access to the event.
+    /// - `ignore_cancelled`: When `true`, this handler is skipped if a higher-priority
+    ///   handler has already cancelled the event. Matches Bukkit's `ignoreCancelled`.
+    pub async fn register_with_options<E, H>(
+        &self,
+        handler: Arc<H>,
+        priority: EventPriority,
+        blocking: bool,
+        ignore_cancelled: bool,
+    ) where
         E: Payload + Send + Sync + 'static,
         H: EventHandler<E> + 'static,
     {
@@ -610,6 +649,7 @@ impl PluginManager {
             handler,
             priority,
             blocking,
+            ignore_cancelled,
             _phantom: std::marker::PhantomData,
         };
 
@@ -619,28 +659,168 @@ impl PluginManager {
             .push(Box::new(typed_handler));
     }
 
-    /// Fire an event to all registered handlers
+    /// Fire an event to all registered handlers.
+    ///
+    /// Execution order (matches Bukkit's EventPriority):
+    /// 1. All handlers sorted by priority: Highest -> High -> Normal -> Low -> Lowest -> Monitor
+    /// 2. Blocking handlers execute sequentially; non-blocking handlers run concurrently
+    ///
+    /// `ignore_cancelled` filtering (PLUGIN-004, Bukkit-compatible):
+    /// - Handlers with `ignore_cancelled = true` are skipped if the event is already cancelled.
+    /// - Non-cancellable events always return `false` from `is_cancelled()`, so no handler
+    ///   is ever skipped for those events.
     pub async fn fire<E: Payload + Send + Sync + 'static>(&self, mut event: E) -> E {
         if let Some(server) = self.server.read().await.as_ref() {
             let handlers = self.handlers.read().await;
             if let Some(handlers) = handlers.get(&E::get_name_static()) {
-                let (blocking, non_blocking): (Vec<_>, Vec<_>) =
+                let (mut blocking, mut non_blocking): (Vec<_>, Vec<_>) =
                     handlers.iter().partition(|h| h.is_blocking());
 
-                // Process blocking handlers first
-                for handler in blocking {
+                // Sort both groups by priority (Highest first, Monitor last)
+                blocking.sort_by(|a, b| a.get_priority().cmp(b.get_priority()));
+                non_blocking.sort_by(|a, b| a.get_priority().cmp(b.get_priority()));
+
+                // Process blocking handlers first (sequentially, in priority order)
+                for handler in &blocking {
+                    // Skip handler if it has ignore_cancelled=true and event is cancelled
+                    if handler.ignore_cancelled() && event.is_cancelled() {
+                        continue;
+                    }
                     handler.handle_blocking_dyn(server, &mut event).await;
                 }
 
-                // Process non-blocking handlers
+                // Process non-blocking handlers (concurrently)
+                // Filter out handlers that should be skipped due to cancellation
+                let active_non_blocking: Vec<_> = non_blocking
+                    .into_iter()
+                    .filter(|h| !(h.ignore_cancelled() && event.is_cancelled()))
+                    .collect();
+
                 join_all(
-                    non_blocking
-                        .into_iter()
+                    active_non_blocking
+                        .iter()
                         .map(|h| h.handle_dyn(server, &event)),
                 )
                 .await;
             }
         }
         event
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn event_priority_ordering() {
+        // Highest < High < Normal < Low < Lowest < Monitor (for sort ordering)
+        assert!(EventPriority::Highest < EventPriority::High);
+        assert!(EventPriority::High < EventPriority::Normal);
+        assert!(EventPriority::Normal < EventPriority::Low);
+        assert!(EventPriority::Low < EventPriority::Lowest);
+        assert!(EventPriority::Lowest < EventPriority::Monitor);
+    }
+
+    #[test]
+    fn event_priority_equality() {
+        assert_eq!(EventPriority::Normal, EventPriority::Normal);
+        assert_ne!(EventPriority::Highest, EventPriority::Lowest);
+    }
+
+    #[test]
+    fn event_priority_clone() {
+        let priority = EventPriority::High;
+        let cloned = priority.clone();
+        assert_eq!(priority, cloned);
+    }
+
+    #[test]
+    fn plugin_state_equality() {
+        assert_eq!(PluginState::Loading, PluginState::Loading);
+        assert_eq!(PluginState::Loaded, PluginState::Loaded);
+        assert_eq!(
+            PluginState::Failed("test".to_string()),
+            PluginState::Failed("test".to_string())
+        );
+        assert_ne!(PluginState::Loading, PluginState::Loaded);
+        assert_ne!(
+            PluginState::Failed("a".to_string()),
+            PluginState::Failed("b".to_string())
+        );
+    }
+
+    #[test]
+    fn plugin_state_clone() {
+        let state = PluginState::Failed("error".to_string());
+        let cloned = state.clone();
+        assert_eq!(state, cloned);
+    }
+
+    #[test]
+    fn plugin_manager_default_has_native_loader() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let manager = PluginManager::new();
+        let loaders = rt.block_on(manager.get_loaders());
+        assert_eq!(
+            loaders.len(),
+            1,
+            "Default manager should have one loader (NativePluginLoader)"
+        );
+    }
+
+    #[test]
+    fn plugin_manager_no_plugins_initially() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let manager = PluginManager::new();
+        let plugins = rt.block_on(manager.loaded_plugins());
+        assert!(plugins.is_empty(), "New manager should have no plugins");
+    }
+
+    #[test]
+    fn plugin_manager_all_plugins_loaded_when_empty() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let manager = PluginManager::new();
+        let all_loaded = rt.block_on(manager.all_plugins_loaded());
+        assert!(all_loaded, "Empty manager should report all plugins loaded");
+    }
+
+    #[test]
+    fn plugin_manager_no_loading_plugins_initially() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let manager = PluginManager::new();
+        let loading = rt.block_on(manager.get_loading_plugins());
+        assert!(loading.is_empty());
+    }
+
+    #[test]
+    fn plugin_manager_no_failed_plugins_initially() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let manager = PluginManager::new();
+        let failed = rt.block_on(manager.get_failed_plugins());
+        assert!(failed.is_empty());
+    }
+
+    #[test]
+    fn plugin_manager_plugin_not_found() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let manager = PluginManager::new();
+        let is_loaded = rt.block_on(manager.is_plugin_loaded("nonexistent"));
+        assert!(!is_loaded);
+        let is_active = rt.block_on(manager.is_plugin_active("nonexistent"));
+        assert!(!is_active);
+    }
+
+    #[test]
+    fn plugin_manager_get_state_nonexistent() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let manager = PluginManager::new();
+        let state = rt.block_on(manager.get_plugin_state("nonexistent"));
+        assert!(state.is_none());
+    }
+
+    #[test]
+    fn plugin_api_version_is_current() {
+        assert_eq!(PLUGIN_API_VERSION, 2);
     }
 }

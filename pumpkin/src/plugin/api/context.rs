@@ -263,6 +263,7 @@ impl Context {
             handler,
             priority,
             blocking,
+            ignore_cancelled: false,
             _phantom: std::marker::PhantomData,
         };
         handlers_vec.push(Box::new(typed_handler));
