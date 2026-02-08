@@ -1,4 +1,5 @@
 pub mod anvil;
+pub mod beacon;
 pub mod brewing_stand;
 pub mod cartography_table;
 pub mod container_click;
@@ -11,6 +12,7 @@ mod error;
 pub mod furnace_like;
 pub mod generic_container_screen_handler;
 pub mod grindstone;
+pub mod lectern;
 pub mod loom;
 pub mod player;
 pub mod screen_handler;
