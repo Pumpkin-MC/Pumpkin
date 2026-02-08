@@ -8,7 +8,7 @@ use crate::entity::{
 
 /// Mule — a cross between a horse and donkey that can carry chests.
 ///
-/// Delegates to HorseEntity for base AI behavior.
+/// Delegates to `HorseEntity` for base AI behavior.
 pub struct MuleEntity {
     horse: Arc<HorseEntity>,
 }

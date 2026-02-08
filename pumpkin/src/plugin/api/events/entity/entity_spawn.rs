@@ -32,7 +32,7 @@ pub struct EntitySpawnEvent {
 impl EntitySpawnEvent {
     /// Creates a new instance of `EntitySpawnEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         entity_id: i32,
         entity_type: &'static EntityType,
         position: Vector3<f64>,

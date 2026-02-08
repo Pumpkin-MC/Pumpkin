@@ -8,7 +8,7 @@ use crate::entity::{
 
 /// Mooshroom — a mushroom-covered variant of the cow.
 ///
-/// Delegates to CowEntity for base AI behavior.
+/// Delegates to `CowEntity` for base AI behavior.
 /// Shearing for mushrooms is a future addition.
 pub struct MooshroomEntity {
     cow: Arc<CowEntity>,

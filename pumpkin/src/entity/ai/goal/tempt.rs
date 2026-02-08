@@ -20,7 +20,7 @@ pub struct TemptGoal {
 }
 
 impl TemptGoal {
-    /// Create a new TemptGoal.
+    /// Create a new `TemptGoal`.
     ///
     /// `speed` — movement speed toward the player.
     /// `tempt_items` — static slice of item IDs that trigger temptation.

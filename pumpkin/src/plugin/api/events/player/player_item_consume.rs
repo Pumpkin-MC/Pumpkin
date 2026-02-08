@@ -23,7 +23,7 @@ pub struct PlayerItemConsumeEvent {
 
 impl PlayerItemConsumeEvent {
     #[must_use]
-    pub fn new(player: Arc<Player>, item: ItemStack) -> Self {
+    pub const fn new(player: Arc<Player>, item: ItemStack) -> Self {
         Self {
             player,
             item,

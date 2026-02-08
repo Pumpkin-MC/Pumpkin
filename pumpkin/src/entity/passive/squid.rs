@@ -9,7 +9,7 @@ use crate::entity::{
 /// Squid — a passive water mob.
 ///
 /// Squids swim around in water. In vanilla they have specialized
-/// water movement; for now they use the basic SwimGoal.
+/// water movement; for now they use the basic `SwimGoal`.
 pub struct SquidEntity {
     pub mob_entity: MobEntity,
 }

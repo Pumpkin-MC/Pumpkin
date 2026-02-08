@@ -123,23 +123,33 @@ pub struct TickProfileSnapshot {
 
 impl TickProfileSnapshot {
     /// World tick average in milliseconds.
+    #[must_use]
     pub fn world_avg_ms(&self) -> f64 {
         self.world_avg_nanos as f64 / 1_000_000.0
     }
 
     /// Player/network tick average in milliseconds.
+    #[must_use]
     pub fn player_avg_ms(&self) -> f64 {
         self.player_avg_nanos as f64 / 1_000_000.0
     }
 
     /// Total tick average in milliseconds.
+    #[must_use]
     pub fn total_avg_ms(&self) -> f64 {
         self.total_avg_nanos as f64 / 1_000_000.0
     }
 
     /// Percentage of tick budget (50ms) used on average.
+    #[must_use]
     pub fn budget_usage_percent(&self) -> f64 {
         (self.total_avg_nanos as f64 / 50_000_000.0) * 100.0
+    }
+}
+
+impl Default for TickProfiler {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -147,6 +157,7 @@ impl TickProfiler {
     /// The default slow tick threshold: 50ms (one full tick at 20 TPS).
     const DEFAULT_SLOW_THRESHOLD_MS: u64 = 50;
 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             enabled: AtomicBool::new(false),
@@ -243,7 +254,7 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn test_rolling_average_empty() {
+    fn rolling_average_empty() {
         let avg = RollingAverage::new();
         assert_eq!(avg.average_nanos(), 0);
         assert_eq!(avg.last_nanos(), 0);
@@ -252,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rolling_average_single_sample() {
+    fn rolling_average_single_sample() {
         let avg = RollingAverage::new();
         avg.record(1_000_000); // 1ms
         assert_eq!(avg.average_nanos(), 1_000_000);
@@ -262,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rolling_average_multiple_samples() {
+    fn rolling_average_multiple_samples() {
         let avg = RollingAverage::new();
         avg.record(2_000_000); // 2ms
         avg.record(4_000_000); // 4ms
@@ -274,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rolling_average_wraps_around() {
+    fn rolling_average_wraps_around() {
         let avg = RollingAverage::new();
         // Fill all 100 slots with 1ms each
         for _ in 0..100 {
@@ -289,13 +300,13 @@ mod tests {
     }
 
     #[test]
-    fn test_profiler_disabled_by_default() {
+    fn profiler_disabled_by_default() {
         let profiler = TickProfiler::new();
         assert!(!profiler.is_enabled());
     }
 
     #[test]
-    fn test_profiler_enable_disable() {
+    fn profiler_enable_disable() {
         let profiler = TickProfiler::new();
         profiler.set_enabled(true);
         assert!(profiler.is_enabled());
@@ -304,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn test_profiler_records_when_enabled() {
+    fn profiler_records_when_enabled() {
         let profiler = TickProfiler::new();
         profiler.set_enabled(true);
 
@@ -318,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn test_profiler_ignores_when_disabled() {
+    fn profiler_ignores_when_disabled() {
         let profiler = TickProfiler::new();
         // Profiler is disabled by default
 
@@ -331,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn test_slow_tick_detection() {
+    fn slow_tick_detection() {
         let profiler = TickProfiler::new();
         profiler.set_enabled(true);
         profiler.set_slow_threshold_ms(0); // Any tick is "slow"
@@ -345,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn test_slow_tick_reset() {
+    fn slow_tick_reset() {
         let profiler = TickProfiler::new();
         profiler.set_enabled(true);
         profiler.set_slow_threshold_ms(0);
@@ -359,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_budget_usage() {
+    fn snapshot_budget_usage() {
         let snap = TickProfileSnapshot {
             world_avg_nanos: 0,
             player_avg_nanos: 0,

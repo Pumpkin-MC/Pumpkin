@@ -7,7 +7,7 @@ use crate::entity::{
 
 /// Zoglin — a zombified variant of the Hoglin.
 ///
-/// Delegates to HoglinEntity for base AI behavior.
+/// Delegates to `HoglinEntity` for base AI behavior.
 /// Attacks all non-creeper mobs indiscriminately.
 pub struct ZoglinEntity {
     hoglin: Arc<HoglinEntity>,

@@ -71,7 +71,12 @@ pub async fn default_dispatcher(
     let mut dispatcher = CommandDispatcher::default();
 
     register_permissions(registry).await;
+    register_commands(&mut dispatcher, basic_config);
 
+    dispatcher
+}
+
+fn register_commands(dispatcher: &mut CommandDispatcher, basic_config: &BasicConfiguration) {
     // Zero
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
     dispatcher.register(help::init_command_tree(), "minecraft:command.help");
@@ -173,8 +178,6 @@ pub async fn default_dispatcher(
         save_on::init_command_tree(),
         "minecraft:command.save-on",
     );
-
-    dispatcher
 }
 
 async fn register_permissions(permission_registry: &RwLock<PermissionRegistry>) {

@@ -630,7 +630,7 @@ impl PluginManager {
     ///
     /// # Arguments
     /// - `handler`: The event handler implementation.
-    /// - `priority`: The priority level (matches Bukkit's EventPriority).
+    /// - `priority`: The priority level (matches Bukkit's `EventPriority`).
     /// - `blocking`: Whether this handler needs mutable access to the event.
     /// - `ignore_cancelled`: When `true`, this handler is skipped if a higher-priority
     ///   handler has already cancelled the event. Matches Bukkit's `ignoreCancelled`.

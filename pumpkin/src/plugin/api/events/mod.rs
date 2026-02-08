@@ -133,7 +133,7 @@ pub trait Cancellable: Send + Sync {
 }
 /// An enumeration representing the priority levels of events.
 ///
-/// Mirrors Bukkit's EventPriority for compatibility:
+/// Mirrors Bukkit's `EventPriority` for compatibility:
 /// - `Lowest` through `Highest`: executed in order, each can modify the event.
 /// - `Monitor`: executed last, must NOT modify the event — used for logging and observation only.
 ///
@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn non_cancellable_event_clone() {
         let event = ServerTickEvent::new(42);
-        let cloned = event.clone();
+        let cloned = event;
         assert_eq!(cloned.tick_count, 42);
     }
 }

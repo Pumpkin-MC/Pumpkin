@@ -35,7 +35,7 @@ pub struct EntityDamageEvent {
 impl EntityDamageEvent {
     /// Creates a new instance of `EntityDamageEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         entity_id: i32,
         entity_type: &'static EntityType,
         damage: f32,
