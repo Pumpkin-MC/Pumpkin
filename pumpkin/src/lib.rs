@@ -45,7 +45,13 @@ pub mod plugin;
 pub mod server;
 pub mod world;
 
-pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter)>;
+pub struct LoggingConfig {
+    pub color: bool,
+    pub threads: bool,
+    pub timestamp: bool,
+}
+
+pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter, LoggingConfig)>;
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
@@ -113,7 +119,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let fmt_layer = fmt::layer()
             .with_writer(std::sync::Mutex::new(logger))
             .with_ansi(advanced_config.logging.color)
-            .with_target(false)
+            .with_target(true)
             .with_thread_names(advanced_config.logging.threads)
             .with_thread_ids(advanced_config.logging.threads);
 
@@ -141,7 +147,13 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             }
         }
 
-        (ReadlineLogWrapper::new(rl), level)
+        let logging_config = LoggingConfig {
+            color: advanced_config.logging.color,
+            threads: advanced_config.logging.threads,
+            timestamp: advanced_config.logging.timestamp,
+        };
+
+        (ReadlineLogWrapper::new(rl), level, logging_config)
     });
 
     assert!(
@@ -176,6 +188,9 @@ pub struct PumpkinServer {
 }
 
 impl PumpkinServer {
+    pub fn log_info(&self, message: &str) {
+        tracing::info!(target: "plugin", "{}", message);
+    }
     #[expect(clippy::if_then_some_else_none)]
     pub async fn new(
         basic_config: BasicConfiguration,
@@ -187,7 +202,7 @@ impl PumpkinServer {
         let rcon = server.advanced_config.networking.rcon.clone();
 
         if server.advanced_config.commands.use_console
-            && let Some((wrapper, _)) = LOGGER_IMPL.wait()
+            && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
         {
             if let Some(rl) = wrapper.take_readline() {
                 setup_console(rl, server.clone());
@@ -357,7 +372,7 @@ impl PumpkinServer {
 
         info!("Completed save!");
 
-        if let Some((wrapper, _)) = LOGGER_IMPL.wait()
+        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
             && let Some(rl) = wrapper.take_readline()
         {
             let _ = rl;
@@ -570,7 +585,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 }
             }
         }
-        if let Some((wrapper, _)) = LOGGER_IMPL.wait() {
+        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait() {
             wrapper.return_readline(rl);
         }
     });

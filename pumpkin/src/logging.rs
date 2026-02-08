@@ -36,6 +36,50 @@ macro_rules! log_at_level {
     };
 }
 
+#[macro_export]
+macro_rules! plugin_log {
+    ($level:expr, $plugin_name:expr, $($arg:tt)*) => {{
+        let plugin_name = $plugin_name;
+        match $level {
+            tracing::Level::TRACE => {
+                tracing::trace!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::DEBUG => {
+                tracing::debug!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::INFO => {
+                tracing::info!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::WARN => {
+                tracing::warn!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::ERROR => {
+                tracing::error!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+        }
+    }};
+}
+
 const LOG_DIR: &str = "logs";
 const MAX_ATTEMPTS: u32 = 100;
 
