@@ -1,5 +1,6 @@
+use pumpkin_data::recipes::{CookingRecipeType, RECIPES_COOKING};
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState, Enchantment, item::Item};
-use pumpkin_data::recipes::{RECIPES_COOKING, CookingRecipeType};
 use pumpkin_util::{
     loot_table::{
         LootCondition, LootFunctionBonusParameter, LootFunctionNumberProvider, LootFunctionTypes,
@@ -49,9 +50,8 @@ impl LootTableExt for LootTable {
                             .as_ref()
                             .is_none_or(|c| c.iter().all(|cond| cond.is_fulfilled(&params)))
                         {
-                            let w = 1; // TODO: weight
-                            total_weight += w;
-                            valid_entries.push((entry, w));
+                            total_weight += entry.weight;
+                            valid_entries.push((entry, entry.weight));
                         }
                     }
 
@@ -183,8 +183,14 @@ fn apply_loot_function(
                 }
             }
         }
-        // These functions need data that the codegen doesn't yet provide,
-        // or require component system support not available.
+        LootFunctionTypes::EnchantedCountIncrease {
+            enchantment,
+            count,
+            limit,
+        } => {
+            apply_enchanted_count_increase(stacks, params, enchantment, count, *limit);
+        }
+        // These functions need component system support not yet available.
         LootFunctionTypes::CopyComponents {
             source: _,
             include: _,
@@ -193,7 +199,6 @@ fn apply_loot_function(
             block: _,
             properties: _,
         }
-        | LootFunctionTypes::EnchantedCountIncrease
         | LootFunctionTypes::SetOminousBottleAmplifier
         | LootFunctionTypes::SetPotion => {}
     }
@@ -257,6 +262,37 @@ fn apply_bonus(
                 stack.item_count = stack.item_count.saturating_mul(multiplier);
             }
             _ => {}
+        }
+    }
+}
+
+fn apply_enchanted_count_increase(
+    stacks: &mut [ItemStack],
+    params: &LootContextParameters,
+    enchantment: &str,
+    count: &LootFunctionNumberProvider,
+    limit: Option<i32>,
+) {
+    let level = params
+        .tool
+        .as_ref()
+        .and_then(|tool| {
+            let key = enchantment
+                .strip_prefix("minecraft:")
+                .unwrap_or(enchantment);
+            Enchantment::from_name(key).map(|ench| tool.get_enchantment_level(ench))
+        })
+        .unwrap_or(0);
+    if level > 0 {
+        for stack in stacks {
+            let bonus = (count.generate() * level as f32).round() as u8;
+            stack.item_count = stack.item_count.saturating_add(bonus);
+            if let Some(lim) = limit {
+                let lim = lim as u8;
+                if stack.item_count > lim {
+                    stack.item_count = lim;
+                }
+            }
         }
     }
 }
@@ -329,18 +365,58 @@ impl LootConditionExt for LootCondition {
                 }
                 false
             }
-            // These conditions need data fields (chance values, predicates, term lists)
-            // that are not yet parsed by the codegen. Default to permissive (true) so
-            // loot drops work rather than being silently blocked. Over-dropping is less
-            // harmful than no drops at all for gameplay.
-            Self::Inverted
-            | Self::AnyOf
-            | Self::AllOf
-            | Self::RandomChance
-            | Self::RandomChanceWithEnchantedBonus
+            Self::Inverted { term } => !term.is_fulfilled(params),
+            Self::AnyOf { terms } => terms.iter().any(|cond| cond.is_fulfilled(params)),
+            Self::AllOf { terms } => terms.iter().all(|cond| cond.is_fulfilled(params)),
+            Self::RandomChance { chance } => rand::rng().random::<f32>() < *chance,
+            Self::MatchTool { predicate } => {
+                let Some(tool) = &params.tool else {
+                    return false;
+                };
+                // Check item match
+                if let Some(items) = predicate.items {
+                    if items.starts_with('#') {
+                        // Tag match
+                        if !tool.item.is_tagged_with(items).unwrap_or(false) {
+                            return false;
+                        }
+                    } else {
+                        let key = items.strip_prefix("minecraft:").unwrap_or(items);
+                        let Some(expected) = Item::from_registry_key(key) else {
+                            return false;
+                        };
+                        if tool.item != expected {
+                            return false;
+                        }
+                    }
+                }
+                // Check enchantment predicates
+                if let Some(enchantments) = predicate.enchantments {
+                    for ep in enchantments {
+                        let key = ep
+                            .enchantments
+                            .strip_prefix("minecraft:")
+                            .unwrap_or(ep.enchantments);
+                        let Some(ench) = Enchantment::from_name(key) else {
+                            return false;
+                        };
+                        let level = tool.get_enchantment_level(ench);
+                        if let Some(min) = ep.levels_min {
+                            if level < min {
+                                return false;
+                            }
+                        } else if level <= 0 {
+                            return false;
+                        }
+                    }
+                }
+                true
+            }
+            // These conditions need data not yet in codegen. Default to permissive
+            // so loot drops rather than being silently blocked.
+            Self::RandomChanceWithEnchantedBonus
             | Self::EntityProperties
             | Self::EntityScores
-            | Self::MatchTool
             | Self::TableBonus
             | Self::DamageSourceProperties
             | Self::LocationCheck

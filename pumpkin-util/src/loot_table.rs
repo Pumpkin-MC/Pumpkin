@@ -30,6 +30,18 @@ pub struct AlternativeEntry {
     pub children: &'static [LootPoolEntry],
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct MatchToolPredicate {
+    pub items: Option<&'static str>,
+    pub enchantments: Option<&'static [EnchantmentPredicate]>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct EnchantmentPredicate {
+    pub enchantments: &'static str,
+    pub levels_min: Option<i32>,
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum LootPoolEntryTypes {
     Empty,
@@ -42,12 +54,20 @@ pub enum LootPoolEntryTypes {
     Group,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum LootCondition {
-    Inverted,
-    AnyOf,
-    AllOf,
-    RandomChance,
+    Inverted {
+        term: &'static Self,
+    },
+    AnyOf {
+        terms: &'static [Self],
+    },
+    AllOf {
+        terms: &'static [Self],
+    },
+    RandomChance {
+        chance: f32,
+    },
     RandomChanceWithEnchantedBonus,
     EntityProperties,
     KilledByPlayer,
@@ -56,7 +76,9 @@ pub enum LootCondition {
         block: &'static str,
         properties: &'static [(&'static str, &'static str)],
     },
-    MatchTool,
+    MatchTool {
+        predicate: MatchToolPredicate,
+    },
     TableBonus,
     SurvivesExplosion,
     DamageSourceProperties,
@@ -80,7 +102,11 @@ pub enum LootFunctionTypes {
         count: LootFunctionNumberProvider,
         add: bool,
     },
-    EnchantedCountIncrease,
+    EnchantedCountIncrease {
+        enchantment: &'static str,
+        count: LootFunctionNumberProvider,
+        limit: Option<i32>,
+    },
     FurnaceSmelt,
     SetPotion,
     SetOminousBottleAmplifier,
@@ -122,6 +148,7 @@ pub struct LootPoolEntry {
     pub content: LootPoolEntryTypes,
     pub conditions: Option<&'static [LootCondition]>,
     pub functions: Option<&'static [LootFunction]>,
+    pub weight: i32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

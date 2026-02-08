@@ -16,7 +16,7 @@ use pumpkin_world::item::ItemStack;
 pub struct BoatItem;
 
 impl BoatItem {
-    fn item_to_entity(item: &Item) -> &'static EntityType {
+    const fn item_to_entity(item: &Item) -> &'static EntityType {
         match item.id {
             val if val == Item::OAK_BOAT.id => &EntityType::OAK_BOAT,
             val if val == Item::SPRUCE_BOAT.id => &EntityType::SPRUCE_BOAT,

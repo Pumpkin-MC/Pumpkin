@@ -117,6 +117,72 @@ impl ToTokens for AlternativeEntryStruct {
 }
 
 #[derive(Deserialize, Clone, Debug)]
+pub struct MatchToolPredicateStruct {
+    items: Option<String>,
+    predicates: Option<MatchToolPredicatesInnerStruct>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct MatchToolPredicatesInnerStruct {
+    #[serde(rename = "minecraft:enchantments")]
+    enchantments: Option<Vec<EnchantmentPredicateStruct>>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct EnchantmentPredicateStruct {
+    enchantments: String,
+    levels: Option<EnchantmentLevelStruct>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct EnchantmentLevelStruct {
+    min: Option<i32>,
+}
+
+impl ToTokens for MatchToolPredicateStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let items = match &self.items {
+            Some(s) => quote! { Some(#s) },
+            None => quote! { None },
+        };
+        let enchantments = match &self.predicates {
+            Some(preds) => match &preds.enchantments {
+                Some(enchs) => {
+                    let ench_tokens: Vec<_> = enchs
+                        .iter()
+                        .map(|e| {
+                            let ench_name = &e.enchantments;
+                            let levels_min = match &e.levels {
+                                Some(l) => match l.min {
+                                    Some(m) => quote! { Some(#m) },
+                                    None => quote! { None },
+                                },
+                                None => quote! { None },
+                            };
+                            quote! {
+                                EnchantmentPredicate {
+                                    enchantments: #ench_name,
+                                    levels_min: #levels_min,
+                                }
+                            }
+                        })
+                        .collect();
+                    quote! { Some(&[#(#ench_tokens),*]) }
+                }
+                None => quote! { None },
+            },
+            None => quote! { None },
+        };
+        tokens.extend(quote! {
+            MatchToolPredicate {
+                items: #items,
+                enchantments: #enchantments,
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
 pub enum LootPoolEntryTypesStruct {
     #[serde(rename = "minecraft:empty")]
@@ -172,13 +238,21 @@ impl ToTokens for LootPoolEntryTypesStruct {
 #[serde(tag = "condition")]
 pub enum LootConditionStruct {
     #[serde(rename = "minecraft:inverted")]
-    Inverted,
+    Inverted {
+        term: Box<LootConditionStruct>,
+    },
     #[serde(rename = "minecraft:any_of")]
-    AnyOf,
+    AnyOf {
+        terms: Vec<LootConditionStruct>,
+    },
     #[serde(rename = "minecraft:all_of")]
-    AllOf,
+    AllOf {
+        terms: Vec<LootConditionStruct>,
+    },
     #[serde(rename = "minecraft:random_chance")]
-    RandomChance,
+    RandomChance {
+        chance: f32,
+    },
     #[serde(rename = "minecraft:random_chance_with_enchanted_bonus")]
     RandomChanceWithEnchantedBonus,
     #[serde(rename = "minecraft:entity_properties")]
@@ -193,7 +267,9 @@ pub enum LootConditionStruct {
         properties: BTreeMap<String, String>,
     },
     #[serde(rename = "minecraft:match_tool")]
-    MatchTool,
+    MatchTool {
+        predicate: MatchToolPredicateStruct,
+    },
     #[serde(rename = "minecraft:table_bonus")]
     TableBonus,
     #[serde(rename = "minecraft:survives_explosion")]
@@ -217,10 +293,23 @@ pub enum LootConditionStruct {
 impl ToTokens for LootConditionStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = match self {
-            Self::Inverted => quote! { LootCondition::Inverted },
-            Self::AnyOf => quote! { LootCondition::AnyOf },
-            Self::AllOf => quote! { LootCondition::AllOf },
-            Self::RandomChance => quote! { LootCondition::RandomChance },
+            Self::Inverted { term } => {
+                let term_tokens = term.to_token_stream();
+                quote! { LootCondition::Inverted { term: &#term_tokens } }
+            }
+            Self::AnyOf { terms } => {
+                let term_tokens: Vec<_> =
+                    terms.iter().map(quote::ToTokens::to_token_stream).collect();
+                quote! { LootCondition::AnyOf { terms: &[#(#term_tokens),*] } }
+            }
+            Self::AllOf { terms } => {
+                let term_tokens: Vec<_> =
+                    terms.iter().map(quote::ToTokens::to_token_stream).collect();
+                quote! { LootCondition::AllOf { terms: &[#(#term_tokens),*] } }
+            }
+            Self::RandomChance { chance } => {
+                quote! { LootCondition::RandomChance { chance: #chance } }
+            }
             Self::RandomChanceWithEnchantedBonus => {
                 quote! { LootCondition::RandomChanceWithEnchantedBonus }
             }
@@ -234,7 +323,10 @@ impl ToTokens for LootConditionStruct {
                     .collect();
                 quote! { LootCondition::BlockStateProperty { block: #block, properties: &[#(#properties),*] } }
             }
-            Self::MatchTool => quote! { LootCondition::MatchTool },
+            Self::MatchTool { predicate } => {
+                let pred_tokens = predicate.to_token_stream();
+                quote! { LootCondition::MatchTool { predicate: #pred_tokens } }
+            }
             Self::TableBonus => quote! { LootCondition::TableBonus },
             Self::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
             Self::DamageSourceProperties => {
@@ -290,7 +382,11 @@ pub enum LootFunctionTypesStruct {
         add: Option<bool>,
     },
     #[serde(rename = "minecraft:enchanted_count_increase")]
-    EnchantedCountIncrease,
+    EnchantedCountIncrease {
+        enchantment: String,
+        count: LootFunctionNumberProviderStruct,
+        limit: Option<i32>,
+    },
     #[serde(rename = "minecraft:furnace_smelt")]
     FurnaceSmelt,
     #[serde(rename = "minecraft:set_potion")]
@@ -336,8 +432,23 @@ impl ToTokens for LootFunctionTypesStruct {
             Self::SetPotion => {
                 quote! { LootFunctionTypes::SetPotion }
             }
-            Self::EnchantedCountIncrease => {
-                quote! { LootFunctionTypes::EnchantedCountIncrease }
+            Self::EnchantedCountIncrease {
+                enchantment,
+                count,
+                limit,
+            } => {
+                let count_tokens = count.to_token_stream();
+                let limit_tokens = match limit {
+                    Some(l) => quote! { Some(#l) },
+                    None => quote! { None },
+                };
+                quote! {
+                    LootFunctionTypes::EnchantedCountIncrease {
+                        enchantment: #enchantment,
+                        count: #count_tokens,
+                        limit: #limit_tokens,
+                    }
+                }
             }
             Self::LimitCount { limit } => {
                 let min = if let Some(min) = limit.min {
@@ -466,6 +577,7 @@ pub struct LootPoolEntryStruct {
     content: LootPoolEntryTypesStruct,
     conditions: Option<Vec<LootConditionStruct>>,
     functions: Option<Vec<LootFunctionStruct>>,
+    weight: Option<i32>,
 }
 
 impl ToTokens for LootPoolEntryStruct {
@@ -484,11 +596,14 @@ impl ToTokens for LootPoolEntryStruct {
             quote! { None }
         };
 
+        let weight = self.weight.unwrap_or(1);
+
         tokens.extend(quote! {
             LootPoolEntry {
                 content: #content,
                 conditions: #conditions_tokens,
                 functions: #functions_tokens,
+                weight: #weight,
             }
         });
     }

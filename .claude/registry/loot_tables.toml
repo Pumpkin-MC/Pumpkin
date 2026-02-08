@@ -1,0 +1,335 @@
+# Loot Table Gap Registry
+# Auto-generated from mcdata 1.21.4 loot table analysis
+# Tracks what fields exist in JSON but are stripped by pumpkin-data/build/loot.rs
+#
+# Owner: Items agent
+# Sources: assets/blocks.json (1130 block tables), assets/entities.json (63 entity tables)
+#          mcdata-1.21.4.zip (1237 total: +56 chest, +25 gameplay, +22 shearing, etc.)
+
+[meta]
+mc_version = "1.21.4"
+total_loot_tables = 1237
+tables_in_codegen = 1193       # blocks (1130) + entities (63) embedded in assets/
+tables_not_in_codegen = 44     # chest(56) + gameplay(25) + shearing(22) etc. minus overlap
+codegen_file = "pumpkin-data/build/loot.rs"
+types_file = "pumpkin-util/src/loot_table.rs"
+execution_file = "pumpkin/src/world/loot.rs"
+
+# =============================================================================
+# Entry Types — LootPoolEntryTypes enum
+# =============================================================================
+
+[entry_types]
+# Status: "done" = fully working, "stub" = returns empty, "missing" = not in enum
+
+[entry_types.Item]
+status = "done"
+occurrences = 1402
+notes = "Fully working, resolves item by registry key"
+
+[entry_types.Empty]
+status = "done"
+occurrences = 3
+
+[entry_types.Alternatives]
+status = "done"
+occurrences = 80
+notes = "Children array preserved, first matching child returned"
+
+[entry_types.LootTable]
+status = "stub"
+occurrences = 18
+missing_fields = ["value"]
+json_format = '{ "type": "minecraft:loot_table", "value": "minecraft:gameplay/fishing/junk" }'
+notes = "value is string ref to another table (49x) or inline object (3x). Also has weight/quality."
+blocker = "codegen strips value field"
+
+[entry_types.Tag]
+status = "stub"
+occurrences = 1
+missing_fields = ["name", "expand"]
+json_format = '{ "type": "minecraft:tag", "name": "minecraft:creeper_drop_music_discs", "expand": true }'
+blocker = "codegen strips name + expand fields"
+
+[entry_types.Dynamic]
+status = "stub"
+occurrences = 1
+missing_fields = ["name"]
+json_format = '{ "type": "minecraft:dynamic", "name": "minecraft:contents" }'
+blocker = "codegen strips name field"
+
+[entry_types.Sequence]
+status = "stub"
+occurrences = 0
+missing_fields = ["children"]
+notes = "Not used in any current loot table"
+
+[entry_types.Group]
+status = "stub"
+occurrences = 0
+missing_fields = ["children"]
+notes = "Not used in any current loot table"
+
+# Entry-level fields stripped by codegen
+[entry_types._meta]
+weight_field_missing = true
+weight_occurrences = 604         # 596 chest + 8 entity
+quality_field_missing = true
+quality_occurrences = 3          # only fishing tables
+
+# =============================================================================
+# Conditions — LootCondition enum
+# =============================================================================
+
+[conditions]
+# Status: "done" = data preserved + logic implemented
+#         "bare_true" = no data, defaults to true (permissive)
+#         "bare_false" = no data, defaults to false (restrictive)
+
+[conditions.SurvivesExplosion]
+status = "done"
+occurrences = 878
+notes = "Uses explosion_radius param, 1/radius survival chance"
+
+[conditions.BlockStateProperty]
+status = "done"
+occurrences = 252
+notes = "block + properties preserved, compared against block_state param"
+
+[conditions.MatchTool]
+status = "bare_true"
+occurrences = 148
+missing_fields = ["predicate"]
+json_shapes = 3
+shape_1 = "enchantment check (153x): predicate.predicates.minecraft:enchantments[{enchantments, levels}]"
+shape_2 = "item match (43x): predicate.items = 'minecraft:shears'"
+shape_3 = "tag match (1x): predicate.items = '#minecraft:cluster_max_harvestables'"
+priority = "P0"
+notes = "Critical for silk touch / shears drops. 21% of all conditions."
+
+[conditions.AnyOf]
+status = "bare_true"
+occurrences = 39
+missing_fields = ["terms"]
+json_format = '{ "condition": "minecraft:any_of", "terms": [...conditions...] }'
+priority = "P1"
+
+[conditions.TableBonus]
+status = "bare_true"
+occurrences = 29
+missing_fields = ["enchantment", "chances"]
+json_format = '{ "condition": "minecraft:table_bonus", "enchantment": "minecraft:fortune", "chances": [0.05, 0.0625, ...] }'
+priority = "P1"
+notes = "Fortune-based drop chance table (leaves→saplings, etc.)"
+
+[conditions.EntityProperties]
+status = "bare_true"
+occurrences = 25
+missing_fields = ["entity", "predicate"]
+priority = "P2"
+
+[conditions.KilledByPlayer]
+status = "done"
+occurrences = 24
+notes = "Uses killed_by_player param"
+
+[conditions.Inverted]
+status = "bare_true"
+occurrences = 15
+missing_fields = ["term"]
+json_format = '{ "condition": "minecraft:inverted", "term": { ...inner condition... } }'
+priority = "P1"
+notes = "Wraps another condition, returns opposite. Critical for silk touch alternatives."
+
+[conditions.RandomChanceWithEnchantedBonus]
+status = "bare_true"
+occurrences = 11
+missing_fields = ["enchanted_chance", "unenchanted_chance", "enchantment"]
+priority = "P2"
+
+[conditions.RandomChance]
+status = "bare_true"
+occurrences = 11
+missing_fields = ["chance"]
+json_format = '{ "condition": "minecraft:random_chance", "chance": 0.1 }'
+priority = "P1"
+
+[conditions.DamageSourceProperties]
+status = "bare_true"
+occurrences = 6
+missing_fields = ["predicate"]
+priority = "P3"
+
+[conditions.LocationCheck]
+status = "bare_true"
+occurrences = 4
+missing_fields = ["predicate", "offsetY"]
+priority = "P3"
+
+# Unused conditions (0 occurrences in codegen data)
+[conditions.AllOf]
+status = "bare_true"
+occurrences = 0
+missing_fields = ["terms"]
+
+[conditions.EntityScores]
+status = "bare_true"
+occurrences = 0
+
+[conditions.WeatherCheck]
+status = "bare_true"
+occurrences = 0
+
+[conditions.Reference]
+status = "bare_true"
+occurrences = 0
+
+[conditions.TimeCheck]
+status = "bare_true"
+occurrences = 0
+
+[conditions.ValueCheck]
+status = "bare_true"
+occurrences = 0
+
+[conditions.EnchantmentActiveCheck]
+status = "bare_true"
+occurrences = 0
+
+# =============================================================================
+# Functions — LootFunctionTypes enum
+# =============================================================================
+
+[functions]
+# Status: "done" = data preserved + logic implemented
+#         "stub_data" = data preserved but no logic
+#         "bare" = no data, no-op
+#         "missing" = not in enum at all
+
+[functions.SetCount]
+status = "done"
+occurrences = 320
+notes = "count + add fields preserved, number provider working"
+
+[functions.ExplosionDecay]
+status = "done"
+occurrences = 138
+
+[functions.CopyComponents]
+status = "stub_data"
+occurrences = 94
+notes = "source + include fields preserved, but no component system to actually copy"
+
+[functions.EnchantedCountIncrease]
+status = "bare"
+occurrences = 80
+missing_fields = ["enchantment", "count", "limit"]
+json_format = '{ "function": "minecraft:enchanted_count_increase", "enchantment": "minecraft:looting", "count": { "type": "minecraft:uniform", "min": 0.0, "max": 1.0 }, "limit": 1 }'
+priority = "P0"
+notes = "Always minecraft:looting. Adds count*level extra drops. 11% of all functions."
+
+[functions.ApplyBonus]
+status = "done"
+occurrences = 32
+notes = "3 formulas implemented: uniform_bonus_count, binomial_with_bonus_count, ore_drops"
+
+[functions.FurnaceSmelt]
+status = "done"
+occurrences = 19
+
+[functions.CopyState]
+status = "stub_data"
+occurrences = 10
+notes = "block + properties preserved, but no block state copying logic"
+
+[functions.LimitCount]
+status = "done"
+occurrences = 6
+
+[functions.SetPotion]
+status = "bare"
+occurrences = 3
+missing_fields = ["id"]
+json_format = '{ "function": "minecraft:set_potion", "id": "minecraft:water" }'
+
+[functions.SetOminousBottleAmplifier]
+status = "bare"
+occurrences = 1
+missing_fields = ["amplifier"]
+
+# Functions NOT in the enum at all (not parsed by codegen)
+[functions.EnchantRandomly]
+status = "missing"
+occurrences = 51
+json_format = '{ "function": "minecraft:enchant_randomly", "options": "#minecraft:on_random_loot" }'
+priority = "P1"
+notes = "Used in chest loot. Not in assets/ blocks/entities. Only in mcdata zip chest tables."
+
+[functions.EnchantWithLevels]
+status = "missing"
+occurrences = 33
+json_format = '{ "function": "minecraft:enchant_with_levels", "levels": { "type": "minecraft:uniform", "min": 20, "max": 39 }, "options": "#minecraft:on_random_loot" }'
+priority = "P1"
+
+[functions.SetDamage]
+status = "missing"
+occurrences = 27
+json_format = '{ "function": "minecraft:set_damage", "damage": { "type": "minecraft:uniform", "min": 0.15, "max": 0.85 } }'
+priority = "P2"
+
+[functions.SetEnchantments]
+status = "missing"
+occurrences = 11
+priority = "P2"
+
+[functions.SetComponents]
+status = "missing"
+occurrences = 6
+priority = "P3"
+
+[functions.SetStewEffect]
+status = "missing"
+occurrences = 3
+priority = "P3"
+
+[functions.ExplorationMap]
+status = "missing"
+occurrences = 3
+priority = "P3"
+
+[functions.SetName]
+status = "missing"
+occurrences = 3
+priority = "P3"
+
+[functions.SetInstrument]
+status = "missing"
+occurrences = 1
+priority = "P3"
+
+# =============================================================================
+# Implementation Priority (by impact)
+# =============================================================================
+
+[priority_order]
+# Codegen fixes — add missing fields to existing enum variants
+P0_codegen = [
+    "MatchTool predicate (148 conditions, 21%)",
+    "EnchantedCountIncrease enchantment+count+limit (80 functions, 11%)",
+    "Entry weight field (604 entries)",
+    "RandomChance chance field (11 conditions)",
+]
+
+P1_codegen = [
+    "Inverted term field (15 conditions)",
+    "AnyOf terms field (39 conditions)",
+    "TableBonus enchantment+chances (29 conditions)",
+    "LootTable value field (18 entries)",
+]
+
+# Missing function types — only matter for chest/gameplay loot (not in assets/)
+P2_chest_loot = [
+    "EnchantRandomly (51 uses, chest tables only)",
+    "EnchantWithLevels (33 uses, chest tables only)",
+    "SetDamage (27 uses, chest tables only)",
+]
