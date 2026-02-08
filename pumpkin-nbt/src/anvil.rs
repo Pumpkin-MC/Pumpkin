@@ -1045,7 +1045,7 @@ mod tests {
         compound.put_string("Status", "full".to_string());
         compound.put("Sections", NbtTag::List(vec![]));
 
-        let nbt = Nbt::new("".to_string(), compound);
+        let nbt = Nbt::new(String::new(), compound);
         let nbt_bytes = nbt.write();
 
         let mut region = RegionFile::new();

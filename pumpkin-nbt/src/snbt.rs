@@ -665,9 +665,9 @@ mod tests {
     #[test]
     fn parse_double() {
         assert_eq!(from_snbt("1.5d").unwrap(), NbtTag::Double(1.5));
-        assert_eq!(from_snbt("-3.14D").unwrap(), NbtTag::Double(-3.14));
+        assert_eq!(from_snbt("-3.15D").unwrap(), NbtTag::Double(-3.15));
         // Bare decimal is double
-        assert_eq!(from_snbt("2.718").unwrap(), NbtTag::Double(2.718));
+        assert_eq!(from_snbt("2.719").unwrap(), NbtTag::Double(2.719));
     }
 
     // --- Strings ---
@@ -918,8 +918,8 @@ mod tests {
             c.put_string("name", "test".to_string());
             c.put_byte("b", 1);
             c.put_long("l", 100);
-            c.put_float("f", 3.14);
-            c.put_double("d", 2.718);
+            c.put_float("f", 3.15);
+            c.put_double("d", 2.719);
             c
         });
 
