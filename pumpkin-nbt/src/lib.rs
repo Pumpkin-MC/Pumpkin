@@ -12,10 +12,13 @@ use serializer::WriteAdaptor;
 use tag::NbtTag;
 use thiserror::Error;
 
+pub mod anvil;
 pub mod compound;
 pub mod deserializer;
 pub mod nbt_compress;
+pub mod player_data;
 pub mod serializer;
+pub mod snbt;
 pub mod tag;
 
 pub use deserializer::{from_bytes, from_bytes_unnamed};
@@ -211,6 +214,7 @@ mod test {
     use std::io::Cursor;
 
     use crate::Error;
+    use crate::Nbt;
     use crate::deserializer::from_bytes;
     use crate::nbt_byte_array;
     use crate::nbt_int_array;
@@ -520,5 +524,323 @@ mod test {
         assert_eq!(value, reconstructed);
     }
 
-    // TODO: More robust tests
+    // --- Edge case and robustness tests ---
+
+    #[test]
+    fn empty_string_field() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct EmptyStr {
+            value: String,
+        }
+        let test = EmptyStr {
+            value: String::new(),
+        };
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: EmptyStr = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert_eq!(test, result);
+    }
+
+    #[test]
+    fn long_string_value() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct LongStr {
+            value: String,
+        }
+        // NBT strings are prefixed with a u16 length, max 65535 bytes
+        let long_value = "A".repeat(10_000);
+        let test = LongStr {
+            value: long_value.clone(),
+        };
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: LongStr = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert_eq!(result.value, long_value);
+    }
+
+    #[test]
+    fn deeply_nested_compound() {
+        use crate::compound::NbtCompound;
+        use crate::tag::NbtTag;
+
+        // Build a 50-level deep nested compound
+        let depth = 50;
+        let mut innermost = NbtCompound::new();
+        innermost.put_int("value", 42);
+
+        let mut current = NbtTag::Compound(innermost);
+        for i in 0..depth {
+            let mut parent = NbtCompound::new();
+            parent.put(&format!("level_{i}"), current);
+            current = NbtTag::Compound(parent);
+        }
+
+        if let NbtTag::Compound(root) = &current {
+            let nbt = Nbt::new(String::new(), root.clone());
+            let bytes = nbt.write();
+
+            let mut cursor = Cursor::new(bytes.to_vec());
+            let mut reader = crate::deserializer::NbtReadHelper::new(&mut cursor);
+            let parsed = Nbt::read(&mut reader).unwrap();
+
+            // Navigate down to the value
+            let mut tag = &NbtTag::Compound(parsed.root_tag);
+            for i in (0..depth).rev() {
+                if let NbtTag::Compound(c) = tag {
+                    tag = c.get(&format!("level_{i}")).unwrap();
+                } else {
+                    panic!("Expected compound at level {i}");
+                }
+            }
+            if let NbtTag::Compound(c) = tag {
+                assert_eq!(c.get_int("value"), Some(42));
+            } else {
+                panic!("Expected innermost compound");
+            }
+        }
+    }
+
+    #[test]
+    fn large_byte_array() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct BigByteArray {
+            #[serde(serialize_with = "nbt_byte_array")]
+            data: Vec<u8>,
+        }
+        let test = BigByteArray {
+            data: vec![0xAB; 65536],
+        };
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: BigByteArray = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert_eq!(test, result);
+    }
+
+    #[test]
+    fn large_int_array() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct BigIntArray {
+            #[serde(serialize_with = "nbt_int_array")]
+            data: Vec<i32>,
+        }
+        let test = BigIntArray {
+            data: (0..10_000).collect(),
+        };
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: BigIntArray = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert_eq!(test, result);
+    }
+
+    #[test]
+    fn large_long_array() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct BigLongArray {
+            #[serde(serialize_with = "nbt_long_array")]
+            data: Vec<i64>,
+        }
+        let test = BigLongArray {
+            data: (0..10_000).map(|i| i * 1_000_000).collect(),
+        };
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: BigLongArray = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert_eq!(test, result);
+    }
+
+    #[test]
+    fn boundary_numeric_values() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct Boundaries {
+            byte_min: i8,
+            byte_max: i8,
+            short_min: i16,
+            short_max: i16,
+            int_min: i32,
+            int_max: i32,
+            long_min: i64,
+            long_max: i64,
+            float_pos_inf: f32,
+            float_neg_inf: f32,
+            double_pos_inf: f64,
+            double_neg_inf: f64,
+        }
+        let test = Boundaries {
+            byte_min: i8::MIN,
+            byte_max: i8::MAX,
+            short_min: i16::MIN,
+            short_max: i16::MAX,
+            int_min: i32::MIN,
+            int_max: i32::MAX,
+            long_min: i64::MIN,
+            long_max: i64::MAX,
+            float_pos_inf: f32::INFINITY,
+            float_neg_inf: f32::NEG_INFINITY,
+            double_pos_inf: f64::INFINITY,
+            double_neg_inf: f64::NEG_INFINITY,
+        };
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: Boundaries = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert_eq!(test, result);
+    }
+
+    #[test]
+    fn float_nan_roundtrip() {
+        #[derive(Serialize, Deserialize, Debug)]
+        struct NanTest {
+            f: f32,
+            d: f64,
+        }
+        let test = NanTest {
+            f: f32::NAN,
+            d: f64::NAN,
+        };
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: NanTest = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert!(result.f.is_nan());
+        assert!(result.d.is_nan());
+    }
+
+    #[test]
+    fn empty_compound_roundtrip() {
+        use crate::compound::NbtCompound;
+
+        let empty = NbtCompound::new();
+        let nbt = Nbt::new(String::new(), empty);
+        let bytes = nbt.write();
+
+        let mut cursor = Cursor::new(bytes.to_vec());
+        let mut reader = crate::deserializer::NbtReadHelper::new(&mut cursor);
+        let parsed = Nbt::read(&mut reader).unwrap();
+        assert!(parsed.root_tag.is_empty());
+    }
+
+    #[test]
+    fn many_fields_compound() {
+        use crate::compound::NbtCompound;
+
+        let mut compound = NbtCompound::new();
+        for i in 0..500 {
+            compound.put_int(&format!("field_{i}"), i);
+        }
+        let nbt = Nbt::new(String::new(), compound);
+        let bytes = nbt.write();
+
+        let mut cursor = Cursor::new(bytes.to_vec());
+        let mut reader = crate::deserializer::NbtReadHelper::new(&mut cursor);
+        let parsed = Nbt::read(&mut reader).unwrap();
+
+        for i in 0..500 {
+            assert_eq!(parsed.root_tag.get_int(&format!("field_{i}")), Some(i));
+        }
+    }
+
+    #[test]
+    fn truncated_nbt_data() {
+        // A valid NBT header but truncated before the compound ends
+        let partial_bytes: Vec<u8> = vec![
+            0x0A, // Compound tag
+            0x00, 0x00, // Empty name
+            0x03, // Int tag
+            0x00, 0x01, // Name length = 1
+            0x78, // Name = "x"
+            0x00, 0x00, // Truncated: only 2 of 4 int bytes
+        ];
+
+        let result: Result<Test, _> = from_bytes(Cursor::new(partial_bytes));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn unknown_tag_id() {
+        // A compound containing a tag with invalid type ID 0xFF
+        let bad_bytes: Vec<u8> = vec![
+            0x0A, // Compound tag
+            0x00, 0x00, // Empty name
+            0xFF, // Invalid tag type
+            0x00, 0x01, // Name length = 1
+            0x78, // Name = "x"
+        ];
+
+        let result: Result<Test, _> = from_bytes(Cursor::new(bad_bytes));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn empty_bytes_error() {
+        let empty: Vec<u8> = vec![];
+        let result: Result<Test, _> = from_bytes(Cursor::new(empty));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn special_characters_in_strings() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct SpecialChars {
+            value: String,
+        }
+        let test = SpecialChars {
+            value: "hello\nworld\ttab\\backslash\"quote".to_string(),
+        };
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: SpecialChars = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert_eq!(test, result);
+    }
+
+    #[test]
+    fn unicode_string() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct UnicodeStr {
+            value: String,
+        }
+        let test = UnicodeStr {
+            value: "日本語テスト 🎮 Ünïcödë".to_string(),
+        };
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: UnicodeStr = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert_eq!(test, result);
+    }
+
+    #[test]
+    fn empty_list_field() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct EmptyList {
+            items: Vec<i32>,
+        }
+        let test = EmptyList { items: vec![] };
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: EmptyList = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert_eq!(test, result);
+    }
+
+    #[test]
+    fn large_list_of_compounds() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct Item {
+            id: i32,
+            name: String,
+        }
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct Inventory {
+            items: Vec<Item>,
+        }
+
+        let items: Vec<Item> = (0..1000)
+            .map(|i| Item {
+                id: i,
+                name: format!("item_{i}"),
+            })
+            .collect();
+        let test = Inventory { items };
+
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let result: Inventory = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
+        assert_eq!(test, result);
+    }
 }
