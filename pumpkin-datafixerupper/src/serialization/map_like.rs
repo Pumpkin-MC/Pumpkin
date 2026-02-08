@@ -12,5 +12,5 @@ pub trait MapLike: Display {
     fn get_str(&self, key: &str) -> Option<&Self::Value>;
 
     /// Returns an `Iterator` to each key-value pair in this map-like, both of its *dynamic type*.
-    fn entries(&self) -> impl Iterator<Item = (&Self::Value, &Self::Value)>;
+    fn iter(&self) -> impl Iterator<Item = (Self::Value, &Self::Value)> + '_;
 }

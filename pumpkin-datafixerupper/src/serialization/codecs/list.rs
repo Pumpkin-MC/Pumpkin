@@ -11,7 +11,7 @@ use crate::serialization::{
 /// A list codec type. For a type `A`, this codec serializes/deserializes a [`Vec<A>`].
 /// - `C` is the codec used for each element of this list.
 /// - Also, `MIN` specifies the minimum number of element this codec has (inclusive), while
-/// `MIN` specifies the maximum number of element this codec has (inclusive).
+///   `MIN` specifies the maximum number of element this codec has (inclusive).
 #[derive(Debug)]
 pub struct ListCodec<C, const MIN: usize, const MAX: usize>
 where
@@ -47,9 +47,9 @@ impl<C: Codec, const MIN: usize, const MAX: usize> Encoder for ListCodec<C, MIN,
     ) -> DataResult<T> {
         let size = input.len();
         if size < MIN {
-            ListCodec::<C, MIN, MAX>::create_too_short_error(size)
+            Self::create_too_short_error(size)
         } else if size > MAX {
-            ListCodec::<C, MIN, MAX>::create_too_long_error(size)
+            Self::create_too_long_error(size)
         } else {
             let mut builder = ops.list_builder();
             for e in input {
@@ -80,22 +80,22 @@ where
             for element in i {
                 total_count += 1;
                 if elements.len() > MAX {
-                    return ListCodec::<C, MIN, MAX>::create_too_long_error(elements.len());
+                    return Self::create_too_long_error(elements.len());
                 }
                 let element_result = self.element_codec.decode(element.clone(), ops);
                 if element_result.is_error() {
                     failed.push(element.clone());
                 }
-                result = result.apply_2_and_make_stable(|r, _| r, element_result)
+                result = result.apply_2_and_make_stable(|r, _| r, element_result);
             }
 
             if elements.len() < MIN {
-                return ListCodec::<C, MIN, MAX>::create_too_short_error(elements.len());
+                return Self::create_too_short_error(elements.len());
             }
 
             let pair = (elements, ops.create_list(failed));
             if total_count > MAX {
-                result = ListCodec::<C, MIN, MAX>::create_too_long_error(total_count);
+                result = Self::create_too_long_error(total_count);
             }
             result.with_complete_or_partial(pair)
         })
