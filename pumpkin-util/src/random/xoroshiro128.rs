@@ -1,3 +1,5 @@
+use md5::Digest;
+
 use crate::population_seed_fn;
 
 use super::{
@@ -151,7 +153,7 @@ impl RandomDeriverImpl for XoroshiroSplitter {
     }
 
     fn split_string(&self, seed: &str) -> RandomGenerator {
-        let bytes = md5::compute(seed.as_bytes());
+        let bytes = md5::Md5::digest(seed.as_bytes());
         let l = u64::from_be_bytes(bytes[0..8].try_into().expect("incorrect length"));
         let m = u64::from_be_bytes(bytes[8..16].try_into().expect("incorrect length"));
 

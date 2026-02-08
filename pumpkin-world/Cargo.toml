@@ -17,8 +17,6 @@ bytes.workspace = true
 tokio = { workspace = true, features = [
     "macros",
     "rt-multi-thread",
-    "sync",
-    "io-std",
     "signal",
     "fs",
     "io-util",
@@ -65,7 +63,7 @@ env_logger.workspace = true
 # Allows us to modify the config
 pumpkin-config = { workspace = true, features = ["test_helper"] }
 # Deserialize NaN and Inf
-serde_json5.workspace = true
+json5.workspace = true
 
 [[bench]]
 name = "chunk"

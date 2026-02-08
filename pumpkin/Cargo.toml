@@ -58,7 +58,7 @@ num-bigint.workspace = true
 rustyline.workspace = true
 
 # encryption
-rsa = { workspace = true, features = ["sha1"] }
+rsa.workspace = true
 pkcs8.workspace = true
 
 # authentication
@@ -78,7 +78,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 # Remove time in favor of chrono?
-time = { workspace = true, features = ["parsing", "macros"] }
+time = { workspace = true, features = ["macros", "parsing"] }
 
 # plugins
 libloading.workspace = true

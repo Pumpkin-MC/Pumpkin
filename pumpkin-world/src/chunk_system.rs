@@ -10,14 +10,14 @@ use crate::block::RawBlockState;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections};
 use crate::generation::biome_coords;
+use crate::generation::height_limit::HeightLimitView;
+use crossfire::*;
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
-
-use crate::generation::height_limit::HeightLimitView;
 
 use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
 use crate::level::{Level, SyncChunk};
@@ -47,7 +47,7 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData;
 use crate::chunk_system::Chunk::Proto;
 use crate::chunk_system::StagedChunkEnum::{Biomes, Empty, Features, Full, Noise, Surface};
-use crossfire::compat::AsyncRx;
+use crossfire::AsyncRx;
 use pumpkin_data::chunk::ChunkStatus;
 use rustc_hash::{FxHashMap, FxHashSet};
 use slotmap::{Key, SlotMap, new_key_type};
@@ -1390,10 +1390,10 @@ pub struct GenerationSchedule {
 
     io_lock: IOLock,
     running_task_count: u16,
-    recv_chunk: crossfire::compat::MRx<(ChunkPos, RecvChunk)>,
-    io_read: crossfire::compat::MTx<ChunkPos>,
-    io_write: crossfire::compat::Tx<Vec<(ChunkPos, Chunk)>>,
-    generate: crossfire::compat::MTx<(ChunkPos, Cache, StagedChunkEnum)>,
+    recv_chunk: crossfire::MRx<crossfire::mpmc::List<(ChunkPos, RecvChunk)>>,
+    io_read: crossfire::MTx<crossfire::mpmc::Array<ChunkPos>>,
+    io_write: crossfire::Tx<crossfire::spsc::List<Vec<(ChunkPos, Chunk)>>>,
+    generate: crossfire::MTx<crossfire::mpmc::Array<(ChunkPos, Cache, StagedChunkEnum)>>,
     listener: Arc<ChunkListener>,
 }
 
@@ -1406,14 +1406,14 @@ impl GenerationSchedule {
         listener: Arc<ChunkListener>,
         thread_tracker: &mut Vec<thread::JoinHandle<()>>,
     ) {
-        let (send_chunk, recv_chunk) = crossfire::compat::mpmc::unbounded_blocking();
+        let (send_chunk, recv_chunk) = crossfire::mpmc::unbounded_blocking();
 
         let (send_read_io, recv_read_io) =
-            crossfire::compat::mpmc::bounded_tx_blocking_rx_async(io_read_thread_count + 5);
+            crossfire::mpmc::bounded_blocking_async(io_read_thread_count + 5);
 
-        let (send_write_io, recv_write_io) = crossfire::compat::spsc::unbounded_async();
+        let (send_write_io, recv_write_io) = crossfire::spsc::unbounded_async();
 
-        let (send_gen, recv_gen) = crossfire::compat::mpmc::bounded_blocking(gen_thread_count + 5);
+        let (send_gen, recv_gen) = crossfire::mpmc::bounded_blocking(gen_thread_count + 5);
 
         let io_lock = Arc::new((Mutex::new(HashMapType::default()), Condvar::new()));
 
@@ -1632,8 +1632,8 @@ impl GenerationSchedule {
     }
 
     async fn io_read_work(
-        recv: crossfire::compat::MAsyncRx<ChunkPos>,
-        send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
+        recv: crossfire::MAsyncRx<crossfire::mpmc::Array<ChunkPos>>,
+        send: crossfire::MTx<crossfire::mpmc::List<(ChunkPos, RecvChunk)>>,
         level: Arc<Level>,
         lock: IOLock,
     ) {
@@ -1707,7 +1707,11 @@ impl GenerationSchedule {
         log::debug!("io read thread stop");
     }
 
-    async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
+    async fn io_write_work(
+        recv: AsyncRx<crossfire::spsc::List<Vec<(ChunkPos, Chunk)>>>,
+        level: Arc<Level>,
+        lock: IOLock,
+    ) {
         log::info!("io write thread start",);
         while let Ok(data) = recv.recv().await {
             // debug!("io write thread receive chunks size {}", data.len());
@@ -1754,8 +1758,8 @@ impl GenerationSchedule {
     }
 
     fn generation_work(
-        recv: crossfire::compat::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
-        send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
+        recv: crossfire::MRx<crossfire::mpmc::Array<(ChunkPos, Cache, StagedChunkEnum)>>,
+        send: crossfire::MTx<crossfire::mpmc::List<(ChunkPos, RecvChunk)>>,
         level: Arc<Level>,
     ) {
         log::debug!(

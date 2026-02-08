@@ -30,7 +30,7 @@ cfb8.workspace = true
 # compression
 async-compression = { workspace = true, features = ["tokio", "zlib"] }
 
-take_mut.workspace = true
+replace_with.workspace = true
 bitflags.workspace = true
 
 [dev-dependencies]
