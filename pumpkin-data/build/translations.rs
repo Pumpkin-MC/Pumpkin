@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::{collections::BTreeMap, fs};
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/en_us.json");
 
     let en_us: BTreeMap<String, String> = serde_json::from_str(
@@ -16,13 +16,13 @@ pub(crate) fn build() -> TokenStream {
         let clean_name = name.to_uppercase().replace(['.', '-'], "_");
         let ident = format_ident!("{}", clean_name);
 
-        if !value.is_empty() {
+        if value.is_empty() {
             constants.extend(quote! {
-                #[doc = #value]
                 pub const #ident: &str = #name;
             });
         } else {
             constants.extend(quote! {
+                #[doc = #value]
                 pub const #ident: &str = #name;
             });
         }

@@ -4,7 +4,7 @@ use quote::quote;
 use serde_json::Value;
 use std::fs;
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/registry/1_21_9_synced_registries.json");
     println!("cargo:rerun-if-changed=../assets/registry/1_21_11_synced_registries.json");
 

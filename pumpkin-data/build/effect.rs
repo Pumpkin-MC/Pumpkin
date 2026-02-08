@@ -58,7 +58,7 @@ impl MobEffectCategory {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/effect.json");
 
     let effects: BTreeMap<String, Effect> =

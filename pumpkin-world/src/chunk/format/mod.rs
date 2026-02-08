@@ -134,12 +134,10 @@ impl ChunkData {
                 // Map light data to the LightContainer enum
                 let block_light = section
                     .block_light
-                    .map(LightContainer::Full)
-                    .unwrap_or(LightContainer::Empty(0)); // Standard default
+                    .map_or(LightContainer::Empty(0), LightContainer::Full); // Standard default
                 let sky_light = section
                     .sky_light
-                    .map(LightContainer::Full)
-                    .unwrap_or(LightContainer::Empty(15)); // Sky is usually bright
+                    .map_or(LightContainer::Empty(15), LightContainer::Full); // Sky is usually bright
 
                 // Convert NBT to Palettes
                 let block_palette = section

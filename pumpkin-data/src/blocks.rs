@@ -117,12 +117,14 @@ impl Block {
     }
 
     /// Returns whether this block is solid (based on default state)
-    pub fn is_solid(&self) -> bool {
+    #[must_use]
+    pub const fn is_solid(&self) -> bool {
         self.default_state.is_solid()
     }
 
     /// Returns whether this block is air (based on default state)
-    pub fn is_air(&self) -> bool {
+    #[must_use]
+    pub const fn is_air(&self) -> bool {
         self.default_state.is_air()
     }
 }

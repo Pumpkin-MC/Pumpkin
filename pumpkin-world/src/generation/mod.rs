@@ -69,44 +69,46 @@ impl GlobalRandomConfig {
 }
 
 pub mod section_coords {
-    use num_traits::PrimInt;
-
     #[inline]
-    pub fn block_to_section<T: PrimInt>(coord: T) -> T {
+    #[must_use]
+    pub const fn block_to_section(coord: i32) -> i32 {
         coord >> 4
     }
 
     #[must_use]
-    pub fn get_offset_pos(chunk_coord: i32, offset: i32) -> i32 {
+    pub const fn get_offset_pos(chunk_coord: i32, offset: i32) -> i32 {
         section_to_block(chunk_coord) + offset
     }
 
     #[inline]
-    pub fn section_to_block<T: PrimInt>(coord: T) -> T {
+    #[must_use]
+    pub const fn section_to_block(coord: i32) -> i32 {
         coord << 4
     }
 }
 
 pub mod biome_coords {
-    use num_traits::PrimInt;
-
     #[inline]
-    pub fn from_block<T: PrimInt>(coord: T) -> T {
+    #[must_use]
+    pub const fn from_block(coord: i32) -> i32 {
         coord >> 2
     }
 
     #[inline]
-    pub fn to_block<T: PrimInt>(coord: T) -> T {
+    #[must_use]
+    pub const fn to_block(coord: i32) -> i32 {
         coord << 2
     }
 
     #[inline]
-    pub fn from_chunk<T: PrimInt>(coord: T) -> T {
+    #[must_use]
+    pub const fn from_chunk(coord: i32) -> i32 {
         coord << 2
     }
 
     #[inline]
-    pub fn to_chunk<T: PrimInt>(coord: T) -> T {
+    #[must_use]
+    pub const fn to_chunk(coord: i32) -> i32 {
         coord >> 2
     }
 }

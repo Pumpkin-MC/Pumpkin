@@ -59,9 +59,9 @@ mod world_event;
 pub const OUT_DIR: &str = "src/generated";
 
 pub fn main() {
-    fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
-
     type BuilderFn = fn() -> TokenStream;
+
+    fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
 
     let build_functions: Vec<(BuilderFn, &str)> = vec![
         (packet::build, "packet.rs"),
@@ -121,9 +121,10 @@ pub fn main() {
 
         let header = "/* This file is generated. Do not edit manually. */\n";
 
-        let final_code = format_code(&raw_code)
-            .map(|formatted| format!("{}{}", header, formatted))
-            .unwrap_or_else(|_| format!("{}{}", header, raw_code));
+        let final_code = format_code(&raw_code).map_or_else(
+            |_| format!("{header}{raw_code}"),
+            |formatted| format!("{header}{formatted}"),
+        );
 
         write_generated_file(&final_code, file);
     });
@@ -164,9 +165,8 @@ pub fn format_code(unformatted_code: &str) -> Result<String, RustFmtError> {
         .stderr(Stdio::null())
         .spawn();
 
-    let mut child = match child_result {
-        Ok(c) => c,
-        Err(_) => return Err(RustFmtError),
+    let Ok(mut child) = child_result else {
+        return Err(RustFmtError);
     };
 
     // Write the code to rustfmt's stdin

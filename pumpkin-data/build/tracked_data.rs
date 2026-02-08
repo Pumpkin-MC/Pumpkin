@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::{collections::BTreeMap, fs};
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_7_tracked_data.json");
     println!("cargo:rerun-if-changed=../assets/tracked_data/1_21_11_tracked_data.json");
 

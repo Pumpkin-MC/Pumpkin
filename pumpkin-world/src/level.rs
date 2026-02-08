@@ -14,7 +14,6 @@ use crate::{
 };
 use crossbeam::channel::Sender;
 use dashmap::DashMap;
-use num_traits::Zero;
 use pumpkin_config::{chunk::ChunkConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
@@ -404,7 +403,7 @@ impl Level {
                 let has_watchers = self
                     .chunk_watchers
                     .get(pos)
-                    .is_some_and(|count| !count.is_zero());
+                    .is_some_and(|count| *count != 0);
 
                 if has_watchers {
                     return None;
@@ -426,7 +425,7 @@ impl Level {
         });
     }
 
-    pub async fn get_tick_data(&self) -> TickData {
+    pub fn get_tick_data(&self) -> TickData {
         let mut ticks = TickData {
             block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
@@ -490,7 +489,7 @@ impl Level {
     }
 
     pub fn clean_memory(&self) {
-        self.chunk_watchers.retain(|_, watcher| !watcher.is_zero());
+        self.chunk_watchers.retain(|_, watcher| *watcher != 0);
         self.loaded_entity_chunks
             .retain(|at, _| self.chunk_watchers.get(at).is_some());
 
@@ -536,7 +535,7 @@ impl Level {
             let mut lock = self.chunk_loading.lock().unwrap();
             lock.remove_ticket(pos, 31);
             lock.send_change();
-        }
+        };
 
         chunk
     }

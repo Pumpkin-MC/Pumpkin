@@ -24,7 +24,7 @@ impl LookControl {
     pub fn look_at_entity(&mut self, mob: &dyn Mob, entity: &Arc<dyn EntityBase>) {
         let entity = entity.get_entity();
         let pos = entity.pos.load();
-        self.look_at_position(mob, pos);
+        self.look_at(mob, pos.x, entity.get_eye_y(), pos.z);
     }
 
     pub fn look_at_entity_with_range(
@@ -35,7 +35,13 @@ impl LookControl {
     ) {
         let entity = entity.get_entity();
         let pos = entity.pos.load();
-        self.look_at_with_range(pos.x, pos.y, pos.z, max_yaw_change, max_pitch_change);
+        self.look_at_with_range(
+            pos.x,
+            entity.get_eye_y(),
+            pos.z,
+            max_yaw_change,
+            max_pitch_change,
+        );
     }
 
     pub fn look_at(&mut self, mob: &dyn Mob, x: f64, y: f64, z: f64) {

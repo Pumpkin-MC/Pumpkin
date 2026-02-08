@@ -39,7 +39,7 @@ pub struct Dimension {
 //     }
 // }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/dimension.json");
 
     let dimensions: BTreeMap<String, Dimension> = serde_json::from_str(
