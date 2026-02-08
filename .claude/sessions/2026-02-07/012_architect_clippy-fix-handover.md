@@ -5,16 +5,15 @@
 **Branch:** `claude/architect-setup-LkWIY` at `6b1dae4` (master HEAD)
 **Status:** HANDOVER — delegated to owning agents
 
-## Actual Error Count: 81 (7 nbt + 11 protocol + 63 inventory)
+## Actual Error Count: 18 (NOT 81+)
 
-The 63 pumpkin-inventory errors were real but hidden — they only surfaced
-once pumpkin-protocol compiled clean (protocol lib errors blocked inventory).
-The 37 pumpkin binary errors are all passthrough from inventory (0 new errors in pumpkin itself).
+The 63 pumpkin-inventory + 37 pumpkin binary errors reported earlier were
+self-inflicted by botched agent/script edits that weren't fully reverted.
+Actual errors are 7 (pumpkin-nbt) + 11 (pumpkin-protocol) = 18 total.
 
 Delegated to owners via prompt updates:
-- **Storage agent**: 7 pumpkin-nbt errors (test code only) — **DONE (PR #83 merged)**
-- **Protocol agent**: 11 pumpkin-protocol errors (dto/mod.rs + custom_payload.rs) — **DONE (PR #82 merged)**
-- **Items agent**: 63 pumpkin-inventory errors (8 categories, detailed fix table in prompt)
+- **Storage agent**: 7 pumpkin-nbt errors (test code only)
+- **Protocol agent**: 11 pumpkin-protocol errors (dto/mod.rs + custom_payload.rs)
 
 ## What Went Wrong
 
@@ -42,9 +41,8 @@ Categories:
 - **3 underscore-prefixed bindings**: `_banner` → `banner` in special_recipes.rs, `_player` → `player` in stonecutter.rs
 - **1 needless_pass_by_value**: container_click.rs test helper — fix with `#[allow(clippy::needless_pass_by_value)]`
 
-### pumpkin (main binary) — 0 new errors
-All 63 errors from `cargo clippy -p pumpkin` are passthrough from pumpkin-inventory.
-Once inventory is fixed, the full workspace will be clean.
+### pumpkin (main binary) — NOT INVESTIGATED
+37 errors visible when pumpkin-inventory compiles clean. Unknown categories — likely same lint families (must_use, doc_markdown, etc.).
 
 ## What Went Wrong
 
@@ -80,6 +78,7 @@ All screen handlers follow the same async constructor pattern for API consistenc
 
 ## Branch State
 
-- `claude/architect-setup-LkWIY` at `fa387b0`
-- PRs #82 (Protocol clippy) and #83 (Storage clippy) merged into master
-- Items agent delegation committed, pending their fix
+- `claude/architect-setup-LkWIY` at `6b1dae4` = master HEAD
+- 0 commits ahead, 0 behind
+- All changes reverted, clean working tree
+- PRs #80-81 (WorldGen chunk events, Plugin chunk event fixes) included in base
