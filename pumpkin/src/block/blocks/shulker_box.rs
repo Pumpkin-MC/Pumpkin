@@ -8,6 +8,7 @@ use crate::block::{
 
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::{self};
+use pumpkin_data::translation;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -37,7 +38,7 @@ impl ScreenHandlerFactory for ShulkerBoxScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.shulkerBox", &[])
+        TextComponent::translate(translation::CONTAINER_SHULKERBOX, &[])
     }
 }
 

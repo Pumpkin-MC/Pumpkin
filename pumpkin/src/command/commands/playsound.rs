@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 use rand::{RngExt, rng};
 
@@ -149,7 +150,7 @@ impl CommandExecutor for Executor {
                 if players_who_heard == 1 {
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.playsound.success.single",
+                            translation::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
                             [
                                 TextComponent::text(sound_name),
                                 targets[0].get_display_name().await,
@@ -159,7 +160,7 @@ impl CommandExecutor for Executor {
                 } else {
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.playsound.success.multiple",
+                            translation::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
                             [
                                 TextComponent::text(sound_name),
                                 TextComponent::text(players_who_heard.to_string()),
