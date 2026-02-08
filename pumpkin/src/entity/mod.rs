@@ -866,11 +866,7 @@ impl Entity {
         */
     }
 
-    async fn tick_block_collisions(
-        &self,
-        caller: &Arc<dyn EntityBase>,
-        server: &Server,
-    ) -> bool {
+    async fn tick_block_collisions(&self, caller: &Arc<dyn EntityBase>, server: &Server) -> bool {
         let bounding_box = self.bounding_box.load();
 
         let min = bounding_box.min_block_pos();
@@ -910,14 +906,7 @@ impl Entity {
             if bounding_box.intersects(&block_aabb) {
                 world
                     .block_registry
-                    .on_entity_collision(
-                        block,
-                        &world,
-                        caller.as_ref(),
-                        &pos,
-                        state,
-                        server,
-                    )
+                    .on_entity_collision(block, &world, caller.as_ref(), &pos, state, server)
                     .await;
             }
         }

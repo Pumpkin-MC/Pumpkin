@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use crate::world::World;
 use pumpkin_data::{Block, tag, tag::Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
-use crate::world::World;
+use std::sync::Arc;
 
 pub mod bamboo;
 pub mod bamboo_sapling;
@@ -46,7 +46,7 @@ trait PlantBlockBase {
         self.can_plant_on_top(block_accessor, &block_pos.down())
             .await
     }
-    
+
     async fn grow(&self, _world: &Arc<World>, _pos: &BlockPos) {
         unimplemented!();
     }
