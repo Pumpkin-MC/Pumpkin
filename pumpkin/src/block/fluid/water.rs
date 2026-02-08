@@ -84,7 +84,7 @@ impl FlowingFluid for FlowingWater {
     }
 
     fn get_max_flow_distance(&self, _world: &World) -> i32 {
-        5
+        4
     }
 
     /// Determines if water can convert to source blocks based on game rules.
