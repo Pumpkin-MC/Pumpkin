@@ -29,8 +29,8 @@ use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot
 use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{
-        CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
-        CUpdateEntityRot, Metadata,
+        CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
+        CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata,
     },
 };
 use pumpkin_util::math::vector3::Axis;
@@ -75,6 +75,7 @@ pub mod projectile;
 pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
+pub mod vehicle;
 
 mod combat;
 pub mod predicate;
@@ -206,6 +207,18 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     fn on_hit(&self, _hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn interact<'a>(
+        &'a self,
+        _entity_self: Arc<dyn EntityBase>,
+        _player: &'a Arc<Player>,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async { false })
+    }
+
+    fn set_paddle_state(&self, _left: bool, _right: bool) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {})
     }
 
@@ -374,6 +387,8 @@ pub struct Entity {
     pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
     /// The vehicle that entity is in
     pub vehicle: Mutex<Option<Arc<dyn EntityBase>>>,
+    /// Cooldown before entity can mount again after dismounting
+    pub riding_cooldown: AtomicI32,
     /// The age of the entity in ticks. Negative values indicate a baby.
     pub age: AtomicI32,
 
@@ -469,6 +484,7 @@ impl Entity {
             removal_reason: AtomicCell::new(None),
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
+            riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
@@ -2038,6 +2054,128 @@ impl Entity {
         vehicle.is_some()
     }
 
+    pub async fn add_passenger(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+    ) {
+        let passenger_entity = passenger.get_entity();
+        *passenger_entity.vehicle.lock().await = Some(vehicle);
+
+        let mut passengers = self.passengers.lock().await;
+        passengers.push(passenger);
+
+        let passenger_ids: Vec<VarInt> = passengers
+            .iter()
+            .map(|p| VarInt(p.get_entity().entity_id))
+            .collect();
+
+        let world = self.world.load();
+        world
+            .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
+            .await;
+    }
+
+    pub async fn remove_passenger(&self, passenger_id: i32) {
+        let mut passengers = self.passengers.lock().await;
+        let removed_passenger = if let Some(idx) = passengers
+            .iter()
+            .position(|p| p.get_entity().entity_id == passenger_id)
+        {
+            let passenger = passengers.remove(idx);
+            *passenger.get_entity().vehicle.lock().await = None;
+            Some(passenger)
+        } else {
+            None
+        };
+
+        let passenger_ids: Vec<VarInt> = passengers
+            .iter()
+            .map(|p| VarInt(p.get_entity().entity_id))
+            .collect();
+        drop(passengers);
+
+        let world = self.world.load();
+        world
+            .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
+            .await;
+
+        if let Some(passenger) = removed_passenger {
+            let vehicle_box = self.bounding_box.load();
+            let passenger_entity = passenger.get_entity();
+            let passenger_yaw = passenger_entity.yaw.load();
+            let passenger_width = passenger_entity.entity_dimension.load().width as f64;
+            let vehicle_width = self.entity_dimension.load().width as f64;
+
+            let offset_dist =
+                (vehicle_width * std::f64::consts::SQRT_2 + passenger_width + 0.00001) / 2.0;
+            let yaw_rad = (-passenger_yaw).to_radians();
+            let sin_yaw = f64::from(yaw_rad.sin());
+            let cos_yaw = f64::from(yaw_rad.cos());
+            let max_component = sin_yaw.abs().max(cos_yaw.abs());
+            let offset_x = sin_yaw * offset_dist / max_component;
+            let offset_z = cos_yaw * offset_dist / max_component;
+
+            let target_x = self.pos.load().x + offset_x;
+            let target_z = self.pos.load().z + offset_z;
+            let target_block_y = vehicle_box.max.y.floor() as i32;
+            let target_block_pos = BlockPos(Vector3::new(
+                target_x.floor() as i32,
+                target_block_y,
+                target_z.floor() as i32,
+            ));
+            let below_block_pos = BlockPos(Vector3::new(
+                target_x.floor() as i32,
+                target_block_y - 1,
+                target_z.floor() as i32,
+            ));
+
+            let world = self.world.load();
+            let below_state_id = world.get_block_state_id(&below_block_pos).await;
+            let is_water = Fluid::from_state_id(below_state_id).is_some();
+
+            let dismount_pos = if is_water {
+                Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z)
+            } else {
+                let target_state = world.get_block_state(&target_block_pos).await;
+                let below_state = world.get_block_state(&below_block_pos).await;
+
+                let target_is_solid = !target_state.is_air();
+                let below_is_solid = !below_state.is_air();
+
+                if below_is_solid && !target_is_solid {
+                    Vector3::new(target_x, f64::from(target_block_y), target_z)
+                } else if !below_is_solid {
+                    Vector3::new(target_x, f64::from(target_block_y - 1) + 1.0, target_z)
+                } else {
+                    Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z)
+                }
+            };
+
+            if let Some(player) = passenger.get_player() {
+                let teleport_id = player
+                    .teleport_id_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1;
+                player.living_entity.entity.set_pos(dismount_pos);
+                *player.awaiting_teleport.lock().await = Some((teleport_id.into(), dismount_pos));
+                player
+                    .client
+                    .send_packet_now(&CPlayerPosition::new(
+                        teleport_id.into(),
+                        dismount_pos,
+                        Vector3::new(0.0, 0.0, 0.0),
+                        passenger_yaw,
+                        0.0,
+                        Vec::new(),
+                    ))
+                    .await;
+            } else {
+                passenger_entity.set_pos(dismount_pos);
+            }
+        }
+    }
+
     pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
         if self.pos.load().y < f64::from(self.world.load().dimension.min_y) - 64.0 {
             dyn_self.tick_in_void(dyn_self).await;
@@ -2167,6 +2305,12 @@ impl EntityBase for Entity {
 
             // Tick freeze state (powder snow)
             self.tick_frozen(&*caller).await;
+
+            let riding_cooldown = self.riding_cooldown.load(Ordering::Relaxed);
+            if riding_cooldown > 0 {
+                self.riding_cooldown
+                    .store(riding_cooldown - 1, Ordering::Relaxed);
+            }
         })
     }
 
