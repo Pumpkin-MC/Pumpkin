@@ -51,7 +51,6 @@ impl Default for AuthenticationConfig {
 pub struct PlayerProfileConfig {
     /// Allow players flagged by Mojang (e.g. banned, forced name change).
     pub allow_banned_players: bool,
-
     /// Depends on [`PlayerProfileConfig::allow_banned_players`].
     pub allowed_actions: Vec<ProfileAction>,
 }

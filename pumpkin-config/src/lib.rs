@@ -85,42 +85,30 @@ pub struct BasicConfiguration {
     pub bedrock_edition_address: SocketAddr,
     /// The seed for the world generation.
     pub seed: Seed,
-
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
     pub max_players: u32,
-
     /// The maximum view distance for players.
     pub view_distance: NonZeroU8,
-
     /// The maximum simulated view distance.
     pub simulation_distance: NonZeroU8,
-
     /// The default game difficulty.
     pub default_difficulty: Difficulty,
     /// The op level assigned by the /op command.
     pub op_permission_level: PermissionLvl,
-
     /// Whether the Nether dimension is enabled.
     pub allow_nether: bool,
-
     /// Whether the End dimension is enabled.
     pub allow_end: bool,
-
     /// Whether the server is in hardcore mode.
     pub hardcore: bool,
-
     /// Whether online mode is enabled. Requires valid Minecraft accounts.
     pub online_mode: bool,
-
     /// Whether packet encryption is enabled. Required when online mode is enabled.
     pub encryption: bool,
-
     /// Message of the Day; the server's description displayed on the status screen.
     pub motd: String,
-
     /// The server's ticks per second.
     pub tps: f32,
-
     /// The default gamemode for players.
     pub default_gamemode: GameMode,
     /// If the server forces the gamemode on-join.
