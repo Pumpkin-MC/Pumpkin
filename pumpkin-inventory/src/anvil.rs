@@ -29,6 +29,12 @@ pub struct AnvilInventory {
     dirty: std::sync::atomic::AtomicBool,
 }
 
+impl Default for AnvilInventory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnvilInventory {
     #[must_use]
     pub fn new() -> Self {
@@ -105,6 +111,12 @@ impl Clearable for AnvilInventory {
 pub struct AnvilOutputSlot {
     id: std::sync::atomic::AtomicU8,
     result: Arc<Mutex<ItemStack>>,
+}
+
+impl Default for AnvilOutputSlot {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AnvilOutputSlot {
@@ -185,8 +197,10 @@ impl Slot for AnvilOutputSlot {
 /// 1. Repair: two same-type damageable items → combined durability
 /// 2. Enchant combine: item + enchanted book or same item → merged enchantments
 /// 3. Material repair: item + repair material → restore durability
+///
 /// TODO: Renaming (requires text input packet from client)
-/// TODO: RepairCost tracking (component is stub)
+/// TODO: `RepairCost` tracking (component is stub)
+#[must_use]
 pub fn compute_anvil_result(
     left: &ItemStack,
     right: &ItemStack,
@@ -281,7 +295,7 @@ fn merge_enchantments(target: &mut ItemStack, source: &ItemStack) -> i32 {
 /// We check if the material is in any repair tag, then verify the item belongs to
 /// the matching material category via registry key prefix.
 ///
-/// TODO: When RepairableImpl is no longer a stub, query `item.repairable` directly.
+/// TODO: When `RepairableImpl` is no longer a stub, query `item.repairable` directly.
 fn is_repair_material(item: &'static Item, material: &'static Item) -> bool {
     let name = item
         .registry_key
@@ -322,6 +336,7 @@ pub struct AnvilScreenHandler {
 }
 
 impl AnvilScreenHandler {
+    #[allow(clippy::unused_async)]
     pub async fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -343,7 +358,7 @@ impl AnvilScreenHandler {
         )));
         // Slot 1: Right input
         handler.add_slot(Arc::new(crate::slot::NormalSlot::new(
-            inventory.clone(),
+            inventory,
             1,
         )));
         // Slot 2: Output

@@ -29,6 +29,12 @@ pub struct LoomInventory {
     dirty: std::sync::atomic::AtomicBool,
 }
 
+impl Default for LoomInventory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LoomInventory {
     #[must_use]
     pub fn new() -> Self {
@@ -108,6 +114,12 @@ pub struct LoomOutputSlot {
     result: Arc<Mutex<ItemStack>>,
 }
 
+impl Default for LoomOutputSlot {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LoomOutputSlot {
     #[must_use]
     pub fn new() -> Self {
@@ -178,11 +190,13 @@ impl Slot for LoomOutputSlot {
 }
 
 /// Check if an item is a banner (any color).
+#[must_use]
 pub fn is_banner(item: &'static Item) -> bool {
     item.has_tag(&tag::Item::MINECRAFT_BANNERS)
 }
 
 /// Check if an item is a dye.
+#[must_use]
 pub fn is_dye(item: &'static Item) -> bool {
     item.has_tag(&tag::Item::MINECRAFT_DYEABLE)
         || item == &Item::WHITE_DYE
@@ -204,6 +218,7 @@ pub fn is_dye(item: &'static Item) -> bool {
 }
 
 /// Check if an item is a banner pattern item (special patterns like creeper, skull, etc.).
+#[must_use]
 pub fn is_banner_pattern_item(item: &'static Item) -> bool {
     item == &Item::CREEPER_BANNER_PATTERN
         || item == &Item::SKULL_BANNER_PATTERN
@@ -229,7 +244,7 @@ pub fn is_banner_pattern_item(item: &'static Item) -> bool {
 /// Window properties:
 /// - 0: Selected pattern index
 ///
-/// TODO: Pattern application requires BannerPatternsImpl (currently stub).
+/// TODO: Pattern application requires `BannerPatternsImpl` (currently stub).
 /// The output banner should be a copy of the input with the selected pattern
 /// applied as a new layer using the dye color.
 pub struct LoomScreenHandler {
@@ -241,6 +256,7 @@ pub struct LoomScreenHandler {
 }
 
 impl LoomScreenHandler {
+    #[allow(clippy::unused_async)]
     pub async fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -267,7 +283,7 @@ impl LoomScreenHandler {
         )));
         // Slot 2: Pattern item
         handler.add_slot(Arc::new(crate::slot::NormalSlot::new(
-            inventory.clone(),
+            inventory,
             2,
         )));
         // Slot 3: Output
@@ -281,7 +297,7 @@ impl LoomScreenHandler {
     }
 
     /// Recalculate the output based on current inputs and selected pattern.
-    /// TODO: Implement pattern application when BannerPatternsImpl is available.
+    /// TODO: Implement pattern application when `BannerPatternsImpl` is available.
     pub async fn update_result(&mut self) {
         let banner_stack = self.inventory.get_stack(0).await;
         let banner = banner_stack.lock().await;
@@ -293,7 +309,7 @@ impl LoomScreenHandler {
             return;
         }
 
-        // Produce a copy of the banner (pattern application requires BannerPatternsImpl)
+        // Produce a copy of the banner (pattern application requires `BannerPatternsImpl`)
         let result = ItemStack::new(1, banner.item);
         *self.output_slot.result.lock().await = result;
     }

@@ -59,7 +59,7 @@ pub async fn try_special_recipe(
     if let Some(result) = try_tipped_arrow(&items) {
         return Some((result, SpecialRecipeType::TippedArrow));
     }
-    if let Some(result) = try_banner_duplicate(&items) {
+    if let Some(result) = trybanner_duplicate(&items) {
         return Some((result, SpecialRecipeType::BannerDuplicate));
     }
     if let Some(result) = try_book_cloning(&items) {
@@ -193,7 +193,7 @@ fn try_tipped_arrow(items: &[ItemStack]) -> Option<ItemStack> {
 /// Duplicate a banner by placing it next to a blank banner of matching color.
 ///
 /// Takes 1 patterned banner + 1 blank banner of the same base color.
-fn try_banner_duplicate(items: &[ItemStack]) -> Option<ItemStack> {
+fn trybanner_duplicate(items: &[ItemStack]) -> Option<ItemStack> {
     if items.len() != 2 {
         return None;
     }
@@ -318,7 +318,6 @@ fn try_firework_star(items: &[ItemStack]) -> Option<ItemStack> {
             // Shape modifiers: fire charge (large ball), gold nugget (star), head (creeper),
             //                  feather (burst)
             // Effect modifiers: diamond (trail), glowstone dust (twinkle)
-            continue;
         } else {
             has_invalid = true;
             break;
@@ -443,7 +442,7 @@ fn try_shield_decoration(items: &[ItemStack]) -> Option<ItemStack> {
     }
 
     let mut shield: Option<&ItemStack> = None;
-    let mut _banner: Option<&ItemStack> = None;
+    let mut banner: Option<&ItemStack> = None;
 
     for item in items {
         if item.item == &Item::SHIELD {
@@ -452,17 +451,17 @@ fn try_shield_decoration(items: &[ItemStack]) -> Option<ItemStack> {
             }
             shield = Some(item);
         } else if item.item.has_tag(&tag::Item::MINECRAFT_BANNERS) {
-            if _banner.is_some() {
+            if banner.is_some() {
                 return None;
             }
-            _banner = Some(item);
+            banner = Some(item);
         } else {
             return None;
         }
     }
 
     shield?;
-    _banner?;
+    banner?;
 
     // TODO: Copy BannerPatterns and BaseColor from banner to shield
     let result = ItemStack::new(1, &Item::SHIELD);
@@ -693,7 +692,7 @@ mod tests {
     }
 
     #[test]
-    fn shield_decoration_no_banner_fails() {
+    fn shield_decoration_nobanner_fails() {
         let items = vec![
             ItemStack::new(1, &Item::SHIELD),
             ItemStack::new(1, &Item::DIAMOND),

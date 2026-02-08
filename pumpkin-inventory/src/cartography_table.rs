@@ -26,6 +26,12 @@ pub struct CartographyTableInventory {
     dirty: std::sync::atomic::AtomicBool,
 }
 
+impl Default for CartographyTableInventory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CartographyTableInventory {
     #[must_use]
     pub fn new() -> Self {
@@ -104,6 +110,12 @@ pub struct CartographyOutputSlot {
     result: Arc<Mutex<ItemStack>>,
 }
 
+impl Default for CartographyOutputSlot {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CartographyOutputSlot {
     #[must_use]
     pub fn new() -> Self {
@@ -180,8 +192,9 @@ impl Slot for CartographyOutputSlot {
 /// - Map + Empty Map → Cloned map
 /// - Map + Glass Pane → Locked map
 ///
-/// TODO: All operations require MapIdImpl (stub). Currently returns a copy of
+/// TODO: All operations require `MapIdImpl` (stub). Currently returns a copy of
 /// the map input as a placeholder.
+#[must_use]
 pub fn compute_cartography_result(map: &ItemStack, additional: &ItemStack) -> Option<ItemStack> {
     if map.is_empty() || map.item != &Item::FILLED_MAP {
         return None;
@@ -223,6 +236,7 @@ pub struct CartographyTableScreenHandler {
 }
 
 impl CartographyTableScreenHandler {
+    #[allow(clippy::unused_async)]
     pub async fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -246,7 +260,7 @@ impl CartographyTableScreenHandler {
         )));
         // Slot 1: Additional input
         handler.add_slot(Arc::new(crate::slot::NormalSlot::new(
-            inventory.clone(),
+            inventory,
             1,
         )));
         // Slot 2: Output

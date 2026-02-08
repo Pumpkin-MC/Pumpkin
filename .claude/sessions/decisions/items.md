@@ -79,3 +79,11 @@
 **Rationale:** These operations require world access (bookshelf counting), tick-driven processing (brewing), or component system support (banner patterns) that is outside pumpkin-inventory scope.
 **Affects:** Items
 **Status:** active
+
+## ITEMS-011: All window property enums must have WindowPropertyTrait impls
+**Date:** 2026-02-08
+**Session:** .claude/sessions/2026-02-08/001_items_beacon-lectern-handlers.md
+**Decision:** Every window property enum (Beacon, Anvil, BrewingStand, Stonecutter, Loom, Lectern) must implement `WindowPropertyTrait::to_id()` to enable programmatic property syncing. Previously only EnchantmentTable had this.
+**Rationale:** Without `to_id()`, window properties can't be synced via `CSetContainerProperty` packets. All screen handlers need this for block entity integration.
+**Affects:** Items
+**Status:** active
