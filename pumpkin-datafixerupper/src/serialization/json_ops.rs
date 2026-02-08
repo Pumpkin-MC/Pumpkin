@@ -60,12 +60,12 @@ impl DynamicOps for JsonOps {
         Value::Null
     }
 
-    fn create_bool(&self, data: bool) -> Self::Value {
-        Value::Bool(data)
-    }
-
     fn create_number(&self, n: super::Number) -> Self::Value {
         n.into()
+    }
+
+    fn create_bool(&self, data: bool) -> Self::Value {
+        Value::Bool(data)
     }
 
     fn create_string(&self, data: &str) -> Self::Value {
@@ -91,6 +91,14 @@ impl DynamicOps for JsonOps {
         )
     }
 
+    fn get_bool(&self, input: &Self::Value) -> DataResult<bool> {
+        if let Value::Bool(b) = input {
+            DataResult::success(*b)
+        } else {
+            DataResult::error(format!("Not a boolean: {input}"))
+        }
+    }
+
     fn get_number(&self, input: &Self::Value) -> DataResult<super::Number> {
         match input {
             Value::Number(_) => {
@@ -112,21 +120,47 @@ impl DynamicOps for JsonOps {
     }
 
     fn get_string(&self, input: &Self::Value) -> DataResult<String> {
-        if !matches!(input, Value::String(_))
-            || (!matches!(input, Value::Number(_)) && self.compressed)
+        if matches!(input, Value::String(_))
+            || (matches!(input, Value::Number(_)) && self.compressed)
         {
             // Unwrapping is fine as only strings and numbers are possible here.
             DataResult::success(Self::get_as_string(input).unwrap())
         } else {
-            DataResult::error(format!("Not a number: {input}"))
+            DataResult::error(format!("Not a string: {input}"))
         }
     }
 
-    fn get_bool(&self, input: &Self::Value) -> DataResult<bool> {
-        if let Value::Bool(b) = input {
-            DataResult::success(*b)
+    fn get_map_iter<'a>(
+        &self,
+        input: &'a Self::Value,
+    ) -> DataResult<impl Iterator<Item = (Self::Value, &'a Self::Value)> + 'a> {
+        if let Value::Object(map) = input {
+            DataResult::success(map.iter().map(|(k, v)| (Value::String(k.clone()), v)))
         } else {
-            DataResult::error(format!("Not a boolean: {input}"))
+            DataResult::error(format!("Not a JSON object: {input}"))
+        }
+    }
+
+    fn get_map<'a>(
+        &self,
+        input: &'a Self::Value,
+    ) -> DataResult<impl MapLike<Value = Self::Value> + 'a> {
+        if let Value::Object(map) = input {
+            DataResult::success(JsonMapLike { map })
+        } else {
+            DataResult::error(format!("Not a JSON object: {input}"))
+        }
+    }
+
+    fn get_iter<'a>(
+        &self,
+        input: &'a Self::Value,
+    ) -> DataResult<impl Iterator<Item = &'a Self::Value> + 'a> {
+        // This only works for JSON arrays.
+        if let Value::Array(list) = input {
+            DataResult::success(list.iter())
+        } else {
+            DataResult::error(format!("Not a JSON array: {input}"))
         }
     }
 
@@ -267,40 +301,6 @@ impl DynamicOps for JsonOps {
         self.compressed
     }
 
-    fn get_map_iter<'a>(
-        &self,
-        input: &'a Self::Value,
-    ) -> DataResult<impl Iterator<Item = (Self::Value, &'a Self::Value)> + 'a> {
-        if let Value::Object(map) = input {
-            DataResult::success(map.iter().map(|(k, v)| (Value::String(k.clone()), v)))
-        } else {
-            DataResult::error(format!("Not a JSON object: {input}"))
-        }
-    }
-
-    fn get_map<'a>(
-        &self,
-        input: &'a Self::Value,
-    ) -> DataResult<impl MapLike<Value = Self::Value> + 'a> {
-        if let Value::Object(map) = input {
-            DataResult::success(JsonMapLike { map })
-        } else {
-            DataResult::error(format!("Not a JSON object: {input}"))
-        }
-    }
-
-    fn get_iter<'a>(
-        &self,
-        input: &'a Self::Value,
-    ) -> DataResult<impl Iterator<Item = &'a Self::Value> + 'a> {
-        // This only works for JSON arrays.
-        if let Value::Array(list) = input {
-            DataResult::success(list.iter())
-        } else {
-            DataResult::error(format!("Not a JSON array: {input}"))
-        }
-    }
-
     fn convert_to<U>(&self, out_ops: &impl DynamicOps<Value = U>, input: &Self::Value) -> U {
         match input {
             Value::Null => out_ops.empty(),
@@ -364,38 +364,97 @@ impl Display for JsonMapLike<'_> {
 
 #[cfg(test)]
 mod test {
-    use serde_json::Value;
+    use serde_json::{Value, json};
 
+    use crate::serialization::codecs::list::{ListCodec, list_of};
     use crate::{
-        assert_success,
-        serialization::{codecs::primitive, coders::Encoder, json_ops},
+        assert_decode, assert_success,
+        serialization::{
+            codecs::primitive,
+            coders::{Decoder, Encoder},
+            json_ops,
+        },
     };
 
     #[test]
     fn primitives() {
         assert_success!(
-            primitive::BOOL.encode_start(&true, &json_ops::INSTANCE),
+            primitive::BOOL_CODEC.encode_start(&true, &json_ops::INSTANCE),
             Value::Bool(true)
         );
 
         assert_success!(
-            primitive::STRING.encode_start(&"Hello world!".to_string(), &json_ops::INSTANCE),
+            primitive::STRING_CODEC.encode_start(&"Hello world!".to_string(), &json_ops::INSTANCE),
             Value::String("Hello world!".to_string())
         );
 
         assert_success!(
-            primitive::INT.encode_start(&90, &json_ops::INSTANCE),
+            primitive::INT_CODEC.encode_start(&90, &json_ops::INSTANCE),
             Value::from(90)
         );
 
         assert_success!(
-            primitive::BYTE.encode_start(&127, &json_ops::INSTANCE),
+            primitive::BYTE_CODEC.encode_start(&127, &json_ops::INSTANCE),
             Value::from(127)
         );
 
         assert_success!(
-            primitive::FLOAT.encode_start(&0.125, &json_ops::INSTANCE),
+            primitive::FLOAT_CODEC.encode_start(&0.125, &json_ops::INSTANCE),
             Value::from(0.125)
+        );
+
+        assert_success!(
+            primitive::FLOAT_CODEC.encode_start(&0.125, &json_ops::INSTANCE),
+            Value::from(0.125)
+        );
+    }
+
+    #[test]
+    fn lists() {
+        pub const BOOL_LIST_CODEC: ListCodec<primitive::BoolCodec> =
+            list_of(&primitive::BOOL_CODEC, 2, 4);
+
+        assert_decode!(
+            BOOL_LIST_CODEC,
+            json!([true, true]),
+            json_ops::INSTANCE,
+            is_success
+        );
+        assert_decode!(
+            BOOL_LIST_CODEC,
+            json!([true, true, false]),
+            json_ops::INSTANCE,
+            is_success
+        );
+        assert_decode!(
+            BOOL_LIST_CODEC,
+            json!([true, 1]),
+            json_ops::INSTANCE,
+            is_error
+        );
+        assert_decode!(BOOL_LIST_CODEC, json!([]), json_ops::INSTANCE, is_error);
+        assert_decode!(
+            BOOL_LIST_CODEC,
+            json!([true, false, true, false]),
+            json_ops::INSTANCE,
+            is_success
+        );
+
+        // Testing a list codec of another list codec of a StringCodec.
+        pub const STRING_STRING_LIST_CODEC: ListCodec<ListCodec<primitive::StringCodec>> =
+            list_of(&list_of(&primitive::STRING_CODEC, 1, 3), 1, 2);
+
+        assert_decode!(
+            STRING_STRING_LIST_CODEC,
+            json!([]),
+            json_ops::INSTANCE,
+            is_error
+        );
+        assert_decode!(
+            STRING_STRING_LIST_CODEC,
+            json!([['a', 'b'], ['c']]),
+            json_ops::INSTANCE,
+            is_success
         );
     }
 }
