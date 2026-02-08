@@ -1,5 +1,8 @@
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use memory_stats::memory_stats;
+use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_util::text::click::ClickEvent;
+use std::borrow::Cow;
 
 use crate::command::CommandResult;
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
@@ -17,60 +20,73 @@ impl CommandExecutor for Executor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // Get process memory usage (RSS)
-            let used_mb = if let Some(usage) = memory_stats() {
-                usage.physical_mem as f64 / 1024.0 / 1024.0
-            } else {
-                0.0
-            };
+            let used_mb = memory_stats()
+                .map(|u| u.physical_mem as f64 / 1024.0 / 1024.0)
+                .unwrap_or(0.0);
 
-            // Pre-calculate totals
-            let mut total_chunks = 0;
-            let mut total_players = 0;
-            let mut total_entities = 0;
-            let mut world_lines = Vec::new();
+            let mut world_stats = Vec::new(); 
+            let mut total = (0, 0, 0); // (Chunks, Players, Entities)
 
-            for world_arc in server.worlds.load().iter() {
-                let world = world_arc.clone();
+            for world in server.worlds.load().iter() {
                 let c = world.level.loaded_chunk_count();
                 let p = world.players.load().len();
                 let e = world.entities.load().len();
 
-                total_chunks += c;
-                total_players += p;
-                total_entities += e;
+                total.0 += c;
+                total.1 += p;
+                total.2 += e;
 
-                let dim_name = if world.dimension == pumpkin_data::dimension::Dimension::OVERWORLD {
-                    "Overworld"
+                let dimension = if world.dimension == pumpkin_data::dimension::Dimension::OVERWORLD {
+                    "NORMAL"
                 } else if world.dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
-                    "Nether"
+                    "NETHER"
                 } else if world.dimension == pumpkin_data::dimension::Dimension::THE_END {
-                    "End"
+                    "END"
                 } else {
-                    "Unknown"
+                    "UNKNOWN"
                 };
 
-                // Store formatted string for later
-                world_lines.push(format!("{}: {}c {}p {}e", dim_name, c, p, e));
+                let display_name = format!("{} ({})", world.level_info.load().level_name, dimension);
+                world_stats.push((display_name, c, p, e));
             }
 
-            // Compact msg with totals
-            let mut message = TextComponent::text("[")
-                .color_named(NamedColor::Gray)
-                .add_child(TextComponent::text(format!("RAM: {:.1}MB", used_mb)).color_named(NamedColor::Gold))
+            let memory_text = if used_mb >= 1024.0 {
+                format!("{:.2} GB", used_mb / 1024.0) // 2 decimals for GB precision
+            } else {
+                format!("{:.1} MB", used_mb)
+            };
+
+            let mut message = TextComponent::text("Memory Usage - ")
+                .add_child(
+                    TextComponent::text("[Something Wrong?]\n")
+                    .click_event(ClickEvent::OpenUrl {
+                        url: Cow::from("https://github.com/Pumpkin-MC/Pumpkin/issues/"),
+                    })
+                    .hover_event(HoverEvent::show_text(TextComponent::text("Report an issue on GitHub!")))
+                    .color_named(NamedColor::Blue)
+                    .bold()
+                    .underlined(),
+                )
+                .color_named(NamedColor::White)
+                .add_child(TextComponent::text("[").color_named(NamedColor::Gray))
+                .add_child(TextComponent::text(memory_text).color_named(NamedColor::Gold))
                 .add_child(TextComponent::text(" | ").color_named(NamedColor::Gray))
-                .add_child(TextComponent::text(format!("Chunks: {}", total_chunks)).color_named(NamedColor::Green))
+                .add_child(TextComponent::text(format!("Chunks: {}", total.0)).color_named(NamedColor::Green))
                 .add_child(TextComponent::text(" | ").color_named(NamedColor::Gray))
-                .add_child(TextComponent::text(format!("Players: {}", total_players)).color_named(NamedColor::Aqua))
+                .add_child(TextComponent::text(format!("Players: {}", total.1)).color_named(NamedColor::Aqua))
                 .add_child(TextComponent::text(" | ").color_named(NamedColor::Gray))
-                .add_child(TextComponent::text(format!("Entities: {}", total_entities)).color_named(NamedColor::Red))
+                .add_child(TextComponent::text(format!("Entities: {}", total.2)).color_named(NamedColor::Red))
                 .add_child(TextComponent::text("]").color_named(NamedColor::Gray));
 
-            // Append per-world details on new lines
-            for line in world_lines {
+            for (name, c, p, e) in world_stats {
                 message = message
                     .add_child(TextComponent::text("\n > ").color_named(NamedColor::DarkGray))
-                    .add_child(TextComponent::text(line).color_named(NamedColor::White));
+                    .add_child(TextComponent::text(format!("{}: ", name)).color_named(NamedColor::Yellow))
+                    .add_child(TextComponent::text(format!("{}c", c)).color_named(NamedColor::Green))
+                    .add_child(TextComponent::text(" | ").color_named(NamedColor::Gray))
+                    .add_child(TextComponent::text(format!("{}p", p)).color_named(NamedColor::Aqua))
+                    .add_child(TextComponent::text(" | ").color_named(NamedColor::Gray))
+                    .add_child(TextComponent::text(format!("{}e", e)).color_named(NamedColor::Red));
             }
 
             sender.send_message(message).await;
