@@ -339,15 +339,15 @@ impl ToTokens for ItemComponents {
     }
 }
 
-fn return_1u32() -> u32 {
+const fn return_1u32() -> u32 {
     1
 }
 
-fn return_1f32() -> f32 {
+const fn return_1f32() -> f32 {
     1.
 }
 
-fn return_true() -> bool {
+const fn return_true() -> bool {
     true
 }
 #[derive(Deserialize)]
@@ -361,7 +361,7 @@ pub struct ToolComponent {
     can_destroy_blocks_in_creative: bool,
 }
 
-fn return_false() -> bool {
+const fn return_false() -> bool {
     false
 }
 
@@ -390,7 +390,7 @@ pub struct Modifier {
     pub slot: AttributeModifierSlot,
 }
 
-fn _true() -> bool {
+const fn _true() -> bool {
     true
 }
 
@@ -429,7 +429,7 @@ pub struct EquippableComponent {
     pub shearing_sound: Option<String>,
 }
 
-#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 #[expect(clippy::enum_variant_names)]
 pub enum Operation {
@@ -438,7 +438,7 @@ pub enum Operation {
     AddMultipliedTotal,
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/items.json");
 
     let items: BTreeMap<String, Item> =

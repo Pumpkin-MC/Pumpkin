@@ -25,7 +25,7 @@ struct Spike {
 }
 
 impl Spike {
-    pub fn is_in_chunk(&self, pos: &BlockPos) -> bool {
+    pub const fn is_in_chunk(&self, pos: &BlockPos) -> bool {
         section_coords::block_to_section(pos.0.x) == section_coords::block_to_section(self.center_x)
             && section_coords::block_to_section(pos.0.z)
                 == section_coords::block_to_section(self.center_z)

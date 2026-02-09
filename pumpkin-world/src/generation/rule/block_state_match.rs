@@ -8,7 +8,7 @@ pub struct BlockStateMatchRuleTest {
 }
 
 impl BlockStateMatchRuleTest {
-    pub fn test(&self, state: &RawBlockState) -> bool {
+    pub fn test(&self, state: RawBlockState) -> bool {
         state.0 == self.block_state.get_state_id()
     }
 }

@@ -28,7 +28,6 @@ use crossbeam::channel::{Receiver, Sender};
 use dashmap::DashMap;
 use itertools::Itertools;
 use log::{debug, error};
-use num_traits::abs;
 use pumpkin_data::biome::Biome;
 
 use pumpkin_data::fluid::{Fluid, FluidState};
@@ -253,7 +252,7 @@ impl ChunkLoading {
             for dx in -range..=range {
                 for dy in -range..=range {
                     let new_pos = ticket_pos.add_raw(dx as i32, dy as i32);
-                    let level_from_source = level + abs(dx).max(abs(dy));
+                    let level_from_source = level + dx.abs().max(dy.abs());
                     let i = temp.entry(new_pos).or_insert(Self::MAX_LEVEL);
                     *i = min(*i, level_from_source);
                 }
@@ -416,7 +415,7 @@ impl ChunkLoading {
         }
 
         for (ticket_pos, levels) in &self.ticket {
-            if abs(ticket_pos.x - pos.x) <= range && abs(ticket_pos.y - pos.y) <= range {
+            if (ticket_pos.x - pos.x).abs() <= range && (ticket_pos.y - pos.y).abs() <= range {
                 let level = *levels.iter().min().unwrap();
                 debug_assert!(level < Self::MAX_LEVEL);
                 let old = self.cache.get(&self.pos_level, *ticket_pos);
@@ -790,7 +789,7 @@ impl Chunk {
         let total_sections = dimension.height as usize / 16;
         let sections = ChunkSections::new(total_sections, dimension.min_y);
 
-        let proto_biome_height = biome_coords::from_block(proto_chunk.height());
+        let proto_biome_height = biome_coords::from_block(proto_chunk.height() as i32);
         let biome_min_y = biome_coords::from_block(dimension.min_y);
 
         for y_offset in 0..proto_biome_height {
@@ -803,7 +802,7 @@ impl Chunk {
                 .unwrap()
                 .get_mut(section_index)
             {
-                let absolute_biome_y = biome_min_y + y_offset as i32;
+                let absolute_biome_y = biome_min_y + y_offset;
 
                 for z in 0..4 {
                     for x in 0..4 {
@@ -1439,7 +1438,7 @@ impl GenerationSchedule {
             let level_clone = level.clone();
 
             let handle = thread::Builder::new()
-                .name(format!("Gen-{}", i)) // Identifying dim helps debugging
+                .name(format!("Gen-{i}")) // Identifying dim helps debugging
                 .spawn(move || {
                     Self::generation_work(recv_gen, send_chunk, level_clone);
                 })
@@ -1448,7 +1447,7 @@ impl GenerationSchedule {
             thread_tracker.push(handle);
         }
 
-        let level_sched = level.clone();
+        let level_sched = level;
         let handle = thread::Builder::new()
             .name("Schedule".to_string())
             .spawn(move || {
@@ -1486,7 +1485,7 @@ impl GenerationSchedule {
             return last_level.get(&pos).unwrap() + (stage as i8);
         }
         for i in last_high_priority {
-            let dst = max(abs(i.x - pos.x), abs(i.y - pos.y));
+            let dst = max((i.x - pos.x).abs(), (i.y - pos.y).abs());
             if dst <= StagedChunkEnum::FULL_RADIUS
                 && stage <= StagedChunkEnum::FULL_DEPENDENCIES[dst as usize]
             {
@@ -1669,15 +1668,13 @@ impl GenerationSchedule {
                         }
                     } else {
                         // debug!("io read thread receive proto chunk {pos:?}",);
-                        let val = RecvChunk::IO(Chunk::Proto(Box::new(
-                            ProtoChunk::from_chunk_data(
+                        let val =
+                            RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
                                 &chunk,
                                 dimension,
                                 level.world_gen.default_block,
                                 biome_mixer_seed,
-                            )
-                            .await,
-                        )));
+                            ))));
                         if send.send((pos, val)).is_err() {
                             break;
                         }

@@ -25,11 +25,11 @@ pub trait HeightLimitView {
     }
 
     fn bottom_section_coord(&self) -> i8 {
-        section_coords::block_to_section(self.bottom_y())
+        section_coords::block_to_section(self.bottom_y() as i32) as i8
     }
 
     fn top_section_coord(&self) -> u16 {
-        section_coords::block_to_section(self.top_y() - 1) + 1
+        section_coords::block_to_section(self.top_y() as i32 - 1) as u16 + 1
     }
 
     fn out_of_height(&self, height: i16) -> bool {

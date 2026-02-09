@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use pumpkin_util::DoublePerlinNoiseParametersCodec;
 use quote::{format_ident, quote};
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/noise_parameters.json");
 
     let json: BTreeMap<String, DoublePerlinNoiseParametersCodec> =

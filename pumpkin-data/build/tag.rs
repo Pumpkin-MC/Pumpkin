@@ -63,7 +63,7 @@ impl ToTokens for EnumCreator {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     // --- Rerun Triggers ---
     println!("cargo:rerun-if-changed=../assets/blocks.json");
     println!("cargo:rerun-if-changed=../assets/items.json");

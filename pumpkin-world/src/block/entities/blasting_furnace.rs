@@ -32,7 +32,7 @@ pub struct BlastingFurnaceBlockEntity {
 
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
 
-    /// Tracks recipes used for XP calculation (vanilla RecipesUsed NBT format)
+    /// Tracks recipes used for XP calculation (vanilla `RecipesUsed` NBT format)
     /// Maps result item ID -> craft count
     pub recipes_used: StdMutex<HashMap<String, u32>>,
 }

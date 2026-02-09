@@ -718,7 +718,7 @@ impl World {
     }
 
     pub async fn tick_chunks(self: &Arc<Self>) {
-        let tick_data = self.level.get_tick_data().await;
+        let tick_data = self.level.get_tick_data();
         for scheduled_tick in tick_data.block_ticks {
             let block = self.get_block(&scheduled_tick.position).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {

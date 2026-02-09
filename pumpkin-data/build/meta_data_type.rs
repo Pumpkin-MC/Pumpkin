@@ -4,7 +4,7 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/meta_data_type.json");
 
     let handlers_map: BTreeMap<String, i32> =
