@@ -1236,12 +1236,13 @@ impl EntityBase for LivingEntity {
 
             let world = self.entity.world.load();
 
-            let bypasses_cooldown =
+            // These damage types bypass the hurt cooldown and death protection
+            let bypasses_cooldown_protection =
                 damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
 
             let last_damage = self.last_damage_taken.load();
             let play_sound;
-            let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown {
+            let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
                 if amount <= last_damage {
                     return false;
                 }
@@ -1305,7 +1306,8 @@ impl EntityBase for LivingEntity {
                 self.set_health(new_health).await;
             }
 
-            if new_health <= 0.0 && !self.try_use_death_protector(caller).await {
+            // Check if the entity died and isn't protected by a death protection mechanic (ex. totem of undying)
+            if new_health <= 0.0 && (bypasses_cooldown_protection || !self.try_use_death_protector(caller).await) {
                 self.on_death(damage_type, source, cause).await;
             }
 
