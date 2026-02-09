@@ -2129,27 +2129,34 @@ impl Player {
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
-        // should be locked first otherwise cause deadlock in tick() (this thread lock stack, that thread lock screen_handler)
+        // Do not hold both item stack and screen handler locks at the same time.
+        let (dropped_stack, updated_stack, selected_slot) = {
+            let binding = self.inventory.held_item();
+            let mut item_stack = binding.lock().await;
 
-        let binding = self.inventory.held_item();
-        let mut item_stack = binding.lock().await;
-
-        if !item_stack.is_empty() {
-            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            self.drop_item(item_stack.copy_with_count(drop_amount))
-                .await;
-            item_stack.decrement(drop_amount);
-            let selected_slot = self.inventory.get_selected_slot();
-            let inv: Arc<dyn Inventory> = self.inventory.clone();
-            let screen_binding = self.current_screen_handler.lock().await;
-            let mut screen_handler = screen_binding.lock().await;
-            let slot_index = screen_handler
-                .get_slot_index(&inv, selected_slot as usize)
-                .await;
-
-            if let Some(slot_index) = slot_index {
-                screen_handler.set_received_stack(slot_index, item_stack.clone());
+            if item_stack.is_empty() {
+                return;
             }
+
+            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
+            let dropped_stack = item_stack.copy_with_count(drop_amount);
+            item_stack.decrement(drop_amount);
+            let updated_stack = item_stack.clone();
+            let selected_slot = self.inventory.get_selected_slot();
+
+            (dropped_stack, updated_stack, selected_slot)
+        };
+
+        self.drop_item(dropped_stack).await;
+
+        let inv: Arc<dyn Inventory> = self.inventory.clone();
+        let screen_binding = self.current_screen_handler.lock().await;
+        let mut screen_handler = screen_binding.lock().await;
+        if let Some(slot_index) = screen_handler
+            .get_slot_index(&inv, selected_slot as usize)
+            .await
+        {
+            screen_handler.set_received_stack(slot_index, updated_stack);
         }
     }
 
@@ -2895,7 +2902,10 @@ impl EntityBase for Player {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
+            if self.abilities.lock().await.invulnerable
+                && damage_type != DamageType::GENERIC_KILL
+                && damage_type != DamageType::OUT_OF_WORLD
+            {
                 return false;
             }
             let result = self
@@ -2996,6 +3006,12 @@ impl EntityBase for Player {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    fn tick_in_void<'a>(&'a self, dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.living_entity.tick_in_void(dyn_self).await;
+        })
     }
 }
 
