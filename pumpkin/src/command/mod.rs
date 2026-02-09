@@ -18,6 +18,7 @@ use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 
 pub mod args;
 pub mod argument_types;
+pub mod argument_builder;
 pub mod client_suggestions;
 pub mod commands;
 pub mod context;
@@ -26,12 +27,14 @@ pub mod errors;
 pub mod string_reader;
 pub mod suggestion;
 pub mod tree;
+pub mod node;
 
 /// Represents the source of a command execution.
 ///
 /// Different senders have different permissions, output targets, and
 /// positions in the world. This enum abstracts those differences for the
 /// command dispatcher.
+#[derive(Clone)]
 pub enum CommandSender {
     /// A remote console connection via the RCON protocol.
     ///
@@ -52,7 +55,7 @@ pub enum CommandSender {
     ///
     /// Contains the block entity responsible for the command and the
     /// world context it exists in for coordinate-relative execution (e.g., `~ ~ ~`).
-    CommandBlock(Arc<dyn BlockEntity>, Arc<World>),
+    CommandBlock(Arc<CommandBlockEntity>, Arc<World>),
 }
 
 impl fmt::Display for CommandSender {
@@ -77,9 +80,7 @@ impl CommandSender {
             Self::Player(c) => c.send_system_message(&text).await,
             Self::Rcon(s) => s.lock().await.push(text.to_pretty_console()),
             Self::CommandBlock(block_entity, _) => {
-                let command_entity: &CommandBlockEntity =
-                    block_entity.as_any().downcast_ref().unwrap();
-                let mut last_output = command_entity.last_output.lock().await;
+                let mut last_output = block_entity.last_output.lock().await;
 
                 let now = time::OffsetDateTime::now_local().unwrap();
                 let format = time::macros::format_description!("[hour]:[minute]:[second]");
@@ -92,8 +93,7 @@ impl CommandSender {
 
     pub fn set_success_count(&self, count: u32) {
         if let Self::CommandBlock(c, _) = self {
-            let block: &CommandBlockEntity = c.as_any().downcast_ref().unwrap();
-            block
+            c
                 .success_count
                 .store(count, std::sync::atomic::Ordering::SeqCst);
         }
@@ -181,6 +181,35 @@ impl CommandSender {
                 Locale::from_str(&player.config.load().locale).unwrap_or(Locale::EnUs)
             }
         }
+    }
+
+    #[must_use]
+    pub fn should_receive_feedback(&self) -> bool {
+        match self {
+            Self::CommandBlock(_, world) => {
+                world.level_info.load().game_rules.send_command_feedback
+            },
+            Self::Player(player) => {
+                player.world().level_info.load().game_rules.send_command_feedback
+            },
+            Self::Console | Self::Rcon(_) => true
+        }
+    }
+
+    #[must_use]
+    pub fn should_broadcast_console_to_ops(&self) -> bool {
+        match self {
+            Self::CommandBlock(_, world) => {
+                world.level_info.load().game_rules.command_block_output
+            },
+            // TODO: should Console and Rcon be decided by server config?
+            Self::Player(..) | Self::Console | Self::Rcon(_) => true
+        }
+    }
+
+    #[must_use]
+    pub fn should_track_output(&self) -> bool {
+        true
     }
 }
 

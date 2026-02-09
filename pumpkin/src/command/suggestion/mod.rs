@@ -1,3 +1,5 @@
+pub mod suggestions;
+
 use pumpkin_util::text::TextComponent;
 use std::hash::Hash;
 use std::{borrow::Borrow, cmp::Ordering, collections::HashSet, fmt::Debug};

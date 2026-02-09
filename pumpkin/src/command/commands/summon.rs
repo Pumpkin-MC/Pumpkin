@@ -1,6 +1,6 @@
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 use uuid::Uuid;
-
+use pumpkin_world::block::entities::BlockEntity;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandResult, CommandSender,
