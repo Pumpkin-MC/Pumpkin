@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
+use crate::serialization::struct_builder::{MapBuilder, StructBuilder};
 use crate::serialization::{
     Number,
     data_result::DataResult,
@@ -22,7 +23,7 @@ macro_rules! create_number_impl {
 }
 
 /// A trait describing methods to read and write a specific format (like NBT or JSON).
-/// The [`Value`] of this trait is the type that can be used to represent anything in this format.
+/// The `Value` of this trait is the type that can be used to represent anything in this format.
 pub trait DynamicOps {
     type Value: PartialEq + Display + Clone;
 
@@ -358,5 +359,11 @@ where {
         new_list_builder_impl(self)
     }
 
-    // TODO: add a map builder.
+    /// Returns a [`MapBuilder`] for this `DynamicOps`.
+    fn map_builder(&'static self) -> impl StructBuilder<Value = Self::Value>
+    where
+        Self: Sized,
+    {
+        MapBuilder::new(self)
+    }
 }

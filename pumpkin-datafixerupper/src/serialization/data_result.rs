@@ -21,7 +21,6 @@ macro_rules! collect_partial_and_message {
 }
 
 // TODO: maybe use pub(crate) for certain functions? (certain functions here are not used outside the library)
-// TODO: when codecs are implemented, add doc examples
 
 /// A result that can either represent a successful result, or a
 /// *partial* or non-result with an error.
@@ -313,7 +312,6 @@ impl<R> DataResult<R> {
         f: impl FnOnce(R, A) -> T,
         second_result: DataResult<A>,
     ) -> DataResult<T> {
-        // TODO: make an Applicative trait and move this to be implemented to Applicative in some way.
         match (self, second_result) {
             // Both results are successful, just apply f.
             (Self::Success { result: r, .. }, DataResult::Success { result: a, .. }) => {
@@ -418,6 +416,20 @@ impl<R> DataResult<R> {
         }
     }
 
+    /// Applies a boxed `dyn` function to `DataResult` errors, leaving successes untouched.
+    /// This can be used to provide additional context to an error.
+    #[must_use]
+    pub fn map_error_dyn(self, f: Box<dyn FnOnce(String) -> String>) -> Self {
+        match self {
+            Self::Success { .. } => self,
+            Self::Error {
+                message,
+                lifecycle,
+                partial_result,
+            } => Self::error_any_with_lifecycle(f(message), partial_result, lifecycle),
+        }
+    }
+
     /// Promotes a `DataResult` containing a partial result to a success `DataResult`, providing
     /// the error message to a function `f` and removing it from the new `DataResult`.
     /// `DataResult`s with no result or a complete result are left untouched.
@@ -484,11 +496,15 @@ impl<R> DataResult<R> {
     /// - If `other_result` is a complete result, nothing happens.
     /// - If both results are partial, the returned result is also partial. Otherwise, it is a non-result.
     /// - Messages found in any `DataResult` error are concatenated and used in the returned result.
+    ///
+    /// This always returns a *stable* result.
     #[must_use]
     pub fn add_message<T>(self, other_result: &DataResult<T>) -> Self {
         match (self, other_result) {
             // Both results are successful.
-            (Self::Success { result: r, .. }, DataResult::Success { .. }) => Self::success(r),
+            (Self::Success { result: r, .. }, DataResult::Success { .. }) => {
+                Self::success_with_lifecycle(r, Lifecycle::Stable)
+            }
 
             // Both results are errors.
             (
@@ -513,8 +529,12 @@ impl<R> DataResult<R> {
             ),
 
             // Exactly one of both results is an error.
-            (Self::Error { message: m1, .. }, _) => Self::error(m1),
-            (_, DataResult::Error { message: m2, .. }) => Self::error(m2.clone()),
+            (Self::Error { message: m1, .. }, _) => {
+                Self::error_with_lifecycle(m1, Lifecycle::Stable)
+            }
+            (_, DataResult::Error { message: m2, .. }) => {
+                Self::error_with_lifecycle(m2.clone(), Lifecycle::Stable)
+            }
         }
     }
 }
