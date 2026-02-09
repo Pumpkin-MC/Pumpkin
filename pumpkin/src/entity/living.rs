@@ -831,7 +831,7 @@ impl LivingEntity {
                     })
                     .await;
             } else {
-                self.handle_fall_damage(fall_distance, 1.0).await;
+                self.handle_fall_damage(&*caller, fall_distance, 1.0).await;
             }
         } else if height_difference < 0.0 {
             let new_fall_distance = if !self.should_prevent_fall_damage().await
@@ -846,7 +846,12 @@ impl LivingEntity {
         }
     }
 
-    pub async fn handle_fall_damage(&self, fall_distance: f32, damage_per_distance: f32) {
+    pub async fn handle_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_per_distance: f32,
+    ) {
         if self.is_immune_to_fall_damage() {
             return;
         }
@@ -857,7 +862,7 @@ impl LivingEntity {
 
         let damage = (unsafe_fall_distance * damage_per_distance).floor();
         if damage > 0.0 {
-            let check_damage = self.damage(self, damage, DamageType::FALL).await; // Fall
+            let check_damage = self.damage(caller, damage, DamageType::FALL).await; // Fall
             if check_damage {
                 self.entity
                     .play_sound(Self::get_fall_sound(fall_distance as i32))
