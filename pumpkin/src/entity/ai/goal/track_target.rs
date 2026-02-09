@@ -1,11 +1,11 @@
 use super::{Controls, Goal, to_goal_ticks};
+use crate::entity::EntityBase;
 use crate::entity::ai::goal::GoalFuture;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::mob::MobEntity;
 use rand::RngExt;
-use crate::entity::EntityBase;
 
 const UNSET: i32 = 0;
 const CAN_TRACK: i32 = 1;
@@ -116,7 +116,10 @@ impl Goal for TrackTargetGoal {
                 return false;
             }
 
-            if target_base.get_player().is_some_and(|p| p.is_creative() || p.is_spectator()) {
+            if target_base
+                .get_player()
+                .is_some_and(|p| p.is_creative() || p.is_spectator())
+            {
                 return false;
             }
 

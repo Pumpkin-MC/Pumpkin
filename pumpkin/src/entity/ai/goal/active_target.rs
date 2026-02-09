@@ -81,7 +81,10 @@ impl ActiveTargetGoal {
                     .target_predicate
                     .test(&world, Some(&mob.living_entity), living)
             {
-                if !potential_entity.get_player().is_some_and(|p| p.is_creative() || p.is_spectator()) {
+                if !potential_entity
+                    .get_player()
+                    .is_some_and(|p| p.is_creative() || p.is_spectator())
+                {
                     self.target = Some(potential_entity);
                 }
                 return;
