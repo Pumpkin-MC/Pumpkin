@@ -32,6 +32,11 @@ impl CEntityVelocity {
     }
 }
 
+fn encode_legacy_velocity_component(component: f64) -> i16 {
+    // Legacy clients (<= 1.21.8 / protocol 772) encode velocity as clamped component * 8000.
+    (component.clamp(-3.9, 3.9) * 8000.0) as i16
+}
+
 impl ClientPacket for CEntityVelocity {
     fn write_packet_data(
         &self,
@@ -46,9 +51,9 @@ impl ClientPacket for CEntityVelocity {
         if version >= &MinecraftVersion::V_1_21_9 {
             self.velocity.write(&mut write)?;
         } else {
-            write.write_i16_be(self.velocity.0.x as i16)?;
-            write.write_i16_be(self.velocity.0.y as i16)?;
-            write.write_i16_be(self.velocity.0.z as i16)?;
+            write.write_i16_be(encode_legacy_velocity_component(self.velocity.0.x))?;
+            write.write_i16_be(encode_legacy_velocity_component(self.velocity.0.y))?;
+            write.write_i16_be(encode_legacy_velocity_component(self.velocity.0.z))?;
         }
 
         Ok(())

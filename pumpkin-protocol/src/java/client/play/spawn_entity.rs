@@ -50,6 +50,11 @@ const fn remap_entity_type_for_version(type_id: i32, version: MinecraftVersion) 
     }
 }
 
+fn encode_legacy_velocity_component(component: f64) -> i16 {
+    // Legacy clients (<= 1.21.8 / protocol 772) encode velocity as clamped component * 8000.
+    (component.clamp(-3.9, 3.9) * 8000.0) as i16
+}
+
 #[java_packet(PLAY_ADD_ENTITY)]
 pub struct CSpawnEntity {
     pub entity_id: VarInt,
@@ -126,9 +131,9 @@ impl ClientPacket for CSpawnEntity {
         write.write_var_int(&data)?;
 
         if version <= &MinecraftVersion::V_1_21_7 {
-            write.write_i16_be(self.velocity.0.x as i16)?;
-            write.write_i16_be(self.velocity.0.y as i16)?;
-            write.write_i16_be(self.velocity.0.z as i16)?;
+            write.write_i16_be(encode_legacy_velocity_component(self.velocity.0.x))?;
+            write.write_i16_be(encode_legacy_velocity_component(self.velocity.0.y))?;
+            write.write_i16_be(encode_legacy_velocity_component(self.velocity.0.z))?;
         }
 
         Ok(())
