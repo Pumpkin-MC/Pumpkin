@@ -97,11 +97,12 @@ impl CachedStatus {
 
             let player_id = player.gameprofile.id;
             let player_name = player.gameprofile.name.clone();
-            
+
             if !self.player_samples.iter().any(|(id, _)| *id == player_id) {
                 self.player_samples.push((player_id, player_name.clone()));
-                
-                players.sample = self.player_samples
+
+                players.sample = self
+                    .player_samples
                     .iter()
                     .take(MAX_SAMPLE_PLAYERS)
                     .map(|(id, name)| Sample {
@@ -123,8 +124,9 @@ impl CachedStatus {
 
             let player_id = player.gameprofile.id;
             self.player_samples.retain(|(id, _)| *id != player_id);
-            
-            players.sample = self.player_samples
+
+            players.sample = self
+                .player_samples
                 .iter()
                 .take(MAX_SAMPLE_PLAYERS)
                 .map(|(id, name)| Sample {

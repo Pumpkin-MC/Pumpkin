@@ -162,16 +162,16 @@ impl LivingEntity {
             self.entity.entity_id.into(),
             stack_amount.try_into().unwrap(),
         );
-        
+
         // Use view_distance from config (in chunks) * 16 to get blocks
         let radius = if let Some(server) = world.server.upgrade() {
             f64::from(server.basic_config.view_distance.get()) * 16.0
         } else {
             64.0 // Fallback to 4 chunks
         };
-        
+
         let nearby_players = world.get_nearby_players(self.entity.pos.load(), radius);
-        
+
         for player in nearby_players {
             player.client.enqueue_packet(&packet).await;
         }
@@ -373,20 +373,17 @@ impl LivingEntity {
 
     pub async fn swing_hand(&self) {
         let world = self.entity.world.load();
-        let packet = CEntityAnimation::new(
-            self.entity_id().into(),
-            Animation::SwingMainArm,
-        );
-        
+        let packet = CEntityAnimation::new(self.entity_id().into(), Animation::SwingMainArm);
+
         // Use view_distance from config (in chunks) * 16 to get blocks
         let radius = if let Some(server) = world.server.upgrade() {
             f64::from(server.basic_config.view_distance.get()) * 16.0
         } else {
             64.0 // Fallback to 4 chunks
         };
-        
+
         let nearby_players = world.get_nearby_players(self.entity.pos.load(), radius);
-        
+
         for player in nearby_players {
             player.client.enqueue_packet(&packet).await;
         }

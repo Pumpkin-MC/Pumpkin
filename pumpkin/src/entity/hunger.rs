@@ -54,7 +54,12 @@ impl HungerManager {
             needs_sync = true;
         }
 
-        let natural_regen = player.world().level_info.load().game_rules.natural_health_regeneration;
+        let natural_regen = player
+            .world()
+            .level_info
+            .load()
+            .game_rules
+            .natural_health_regeneration;
 
         if natural_regen && saturation > 0.0 && can_heal && level >= 20 {
             timer += 1;

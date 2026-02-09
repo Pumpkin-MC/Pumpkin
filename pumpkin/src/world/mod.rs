@@ -309,16 +309,16 @@ impl World {
 
     pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
         let packet = CEntityStatus::new(entity.entity_id, status as i8);
-        
+
         // Use view_distance from config (in chunks) * 16 to get blocks
         let radius = if let Some(server) = self.server.upgrade() {
             f64::from(server.basic_config.view_distance.get()) * 16.0
         } else {
             64.0 // Fallback to 4 chunks
         };
-        
+
         let nearby_players = self.get_nearby_players(entity.pos.load(), radius);
-        
+
         for player in nearby_players {
             player.client.enqueue_packet(&packet).await;
         }
@@ -329,20 +329,18 @@ impl World {
         entity: &Entity,
         effect_type: &'static StatusEffect,
     ) {
-        let packet = CRemoveMobEffect::new(
-            entity.entity_id.into(),
-            VarInt(i32::from(effect_type.id)),
-        );
-        
+        let packet =
+            CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
+
         // Use view_distance from config (in chunks) * 16 to get blocks
         let radius = if let Some(server) = self.server.upgrade() {
             f64::from(server.basic_config.view_distance.get()) * 16.0
         } else {
             64.0 // Fallback to 4 chunks
         };
-        
+
         let nearby_players = self.get_nearby_players(entity.pos.load(), radius);
-        
+
         for player in nearby_players {
             player.client.enqueue_packet(&packet).await;
         }
@@ -2133,9 +2131,14 @@ impl World {
             return false;
         }
 
-        let sleep_percentage = self.level_info.load().game_rules.players_sleeping_percentage;
-        let required_sleeping = ((player_count as f64 * sleep_percentage as f64) / 100.0).ceil() as usize;
-        
+        let sleep_percentage = self
+            .level_info
+            .load()
+            .game_rules
+            .players_sleeping_percentage;
+        let required_sleeping =
+            ((player_count as f64 * sleep_percentage as f64) / 100.0).ceil() as usize;
+
         sleeping_player_count >= required_sleeping
     }
 

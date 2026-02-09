@@ -151,10 +151,12 @@ async fn handle_packet(
                             version: CString::new(CURRENT_MC_VERSION)?,
                             plugins: CString::new(plugins)?,
                             map: CString::new(
-                                server.worlds.load()
+                                server
+                                    .worlds
+                                    .load()
                                     .first()
                                     .map(|w| w.dimension.minecraft_name)
-                                    .unwrap_or("world")
+                                    .unwrap_or("world"),
                             )?,
                             num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,
@@ -171,10 +173,12 @@ async fn handle_packet(
                             session_id: packet.session_id,
                             motd: CString::new(server.basic_config.motd.as_str())?,
                             map: CString::new(
-                                server.worlds.load()
+                                server
+                                    .worlds
+                                    .load()
                                     .first()
                                     .map(|w| w.dimension.minecraft_name)
-                                    .unwrap_or("world")
+                                    .unwrap_or("world"),
                             )?,
                             num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,
