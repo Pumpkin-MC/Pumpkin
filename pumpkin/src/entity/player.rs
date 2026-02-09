@@ -2876,7 +2876,10 @@ impl EntityBase for Player {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL && damage_type != DamageType::OUT_OF_WORLD {
+            if self.abilities.lock().await.invulnerable
+                && damage_type != DamageType::GENERIC_KILL
+                && damage_type != DamageType::OUT_OF_WORLD
+            {
                 return false;
             }
             let result = self

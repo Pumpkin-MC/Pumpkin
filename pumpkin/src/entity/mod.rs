@@ -1939,7 +1939,8 @@ impl Entity {
     }
 
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
-        *damage_type != DamageType::GENERIC_KILL && *damage_type != DamageType::OUT_OF_WORLD
+        *damage_type != DamageType::GENERIC_KILL
+            && *damage_type != DamageType::OUT_OF_WORLD
             && (self.invulnerable.load(Relaxed) || self.damage_immunities.contains(damage_type))
     }
 
