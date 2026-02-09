@@ -1015,7 +1015,7 @@ impl LivingEntity {
             let mut stack = stack.lock().await;
             // TODO: effects...
             if stack.get_data_component::<DeathProtectionImpl>().is_some() {
-                stack.decrement(1);
+                stack.clear();
                 self.set_health(1.0).await;
                 self.entity
                     .world
