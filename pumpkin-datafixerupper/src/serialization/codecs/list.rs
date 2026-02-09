@@ -10,9 +10,9 @@ use crate::serialization::{
 use std::fmt::Debug;
 
 /// A list codec type. For a type `A`, this codec serializes/deserializes a [`Vec<A>`].
-/// - `C` is the codec used for each element of this list.
-/// - Also, `MIN` specifies the minimum number of element this codec has (inclusive), while
-///   `MIN` specifies the maximum number of element this codec has (inclusive).
+/// `C` is the codec used for each element of this list.
+///
+/// A `ListCodec` can also specify a minimum and maximum number of elements to allow in the list.
 #[derive(Debug)]
 pub struct ListCodec<C>
 where
