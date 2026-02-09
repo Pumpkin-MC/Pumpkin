@@ -311,11 +311,9 @@ impl World {
         let packet = CEntityStatus::new(entity.entity_id, status as i8);
 
         // Use view_distance from config (in chunks) * 16 to get blocks
-        let radius = if let Some(server) = self.server.upgrade() {
+        let radius = self.server.upgrade().map_or(64.0, |server| {
             f64::from(server.basic_config.view_distance.get()) * 16.0
-        } else {
-            64.0 // Fallback to 4 chunks
-        };
+        });
 
         let nearby_players = self.get_nearby_players(entity.pos.load(), radius);
 
@@ -333,11 +331,9 @@ impl World {
             CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
 
         // Use view_distance from config (in chunks) * 16 to get blocks
-        let radius = if let Some(server) = self.server.upgrade() {
+        let radius = self.server.upgrade().map_or(64.0, |server| {
             f64::from(server.basic_config.view_distance.get()) * 16.0
-        } else {
-            64.0 // Fallback to 4 chunks
-        };
+        });
 
         let nearby_players = self.get_nearby_players(entity.pos.load(), radius);
 

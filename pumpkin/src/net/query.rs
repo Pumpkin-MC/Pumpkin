@@ -155,8 +155,7 @@ async fn handle_packet(
                                     .worlds
                                     .load()
                                     .first()
-                                    .map(|w| w.dimension.minecraft_name)
-                                    .unwrap_or("world"),
+                                    .map_or("world", |w| w.dimension.minecraft_name),
                             )?,
                             num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,
@@ -177,8 +176,7 @@ async fn handle_packet(
                                     .worlds
                                     .load()
                                     .first()
-                                    .map(|w| w.dimension.minecraft_name)
-                                    .unwrap_or("world"),
+                                    .map_or("world", |w| w.dimension.minecraft_name),
                             )?,
                             num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,

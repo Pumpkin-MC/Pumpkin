@@ -164,11 +164,9 @@ impl LivingEntity {
         );
 
         // Use view_distance from config (in chunks) * 16 to get blocks
-        let radius = if let Some(server) = world.server.upgrade() {
+        let radius = world.server.upgrade().map_or(64.0, |server| {
             f64::from(server.basic_config.view_distance.get()) * 16.0
-        } else {
-            64.0 // Fallback to 4 chunks
-        };
+        });
 
         let nearby_players = world.get_nearby_players(self.entity.pos.load(), radius);
 
@@ -376,11 +374,9 @@ impl LivingEntity {
         let packet = CEntityAnimation::new(self.entity_id().into(), Animation::SwingMainArm);
 
         // Use view_distance from config (in chunks) * 16 to get blocks
-        let radius = if let Some(server) = world.server.upgrade() {
+        let radius = world.server.upgrade().map_or(64.0, |server| {
             f64::from(server.basic_config.view_distance.get()) * 16.0
-        } else {
-            64.0 // Fallback to 4 chunks
-        };
+        });
 
         let nearby_players = world.get_nearby_players(self.entity.pos.load(), radius);
 
