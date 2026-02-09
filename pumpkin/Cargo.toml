@@ -86,9 +86,6 @@ rustc-hash.workspace = true
 # Task handling
 tokio-util = { workspace = true, features = ["rt"] }
 
-# memory usage stats
-memory-stats = "1.0"
-
 flate2.workspace = true
 console-subscriber = { workspace = true, optional = true }
 
