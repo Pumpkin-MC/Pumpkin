@@ -47,7 +47,7 @@ pub enum DeathMessageType {
     IntentionalGameDesign,
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/damage_type.json");
 
     let damage_types: BTreeMap<String, DamageTypeEntry> =

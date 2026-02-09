@@ -41,11 +41,11 @@ pub enum MaterialRuleStruct {
     #[serde(rename = "minecraft:block")]
     Block { result_state: BlockStateCodecStruct },
     #[serde(rename = "minecraft:sequence")]
-    Sequence { sequence: Vec<MaterialRuleStruct> },
+    Sequence { sequence: Vec<Self> },
     #[serde(rename = "minecraft:condition")]
     Condition {
         if_true: MaterialConditionStruct,
-        then_run: Box<MaterialRuleStruct>,
+        then_run: Box<Self>,
     },
     #[serde(rename = "minecraft:bandlands")]
     Badlands,
@@ -87,9 +87,7 @@ pub enum MaterialConditionStruct {
     #[serde(rename = "minecraft:steep")]
     Steep,
     #[serde(rename = "minecraft:not")]
-    Not {
-        invert: Box<MaterialConditionStruct>,
-    },
+    Not { invert: Box<Self> },
     #[serde(rename = "minecraft:hole")]
     Hole,
     #[serde(rename = "minecraft:above_preliminary_surface")]
@@ -347,7 +345,7 @@ impl ToTokens for MaterialRuleStruct {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/chunk_gen_settings.json");
 
     let json: BTreeMap<String, GenerationSettingsStruct> =

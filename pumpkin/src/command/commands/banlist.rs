@@ -4,6 +4,7 @@ use crate::command::{
     tree::{CommandTree, builder::argument},
 };
 use CommandError::InvalidConsumption;
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["banlist"];
@@ -59,7 +60,7 @@ impl CommandExecutor for ListExecutor {
                     handle_banlist(entries, sender).await
                 }
                 _ => Err(CommandError::CommandFailed(TextComponent::translate(
-                    "command.unknown.argument",
+                    translation::COMMAND_UNKNOWN_ARGUMENT,
                     [],
                 ))),
             }
@@ -106,14 +107,14 @@ async fn handle_banlist(
 ) -> Result<i32, CommandError> {
     if list.is_empty() {
         return Result::Err(CommandError::CommandFailed(TextComponent::translate(
-            "commands.banlist.none",
+            translation::COMMANDS_BANLIST_NONE,
             [],
         )));
     }
 
     sender
         .send_message(TextComponent::translate(
-            "commands.banlist.list",
+            translation::COMMANDS_BANLIST_LIST,
             [TextComponent::text(list.len().to_string())],
         ))
         .await;
@@ -123,7 +124,7 @@ async fn handle_banlist(
     for (name, source, reason) in list {
         sender
             .send_message(TextComponent::translate(
-                "commands.banlist.entry",
+                translation::COMMANDS_BANLIST_ENTRY,
                 [
                     TextComponent::text(name),
                     TextComponent::text(source),

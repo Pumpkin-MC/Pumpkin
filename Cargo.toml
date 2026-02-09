@@ -122,10 +122,9 @@ crossfire = { version= "3.0.4", features = ["compat"]}
 dashmap = "6.1"
 ecdsa = "0.16.9"
 enum_dispatch = "0.3.13"
-env_logger = "0.11.8"
 flate2 = "1.1.9"
 heck = "0.5"
-hmac = "=0.13.0-rc.4"
+hmac = "=0.13.0-rc.5"
 indexmap = "2.13"
 itertools = "0.14.0"
 libloading = "0.9"
@@ -150,13 +149,13 @@ pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
 rand = { git = "https://github.com/rust-random/rand"}
-rsa = "=0.10.0-rc.14"
+rsa = "=0.10.0-rc.15"
 rustc-hash = "2.1.1"
 rustyline = "17.0.2"
 ruzstd = "0.8.2"
 serde_json5 = "0.2.1"
-sha1 = "=0.11.0-rc.4"
-sha2 = "=0.11.0-rc.4"
+sha1 = "=0.11.0-rc.5"
+sha2 = "=0.11.0-rc.5"
 signature = "2.2.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }

@@ -78,17 +78,17 @@ impl ToTokens for WeightedEntryStruct {
 
 impl ToTokens for StructurePlacementStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let frequency_reduction = match &self.frequency_reduction_method {
-            Some(method) => {
-                let method_token = frequency_reduction_to_token(method);
-                quote!(Some(#method_token))
-            }
-            None => quote!(None),
+        let frequency_reduction = if let Some(method) = &self.frequency_reduction_method {
+            let method_token = frequency_reduction_to_token(method);
+            quote!(Some(#method_token))
+        } else {
+            quote!(None)
         };
 
-        let frequency = match self.frequency {
-            Some(f) => quote!(Some(#f)),
-            None => quote!(None),
+        let frequency = if let Some(f) = self.frequency {
+            quote!(Some(#f))
+        } else {
+            quote!(None)
         };
 
         let salt = self.salt;
@@ -113,12 +113,11 @@ impl ToTokens for StructurePlacementTypeStruct {
                 separation,
                 spread_type,
             } => {
-                let spread_type_token = match spread_type {
-                    Some(st) => {
-                        let st_token = spread_type_to_token(st);
-                        quote!(Some(#st_token))
-                    }
-                    None => quote!(None),
+                let spread_type_token = if let Some(st) = spread_type {
+                    let st_token = spread_type_to_token(st);
+                    quote!(Some(#st_token))
+                } else {
+                    quote!(None)
                 };
 
                 tokens.extend(quote!(
@@ -202,7 +201,7 @@ fn structure_key_to_token(key: &str) -> TokenStream {
         "ancient_city" => quote!(StructureKeys::AncientCity),
         "trail_ruins" => quote!(StructureKeys::TrailRuins),
         "trial_chambers" => quote!(StructureKeys::TrialChambers),
-        _ => panic!("Unknown structure key: {}", stripped),
+        _ => panic!("Unknown structure key: {stripped}"),
     }
 }
 
@@ -237,11 +236,11 @@ fn generation_step_to_token(step: &str) -> TokenStream {
         "fluid_springs" => quote!(GenerationStep::FluidSprings),
         "vegetal_decoration" => quote!(GenerationStep::VegetalDecoration),
         "top_layer_modification" => quote!(GenerationStep::TopLayerModification),
-        _ => panic!("Unknown generation step: {}", step),
+        _ => panic!("Unknown generation step: {step}"),
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/structures.json");
     println!("cargo:rerun-if-changed=../assets/structure_set.json");
 

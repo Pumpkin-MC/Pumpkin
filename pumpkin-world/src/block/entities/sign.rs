@@ -7,12 +7,11 @@ use std::{
 };
 
 use super::BlockEntity;
-use num_derive::FromPrimitive;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
 
-#[derive(Clone, Default, FromPrimitive)]
+#[derive(Clone, Default)]
 #[repr(i8)]
 pub enum DyeColor {
     White = 0,

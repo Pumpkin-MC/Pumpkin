@@ -243,9 +243,9 @@ impl ProtoChunk {
             flat_block_map: vec![0; CHUNK_AREA * height as usize].into_boxed_slice(),
             flat_biome_map: vec![
                 Biome::PLAINS.id;
-                biome_coords::from_block(CHUNK_DIM as usize)
-                    * biome_coords::from_block(CHUNK_DIM as usize)
-                    * biome_coords::from_block(height as usize)
+                biome_coords::from_block(CHUNK_DIM as i32) as usize
+                    * biome_coords::from_block(CHUNK_DIM as i32) as usize
+                    * biome_coords::from_block(height as i32) as usize
             ]
             .into_boxed_slice(),
             biome_mixer_seed,
@@ -268,7 +268,7 @@ impl ProtoChunk {
         }
     }
 
-    pub async fn from_chunk_data(
+    pub fn from_chunk_data(
         chunk_data: &ChunkData,
         dimension: &Dimension,
         default_block: &'static BlockState,
@@ -656,9 +656,9 @@ impl ProtoChunk {
 
     #[inline]
     fn local_pos_to_block_index(&self, x: i32, y: i32, z: i32) -> usize {
-        debug_assert!((0..16).contains(&x), "x out of bounds: {}", x);
-        debug_assert!((0..16).contains(&z), "z out of bounds: {}", z);
-        debug_assert!(y >= 0 && y < self.height() as i32, "y out of bounds: {}", y);
+        debug_assert!((0..16).contains(&x), "x out of bounds: {x}");
+        debug_assert!((0..16).contains(&z), "z out of bounds: {z}");
+        debug_assert!(y >= 0 && y < self.height() as i32, "y out of bounds: {y}");
 
         self.height() as usize * CHUNK_DIM as usize * x as usize
             + CHUNK_DIM as usize * y as usize
@@ -670,16 +670,15 @@ impl ProtoChunk {
     pub fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
         let biome_height = self.height() as usize >> 2;
 
-        debug_assert!((0..4).contains(&x), "Biome X out of bounds: {}", x);
-        debug_assert!((0..4).contains(&z), "Biome Z out of bounds: {}", z);
+        debug_assert!((0..4).contains(&x), "Biome X out of bounds: {x}");
+        debug_assert!((0..4).contains(&z), "Biome Z out of bounds: {z}");
         debug_assert!(
             y >= 0 && y < biome_height as i32,
-            "Biome Y out of bounds: {}",
-            y
+            "Biome Y out of bounds: {y}"
         );
 
-        biome_height * biome_coords::from_block(CHUNK_DIM as usize) * x as usize
-            + biome_coords::from_block(CHUNK_DIM as usize) * y as usize
+        biome_height * biome_coords::from_block(CHUNK_DIM as i32) as usize * x as usize
+            + biome_coords::from_block(CHUNK_DIM as i32) as usize * y as usize
             + z as usize
     }
 
@@ -898,7 +897,7 @@ impl ProtoChunk {
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
         let min_y = self.bottom_y();
-        let bottom_section = section_coords::block_to_section(min_y) as i32;
+        let bottom_section = section_coords::block_to_section(min_y as i32);
         let top_section = section_coords::block_to_section(min_y as i32 + self.height() as i32 - 1);
 
         let start_block_x = start_block_x(self.x);
@@ -911,7 +910,7 @@ impl ProtoChunk {
             let start_block_y = section_coords::section_to_block(i);
             let start_biome_y = biome_coords::from_block(start_block_y);
 
-            let biomes_per_section = biome_coords::from_block(CHUNK_DIM) as i32;
+            let biomes_per_section = biome_coords::from_block(CHUNK_DIM as i32);
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {

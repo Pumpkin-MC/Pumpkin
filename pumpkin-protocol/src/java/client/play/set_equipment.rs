@@ -1,13 +1,9 @@
 use std::io::Write;
 
-use crate::{
-    WritingError,
-    ser::{NetworkWriteExt, serializer::Serializer},
-};
+use crate::{WritingError, ser::NetworkWriteExt};
 use pumpkin_data::packet::clientbound::PLAY_SET_EQUIPMENT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::MinecraftVersion;
-use serde::Serialize;
 
 use crate::{
     ClientPacket,
@@ -37,7 +33,7 @@ impl ClientPacket for CSetEquipment {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &MinecraftVersion,
+        version: &MinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
@@ -50,11 +46,7 @@ impl ClientPacket for CSetEquipment {
             } else {
                 write.write_i8(*slot | -128)?;
             }
-            let mut serializer = Serializer::new(&mut write);
-            equipment
-                .1
-                .serialize(&mut serializer)
-                .expect("Could not serialize `EquipmentSlot`");
+            equipment.1.write_with_version(&mut write, version)?;
         }
 
         Ok(())

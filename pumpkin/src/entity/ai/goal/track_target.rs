@@ -3,9 +3,8 @@ use crate::entity::ai::goal::GoalFuture;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
-use crate::entity::{EntityBase, mob::MobEntity};
+use crate::entity::mob::MobEntity;
 use rand::RngExt;
-use std::sync::Arc;
 
 const UNSET: i32 = 0;
 const CAN_TRACK: i32 = 1;
@@ -14,13 +13,13 @@ const CANNOT_TRACK: i32 = 2;
 #[expect(dead_code)]
 pub struct TrackTargetGoal {
     goal_control: Controls,
-    target: Option<Arc<dyn EntityBase>>,
     check_visibility: bool,
     check_can_navigate: bool,
     can_navigate_flag: i32,
     check_can_navigate_cooldown: i32,
     time_without_visibility: i32,
     max_time_without_visibility: i32,
+    target_predicate: TargetPredicate,
 }
 
 #[expect(dead_code)]
@@ -29,13 +28,13 @@ impl TrackTargetGoal {
     pub fn new(check_visibility: bool, check_can_navigate: bool) -> Self {
         Self {
             goal_control: Controls::TARGET,
-            target: None,
             check_visibility,
             check_can_navigate,
             can_navigate_flag: UNSET,
             check_can_navigate_cooldown: 0,
             time_without_visibility: 0,
             max_time_without_visibility: 60,
+            target_predicate: TargetPredicate::create_attackable(),
         }
     }
 
@@ -44,7 +43,7 @@ impl TrackTargetGoal {
     }
 
     // TODO: get from entity attribute
-    pub const fn get_follow_range(_mob: &MobEntity) -> f32 {
+    pub const fn get_follow_range(_mob: &MobEntity) -> f64 {
         32.0
     }
 
@@ -66,7 +65,7 @@ impl TrackTargetGoal {
         let mob_entity = mob.get_mob_entity();
         let target = target.unwrap();
         let world = mob_entity.living_entity.entity.world.load_full();
-        if !target_predicate.test(world, Some(&mob_entity.living_entity), target) {
+        if !target_predicate.test(&world, Some(&mob_entity.living_entity), target) {
             return false;
         } /*else if (!this.mob.isInPositionTargetRange(target.getBlockPos())) {
         return false;
@@ -100,20 +99,44 @@ impl TrackTargetGoal {
 impl Goal for TrackTargetGoal {
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
-            let mob = mob.get_mob_entity();
-            let mob_target = mob.target.lock().await;
+            let mob_entity = mob.get_mob_entity();
+            let target_arc = mob_entity.target.lock().await.clone();
 
-            let target = if mob_target.is_some() {
-                (*mob_target).clone()
-            } else {
-                self.target.clone()
+            let Some(target_base) = target_arc else {
+                return false;
             };
 
-            drop(mob_target);
-
-            if target.is_none() {
+            // Downcast to LivingEntity for vanilla checks
+            let Some(target) = target_base.get_living_entity() else {
                 return false;
-            } // TODO: continue when scoreboard team are implemented
+            };
+
+            if !target.entity.is_alive() {
+                return false;
+            }
+
+            // Vanilla check: Distance vs Follow Range
+            let dist_sq = mob_entity
+                .living_entity
+                .entity
+                .pos
+                .load()
+                .squared_distance_to_vec(&target.entity.pos.load());
+            let follow_range = Self::get_follow_range(mob_entity);
+            if dist_sq > follow_range * follow_range {
+                return false;
+            }
+
+            // Vanilla check: Visibility timeout
+            // if self.check_visibility {
+            //     if mob_entity.get_visibility_cache().can_see(target) {
+            //         // Reset timeout if seen
+            //         // (Note: in a real impl, this requires &mut self which should_continue usually lacks)
+            //     } else {
+            //         // Logic for incrementing time_without_visibility would occur in tick()
+            //     }
+            // }
+
             true
         })
     }
@@ -131,7 +154,6 @@ impl Goal for TrackTargetGoal {
             let mob = mob.get_mob_entity();
             let mut mob_target = mob.target.lock().await;
             *mob_target = None;
-            self.target = None;
         })
     }
 

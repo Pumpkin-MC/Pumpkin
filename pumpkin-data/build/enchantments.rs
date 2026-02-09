@@ -52,7 +52,7 @@ impl AttributeModifierSlot {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/enchantments.json");
 
     let enchantments: BTreeMap<String, Enchantment> =

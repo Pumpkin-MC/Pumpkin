@@ -8,7 +8,7 @@ pub struct CollisionShape {
 
 impl CollisionShape {
     #[must_use]
-    pub fn to_bounding_box(&self) -> BoundingBox {
+    pub const fn to_bounding_box(&self) -> BoundingBox {
         BoundingBox {
             min: self.min,
             max: self.max,
@@ -16,7 +16,7 @@ impl CollisionShape {
     }
 
     #[must_use]
-    pub fn new(min: Vector3<f64>, max: Vector3<f64>) -> Self {
+    pub const fn new(min: Vector3<f64>, max: Vector3<f64>) -> Self {
         Self { min, max }
     }
 

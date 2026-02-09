@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
@@ -89,7 +90,7 @@ async fn send_success_message(sender: &CommandSender, target: &dyn crate::entity
     let target_name = target.get_display_name().await;
     sender
         .send_message(TextComponent::translate(
-            "commands.rotate.success",
+            translation::COMMANDS_ROTATE_SUCCESS,
             [target_name],
         ))
         .await;

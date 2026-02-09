@@ -180,7 +180,7 @@ struct MultiNoiseBiomeSuppliers {
     nether: BiomeTree,
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/biome.json");
     println!("cargo:rerun-if-changed=../assets/multi_noise_biome_tree.json");
 

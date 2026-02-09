@@ -157,7 +157,7 @@ impl ToTokens for NamedEntityType<'_> {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/entities.json");
 
     let json: BTreeMap<String, EntityType> =

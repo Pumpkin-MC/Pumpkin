@@ -69,7 +69,7 @@ impl PropertyCollectionData {
         self.blocks.push((block_name, block_id));
     }
 
-    pub fn from_mappings(variant_mappings: Vec<PropertyVariantMapping>) -> Self {
+    pub const fn from_mappings(variant_mappings: Vec<PropertyVariantMapping>) -> Self {
         Self {
             variant_mappings,
             blocks: Vec::new(),
@@ -431,7 +431,7 @@ impl BlockState {
     const IS_AIR: u16 = 1 << 0;
     const HAS_RANDOM_TICKS: u16 = 1 << 9;
 
-    fn has_random_ticks(&self) -> bool {
+    const fn has_random_ticks(&self) -> bool {
         self.state_flags & Self::HAS_RANDOM_TICKS != 0
     }
 
@@ -569,7 +569,7 @@ impl ToTokens for Block {
     }
 }
 
-#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum GeneratedPropertyType {
     #[serde(rename = "boolean")]
@@ -634,7 +634,7 @@ pub struct BlockAssets {
     pub block_entity_types: Vec<String>,
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/blocks.json");
     println!("cargo:rerun-if-changed=../assets/bedrock_block_states.nbt");
     println!("cargo:rerun-if-changed=../assets/properties.json");

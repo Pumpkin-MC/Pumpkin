@@ -52,7 +52,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{BlockDirection, BlockState};
+use pumpkin_data::{BlockDirection, BlockState, translation};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::set_actor_data::{
@@ -718,7 +718,7 @@ impl World {
     }
 
     pub async fn tick_chunks(self: &Arc<Self>) {
-        let tick_data = self.level.get_tick_data().await;
+        let tick_data = self.level.get_tick_data();
         for scheduled_tick in tick_data.block_ticks {
             let block = self.get_block(&scheduled_tick.position).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
@@ -2475,7 +2475,7 @@ impl World {
         let current_players = self.players.load();
         player.clone().spawn_task(async move {
             let msg_comp = TextComponent::translate(
-                "multiplayer.player.joined",
+                translation::MULTIPLAYER_PLAYER_JOINED,
                 [TextComponent::text(player.gameprofile.name.clone())],
             )
             .color_named(NamedColor::Yellow);
@@ -2539,7 +2539,7 @@ impl World {
 
             if fire_event {
                 let msg_comp = TextComponent::translate(
-                    "multiplayer.player.left",
+                    translation::MULTIPLAYER_PLAYER_LEFT,
                     [TextComponent::text(player.gameprofile.name.clone())],
                 )
                 .color_named(NamedColor::Yellow);
