@@ -76,10 +76,16 @@ pub trait Slot: Send + Sync {
                 Ok(lock) => lock.clone(),
                 Err(_) => {
                     log::warn!(
-                        "Timed out acquiring slot stack lock for slot {} after 5s; waiting for lock to avoid stale empty snapshot",
+                        "Timed out acquiring slot stack lock for slot {} after 5s; retrying once",
                         self.get_index()
                     );
-                    stack.lock().await.clone()
+                    match timeout(Duration::from_secs(5), stack.lock()).await {
+                        Ok(lock) => lock.clone(),
+                        Err(_) => panic!(
+                            "Timed out acquiring slot stack lock for slot {} after 10s total",
+                            self.get_index()
+                        ),
+                    }
                 }
             }
         })

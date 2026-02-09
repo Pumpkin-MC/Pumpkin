@@ -49,15 +49,18 @@ async fn clear_player(target: &Player, item: &ItemPredicate, max: i32) -> i32 {
     )
     .await;
 
-    let equipment_slots = {
-        let entity_equipment_lock = inventory.entity_equipment.lock().await;
-        entity_equipment_lock
-            .equipment
-            .values()
-            .cloned()
-            .collect::<Vec<_>>()
-    };
-    iter_test_and_clear(&equipment_slots, &mut count, &mut max, item, &mut is_done).await;
+    if !is_done {
+        for equipment_slot in inventory.equipment_slots.values() {
+            let slot = {
+                let entity_equipment_lock = inventory.entity_equipment.lock().await;
+                entity_equipment_lock.get(equipment_slot)
+            };
+            test_and_clear(&mut count, &mut max, item, &slot, &mut is_done).await;
+            if is_done {
+                break;
+            }
+        }
+    }
 
     count
 }

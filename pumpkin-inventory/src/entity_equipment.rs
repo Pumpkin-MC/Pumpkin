@@ -19,18 +19,29 @@ impl Default for EntityEquipment {
 impl EntityEquipment {
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            equipment: HashMap::new(),
+        let mut equipment = HashMap::new();
+        for slot in [
+            EquipmentSlot::OFF_HAND,
+            EquipmentSlot::FEET,
+            EquipmentSlot::LEGS,
+            EquipmentSlot::CHEST,
+            EquipmentSlot::HEAD,
+        ] {
+            equipment.insert(slot, Arc::new(Mutex::new(ItemStack::EMPTY.clone())));
         }
+
+        Self { equipment }
     }
 
     pub async fn put(&mut self, slot: &EquipmentSlot, stack: ItemStack) -> ItemStack {
+        if let Some(existing) = self.equipment.get(slot) {
+            let mut existing = existing.lock().await;
+            return std::mem::replace(&mut *existing, stack);
+        }
+
         self.equipment
-            .insert(slot.clone(), Arc::new(Mutex::new(stack)))
-            .unwrap_or(Arc::new(Mutex::new(ItemStack::EMPTY.clone())))
-            .lock()
-            .await
-            .clone()
+            .insert(slot.clone(), Arc::new(Mutex::new(stack)));
+        ItemStack::EMPTY.clone()
     }
 
     #[must_use]
@@ -51,8 +62,11 @@ impl EntityEquipment {
         true
     }
 
-    pub fn clear(&mut self) {
-        self.equipment.clear();
+    pub async fn clear(&mut self) {
+        let stacks = self.equipment.values().cloned().collect::<Vec<_>>();
+        for stack in stacks {
+            *stack.lock().await = ItemStack::EMPTY.clone();
+        }
     }
 
     // TODO: tick
