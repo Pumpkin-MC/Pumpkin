@@ -54,7 +54,8 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
-    CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
+    CCustomPayload, CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen,
+    CParticle,
     CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
     CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetEquipment,
     CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
@@ -2099,6 +2100,13 @@ impl Player {
                 target_name,
             ))
             .await;
+    }
+
+    /// Sends a custom payload packet to this player (Java edition only).
+    pub async fn send_custom_payload(&self, channel: &str, data: &[u8]) {
+        if let ClientPlatform::Java(java) = &self.client {
+            java.enqueue_packet(&CCustomPayload::new(channel, data)).await;
+        }
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
