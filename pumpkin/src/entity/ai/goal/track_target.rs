@@ -5,6 +5,7 @@ use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::mob::MobEntity;
 use rand::RngExt;
+use crate::entity::EntityBase;
 
 const UNSET: i32 = 0;
 const CAN_TRACK: i32 = 1;
@@ -112,6 +113,10 @@ impl Goal for TrackTargetGoal {
             };
 
             if !target.entity.is_alive() {
+                return false;
+            }
+
+            if target_base.get_player().is_some_and(|p| p.is_creative() || p.is_spectator()) {
                 return false;
             }
 
