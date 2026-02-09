@@ -28,6 +28,7 @@ use pumpkin_data::block_properties::{
     BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
 };
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState, translation};
@@ -2111,14 +2112,21 @@ impl JavaClient {
             )
             .await;
 
-        // Check if there is a player in the way of the block being placed
+        // Check if any collidable entity is in the way of the block being placed.
         let state = BlockState::from_id(new_state);
-        for player in world.get_nearby_players(location.0.to_f64(), 3.0) {
-            let player_box = player.living_entity.entity.bounding_box.load();
-            for shape in state.get_block_collision_shapes() {
-                if shape.at_pos(final_block_pos).intersects(&player_box) {
-                    return Ok(false);
-                }
+        for shape in state.get_block_collision_shapes() {
+            let placed_shape = shape.at_pos(final_block_pos);
+
+            if !world.get_players_at_box(&placed_shape).is_empty() {
+                return Ok(false);
+            }
+
+            if world
+                .get_entities_at_box(&placed_shape)
+                .into_iter()
+                .any(|entity| entity.get_entity().entity_type != &EntityType::ITEM)
+            {
+                return Ok(false);
             }
         }
 
