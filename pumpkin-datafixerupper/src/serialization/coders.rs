@@ -42,29 +42,3 @@ pub trait Decoder: HasValue + 'static {
         self.decode(input, ops).map(|r| r.0)
     }
 }
-
-/*
-pub struct ComappedEncoder<'a, A, B, F, E: ?Sized> {
-    encoder: &'a E,
-    f: F,
-    phantom: PhantomData<(A, B)>,
-}
-
-impl<A, B, F, E> Encoder<B> for ComappedEncoder<'static, A, B, F, E>
-where
-    A: 'static,
-    B: 'static,
-    F: Fn(&B) -> A + 'static,
-    E: Encoder<A>,
-{
-    fn encode<T: PartialEq>(
-        &self,
-        input: &B,
-        ops: &impl DynamicOps<Value = T>,
-        prefix: T,
-    ) -> DataResult<T> {
-        self.encoder.encode(&(self.f)(input), ops, prefix)
-    }
-}
-
-*/
