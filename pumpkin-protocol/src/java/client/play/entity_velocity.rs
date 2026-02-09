@@ -4,11 +4,7 @@ use pumpkin_data::packet::clientbound::PLAY_SET_ENTITY_MOTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
 
-use crate::{
-    ClientPacket, VarInt, WritingError,
-    codec::velocity::Velocity,
-    ser::NetworkWriteExt,
-};
+use crate::{ClientPacket, VarInt, WritingError, codec::velocity::Velocity, ser::NetworkWriteExt};
 
 /// Updates the velocity of an entity.
 ///
