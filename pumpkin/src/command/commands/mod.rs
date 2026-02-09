@@ -29,7 +29,6 @@ mod kick;
 mod kill;
 mod list;
 mod me;
-mod mem;
 mod msg;
 mod op;
 mod pardon;
@@ -73,7 +72,6 @@ pub async fn default_dispatcher(
     dispatcher.register(help::init_command_tree(), "minecraft:command.help");
     dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
-    dispatcher.register(mem::init_command_tree(), "pumpkin:command.mem");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
     // Two
     dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
@@ -411,13 +409,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.enchant",
             "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "pumpkin:command.mem",
-            "Displays server memory and chunk usage information",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
