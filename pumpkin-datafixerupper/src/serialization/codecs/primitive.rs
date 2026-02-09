@@ -9,6 +9,9 @@ use crate::serialization::{
 /// Helper macro to generate the struct and [`HasValue`] trait implementation for a `PrimitiveCodec` struct.
 macro_rules! impl_primitive_codec_start {
     ($name:ident, $prim:ty) => {
+        /// A primitive macro for the
+        #[doc = concat!("[`", stringify!($prim), "`]")]
+        /// data type.
         pub struct $name;
 
         impl HasValue for $name {

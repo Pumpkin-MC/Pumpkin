@@ -252,7 +252,7 @@ impl DynamicOps for JsonOps {
             && map != self.empty()
         {
             return DataResult::error_partial(
-                format!("merge_into_map called with not a map: {map}"),
+                format!("merge_map_like_into_map called with not a map: {map}"),
                 map.clone(),
             );
         }
@@ -366,7 +366,8 @@ impl Display for JsonMapLike<'_> {
 mod test {
     use serde_json::{Value, json};
 
-    use crate::serialization::codecs::list::{ListCodec, list_of};
+    use crate::serialization::codec::list_of;
+    use crate::serialization::codecs::list::ListCodec;
     use crate::{
         assert_decode, assert_success,
         serialization::{
@@ -411,50 +412,66 @@ mod test {
 
     #[test]
     fn lists() {
-        pub const BOOL_LIST_CODEC: ListCodec<primitive::BoolCodec> =
-            list_of(&primitive::BOOL_CODEC, 2, 4);
+        {
+            pub const BOOL_LIST_CODEC: ListCodec<primitive::BoolCodec> =
+                list_of(&primitive::BOOL_CODEC, 2, 4);
 
-        assert_decode!(
-            BOOL_LIST_CODEC,
-            json!([true, true]),
-            json_ops::INSTANCE,
-            is_success
-        );
-        assert_decode!(
-            BOOL_LIST_CODEC,
-            json!([true, true, false]),
-            json_ops::INSTANCE,
-            is_success
-        );
-        assert_decode!(
-            BOOL_LIST_CODEC,
-            json!([true, 1]),
-            json_ops::INSTANCE,
-            is_error
-        );
-        assert_decode!(BOOL_LIST_CODEC, json!([]), json_ops::INSTANCE, is_error);
-        assert_decode!(
-            BOOL_LIST_CODEC,
-            json!([true, false, true, false]),
-            json_ops::INSTANCE,
-            is_success
-        );
+            assert_decode!(
+                BOOL_LIST_CODEC,
+                json!([true, true]),
+                json_ops::INSTANCE,
+                is_success
+            );
+            assert_decode!(
+                BOOL_LIST_CODEC,
+                json!([true, true, false]),
+                json_ops::INSTANCE,
+                is_success
+            );
+            assert_decode!(
+                BOOL_LIST_CODEC,
+                json!([true, 1]),
+                json_ops::INSTANCE,
+                is_error
+            );
+            assert_decode!(BOOL_LIST_CODEC, json!([]), json_ops::INSTANCE, is_error);
+            assert_decode!(
+                BOOL_LIST_CODEC,
+                json!([true, false, true, false]),
+                json_ops::INSTANCE,
+                is_success
+            );
+        }
 
-        // Testing a list codec of another list codec of a StringCodec.
-        pub const STRING_STRING_LIST_CODEC: ListCodec<ListCodec<primitive::StringCodec>> =
-            list_of(&list_of(&primitive::STRING_CODEC, 1, 3), 1, 2);
+        {
+            // Testing a list codec of another list codec of a StringCodec.
+            pub const STRING_STRING_LIST_CODEC: ListCodec<ListCodec<primitive::StringCodec>> =
+                list_of(&list_of(&primitive::STRING_CODEC, 1, 3), 1, 2);
 
-        assert_decode!(
-            STRING_STRING_LIST_CODEC,
-            json!([]),
-            json_ops::INSTANCE,
-            is_error
-        );
-        assert_decode!(
-            STRING_STRING_LIST_CODEC,
-            json!([['a', 'b'], ['c']]),
-            json_ops::INSTANCE,
-            is_success
-        );
+            assert_decode!(
+                STRING_STRING_LIST_CODEC,
+                json!([]),
+                json_ops::INSTANCE,
+                is_error
+            );
+            assert_decode!(
+                STRING_STRING_LIST_CODEC,
+                json!([["a", "b"], ['c']]),
+                json_ops::INSTANCE,
+                is_success
+            );
+            assert_decode!(
+                STRING_STRING_LIST_CODEC,
+                json!([["a", "b", 'c', 'd', 'e']]),
+                json_ops::INSTANCE,
+                is_error
+            );
+            assert_decode!(
+                STRING_STRING_LIST_CODEC,
+                json!([["1", 2, "3"], ['4', '5']]),
+                json_ops::INSTANCE,
+                is_error
+            );
+        }
     }
 }

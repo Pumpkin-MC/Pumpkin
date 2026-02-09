@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 use crate::serialization::{
     HasValue,
     codec::Codec,
@@ -9,6 +7,7 @@ use crate::serialization::{
     lifecycle::Lifecycle,
     list_builder::ListBuilder,
 };
+use std::fmt::Debug;
 
 /// A list codec type. For a type `A`, this codec serializes/deserializes a [`Vec<A>`].
 /// - `C` is the codec used for each element of this list.
@@ -109,18 +108,5 @@ where
             }
             result.with_complete_or_partial(pair)
         })
-    }
-}
-
-/// Creates a [`ListCodec`] of another [`Codec`].
-pub const fn list_of<C: Codec>(
-    codec: &'static C,
-    min_size: usize,
-    max_size: usize,
-) -> ListCodec<C> {
-    ListCodec {
-        element_codec: codec,
-        min_size,
-        max_size,
     }
 }
