@@ -7,7 +7,7 @@
     "exported_at": "2024-12-29T00:41:20+01:00",
     "name": "Pumpkin",
     "author": "lilalexmed@proton.me",
-    "description": "Pumpkin is a Minecraft server built entirely in Rust, offering a fast, efficient, and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game. Requires around 2GB RAM to build, adjust docker.installer_limits.memory in your wing accordingly! Currently, you need to adjust the port in the config manually!",
+    "description": "Pumpkin is a Minecraft server built entirely in Rust, offering a fast, efficient, and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game. Requires around 4GB RAM to build, adjust docker.installer_limits.memory to a value of 4096 or above in your wing accordingly! Currently, you need to adjust the port in the config manually! For faster builds consider increasing docker.installer_limits.cpu as well.",
     "features": null,
     "docker_images": {
         "Alpine": "ghcr.io\/pterodactyl\/yolks:alpine"
@@ -80,12 +80,12 @@
         },
         {
             "name": "Cargo build jobs",
-            "description": "Amount of jobs that cargo spawns to compile. Try to reduce them if you encounter a deadlock.\r\nScope: installation",
+            "description": "Amount of jobs that cargo spawns to compile. Try to reduce them if you encounter a deadlock. Value must be at least 1. To use maximum available threads, use the value 'default'\r\nScope: installation",
             "env_variable": "CARGO_BUILD_JOBS",
-            "default_value": "",
+            "default_value": "default",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "nullable|integer",
+            "rules": "nullable|string",
             "field_type": "text"
         }
     ]
