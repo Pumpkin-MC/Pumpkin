@@ -374,7 +374,7 @@ fn chunk_biome_sampling(
 ) -> (i32, i32, usize) {
     let horizontal_cell_count = CHUNK_DIM / settings.shape.horizontal_cell_block_count();
     let horizontal_biome_end = crate::generation::biome_coords::from_block(
-        horizontal_cell_count * settings.shape.horizontal_cell_block_count(),
+        i32::from(horizontal_cell_count) * i32::from(settings.shape.horizontal_cell_block_count()),
     );
     let start_biome_x = biome_coords::from_block(chunk_pos::start_block_x(chunk_x));
     let start_biome_z = biome_coords::from_block(chunk_pos::start_block_z(chunk_z));
@@ -741,7 +741,7 @@ fn create_fluid_only_sampler<'a>(
     let horizontal_cell_count = CHUNK_DIM / settings.shape.horizontal_cell_block_count();
     let vertical_cell_count = height as usize / settings.shape.vertical_cell_block_count() as usize;
     let horizontal_biome_end = crate::generation::biome_coords::from_block(
-        horizontal_cell_count * settings.shape.horizontal_cell_block_count(),
+        i32::from(horizontal_cell_count) * i32::from(settings.shape.horizontal_cell_block_count()),
     );
     let horizontal_biome_end = horizontal_biome_end.saturating_sub(1);
     let surface_config = SurfaceHeightSamplerBuilderOptions::new(

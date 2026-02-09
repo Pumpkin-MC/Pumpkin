@@ -2120,7 +2120,9 @@ impl GenerationSchedule {
                             continue;
                         };
                         if holder.current_stage != StagedChunkEnum::None || holder.chunk.is_some() {
-                            debug!("dropping invalid empty task with mismatched holder state: {node:?}");
+                            debug!(
+                                "dropping invalid empty task with mismatched holder state: {node:?}"
+                            );
                             self.invalidate_task_node(task.1, &node);
                             continue;
                         }
@@ -2211,21 +2213,14 @@ impl GenerationSchedule {
                                     if holder.current_stage < dp[dst as usize] {
                                         debug!(
                                             "dependency stage lag at {new_pos:?}: current={:?} required={:?} for task {:?}",
-                                            holder.current_stage,
-                                            dp[dst as usize],
-                                            node
+                                            holder.current_stage, dp[dst as usize], node
                                         );
                                     }
-                                    if dx == 0 && dy == 0 {
-                                        if holder.current_stage != dp[0] {
-                                            debug!(
-                                                "center stage mismatch at {:?}: current={:?} expected={:?} for task {:?}",
-                                                node.pos,
-                                                holder.current_stage,
-                                                dp[0],
-                                                node
-                                            );
-                                        }
+                                    if dx == 0 && dy == 0 && holder.current_stage != dp[0] {
+                                        debug!(
+                                            "center stage mismatch at {:?}: current={:?} expected={:?} for task {:?}",
+                                            node.pos, holder.current_stage, dp[0], node
+                                        );
                                     }
                                 }
                             }
@@ -2253,8 +2248,7 @@ impl GenerationSchedule {
                                 if !holder.occupied.is_null() {
                                     debug!(
                                         "overlapping occupied state at {new_pos:?}: occupied={:?} task={:?}",
-                                        holder.occupied,
-                                        node
+                                        holder.occupied, node
                                     );
                                 }
 
