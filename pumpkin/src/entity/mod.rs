@@ -541,6 +541,10 @@ impl Entity {
         }
     }
 
+    pub fn get_eye_height(&self) -> f64 {
+        f64::from(Self::get_entity_dimensions(self.pose.load()).eye_height)
+    }
+
     /// Updates the entity's position, block position, and chunk position.
     ///
     /// This function calculates the new position, block position, and chunk position based on the provided coordinates. If any of these values change, the corresponding fields are updated.
@@ -882,7 +886,7 @@ impl Entity {
         let min = aabb.min_block_pos();
         let max = aabb.max_block_pos();
 
-        let eye_height = f64::from(self.entity_dimension.load().eye_height);
+        let eye_height = self.get_eye_height();
         let mut eye_level_box = aabb;
         eye_level_box.min.y += eye_height;
         eye_level_box.max.y = eye_level_box.min.y;
