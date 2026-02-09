@@ -308,9 +308,20 @@ impl World {
     }
 
     pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
-        // TODO: only nearby
-        self.broadcast_packet_all(&CEntityStatus::new(entity.entity_id, status as i8))
-            .await;
+        let packet = CEntityStatus::new(entity.entity_id, status as i8);
+        
+        // Use view_distance from config (in chunks) * 16 to get blocks
+        let radius = if let Some(server) = self.server.upgrade() {
+            f64::from(server.basic_config.view_distance.get()) * 16.0
+        } else {
+            64.0 // Fallback to 4 chunks
+        };
+        
+        let nearby_players = self.get_nearby_players(entity.pos.load(), radius);
+        
+        for player in nearby_players {
+            player.client.enqueue_packet(&packet).await;
+        }
     }
 
     pub async fn send_remove_mob_effect(
@@ -318,12 +329,23 @@ impl World {
         entity: &Entity,
         effect_type: &'static StatusEffect,
     ) {
-        // TODO: only nearby
-        self.broadcast_packet_all(&CRemoveMobEffect::new(
+        let packet = CRemoveMobEffect::new(
             entity.entity_id.into(),
             VarInt(i32::from(effect_type.id)),
-        ))
-        .await;
+        );
+        
+        // Use view_distance from config (in chunks) * 16 to get blocks
+        let radius = if let Some(server) = self.server.upgrade() {
+            f64::from(server.basic_config.view_distance.get()) * 16.0
+        } else {
+            64.0 // Fallback to 4 chunks
+        };
+        
+        let nearby_players = self.get_nearby_players(entity.pos.load(), radius);
+        
+        for player in nearby_players {
+            player.client.enqueue_packet(&packet).await;
+        }
     }
 
     pub fn get_difficulty(&self, difficulty: Difficulty) {
@@ -2107,8 +2129,14 @@ impl World {
             .count();
         drop(players);
 
-        // TODO: sleep ratio
-        sleeping_player_count == player_count && player_count != 0
+        if player_count == 0 {
+            return false;
+        }
+
+        let sleep_percentage = self.level_info.load().game_rules.players_sleeping_percentage;
+        let required_sleeping = ((player_count as f64 * sleep_percentage as f64) / 100.0).ceil() as usize;
+        
+        sleeping_player_count >= required_sleeping
     }
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
