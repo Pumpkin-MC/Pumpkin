@@ -693,6 +693,9 @@ impl Player {
             return;
         }
 
+        // Exhaustion for performing an attack
+        self.add_exhaustion(crate::entity::hunger::EXHAUSTION_ATTACK).await;
+
         if victim.get_living_entity().is_some() {
             let mut knockback_strength = 1.0;
             player_attack_sound(&pos, &world, attack_type).await;
@@ -1434,24 +1437,31 @@ impl Player {
     }
 
     pub async fn jump(&self) {
+        // Exhaustion for jumping
         if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
-            self.add_exhaustion(0.2).await;
+            self.add_exhaustion(crate::entity::hunger::EXHAUSTION_SPRINT_JUMP).await;
         } else {
-            self.add_exhaustion(0.05).await;
+            self.add_exhaustion(crate::entity::hunger::EXHAUSTION_JUMP).await;
         }
     }
 
     pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
         // TODO: Swimming, gliding...
+        let delta = (delta_pos.horizontal_length() * 100.0).round() as f32;
+        if delta <= 0.0 {
+            return;
+        }
+
+        // Exhaustion for moving around
         if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
-            let delta = (delta_pos.horizontal_length() * 100.0).round() as f32;
-            if delta > 0.0 {
-                if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
-                    self.add_exhaustion(0.1 * delta * 0.01).await;
-                } else {
-                    self.add_exhaustion(0.0 * delta * 0.01).await;
-                }
+            if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
+                self.add_exhaustion(crate::entity::hunger::EXHAUSTION_SPRINT * delta * 0.01).await;
+            } else {
+                self.add_exhaustion(0.0 * delta * 0.01).await;
             }
+        } else if self.living_entity.entity.pose.load() == EntityPose::Swimming {
+            // Exhaustion for swimming
+            self.add_exhaustion(crate::entity::hunger::EXHAUSTION_SWIM * delta * 0.01).await;
         }
     }
 
