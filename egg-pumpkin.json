@@ -4,10 +4,10 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2024-12-29T00:41:20+01:00",
+    "exported_at": "2026-02-10T08:07:42+00:00",
     "name": "Pumpkin",
     "author": "lilalexmed@proton.me",
-    "description": "Pumpkin is a Minecraft server built entirely in Rust, offering a fast, efficient, and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game. Requires around 4GB RAM to build, adjust docker.installer_limits.memory to a value of 4096 or above in your wing accordingly! Currently, you need to adjust the port in the config manually! For faster builds consider increasing docker.installer_limits.cpu as well.",
+    "description": "Pumpkin is a Minecraft server built entirely in Rust, offering a fast, efficient, and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game. Requires around 4GB RAM to build, adjust docker.installer_limits.memory to a value of 4096 or above in your wing accordingly! For faster builds consider increasing docker.installer_limits.cpu as well.",
     "features": null,
     "docker_images": {
         "Alpine": "ghcr.io\/pterodactyl\/yolks:alpine"
@@ -15,14 +15,14 @@
     "file_denylist": [],
     "startup": ".\/pumpkin",
     "config": {
-        "files": "{}",
-        "startup": "{\"done\":\"Started Server took\"}",
+        "files": "{\r\n    \"config\/configuration.toml\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"java_edition_address\": \"java_edition_address = '0.0.0.0:{{server.allocations.default.port}}'\"\r\n        }\r\n    },\r\n    \"config\/features.toml\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"address\": \"address = '0.0.0.0:{{server.allocations.default.port}}'\"\r\n        }\r\n    }\r\n}",
+        "startup": "{\r\n    \"done\": \"Server is now running.\"\r\n}",
         "logs": "{}",
         "stop": "stop"
     },
     "scripts": {
         "installation": {
-            "script": "#!\/bin\/ash\r\nset -eux\r\n\r\napk add --no-cache musl-dev git\r\nmkdir -p \/mnt\/server\r\n\r\nREPO_URL=\"${GIT_URL:-https:\/\/github.com\/Pumpkin-MC\/Pumpkin.git}\"\r\n\r\nif [ -n \"$GIT_BRANCH\" ]; then\r\n    git clone --depth 1 --single-branch --branch \"$GIT_BRANCH\" \"$REPO_URL\"\r\nelse\r\n    git clone --depth 1 --single-branch \"$REPO_URL\"\r\nfi\r\n\r\nif [ -n \"$GIT_COMMIT\" ]; then\r\n    git checkout \"$GIT_COMMIT\"\r\nfi\r\n\r\ncd Pumpkin\r\n\r\n#export RUSTFLAGS=\"-C target-feature=-crt-static -C target-cpu=native\"\r\nexport CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-default}\r\n\r\nif [[ \"$BUILD_RELEASE\" == \"1\" || \"$BUILD_RELEASE\" == \"true\" ]]; then\r\n    cargo build --release\r\n    strip target\/release\/pumpkin\r\n    cp target\/release\/pumpkin \/mnt\/server\/pumpkin\r\nelse\r\n    cargo build\r\n    cp target\/debug\/pumpkin \/mnt\/server\/pumpkin\r\nfi",
+            "script": "#!\/bin\/ash\r\nset -eux\r\n\r\napk add --no-cache musl-dev git\r\nmkdir -p \/mnt\/server\r\n\r\nREPO_URL=\"${GIT_URL:-https:\/\/github.com\/Pumpkin-MC\/Pumpkin.git}\"\r\n\r\nif [ -n \"$GIT_BRANCH\" ]; then\r\n    git clone --depth 1 --single-branch --branch \"$GIT_BRANCH\" \"$REPO_URL\"\r\nelse\r\n    git clone --depth 1 --single-branch \"$REPO_URL\"\r\nfi\r\n\r\nif [ -n \"$GIT_COMMIT\" ]; then\r\n    git checkout \"$GIT_COMMIT\"\r\nfi\r\n\r\ncd Pumpkin\r\n\r\n#export RUSTFLAGS=\"-C target-feature=-crt-static -C target-cpu=native\"\r\nexport CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-default}\r\n\r\nif [[ \"$BUILD_RELEASE\" == \"1\" || \"$BUILD_RELEASE\" == \"true\" ]]; then\r\n    cargo build --release\r\n    strip target\/release\/pumpkin\r\n    cp target\/release\/pumpkin \/mnt\/server\/pumpkin\r\nelse\r\n    cargo build\r\n    cp target\/debug\/pumpkin \/mnt\/server\/pumpkin\r\nfi\r\n\r\n# Quickly start and kill server to generate config\r\ncd \/mnt\/server\r\ntimeout 1 .\/pumpkin",
             "container": "docker.io\/rust:1-alpine3.21",
             "entrypoint": "ash"
         }
