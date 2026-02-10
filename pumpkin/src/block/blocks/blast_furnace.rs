@@ -3,6 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::{
     block_properties::{BlockProperties, FurnaceLikeProperties},
     screen::WindowType,
+    translation,
 };
 use pumpkin_inventory::{
     furnace_like::furnace_like_screen_handler::FurnaceLikeScreenHandler,
@@ -74,7 +75,7 @@ impl ScreenHandlerFactory for BlastingFurnaceScreenFactory {
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
-        TextComponent::translate("container.blast_furnace", &[])
+        TextComponent::translate(translation::CONTAINER_BLAST_FURNACE, &[])
     }
 }
 

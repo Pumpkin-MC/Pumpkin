@@ -75,6 +75,19 @@ impl BoundingBox {
     }
 
     #[must_use]
+    pub fn at_pos(&self, pos: BlockPos) -> Self {
+        let vec3 = Vector3 {
+            x: f64::from(pos.0.x),
+            y: f64::from(pos.0.y),
+            z: f64::from(pos.0.z),
+        };
+        Self {
+            min: self.min + vec3,
+            max: self.max + vec3,
+        }
+    }
+
+    #[must_use]
     pub fn offset(&self, other: Self) -> Self {
         Self {
             min: self.min.add(&other.min),

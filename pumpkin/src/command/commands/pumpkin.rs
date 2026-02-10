@@ -83,10 +83,16 @@ impl CommandExecutor for Executor {
                 .collect::<Vec<_>>()
                 .join(", ");
             let locale = sender.get_locale();
+            let profile = if cfg!(debug_assertions) {
+                "debug"
+            } else {
+                "release"
+            };
             let version_string = format!(
-                "{} (Commit: {}) - {} Contributors",
+                "{} (Commit: {}/{}) - {} Contributors",
                 CARGO_PKG_VERSION,
                 GIT_HASH,
+                profile,
                 contributors.len()
             );
             sender

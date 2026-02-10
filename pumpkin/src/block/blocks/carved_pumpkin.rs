@@ -65,7 +65,7 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                     down_pos.down().to_centered_f64(),
                     &EntityType::SNOW_GOLEM,
                 );
-                let golem = SnowGolemEntity::make(entity).await;
+                let golem = SnowGolemEntity::new(entity).await;
                 args.world.spawn_entity(golem).await;
                 return;
             }
@@ -103,7 +103,7 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                             down_pos.down().to_centered_f64(),
                             &EntityType::IRON_GOLEM,
                         );
-                        let golem = IronGolemEntity::make(entity).await;
+                        let golem = IronGolemEntity::new(entity).await;
                         args.world.spawn_entity(golem).await;
                         return;
                     }

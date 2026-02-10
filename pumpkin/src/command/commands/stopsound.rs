@@ -6,6 +6,7 @@ use crate::command::{
     },
     tree::{CommandTree, builder::argument},
 };
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["stopsound"];
@@ -45,23 +46,24 @@ impl CommandExecutor for Executor {
 
             let text = match (category, sound) {
                 (Ok(c), Ok(s)) => TextComponent::translate(
-                    "commands.stopsound.success.source.sound",
+                    translation::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
                     [
                         TextComponent::text(s.to_name()),
                         TextComponent::text(c.to_name()),
                     ],
                 ),
                 (Ok(c), Err(_)) => TextComponent::translate(
-                    "commands.stopsound.success.source.any",
+                    translation::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
                     [TextComponent::text(c.to_name())],
                 ),
                 (Err(_), Ok(s)) => TextComponent::translate(
-                    "commands.stopsound.success.sourceless.sound",
+                    translation::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
                     [TextComponent::text(s.to_name())],
                 ),
-                (Err(_), Err(_)) => {
-                    TextComponent::translate("commands.stopsound.success.sourceless.any", [])
-                }
+                (Err(_), Err(_)) => TextComponent::translate(
+                    translation::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
+                    [],
+                ),
             };
             sender.send_message(text).await;
 

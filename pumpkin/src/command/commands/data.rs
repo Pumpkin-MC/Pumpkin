@@ -8,6 +8,7 @@ use crate::command::{
 };
 use crate::entity::NBTStorage;
 use CommandError::InvalidConsumption;
+use pumpkin_data::translation;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
@@ -232,7 +233,7 @@ async fn display_data(
         .map_err(|string| CommandError::CommandFailed(TextComponent::text(string)))?;
     sender
         .send_message(TextComponent::translate(
-            "commands.data.entity.query",
+            translation::COMMANDS_DATA_ENTITY_QUERY,
             [target_name, display],
         ))
         .await;
@@ -243,7 +244,7 @@ async fn display_data(
 fn get_i32_result(tag: &NbtTag) -> Result<i32, CommandError> {
     match tag {
         NbtTag::End => Err(CommandError::CommandFailed(TextComponent::translate(
-            "commands.data.get.unknown",
+            translation::COMMANDS_DATA_GET_UNKNOWN,
             [],
         ))),
 

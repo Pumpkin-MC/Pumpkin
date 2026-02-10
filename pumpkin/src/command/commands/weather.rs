@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
@@ -51,7 +52,10 @@ impl CommandExecutor for Executor {
                         .set_weather_parameters(&world, processed_duration, 0, false, false)
                         .await;
                     sender
-                        .send_message(TextComponent::translate("commands.weather.set.clear", []))
+                        .send_message(TextComponent::translate(
+                            translation::COMMANDS_WEATHER_SET_CLEAR,
+                            [],
+                        ))
                         .await;
                 }
                 WeatherMode::Rain => {
@@ -62,7 +66,10 @@ impl CommandExecutor for Executor {
                         .set_weather_parameters(&world, 0, processed_duration, true, false)
                         .await;
                     sender
-                        .send_message(TextComponent::translate("commands.weather.set.rain", []))
+                        .send_message(TextComponent::translate(
+                            translation::COMMANDS_WEATHER_SET_RAIN,
+                            [],
+                        ))
                         .await;
                 }
                 WeatherMode::Thunder => {
@@ -73,7 +80,10 @@ impl CommandExecutor for Executor {
                         .set_weather_parameters(&world, 0, processed_duration, true, true)
                         .await;
                     sender
-                        .send_message(TextComponent::translate("commands.weather.set.thunder", []))
+                        .send_message(TextComponent::translate(
+                            translation::COMMANDS_WEATHER_SET_THUNDER,
+                            [],
+                        ))
                         .await;
                 }
             }

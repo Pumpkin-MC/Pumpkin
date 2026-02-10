@@ -14,6 +14,7 @@ use crate::command::tree::builder::{argument, argument_default_name, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::world::bossbar::Bossbar;
 use crate::world::custom_bossbar::BossbarUpdateError;
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 use std::fmt::Write as _;
@@ -634,9 +635,12 @@ fn bossbar_prefix(title: TextComponent, namespace: String) -> TextComponent {
 
 fn handle_bossbar_error(error: BossbarUpdateError) -> CommandError {
     match error {
-        BossbarUpdateError::InvalidResourceLocation(location) => CommandError::CommandFailed(
-            TextComponent::translate("commands.bossbar.unknown", [TextComponent::text(location)]),
-        ),
+        BossbarUpdateError::InvalidResourceLocation(location) => {
+            CommandError::CommandFailed(TextComponent::translate(
+                translation::COMMANDS_BOSSBAR_UNKNOWN,
+                [TextComponent::text(location)],
+            ))
+        }
         BossbarUpdateError::NoChanges(value, variation) => {
             let mut key = "commands.bossbar.set.".to_string();
             key.push_str(value);

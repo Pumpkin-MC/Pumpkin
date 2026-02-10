@@ -10,6 +10,7 @@ use crate::{
     server::Server,
 };
 
+use pumpkin_data::translation;
 use pumpkin_protocol::{ClientPacket, Property};
 use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
 use serde::Deserialize;
@@ -177,12 +178,12 @@ pub async fn can_not_join(
     let mut banned_players = server.data.banned_player_list.write().await;
     if let Some(entry) = banned_players.get_entry(profile) {
         let text = TextComponent::translate(
-            "multiplayer.disconnect.banned.reason",
+            translation::MULTIPLAYER_DISCONNECT_BANNED_REASON,
             [TextComponent::text(entry.reason.clone())],
         );
         return Some(match entry.expires {
             Some(expires) => text.add_child(TextComponent::translate(
-                "multiplayer.disconnect.banned.expiration",
+                translation::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
                 [TextComponent::text(
                     expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],
@@ -198,7 +199,7 @@ pub async fn can_not_join(
 
         if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
             return Some(TextComponent::translate(
-                "multiplayer.disconnect.not_whitelisted",
+                translation::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
                 &[],
             ));
         }
@@ -212,12 +213,12 @@ pub async fn can_not_join(
         .get_entry(&address.ip())
     {
         let text = TextComponent::translate(
-            "multiplayer.disconnect.banned_ip.reason",
+            translation::MULTIPLAYER_DISCONNECT_BANNED_IP_REASON,
             [TextComponent::text(entry.reason.clone())],
         );
         return Some(match entry.expires {
             Some(expires) => text.add_child(TextComponent::translate(
-                "multiplayer.disconnect.banned_ip.expiration",
+                translation::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
                 [TextComponent::text(
                     expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],

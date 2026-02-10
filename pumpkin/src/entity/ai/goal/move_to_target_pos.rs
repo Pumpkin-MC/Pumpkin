@@ -1,5 +1,6 @@
 use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::ai::goal::GoalFuture;
+use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::{ai::goal::ParentHandle, mob::Mob};
 use crate::world::World;
 use pumpkin_util::math::position::BlockPos;
@@ -184,8 +185,17 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
                 self.reached = false;
                 self.trying_time += 1;
                 if self.should_reset_path() {
-                    // TODO: implement when navigation is implemented
-                    // this.mob.getNavigation().startMovingTo(lv.getX() + 0.5, lv.getY(), lv.getZ() + 0.5, this.speed);
+                    let mut navigator = mob.get_mob_entity().navigator.lock().await;
+
+                    navigator.set_progress(NavigatorGoal {
+                        current_progress: mob.get_entity().pos.load(),
+                        destination: Vector3::new(
+                            block_pos.x + 0.5,
+                            block_pos.y,
+                            block_pos.z + 0.5,
+                        ),
+                        speed: self.speed,
+                    });
                 }
             }
         })

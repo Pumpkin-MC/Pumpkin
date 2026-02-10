@@ -13,6 +13,7 @@ use crate::command::{
 };
 use crate::server::Server;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::translation;
 use pumpkin_util::{math::position::BlockPos, text::TextComponent};
 
 const NAMES: [&str; 1] = ["setworldspawn"];
@@ -107,7 +108,7 @@ async fn setworldspawn(
     };
     if world.dimension != Dimension::OVERWORLD && world.dimension != Dimension::OVERWORLD_CAVES {
         return Err(CommandError::CommandFailed(TextComponent::translate(
-            "commands.setworldspawn.failure.not_overworld",
+            translation::COMMANDS_SETWORLDSPAWN_FAILURE_NOT_OVERWORLD,
             [],
         )));
     }
@@ -126,7 +127,7 @@ async fn setworldspawn(
 
     sender
         .send_message(TextComponent::translate(
-            "commands.setworldspawn.success",
+            translation::COMMANDS_SETWORLDSPAWN_SUCCESS,
             [
                 TextComponent::text(block_pos.0.x.to_string()),
                 TextComponent::text(block_pos.0.y.to_string()),

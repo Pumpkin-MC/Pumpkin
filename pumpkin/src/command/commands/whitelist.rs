@@ -1,6 +1,7 @@
 use std::sync::atomic::Ordering;
 
 use pumpkin_config::whitelist::WhitelistEntry;
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandResult;
@@ -34,7 +35,10 @@ async fn kick_non_whitelisted_players(server: &Server) {
             player
                 .kick(
                     DisconnectReason::Kicked,
-                    TextComponent::translate("multiplayer.disconnect.not_whitelisted", &[]),
+                    TextComponent::translate(
+                        translation::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
+                        &[],
+                    ),
                 )
                 .await;
         }
@@ -54,13 +58,16 @@ impl CommandExecutor for OnExecutor {
             let previous = server.white_list.swap(true, Ordering::Relaxed);
             if previous {
                 Err(CommandError::CommandFailed(TextComponent::translate(
-                    "commands.whitelist.alreadyOn",
+                    translation::COMMANDS_WHITELIST_ALREADYON,
                     &[],
                 )))
             } else {
                 kick_non_whitelisted_players(server).await;
                 sender
-                    .send_message(TextComponent::translate("commands.whitelist.enabled", &[]))
+                    .send_message(TextComponent::translate(
+                        translation::COMMANDS_WHITELIST_ENABLED,
+                        &[],
+                    ))
                     .await;
                 Ok(1)
             }
@@ -81,12 +88,15 @@ impl CommandExecutor for OffExecutor {
             let previous = server.white_list.swap(false, Ordering::Relaxed);
             if previous {
                 sender
-                    .send_message(TextComponent::translate("commands.whitelist.disabled", &[]))
+                    .send_message(TextComponent::translate(
+                        translation::COMMANDS_WHITELIST_DISABLED,
+                        &[],
+                    ))
                     .await;
                 Ok(1)
             } else {
                 Err(CommandError::CommandFailed(TextComponent::translate(
-                    "commands.whitelist.alreadyOff",
+                    translation::COMMANDS_WHITELIST_ALREADYOFF,
                     &[],
                 )))
             }
@@ -107,7 +117,10 @@ impl CommandExecutor for ListExecutor {
             let whitelist = &server.data.whitelist_config.read().await.whitelist;
             if whitelist.is_empty() {
                 sender
-                    .send_message(TextComponent::translate("commands.whitelist.none", []))
+                    .send_message(TextComponent::translate(
+                        translation::COMMANDS_WHITELIST_NONE,
+                        [],
+                    ))
                     .await;
                 return Ok(0);
             }
@@ -122,7 +135,7 @@ impl CommandExecutor for ListExecutor {
 
             sender
                 .send_message(TextComponent::translate(
-                    "commands.whitelist.list",
+                    translation::COMMANDS_WHITELIST_LIST,
                     [
                         TextComponent::text(whitelist.len().to_string()),
                         TextComponent::text(names),
@@ -148,7 +161,10 @@ impl CommandExecutor for ReloadExecutor {
             *server.data.whitelist_config.write().await = WhitelistConfig::load();
             kick_non_whitelisted_players(server).await;
             sender
-                .send_message(TextComponent::translate("commands.whitelist.reloaded", &[]))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_WHITELIST_RELOADED,
+                    &[],
+                ))
                 .await;
             Ok(1)
         })
@@ -181,7 +197,7 @@ impl CommandExecutor for AddExecutor {
                     .push(WhitelistEntry::new(profile.id, profile.name.clone()));
                 sender
                     .send_message(TextComponent::translate(
-                        "commands.whitelist.add.success",
+                        translation::COMMANDS_WHITELIST_ADD_SUCCESS,
                         [TextComponent::text(profile.name.clone())],
                     ))
                     .await;
@@ -192,7 +208,7 @@ impl CommandExecutor for AddExecutor {
 
             if successes == 0 {
                 Err(CommandError::CommandFailed(TextComponent::translate(
-                    "commands.whitelist.add.failed",
+                    translation::COMMANDS_WHITELIST_ADD_FAILED,
                     &[],
                 )))
             } else {
@@ -228,7 +244,7 @@ impl CommandExecutor for RemoveExecutor {
                     whitelist.whitelist.remove(i);
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.whitelist.remove.success",
+                            translation::COMMANDS_WHITELIST_REMOVE_SUCCESS,
                             [player.get_display_name().await],
                         ))
                         .await;
@@ -243,7 +259,7 @@ impl CommandExecutor for RemoveExecutor {
 
             if successes == 0 {
                 Err(CommandError::CommandFailed(TextComponent::translate(
-                    "commands.whitelist.remove.failed",
+                    translation::COMMANDS_WHITELIST_REMOVE_FAILED,
                     &[],
                 )))
             } else {

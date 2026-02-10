@@ -1,4 +1,4 @@
-use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+use pumpkin_data::{packet::CURRENT_MC_PROTOCOL, translation};
 use pumpkin_protocol::{ConnectionState, java::server::handshake::SHandShake};
 use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
 
@@ -18,13 +18,13 @@ impl JavaClient {
             let protocol = version;
             if protocol < LOWEST_SUPPRORTED_PROTOCOL_VERSION {
                 self.kick(TextComponent::translate(
-                    "multiplayer.disconnect.outdated_client",
+                    translation::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,
                     [TextComponent::text(CURRENT_MC_VERSION.to_string())],
                 ))
                 .await;
             } else if protocol > CURRENT_MC_PROTOCOL {
                 self.kick(TextComponent::translate(
-                    "multiplayer.disconnect.incompatible",
+                    translation::MULTIPLAYER_DISCONNECT_OUTDATED_SERVER,
                     [TextComponent::text(CURRENT_MC_VERSION.to_string())],
                 ))
                 .await;

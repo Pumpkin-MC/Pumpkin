@@ -84,7 +84,7 @@ impl StructurePieceBase for PortalRoomPiece {
         _collector: &mut StructurePiecesCollector,
         _pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
     ) {
-        *has_portal_room = true
+        *has_portal_room = true;
     }
 
     fn place(&mut self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, _seed: i64) {

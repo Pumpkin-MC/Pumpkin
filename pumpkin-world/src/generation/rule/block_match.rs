@@ -9,7 +9,7 @@ pub struct BlockMatchRuleTest {
 }
 
 impl BlockMatchRuleTest {
-    pub fn test(&self, state: &RawBlockState) -> bool {
+    pub fn test(&self, state: RawBlockState) -> bool {
         state.to_block().name == self.block.strip_prefix("minecraft:").unwrap_or(&self.block)
     }
 }

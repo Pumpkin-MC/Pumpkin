@@ -146,6 +146,11 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         true
     }
 
+    /// Whether the entity is immune from explosion knockback and damage
+    fn is_immune_to_explosion(&self) -> bool {
+        false
+    }
+
     fn get_gravity(&self) -> f64 {
         0.0
     }
@@ -194,9 +199,12 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            caller
-                .damage_with_context(caller, amount, damage_type, position, source, cause)
-                .await
+            if caller.get_living_entity().is_some() {
+                return caller
+                    .damage_with_context(caller, amount, damage_type, position, source, cause)
+                    .await;
+            }
+            false
         })
     }
 
@@ -479,6 +487,10 @@ impl Entity {
             velocity_dirty: AtomicBool::new(true),
             removed: AtomicBool::new(false),
         }
+    }
+
+    pub async fn add_velocity(&self, velocity: Vector3<f64>) {
+        self.set_velocity(self.velocity.load() + velocity).await;
     }
 
     pub async fn set_velocity(&self, velocity: Vector3<f64>) {
@@ -978,7 +990,6 @@ impl Entity {
 
     async fn update_fluid_state(&self, caller: &Arc<dyn EntityBase>) {
         let is_pushed = caller.is_pushed_by_fluids();
-
         let mut fluids = BTreeMap::new();
 
         let water_push = Vector3::default();
@@ -1208,7 +1219,7 @@ impl Entity {
         }
 
         let input = if dist > 1.0 {
-            movement_input.normalize()
+            movement_input.normalize() * speed
         } else {
             movement_input * speed
         };
@@ -1730,14 +1741,14 @@ impl Entity {
     }
 
     pub fn get_horizontal_facing(&self) -> HorizontalFacing {
-        let adjusted_yaw = self.yaw.load().rem_euclid(360.0); // Normalize yaw to [0, 360)
-
-        match adjusted_yaw {
-            0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,
-            45.0..=135.0 => HorizontalFacing::West,
-            135.0..=225.0 => HorizontalFacing::North,
-            225.0..=315.0 => HorizontalFacing::East,
-            _ => HorizontalFacing::South, // Default case, should not occur
+        let yaw = self.yaw.load();
+        // Use vanilla's formula: floor(angle / 90.0 + 0.5) & 3
+        let quarter_turns = ((yaw / 90.0) + 0.5).floor() as i32 & 3;
+        match quarter_turns {
+            0 => HorizontalFacing::South,
+            1 => HorizontalFacing::West,
+            2 => HorizontalFacing::North,
+            _ => HorizontalFacing::East,
         }
     }
 
@@ -1941,6 +1952,7 @@ impl Entity {
 
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
         *damage_type != DamageType::GENERIC_KILL
+            && *damage_type != DamageType::OUT_OF_WORLD
             && (self.invulnerable.load(Relaxed) || self.damage_immunities.contains(damage_type))
     }
 
@@ -2016,6 +2028,15 @@ impl Entity {
                 self.on_ground.load(Ordering::SeqCst),
             ))
             .await;
+    }
+
+    pub fn get_eye_pos(&self) -> Vector3<f64> {
+        let pos = self.pos.load();
+        Vector3::new(
+            pos.x,
+            pos.y + f64::from(self.entity_dimension.load().eye_height),
+            pos.z,
+        )
     }
 
     pub fn get_eye_y(&self) -> f64 {

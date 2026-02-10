@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds};
@@ -119,12 +120,12 @@ impl CommandExecutor for Executor {
                 }
             }
             if success == 0 {
-                let msg = TextComponent::translate("commands.enchant.failed", []);
+                let msg = TextComponent::translate(translation::COMMANDS_ENCHANT_FAILED, []);
                 return Err(CommandError::CommandFailed(msg));
             }
             if only_one {
                 let msg = TextComponent::translate(
-                    "commands.enchant.success.single",
+                    translation::COMMANDS_ENCHANT_SUCCESS_SINGLE,
                     [
                         enchantment.get_fullname(level),
                         targets[0].get_display_name().await,
@@ -133,7 +134,7 @@ impl CommandExecutor for Executor {
                 sender.send_message(msg).await;
             } else {
                 let msg = TextComponent::translate(
-                    "commands.enchant.success.multiple",
+                    translation::COMMANDS_ENCHANT_SUCCESS_MULTIPLE,
                     [
                         enchantment.get_fullname(level),
                         TextComponent::text(targets.len().to_string()),

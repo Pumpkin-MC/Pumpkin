@@ -12,7 +12,7 @@ query = []
 
 [dependencies]
 pumpkin-nbt.workspace = true
-pumpkin-data.workspace = true
+pumpkin-data = { workspace = true, features = ["packet", "item_id_remap"] }
 pumpkin-macros.workspace = true
 pumpkin-world.workspace = true
 pumpkin-util.workspace = true

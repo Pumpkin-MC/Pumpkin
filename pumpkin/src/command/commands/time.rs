@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandResult;
@@ -67,7 +68,7 @@ impl CommandExecutor for QueryExecutor {
             };
             sender
                 .send_message(TextComponent::translate(
-                    "commands.time.query",
+                    translation::COMMANDS_TIME_QUERY,
                     [TextComponent::text(curr_time.to_string())],
                 ))
                 .await;
@@ -112,7 +113,7 @@ impl CommandExecutor for ChangeExecutor {
                     let curr_time = level_time.query_daytime();
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.time.set",
+                            translation::COMMANDS_TIME_SET,
                             [TextComponent::text(curr_time.to_string())],
                         ))
                         .await;
@@ -124,7 +125,7 @@ impl CommandExecutor for ChangeExecutor {
                     level_time.send_time(world).await;
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.time.set",
+                            translation::COMMANDS_TIME_SET,
                             [TextComponent::text(time_count.to_string())],
                         ))
                         .await;

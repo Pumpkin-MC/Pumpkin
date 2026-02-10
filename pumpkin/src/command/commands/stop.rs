@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
@@ -22,7 +23,7 @@ impl CommandExecutor for Executor {
         Box::pin(async move {
             sender
                 .send_message(
-                    TextComponent::translate("commands.stop.stopping", [])
+                    TextComponent::translate(translation::COMMANDS_STOP_STOPPING, [])
                         .color_named(NamedColor::Red),
                 )
                 .await;

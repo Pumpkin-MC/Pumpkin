@@ -104,13 +104,13 @@ pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T 
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
     value.as_mut_any().downcast_mut::<T>().unwrap()
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CustomDataImpl;
 impl DataComponentImpl for CustomDataImpl {
     default_impl!(CustomData);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MaxStackSizeImpl {
     pub size: u8,
 }
@@ -129,14 +129,14 @@ impl DataComponentImpl for MaxStackSizeImpl {
 
     default_impl!(MaxStackSize);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MaxDamageImpl {
     pub max_damage: i32,
 }
 impl DataComponentImpl for MaxDamageImpl {
     default_impl!(MaxDamage);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DamageImpl {
     pub damage: i32,
 }
@@ -154,10 +154,10 @@ impl DataComponentImpl for DamageImpl {
     }
     default_impl!(Damage);
 }
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct UnbreakableImpl;
 impl UnbreakableImpl {
-    fn read_data(_data: &NbtTag) -> Option<Self> {
+    const fn read_data(_data: &NbtTag) -> Option<Self> {
         Some(Self)
     }
 }
@@ -170,7 +170,7 @@ impl DataComponentImpl for UnbreakableImpl {
     }
     default_impl!(Unbreakable);
 }
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CustomNameImpl {
     // TODO make TextComponent const
     pub name: &'static str,
@@ -178,7 +178,7 @@ pub struct CustomNameImpl {
 impl DataComponentImpl for CustomNameImpl {
     default_impl!(CustomName);
 }
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct ItemNameImpl {
     // TODO make TextComponent const
     pub name: &'static str,
@@ -186,13 +186,13 @@ pub struct ItemNameImpl {
 impl DataComponentImpl for ItemNameImpl {
     default_impl!(ItemName);
 }
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct ItemModelImpl;
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct LoreImpl;
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct RarityImpl;
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct EnchantmentsImpl {
     pub enchantment: Cow<'static, [(&'static Enchantment, i32)]>,
 }
@@ -261,12 +261,12 @@ impl DataComponentImpl for EnchantmentsImpl {
     }
     default_impl!(Enchantments);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CanPlaceOnImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CanBreakImpl;
 
-#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Operation {
     AddValue,
     AddMultipliedBase,
@@ -296,17 +296,17 @@ pub struct AttributeModifiersImpl {
 impl DataComponentImpl for AttributeModifiersImpl {
     default_impl!(AttributeModifiers);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CustomModelDataImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TooltipDisplayImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct RepairCostImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CreativeSlotLockImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct EnchantmentGlintOverrideImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct IntangibleProjectileImpl;
 #[derive(Clone, Debug, PartialEq)]
 pub struct FoodImpl {
@@ -345,14 +345,14 @@ impl Hash for ConsumableImpl {
         unsafe { (*(&raw const self.consume_seconds).cast::<u32>()).hash(state) };
     }
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct UseRemainderImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct UseCooldownImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DamageResistantImpl;
 
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub enum IDSet {
     Tag(&'static Tag),
     Blocks(Cow<'static, [&'static Block]>),
@@ -394,7 +394,7 @@ impl Hash for ToolImpl {
         self.can_destroy_blocks_in_creative.hash(state);
     }
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct WeaponImpl;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
@@ -486,7 +486,7 @@ impl EquipmentSlot {
     });
 
     #[must_use]
-    pub fn get_entity_slot_id(&self) -> i32 {
+    pub const fn get_entity_slot_id(&self) -> i32 {
         match self {
             Self::MainHand(data) => data.entity_id,
             Self::OffHand(data) => data.entity_id,
@@ -515,12 +515,12 @@ impl EquipmentSlot {
     }
 
     #[must_use]
-    pub fn get_offset_entity_slot_id(&self, offset: i32) -> i32 {
+    pub const fn get_offset_entity_slot_id(&self, offset: i32) -> i32 {
         self.get_entity_slot_id() + offset
     }
 
     #[must_use]
-    pub fn slot_type(&self) -> EquipmentType {
+    pub const fn slot_type(&self) -> EquipmentType {
         match self {
             Self::MainHand(data) => data.slot_type,
             Self::OffHand(data) => data.slot_type,
@@ -534,7 +534,7 @@ impl EquipmentSlot {
     }
 
     #[must_use]
-    pub fn is_armor_slot(&self) -> bool {
+    pub const fn is_armor_slot(&self) -> bool {
         matches!(
             self.slot_type(),
             EquipmentType::HumanoidArmor | EquipmentType::AnimalArmor
@@ -556,7 +556,7 @@ impl EquipmentSlot {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum EntityTypeOrTag {
     Tag(&'static Tag),
     Single(&'static EntityType),
@@ -577,9 +577,9 @@ impl Hash for EntityTypeOrTag {
     }
 }
 
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct EnchantableImpl;
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct EquippableImpl {
     pub slot: &'static EquipmentSlot,
     pub equip_sound: &'static str,
@@ -596,41 +596,41 @@ pub struct EquippableImpl {
 impl DataComponentImpl for EquippableImpl {
     default_impl!(Equippable);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct RepairableImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct GliderImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TooltipStyleImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DeathProtectionImpl;
 impl DataComponentImpl for DeathProtectionImpl {
     default_impl!(DeathProtection);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BlocksAttacksImpl;
 
 impl DataComponentImpl for BlocksAttacksImpl {
     default_impl!(BlocksAttacks);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct StoredEnchantmentsImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DyedColorImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapColorImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapIdImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapDecorationsImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapPostProcessingImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ChargedProjectilesImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BundleContentsImpl;
 /// Status effect instance for potion contents
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct StatusEffectInstance {
     pub effect_id: i32,
     pub amplifier: i32,
@@ -640,7 +640,7 @@ pub struct StatusEffectInstance {
     pub show_icon: bool,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PotionContentsImpl {
     pub potion_id: Option<i32>,
     pub custom_color: Option<i32>,
@@ -684,114 +684,114 @@ impl DataComponentImpl for PotionContentsImpl {
 
     default_impl!(PotionContents);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PotionDurationScaleImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SuspiciousStewEffectsImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct WritableBookContentImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct WrittenBookContentImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TrimImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DebugStickStateImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct EntityDataImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BucketEntityDataImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BlockEntityDataImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct InstrumentImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProvidesTrimMaterialImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct OminousBottleAmplifierImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct JukeboxPlayableImpl {
     pub song: &'static str,
 }
 impl DataComponentImpl for JukeboxPlayableImpl {
     default_impl!(JukeboxPlayable);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProvidesBannerPatternsImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct RecipesImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct LodestoneTrackerImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct FireworkExplosionImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct FireworksImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProfileImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NoteBlockSoundImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BannerPatternsImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BaseColorImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PotDecorationsImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ContainerImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BlockStateImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BeesImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct LockImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ContainerLootImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BreakSoundImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct VillagerVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct WolfVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct WolfSoundVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct WolfCollarImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct FoxVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SalmonSizeImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ParrotVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TropicalFishPatternImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TropicalFishBaseColorImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TropicalFishPatternColorImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MooshroomVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct RabbitVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PigVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CowVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ChickenVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct FrogVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct HorseVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PaintingVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct LlamaVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct AxolotlVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CatVariantImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CatCollarImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SheepColorImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ShulkerColorImpl;

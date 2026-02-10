@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering};
 use std::time::Instant;
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::translation;
 use pumpkin_protocol::java::client::play::{CSystemChatMessage, CTickingState, CTickingStep};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 
@@ -160,7 +161,7 @@ impl ServerTickRateManager {
             let mspt = time_spent_ms / total_sprinted_ticks as f64;
 
             TextComponent::translate(
-                "commands.tick.sprint.report",
+                translation::COMMANDS_TICK_SPRINT_REPORT,
                 [
                     TextComponent::text(format!("{tps:.2}")),
                     TextComponent::text(format!("{mspt:.2}")),
@@ -168,7 +169,7 @@ impl ServerTickRateManager {
             )
         } else {
             // This is the message for `/tick sprint stop` or a zero-tick sprint.
-            TextComponent::translate("commands.tick.sprint.stop.success", [])
+            TextComponent::translate(translation::COMMANDS_TICK_SPRINT_STOP_SUCCESS, [])
         };
 
         // Construct the final component with the [Server: ...] wrapper

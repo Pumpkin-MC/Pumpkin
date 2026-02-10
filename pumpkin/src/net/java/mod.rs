@@ -171,7 +171,7 @@ impl JavaClient {
                 }
                 Err(error) => {
                     let text = format!("Error while reading incoming packet {error}");
-                    log::error!(
+                    log::debug!(
                         "Failed to read incoming packet with id {}: {}",
                         packet.id,
                         error

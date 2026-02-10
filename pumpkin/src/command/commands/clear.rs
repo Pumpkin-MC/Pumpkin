@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
@@ -143,36 +144,36 @@ async fn clear_command_text_output(
 ) -> Result<TextComponent, TextComponent> {
     match (targets, item_count == 0, max_count == 0) {
         ([target], true, _) => Err(TextComponent::translate(
-            "clear.failed.single",
+            translation::CLEAR_FAILED_SINGLE,
             [target.get_display_name().await],
         )),
         (targets, true, _) => Err(TextComponent::translate(
-            "clear.failed.multiple",
+            translation::CLEAR_FAILED_MULTIPLE,
             [TextComponent::text(targets.len().to_string())],
         )),
         ([target], false, false) => Ok(TextComponent::translate(
-            "commands.clear.success.single",
+            translation::COMMANDS_CLEAR_SUCCESS_SINGLE,
             [
                 TextComponent::text(item_count.to_string()),
                 target.get_display_name().await,
             ],
         )),
         (targets, false, false) => Ok(TextComponent::translate(
-            "commands.clear.success.multiple",
+            translation::COMMANDS_CLEAR_SUCCESS_MULTIPLE,
             [
                 TextComponent::text(item_count.to_string()),
                 TextComponent::text(targets.len().to_string()),
             ],
         )),
         ([target], false, true) => Ok(TextComponent::translate(
-            "commands.clear.test.single",
+            translation::COMMANDS_CLEAR_TEST_SINGLE,
             [
                 TextComponent::text(item_count.to_string()),
                 target.get_display_name().await,
             ],
         )),
         (targets, false, true) => Ok(TextComponent::translate(
-            "commands.clear.test.multiple",
+            translation::COMMANDS_CLEAR_TEST_MULTIPLE,
             [
                 TextComponent::text(item_count.to_string()),
                 TextComponent::text(targets.len().to_string()),
@@ -273,7 +274,7 @@ impl CommandExecutor for ItemCountExecutor {
             let item = ItemPredicateArgumentConsumer::find_arg(args, ARG_ITEM)?;
             let Ok(max) = count_consumer().find_arg_default_name(args)? else {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "parsing.int.invalid",
+                    translation::PARSING_INT_INVALID,
                     [TextComponent::text(i32::MAX.to_string())],
                 )));
             };

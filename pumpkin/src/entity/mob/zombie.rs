@@ -24,7 +24,7 @@ pub struct ZombieEntity {
 }
 
 impl ZombieEntity {
-    pub async fn make(entity: Entity) -> Arc<Self> {
+    pub async fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let zombie = Self { mob_entity };
         let mob_arc = Arc::new(zombie);
@@ -43,7 +43,7 @@ impl ZombieEntity {
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
-            goal_selector.add_goal(2, ZombieAttackGoal::new(0.1, false));
+            goal_selector.add_goal(3, ZombieAttackGoal::new(1.0, false));
 
             target_selector.add_goal(
                 2,

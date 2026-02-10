@@ -38,7 +38,7 @@ use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockState, Enchantment, tag};
+use pumpkin_data::{Block, BlockState, Enchantment, tag, translation};
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -250,6 +250,12 @@ impl ChunkManager {
         let (_rx, tx) = crossbeam::channel::unbounded();
         // drop old channel
         self.chunk_listener = tx;
+
+        // Drop any held chunk references to allow chunks to be unloaded.
+        self.chunk_sent.clear();
+        self.chunk_queue.clear();
+        self.entity_chunk_queue.clear();
+        self.batches_sent_since_ack = BatchState::Initial;
     }
 
     pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
@@ -1378,7 +1384,7 @@ impl Player {
             if idle_duration >= Duration::from_secs(idle_timeout_minutes as u64 * 60) {
                 self.kick(
                     DisconnectReason::KickedForIdle,
-                    TextComponent::translate("multiplayer.disconnect.idling", []),
+                    TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IDLING, []),
                 )
                 .await;
                 return;
@@ -1394,7 +1400,7 @@ impl Player {
             if self.wait_for_keep_alive.load(Ordering::Relaxed) {
                 self.kick(
                     DisconnectReason::Timeout,
-                    TextComponent::translate("disconnect.timeout", []),
+                    TextComponent::translate(translation::DISCONNECT_TIMEOUT, []),
                 )
                 .await;
                 return;
@@ -2129,27 +2135,34 @@ impl Player {
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
-        // should be locked first otherwise cause deadlock in tick() (this thread lock stack, that thread lock screen_handler)
+        // Do not hold both item stack and screen handler locks at the same time.
+        let (dropped_stack, updated_stack, selected_slot) = {
+            let binding = self.inventory.held_item();
+            let mut item_stack = binding.lock().await;
 
-        let binding = self.inventory.held_item();
-        let mut item_stack = binding.lock().await;
-
-        if !item_stack.is_empty() {
-            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            self.drop_item(item_stack.copy_with_count(drop_amount))
-                .await;
-            item_stack.decrement(drop_amount);
-            let selected_slot = self.inventory.get_selected_slot();
-            let inv: Arc<dyn Inventory> = self.inventory.clone();
-            let screen_binding = self.current_screen_handler.lock().await;
-            let mut screen_handler = screen_binding.lock().await;
-            let slot_index = screen_handler
-                .get_slot_index(&inv, selected_slot as usize)
-                .await;
-
-            if let Some(slot_index) = slot_index {
-                screen_handler.set_received_stack(slot_index, item_stack.clone());
+            if item_stack.is_empty() {
+                return;
             }
+
+            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
+            let dropped_stack = item_stack.copy_with_count(drop_amount);
+            item_stack.decrement(drop_amount);
+            let updated_stack = item_stack.clone();
+            let selected_slot = self.inventory.get_selected_slot();
+
+            (dropped_stack, updated_stack, selected_slot)
+        };
+
+        self.drop_item(dropped_stack).await;
+
+        let inv: Arc<dyn Inventory> = self.inventory.clone();
+        let screen_binding = self.current_screen_handler.lock().await;
+        let mut screen_handler = screen_binding.lock().await;
+        if let Some(slot_index) = screen_handler
+            .get_slot_index(&inv, selected_slot as usize)
+            .await
+        {
+            screen_handler.set_received_stack(slot_index, updated_stack);
         }
     }
 
@@ -2709,6 +2722,25 @@ impl NBTStorage for Player {
             self.experience_level.store(level, Ordering::Relaxed);
             self.experience_progress.store(progress);
             self.experience_points.store(points, Ordering::Relaxed);
+
+            // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
+            if let (Some(x), Some(y), Some(z)) = (
+                nbt.get_int("SpawnX"),
+                nbt.get_int("SpawnY"),
+                nbt.get_int("SpawnZ"),
+            ) {
+                let dim = nbt
+                    .get_string("SpawnDimension")
+                    .and_then(|s| Dimension::from_name(s).copied())
+                    .unwrap_or(self.world().dimension);
+                let force = nbt.get_bool("SpawnForced").unwrap_or(false);
+                self.respawn_point.store(Some(RespawnPoint {
+                    dimension: dim,
+                    position: BlockPos(Vector3::new(x, y, z)),
+                    yaw: 0.0,
+                    force,
+                }));
+            }
         })
     }
 }
@@ -2876,7 +2908,10 @@ impl EntityBase for Player {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
+            if self.abilities.lock().await.invulnerable
+                && damage_type != DamageType::GENERIC_KILL
+                && damage_type != DamageType::OUT_OF_WORLD
+            {
                 return false;
             }
             let result = self
@@ -2977,6 +3012,12 @@ impl EntityBase for Player {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    fn tick_in_void<'a>(&'a self, dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.living_entity.tick_in_void(dyn_self).await;
+        })
     }
 }
 

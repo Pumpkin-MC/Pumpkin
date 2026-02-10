@@ -32,7 +32,7 @@ pub enum RuleTest {
 }
 
 impl RuleTest {
-    pub fn test(&self, state: &RawBlockState, random: &mut RandomGenerator) -> bool {
+    pub fn test(&self, state: RawBlockState, random: &mut RandomGenerator) -> bool {
         match self {
             Self::AlwaysTrue => true,
             Self::BlockMatch(rule) => rule.test(state),

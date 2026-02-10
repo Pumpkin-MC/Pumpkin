@@ -9,7 +9,7 @@ proc-macro = true
 
 [dependencies]
 proc-macro-error2.workspace = true
-pumpkin-data.workspace = true
+pumpkin-data = { workspace = true, features = ["block", "tag"] }
 
 
 quote.workspace = true

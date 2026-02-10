@@ -4,7 +4,7 @@ use crate::command::{
     CommandExecutor, CommandResult, CommandSender, args::ConsumedArgs, tree::CommandTree,
 };
 
-const NAMES: [&str; 1] = ["plugins"];
+const NAMES: [&str; 2] = ["pl", "plugins"];
 
 const DESCRIPTION: &str = "List all available plugins.";
 

@@ -189,7 +189,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         );
 
         let horizontal_biome_end = biome_coords::from_block(
-            horizontal_cell_count * generation_shape.horizontal_cell_block_count() as usize,
+            horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
         );
         let vertical_cell_count = floor_div(
             generation_shape.height as usize,
@@ -209,7 +209,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
             horizontal_cell_count,
             biome_coords::from_block(start_block_x),
             biome_coords::from_block(start_block_z),
-            horizontal_biome_end,
+            horizontal_biome_end as usize,
         );
 
         let aquifer_sampler = if aquifers {

@@ -80,7 +80,7 @@ pub fn to_state_id_from_blueprint(print: &BlockBlueprint) -> BlockStateId {
     }
 }
 
-/// Helper to get the full BlockState reference from the blueprint
+/// Helper to get the full `BlockState` reference from the blueprint
 #[must_use]
 pub fn to_state_from_blueprint(print: &BlockBlueprint) -> &'static BlockState {
     BlockState::from_id(to_state_id_from_blueprint(print))

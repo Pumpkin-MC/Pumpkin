@@ -776,13 +776,13 @@ mod random_positions_and_hypot {
         let horizontal_cell_count = CHUNK_WIDTH / shape.horizontal_cell_block_count() as usize;
 
         let horizontal_biome_end = biome_coords::from_block(
-            horizontal_cell_count * shape.horizontal_cell_block_count() as usize,
+            horizontal_cell_count as i32 * shape.horizontal_cell_block_count() as i32,
         );
 
         let surface_height_estimator_options = SurfaceHeightSamplerBuilderOptions::new(
             chunk_x,
             chunk_z,
-            horizontal_biome_end,
+            horizontal_biome_end as usize,
             shape.min_y as i32,
             shape.max_y() as i32,
             shape.vertical_cell_block_count() as usize,

@@ -11,6 +11,7 @@ use crate::{
     server::Server,
 };
 use CommandError::InvalidConsumption;
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["ban-ip"];
@@ -83,7 +84,7 @@ async fn ban_ip(
 
     let Some(target_ip) = parse_ip(target, server).await else {
         return Err(CommandError::CommandFailed(TextComponent::translate(
-            "commands.banip.invalid",
+            translation::COMMANDS_BANIP_INVALID,
             [],
         )));
     };
@@ -92,7 +93,7 @@ async fn ban_ip(
 
     if banned_ips.get_entry(&target_ip).is_some() {
         return Err(CommandError::CommandFailed(TextComponent::translate(
-            "commands.banip.failed",
+            translation::COMMANDS_BANIP_FAILED,
             [],
         )));
     }
@@ -117,7 +118,7 @@ async fn ban_ip(
 
     sender
         .send_message(TextComponent::translate(
-            "commands.banip.success",
+            translation::COMMANDS_BANIP_SUCCESS,
             [
                 TextComponent::text(target_ip.to_string()),
                 TextComponent::text(reason),
@@ -127,7 +128,7 @@ async fn ban_ip(
 
     sender
         .send_message(TextComponent::translate(
-            "commands.banip.info",
+            translation::COMMANDS_BANIP_INFO,
             [
                 TextComponent::text(affected.len().to_string()),
                 TextComponent::text(names),
@@ -140,7 +141,7 @@ async fn ban_ip(
         target
             .kick(
                 DisconnectReason::Kicked,
-                TextComponent::translate("multiplayer.disconnect.ip_banned", []),
+                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IP_BANNED, []),
             )
             .await;
     }

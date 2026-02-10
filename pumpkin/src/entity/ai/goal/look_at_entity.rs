@@ -56,8 +56,8 @@ impl LookAtEntityGoal {
         target_type: &'static EntityType,
         range: f32,
     ) -> TargetPredicate {
-        let mut target_predicate = TargetPredicate::non_attackable();
-        target_predicate.base_max_distance = range;
+        let mut target_predicate = TargetPredicate::create_non_attackable();
+        target_predicate.base_max_distance = range as f64; // TODO
         if target_type == &EntityType::PLAYER {
             target_predicate.set_predicate(move |living_entity, _world| {
                 let mob_weak = mob_weak.clone();
@@ -144,8 +144,19 @@ impl Goal for LookAtEntityGoal {
             if let Some(target) = &self.target
                 && target.get_entity().is_alive()
             {
-                let target_pos = target.get_entity().pos.load();
-                mob_entity.living_entity.entity.look_at(target_pos);
+                let target_entity = target.get_entity();
+                let target_pos = target_entity.pos.load();
+                let look_y = if self.look_forward {
+                    mob_entity.living_entity.entity.get_eye_y()
+                } else {
+                    target_entity.get_eye_y()
+                };
+                mob_entity.look_control.lock().await.look_at(
+                    mob,
+                    target_pos.x,
+                    look_y,
+                    target_pos.z,
+                );
                 self.look_time -= 1;
             }
         })

@@ -59,22 +59,22 @@ pub mod chunk_pos {
     }
 
     #[must_use]
-    pub fn get_offset_x(coord: i32, offset: i32) -> i32 {
+    pub const fn get_offset_x(coord: i32, offset: i32) -> i32 {
         get_offset_pos(coord, offset)
     }
 
     #[must_use]
-    pub fn get_center_x(coord: i32) -> i32 {
+    pub const fn get_center_x(coord: i32) -> i32 {
         get_offset_x(coord, 8)
     }
 
     #[must_use]
-    pub fn get_center_z(coord: i32) -> i32 {
+    pub const fn get_center_z(coord: i32) -> i32 {
         get_offset_z(coord, 8)
     }
 
     #[must_use]
-    pub fn get_offset_z(coord: i32, offset: i32) -> i32 {
+    pub const fn get_offset_z(coord: i32, offset: i32) -> i32 {
         get_offset_pos(coord, offset)
     }
 

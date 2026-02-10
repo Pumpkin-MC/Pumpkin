@@ -13,8 +13,8 @@ pub struct DrownedEntity {
 }
 
 impl DrownedEntity {
-    pub async fn make(entity: Entity) -> Arc<Self> {
-        let entity = ZombieEntity::make(entity).await;
+    pub async fn new(entity: Entity) -> Arc<Self> {
+        let entity = ZombieEntity::new(entity).await;
         let zombie = Self { entity };
         let mob_arc = Arc::new(zombie);
 
