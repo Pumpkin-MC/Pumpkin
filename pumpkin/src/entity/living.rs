@@ -11,7 +11,7 @@ use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
-    AtomicBool, AtomicU8,
+    AtomicBool, AtomicI64, AtomicU8,
     Ordering::{Relaxed, SeqCst},
 };
 use std::{collections::HashMap, sync::atomic::AtomicI32};
@@ -56,6 +56,10 @@ pub struct LivingEntity {
     pub hurt_cooldown: AtomicI32,
     /// Stores the amount of damage the entity last received.
     pub last_damage_taken: AtomicCell<f32>,
+    /// Tracks the most recent attacker entity id.
+    last_attacker: AtomicI32,
+    /// World age when `last_attacker` was updated.
+    last_attacker_time: AtomicI64,
     /// The current health level of the entity.
     pub health: AtomicCell<f32>,
     pub item_use_time: AtomicI32,
@@ -114,6 +118,8 @@ impl LivingEntity {
             entity,
             hurt_cooldown: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
+            last_attacker: AtomicI32::new(-1),
+            last_attacker_time: AtomicI64::new(0),
             health: AtomicCell::new(health),
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
@@ -251,6 +257,23 @@ impl LivingEntity {
     pub async fn has_effect(&self, effect: &'static StatusEffect) -> bool {
         let effects = self.active_effects.lock().await;
         effects.contains_key(&effect)
+    }
+
+    pub fn set_last_attacker(&self, attacker_id: Option<i32>, world_age: i64) {
+        self.last_attacker.store(attacker_id.unwrap_or(-1), Relaxed);
+        self.last_attacker_time.store(world_age, Relaxed);
+    }
+
+    pub fn last_attacker_time(&self) -> i64 {
+        self.last_attacker_time.load(Relaxed)
+    }
+
+    pub fn get_last_attacker(&self) -> Option<Arc<dyn EntityBase>> {
+        let attacker_id = self.last_attacker.load(Relaxed);
+        if attacker_id < 0 || attacker_id == self.entity.entity_id {
+            return None;
+        }
+        self.entity.world.load().get_entity_by_id(attacker_id)
     }
 
     pub async fn get_effect(&self, effect: &'static StatusEffect) -> Option<Effect> {
@@ -1118,6 +1141,7 @@ impl LivingEntity {
         // Give a short grace period of invulnerability after respawn
         self.hurt_cooldown.store(20, Relaxed);
         self.last_damage_taken.store(0f32);
+        self.set_last_attacker(None, 0);
 
         self.entity.portal_cooldown.store(0, Relaxed);
         *self.entity.portal_manager.lock().await = None;
@@ -1261,6 +1285,19 @@ impl EntityBase for LivingEntity {
                 };
             self.last_damage_taken.store(amount);
             damage_amount = damage_amount.max(0.0);
+
+            if damage_amount > 0.0
+                && let Some(attacker) = source.or(cause)
+            {
+                let attacker_id = attacker.get_entity().entity_id;
+                if attacker_id != self.entity.entity_id {
+                    let world_age = {
+                        let level_time = world.level_time.lock().await;
+                        level_time.world_age
+                    };
+                    self.set_last_attacker(Some(attacker_id), world_age);
+                }
+            }
 
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
 
