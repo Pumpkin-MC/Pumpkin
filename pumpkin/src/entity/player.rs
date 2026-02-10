@@ -195,7 +195,7 @@ impl ChunkManager {
         mut view_distance: u8,
         level: &Arc<Level>,
         loading_chunks: &[Vector2<i32>],
-        unloading_chunks: &[Vector2<i32>],
+        _unloading_chunks: &[Vector2<i32>],
     ) {
         view_distance += 1; // Margin for loading
         let old_center = self.center;
@@ -220,8 +220,9 @@ impl ChunkManager {
         self.view_distance = view_distance;
         let view_distance_i32 = i32::from(view_distance);
 
-        self.chunk_sent
-            .retain(|pos| !unloading_chunks.contains(pos));
+        self.chunk_sent.retain(|pos| {
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
+        });
 
         let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
         for node in self.chunk_queue.drain() {
