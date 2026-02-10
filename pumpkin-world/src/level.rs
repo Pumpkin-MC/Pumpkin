@@ -1,5 +1,6 @@
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
 use crate::generation::generator::VanillaGenerator;
+use crate::lighting::DynamicLightEngine;
 use crate::{
     BlockStateId,
     block::{RawBlockState, entities::BlockEntity},
@@ -15,8 +16,7 @@ use crate::{
 use crossbeam::channel::Sender;
 use dashmap::DashMap;
 use log::trace;
-use num_traits::Zero;
-use pumpkin_config::{chunk::ChunkConfig, world::LevelConfig};
+use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
@@ -25,9 +25,6 @@ use pumpkin_util::world_seed::Seed;
 use rustc_hash::FxHashMap;
 use std::sync::Mutex;
 use std::time::Duration;
-use tokio::time::timeout;
-use tokio_util::sync::CancellationToken;
-// use std::time::Duration;
 use std::{
     path::PathBuf,
     sync::{
@@ -36,6 +33,8 @@ use std::{
     },
     thread,
 };
+use tokio::time::timeout;
+use tokio_util::sync::CancellationToken;
 // use tokio::runtime::Handle;
 use tokio::{
     select,
@@ -63,6 +62,7 @@ pub struct Level {
     pub seed: Seed,
     pub block_registry: Arc<dyn BlockRegistryExt>,
     pub level_folder: LevelFolder,
+    pub lighting_config: LightingEngineConfig,
 
     /// Counts the number of ticks that have been scheduled for this world
     schedule_tick_counts: AtomicU64,
@@ -80,6 +80,9 @@ pub struct Level {
 
     pub world_gen: Arc<VanillaGenerator>,
 
+    /// Handles runtime lighting updates
+    pub light_engine: DynamicLightEngine,
+
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
     pub chunk_system_tasks: TaskTracker,
@@ -89,6 +92,8 @@ pub struct Level {
     pub shut_down_chunk_system: AtomicBool,
     pub should_save: AtomicBool,
     pub should_unload: AtomicBool,
+    /// Number of ticks between autosave checks. If 0, autosave is disabled.
+    pub autosave_ticks: u64,
 
     gen_entity_request_tx: Sender<Vector2<i32>>,
     pending_entity_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncEntityChunk>>>>,
@@ -176,6 +181,8 @@ impl Level {
             block_registry,
             world_gen,
             level_folder,
+            lighting_config: level_config.lighting,
+            light_engine: DynamicLightEngine::new(),
             chunk_saver,
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
@@ -189,6 +196,7 @@ impl Level {
             shut_down_chunk_system: AtomicBool::new(false),
             should_save: AtomicBool::new(false),
             should_unload: AtomicBool::new(false),
+            autosave_ticks: level_config.autosave_ticks,
             gen_entity_request_tx,
             pending_entity_generations: pending_entity_generations.clone(),
             level_channel: level_channel.clone(),
@@ -269,7 +277,8 @@ impl Level {
     }
 
     pub async fn shutdown(&self) {
-        log::info!("Saving level...");
+        let world_id = self.level_folder.root_folder.display();
+        log::info!("Saving level ({})...", world_id);
         self.cancel_token.cancel();
         self.shut_down_chunk_system.store(true, Ordering::Relaxed);
         self.level_channel.notify();
@@ -282,31 +291,40 @@ impl Level {
             lock.drain(..).collect::<Vec<_>>()
         };
 
-        log::info!("Joining {} synchronous threads...", handles.len());
+        let handle_count = handles.len();
+        log::info!("Joining {} threads for {}...", handle_count, world_id);
         let join_task = tokio::task::spawn_blocking(move || {
-            for handle in handles {
-                // Attempt to join. If a thread is stuck, this block stays alive.
-                let _ = handle.join();
+            let mut failed_count = 0;
+            for handle in handles.into_iter() {
+                if handle.join().is_err() {
+                    failed_count += 1;
+                }
             }
+            failed_count
         });
 
         match timeout(Duration::from_secs(3), join_task).await {
-            Ok(task_result) => {
-                task_result.unwrap();
-                log::info!("All threads joined successfully.");
+            Ok(Ok(failed_count)) => {
+                if failed_count > 0 {
+                    log::warn!(
+                        "{} threads failed to join properly for {}.",
+                        failed_count,
+                        world_id
+                    );
+                }
+            }
+            Ok(Err(_)) => {
+                log::warn!("Thread join task panicked for {}.", world_id);
             }
             Err(_) => {
-                log::warn!(
-                    "Timed out waiting for synchronous threads to join. Proceeding anyway..."
-                );
+                log::warn!("Timed out waiting for threads to join for {}.", world_id);
             }
         }
 
-        log::debug!("Awaiting remaining async tasks...");
         self.tasks.wait().await;
         self.chunk_system_tasks.wait().await;
 
-        log::info!("Flushing savers to disk...");
+        log::info!("Flushing data to disk for {}...", world_id);
         self.chunk_saver.block_and_await_ongoing_tasks().await;
         self.entity_saver.block_and_await_ongoing_tasks().await;
 
@@ -406,7 +424,7 @@ impl Level {
                 let has_watchers = self
                     .chunk_watchers
                     .get(pos)
-                    .is_some_and(|count| !count.is_zero());
+                    .is_some_and(|count| *count != 0);
 
                 if has_watchers {
                     return None;
@@ -428,7 +446,7 @@ impl Level {
         });
     }
 
-    pub async fn get_tick_data(&self) -> TickData {
+    pub fn get_tick_data(&self) -> TickData {
         let mut ticks = TickData {
             block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
@@ -492,7 +510,7 @@ impl Level {
     }
 
     pub fn clean_memory(&self) {
-        self.chunk_watchers.retain(|_, watcher| !watcher.is_zero());
+        self.chunk_watchers.retain(|_, watcher| *watcher != 0);
         self.loaded_entity_chunks
             .retain(|at, _| self.chunk_watchers.get(at).is_some());
 
@@ -538,7 +556,7 @@ impl Level {
             let mut lock = self.chunk_loading.lock().unwrap();
             lock.remove_ticket(pos, 31);
             lock.send_change();
-        }
+        };
 
         chunk
     }

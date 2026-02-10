@@ -1,3 +1,4 @@
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::{Block, tracked_data::TrackedData};
@@ -108,6 +109,15 @@ impl EntityBase for FallingEntity {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    fn damage<'a>(
+        &'a self,
+        _caller: &'a dyn EntityBase,
+        _amount: f32,
+        _damage_type: DamageType,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move { false })
     }
 
     fn get_gravity(&self) -> f64 {
