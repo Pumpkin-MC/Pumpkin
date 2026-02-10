@@ -248,6 +248,21 @@ impl LivingEntity {
         succeeded
     }
 
+    pub async fn clear_effects(&self) {
+        // Loop over all effects and remove them
+        let effect_types: Vec<&'static StatusEffect> = self
+            .active_effects
+            .lock()
+            .await
+            .keys()
+            .cloned()
+            .collect();
+        
+        for effect_type in effect_types {
+            self.remove_effect(effect_type).await;
+        }
+    }
+
     pub async fn has_effect(&self, effect: &'static StatusEffect) -> bool {
         let effects = self.active_effects.lock().await;
         effects.contains_key(&effect)
@@ -1376,6 +1391,9 @@ impl EntityBase for LivingEntity {
                                 .hunger_manager
                                 .eat(player, food.nutrition as u8, food.saturation)
                                 .await;
+
+                            // Apply any special effects from consuming this food to the player
+                            player.consume_food_effects(item.item).await; 
 
                             // Decrement item only when actual consumption happens
                             player

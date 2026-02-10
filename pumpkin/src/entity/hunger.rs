@@ -150,8 +150,8 @@ impl HungerManager {
     }
 
     /// Apply eating effects.
-    pub async fn eat(&self, player: &Player, food: u8, saturation: f32) {
-        let added_saturation = saturation;
+    pub async fn eat(&self, player: &Player, food: u8, saturation_modifier: f32) {
+        let added_saturation = f32::from(food) * saturation_modifier * 2.0;
 
         let current_level = self.level.load();
         let current_sat = self.saturation.load();

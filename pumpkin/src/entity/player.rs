@@ -1826,6 +1826,281 @@ impl Player {
         }}
     }
 
+    /// Attempt to teleport the player to a random nearby location within `max_distance` blocks.
+    /// Returns `true` if a successful teleport occurred.
+    pub async fn teleport_randomly(self: &Arc<Self>, max_distance: i32) -> bool {
+        const ATTEMPTS: usize = 16;
+        const VERTICAL_RANGE: i32 = 16; // Search up/down 16 blocks from player
+        const MIN_Y: i32 = -64;
+        const MAX_Y: i32 = 319;
+
+        let origin = self.position();
+        let world = self.world();
+
+        for _ in 0..ATTEMPTS {
+            // Pick a random X and Z within max_distance
+            let dx = (rand::random::<f64>() * ((2 * max_distance + 1) as f64)).floor() - (max_distance as f64) + rand::random::<f64>();
+            let dz = (rand::random::<f64>() * ((2 * max_distance + 1) as f64)).floor() - (max_distance as f64) + rand::random::<f64>();
+            
+            let target_x = origin.x + dx;
+            let target_z = origin.z + dz;
+            
+            let bx = target_x.floor() as i32;
+            let bz = target_z.floor() as i32;
+
+            let start_y = (origin.y as i32 + VERTICAL_RANGE).min(MAX_Y - 2);
+            let end_y = (origin.y as i32 - VERTICAL_RANGE).max(MIN_Y + 1);
+
+            let mut found_y = None;
+
+            // Search Top-Down to find the highest valid ground in the window
+            for y in (end_y..=start_y).rev() {
+                let pos = BlockPos(Vector3::new(bx, y, bz));
+                
+                // Get block states
+                let below_state = world.get_block_state(&pos.down()).await;
+                let feet_state = world.get_block_state(&pos).await;
+                let head_state = world.get_block_state(&pos.up()).await;
+
+                // Safety Checks
+                let is_solid_ground = below_state.is_solid(); 
+                let is_safe_body = !feet_state.is_solid() && !feet_state.is_liquid(); 
+                let is_safe_head = !head_state.is_solid() && !head_state.is_liquid();
+
+                if is_solid_ground && is_safe_body && is_safe_head {
+                    found_y = Some(y);
+                    break;
+                }
+            }
+
+            // If we found a valid Y level, execute teleport
+            if let Some(y) = found_y {
+                // Spawn particles at OLD location
+                world.spawn_particle(origin, Vector3::new(0.5, 0.5, 0.5), 0.2, 32, Particle::Portal).await;
+
+                let target_pos = Vector3::new(target_x, f64::from(y) + 0.5, target_z); // +0.5 Y to stand on center of block
+
+                // Spawn particles & sound at new location
+                world.spawn_particle(target_pos, Vector3::new(0.5, 0.5, 0.5), 0.2, 32, Particle::Portal).await;
+                world.play_sound_fine(Sound::ItemChorusFruitTeleport, SoundCategory::Players, &target_pos, 1.0, 1.0).await;
+
+                // Reset fall distance
+                self.living_entity.fall_distance.store(0.0);
+
+                // Execute
+                let yaw = self.living_entity.entity.yaw.load();
+                let pitch = self.living_entity.entity.pitch.load();
+                self.request_teleport(target_pos, yaw, pitch).await;
+                
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Apply special effects associated with consuming a food item.
+    pub async fn consume_food_effects(&self, item: &pumpkin_data::item::Item) {
+        // Chorus fruit teleports the player randomly when eaten.
+        if item == &pumpkin_data::item::Item::CHORUS_FRUIT {
+             if let Some(arc_player) = self.world().get_player_by_id(self.entity_id()) {
+                // Try to teleport; ignore failure
+                let _ = arc_player.teleport_randomly(16).await;
+            }
+            return;
+        }
+
+        // Rotten flesh has a chance to give Hunger effect on consumption.
+        if item == &pumpkin_data::item::Item::ROTTEN_FLESH {
+            // Only give effect 80% of the time
+            if rand::random::<f32>() < 0.8 {
+                let hunger_effect = Effect {
+                    effect_type: &StatusEffect::HUNGER,
+                    duration: 600,
+                    amplifier: 0,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: false,
+                };
+                self.living_entity.add_effect(hunger_effect).await;
+            }
+        }
+
+        // Raw chicken has a chance to give Hunger effect on consumption.
+        if item == &pumpkin_data::item::Item::CHICKEN {
+            // Only give effect 30% of the time
+            if rand::random::<f32>() < 0.3 {
+                let hunger_effect = Effect {
+                    effect_type: &StatusEffect::HUNGER,
+                    duration: 600,
+                    amplifier: 0,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: false,
+                };
+                self.living_entity.add_effect(hunger_effect).await;
+            }
+        }
+
+        // Spider eyes give Poison effect on consumption.
+        if item == &pumpkin_data::item::Item::SPIDER_EYE {
+            let poison_effect = Effect {
+                effect_type: &StatusEffect::POISON,
+                duration: 100,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            };
+
+            self.living_entity.add_effect(poison_effect).await;
+        }
+
+        // Poisoned potatoes have a chance to give Poison effect on consumption.
+        if item == &pumpkin_data::item::Item::POISONOUS_POTATO {
+            // Only give effect 60% of the time
+            if rand::random::<f32>() < 0.6 {
+                let poison_effect = Effect {
+                    effect_type: &StatusEffect::POISON,
+                    duration: 100,
+                    amplifier: 0,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: false,
+                };
+
+                self.living_entity.add_effect(poison_effect).await;
+            }
+        }
+
+        // Pufferfish gives Hunger, Nausea, and Poison effects on consumption.
+        if item == &pumpkin_data::item::Item::PUFFERFISH {
+            let hunger_effect = Effect {
+                effect_type: &StatusEffect::HUNGER,
+                duration: 300,
+                amplifier: 2,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            };
+            
+            let nausea_effect = Effect {
+                effect_type: &StatusEffect::NAUSEA,
+                duration: 300,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            };
+            
+            let poison_effect = Effect {
+                effect_type: &StatusEffect::POISON,
+                duration: 1200,
+                amplifier: 1,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            };
+
+            self.living_entity.add_effect(hunger_effect).await;
+            self.living_entity.add_effect(nausea_effect).await;
+            self.living_entity.add_effect(poison_effect).await;
+        }
+
+        // Enchanted golden apples give Regeneration, Absorption, Resistance, and Fire Resistance effects on consumption.
+        if item == &pumpkin_data::item::Item::ENCHANTED_GOLDEN_APPLE {
+            let regeneration_effect = Effect {
+                effect_type: &StatusEffect::REGENERATION,
+                duration: 400,
+                amplifier: 1,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            };
+            
+            let absorption_effect = Effect {
+                effect_type: &StatusEffect::ABSORPTION,
+                duration: 2400,
+                amplifier: 3,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            };
+            
+            let resistance_effect = Effect {
+                effect_type: &StatusEffect::RESISTANCE,
+                duration: 6000,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            };
+            
+            let fire_resistance_effect = Effect {
+                effect_type: &StatusEffect::FIRE_RESISTANCE,
+                duration: 6000,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            };
+
+            self.living_entity.add_effect(regeneration_effect).await;
+            self.living_entity.add_effect(absorption_effect).await;
+            self.living_entity.add_effect(resistance_effect).await;
+            self.living_entity.add_effect(fire_resistance_effect).await;
+        }
+
+        // Golden apples give Regeneration and Absorption effects on consumption.
+        if item == &pumpkin_data::item::Item::GOLDEN_APPLE {
+            let regeneration_effect = Effect {
+                effect_type: &StatusEffect::REGENERATION,
+                duration: 100,
+                amplifier: 1,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            };
+            
+            let absorption_effect = Effect {
+                effect_type: &StatusEffect::ABSORPTION,
+                duration: 2400,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            };
+
+            self.living_entity.add_effect(regeneration_effect).await;
+            self.living_entity.add_effect(absorption_effect).await;
+        }
+
+        // Honey bottles clears Poison effect on consumption.
+        if item == &pumpkin_data::item::Item::HONEY_BOTTLE {
+            self.living_entity.remove_effect(&StatusEffect::POISON).await;
+        }
+
+        // Milk buckets clear all status effects on consumption.
+        if item == &pumpkin_data::item::Item::MILK_BUCKET {
+            self.living_entity.clear_effects().await;
+        }
+
+        // TODO: Suspicious stew gives different effects based on the flower used.
+    }
+
     pub fn block_interaction_range(&self) -> f64 {
         if self.gamemode.load() == GameMode::Creative {
             5.0
