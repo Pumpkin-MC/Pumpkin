@@ -294,6 +294,10 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
+        if player.awaiting_teleport.lock().await.is_some() {
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
@@ -400,6 +404,10 @@ impl JavaClient {
         packet: SPlayerPositionRotation,
     ) {
         if !player.has_client_loaded() {
+            return;
+        }
+        // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
+        if player.awaiting_teleport.lock().await.is_some() {
             return;
         }
         // y = feet Y

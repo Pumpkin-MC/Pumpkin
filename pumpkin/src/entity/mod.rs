@@ -27,6 +27,7 @@ use pumpkin_data::{
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
+    PositionFlag,
     codec::var_int::VarInt,
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
@@ -2132,6 +2133,7 @@ impl Entity {
             .await;
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn remove_passenger(&self, passenger_id: i32) {
         let mut passengers = self.passengers.lock().await;
         let removed_passenger = if let Some(idx) = passengers
@@ -2151,11 +2153,6 @@ impl Entity {
             .collect();
         drop(passengers);
 
-        let world = self.world.load();
-        world
-            .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
-            .await;
-
         if let Some(passenger) = removed_passenger {
             let vehicle_box = self.bounding_box.load();
             let passenger_entity = passenger.get_entity();
@@ -2163,6 +2160,56 @@ impl Entity {
             let passenger_width = passenger_entity.entity_dimension.load().width as f64;
             let vehicle_width = self.entity_dimension.load().width as f64;
 
+            // Pre-allocate teleport ID and block movement packets BEFORE sending
+            // CSetPassengers. This prevents a race condition where the client receives
+            // the dismount packet, sends stale position packets from the old riding
+            // position, and the server processes them before the teleport arrives.
+            let teleport_id = if let Some(player) = passenger.get_player() {
+                let id = player
+                    .teleport_id_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1;
+                // Use fallback position as placeholder — updated below with real position
+                let placeholder =
+                    Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
+                *player.awaiting_teleport.lock().await = Some((id.into(), placeholder));
+                Some(id)
+            } else {
+                None
+            };
+
+            // Vanilla: ridingCooldown = 60 (prevents immediate re-mount)
+            passenger_entity
+                .riding_cooldown
+                .store(60, Relaxed);
+            // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
+
+            // Now send CSetPassengers — client movement is already blocked.
+            // Vanilla sends this directly to the dismounting player's connection,
+            // then broadcasts to other players separately.
+            let world = self.world.load();
+            let passengers_packet = CSetPassengers::new(
+                VarInt(self.entity_id),
+                &passenger_ids,
+            );
+            if let Some(player) = passenger.get_player() {
+                player
+                    .client
+                    .enqueue_packet(&passengers_packet)
+                    .await;
+                world
+                    .broadcast_packet_except(
+                        &[player.gameprofile.id],
+                        &passengers_packet,
+                    )
+                    .await;
+            } else {
+                world
+                    .broadcast_packet_all(&passengers_packet)
+                    .await;
+            }
+
+            // Calculate dismount offset (vanilla getPassengerDismountOffset)
             let offset_dist =
                 (vehicle_width * std::f64::consts::SQRT_2 + passenger_width + 0.00001) / 2.0;
             let yaw_rad = (-passenger_yaw).to_radians();
@@ -2175,60 +2222,118 @@ impl Entity {
             let target_x = self.pos.load().x + offset_x;
             let target_z = self.pos.load().z + offset_z;
             let target_block_y = vehicle_box.max.y.floor() as i32;
-            let target_block_pos = BlockPos(Vector3::new(
+            let block_pos = BlockPos(Vector3::new(
                 target_x.floor() as i32,
                 target_block_y,
                 target_z.floor() as i32,
             ));
-            let below_block_pos = BlockPos(Vector3::new(
+            let below_pos = BlockPos(Vector3::new(
                 target_x.floor() as i32,
                 target_block_y - 1,
                 target_z.floor() as i32,
             ));
 
-            let world = self.world.load();
-            let below_state_id = world.get_block_state_id(&below_block_pos).await;
-            let is_water = Fluid::from_state_id(below_state_id).is_some();
+            let below_state_id = world.get_block_state_id(&below_pos).await;
+            // Vanilla: isWater checks specifically for water fluid, not any fluid
+            let is_water = Fluid::from_state_id(below_state_id).is_some_and(|f| {
+                f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id
+            });
+
+            let fallback_pos =
+                Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
 
             let dismount_pos = if is_water {
-                Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z)
+                fallback_pos
             } else {
-                let target_state = world.get_block_state(&target_block_pos).await;
-                let below_state = world.get_block_state(&below_block_pos).await;
+                // Vanilla tries two Y levels: at vehicle top and one block below
+                let mut candidates = Vec::new();
+                for pos in [&block_pos, &below_pos] {
+                    let height = world.get_dismount_height(pos).await;
+                    // Vanilla: canDismountInBlock = !height.is_infinite() && height < 1.0
+                    if height.is_finite() && height < 1.0 {
+                        candidates.push(Vector3::new(
+                            target_x,
+                            f64::from(pos.0.y) + height,
+                            target_z,
+                        ));
+                    }
+                }
 
-                let target_is_solid = !target_state.is_air();
-                let below_is_solid = !below_state.is_air();
+                // Try poses: Standing, Crouching, Swimming (vanilla order)
+                let poses = [
+                    EntityPose::Standing,
+                    EntityPose::Crouching,
+                    EntityPose::Swimming,
+                ];
+                let mut found = None;
+                'outer: for pose in poses {
+                    let dims = Self::get_entity_dimensions(pose);
+                    for candidate in &candidates {
+                        let bbox = BoundingBox::new_from_pos(
+                            candidate.x,
+                            candidate.y,
+                            candidate.z,
+                            &dims,
+                        );
+                        if world.is_space_empty(bbox).await {
+                            found = Some((*candidate, pose));
+                            break 'outer;
+                        }
+                    }
+                }
 
-                if below_is_solid && !target_is_solid {
-                    Vector3::new(target_x, f64::from(target_block_y), target_z)
-                } else if !below_is_solid {
-                    Vector3::new(target_x, f64::from(target_block_y - 1) + 1.0, target_z)
+                if let Some((pos, pose)) = found {
+                    if pose != EntityPose::Standing {
+                        passenger_entity.set_pose(pose).await;
+                    }
+                    pos
                 } else {
-                    Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z)
+                    fallback_pos
                 }
             };
 
             if let Some(player) = passenger.get_player() {
-                let teleport_id = player
-                    .teleport_id_count
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                    + 1;
+                let id = teleport_id.unwrap();
                 player.living_entity.entity.set_pos(dismount_pos);
-                *player.awaiting_teleport.lock().await = Some((teleport_id.into(), dismount_pos));
+                // Update awaiting_teleport with the real dismount position
+                *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
+                // Use enqueue_packet (not send_packet_now) so the teleport goes through
+                // the same packet queue as CSetPassengers, preserving send order.
+                // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
+                // With rotation relative and yaw/pitch=0, the client preserves its current look.
                 player
                     .client
-                    .send_packet_now(&CPlayerPosition::new(
-                        teleport_id.into(),
+                    .enqueue_packet(&CPlayerPosition::new(
+                        id.into(),
                         dismount_pos,
                         Vector3::new(0.0, 0.0, 0.0),
-                        passenger_yaw,
                         0.0,
-                        Vec::new(),
+                        0.0,
+                        vec![
+                            PositionFlag::DeltaX,
+                            PositionFlag::DeltaY,
+                            PositionFlag::DeltaZ,
+                            PositionFlag::YRot,
+                            PositionFlag::XRot,
+                        ],
                     ))
                     .await;
+                // Vanilla: setSneaking(false) after dismount via sneak input
+                if passenger_entity.sneaking.load(Relaxed) {
+                    passenger_entity.set_sneaking(false).await;
+                }
             } else {
                 passenger_entity.set_pos(dismount_pos);
             }
+        } else {
+            // No passenger was removed, still need to broadcast the passenger list
+            let world = self.world.load();
+            world
+                .broadcast_packet_all(&CSetPassengers::new(
+                    VarInt(self.entity_id),
+                    &passenger_ids,
+                ))
+                .await;
         }
     }
 
