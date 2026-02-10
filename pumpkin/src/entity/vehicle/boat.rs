@@ -3,13 +3,11 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crossbeam::atomic::AtomicCell;
 
-use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
 use crate::server::Server;
+use crate::world::loot::{LootContextParameters, LootTableExt};
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -84,44 +82,16 @@ impl BoatEntity {
             .await;
     }
 
-    const fn entity_to_item(entity_type: &EntityType) -> &'static Item {
-        match entity_type.id {
-            val if val == EntityType::OAK_BOAT.id => &Item::OAK_BOAT,
-            val if val == EntityType::OAK_CHEST_BOAT.id => &Item::OAK_CHEST_BOAT,
-            val if val == EntityType::SPRUCE_BOAT.id => &Item::SPRUCE_BOAT,
-            val if val == EntityType::SPRUCE_CHEST_BOAT.id => &Item::SPRUCE_CHEST_BOAT,
-            val if val == EntityType::BIRCH_BOAT.id => &Item::BIRCH_BOAT,
-            val if val == EntityType::BIRCH_CHEST_BOAT.id => &Item::BIRCH_CHEST_BOAT,
-            val if val == EntityType::JUNGLE_BOAT.id => &Item::JUNGLE_BOAT,
-            val if val == EntityType::JUNGLE_CHEST_BOAT.id => &Item::JUNGLE_CHEST_BOAT,
-            val if val == EntityType::ACACIA_BOAT.id => &Item::ACACIA_BOAT,
-            val if val == EntityType::ACACIA_CHEST_BOAT.id => &Item::ACACIA_CHEST_BOAT,
-            val if val == EntityType::DARK_OAK_BOAT.id => &Item::DARK_OAK_BOAT,
-            val if val == EntityType::DARK_OAK_CHEST_BOAT.id => &Item::DARK_OAK_CHEST_BOAT,
-            val if val == EntityType::MANGROVE_BOAT.id => &Item::MANGROVE_BOAT,
-            val if val == EntityType::MANGROVE_CHEST_BOAT.id => &Item::MANGROVE_CHEST_BOAT,
-            val if val == EntityType::CHERRY_BOAT.id => &Item::CHERRY_BOAT,
-            val if val == EntityType::CHERRY_CHEST_BOAT.id => &Item::CHERRY_CHEST_BOAT,
-            val if val == EntityType::PALE_OAK_BOAT.id => &Item::PALE_OAK_BOAT,
-            val if val == EntityType::PALE_OAK_CHEST_BOAT.id => &Item::PALE_OAK_CHEST_BOAT,
-            val if val == EntityType::BAMBOO_RAFT.id => &Item::BAMBOO_RAFT,
-            val if val == EntityType::BAMBOO_CHEST_RAFT.id => &Item::BAMBOO_CHEST_RAFT,
-            _ => &Item::OAK_BOAT,
-        }
-    }
-
     async fn kill_and_drop_self(&self) {
         let world = self.entity.world.load();
-        let pos = self.entity.pos.load();
         let entity_drops = world.level_info.load().game_rules.entity_drops;
 
-        if entity_drops {
-            let item = Self::entity_to_item(self.entity.entity_type);
-            let item_stack = pumpkin_world::item::ItemStack::new(1, item);
-
-            let item_entity = Entity::new(world.clone(), pos, &EntityType::ITEM);
-            let item_entity = Arc::new(ItemEntity::new(item_entity, item_stack).await);
-            world.spawn_entity(item_entity).await;
+        if entity_drops && let Some(loot_table) = &self.entity.entity_type.loot_table {
+            let pos = self.entity.block_pos.load();
+            let params = LootContextParameters::default();
+            for stack in loot_table.get_loot(params) {
+                world.drop_stack(&pos, stack).await;
+            }
         }
 
         self.entity.remove().await;
