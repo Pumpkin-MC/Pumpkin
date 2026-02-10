@@ -89,6 +89,12 @@ impl BlockState {
         self.state_flags & IS_SOLID != 0
     }
 
+    pub const fn block_movement(&self) -> bool {
+        self.id != 129 && // cobweb
+        self.id != 789 && // bamboo sapling
+        self.is_solid()
+    }
+
     #[must_use]
     pub const fn is_full_cube(&self) -> bool {
         self.state_flags & IS_FULL_CUBE != 0
