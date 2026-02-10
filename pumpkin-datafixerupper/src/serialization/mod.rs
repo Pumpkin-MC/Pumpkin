@@ -11,6 +11,8 @@ mod key_compressor;
 pub mod keyable;
 pub mod lifecycle;
 pub mod list_builder;
+mod map_codec;
+mod map_codecs;
 pub mod map_coders;
 pub mod map_like;
 mod struct_builder;
