@@ -3,10 +3,10 @@ use crate::serialization::codecs::list::ListCodec;
 use crate::serialization::coders::{Decoder, Encoder};
 use std::sync::LazyLock;
 
-/// A trait describing the way to **encode from and decode into** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
+/// A type of *codec* describing the way to **encode from and decode into** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
 pub trait Codec: Encoder + Decoder {}
 
-// Any struct implementing Encoder<A> and Decoder<A> will also implement Codec<A>.
+// Any struct implementing Encoder<Value = A> and Decoder<Value = A> will also implement Codec<Value = A>.
 impl<T> Codec for T where T: Encoder + Decoder {}
 
 // Modifier methods

@@ -16,7 +16,7 @@ use std::fmt::Debug;
 #[derive(Debug)]
 pub struct ListCodec<C>
 where
-    C: Codec + ?Sized,
+    C: Codec + ?Sized + 'static,
 {
     pub(crate) element_codec: &'static C,
     pub(crate) min_size: usize,
