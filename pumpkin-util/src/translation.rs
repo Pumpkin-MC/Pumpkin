@@ -150,15 +150,16 @@ pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
     }
 
     let (substitutions, indices) = reorder_substitutions(&translation, with);
-    let mut displacement = 0;
+    let mut displacement = 0i32;
     for (idx, &range) in indices.iter().enumerate() {
         let sub_idx = idx.clamp(0, substitutions.len() - 1);
         let substitution = substitutions[sub_idx].clone().to_pretty_console();
         translation.replace_range(
-            range.start + displacement..=range.end + displacement,
+            (range.start as i32 + displacement) as usize
+                ..=(range.end as i32 + displacement) as usize,
             &substitution,
         );
-        displacement += substitution.len() - range.len();
+        displacement += substitution.len() as i32 - range.len() as i32;
     }
     translation
 }
