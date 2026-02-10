@@ -11,7 +11,11 @@ members = [
     "pumpkin/",
     "pumpkin-data",
 ]
+<<<<<<< HEAD
 exclude = ["pumpkin-codegen", "pumpkin-build"]
+=======
+exclude = ["pumpkin-codegen"]
+>>>>>>> upstream/master
 
 [workspace.lints.clippy]
 # Groups

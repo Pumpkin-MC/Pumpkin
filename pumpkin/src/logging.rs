@@ -240,7 +240,10 @@ impl ReadlineLogWrapper {
             .map_or_else(|_| None, |mut result| result.take())
     }
 
+<<<<<<< HEAD
     #[allow(dead_code)]
+=======
+>>>>>>> upstream/master
     pub(crate) fn return_readline(&self, rl: Editor<PumpkinCommandCompleter, FileHistory>) {
         if let Ok(mut result) = self.readline.lock() {
             let _ = result.insert(rl);

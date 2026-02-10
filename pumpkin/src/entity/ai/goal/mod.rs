@@ -7,7 +7,11 @@ pub mod creeper_ignite;
 pub mod goal_selector;
 pub mod look_around;
 pub mod look_at_entity;
+<<<<<<< HEAD
 mod melee_attack;
+=======
+pub mod melee_attack;
+>>>>>>> upstream/master
 pub mod move_to_target_pos;
 pub mod step_and_destroy_block;
 mod track_target;

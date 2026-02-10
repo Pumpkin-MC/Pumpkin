@@ -40,6 +40,10 @@ impl MeleeAttackGoal {
         }
     }
 
+<<<<<<< HEAD
+=======
+    #[must_use]
+>>>>>>> upstream/master
     pub fn get_max_cooldown(&self) -> i32 {
         self.get_tick_count(20)
     }

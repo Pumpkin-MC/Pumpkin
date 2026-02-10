@@ -19,7 +19,11 @@ use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use tokio::sync::Mutex;
 
 pub mod creeper;
+<<<<<<< HEAD
 pub mod drowned;
+=======
+pub mod enderman;
+>>>>>>> upstream/master
 pub mod silverfish;
 pub mod skeleton;
 pub mod zombie;
