@@ -20,6 +20,7 @@ use rustc_hash::FxHashMap;
 
 use super::{
     GlobalRandomConfig, biome_coords,
+    blender::{Blender, BlenderImpl},
     feature::placed_features::PLACED_FEATURES,
     noise::router::{
         multi_noise_sampler::MultiNoiseSampler, proto_noise_router::DoublePerlinNoiseBuilder,
@@ -45,7 +46,6 @@ use crate::generation::structure::try_generate_structure;
 use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
     BlockStateId, ProtoNoiseRouters,
-    biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier},
     block::RawBlockState,
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
@@ -628,6 +628,7 @@ impl ProtoChunk {
         dimension: Dimension,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
+        let biome_supplier = Blender::NO_BLEND.get_biome_supplier();
         let min_y = self.bottom_y();
         let bottom_section = section_coords::block_to_section(min_y as i32);
         let top_section = section_coords::block_to_section(min_y as i32 + self.height() as i32 - 1);
@@ -646,23 +647,13 @@ impl ProtoChunk {
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
-                        let biome = if dimension == Dimension::THE_END {
-                            TheEndBiomeSupplier::biome(
-                                start_biome_x + x,
-                                start_biome_y + y,
-                                start_biome_z + z,
-                                multi_noise_sampler,
-                                dimension,
-                            )
-                        } else {
-                            MultiNoiseBiomeSupplier::biome(
-                                start_biome_x + x,
-                                start_biome_y + y,
-                                start_biome_z + z,
-                                multi_noise_sampler,
-                                dimension,
-                            )
-                        };
+                        let biome = biome_supplier(
+                            start_biome_x + x,
+                            start_biome_y + y,
+                            start_biome_z + z,
+                            multi_noise_sampler,
+                            dimension,
+                        );
                         let index = self.local_biome_pos_to_biome_index(
                             x,
                             start_biome_y + y - biome_coords::from_block(min_y as i32),
