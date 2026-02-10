@@ -7,7 +7,7 @@ fn is_cargo_run() -> bool {
 
 fn main() -> Result<(), BootstrapError> {
     if is_cargo_run() {
-        eprintln!("Running with cargo. Bootsrapping is useless.")
+        eprintln!("Running with cargo. Bootstrapping is useless.")
     }
 
     let self_path = env::current_exe().map_err(BootstrapError::CurrentExe)?;
