@@ -47,18 +47,31 @@ impl<R> DataResult<R> {
         }
     }
 
-    /// Sets this `DataResult`'s lifecycle (mutates it).
-    pub const fn set_lifecycle(&mut self, new_lifecycle: Lifecycle) {
+    /// Sets this `DataResult`'s lifecycle and returns a new result.
+    #[must_use]
+    pub fn with_lifecycle(self, new_lifecycle: Lifecycle) -> Self {
         match self {
-            Self::Success { lifecycle, .. } | Self::Error { lifecycle, .. } => {
-                *lifecycle = new_lifecycle;
-            }
+            Self::Success { result, .. } => Self::Success {
+                result,
+                lifecycle: new_lifecycle,
+            },
+            Self::Error {
+                partial_result,
+                message,
+                ..
+            } => Self::Error {
+                partial_result,
+                message,
+                lifecycle: new_lifecycle,
+            },
         }
     }
 
-    /// Adds another `Lifecycle` to this this `DataResult`'s lifecycle (mutates it).
-    pub const fn add_lifecycle(&mut self, added_lifecycle: Lifecycle) {
-        self.set_lifecycle(self.lifecycle().add(added_lifecycle));
+    /// Adds another `Lifecycle` to this `DataResult`'s lifecycle and returns the new result.
+    #[must_use]
+    pub fn add_lifecycle(self, added_lifecycle: Lifecycle) -> Self {
+        let new_lifecycle = self.lifecycle().add(added_lifecycle);
+        self.with_lifecycle(new_lifecycle)
     }
 
     /// Returns a *successful* `DataResult` with an experimental lifecycle.
@@ -218,10 +231,8 @@ impl<R> DataResult<R> {
     pub fn flat_map<T>(self, f: impl FnOnce(R) -> DataResult<T>) -> DataResult<T> {
         match self {
             Self::Success { result, lifecycle } => {
-                let mut new_data_result = f(result);
                 // Add this DataResult's lifecycle to the new DataResult.
-                new_data_result.add_lifecycle(lifecycle);
-                new_data_result
+                f(result).add_lifecycle(lifecycle)
             }
             Self::Error {
                 partial_result,
@@ -352,9 +363,8 @@ impl<R> DataResult<R> {
         f: impl FnOnce(R, R2) -> T,
         second_result: DataResult<R2>,
     ) -> DataResult<T> {
-        let mut result = self.apply_2(f, second_result);
-        result.set_lifecycle(Lifecycle::Stable);
-        result
+        self.apply_2(f, second_result)
+            .with_lifecycle(Lifecycle::Stable)
     }
 
     /// Applies a function to each result of three `DataResult`s of different types.

@@ -1,8 +1,6 @@
-use std::fmt::Display;
-
 /// A trait that can be used to treat something as a map view of a dynamic type.
 /// The [`Value`] of this trait is the *dynamic type* of this map-like.
-pub trait MapLike: Display {
+pub trait MapLike {
     type Value;
 
     /// Gets the value of this map view with a key of the *dynamic type* of this map-like.

@@ -74,8 +74,7 @@ where
         input: T,
         ops: &'static impl DynamicOps<Value = T>,
     ) -> DataResult<(Self::Value, T)> {
-        let mut iter = ops.get_iter(&input);
-        iter.set_lifecycle(Lifecycle::Stable);
+        let iter = ops.get_iter(&input).with_lifecycle(Lifecycle::Stable);
         iter.flat_map(|i| {
             let mut total_count = 0;
             let mut elements: Self::Value = vec![];
