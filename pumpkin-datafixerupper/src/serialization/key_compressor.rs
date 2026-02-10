@@ -1,22 +1,23 @@
 use crate::serialization::dynamic_ops::DynamicOps;
 use std::collections::HashMap;
 
-/// A struct to compress keys of a map of type `T` by converting them to numbers (making a kind of list) and back.
-pub struct KeyCompressor<T, O: DynamicOps<Value = T> + 'static> {
+/// A struct to compress keys of a map by converting them to numbers (making a kind of list) and back.
+pub struct KeyCompressor {
     compress_map: HashMap<String, usize>,
     decompress_map: HashMap<usize, String>,
     size: usize,
-    ops: &'static O,
 }
 
-impl<T, O: DynamicOps<Value = T>> KeyCompressor<T, O> {
-    /// Returns a new `KeyCompressor` with the calculated compressor and decompressor maps.
-    pub(crate) fn new(ops: &'static O, key_iter: impl Iterator<Item = T>) -> Self {
+impl KeyCompressor {
+    /// Returns a new `KeyCompressor` with the calculated compressor and decompressor maps .
+    pub(crate) fn new<T>(
+        key_iter: impl Iterator<Item = T>,
+        ops: &'static impl DynamicOps<Value = T>,
+    ) -> Self {
         let mut c = Self {
             compress_map: HashMap::new(),
             decompress_map: HashMap::new(),
             size: 0,
-            ops,
         };
 
         // Iterate over every key.
@@ -35,21 +36,32 @@ impl<T, O: DynamicOps<Value = T>> KeyCompressor<T, O> {
         c
     }
 
-    /// Gets the decompressed key of an index.
-    pub fn decompress_key(&self, key: usize) -> Option<T> {
-        self.decompress_map
-            .get(&key)
-            .map(|s| self.ops.create_string(s))
+    /// Gets the decompressed key of an index with the provided dynamic type.
+    pub fn decompress_key<T>(
+        &self,
+        key: usize,
+        ops: &'static impl DynamicOps<Value = T>,
+    ) -> Option<T> {
+        self.decompress_map.get(&key).map(|s| ops.create_string(s))
     }
 
-    /// Gets the compressed key of the dynamic type.
-    pub fn compress_key(&self, key: &T) -> Option<usize> {
-        let string = self.ops.get_string(key).into_result()?;
+    /// Gets the compressed key of the provided dynamic type.
+    pub fn compress_key<T>(
+        &self,
+        key: &T,
+        ops: &'static impl DynamicOps<Value = T>,
+    ) -> Option<usize> {
+        let string = ops.get_string(key).into_result()?;
         self.compress_key_str(&string)
     }
 
+    /// Gets the decompressed string key of an index.
+    fn decompress_key_str(&self, key: usize) -> Option<String> {
+        self.decompress_map.get(&key).cloned()
+    }
+
     /// Gets the compressed key of a string value.
-    pub fn compress_key_str(&self, key: &str) -> Option<usize> {
+    pub(crate) fn compress_key_str(&self, key: &str) -> Option<usize> {
         self.compress_map.get(key).copied()
     }
 
