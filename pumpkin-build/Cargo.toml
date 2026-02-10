@@ -1,0 +1,11 @@
+[package]
+name = "pumpkin"      # Equal name makes cargo uninstall easier
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+
+[[bin]]
+name = "pumpkin"
+path = "src/main.rs"
+
+[dependencies]
