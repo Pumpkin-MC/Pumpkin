@@ -140,6 +140,8 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     /// -   `Data Length`: (Only present in compressed packets) The length of the uncompressed `Packet ID` and `Data`.
     /// -   `Packet ID`: The ID of the packet.
     /// -   `Data`: The packet's data.
+    ///
+    /// NOTE: This method does not flush. Call [`Self::flush`] to flush buffered data.
     pub async fn write_packet(&mut self, packet_data: Bytes) -> Result<(), PacketEncodeError> {
         // We need to know the length of the compressed buffer and serde is not async :(
         // We need to write to a buffer here 😔
@@ -261,11 +263,14 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
         }
 
+        Ok(())
+    }
+
+    pub async fn flush(&mut self) -> Result<(), PacketEncodeError> {
         self.writer
             .flush()
             .await
-            .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-        Ok(())
+            .map_err(|err| PacketEncodeError::Message(err.to_string()))
     }
 }
 

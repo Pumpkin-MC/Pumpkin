@@ -471,9 +471,7 @@ impl Server {
     /// * `packet`: A reference to the packet to be broadcast. The packet must implement the `ClientPacket` trait.
     pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         for world in self.worlds.load().iter() {
-            for player in world.players.load().iter() {
-                player.client.enqueue_packet(packet).await;
-            }
+            world.broadcast_packet_all(packet).await;
         }
     }
 
