@@ -2179,34 +2179,21 @@ impl Entity {
             };
 
             // Vanilla: ridingCooldown = 60 (prevents immediate re-mount)
-            passenger_entity
-                .riding_cooldown
-                .store(60, Relaxed);
+            passenger_entity.riding_cooldown.store(60, Relaxed);
             // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
 
             // Now send CSetPassengers — client movement is already blocked.
             // Vanilla sends this directly to the dismounting player's connection,
             // then broadcasts to other players separately.
             let world = self.world.load();
-            let passengers_packet = CSetPassengers::new(
-                VarInt(self.entity_id),
-                &passenger_ids,
-            );
+            let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
             if let Some(player) = passenger.get_player() {
-                player
-                    .client
-                    .enqueue_packet(&passengers_packet)
-                    .await;
+                player.client.enqueue_packet(&passengers_packet).await;
                 world
-                    .broadcast_packet_except(
-                        &[player.gameprofile.id],
-                        &passengers_packet,
-                    )
+                    .broadcast_packet_except(&[player.gameprofile.id], &passengers_packet)
                     .await;
             } else {
-                world
-                    .broadcast_packet_all(&passengers_packet)
-                    .await;
+                world.broadcast_packet_all(&passengers_packet).await;
             }
 
             // Calculate dismount offset (vanilla getPassengerDismountOffset)
@@ -2235,9 +2222,8 @@ impl Entity {
 
             let below_state_id = world.get_block_state_id(&below_pos).await;
             // Vanilla: isWater checks specifically for water fluid, not any fluid
-            let is_water = Fluid::from_state_id(below_state_id).is_some_and(|f| {
-                f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id
-            });
+            let is_water = Fluid::from_state_id(below_state_id)
+                .is_some_and(|f| f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id);
 
             let fallback_pos =
                 Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
@@ -2269,12 +2255,8 @@ impl Entity {
                 'outer: for pose in poses {
                     let dims = Self::get_entity_dimensions(pose);
                     for candidate in &candidates {
-                        let bbox = BoundingBox::new_from_pos(
-                            candidate.x,
-                            candidate.y,
-                            candidate.z,
-                            &dims,
-                        );
+                        let bbox =
+                            BoundingBox::new_from_pos(candidate.x, candidate.y, candidate.z, &dims);
                         if world.is_space_empty(bbox).await {
                             found = Some((*candidate, pose));
                             break 'outer;
@@ -2329,10 +2311,7 @@ impl Entity {
             // No passenger was removed, still need to broadcast the passenger list
             let world = self.world.load();
             world
-                .broadcast_packet_all(&CSetPassengers::new(
-                    VarInt(self.entity_id),
-                    &passenger_ids,
-                ))
+                .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
                 .await;
         }
     }
