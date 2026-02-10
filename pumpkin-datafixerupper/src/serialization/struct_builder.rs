@@ -83,7 +83,7 @@ pub trait UniversalStructBuilder: ResultStructBuilder {
 macro_rules! impl_struct_builder {
     ($builder:ident, $ops:ident) => {
         fn set_lifecycle(&mut self, lifecycle: Lifecycle) {
-            self.$builder.set_lifecycle(lifecycle);
+            self.$builder = self.$builder.clone().with_lifecycle(lifecycle);
         }
 
         fn map_error(&mut self, f: Box<dyn FnOnce(String) -> String>) {
