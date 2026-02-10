@@ -2113,7 +2113,7 @@ impl JavaClient {
 
         // Check if there is a player in the way of the block being placed
         let state = BlockState::from_id(new_state);
-        for player in world.get_nearby_players(location.0.to_f64(), 3.0) {
+        for player in world.get_nearby_players(location.0.to_f64(), 3.0, None) {
             let player_box = player.living_entity.entity.bounding_box.load();
             for shape in state.get_block_collision_shapes() {
                 if shape.at_pos(final_block_pos).intersects(&player_box) {
