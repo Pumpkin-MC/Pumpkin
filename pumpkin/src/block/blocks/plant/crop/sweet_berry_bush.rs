@@ -9,7 +9,6 @@ use crate::{
     },
     world::World,
 };
-use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties},
@@ -69,14 +68,9 @@ impl BlockBehaviour for SweetBerryBushBlock {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position).await;
             let props = NetherWartLikeProperties::from_state_id(state_id, &Block::SWEET_BERRY_BUSH);
-            let mut lock = args.item_stack.lock().await;
+            let lock = args.item_stack.lock().await;
             if props.age != Integer0To3::L3 && lock.get_item() == &Item::BONE_MEAL {
-                <Self as PlantBlockBase>::grow(self, args.world, args.position).await;
-                lock.decrement(1);
-                args.world
-                    .sync_world_event(WorldEvent::BoneMealUsed, *args.position, 15)
-                    .await;
-                BlockActionResult::Success
+                BlockActionResult::Pass
             } else {
                 BlockActionResult::PassToDefaultBlockAction
             }
@@ -174,7 +168,7 @@ impl PlantBlockBase for SweetBerryBushBlock {
         <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down()).await
     }
 
-    async fn grow(&self, world: &Arc<World>, pos: &BlockPos) {
+    async fn _grow(&self, world: &Arc<World>, pos: &BlockPos) {
         let (block, state) = world.get_block_and_state_id(pos).await;
         let age = self.get_age(state, block);
         world

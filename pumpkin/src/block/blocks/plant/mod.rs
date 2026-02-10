@@ -47,7 +47,7 @@ trait PlantBlockBase {
             .await
     }
 
-    async fn grow(&self, _world: &Arc<World>, _pos: &BlockPos) {
+    async fn _grow(&self, _world: &Arc<World>, _pos: &BlockPos) {
         unimplemented!();
     }
 }
