@@ -1,7 +1,7 @@
 use crate::serialization::dynamic_ops::DynamicOps;
 use std::collections::HashMap;
 
-/// A struct to compress keys of a map of type `T` by converting them to numbers and back.
+/// A struct to compress keys of a map of type `T` by converting them to numbers (making a kind of list) and back.
 pub struct KeyCompressor<T, O: DynamicOps<Value = T> + 'static> {
     compress_map: HashMap<String, usize>,
     decompress_map: HashMap<usize, String>,
@@ -11,7 +11,7 @@ pub struct KeyCompressor<T, O: DynamicOps<Value = T> + 'static> {
 
 impl<T, O: DynamicOps<Value = T>> KeyCompressor<T, O> {
     /// Returns a new `KeyCompressor` with the calculated compressor and decompressor maps.
-    fn new(ops: &'static O, key_iter: impl Iterator<Item = T>) -> Self {
+    pub(crate) fn new(ops: &'static O, key_iter: impl Iterator<Item = T>) -> Self {
         let mut c = Self {
             compress_map: HashMap::new(),
             decompress_map: HashMap::new(),
