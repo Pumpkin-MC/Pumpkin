@@ -157,11 +157,39 @@ fn compose(first: &[u16], second: &[u16]) -> Vec<u16> {
 }
 
 pub fn build() -> TokenStream {
+    let mappings_2_to_4 =
+        parse_mapping_file("../assets/viaversion/data/mappings-1.21.2to1.21.4.nbt");
+    let mappings_4_to_5 =
+        parse_mapping_file("../assets/viaversion/data/mappings-1.21.4to1.21.5.nbt");
+    let mappings_5_to_6 =
+        parse_mapping_file("../assets/viaversion/data/mappings-1.21.5to1.21.6.nbt");
+    let mappings_6_to_7 =
+        parse_mapping_file("../assets/viaversion/data/mappings-1.21.6to1.21.7.nbt");
     let mappings_7_to_9 =
         parse_mapping_file("../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt");
     let mappings_9_to_11 =
         parse_mapping_file("../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt");
 
+    let remap_4_to_2 = invert_to_u16(
+        &mappings_2_to_4.forward,
+        mappings_2_to_4.mapped_size,
+        "1.21.4->1.21.2",
+    );
+    let remap_5_to_4 = invert_to_u16(
+        &mappings_4_to_5.forward,
+        mappings_4_to_5.mapped_size,
+        "1.21.5->1.21.4",
+    );
+    let remap_6_to_5 = invert_to_u16(
+        &mappings_5_to_6.forward,
+        mappings_5_to_6.mapped_size,
+        "1.21.6->1.21.5",
+    );
+    let remap_7_to_6 = invert_to_u16(
+        &mappings_6_to_7.forward,
+        mappings_6_to_7.mapped_size,
+        "1.21.7->1.21.6",
+    );
     let remap_9_to_7 = invert_to_u16(
         &mappings_7_to_9.forward,
         mappings_7_to_9.mapped_size,
@@ -173,6 +201,28 @@ pub fn build() -> TokenStream {
         "1.21.11->1.21.9",
     );
     let remap_11_to_7 = compose(&remap_11_to_9, &remap_9_to_7);
+    let remap_11_to_6 = compose(&remap_11_to_9, &compose(&remap_9_to_7, &remap_7_to_6));
+    let remap_11_to_5 = compose(
+        &remap_11_to_9,
+        &compose(&remap_9_to_7, &compose(&remap_7_to_6, &remap_6_to_5)),
+    );
+    let remap_11_to_4 = compose(
+        &remap_11_to_9,
+        &compose(
+            &remap_9_to_7,
+            &compose(&remap_7_to_6, &compose(&remap_6_to_5, &remap_5_to_4)),
+        ),
+    );
+    let remap_11_to_2 = compose(
+        &remap_11_to_9,
+        &compose(
+            &remap_9_to_7,
+            &compose(
+                &remap_7_to_6,
+                &compose(&remap_6_to_5, &compose(&remap_5_to_4, &remap_4_to_2)),
+            ),
+        ),
+    );
 
     let remap_11_to_9_tokens: Vec<Literal> = remap_11_to_9
         .into_iter()
@@ -182,16 +232,52 @@ pub fn build() -> TokenStream {
         .into_iter()
         .map(Literal::u16_unsuffixed)
         .collect();
+    let remap_11_to_6_tokens: Vec<Literal> = remap_11_to_6
+        .into_iter()
+        .map(Literal::u16_unsuffixed)
+        .collect();
+    let remap_11_to_5_tokens: Vec<Literal> = remap_11_to_5
+        .into_iter()
+        .map(Literal::u16_unsuffixed)
+        .collect();
+    let remap_11_to_4_tokens: Vec<Literal> = remap_11_to_4
+        .into_iter()
+        .map(Literal::u16_unsuffixed)
+        .collect();
+    let remap_11_to_2_tokens: Vec<Literal> = remap_11_to_2
+        .into_iter()
+        .map(Literal::u16_unsuffixed)
+        .collect();
 
     quote! {
         use pumpkin_util::version::MinecraftVersion;
 
         pub static BLOCK_STATE_REMAP_1_21_11_TO_1_21_9: &[u16] = &[#(#remap_11_to_9_tokens),*];
         pub static BLOCK_STATE_REMAP_1_21_11_TO_1_21_7: &[u16] = &[#(#remap_11_to_7_tokens),*];
+        pub static BLOCK_STATE_REMAP_1_21_11_TO_1_21_6: &[u16] = &[#(#remap_11_to_6_tokens),*];
+        pub static BLOCK_STATE_REMAP_1_21_11_TO_1_21_5: &[u16] = &[#(#remap_11_to_5_tokens),*];
+        pub static BLOCK_STATE_REMAP_1_21_11_TO_1_21_4: &[u16] = &[#(#remap_11_to_4_tokens),*];
+        pub static BLOCK_STATE_REMAP_1_21_11_TO_1_21_2: &[u16] = &[#(#remap_11_to_2_tokens),*];
 
         #[must_use]
         pub fn remap_block_state_for_version(state_id: u16, version: MinecraftVersion) -> u16 {
             match version {
+                MinecraftVersion::V_1_21_2 => BLOCK_STATE_REMAP_1_21_11_TO_1_21_2
+                    .get(usize::from(state_id))
+                    .copied()
+                    .unwrap_or(0),
+                MinecraftVersion::V_1_21_4 => BLOCK_STATE_REMAP_1_21_11_TO_1_21_4
+                    .get(usize::from(state_id))
+                    .copied()
+                    .unwrap_or(0),
+                MinecraftVersion::V_1_21_5 => BLOCK_STATE_REMAP_1_21_11_TO_1_21_5
+                    .get(usize::from(state_id))
+                    .copied()
+                    .unwrap_or(0),
+                MinecraftVersion::V_1_21_6 => BLOCK_STATE_REMAP_1_21_11_TO_1_21_6
+                    .get(usize::from(state_id))
+                    .copied()
+                    .unwrap_or(0),
                 MinecraftVersion::V_1_21_7 => BLOCK_STATE_REMAP_1_21_11_TO_1_21_7
                     .get(usize::from(state_id))
                     .copied()
