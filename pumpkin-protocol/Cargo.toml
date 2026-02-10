@@ -22,6 +22,7 @@ serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 bytes.workspace = true
+log.workspace = true
 
 # encryption
 aes.workspace = true
@@ -29,13 +30,13 @@ cfb8.workspace = true
 
 # compression
 async-compression = { workspace = true, features = ["tokio", "zlib"] }
+flate2.workspace = true
 
 take_mut.workspace = true
 bitflags.workspace = true
 
 [dev-dependencies]
 # Validate correctness
-flate2.workspace = true
 
 [lints]
 workspace = true

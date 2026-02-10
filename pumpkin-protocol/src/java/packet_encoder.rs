@@ -1,6 +1,8 @@
 use aes::cipher::KeyIvInit;
-use async_compression::{Level, tokio::write::ZlibEncoder};
 use bytes::Bytes;
+use flate2::{Compress, Compression, FlushCompress, Status};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 use thiserror::Error;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
@@ -10,6 +12,12 @@ use crate::{
 };
 
 // raw -> compress -> encrypt
+
+const JAVA_ENCODER_METRICS_LOG_EVERY: u64 = 4096;
+static JAVA_ENCODER_PACKET_COUNT: AtomicU64 = AtomicU64::new(0);
+static JAVA_ENCODER_COMPRESSED_PACKET_COUNT: AtomicU64 = AtomicU64::new(0);
+static JAVA_ENCODER_PAYLOAD_BYTES: AtomicU64 = AtomicU64::new(0);
+static JAVA_ENCODER_WIRE_PAYLOAD_BYTES: AtomicU64 = AtomicU64::new(0);
 
 pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
     Encrypt(Box<StreamEncryptor<W>>),
@@ -84,6 +92,10 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
     writer: EncryptionWriter<W>,
     // compression and compression threshold
     compression: Option<(CompressionThreshold, CompressionLevel)>,
+    // Reused compressor to avoid constructing zlib state per packet.
+    compressor: Option<(CompressionLevel, Compress)>,
+    // Reused compression buffer to avoid allocating a new Vec for each packet.
+    compression_scratch: Vec<u8>,
 }
 
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
@@ -91,6 +103,8 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         Self {
             writer: EncryptionWriter::None(writer),
             compression: None,
+            compressor: None,
+            compression_scratch: Vec::new(),
         }
     }
 
@@ -108,6 +122,54 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         }
         let cipher = Aes128Cfb8Enc::new_from_slices(key, key).expect("invalid key");
         take_mut::take(&mut self.writer, |encoder| encoder.upgrade(cipher));
+    }
+
+    fn compress_packet_data(
+        &mut self,
+        packet_data: &[u8],
+        compression_level: CompressionLevel,
+    ) -> Result<(), PacketEncodeError> {
+        self.compression_scratch.clear();
+        let reserve_hint = packet_data
+            .len()
+            .saturating_add(packet_data.len() / 16)
+            .saturating_add(64);
+        let current_capacity = self.compression_scratch.capacity();
+        if reserve_hint > current_capacity {
+            self.compression_scratch
+                .reserve(reserve_hint.saturating_sub(current_capacity));
+        }
+
+        let needs_new_compressor = match self.compressor.as_ref() {
+            Some((level, _)) => *level != compression_level,
+            None => true,
+        };
+        if needs_new_compressor {
+            self.compressor = Some((
+                compression_level,
+                Compress::new(Compression::new(compression_level), true),
+            ));
+        }
+
+        let (_, compressor) = self
+            .compressor
+            .as_mut()
+            .expect("compressor must be present after initialization");
+        compressor.reset();
+        let status = compressor
+            .compress_vec(
+                packet_data,
+                &mut self.compression_scratch,
+                FlushCompress::Finish,
+            )
+            .map_err(|err| PacketEncodeError::CompressionFailed(err.to_string()))?;
+
+        if !matches!(status, Status::StreamEnd) {
+            return Err(PacketEncodeError::CompressionFailed(format!(
+                "Unexpected compressor status: {status:?}"
+            )));
+        }
+        Ok(())
     }
 
     /// Appends a Clientbound `ClientPacket` to the internal buffer and applies compression when needed.
@@ -142,11 +204,15 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     /// -   `Data`: The packet's data.
     ///
     /// NOTE: This method does not flush. Call [`Self::flush`] to flush buffered data.
+    #[expect(clippy::too_many_lines)]
     pub async fn write_packet(&mut self, packet_data: Bytes) -> Result<(), PacketEncodeError> {
+        let encode_start = Instant::now();
         // We need to know the length of the compressed buffer and serde is not async :(
         // We need to write to a buffer here 😔
 
         let data_len = packet_data.len();
+        let mut wire_payload_len = data_len;
+        let mut packet_was_compressed = false;
         if data_len > MAX_PACKET_DATA_SIZE {
             return Err(PacketEncodeError::TooLong(data_len));
         }
@@ -159,30 +225,20 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
 
         if let Some((compression_threshold, compression_level)) = self.compression {
             if data_len >= compression_threshold {
+                let compress_start = Instant::now();
                 // Pushed before data:
                 // Length of (Data Length) + length of compressed (Packet ID + Data)
                 // Length of uncompressed (Packet ID + Data)
 
                 // TODO: We need the compressed length at the beginning of the packet so we need to write to
                 // buf here :( Is there a magic way to find a compressed length?
-                let mut compressed_buf = Vec::new();
-                let mut compressor = ZlibEncoder::with_quality(
-                    &mut compressed_buf,
-                    Level::Precise(compression_level as i32),
-                );
-
-                compressor
-                    .write_all(&packet_data)
-                    .await
-                    .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-                compressor
-                    .shutdown()
-                    .await
-                    .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-                debug_assert!(!compressed_buf.is_empty());
+                self.compress_packet_data(packet_data.as_ref(), compression_level)?;
+                debug_assert!(!self.compression_scratch.is_empty());
+                packet_was_compressed = true;
+                wire_payload_len = self.compression_scratch.len();
 
                 let full_packet_len_var_int: VarInt = (data_len_var_int.written_size()
-                    + compressed_buf.len())
+                    + self.compression_scratch.len())
                 .try_into()
                 .map_err(|_| {
                     PacketEncodeError::Message(format!(
@@ -205,9 +261,17 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 self.writer
-                    .write_all(&compressed_buf)
+                    .write_all(&self.compression_scratch)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+
+                let compress_elapsed = compress_start.elapsed();
+                if compress_elapsed.as_micros() >= 1_000 {
+                    let compressed_len = self.compression_scratch.len();
+                    log::trace!(
+                        "java encoder compression took {compress_elapsed:?} (input={data_len}B output={compressed_len}B)"
+                    );
+                }
             } else {
                 // Pushed before data:
                 // Length of (Data Length) + length of compressed (Packet ID + Data)
@@ -261,6 +325,29 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 .write_all(&packet_data)
                 .await
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+        }
+
+        let encoded_packet_count = JAVA_ENCODER_PACKET_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+        JAVA_ENCODER_PAYLOAD_BYTES.fetch_add(data_len as u64, Ordering::Relaxed);
+        JAVA_ENCODER_WIRE_PAYLOAD_BYTES.fetch_add(wire_payload_len as u64, Ordering::Relaxed);
+        if packet_was_compressed {
+            JAVA_ENCODER_COMPRESSED_PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
+        }
+
+        if encoded_packet_count.is_multiple_of(JAVA_ENCODER_METRICS_LOG_EVERY) {
+            let compressed = JAVA_ENCODER_COMPRESSED_PACKET_COUNT.load(Ordering::Relaxed);
+            let payload_bytes = JAVA_ENCODER_PAYLOAD_BYTES.load(Ordering::Relaxed);
+            let wire_bytes = JAVA_ENCODER_WIRE_PAYLOAD_BYTES.load(Ordering::Relaxed);
+            log::trace!(
+                "java encoder stats packets={encoded_packet_count} compressed={compressed} payload={payload_bytes}B wire_payload={wire_bytes}B"
+            );
+        }
+
+        let encode_elapsed = encode_start.elapsed();
+        if encode_elapsed.as_micros() >= 1_000 {
+            log::trace!(
+                "java encoder write_packet took {encode_elapsed:?} (payload={data_len}B, compressed={packet_was_compressed})"
+            );
         }
 
         Ok(())
