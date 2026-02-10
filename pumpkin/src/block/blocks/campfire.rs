@@ -26,12 +26,20 @@ impl BlockBehaviour for CampfireBlock {
     // TODO: cooking food on campfire (CampfireBlockEntity)
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit
-                && args.entity.get_living_entity().is_some()
-            {
-                // FIXME: entity collision code is wrong
-                args.entity
-                    .damage(args.entity, 1.0, DamageType::CAMPFIRE)
+            let state = CampfireLikeProperties::from_state_id(args.state.id, args.block);
+
+            // Check if the campfire is actually burning
+            if state.lit && args.entity.get_living_entity().is_some() {
+                // Set correct damage amount
+                let damage_amount = if args.block.id == Block::SOUL_CAMPFIRE.id {
+                    2.0 
+                } else {
+                    1.0
+                };
+
+                // Damage the entity
+                let _ = args.entity
+                    .damage(args.entity, damage_amount, DamageType::CAMPFIRE)
                     .await;
             }
         })

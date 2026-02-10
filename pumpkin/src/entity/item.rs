@@ -6,7 +6,7 @@ use std::sync::{
         Ordering::{self},
     },
 };
-
+use pumpkin_data::tag::Taggable;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{
@@ -43,6 +43,12 @@ impl ItemEntity {
             ))
             .await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
+
+        // Set fire immunity for netherite items
+        if item_stack.item.has_tag(&pumpkin_data::tag::Item::MINECRAFT_NETHERITE_ITEMS) {
+            entity.fire_immune.store(true, Ordering::Relaxed);
+        }
+
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
@@ -62,6 +68,12 @@ impl ItemEntity {
     ) -> Self {
         entity.set_velocity(velocity).await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
+
+        // Set fire immunity for netherite items
+        if item_stack.item.has_tag(&pumpkin_data::tag::Item::MINECRAFT_NETHERITE_ITEMS) {
+            entity.fire_immune.store(true, Ordering::Relaxed);
+        }
+
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
@@ -350,7 +362,11 @@ impl EntityBase for ItemEntity {
         _cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            //TODO: invulnerability, e.g. ancient debris
+            // Exclude fire-immune items from burn damage
+            if self.get_entity().fire_immune.load(Ordering::Relaxed) {
+                return false;
+            }
+
             self.health.store(self.health.load() - amount);
             if self.health.load() <= 0.0 {
                 self.entity.remove().await;

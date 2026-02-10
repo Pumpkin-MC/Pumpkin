@@ -1233,13 +1233,19 @@ impl EntityBase for LivingEntity {
                 return false;
             }
 
+            
+            let world = self.entity.world.load();
+
+            // Check if fire damage is disabled
+            if !world.level_info.load().game_rules.fire_damage {
+                return false;
+            }
+
             if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
                 && self.has_effect(&StatusEffect::FIRE_RESISTANCE).await
             {
                 return false; // Fire resistance
             }
-
-            let world = self.entity.world.load();
 
             // These damage types bypass the hurt cooldown and death protection
             let bypasses_cooldown_protection =
