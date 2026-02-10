@@ -157,16 +157,20 @@ impl LivingEntity {
 
     /// Picks up and Item entity or XP Orb
     pub async fn pickup(&self, item: &Entity, stack_amount: u32) {
-        // TODO: Only nearby
-        self.entity
-            .world
-            .load()
-            .broadcast_packet_all(&CTakeItemEntity::new(
-                item.entity_id.into(),
-                self.entity.entity_id.into(),
-                stack_amount.try_into().unwrap(),
-            ))
-            .await;
+        let world = self.entity.world.load();
+        let packet = CTakeItemEntity::new(
+            item.entity_id.into(),
+            self.entity.entity_id.into(),
+            stack_amount.try_into().unwrap(),
+        );
+        let radius = world.get_broadcast_radius();
+
+        let nearby_players =
+            world.get_nearby_players(self.entity.pos.load(), radius, Some(self.entity.entity_id));
+
+        for player in nearby_players {
+            player.client.enqueue_packet(&packet).await;
+        }
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
@@ -364,15 +368,16 @@ impl LivingEntity {
     }
 
     pub async fn swing_hand(&self) {
-        // TODO: radius
-        self.entity
-            .world
-            .load()
-            .broadcast_packet_all(&CEntityAnimation::new(
-                self.entity_id().into(),
-                Animation::SwingMainArm,
-            ))
-            .await;
+        let world = self.entity.world.load();
+        let packet = CEntityAnimation::new(self.entity_id().into(), Animation::SwingMainArm);
+        let radius = world.get_broadcast_radius();
+
+        let nearby_players =
+            world.get_nearby_players(self.entity.pos.load(), radius, Some(self.entity.entity_id));
+
+        for player in nearby_players {
+            player.client.enqueue_packet(&packet).await;
+        }
     }
 
     async fn tick_movement(&self, server: &Server, caller: Arc<dyn EntityBase>) {

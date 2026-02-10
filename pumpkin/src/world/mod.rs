@@ -264,6 +264,12 @@ impl World {
             .unwrap_or("world")
     }
 
+    /// Get the entity tracking distance for broadcasting packets.
+    /// Uses a fixed radius of 64 blocks, which is the standard entity tracking distance.
+    pub const fn get_broadcast_radius(&self) -> f64 {
+        64.0
+    }
+
     pub async fn shutdown(&self) {
         for entity in self.entities.load().iter() {
             self.save_entity(entity).await;
@@ -324,9 +330,14 @@ impl World {
     }
 
     pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
-        // TODO: only nearby
-        self.broadcast_packet_all(&CEntityStatus::new(entity.entity_id, status as i8))
-            .await;
+        let packet = CEntityStatus::new(entity.entity_id, status as i8);
+        let radius = self.get_broadcast_radius();
+
+        let nearby_players = self.get_nearby_players(entity.pos.load(), radius, None);
+
+        for player in nearby_players {
+            player.client.enqueue_packet(&packet).await;
+        }
     }
 
     pub async fn send_remove_mob_effect(
@@ -334,12 +345,15 @@ impl World {
         entity: &Entity,
         effect_type: &'static StatusEffect,
     ) {
-        // TODO: only nearby
-        self.broadcast_packet_all(&CRemoveMobEffect::new(
-            entity.entity_id.into(),
-            VarInt(i32::from(effect_type.id)),
-        ))
-        .await;
+        let packet =
+            CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
+        let radius = self.get_broadcast_radius();
+
+        let nearby_players = self.get_nearby_players(entity.pos.load(), radius, None);
+
+        for player in nearby_players {
+            player.client.enqueue_packet(&packet).await;
+        }
     }
 
     pub fn get_difficulty(&self, difficulty: Difficulty) {
@@ -2462,7 +2476,13 @@ impl World {
     /// # Arguments
     /// * `pos`: The center of the sphere.
     /// * `radius`: The radius of the sphere. The higher the radius, the more area will be checked (in every direction).
-    pub fn get_nearby_players(&self, pos: Vector3<f64>, radius: f64) -> Vec<Arc<Player>> {
+    /// * `exclude_entity_id`: Optional entity ID to exclude from results (e.g., to prevent self-broadcasting).
+    pub fn get_nearby_players(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        exclude_entity_id: Option<i32>,
+    ) -> Vec<Arc<Player>> {
         let radius_squared = radius.powi(2);
 
         self.players
@@ -2470,7 +2490,9 @@ impl World {
             .iter()
             .filter_map(|player| {
                 let player_pos = player.living_entity.entity.pos.load();
-                (player_pos.squared_distance_to_vec(&pos) <= radius_squared).then(|| player.clone())
+                let is_nearby = player_pos.squared_distance_to_vec(&pos) <= radius_squared;
+                let is_excluded = exclude_entity_id.is_some_and(|id| id == player.entity_id());
+                (is_nearby && !is_excluded).then(|| player.clone())
             })
             .collect()
     }
@@ -2494,7 +2516,7 @@ impl World {
     }
 
     pub fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
-        let players = self.get_nearby_players(pos, radius);
+        let players = self.get_nearby_players(pos, radius, None);
         players
             .iter()
             .min_by(|a, b| {
