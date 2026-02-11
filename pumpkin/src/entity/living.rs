@@ -831,7 +831,7 @@ impl LivingEntity {
                     })
                     .await;
             } else {
-                self.handle_fall_damage(fall_distance, 1.0).await;
+                self.handle_fall_damage(&*caller, fall_distance, 1.0).await;
             }
         } else if height_difference < 0.0 {
             let new_fall_distance = if !self.should_prevent_fall_damage().await
@@ -846,7 +846,12 @@ impl LivingEntity {
         }
     }
 
-    pub async fn handle_fall_damage(&self, fall_distance: f32, damage_per_distance: f32) {
+    pub async fn handle_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_per_distance: f32,
+    ) {
         if self.is_immune_to_fall_damage() {
             return;
         }
@@ -857,7 +862,7 @@ impl LivingEntity {
 
         let damage = (unsafe_fall_distance * damage_per_distance).floor();
         if damage > 0.0 {
-            let check_damage = self.damage(self, damage, DamageType::FALL).await; // Fall
+            let check_damage = self.damage(caller, damage, DamageType::FALL).await; // Fall
             if check_damage {
                 self.entity
                     .play_sound(Self::get_fall_sound(fall_distance as i32))
@@ -1010,7 +1015,7 @@ impl LivingEntity {
             let mut stack = stack.lock().await;
             // TODO: effects...
             if stack.get_data_component::<DeathProtectionImpl>().is_some() {
-                stack.decrement(1);
+                stack.clear();
                 self.set_health(1.0).await;
                 self.entity
                     .world
@@ -1236,22 +1241,24 @@ impl EntityBase for LivingEntity {
 
             let world = self.entity.world.load();
 
-            let bypasses_cooldown =
+            // These damage types bypass the hurt cooldown and death protection
+            let bypasses_cooldown_protection =
                 damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
 
             let last_damage = self.last_damage_taken.load();
             let play_sound;
-            let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown {
-                if amount <= last_damage {
-                    return false;
-                }
-                play_sound = false;
-                amount - self.last_damage_taken.load()
-            } else {
-                self.hurt_cooldown.store(20, Relaxed);
-                play_sound = true;
-                amount
-            };
+            let mut damage_amount =
+                if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
+                    if amount <= last_damage {
+                        return false;
+                    }
+                    play_sound = false;
+                    amount - self.last_damage_taken.load()
+                } else {
+                    self.hurt_cooldown.store(20, Relaxed);
+                    play_sound = true;
+                    amount
+                };
             self.last_damage_taken.store(amount);
             damage_amount = damage_amount.max(0.0);
 
@@ -1305,7 +1312,10 @@ impl EntityBase for LivingEntity {
                 self.set_health(new_health).await;
             }
 
-            if new_health <= 0.0 && !self.try_use_death_protector(caller).await {
+            // Check if the entity died and isn't protected by a death protection mechanic (ex. totem of undying)
+            if new_health <= 0.0
+                && (bypasses_cooldown_protection || !self.try_use_death_protector(caller).await)
+            {
                 self.on_death(damage_type, source, cause).await;
             }
 

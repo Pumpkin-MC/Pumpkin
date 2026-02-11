@@ -2076,18 +2076,10 @@ version = "0.1.0-dev+1.21.11"
 dependencies = [
  "crc-fast",
  "criterion",
- "heck",
- "indexmap",
  "phf",
- "proc-macro2",
  "pumpkin-nbt",
  "pumpkin-util",
- "quote",
- "rayon",
  "serde",
- "serde_json",
- "serde_json5",
- "syn",
 ]
 
 [[package]]
@@ -2257,26 +2249,6 @@ name = "rand_core"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c8d0fd677905edcbeedbf2edb6494d676f0e98d54d5cf9bda0b061cb8fb8aba"
-
-[[package]]
-name = "rayon"
-version = "1.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "368f01d005bf8fd9b1206fb6fa653e6c4a81ceb1466406b81792d87c5677a58f"
-dependencies = [
- "either",
- "rayon-core",
-]
-
-[[package]]
-name = "rayon-core"
-version = "1.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
-dependencies = [
- "crossbeam-deque",
- "crossbeam-utils",
-]
 
 [[package]]
 name = "redox_syscall"

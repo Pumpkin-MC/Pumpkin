@@ -91,7 +91,7 @@ impl BlockBehaviour for BedBlock {
         Box::pin(async move {
             if let Some(living) = args.entity.get_living_entity() {
                 living
-                    .handle_fall_damage(args.fall_distance * 0.5, 1.0)
+                    .handle_fall_damage(args.entity, args.fall_distance * 0.5, 1.0)
                     .await;
             }
         })

@@ -86,41 +86,6 @@ impl ChunkData {
         let mut chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
-        if chunk_data.light_correct {
-            for section in &chunk_data.sections {
-                let mut block = false;
-                let mut sky = false;
-                let mut block_sum = 0;
-                let mut sky_sum = 0;
-                if let Some(block_light) = &section.block_light {
-                    block = !block_light.is_empty();
-                    block_sum = block_light
-                        .iter()
-                        .map(|b| ((*b >> 4) + (*b & 0x0F)) as usize)
-                        .sum();
-                }
-                if let Some(sky_light) = &section.sky_light {
-                    sky = !sky_light.is_empty();
-                    sky_sum = sky_light
-                        .iter()
-                        .map(|b| ((*b >> 4) + (*b & 0x0F)) as usize)
-                        .sum();
-                }
-                if (block || sky) && section.y == -5 {
-                    log::trace!(
-                        "section {},{},{}: block_light={}/{}, sky_light={}/{}",
-                        chunk_data.x_pos,
-                        section.y,
-                        chunk_data.z_pos,
-                        block,
-                        block_sum,
-                        sky,
-                        sky_sum,
-                    );
-                }
-            }
-        }
-
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
             return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
                 "Expected data for chunk {},{} but got it for {},{}!",
@@ -131,13 +96,13 @@ impl ChunkData {
             .sections
             .into_iter()
             .map(|section| {
-                // Map light data to the LightContainer enum
+                // When loading light data, missing data should default to 0 (no light)
                 let block_light = section
                     .block_light
-                    .map_or(LightContainer::Empty(0), LightContainer::Full); // Standard default
+                    .map_or(LightContainer::Empty(0), LightContainer::Full);
                 let sky_light = section
                     .sky_light
-                    .map_or(LightContainer::Empty(15), LightContainer::Full); // Sky is usually bright
+                    .map_or(LightContainer::Empty(0), LightContainer::Full);
 
                 // Convert NBT to Palettes
                 let block_palette = section
@@ -162,7 +127,7 @@ impl ChunkData {
                 },
             );
 
-        // 2. Assemble the LightEngine
+        // Assemble the LightEngine
         let light_engine = ChunkLight {
             block_light: block_lights.into_boxed_slice(),
             sky_light: sky_lights.into_boxed_slice(),
@@ -186,7 +151,7 @@ impl ChunkData {
                         .unwrap_or_default(),
                 )
             };
-        // 3. Assemble the ChunkSections using your specific struct fields
+        // Assemble the ChunkSections
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
         let section = ChunkSections {
             count: block_palettes.len(),
@@ -221,39 +186,55 @@ impl ChunkData {
                 }
                 std::sync::Mutex::new(block_entities)
             },
-            light_engine,
+            light_engine: std::sync::Mutex::new(light_engine),
+            light_populated: AtomicBool::new(chunk_data.light_correct),
             status: chunk_data.status,
         })
     }
 
     async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        let sections: Vec<ChunkSectionNBT> = {
+        let is_light_correct = self
+            .light_populated
+            .load(std::sync::atomic::Ordering::Relaxed);
+
+        let sections = {
+            let light_lock = self.light_engine.lock().unwrap();
             let block_lock = self.section.block_sections.read().unwrap();
             let biome_lock = self.section.biome_sections.read().unwrap();
             let min_section_y = (self.section.min_y >> 4) as i8;
 
             (0..self.section.count)
-                .map(|i| {
-                    ChunkSectionNBT {
-                        y: i as i8 + min_section_y,
-                        // Convert the palettes to their NBT disk representation
-                        block_states: Some(block_lock[i].to_disk_nbt()),
-                        biomes: Some(biome_lock[i].to_disk_nbt()),
-                        block_light: match self.light_engine.block_light.get(i) {
-                            Some(LightContainer::Full(data)) => Some(data.clone()),
-                            _ => None,
-                        },
-                        sky_light: match self.light_engine.sky_light.get(i) {
-                            Some(LightContainer::Full(data)) => Some(data.clone()),
-                            _ => None,
-                        },
-                    }
+                .map(|i| ChunkSectionNBT {
+                    y: i as i8 + min_section_y,
+                    block_states: Some(block_lock[i].to_disk_nbt()),
+                    biomes: Some(biome_lock[i].to_disk_nbt()),
+
+                    block_light: match light_lock.block_light.get(i) {
+                        Some(LightContainer::Empty(default)) if *default == 0 => None,
+                        Some(LightContainer::Empty(default)) => {
+                            let value = (*default << 4) | *default;
+                            Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
+                        }
+                        Some(LightContainer::Full(data)) => Some(data.clone()),
+                        None => None,
+                    },
+                    sky_light: match light_lock.sky_light.get(i) {
+                        Some(LightContainer::Empty(default)) if *default == 0 => None,
+                        Some(LightContainer::Empty(default)) => {
+                            let value = (*default << 4) | *default;
+                            Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
+                        }
+                        Some(LightContainer::Full(data)) => Some(data.clone()),
+                        None => None,
+                    },
                 })
-                .collect()
+                .collect::<Vec<_>>()
         };
 
+        // Lock and clone heightmaps
         let heightmaps = self.heightmap.lock().unwrap().clone();
 
+        // Lock and clone entities
         let entities_to_serialize = {
             let entities_guard = self.block_entities.lock().unwrap();
             entities_guard.values().cloned().collect::<Vec<_>>()
@@ -268,6 +249,7 @@ impl ChunkData {
         ))
         .await;
 
+        // Build the final NBT
         let nbt = ChunkNbt {
             data_version: WORLD_DATA_VERSION,
             x_pos: self.x,
@@ -292,7 +274,7 @@ impl ChunkData {
             carving_mask_liquid: None,
             block_entities: block_entities_nbt,
             blending_data: self.blending_data.clone(),
-            light_correct: false,
+            light_correct: is_light_correct,
         };
 
         let mut result = Vec::new();
@@ -514,6 +496,10 @@ impl LightContainer {
             }
         }
     }
+
+    pub fn fill(&mut self, value: u8) {
+        *self = Self::new_filled(value);
+    }
 }
 
 impl Default for LightContainer {
@@ -571,7 +557,7 @@ struct ChunkNbt {
     blending_data: Option<NbtCompound>,
     #[serde(rename = "block_entities")]
     block_entities: Vec<NbtCompound>,
-    #[serde(rename = "isLightOn")]
+    #[serde(rename = "isLightOn", default)]
     light_correct: bool,
 }
 
