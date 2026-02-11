@@ -605,7 +605,7 @@ impl Player {
         log::debug!(
             "Removed player id {} from world {} ({} chunks remain cached)",
             self.gameprofile.name,
-            "world", // TODO: Add world names
+            self.world().get_world_name(),
             level.loaded_chunk_count(),
         );
 
@@ -1164,6 +1164,79 @@ impl Player {
         abilities.flying
     }
 
+    fn is_sleeping(&self) -> bool {
+        // TODO: Track sleeping position state explicitly (vanilla checks sleepingPosition.isPresent()).
+        self.sleeping_since.load().is_some()
+    }
+
+    async fn is_swimming(&self, flying: bool) -> bool {
+        let entity = self.get_entity();
+        let swim_height = self.living_entity.get_swim_height();
+
+        // TODO: Replace this inferred check with vanilla-equivalent swimming state tracking
+        // (LivingEntity#updateSwimming + entity swimming flag).
+        entity.touching_water.load(Ordering::Relaxed)
+            && entity.water_height.load() > swim_height
+            && entity.sprinting.load(Ordering::Relaxed)
+            && !entity.on_ground.load(Ordering::Relaxed)
+            && !flying
+            && !entity.has_vehicle().await
+    }
+
+    const fn is_auto_spin_attack() -> bool {
+        // TODO: Track active auto-spin/riptide state and return true while it is active.
+        false
+    }
+
+    async fn can_fit_pose(&self, pose: EntityPose) -> bool {
+        let entity = self.get_entity();
+        let dimensions = Entity::get_entity_dimensions(pose);
+        let position = entity.pos.load();
+        let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimensions);
+        entity
+            .world
+            .load()
+            .is_space_empty(aabb.contract_all(1.0E-7))
+            .await
+    }
+
+    pub async fn update_player_pose(&self) {
+        let entity = self.get_entity();
+        if !self.can_fit_pose(EntityPose::Swimming).await {
+            return;
+        }
+
+        let flying = self.is_flying().await;
+        let desired_pose = if self.is_sleeping() {
+            EntityPose::Sleeping
+        } else if self.is_swimming(flying).await {
+            EntityPose::Swimming
+        } else if entity.fall_flying.load(Ordering::Relaxed) {
+            EntityPose::FallFlying
+        } else if Self::is_auto_spin_attack() {
+            EntityPose::SpinAttack
+        } else if entity.sneaking.load(Ordering::Relaxed) && !flying {
+            EntityPose::Crouching
+        } else {
+            EntityPose::Standing
+        };
+
+        let new_pose = if self.gamemode.load() == GameMode::Spectator
+            || entity.has_vehicle().await
+            || self.can_fit_pose(desired_pose).await
+        {
+            desired_pose
+        } else if self.can_fit_pose(EntityPose::Crouching).await {
+            EntityPose::Crouching
+        } else {
+            EntityPose::Swimming
+        };
+
+        if entity.pose.load() != new_pose {
+            entity.set_pose(new_pose).await;
+        }
+    }
+
     pub async fn wake_up(&self) {
         let world = self.world();
         let respawn_point = self
@@ -1375,6 +1448,8 @@ impl Player {
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
         self.living_entity.tick(self.clone(), server).await;
+        // Vanilla updates pose in PlayerEntity#tick after super.tick().
+        self.update_player_pose().await;
         self.breath_manager.tick(self).await;
         self.hunger_manager.tick(self).await;
 
