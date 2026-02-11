@@ -211,8 +211,6 @@ impl CommandDispatcher {
                 let a_reader_remaining = a.reader.peek().is_some();
                 let b_reader_remaining = b.reader.peek().is_some();
 
-                true.cmp(&false);
-
                 let a_has_errors = !a.errors.is_empty();
                 let b_has_errors = !b.errors.is_empty();
 

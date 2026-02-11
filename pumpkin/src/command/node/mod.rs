@@ -28,10 +28,6 @@ pub type Command = Arc<dyn CommandExecutor>;
 /// Represents the result of [`Arc<CommandSource>`]s from a [`CommandContext`].
 pub type RedirectModifierResult<'a> = Pin<Box<dyn Future<Output = Result<Vec<Arc<CommandSource>>, CommandSyntaxError>> + Send + 'a>>;
 
-fn assert_sync<T: Sync>() {
-    assert_sync::<RedirectModifier>();
-}
-
 /// A function that returns a new collection of sources from a given context.
 #[derive(Clone)]
 pub enum RedirectModifier {
