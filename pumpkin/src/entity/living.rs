@@ -36,6 +36,7 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CEntityAnimation, CHurtAnimation, CSetPlayerInventory, CTakeItemEntity,
+    CUpdateAttributes, CUpdateMobEffect
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -45,6 +46,8 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
+use pumpkin_protocol::java::client::play::AttributeModifier;
+use pumpkin_data::attributes::Attributes;
 
 /// Represents a living entity within the game world.
 ///
@@ -108,7 +111,7 @@ impl LivingEntity {
             0.8
         };
         // TODO: Extract default MOVEMENT_SPEED Entity Attribute
-        let default_movement_speed = 0.25;
+        let default_movement_speed = 0.1;
         let health = entity.entity_type.max_health.unwrap_or(20.0);
         Self {
             entity,
@@ -226,11 +229,50 @@ impl LivingEntity {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
+        // Apply instant effects immediately before storing
+        if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
+            let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
+            self.heal(heal_amount).await;
+        } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
+            let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
+            if let Some(dyn_self) = self.entity.world.load().get_entity_by_id(self.entity.entity_id) {
+                dyn_self.damage(&*dyn_self, damage_amount, DamageType::MAGIC).await;
+            }
+        }
+        
         self.active_effects
             .lock()
             .await
-            .insert(effect.effect_type, effect);
-        // TODO broadcast metadata
+            .insert(effect.effect_type, effect.clone());
+        
+        // Broadcast effect to nearby players
+        let mut flag: i8 = 0;
+        if effect.ambient {
+            flag |= 1;
+        }
+        if effect.show_particles {
+            flag |= 2;
+        }
+        if effect.show_icon {
+            flag |= 4;
+        }
+        if effect.blend {
+            flag |= 8;
+        }
+
+        let packet = CUpdateMobEffect::new(
+            self.entity.entity_id.into(),
+            VarInt(i32::from(effect.effect_type.id)),
+            effect.amplifier.into(),
+            effect.duration.into(),
+            flag,
+        );
+
+        self.entity.world.load().broadcast_packet_all(&packet).await;
+
+        // Effects that modify attributes (ex. speed) should also update the
+        // entity's attributes so the client updates movement prediction.
+        self.send_attribute_update().await;
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -245,6 +287,10 @@ impl LivingEntity {
             .load()
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
+
+        // Effect removal may change attributes
+        self.send_attribute_update().await;
+
         succeeded
     }
 
@@ -256,6 +302,99 @@ impl LivingEntity {
     pub async fn get_effect(&self, effect: &'static StatusEffect) -> Option<Effect> {
         let effects = self.active_effects.lock().await;
         effects.get(&effect).cloned()
+    }
+
+    /// Calculates the movement speed with all effect modifiers applied
+    pub async fn get_effective_movement_speed(&self) -> f64 {
+        let base_speed = self.movement_speed.load();
+        let mut speed = base_speed;
+
+        // Apply Speed effect
+        if let Some(effect) = self.get_effect(&StatusEffect::SPEED).await {
+            let modifier = 0.20000000298023224 * f64::from(effect.amplifier + 1);
+            speed *= 1.0 + modifier;
+        }
+
+        // Apply Slowness effect
+        if let Some(effect) = self.get_effect(&StatusEffect::SLOWNESS).await {
+            let modifier = -0.15000000596046448 * f64::from(effect.amplifier + 1);
+            speed *= 1.0 + modifier;
+        }
+
+        speed
+    }
+
+    /// Sends an attribute update for this entity to clients.
+    /// This recomputes movement attribute modifiers from active effects and broadcasts them.
+    pub async fn send_attribute_update(&self) {
+        let base_speed = self.movement_speed.load();
+
+        let mut modifiers: Vec<AttributeModifier> = Vec::new();
+
+        // Add Speed modifier if present
+        if let Some(effect) = self.get_effect(&StatusEffect::SPEED).await {
+            let amount = 0.20000000298023224 * f64::from(effect.amplifier + 1);
+            modifiers.push(
+                AttributeModifier::new("minecraft:effect.speed".to_string(), amount, 2)
+            );
+        }
+
+        // Add Slowness modifier if present
+        if let Some(effect) = self.get_effect(&StatusEffect::SLOWNESS).await {
+            let amount = -0.15000000596046448 * f64::from(effect.amplifier + 1);
+            modifiers.push(
+                AttributeModifier::new("minecraft:effect.slowness".to_string(), amount, 2)
+            );
+        }
+
+        let modifiers_count = modifiers.len();
+        
+        // Build Java attribute representation
+        let property = pumpkin_protocol::java::client::play::Property::new(
+            VarInt(i32::from(Attributes::MOVEMENT_SPEED.id)),
+            base_speed,
+            modifiers,
+        );
+
+        let je_packet = CUpdateAttributes::new(self.entity_id().into(), vec![property]);
+
+        // Build Bedrock attribute representation
+        let effective_speed = self.get_effective_movement_speed().await;
+        println!(
+            "send_attribute_update: entity {} effective_speed {}",
+            self.entity_id(), effective_speed
+        );
+
+        use pumpkin_protocol::bedrock::client::update_artributes::{
+            Attribute as BAttribute, 
+            CUpdateAttributes as BUpdateAttributes
+        };
+        use pumpkin_protocol::codec::{var_ulong::VarULong, var_uint::VarUInt};
+
+        let be_attribute = BAttribute {
+            min_value: 0.0,
+            max_value: 3.402_823_5E38,
+            current_value: effective_speed as f32,
+            default_min_value: 0.0,
+            default_max_value: 3.402_823_5E38,
+            default_value: base_speed as f32,
+            name: "minecraft:movement".to_string(),
+            modifiers_list_size: VarUInt(modifiers_count as _),
+        };
+
+        let runtime_id = self.entity_id() as u64;
+        let be_packet = BUpdateAttributes {
+            runtime_id: VarULong(runtime_id),
+            attributes: vec![be_attribute],
+            player_tick: VarULong(0),
+        };
+
+        // Broadcast to both Java and Bedrock clients
+        self.entity
+            .world
+            .load()
+            .broadcast_editioned(&je_packet, &be_packet)
+            .await;
     }
 
     pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
@@ -464,6 +603,8 @@ impl LivingEntity {
     async fn travel_in_air(&self, caller: Arc<dyn EntityBase>) {
         // applyMovementInput
 
+        let effective_speed = self.get_effective_movement_speed().await;
+
         let (speed, friction) = if self.entity.on_ground.load(SeqCst) {
             // getVelocityAffectingPos
 
@@ -475,7 +616,7 @@ impl LivingEntity {
                     .slipperiness,
             );
 
-            let speed = self.movement_speed.load() * 0.216_000_02
+            let speed = effective_speed * 0.216_000_02
                 / (slipperiness * slipperiness * slipperiness);
 
             (speed, slipperiness * 0.91)
@@ -544,6 +685,8 @@ impl LivingEntity {
 
         let gravity = self.get_effective_gravity(&caller).await;
 
+        let effective_speed = self.get_effective_movement_speed().await;
+
         if water {
             let mut friction = if self.entity.sprinting.load(Relaxed) {
                 0.9
@@ -562,7 +705,7 @@ impl LivingEntity {
 
                 friction += (0.546_000_06 - friction) * water_movement_efficiency;
 
-                speed += (self.movement_speed.load() - speed) * water_movement_efficiency;
+                speed += (effective_speed - speed) * water_movement_efficiency;
             }
 
             if self.has_effect(&StatusEffect::DOLPHINS_GRACE).await {
@@ -993,19 +1136,140 @@ impl LivingEntity {
 
     async fn tick_effects(&self) {
         let mut effects_to_remove = Vec::new();
+        let mut effects_to_apply = Vec::new();
 
         {
             let mut effects = self.active_effects.lock().await;
+            
+            // Collect keys to remove to avoid borrowing issues while iterating
+            let mut keys_to_remove = Vec::new();
+
             for effect in effects.values_mut() {
-                if effect.duration == 0 {
-                    effects_to_remove.push(effect.effect_type);
+                // Check if effect duration has expired
+                if effect.duration <= 0 {
+                    keys_to_remove.push(effect.effect_type);
+                    continue;
                 }
+
+                // Check if this effect should tick this frame
+                if Self::should_apply_effect_tick(effect) {
+                    effects_to_apply.push((effect.effect_type, effect.amplifier));
+                }
+
+                // Decrement duration
                 effect.duration -= 1;
+            }
+
+            // Remove expired effects atomically
+            for k in keys_to_remove {
+                if effects.remove(&k).is_some() {
+                    effects_to_remove.push(k);
+                }
             }
         }
 
-        for effect_type in effects_to_remove {
-            self.remove_effect(effect_type).await;
+        // Remove expired effects packets and attribute updates
+        for &effect_type in &effects_to_remove {
+            self.entity
+                .world
+                .load()
+                .send_remove_mob_effect(&self.entity, effect_type)
+                .await;
+        }
+
+        // If we removed any effects, update attributes once
+        if !effects_to_remove.is_empty() {
+            self.send_attribute_update().await;
+        }
+
+        // Apply active effects
+        for (effect_type, amplifier) in effects_to_apply {
+            self.apply_effect_tick(effect_type, amplifier).await;
+        }
+    }
+
+    /// Determines if an effect should apply its tick effect this frame
+    /// Based on vanilla Minecraft's effect tick frequencies
+    ///
+    /// TODO: villager, infested, beacon, and other effects. 
+    fn should_apply_effect_tick(effect: &pumpkin_data::potion::Effect) -> bool {
+        let duration = effect.duration;
+        let effect_type = effect.effect_type;
+        
+        if effect_type == &StatusEffect::REGENERATION {
+            if duration <= 0 {
+                return false;
+            }
+            let tick_rate = 50 >> effect.amplifier.min(4);
+            duration % tick_rate == 0
+        } else if effect_type == &StatusEffect::POISON {
+            if duration <= 0 {
+                return false;
+            }
+            let tick_rate = 25 >> effect.amplifier.min(4);
+            duration % tick_rate == 0
+        } else if effect_type == &StatusEffect::WITHER {
+            if duration <= 0 {
+                return false;
+            }
+            let tick_rate = 40 >> effect.amplifier.min(4);
+            duration % tick_rate == 0
+        } else if effect_type == &StatusEffect::HUNGER {
+            // Hunger every 20 ticks
+            duration % 20 == 0
+        } else if effect_type == &StatusEffect::SATURATION {
+            // Saturation every tick
+            true
+        } else {
+            // Other effects that don't tick
+            false
+        }
+    }
+
+    /// Applies the actual effect to the entity
+    /// This is called by tick_effects when an effect should trigger this tick
+    async fn apply_effect_tick(&self, effect_type: &'static StatusEffect, amplifier: u8) {
+        if effect_type == &StatusEffect::REGENERATION {
+            let current_health = self.health.load();
+            let max_health = self.entity.entity_type.max_health.unwrap_or(20.0);
+            if current_health < max_health && current_health > 0.0 {
+                self.heal(1.0).await;
+            }
+        } else if effect_type == &StatusEffect::POISON {
+            let current_health = self.health.load();
+            if current_health > 1.0 {
+                if let Some(dyn_self) = self.entity.world.load().get_entity_by_id(self.entity.entity_id) {
+                    let damage_amount = (current_health - 1.0).min(1.0);
+                    if damage_amount > 0.0 {
+                        dyn_self.damage(&*dyn_self, damage_amount, DamageType::MAGIC).await;
+                    }
+                }
+            }
+        } else if effect_type == &StatusEffect::WITHER {
+            let damage_amount = 1.0;
+            if let Some(dyn_self) = self.entity.world.load().get_entity_by_id(self.entity.entity_id) {
+                dyn_self.damage(&*dyn_self, damage_amount, DamageType::WITHER).await;
+            }
+        } else if effect_type == &StatusEffect::HUNGER {
+            let world = self.entity.world.load();
+            if let Some(entity) = world.get_entity_by_id(self.entity.entity_id) {
+                if let Some(player) = entity.get_player() {
+                    // Add exhaustion to trigger hunger decrease
+                    let exhaustion = 0.1 * (amplifier as f32 + 1.0);
+                    player.hunger_manager.add_exhaustion(exhaustion);
+                }
+            }
+            drop(world);
+        } else if effect_type == &StatusEffect::SATURATION {
+            let world = self.entity.world.load();
+            if let Some(entity) = world.get_entity_by_id(self.entity.entity_id) {
+                if let Some(player) = entity.get_player() {
+                    // Add hunger and saturation
+                    let hunger = amplifier as u8 + 1;
+                    player.hunger_manager.add_hunger(hunger);
+                    player.hunger_manager.add_saturation(hunger as f32 * 2.0);
+                }
+            }
         }
     }
 

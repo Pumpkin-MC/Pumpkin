@@ -664,6 +664,11 @@ impl Player {
         // Modify the added damage based on the multiplier.
         let mut damage = base_damage + add_damage * damage_multiplier;
 
+        // Apply Strength effect (+3 damage per level)
+        if let Some(effect) = self.living_entity.get_effect(&pumpkin_data::effect::StatusEffect::STRENGTH).await {
+            damage += 3.0 * f64::from(effect.amplifier + 1);
+        }
+
         let pos = victim_entity.pos.load();
 
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
