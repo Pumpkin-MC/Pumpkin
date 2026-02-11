@@ -364,6 +364,9 @@ impl Display for JsonMapLike<'_> {
 
 #[cfg(test)]
 mod test {
+    use crate::serialization::codec::{
+        BOOL_CODEC, BYTE_CODEC, FLOAT_CODEC, INT_CODEC, STRING_CODEC,
+    };
     use serde_json::{Value, json};
 
     use crate::serialization::codec::list_of;
@@ -380,32 +383,32 @@ mod test {
     #[test]
     fn primitives() {
         assert_success!(
-            primitive::BOOL_CODEC.encode_start(&true, &json_ops::INSTANCE),
+            BOOL_CODEC.encode_start(&true, &json_ops::INSTANCE),
             Value::Bool(true)
         );
 
         assert_success!(
-            primitive::STRING_CODEC.encode_start(&"Hello world!".to_string(), &json_ops::INSTANCE),
+            STRING_CODEC.encode_start(&"Hello world!".to_string(), &json_ops::INSTANCE),
             Value::String("Hello world!".to_string())
         );
 
         assert_success!(
-            primitive::INT_CODEC.encode_start(&90, &json_ops::INSTANCE),
+            INT_CODEC.encode_start(&90, &json_ops::INSTANCE),
             Value::from(90)
         );
 
         assert_success!(
-            primitive::BYTE_CODEC.encode_start(&127, &json_ops::INSTANCE),
+            BYTE_CODEC.encode_start(&127, &json_ops::INSTANCE),
             Value::from(127)
         );
 
         assert_success!(
-            primitive::FLOAT_CODEC.encode_start(&0.125, &json_ops::INSTANCE),
+            FLOAT_CODEC.encode_start(&0.125, &json_ops::INSTANCE),
             Value::from(0.125)
         );
 
         assert_success!(
-            primitive::FLOAT_CODEC.encode_start(&0.125, &json_ops::INSTANCE),
+            FLOAT_CODEC.encode_start(&0.125, &json_ops::INSTANCE),
             Value::from(0.125)
         );
     }
@@ -413,8 +416,7 @@ mod test {
     #[test]
     fn lists() {
         {
-            pub const BOOL_LIST_CODEC: ListCodec<primitive::BoolCodec> =
-                list_of(&primitive::BOOL_CODEC, 2, 4);
+            pub const BOOL_LIST_CODEC: ListCodec<primitive::BoolCodec> = list_of(&BOOL_CODEC, 2, 4);
 
             assert_decode!(
                 BOOL_LIST_CODEC,
@@ -446,7 +448,7 @@ mod test {
         {
             // Testing a list codec of another list codec of a StringCodec.
             pub const STRING_STRING_LIST_CODEC: ListCodec<ListCodec<primitive::StringCodec>> =
-                list_of(&list_of(&primitive::STRING_CODEC, 1, 3), 1, 2);
+                list_of(&list_of(&STRING_CODEC, 1, 3), 1, 2);
 
             assert_decode!(
                 STRING_STRING_LIST_CODEC,
