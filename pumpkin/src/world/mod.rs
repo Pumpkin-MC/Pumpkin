@@ -248,6 +248,17 @@ impl World {
             .unwrap_or_default()
     }
 
+    /// Get the world folder name (e.g., `world`, `world_nether`, `world_the_end`).
+    /// Falls back to "world" if the name cannot be determined.
+    pub fn get_world_name(&self) -> &str {
+        self.level
+            .level_folder
+            .root_folder
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("world")
+    }
+
     pub async fn shutdown(&self) {
         for entity in self.entities.load().iter() {
             self.save_entity(entity).await;
