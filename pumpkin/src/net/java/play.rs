@@ -2112,17 +2112,13 @@ impl JavaClient {
             )
             .await;
 
-        // Check if any collidable entity is in the way of the block being placed.
+        // Check if any collidable non-item entity is in the way of the block being placed.
         let state = BlockState::from_id(new_state);
         for shape in state.get_block_collision_shapes() {
-            let placed_box = shape.at_pos(final_block_pos).to_bounding_box();
-
-            if !world.get_players_at_box(&placed_box).is_empty() {
-                return Ok(false);
-            }
+            let placed_box = shape.at_pos(final_block_pos);
 
             if world
-                .get_entities_at_box(&placed_box)
+                .get_all_at_box(&placed_box)
                 .into_iter()
                 .any(|entity| entity.get_entity().entity_type != &EntityType::ITEM)
             {
