@@ -1,18 +1,20 @@
-use std::num::NonZero;
-use std::ops::{Index, IndexMut};
-use std::sync::Arc;
-use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
-use pumpkin_util::text::TextComponent;
 use crate::command::context::command_context::{CommandContextBuilder, ParsedArgument};
 use crate::command::context::command_source::CommandSource;
 use crate::command::context::string_range::StringRange;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::{DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR, LITERAL_INCORRECT};
-use crate::command::node::attached::{ArgumentAttachedNode, ArgumentNodeId, AttachedNode, CommandAttachedNode, CommandNodeId, LiteralAttachedNode, LiteralNodeId, NodeClassification, NodeId, RootAttachedNode};
-use crate::command::node::detached::{CommandDetachedNode, DetachedNode, GlobalNodeId};
-use crate::command::node::dispatcher::ARG_SEPARATOR_CHAR;
+use crate::command::errors::error_types::LITERAL_INCORRECT;
 use crate::command::node::Redirection;
+use crate::command::node::attached::{
+    ArgumentAttachedNode, ArgumentNodeId, AttachedNode, CommandAttachedNode, CommandNodeId,
+    LiteralAttachedNode, LiteralNodeId, NodeClassification, NodeId, RootAttachedNode,
+};
+use crate::command::node::detached::{CommandDetachedNode, DetachedNode, GlobalNodeId};
 use crate::command::string_reader::StringReader;
+use pumpkin_util::text::TextComponent;
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
+use std::num::NonZero;
+use std::ops::{Index, IndexMut};
+use std::sync::Arc;
 
 /// The constant local ID occupied by the root node.
 pub const ROOT_NODE_ID: NodeId = NodeId(NonZero::new(1).unwrap());
@@ -25,7 +27,7 @@ pub trait AmbiguityConsumer {
         parent: NodeId,
         child: NodeId,
         sibling: NodeId,
-        inputs: Vec<String>
+        inputs: Vec<String>,
     );
 }
 
@@ -36,7 +38,7 @@ pub enum NodeIdClassification {
     Root,
     Literal(LiteralNodeId),
     Command(CommandNodeId),
-    Argument(ArgumentNodeId)
+    Argument(ArgumentNodeId),
 }
 
 /// Represents an entire tree of nodes.
@@ -58,18 +60,19 @@ pub struct Tree {
 
     /// Keys linking [`GlobalNodeId`] to the [`NodeId`] for this tree.
     /// Useful for redirecting.
-    ids_map: FxHashMap<GlobalNodeId, NodeId>
+    ids_map: FxHashMap<GlobalNodeId, NodeId>,
 }
 
 impl Tree {
     /// Constructs a new tree, containing a new root node without children.
-    pub fn new() -> Tree {
+    #[must_use]
+    pub fn new() -> Self {
         let node = RootAttachedNode::new();
         let mut ids_map = FxHashMap::default();
         ids_map.insert(node.owned.global_id, ROOT_NODE_ID);
-        Tree {
+        Self {
             nodes: vec![AttachedNode::Root(node)],
-            ids_map
+            ids_map,
         }
     }
 
@@ -94,22 +97,14 @@ impl Tree {
         let node = node.decompose();
 
         // Add its children to this tree.
-        let mut children = FxHashMap::with_capacity_and_hasher(
-            node.children.len(),
-            FxBuildHasher::default()
-        );
+        let mut children = FxHashMap::with_capacity_and_hasher(node.children.len(), FxBuildHasher);
         for (child_name, child) in node.children {
             let child_id = self.attach(child);
             children.insert(child_name, child_id);
         }
 
         // Now create the node to be 'attached'.
-        let node = AttachedNode::from_parts(
-            node.owned,
-            children,
-            node.redirect,
-            node.meta
-        );
+        let node = AttachedNode::from_parts(node.owned, children, node.redirect, node.meta);
 
         self.add(node)
     }
@@ -135,7 +130,7 @@ impl Tree {
         let child = self[parent].children_ref().get(&node_name);
         if let Some(child) = child {
             let node_command = self[node].command().clone();
-            let node_children: Vec<NodeId> = self[node].children_ref().values().cloned().collect();
+            let node_children: Vec<NodeId> = self[node].children_ref().values().copied().collect();
 
             let child = *child;
             // Merge onto the child.
@@ -151,11 +146,13 @@ impl Tree {
     }
 
     /// Gets the children of a given node in the tree.
+    #[must_use]
     pub fn get_children(&self, node: NodeId) -> Vec<NodeId> {
-        self[node].children_ref().values().cloned().collect()
+        self[node].children_ref().values().copied().collect()
     }
 
     /// Returns whether the given node is able to be used by a given source.
+    #[must_use]
     pub fn can_use(&self, node: NodeId, source: &CommandSource) -> bool {
         self[node].requirement().evaluate(source)
     }
@@ -171,18 +168,12 @@ impl Tree {
                 }
                 for input in self[child].examples() {
                     if self[node].is_valid_input(&input) {
-                        matches.insert(input.to_string());
+                        matches.insert(input.clone());
                     }
                 }
 
                 if !matches.is_empty() {
-                    consumer.ambiguous(
-                        self,
-                        node,
-                        child,
-                        sibling,
-                        matches.drain().collect()
-                    );
+                    consumer.ambiguous(self, node, child, sibling, matches.drain().collect());
                 }
             }
 
@@ -191,18 +182,13 @@ impl Tree {
     }
 
     /// Classifies a given node to a typed ID.
+    #[must_use]
     pub fn classify_id(&self, node: NodeId) -> NodeIdClassification {
         match self[node].classification() {
             NodeClassification::Root => NodeIdClassification::Root,
-            NodeClassification::Literal => NodeIdClassification::Literal(
-                LiteralNodeId(node.0)
-            ),
-            NodeClassification::Command => NodeIdClassification::Command(
-                CommandNodeId(node.0)
-            ),
-            NodeClassification::Argument => NodeIdClassification::Argument(
-                ArgumentNodeId(node.0)
-            ),
+            NodeClassification::Literal => NodeIdClassification::Literal(LiteralNodeId(node.0)),
+            NodeClassification::Command => NodeIdClassification::Command(CommandNodeId(node.0)),
+            NodeClassification::Argument => NodeIdClassification::Argument(ArgumentNodeId(node.0)),
         }
     }
 
@@ -219,7 +205,7 @@ impl Tree {
                 NodeIdClassification::Root => {}
                 NodeIdClassification::Literal(literal) => literals.push(literal),
                 NodeIdClassification::Command(command) => commands.push(command),
-                NodeIdClassification::Argument(arg) => arguments.push(arg)
+                NodeIdClassification::Argument(arg) => arguments.push(arg),
             }
         }
 
@@ -238,37 +224,41 @@ impl Tree {
 
             for command in commands {
                 if self[command].meta.literal == text {
-                    return vec![command.into()]
+                    return vec![command.into()];
                 }
             }
             for literal in literals {
                 if self[literal].meta.literal == text {
-                    return vec![literal.into()]
+                    return vec![literal.into()];
                 }
             }
         }
 
-        arguments
-            .into_iter()
-            .map(ArgumentNodeId::into)
-            .collect()
+        arguments.into_iter().map(ArgumentNodeId::into).collect()
     }
 
     /// Parses the given node, returning an error on failure.
-    pub fn parse(&self, node_id: NodeId, reader: &mut StringReader, command_context_builder: &mut CommandContextBuilder) -> Result<(), CommandSyntaxError> {
+    pub fn parse(
+        &self,
+        node_id: NodeId,
+        reader: &mut StringReader,
+        command_context_builder: &mut CommandContextBuilder,
+    ) -> Result<(), CommandSyntaxError> {
         match &self[node_id] {
             AttachedNode::Root(_) => {}
             AttachedNode::Literal(node) => {
                 let start = reader.cursor();
                 let Ok(end) = AttachedNode::parse_literal(reader, &node.meta.literal) else {
-                    return Err(LITERAL_INCORRECT.create(reader, TextComponent::text(node.meta.literal.to_string())));
+                    return Err(LITERAL_INCORRECT
+                        .create(reader, TextComponent::text(node.meta.literal.to_string())));
                 };
                 command_context_builder.with_node(node_id, StringRange::between(start, end));
             }
             AttachedNode::Command(node) => {
                 let start = reader.cursor();
                 let Ok(end) = AttachedNode::parse_literal(reader, &node.meta.literal) else {
-                    return Err(LITERAL_INCORRECT.create(reader, TextComponent::text(node.meta.literal.to_string())));
+                    return Err(LITERAL_INCORRECT
+                        .create(reader, TextComponent::text(node.meta.literal.to_string())));
                 };
                 command_context_builder.with_node(node_id, StringRange::between(start, end));
             }
@@ -276,14 +266,8 @@ impl Tree {
                 let start = reader.cursor();
                 let result = node.meta.argument_type.parse(reader)?;
                 let range = StringRange::between(start, reader.cursor());
-                let parsed = ParsedArgument::new(
-                    range,
-                    result
-                );
-                command_context_builder.with_argument(
-                    node.meta.name.to_string(),
-                    Arc::new(parsed)
-                );
+                let parsed = ParsedArgument::new(range, result);
+                command_context_builder.with_argument(node.meta.name.to_string(), Arc::new(parsed));
                 command_context_builder.with_node(node_id, range);
             }
         }
@@ -294,10 +278,11 @@ impl Tree {
     ///
     /// Returns [`Some`] if the node required could be found, and
     /// returns [`None`] otherwise.
+    #[must_use]
     pub fn resolve(&self, redirect: Redirection) -> Option<NodeId> {
         match redirect {
             Redirection::Root => Some(ROOT_NODE_ID),
-            Redirection::Global(id) => self.ids_map.get(&id).cloned()
+            Redirection::Global(id) => self.ids_map.get(&id).copied(),
         }
     }
 }
@@ -326,17 +311,24 @@ macro_rules! impl_index_index_mut {
                 if let AttachedNode::$attached_node_enum(node) = &self.nodes[index.0.get() - 1] {
                     node
                 } else {
-                    unreachable!("Node should have been AttachedNode::{}", stringify!($attached_node_enum))
+                    unreachable!(
+                        "Node should have been AttachedNode::{}",
+                        stringify!($attached_node_enum)
+                    )
                 }
             }
         }
 
         impl IndexMut<$node_id> for Tree {
             fn index_mut(&mut self, index: $node_id) -> &mut Self::Output {
-                if let AttachedNode::$attached_node_enum(node) = &mut self.nodes[index.0.get() - 1] {
+                if let AttachedNode::$attached_node_enum(node) = &mut self.nodes[index.0.get() - 1]
+                {
                     node
                 } else {
-                    unreachable!("Node should have been AttachedNode::{}", stringify!($attached_node_enum))
+                    unreachable!(
+                        "Node should have been AttachedNode::{}",
+                        stringify!($attached_node_enum)
+                    )
                 }
             }
         }

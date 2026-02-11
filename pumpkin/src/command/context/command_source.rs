@@ -1,10 +1,3 @@
-use std::pin::Pin;
-use std::sync::Arc;
-use pumpkin_util::math::vector2::Vector2;
-use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::math::wrap_degrees;
-use pumpkin_util::text::color::{Color, NamedColor};
-use pumpkin_util::text::TextComponent;
 use crate::command::CommandSender;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
@@ -12,9 +5,18 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::wrap_degrees;
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::{Color, NamedColor};
+use std::pin::Pin;
+use std::sync::Arc;
 
-pub const REQUIRES_PLAYER: CommandErrorType<0> = CommandErrorType::new("permissions.requires.player");
-pub const REQUIRES_ENTITY: CommandErrorType<0> = CommandErrorType::new("permissions.requires.entity");
+pub const REQUIRES_PLAYER: CommandErrorType<0> =
+    CommandErrorType::new("permissions.requires.player");
+pub const REQUIRES_ENTITY: CommandErrorType<0> =
+    CommandErrorType::new("permissions.requires.entity");
 
 trait ReturnValueCallable: Send + Sync {
     fn call(&self, value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
@@ -28,20 +30,22 @@ pub struct ResultValueTaker(pub Vec<ReturnValueCallback>);
 
 impl ResultValueTaker {
     /// Merges two takers, returning one.
-    pub fn merge(taker_1: &ResultValueTaker, taker_2: &ResultValueTaker) -> ResultValueTaker {
+    #[must_use]
+    pub fn merge(taker_1: &Self, taker_2: &Self) -> Self {
         let mut takers = Vec::with_capacity(taker_1.0.len() + taker_2.0.len());
-        for taker in taker_1.0.iter() {
+        for taker in &taker_1.0 {
             takers.push(taker.clone());
         }
-        for taker in taker_2.0.iter() {
+        for taker in &taker_2.0 {
             takers.push(taker.clone());
         }
-        ResultValueTaker(takers)
+        Self(takers)
     }
 
     /// Constructs a new, empty result value taker.
-    pub fn new() -> ResultValueTaker {
-        ResultValueTaker(Vec::new())
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Vec::new())
     }
 }
 
@@ -80,12 +84,13 @@ pub struct CommandSource {
     pub server: Arc<Server>,
     pub silent: bool,
     pub command_result_taker: ResultValueTaker,
-    pub entity_anchor: EntityAnchor
+    pub entity_anchor: EntityAnchor,
 }
 
 impl CommandSource {
     /// Returns a new [`CommandSource`] with the specified output and
     /// everything else from the `source` provided.
+    #[must_use]
     pub fn with_output(self, output: CommandSender) -> Self {
         Self {
             output,
@@ -98,12 +103,13 @@ impl CommandSource {
             server: self.server,
             silent: self.silent,
             command_result_taker: self.command_result_taker,
-            entity_anchor: self.entity_anchor
+            entity_anchor: self.entity_anchor,
         }
     }
 
     /// Returns a new [`CommandSource`] with the specified entity and
     /// everything else from the `source` provided.
+    #[must_use]
     pub fn with_entity(self, entity: Option<Arc<dyn EntityBase>>) -> Self {
         Self {
             output: self.output,
@@ -116,12 +122,13 @@ impl CommandSource {
             server: self.server,
             silent: self.silent,
             command_result_taker: self.command_result_taker,
-            entity_anchor: self.entity_anchor
+            entity_anchor: self.entity_anchor,
         }
     }
 
     /// Returns a new [`CommandSource`] with the specified position and
     /// everything else from the `source` provided.
+    #[must_use]
     pub fn with_position(self, position: Vector3<f64>) -> Self {
         Self {
             output: self.output,
@@ -134,12 +141,13 @@ impl CommandSource {
             server: self.server,
             silent: self.silent,
             command_result_taker: self.command_result_taker,
-            entity_anchor: self.entity_anchor
+            entity_anchor: self.entity_anchor,
         }
     }
 
     /// Returns a new [`CommandSource`] with the specified rotation and
     /// everything else from the `source` provided.
+    #[must_use]
     pub fn with_rotation(self, rotation: Vector2<f32>) -> Self {
         Self {
             output: self.output,
@@ -152,12 +160,13 @@ impl CommandSource {
             server: self.server,
             silent: self.silent,
             command_result_taker: self.command_result_taker,
-            entity_anchor: self.entity_anchor
+            entity_anchor: self.entity_anchor,
         }
     }
 
     /// Returns a new [`CommandSource`] with the specified command result taker and
     /// everything else from the `source` provided.
+    #[must_use]
     pub fn with_command_result_taker(self, command_result_taker: ResultValueTaker) -> Self {
         Self {
             output: self.output,
@@ -170,12 +179,13 @@ impl CommandSource {
             server: self.server,
             silent: self.silent,
             command_result_taker,
-            entity_anchor: self.entity_anchor
+            entity_anchor: self.entity_anchor,
         }
     }
 
     /// Merges the given takers with this one, returning a new [`CommandSource`] with
     /// the merged taker.
+    #[must_use]
     pub fn merge_command_result_taker(self, command_result_taker: &ResultValueTaker) -> Self {
         let merged = ResultValueTaker::merge(&self.command_result_taker, command_result_taker);
         self.with_command_result_taker(merged)
@@ -183,6 +193,7 @@ impl CommandSource {
 
     /// Returns a new [`CommandSource`] with the specified silent state and
     /// everything else from the `source` provided.
+    #[must_use]
     pub fn with_silent(self) -> Self {
         Self {
             output: self.output,
@@ -195,12 +206,13 @@ impl CommandSource {
             server: self.server,
             silent: true,
             command_result_taker: self.command_result_taker,
-            entity_anchor: self.entity_anchor
+            entity_anchor: self.entity_anchor,
         }
     }
 
     /// Returns a new [`CommandSource`] with the specified entity anchor and
     /// everything else from the `source` provided.
+    #[must_use]
     pub fn with_entity_anchor(self, entity_anchor: EntityAnchor) -> Self {
         Self {
             output: self.output,
@@ -213,7 +225,7 @@ impl CommandSource {
             server: self.server,
             silent: true,
             command_result_taker: self.command_result_taker,
-            entity_anchor
+            entity_anchor,
         }
     }
 
@@ -231,32 +243,35 @@ impl CommandSource {
             server: self.server,
             silent: true,
             command_result_taker: self.command_result_taker,
-            entity_anchor: self.entity_anchor
+            entity_anchor: self.entity_anchor,
         }
     }
 
     /// Returns a new [`CommandSource`] with the rotation changed in such
     /// a way that the source faces the anchor of the entity and
     /// everything else from the `source` provided.
-    pub fn with_looking_at_entity(self, entity: &Arc<dyn EntityBase>, anchor: EntityAnchor) -> Self {
+    pub fn with_looking_at_entity(
+        self,
+        entity: &Arc<dyn EntityBase>,
+        anchor: EntityAnchor,
+    ) -> Self {
         self.with_looking_at_pos(anchor.position_at_entity(entity))
     }
 
     /// Returns a new [`CommandSource`] with the rotation changed in such
     /// a way that the source faces the provided position and
     /// everything else from the `source` provided.
+    #[must_use]
     pub fn with_looking_at_pos(self, pos: Vector3<f64>) -> Self {
         let source_pos = self.entity_anchor.position_at_source(&self);
         let delta = pos.sub(&source_pos);
         let horizontal_len = delta.horizontal_length();
         let pitch = -delta.y.atan2(horizontal_len).to_degrees();
         let yaw = delta.z.atan2(delta.x).to_degrees() - 90.0;
-        self.with_rotation(
-            Vector2::new(
-                wrap_degrees(pitch as f32),
-                wrap_degrees(yaw as f32)
-            )
-        )
+        self.with_rotation(Vector2::new(
+            wrap_degrees(pitch as f32),
+            wrap_degrees(yaw as f32),
+        ))
     }
 
     /// Gets the entity as a result:
@@ -273,10 +288,9 @@ impl CommandSource {
     ///
     /// - If this source actually contains a player, it returns that wrapped in a [`Some`].
     /// - If it doesn't, a [`None`] is returned instead.
+    #[must_use]
     pub fn player_or_none(&self) -> Option<&Player> {
-        self.entity
-            .as_ref()
-            .and_then(|entity| entity.get_player())
+        self.entity.as_ref().and_then(|entity| entity.get_player())
     }
 
     /// Gets the player as a result:
@@ -285,11 +299,11 @@ impl CommandSource {
     /// - If it doesn't, a command error is provided instead, wrapped in an [`Err`].
     pub fn player_or_err(&self) -> Result<&Player, CommandSyntaxError> {
         self.player_or_none()
-            .clone()
             .ok_or(REQUIRES_PLAYER.create_without_context())
     }
 
     /// Returns if the command was executed by a player.
+    #[must_use]
     pub fn executed_by_player(&self) -> bool {
         self.player_or_none().is_some()
     }
@@ -303,19 +317,26 @@ impl CommandSource {
 
     /// Sends a message to all online operators.
     async fn send_to_ops(&self, message: TextComponent) {
-        let text = TextComponent::translate("chat.type.admin", &[self.display_name.clone(), message])
-            .color(Color::Named(NamedColor::Gray))
-            .italic();
-        if self.world.level_info.load().game_rules.send_command_feedback {
+        let text =
+            TextComponent::translate("chat.type.admin", &[self.display_name.clone(), message])
+                .color(Color::Named(NamedColor::Gray))
+                .italic();
+        if self
+            .world
+            .level_info
+            .load()
+            .game_rules
+            .send_command_feedback
+        {
             let output_player = match &self.output {
                 CommandSender::Player(sender) => Some(sender),
-                _ => None
+                _ => None,
             };
             for player in self.server.get_all_players() {
-                if output_player != Some(&player) {
-                    if player.permission_lvl.load() >= self.server.basic_config.op_permission_level {
-                        player.send_system_message(&text).await;
-                    }
+                if output_player != Some(&player)
+                    && player.permission_lvl.load() >= self.server.basic_config.op_permission_level
+                {
+                    player.send_system_message(&text).await;
                 }
             }
         }
@@ -325,13 +346,14 @@ impl CommandSource {
     pub async fn send_feedback(&self, message: TextComponent, broadcast_to_ops: bool) {
         if !self.silent {
             let should_send_to_output = self.output.should_receive_feedback();
-            let should_send_to_ops = broadcast_to_ops && self.output.should_broadcast_console_to_ops();
+            let should_send_to_ops =
+                broadcast_to_ops && self.output.should_broadcast_console_to_ops();
 
             if should_send_to_output {
-                self.output.send_message(message.clone()).await
+                self.output.send_message(message.clone()).await;
             }
             if should_send_to_ops {
-                self.send_to_ops(message).await
+                self.send_to_ops(message).await;
             }
         }
     }
@@ -347,11 +369,13 @@ impl CommandSource {
     pub async fn send_error(&self, error: TextComponent) {
         if !self.silent && self.output.should_track_output() {
             // TODO: Use `TextComponent::empty` instead of `TextComponent::text` when implemented
-            self.output.send_message(
-                TextComponent::text("")
-                    .add_child(error)
-                    .color(Color::Named(NamedColor::Red))
-            ).await;
+            self.output
+                .send_message(
+                    TextComponent::text("")
+                        .add_child(error)
+                        .color(Color::Named(NamedColor::Red)),
+                )
+                .await;
         }
     }
 }
@@ -359,26 +383,27 @@ impl CommandSource {
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum EntityAnchor {
     Feet,
-    Eyes
+    Eyes,
 }
-
 
 // TODO: Move this to the /execute command when implemented.
 impl EntityAnchor {
     /// Gets the [`EntityAnchor`] whose identity is the ID provided.
-    pub fn from_id(id: &str) -> Option<EntityAnchor> {
+    #[must_use]
+    pub fn from_id(id: &str) -> Option<Self> {
         match id {
-            "feet" => Some(EntityAnchor::Feet),
-            "eyes" => Some(EntityAnchor::Eyes),
-            _ => None
+            "feet" => Some(Self::Feet),
+            "eyes" => Some(Self::Eyes),
+            _ => None,
         }
     }
 
     /// Gets the ID of this [`EntityAnchor`]
-    pub fn id(self) -> &'static str {
+    #[must_use]
+    pub const fn id(self) -> &'static str {
         match self {
-            EntityAnchor::Feet => "feet",
-            EntityAnchor::Eyes => "eyes",
+            Self::Feet => "feet",
+            Self::Eyes => "eyes",
         }
     }
 
@@ -391,9 +416,10 @@ impl EntityAnchor {
     }
 
     /// Gets the position of a source with respect to this anchor.
+    #[must_use]
     pub fn position_at_source(self, command_source: &CommandSource) -> Vector3<f64> {
         if let Some(entity) = &command_source.entity {
-            self.position_at_entity(&entity)
+            self.position_at_entity(entity)
         } else {
             command_source.position
         }
@@ -403,23 +429,25 @@ impl EntityAnchor {
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ReturnValue {
     Success(i32),
-    Failure
+    Failure,
 }
 
 impl ReturnValue {
     /// Get the success value of this return value.
-    pub fn success_value(self) -> bool {
+    #[must_use]
+    pub const fn success_value(self) -> bool {
         match self {
-            ReturnValue::Success(_) => true,
-            ReturnValue::Failure => false
+            Self::Success(_) => true,
+            Self::Failure => false,
         }
     }
 
     /// Get the result integral value of this return value.
-    pub fn result_value(self) -> i32 {
+    #[must_use]
+    pub const fn result_value(self) -> i32 {
         match self {
-            ReturnValue::Success(value) => value,
-            ReturnValue::Failure => 0
+            Self::Success(value) => value,
+            Self::Failure => 0,
         }
     }
 }

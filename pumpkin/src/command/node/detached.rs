@@ -1,10 +1,13 @@
+use crate::command::argument_types::argument_type::AnyArgumentType;
+use crate::command::node::{
+    ArgumentNodeMetadata, Command, CommandNodeMetadata, LiteralNodeMetadata, NodeMetadata,
+    OwnedNodeData, RedirectModifier, Redirection, Requirement,
+};
+use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::num::NonZero;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use rustc_hash::FxHashMap;
-use crate::command::argument_types::argument_type::AnyArgumentType;
-use crate::command::node::{ArgumentNodeMetadata, Command, CommandNodeMetadata, LiteralNodeMetadata, NodeMetadata, OwnedNodeData, RedirectModifier, Redirection, Requirement};
 
 static NEXT_DETACHED_NODE_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -20,10 +23,9 @@ impl GlobalNodeId {
     /// Generates an ID that is guaranteed
     /// to be unique at runtime, by using atomics.
     pub fn new() -> Self {
-        GlobalNodeId(
-            NonZero::new(
-                NEXT_DETACHED_NODE_ID.fetch_add(1, Ordering::Relaxed)
-            ).expect("expected a non-zero id")
+        Self(
+            NonZero::new(NEXT_DETACHED_NODE_ID.fetch_add(1, Ordering::Relaxed))
+                .expect("expected a non-zero id"),
         )
     }
 }
@@ -36,7 +38,7 @@ pub struct LiteralDetachedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, DetachedNode>,
     pub redirect: Option<Redirection>,
-    pub meta: LiteralNodeMetadata
+    pub meta: LiteralNodeMetadata,
 }
 
 impl LiteralDetachedNode {
@@ -51,7 +53,7 @@ impl LiteralDetachedNode {
         requirement: Requirement,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
-        forks: bool
+        forks: bool,
     ) -> Self {
         Self {
             owned: OwnedNodeData {
@@ -76,7 +78,7 @@ pub struct CommandDetachedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, DetachedNode>,
     pub redirect: Option<Redirection>,
-    pub meta: CommandNodeMetadata
+    pub meta: CommandNodeMetadata,
 }
 
 impl CommandDetachedNode {
@@ -92,7 +94,7 @@ impl CommandDetachedNode {
         requirement: Requirement,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
-        forks: bool
+        forks: bool,
     ) -> Self {
         Self {
             owned: OwnedNodeData {
@@ -114,7 +116,7 @@ pub struct ArgumentDetachedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, DetachedNode>,
     pub redirect: Option<Redirection>,
-    pub meta: ArgumentNodeMetadata
+    pub meta: ArgumentNodeMetadata,
 }
 
 impl ArgumentDetachedNode {
@@ -130,9 +132,9 @@ impl ArgumentDetachedNode {
         requirement: Requirement,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
-        forks: bool
-    ) -> ArgumentDetachedNode {
-        ArgumentDetachedNode {
+        forks: bool,
+    ) -> Self {
+        Self {
             owned: OwnedNodeData {
                 global_id: GlobalNodeId::new(),
                 requirement,
@@ -151,7 +153,7 @@ impl ArgumentDetachedNode {
 pub enum DetachedNode {
     Literal(LiteralDetachedNode),
     Command(CommandDetachedNode),
-    Argument(ArgumentDetachedNode)
+    Argument(ArgumentDetachedNode),
 }
 
 /// Represents a [`DetachedNode`] that has been irreversibly
@@ -161,51 +163,51 @@ pub struct DecomposedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, DetachedNode>,
     pub redirect: Option<Redirection>,
-    pub meta: NodeMetadata
+    pub meta: NodeMetadata,
 }
 
 impl From<LiteralDetachedNode> for DetachedNode {
     fn from(node: LiteralDetachedNode) -> Self {
-        DetachedNode::Literal(node)
+        Self::Literal(node)
     }
 }
 
 impl From<CommandDetachedNode> for DetachedNode {
     fn from(node: CommandDetachedNode) -> Self {
-        DetachedNode::Command(node)
+        Self::Command(node)
     }
 }
 
 impl From<ArgumentDetachedNode> for DetachedNode {
     fn from(node: ArgumentDetachedNode) -> Self {
-        DetachedNode::Argument(node)
+        Self::Argument(node)
     }
 }
 
 impl DetachedNode {
     /// Irreversibly decomposes this [`DetachedNode`] into its constituent elements.
     /// This allows it to then be recast into a new [`AttachedNode`].
+    #[must_use]
     pub fn decompose(self) -> DecomposedNode {
         match self {
-            DetachedNode::Literal(node) => DecomposedNode {
+            Self::Literal(node) => DecomposedNode {
                 owned: node.owned,
                 children: node.children,
                 redirect: node.redirect,
-                meta: NodeMetadata::Literal(node.meta)
+                meta: NodeMetadata::Literal(node.meta),
             },
-            DetachedNode::Command(node) => DecomposedNode {
+            Self::Command(node) => DecomposedNode {
                 owned: node.owned,
                 children: node.children,
                 redirect: node.redirect,
-                meta: NodeMetadata::Command(node.meta)
+                meta: NodeMetadata::Command(node.meta),
             },
-            DetachedNode::Argument(node) => DecomposedNode {
+            Self::Argument(node) => DecomposedNode {
                 owned: node.owned,
                 children: node.children,
                 redirect: node.redirect,
-                meta: NodeMetadata::Argument(node.meta)
+                meta: NodeMetadata::Argument(node.meta),
             },
         }
     }
 }
-

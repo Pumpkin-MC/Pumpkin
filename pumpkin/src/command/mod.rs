@@ -17,17 +17,17 @@ use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 
 pub mod args;
-pub mod argument_types;
 pub mod argument_builder;
+pub mod argument_types;
 pub mod client_suggestions;
 pub mod commands;
 pub mod context;
 pub mod dispatcher;
 pub mod errors;
+pub mod node;
 pub mod string_reader;
 pub mod suggestion;
 pub mod tree;
-pub mod node;
 
 /// Represents the source of a command execution.
 ///
@@ -93,8 +93,7 @@ impl CommandSender {
 
     pub fn set_success_count(&self, count: u32) {
         if let Self::CommandBlock(c, _) = self {
-            c
-                .success_count
+            c.success_count
                 .store(count, std::sync::atomic::Ordering::SeqCst);
         }
     }
@@ -188,27 +187,30 @@ impl CommandSender {
         match self {
             Self::CommandBlock(_, world) => {
                 world.level_info.load().game_rules.send_command_feedback
-            },
+            }
             Self::Player(player) => {
-                player.world().level_info.load().game_rules.send_command_feedback
-            },
-            Self::Console | Self::Rcon(_) => true
+                player
+                    .world()
+                    .level_info
+                    .load()
+                    .game_rules
+                    .send_command_feedback
+            }
+            Self::Console | Self::Rcon(_) => true,
         }
     }
 
     #[must_use]
     pub fn should_broadcast_console_to_ops(&self) -> bool {
         match self {
-            Self::CommandBlock(_, world) => {
-                world.level_info.load().game_rules.command_block_output
-            },
+            Self::CommandBlock(_, world) => world.level_info.load().game_rules.command_block_output,
             // TODO: should Console and Rcon be decided by server config?
-            Self::Player(..) | Self::Console | Self::Rcon(_) => true
+            Self::Player(..) | Self::Console | Self::Rcon(_) => true,
         }
     }
 
     #[must_use]
-    pub fn should_track_output(&self) -> bool {
+    pub const fn should_track_output(&self) -> bool {
         true
     }
 }

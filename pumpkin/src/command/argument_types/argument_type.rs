@@ -1,13 +1,13 @@
-use std::any::Any;
-use std::pin::Pin;
-use crate::command::{
-    errors::command_syntax_error::CommandSyntaxError, string_reader::StringReader,
-};
 use crate::command::argument_types::argument_type::sealed::Sealed;
 use crate::command::context::command_context::CommandContext;
 use crate::command::context::command_source::CommandSource;
 use crate::command::suggestion::Suggestions;
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
+use crate::command::{
+    errors::command_syntax_error::CommandSyntaxError, string_reader::StringReader,
+};
+use std::any::Any;
+use std::pin::Pin;
 
 /// Represents an argument type that parses a particular type `T`.
 pub trait ArgumentType<T: Send + Sync>: Send + Sync {
@@ -35,13 +35,9 @@ pub trait ArgumentType<T: Send + Sync>: Send + Sync {
     fn list_suggestions(
         &self,
         _context: &CommandContext,
-        _suggestions_builder: &mut SuggestionsBuilder
+        _suggestions_builder: &mut SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
-        Box::pin(
-            async move {
-                Suggestions::empty()
-            }
-        )
+        Box::pin(async move { Suggestions::empty() })
     }
 
     /// Gets a selected list of examples which are considered
@@ -68,20 +64,27 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
     ///
     /// Errors should be propagated using the `?` operator, which will
     /// replicate Brigadier's behavior of exceptions.
-    fn parse(&self, reader: &mut StringReader) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError>;
+    fn parse(
+        &self,
+        reader: &mut StringReader,
+    ) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError>;
 
     /// Parses a value by using a [`StringReader`]. Call this only if you have no source.
     ///
     /// Errors should be propagated using the `?` operator, which will
     /// replicate Brigadier's behavior of exceptions.
-    fn parse_with_source(&self, reader: &mut StringReader, source: &CommandSource) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError>;
+    fn parse_with_source(
+        &self,
+        reader: &mut StringReader,
+        source: &CommandSource,
+    ) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError>;
 
     /// Provides a list of suggestions from this argument type.
     #[must_use]
     fn list_suggestions(
         &self,
         context: &CommandContext,
-        suggestions_builder: &mut SuggestionsBuilder
+        suggestions_builder: &mut SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>>;
 
     /// Gets a selected list of examples which are considered
@@ -98,21 +101,32 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
 impl<T: Send + Sync> Sealed for dyn ArgumentType<T> {}
 
 impl<T: 'static + Send + Sync> AnyArgumentType for dyn ArgumentType<T> {
-    fn parse(&self, reader: &mut StringReader) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError> {
+    fn parse(
+        &self,
+        reader: &mut StringReader,
+    ) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError> {
         match self.parse(reader) {
             Ok(value) => Ok(Box::new(value)),
-            Err(error) => Err(error)
+            Err(error) => Err(error),
         }
     }
 
-    fn parse_with_source(&self, reader: &mut StringReader, source: &CommandSource) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError> {
+    fn parse_with_source(
+        &self,
+        reader: &mut StringReader,
+        source: &CommandSource,
+    ) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError> {
         match self.parse_with_source(reader, source) {
             Ok(value) => Ok(Box::new(value)),
-            Err(error) => Err(error)
+            Err(error) => Err(error),
         }
     }
 
-    fn list_suggestions(&self, context: &CommandContext, suggestions_builder: &mut SuggestionsBuilder) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
+    fn list_suggestions(
+        &self,
+        context: &CommandContext,
+        suggestions_builder: &mut SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
         self.list_suggestions(context, suggestions_builder)
     }
 
@@ -120,4 +134,3 @@ impl<T: 'static + Send + Sync> AnyArgumentType for dyn ArgumentType<T> {
         self.examples()
     }
 }
-

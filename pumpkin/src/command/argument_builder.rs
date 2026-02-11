@@ -1,9 +1,11 @@
-use std::borrow::Cow;
-use std::sync::Arc;
 use crate::command::argument_builder::private::Sealed;
 use crate::command::argument_types::argument_type::AnyArgumentType;
+use crate::command::node::detached::{
+    ArgumentDetachedNode, CommandDetachedNode, DetachedNode, LiteralDetachedNode,
+};
 use crate::command::node::{Command, RedirectModifier, Redirection, Requirement};
-use crate::command::node::detached::{ArgumentDetachedNode, CommandDetachedNode, DetachedNode, LiteralDetachedNode};
+use std::borrow::Cow;
+use std::sync::Arc;
 
 /// Represents an intermediate struct for
 /// building arguments for commands.
@@ -15,27 +17,27 @@ struct CommonArgumentBuilder {
     pub requirement: Requirement,
     pub target: Option<Redirection>,
     pub modifier: RedirectModifier,
-    pub forks: bool
+    pub forks: bool,
 }
 
 /// A builder that builds a literal, non-command [`DetachedNode`].
 pub struct LiteralArgumentBuilder {
     pub common: CommonArgumentBuilder,
-    pub literal: Cow<'static, str>
+    pub literal: Cow<'static, str>,
 }
 
 /// A builder that builds a command [`DetachedNode`].
 pub struct CommandArgumentBuilder {
     pub common: CommonArgumentBuilder,
     pub literal: Cow<'static, str>,
-    pub description: Cow<'static, str>
+    pub description: Cow<'static, str>,
 }
 
 /// A builder that builds an argument [`DetachedNode`].
 pub struct RequiredArgumentBuilder {
     pub common: CommonArgumentBuilder,
     pub name: String,
-    pub argument_type: Arc<dyn AnyArgumentType>
+    pub argument_type: Arc<dyn AnyArgumentType>,
 }
 
 mod private {
@@ -80,11 +82,14 @@ impl Sealed for LiteralArgumentBuilder {}
 impl Sealed for CommandArgumentBuilder {}
 impl Sealed for RequiredArgumentBuilder {}
 
-/// Helper macro to implement repeated code of ArgumentBuilder for our types.
+/// Helper macro to implement repeated code of `ArgumentBuilder` for our types.
 macro_rules! impl_boilerplate_argument_builder {
     () => {
         fn then(mut self, argument: impl Into<DetachedNode>) -> Self {
-            assert!(self.target().is_none(), "Cannot add children to a redirected node");
+            assert!(
+                self.target().is_none(),
+                "Cannot add children to a redirected node"
+            );
             let node = argument.into();
             self.common.arguments.push(node);
             self
@@ -114,7 +119,7 @@ macro_rules! impl_boilerplate_argument_builder {
         fn forks(&self) -> bool {
             self.common.forks
         }
-    }
+    };
 }
 
 impl ArgumentBuilder<LiteralDetachedNode> for LiteralArgumentBuilder {
@@ -127,7 +132,7 @@ impl ArgumentBuilder<LiteralDetachedNode> for LiteralArgumentBuilder {
             self.common.requirement,
             self.common.target,
             self.common.modifier,
-            self.common.forks
+            self.common.forks,
         )
     }
 }
@@ -143,7 +148,7 @@ impl ArgumentBuilder<CommandDetachedNode> for CommandArgumentBuilder {
             self.common.requirement,
             self.common.target,
             self.common.modifier,
-            self.common.forks
+            self.common.forks,
         )
     }
 }
@@ -159,7 +164,7 @@ impl ArgumentBuilder<ArgumentDetachedNode> for RequiredArgumentBuilder {
             self.common.requirement,
             self.common.target,
             self.common.modifier,
-            self.common.forks
+            self.common.forks,
         )
     }
 }

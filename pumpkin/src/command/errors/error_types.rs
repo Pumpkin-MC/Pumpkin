@@ -60,7 +60,7 @@ pub enum CompileTimeText {
     TranslationKey(&'static str),
 
     /// Directly shows up to the user without any translation done.
-    Literal(&'static str)
+    Literal(&'static str),
 }
 
 /// A command error that requires **exactly** `N` translation arguments.
@@ -134,28 +134,16 @@ impl LiteralCommandErrorType {
 
     /// Creates an error without context from itself.
     #[must_use]
-    pub fn create_without_context(
-        &'static self,
-    ) -> CommandSyntaxError {
-        CommandSyntaxError::create_without_context(
-            self,
-            TextComponent::text(self.literal),
-        )
+    pub fn create_without_context(&'static self) -> CommandSyntaxError {
+        CommandSyntaxError::create_without_context(self, TextComponent::text(self.literal))
     }
 
     /// Creates an error with context from itself.
-    pub fn create<C>(
-        &'static self,
-        context_provider: &C
-    ) -> CommandSyntaxError
+    pub fn create<C>(&'static self, context_provider: &C) -> CommandSyntaxError
     where
         C: ContextProvider,
     {
-        CommandSyntaxError::create(
-            self,
-            TextComponent::text(self.literal),
-            context_provider,
-        )
+        CommandSyntaxError::create(self, TextComponent::text(self.literal), context_provider)
     }
 }
 
@@ -184,8 +172,7 @@ impl Eq for dyn AnyCommandErrorType {}
 
 impl PartialEq for dyn AnyCommandErrorType {
     fn eq(&self, other: &Self) -> bool {
-        self.text() == other.text()
-            && self.argument_count() == other.argument_count()
+        self.text() == other.text() && self.argument_count() == other.argument_count()
     }
 }
 

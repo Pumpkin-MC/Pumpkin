@@ -320,6 +320,7 @@ impl<'a> StringReader<'a> {
 
     /// Converts this reader into a `'static` form, which
     /// is useful for snapshotting the reader.
+    #[must_use]
     pub fn into_owned(self) -> StringReader<'static> {
         StringReader {
             string: Cow::Owned(self.string.into_owned()),
@@ -329,6 +330,7 @@ impl<'a> StringReader<'a> {
 
     /// Clones this reader into a `'static` form, which
     /// is useful for snapshotting the reader.
+    #[must_use]
     pub fn clone_into_owned(&self) -> StringReader<'static> {
         StringReader {
             string: Cow::Owned(self.string.to_string()),

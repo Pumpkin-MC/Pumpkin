@@ -1,20 +1,20 @@
-pub mod tree;
-pub mod dispatcher;
-pub mod detached;
 pub mod attached;
+pub mod detached;
+pub mod dispatcher;
+pub mod tree;
 
+use crate::command::argument_types::argument_type::AnyArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::CommandSource;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::node::detached::GlobalNodeId;
 use std::borrow::Cow;
 use std::pin::Pin;
 use std::sync::Arc;
-use crate::command::argument_types::argument_type::AnyArgumentType;
-use crate::command::context::command_context::{CommandContext};
-use crate::command::context::command_source::CommandSource;
-use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::node::attached::NodeId;
-use crate::command::node::detached::GlobalNodeId;
 
 /// Represents a [`CommandExecutor`]'s result.
-pub type CommandExecutorResult = Pin<Box<dyn Future<Output = Result<i32, CommandSyntaxError>> + Send>>;
+pub type CommandExecutorResult =
+    Pin<Box<dyn Future<Output = Result<i32, CommandSyntaxError>> + Send>>;
 
 /// A struct implementing this trait is able to run with a given context.
 pub trait CommandExecutor: Sync + Send {
@@ -26,7 +26,8 @@ pub trait CommandExecutor: Sync + Send {
 pub type Command = Arc<dyn CommandExecutor>;
 
 /// Represents the result of [`Arc<CommandSource>`]s from a [`CommandContext`].
-pub type RedirectModifierResult<'a> = Pin<Box<dyn Future<Output = Result<Vec<Arc<CommandSource>>, CommandSyntaxError>> + Send + 'a>>;
+pub type RedirectModifierResult<'a> =
+    Pin<Box<dyn Future<Output = Result<Vec<Arc<CommandSource>>, CommandSyntaxError>> + Send + 'a>>;
 
 /// A function that returns a new collection of sources from a given context.
 #[derive(Clone)]
@@ -36,20 +37,17 @@ pub enum RedirectModifier {
 
     /// Returns multiple [`CommandSource`]s from one context via
     /// custom behavior.
-    Custom(Arc<dyn Fn(&CommandContext) -> RedirectModifierResult<'_> + Send + Sync>)
+    Custom(Arc<dyn Fn(&CommandContext) -> RedirectModifierResult<'_> + Send + Sync>),
 }
 
 impl RedirectModifier {
     /// Tries to provide a [`Vec`] of [`Arc<CommandSource>`] from a
     /// given [`CommandContext`].
+    #[must_use]
     pub fn sources<'c>(&self, command_context: &'c CommandContext) -> RedirectModifierResult<'c> {
         match self {
-            Self::OneSource => Box::pin(
-                async move {
-                    Ok(vec![command_context.source.clone()])
-                }
-            ),
-            Self::Custom(function) => function(command_context)
+            Self::OneSource => Box::pin(async move { Ok(vec![command_context.source.clone()]) }),
+            Self::Custom(function) => function(command_context),
         }
     }
 }
@@ -63,16 +61,17 @@ pub enum Requirement {
 
     /// The given source must satisfy the condition to
     /// be allowed to run the command.
-    Condition(Arc<dyn Fn(&CommandSource) -> bool + Send + Sync>)
+    Condition(Arc<dyn Fn(&CommandSource) -> bool + Send + Sync>),
 }
 
 impl Requirement {
     /// Evaluates the given condition, returning whether the
     /// given [`CommandSource`] satisfies this requirement.
+    #[must_use]
     pub fn evaluate(&self, command_source: &CommandSource) -> bool {
         match self {
             Self::AlwaysQualified => true,
-            Self::Condition(condition) => condition(command_source)
+            Self::Condition(condition) => condition(command_source),
         }
     }
 }
@@ -84,7 +83,7 @@ pub struct OwnedNodeData {
     pub requirement: Requirement,
     pub modifier: RedirectModifier,
     pub forks: bool,
-    pub command: Option<Command>
+    pub command: Option<Command>,
 }
 
 /// Represents the extra metadata of a node storing a literal.
@@ -97,9 +96,9 @@ pub struct LiteralNodeMetadata {
 impl LiteralNodeMetadata {
     pub fn new(literal: impl Into<Cow<'static, str>>) -> Self {
         let literal = literal.into();
-        LiteralNodeMetadata {
+        Self {
             literal: literal.clone(),
-            literal_lowercase: literal.to_uppercase()
+            literal_lowercase: literal.to_uppercase(),
         }
     }
 }
@@ -110,16 +109,19 @@ impl LiteralNodeMetadata {
 pub struct CommandNodeMetadata {
     pub literal: Cow<'static, str>,
     pub literal_lowercase: String,
-    pub description: Cow<'static, str>
+    pub description: Cow<'static, str>,
 }
 
 impl CommandNodeMetadata {
-    pub fn new(literal: impl Into<Cow<'static, str>>, description: impl Into<Cow<'static, str>>) -> Self {
+    pub fn new(
+        literal: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
+    ) -> Self {
         let literal = literal.into();
-        CommandNodeMetadata {
+        Self {
             literal: literal.clone(),
             literal_lowercase: literal.to_uppercase(),
-            description: description.into()
+            description: description.into(),
         }
     }
 }
@@ -128,14 +130,17 @@ impl CommandNodeMetadata {
 #[derive(Clone)]
 pub struct ArgumentNodeMetadata {
     pub name: Cow<'static, str>,
-    pub argument_type: Arc<dyn AnyArgumentType>
+    pub argument_type: Arc<dyn AnyArgumentType>,
 }
 
 impl ArgumentNodeMetadata {
-    pub fn new(name: impl Into<Cow<'static, str>>, argument_type: Arc<dyn AnyArgumentType>) -> Self {
-        ArgumentNodeMetadata {
+    pub fn new(
+        name: impl Into<Cow<'static, str>>,
+        argument_type: Arc<dyn AnyArgumentType>,
+    ) -> Self {
+        Self {
             name: name.into(),
-            argument_type
+            argument_type,
         }
     }
 }
@@ -152,12 +157,12 @@ pub enum NodeMetadata {
     Command(CommandNodeMetadata),
 
     /// Metadata of an argument node.
-    Argument(ArgumentNodeMetadata)
+    Argument(ArgumentNodeMetadata),
 }
 
 /// Stores where this redirection would lead to.
 #[derive(Clone)]
 pub enum Redirection {
     Root,
-    Global(GlobalNodeId)
+    Global(GlobalNodeId),
 }

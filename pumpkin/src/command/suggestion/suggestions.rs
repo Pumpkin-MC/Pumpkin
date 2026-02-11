@@ -1,6 +1,6 @@
-use pumpkin_util::text::TextComponent;
 use crate::command::context::string_range::StringRange;
 use crate::command::suggestion::{Suggestion, SuggestionText, Suggestions};
+use pumpkin_util::text::TextComponent;
 
 /// Represents a builder of [`Suggestion`]s.
 pub struct SuggestionsBuilder {
@@ -15,27 +15,30 @@ pub struct SuggestionsBuilder {
     pub input_lowercase: String,
 
     /// The eventual result of this [`SuggestionsBuilder`].
-    pub result: Vec<Suggestion>
+    pub result: Vec<Suggestion>,
 }
 
 impl SuggestionsBuilder {
     /// Constructs a new [`SuggestionsBuilder`] from the given
     /// input string and a starting position relative to it.
-    pub fn new(input: String, start: usize) -> SuggestionsBuilder {
-        SuggestionsBuilder {
+    #[must_use]
+    pub fn new(input: String, start: usize) -> Self {
+        Self {
             input: input.clone(),
             input_lowercase: input.to_lowercase(),
             start,
-            result: Vec::new()
+            result: Vec::new(),
         }
     }
 
     /// Gets the remaining substring of the underlying input string.
+    #[must_use]
     pub fn remaining(&self) -> &str {
         &self.input[self.start..]
     }
 
     /// Gets the remaining substring of the underlying lowercased input string.
+    #[must_use]
     pub fn remaining_lowercase(&self) -> &str {
         &self.input_lowercase[self.start..]
     }
@@ -54,12 +57,10 @@ impl SuggestionsBuilder {
     {
         let text = text.into();
         if text.cached_text() != self.remaining() {
-            self.result.push(
-                Suggestion::without_tooltip(
-                    StringRange::between(self.start, self.input.len()),
-                    text
-                )
-            );
+            self.result.push(Suggestion::without_tooltip(
+                StringRange::between(self.start, self.input.len()),
+                text,
+            ));
         }
         self
     }
@@ -72,19 +73,18 @@ impl SuggestionsBuilder {
     {
         let text = text.into();
         if text.cached_text() != self.remaining() {
-            self.result.push(
-                Suggestion::with_tooltip(
-                    StringRange::between(self.start, self.input.len()),
-                    text,
-                    tooltip
-                )
-            );
+            self.result.push(Suggestion::with_tooltip(
+                StringRange::between(self.start, self.input.len()),
+                text,
+                tooltip,
+            ));
         }
         self
     }
 
     /// Adds all suggestions from another [`SuggestionsBuilder`] to this one.
-    pub fn add(mut self, other: &SuggestionsBuilder) -> Self {
+    #[must_use]
+    pub fn add(mut self, other: &Self) -> Self {
         for suggestion in &other.result {
             self.result.push(suggestion.clone());
         }
@@ -93,12 +93,13 @@ impl SuggestionsBuilder {
 
     /// Creates another [`SuggestionsBuilder`] from this one
     /// by copying the input and taking the starting position.
+    #[must_use]
     pub fn create_offset(&self, start: usize) -> Self {
-        SuggestionsBuilder {
+        Self {
             input: self.input.clone(),
             input_lowercase: self.input_lowercase.clone(),
             start,
-            result: Vec::new()
+            result: Vec::new(),
         }
     }
 }

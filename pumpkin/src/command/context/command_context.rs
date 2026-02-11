@@ -1,33 +1,33 @@
-use std::any::Any;
-use std::sync::Arc;
-use rustc_hash::FxHashMap;
 use crate::command::context::command_source::{CommandSource, ReturnValue};
 use crate::command::context::string_range::StringRange;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::node::{Command, RedirectModifier};
 use crate::command::node::attached::NodeId;
 use crate::command::node::dispatcher::{CommandDispatcher, ResultConsumer};
 use crate::command::node::tree::Tree;
+use crate::command::node::{Command, RedirectModifier};
+use rustc_hash::FxHashMap;
+use std::any::Any;
+use std::sync::Arc;
 
 /// Represents the current stage of the chain.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Stage {
     MODIFY,
-    EXECUTE
+    EXECUTE,
 }
 
 /// Represents a parsed node.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct ParsedNode {
     pub node: NodeId,
-    pub range: StringRange
+    pub range: StringRange,
 }
 
 /// Represents a suggestional context involving a node.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct SuggestionContext {
     pub parent: NodeId,
-    pub starting_position: usize
+    pub starting_position: usize,
 }
 
 /// Represents a parsed argument of any type.
@@ -36,16 +36,14 @@ pub struct ParsedArgument {
     pub range: StringRange,
 
     /// The result of this parsed argument.
-    pub result: Box<dyn Any + Send + Sync>
+    pub result: Box<dyn Any + Send + Sync>,
 }
 
 impl ParsedArgument {
     /// Creates a new [`ParsedArgument`] from its range and resultant value.
-    pub fn new(range: StringRange, result: Box<dyn Any + Send + Sync>) -> ParsedArgument {
-        ParsedArgument {
-            range,
-            result
-        }
+    #[must_use]
+    pub fn new(range: StringRange, result: Box<dyn Any + Send + Sync>) -> Self {
+        Self { range, result }
     }
 }
 
@@ -76,7 +74,7 @@ pub struct CommandContext {
     pub range: StringRange,
 
     /// The child context of this context.
-    pub child: Option<Arc<CommandContext>>,
+    pub child: Option<Arc<Self>>,
 
     /// The redirect modifier of this context.
     pub modifier: RedirectModifier,
@@ -86,38 +84,41 @@ pub struct CommandContext {
 
     /// The command stored in this context which
     /// is run to get a command result.
-    pub command: Option<Command>
+    pub command: Option<Command>,
 }
 
 impl CommandContext {
     /// Copies this context with the source provided.
-    pub fn with_source(&self, source: Arc<CommandSource>) -> CommandContext {
-        CommandContext {
+    #[must_use]
+    pub fn with_source(&self, source: Arc<CommandSource>) -> Self {
+        Self {
             source,
             input: self.input.clone(),
             arguments: self.arguments.clone(),
             nodes: self.nodes.clone(),
-            range: self.range.clone(),
+            range: self.range,
             child: self.child.clone(),
             modifier: self.modifier.clone(),
             forks: self.forks,
             command: self.command.clone(),
             tree: self.tree.clone(),
-            root: self.root
+            root: self.root,
         }
     }
 
     /// Returns the child immediately below this node.
-    pub fn get_child(&self) -> Option<&Arc<CommandContext>> {
+    #[must_use]
+    pub const fn get_child(&self) -> Option<&Arc<Self>> {
         self.child.as_ref()
     }
 
     /// Returns the child which does not have a child which originated from this node.
     /// This may return itself.
-    pub fn get_last_child(&self) -> &CommandContext {
+    #[must_use]
+    pub fn get_last_child(&self) -> &Self {
         let mut current_child = self;
         while let Some(child) = &current_child.child {
-            current_child = &*child;
+            current_child = child;
         }
         current_child
     }
@@ -130,7 +131,7 @@ pub struct ContextChain {
     modifiers: Vec<Arc<CommandContext>>,
 
     /// That specific [`CommandContext`] to execute.
-    execute: Arc<CommandContext>
+    execute: Arc<CommandContext>,
 }
 
 impl ContextChain {
@@ -139,17 +140,19 @@ impl ContextChain {
     /// # Panics
     ///
     /// Panics if the `execute` given is non-executable.
-    pub fn new(modifiers: Vec<Arc<CommandContext>>, execute: Arc<CommandContext>) -> ContextChain {
-        assert!(execute.command.is_some(), "Expected last command in chain to be executable");
-        ContextChain {
-            modifiers,
-            execute
-        }
+    #[must_use]
+    pub fn new(modifiers: Vec<Arc<CommandContext>>, execute: Arc<CommandContext>) -> Self {
+        assert!(
+            execute.command.is_some(),
+            "Expected last command in chain to be executable"
+        );
+        Self { modifiers, execute }
     }
 
     /// Tries to flatten a [`CommandContext`] in a [`Box`]. If no command
     /// is available at the end of chain, [`None`] is returned.
-    pub fn try_flatten(root: &CommandContext) -> Option<ContextChain> {
+    #[must_use]
+    pub fn try_flatten(root: &CommandContext) -> Option<Self> {
         let mut modifiers = Vec::new();
         let mut current = root;
 
@@ -158,16 +161,10 @@ impl ContextChain {
                 modifiers.push(child.clone());
                 current = child;
             } else {
-                return if current.command.is_some() {
-                    Some(
-                        ContextChain::new(
-                            modifiers,
-                            Arc::new(current.clone())
-                        )
-                    )
-                } else {
-                    None
-                }
+                return current
+                    .command
+                    .is_some()
+                    .then(|| Self::new(modifiers, Arc::new(current.clone())));
             }
         }
     }
@@ -177,7 +174,7 @@ impl ContextChain {
         modifier: &CommandContext,
         source: &Arc<CommandSource>,
         result_consumer: &dyn ResultConsumer,
-        forked_mode: bool
+        forked_mode: bool,
     ) -> Result<Vec<Arc<CommandSource>>, CommandSyntaxError> {
         let source_modifier = &modifier.modifier;
 
@@ -207,18 +204,18 @@ impl ContextChain {
         executable: &CommandContext,
         source: &Arc<CommandSource>,
         result_consumer: &dyn ResultConsumer,
-        forked_mode: bool
+        forked_mode: bool,
     ) -> Result<i32, CommandSyntaxError> {
         let context_to_use = executable.with_source(source.clone());
 
         let mut result = match &executable.command {
             None => panic!("Expected `executable` to be executable"),
-            Some(command) => command.execute(&context_to_use).await
+            Some(command) => command.execute(&context_to_use).await,
         };
 
         if let Ok(result) = result {
             result_consumer.on_command_completion(&context_to_use, ReturnValue::Success(result));
-            Ok(if forked_mode {1} else {result})
+            Ok(if forked_mode { 1 } else { result })
         } else {
             result_consumer.on_command_completion(&context_to_use, ReturnValue::Failure);
             if forked_mode {
@@ -232,10 +229,10 @@ impl ContextChain {
     pub async fn execute_all(
         &self,
         source: &Arc<CommandSource>,
-        result_consumer: &dyn ResultConsumer
+        result_consumer: &dyn ResultConsumer,
     ) -> Result<i32, CommandSyntaxError> {
         if self.modifiers.is_empty() {
-            return Self::run_executable(&*self.execute, source, result_consumer, false).await;
+            return Self::run_executable(&self.execute, source, result_consumer, false).await;
         }
 
         let mut forked_mode = false;
@@ -246,7 +243,8 @@ impl ContextChain {
 
             let mut next_sources = Vec::new();
             for source in current_sources {
-                let mut to_add = Self::run_modifier(modifier, &source, result_consumer, forked_mode).await?;
+                let mut to_add =
+                    Self::run_modifier(modifier, &source, result_consumer, forked_mode).await?;
                 next_sources.append(&mut to_add);
             }
             if next_sources.is_empty() {
@@ -257,14 +255,21 @@ impl ContextChain {
 
         let mut result = 0;
         for execution_source in current_sources {
-            result += Self::run_executable(&*self.execute, &execution_source, result_consumer, forked_mode).await?;
+            result += Self::run_executable(
+                &self.execute,
+                &execution_source,
+                result_consumer,
+                forked_mode,
+            )
+            .await?;
         }
 
         Ok(result)
     }
 
     /// Gets the current stage of this context.
-    pub fn get_stage(&self) -> Stage {
+    #[must_use]
+    pub const fn get_stage(&self) -> Stage {
         if self.modifiers.is_empty() {
             Stage::EXECUTE
         } else {
@@ -273,6 +278,7 @@ impl ContextChain {
     }
 
     /// Gets a reference to the top context of this chain.
+    #[must_use]
     pub fn get_top_context(&self) -> &Arc<CommandContext> {
         if self.modifiers.is_empty() {
             &self.execute
@@ -291,16 +297,15 @@ impl ContextChain {
     }
 
     /// Gets the next stage of this chain.
-    pub fn next_stage(&self) -> Option<ContextChain> {
+    #[must_use]
+    pub fn next_stage(&self) -> Option<Self> {
         if self.modifiers.is_empty() {
             None
         } else {
-            Some(
-                ContextChain::new(
-                    self.modifiers[1..].iter().cloned().collect(),
-                    self.execute.clone()
-                )
-            )
+            Some(Self::new(
+                self.modifiers[1..].to_vec(),
+                self.execute.clone(),
+            ))
         }
     }
 }
@@ -334,7 +339,7 @@ pub struct CommandContextBuilder<'a> {
     pub range: StringRange,
 
     /// The child context of this context.
-    pub child: Option<Box<CommandContextBuilder<'a>>>,
+    pub child: Option<Box<Self>>,
 
     /// The redirect modifier of this context.
     pub modifier: RedirectModifier,
@@ -344,20 +349,21 @@ pub struct CommandContextBuilder<'a> {
 
     /// The command stored in this context which
     /// is run to get a command result.
-    pub command: Option<Command>
+    pub command: Option<Command>,
 }
 
 impl<'a> CommandContextBuilder<'a> {
     /// Creates a new [`CommandContextBuilder`] from the properties required to initialize one.
     ///
     /// Note that builder's lifetime is bound to the dispatcher provided to it.
+    #[must_use]
     pub fn new(
         dispatcher: &'a CommandDispatcher,
         source: Arc<CommandSource>,
         tree: Arc<Tree>,
         root: NodeId,
-        start: usize
-    ) -> CommandContextBuilder<'a> {
+        start: usize,
+    ) -> Self {
         CommandContextBuilder {
             dispatcher,
             source,
@@ -369,11 +375,12 @@ impl<'a> CommandContextBuilder<'a> {
             child: None,
             modifier: RedirectModifier::OneSource,
             forks: false,
-            command: None
+            command: None,
         }
     }
 
     /// Builds the required [`CommandContext`], consuming itself in the process.
+    #[must_use]
     pub fn build(self, input: &str) -> CommandContext {
         CommandContext {
             source: self.source,
@@ -386,7 +393,7 @@ impl<'a> CommandContextBuilder<'a> {
             child: self.child.map(|child| Arc::new(child.build(input))),
             modifier: self.modifier,
             forks: self.forks,
-            command: self.command
+            command: self.command,
         }
     }
 
@@ -407,25 +414,23 @@ impl<'a> CommandContextBuilder<'a> {
 
     /// Returns itself with a new node added to this builder.
     pub fn with_node(&mut self, node: NodeId, range: StringRange) {
-        self.nodes.push(ParsedNode {
-            node,
-            range
-        });
+        self.nodes.push(ParsedNode { node, range });
         self.range = StringRange::encompass(self.range, range);
         self.modifier = self.tree[node].modifier().clone();
         self.forks = self.tree[node].forks();
     }
 
     /// Returns itself with the new child set.
-    pub fn with_child(&mut self, child: CommandContextBuilder<'a>) {
+    pub fn with_child(&mut self, child: Self) {
         self.child = Some(Box::new(child));
     }
 
     /// Returns the last child of this builder.
+    #[must_use]
     pub fn last_child(&self) -> &Self {
         let mut result = self;
         while let Some(child) = &result.child {
-            result = &*child;
+            result = child;
         }
         result
     }
@@ -435,20 +440,24 @@ impl<'a> CommandContextBuilder<'a> {
     /// # Panics
     ///
     /// Panics if the node couldn't be found before the cursor.
+    #[must_use]
     pub fn find_suggestion_context(&self, cursor: usize) -> SuggestionContext {
-        assert!(self.range.start <= cursor, "Could not find node before cursor");
+        assert!(
+            self.range.start <= cursor,
+            "Could not find node before cursor"
+        );
         if self.range.end < cursor {
             if let Some(child) = &self.child {
                 child.find_suggestion_context(cursor)
             } else if let Some(last_node) = self.nodes.last() {
                 SuggestionContext {
                     parent: last_node.node,
-                    starting_position: last_node.range.end + 1
+                    starting_position: last_node.range.end + 1,
                 }
             } else {
                 SuggestionContext {
                     parent: self.root,
-                    starting_position: self.range.start
+                    starting_position: self.range.start,
                 }
             }
         } else {
@@ -457,14 +466,14 @@ impl<'a> CommandContextBuilder<'a> {
                 if (self.range.start..=self.range.end).contains(&cursor) {
                     return SuggestionContext {
                         parent: previous,
-                        starting_position: self.range.start
-                    }
+                        starting_position: self.range.start,
+                    };
                 }
                 previous = node.node;
             }
             SuggestionContext {
                 parent: previous,
-                starting_position: self.range.start
+                starting_position: self.range.start,
             }
         }
     }

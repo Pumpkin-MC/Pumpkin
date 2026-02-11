@@ -1,14 +1,18 @@
-use std::cmp::Ordering;
-use std::sync::{Arc, LazyLock};
-use rustc_hash::FxHashMap;
-use crate::command::context::command_context::{CommandContext, CommandContextBuilder, ContextChain};
+use crate::command::context::command_context::{
+    CommandContext, CommandContextBuilder, ContextChain,
+};
 use crate::command::context::command_source::{CommandSource, ReturnValue};
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::{LiteralCommandErrorType, DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR, DISPATCHER_UNKNOWN_ARGUMENT, DISPATCHER_UNKNOWN_COMMAND};
+use crate::command::errors::error_types::{
+    DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR, DISPATCHER_UNKNOWN_ARGUMENT,
+    DISPATCHER_UNKNOWN_COMMAND, LiteralCommandErrorType,
+};
 use crate::command::node::attached::NodeId;
 use crate::command::node::detached::CommandDetachedNode;
-use crate::command::node::tree::{Tree, ROOT_NODE_ID};
+use crate::command::node::tree::{ROOT_NODE_ID, Tree};
 use crate::command::string_reader::StringReader;
+use rustc_hash::FxHashMap;
+use std::sync::{Arc, LazyLock};
 
 pub const ARG_SEPARATOR: &str = " ";
 pub const ARG_SEPARATOR_CHAR: char = ' ';
@@ -21,13 +25,14 @@ pub const USAGE_OR: &str = "|";
 
 /// Thrown when redirection could not be resolved.
 /// This shouldn't happen, and only happens when the command is incorrectly configured.
-pub const UNRESOLVED_REDIRECT: LiteralCommandErrorType = LiteralCommandErrorType::new("Could not resolve redirect to node");
+pub const UNRESOLVED_REDIRECT: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("Could not resolve redirect to node");
 
 /// Represents the result of parsing.
 pub struct ParsingResult<'a> {
     pub context: CommandContextBuilder<'a>,
     pub errors: FxHashMap<NodeId, CommandSyntaxError>,
-    pub reader: StringReader<'static>
+    pub reader: StringReader<'static>,
 }
 
 /// Structs implementing this trait are able to execute upon command completion.
@@ -42,26 +47,27 @@ impl ResultConsumer for EmptyResultConsumer {
     fn on_command_completion(&self, _context: &CommandContext, _result: ReturnValue) {}
 }
 
-
-pub static EMPTY_CONSUMER: LazyLock<Arc<EmptyResultConsumer>> = LazyLock::new(|| Arc::new(EmptyResultConsumer));
+pub static EMPTY_CONSUMER: LazyLock<Arc<EmptyResultConsumer>> =
+    LazyLock::new(|| Arc::new(EmptyResultConsumer));
 
 /// The core command dispatcher, used to register, parse and execute commands.
 pub struct CommandDispatcher {
     tree: Arc<Tree>,
-    consumer: Arc<dyn ResultConsumer>
+    consumer: Arc<dyn ResultConsumer>,
 }
 
 impl CommandDispatcher {
     /// Creates a new [`CommandDispatcher`] with a new [`Tree`].
-    pub fn new() -> CommandDispatcher {
-        CommandDispatcher::from_existing_tree(Tree::new())
+    #[must_use]
+    pub fn new() -> Self {
+        Self::from_existing_tree(Tree::new())
     }
 
     /// Creates this [`CommandDispatcher`] from a pre-existing tree.
-    pub fn from_existing_tree(tree: Tree) -> CommandDispatcher {
-        CommandDispatcher {
+    pub fn from_existing_tree(tree: Tree) -> Self {
+        Self {
             tree: Arc::new(tree),
-            consumer: EMPTY_CONSUMER.clone()
+            consumer: EMPTY_CONSUMER.clone(),
         }
     }
 
@@ -79,7 +85,11 @@ impl CommandDispatcher {
     ///
     /// # Note
     /// This does not cache parsed input.
-    pub async fn execute_input(&self, input: &str, source: &CommandSource) -> Result<i32, CommandSyntaxError> {
+    pub async fn execute_input(
+        &self,
+        input: &str,
+        source: &CommandSource,
+    ) -> Result<i32, CommandSyntaxError> {
         let mut reader = StringReader::new(input);
         self.execute_reader(&mut reader, source).await
     }
@@ -88,7 +98,11 @@ impl CommandDispatcher {
     ///
     /// # Note
     /// This does not cache parsed input.
-    pub async fn execute_reader(&self, reader: &mut StringReader<'_>, source: &CommandSource) -> Result<i32, CommandSyntaxError> {
+    pub async fn execute_reader(
+        &self,
+        reader: &mut StringReader<'_>,
+        source: &CommandSource,
+    ) -> Result<i32, CommandSyntaxError> {
         let parsed = self.parse(reader, source);
         self.execute(parsed).await
     }
@@ -110,34 +124,43 @@ impl CommandDispatcher {
 
         match ContextChain::try_flatten(&original_context) {
             None => {
-                self.consumer.on_command_completion(&original_context, ReturnValue::Failure);
+                self.consumer
+                    .on_command_completion(&original_context, ReturnValue::Failure);
                 Err(DISPATCHER_UNKNOWN_COMMAND.create(&parsed.reader))
-            },
+            }
             Some(flat_context) => {
-                flat_context.execute_all(&original_context.source, self.consumer.as_ref()).await
+                flat_context
+                    .execute_all(&original_context.source, self.consumer.as_ref())
+                    .await
             }
         }
     }
 
     /// Only parses a given source with the specified source.
-    pub fn parse_input(&self, command: &str, source: &CommandSource) -> ParsingResult {
+    #[must_use]
+    pub fn parse_input(&self, command: &str, source: &CommandSource) -> ParsingResult<'_> {
         let mut reader = StringReader::new(command);
         self.parse(&mut reader, source)
     }
 
     /// Parses a command owned by a [`StringReader`] with the provided source.
-    pub fn parse(&self, reader: &mut StringReader, source: &CommandSource) -> ParsingResult {
+    pub fn parse(&self, reader: &mut StringReader, source: &CommandSource) -> ParsingResult<'_> {
         let mut context = CommandContextBuilder::new(
             self,
             Arc::new(source.clone()),
             self.tree.clone(),
             ROOT_NODE_ID,
-            reader.cursor()
+            reader.cursor(),
         );
         self.parse_nodes(ROOT_NODE_ID, reader, &mut context)
     }
 
-    fn parse_nodes<'a>(&'a self, node: NodeId, original_reader: &mut StringReader, context_so_far: &mut CommandContextBuilder<'a>) -> ParsingResult<'a> {
+    fn parse_nodes<'a>(
+        &'a self,
+        node: NodeId,
+        original_reader: &mut StringReader,
+        context_so_far: &mut CommandContextBuilder<'a>,
+    ) -> ParsingResult<'a> {
         let source = context_so_far.source.clone();
         let mut errors: FxHashMap<NodeId, CommandSyntaxError> = FxHashMap::default();
         let mut potentials: Vec<ParsingResult> = Vec::new();
@@ -154,7 +177,7 @@ impl CommandDispatcher {
                     Err(error)
                 } else {
                     let peek = reader.peek();
-                    if peek != None && peek != Some(ARG_SEPARATOR_CHAR) {
+                    if peek.is_some() && peek != Some(ARG_SEPARATOR_CHAR) {
                         Err(DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR.create(&reader))
                     } else {
                         Ok(())
@@ -169,9 +192,7 @@ impl CommandDispatcher {
 
             context.with_command(self.tree[child].command().clone());
             let redirect = self.tree[child].redirect();
-            if reader.can_read_chars(
-                if redirect.is_some() {2} else {1}
-            ) {
+            if reader.can_read_chars(if redirect.is_some() { 2 } else { 1 }) {
                 reader.skip();
                 if let Some(redirect) = redirect {
                     let Some(redirect) = self.tree.resolve(redirect) else {
@@ -181,10 +202,10 @@ impl CommandDispatcher {
                     };
                     let mut child_context = CommandContextBuilder::new(
                         self,
-                        source.clone(),
+                        source,
                         self.tree.clone(),
                         redirect,
-                        reader.cursor()
+                        reader.cursor(),
                     );
                     let parsed = self.parse_nodes(redirect, &mut reader, &mut child_context);
                     context.with_child(parsed.context);
@@ -215,13 +236,13 @@ impl CommandDispatcher {
                 let b_has_errors = !b.errors.is_empty();
 
                 (a_reader_remaining, a_has_errors).cmp(&(b_reader_remaining, b_has_errors))
-            })
+            });
         }
 
         ParsingResult {
             context: context_so_far.clone(),
             errors,
-            reader: original_reader.clone_into_owned()
+            reader: original_reader.clone_into_owned(),
         }
     }
 }
