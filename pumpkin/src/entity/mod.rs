@@ -11,7 +11,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
+use pumpkin_data::block_properties::{blocks_movement, EnumVariants, Integer0To15};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -897,7 +897,7 @@ impl Entity {
 
             // TODO: this is default predicate, vanilla overwrites it for some blocks,
             // see .suffocates(...) in Blocks.java
-            let check_suffocation = !suffocating && state.block_movement() && state.is_full_cube();
+            let check_suffocation = !suffocating && blocks_movement(state, block.id) && state.is_full_cube();
 
             World::check_collision(
                 &bounding_box,
