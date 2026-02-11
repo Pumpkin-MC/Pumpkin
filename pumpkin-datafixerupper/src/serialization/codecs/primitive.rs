@@ -126,32 +126,3 @@ impl PrimitiveCodec for StringCodec {
 impl_primitive_list_codec!(ByteBufferCodec, i8, get_byte_buffer, create_byte_buffer);
 impl_primitive_list_codec!(IntStreamCodec, i32, get_int_list, create_int_list);
 impl_primitive_list_codec!(LongStreamCodec, i64, get_long_list, create_long_list);
-
-/// A primitive codec for Java's `boolean` (`bool` in Rust).
-pub const BOOL_CODEC: BoolCodec = BoolCodec;
-
-/// A primitive codec for Java's `byte` (or `i8` in Rust).
-pub const BYTE_CODEC: ByteCodec = ByteCodec;
-/// A primitive codec for Java's `short` (or `i16` in Rust).
-pub const SHORT_CODEC: ShortCodec = ShortCodec;
-/// A primitive codec for Java's `int` (or `i32` in Rust).
-pub const INT_CODEC: IntCodec = IntCodec;
-/// A primitive codec for Java's `long` (or `i64` in Rust).
-pub const LONG_CODEC: LongCodec = LongCodec;
-/// A primitive codec for Java's `float` (or `f32` in Rust).
-pub const FLOAT_CODEC: FloatCodec = FloatCodec;
-/// A primitive codec for Java's `double` (or `f64` in Rust).
-pub const DOUBLE_CODEC: DoubleCodec = DoubleCodec;
-
-/// A primitive codec for Java's `String` (also `String` in Rust).
-pub const STRING_CODEC: StringCodec = StringCodec;
-
-/// A primitive codec for Java's `ByteBuffer`.
-/// Here, this actually stores a [`Vec<i8>`].
-pub const BYTE_BUFFER_CODEC: ByteBufferCodec = ByteBufferCodec;
-/// A primitive codec for Java's `IntStream`.
-/// Here, this actually stores a [`Vec<i32>`].
-pub const INT_STREAM_CODEC: IntStreamCodec = IntStreamCodec;
-/// A primitive codec for Java's `LongStream`.
-/// Here, this actually stores a [`Vec<i64>`].
-pub const LONG_STREAM_CODEC: LongStreamCodec = LongStreamCodec;
