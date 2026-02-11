@@ -11,7 +11,7 @@ use crate::serialization::struct_builder::{
 use crate::{impl_struct_builder, impl_universal_struct_builder};
 
 /// A trait specifying that an object holds a [`KeyCompressor`].
-pub trait CompressorHolder {
+pub trait CompressorHolder: Keyable {
     /// Returns the [`KeyCompressor`] of this object with the provided [`DynamicOps`].
     fn compressor(&self) -> &KeyCompressor;
 }
@@ -19,7 +19,7 @@ pub trait CompressorHolder {
 /// A different encoder that encodes a value of type `Value` for a map.
 pub trait MapEncoder: HasValue + Keyable + CompressorHolder {
     /// Encodes an input by working on a [`StructBuilder`].
-    fn encode<T>(
+    fn encode<T: PartialEq + Clone>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
@@ -94,13 +94,13 @@ pub trait MapEncoder: HasValue + Keyable + CompressorHolder {
 /// A different decoder that decodes into something of type `Value` for a map.
 pub trait MapDecoder: HasValue + Keyable + CompressorHolder {
     /// Decodes a map input.
-    fn decode<T>(
+    fn decode<T: PartialEq + Clone>(
         &self,
-        input: impl MapLike<Value = T>,
+        input: &impl MapLike<Value = T>,
         ops: &'static impl DynamicOps<Value = T>,
     ) -> DataResult<Self::Value>;
 
-    fn compressed_decode<T: Clone>(
+    fn compressed_decode<T: PartialEq + Clone>(
         &self,
         input: T,
         ops: &'static impl DynamicOps<Value = T>,
@@ -140,7 +140,7 @@ pub trait MapDecoder: HasValue + Keyable + CompressorHolder {
                     }
 
                     self.decode(
-                        CompressorMapLikeImpl {
+                        &CompressorMapLikeImpl {
                             list: iter.map(Clone::clone).collect(),
                             compressor: self.compressor(),
                             ops,
@@ -152,22 +152,24 @@ pub trait MapDecoder: HasValue + Keyable + CompressorHolder {
         }
         ops.get_map(&input)
             .with_lifecycle(Lifecycle::Stable)
-            .flat_map(|map| self.decode(map, ops))
+            .flat_map(|map| self.decode(&map, ops))
     }
 }
 
 /// A helper macro for generating the [`CompressorHolder::compressor`] method
 /// for structs implementing one or both of them.
 ///
-/// `$compressor` is where the `KeyCompressor` will be stored.
-/// There is no need to implement this in a block as this macro already places the `impl` block.
+/// `$compressor` is where the [`OnceLock<KeyCompressor>`] will be stored.
+/// Implement this in an `impl` block for [`CompressorHolder`].
 #[macro_export]
 macro_rules! impl_compressor {
-    ($struct_name:ident, $compressors:ident) => {
-        impl CompressorHolder for Test {
-            fn compressor(&self) -> &KeyCompressor {
-                &self.compressor
-            }
+    ($compressor:ident) => {
+        fn compressor(&self) -> &KeyCompressor {
+            &self.$compressor.get_or_init(|| {
+                let mut c = KeyCompressor::new();
+                c.populate(self.iter_keys());
+                c
+            })
         }
     };
 }

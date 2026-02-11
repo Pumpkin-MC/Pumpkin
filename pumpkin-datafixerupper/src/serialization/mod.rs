@@ -7,15 +7,15 @@ pub mod coders;
 pub mod data_result;
 pub mod dynamic_ops;
 pub mod json_ops;
-mod key_compressor;
+pub mod key_compressor;
 pub mod keyable;
 pub mod lifecycle;
 pub mod list_builder;
-mod map_codec;
-mod map_codecs;
+pub mod map_codec;
+pub mod map_codecs;
 pub mod map_coders;
 pub mod map_like;
-mod struct_builder;
+pub mod struct_builder;
 
 /// A trait specifying a single type.
 /// This is used to prevent type conflicts for `Codec`s and `MapCodec`s implementing an encoder and decoder.

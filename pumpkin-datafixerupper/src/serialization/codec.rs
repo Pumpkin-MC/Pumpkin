@@ -5,14 +5,17 @@ use crate::serialization::codecs::primitive::{
     BoolCodec, ByteBufferCodec, ByteCodec, DoubleCodec, FloatCodec, IntCodec, IntStreamCodec,
     LongCodec, LongStreamCodec, ShortCodec, StringCodec,
 };
+use crate::serialization::codecs::range::RangeCodec;
+use crate::serialization::codecs::range::new_range_codec;
 use crate::serialization::coders::{
     ComappedEncoderImpl, Decoder, Encoder, FlatComappedEncoderImpl, FlatMappedDecoderImpl,
-    MappedDecoderImpl, comap, flat_comap, flat_map, map,
+    MappedDecoderImpl, comap, decoder_field_of, encoder_field_of, flat_comap, flat_map, map,
 };
 use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
-use std::fmt::Display;
-use std::sync::LazyLock;
+use crate::serialization::map_codec::ComposedMapCodec;
+use crate::serialization::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
+use std::sync::{LazyLock, OnceLock};
 
 /// A type of *codec* describing the way to **encode from and decode into** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
 pub trait Codec: Encoder + Decoder {}
@@ -20,17 +23,17 @@ pub trait Codec: Encoder + Decoder {}
 // Any struct implementing Encoder<Value = A> and Decoder<Value = A> will also implement Codec<Value = A>.
 impl<T> Codec for T where T: Encoder + Decoder {}
 
-/// A base codec allowing an arbitrary encoder and decoder.
-pub struct BaseCodec<A, E: Encoder<Value = A> + 'static, D: Decoder<Value = A> + 'static> {
+/// A codec allowing an arbitrary encoder and decoder.
+pub struct ComposedCodec<A, E: Encoder<Value = A> + 'static, D: Decoder<Value = A> + 'static> {
     encoder: E,
     decoder: D,
 }
 
-impl<A, E: Encoder<Value = A>, D: Decoder<Value = A>> HasValue for BaseCodec<A, E, D> {
+impl<A, E: Encoder<Value = A>, D: Decoder<Value = A>> HasValue for ComposedCodec<A, E, D> {
     type Value = A;
 }
 
-impl<A, E: Encoder<Value = A>, D: Decoder<Value = A>> Encoder for BaseCodec<A, E, D> {
+impl<A, E: Encoder<Value = A>, D: Decoder<Value = A>> Encoder for ComposedCodec<A, E, D> {
     fn encode<T: PartialEq + Clone>(
         &self,
         input: &Self::Value,
@@ -41,7 +44,7 @@ impl<A, E: Encoder<Value = A>, D: Decoder<Value = A>> Encoder for BaseCodec<A, E
     }
 }
 
-impl<A, E: Encoder<Value = A>, D: Decoder<Value = A>> Decoder for BaseCodec<A, E, D> {
+impl<A, E: Encoder<Value = A>, D: Decoder<Value = A>> Decoder for ComposedCodec<A, E, D> {
     fn decode<T: PartialEq + Clone>(
         &self,
         input: T,
@@ -51,79 +54,34 @@ impl<A, E: Encoder<Value = A>, D: Decoder<Value = A>> Decoder for BaseCodec<A, E
     }
 }
 
-/// A helper function to check whether a number is between the range `[min, max]` (both inclusive).
-fn check_range<T: PartialOrd + Display + Clone>(input: &T, min: &T, max: &T) -> DataResult<T> {
-    if input >= min && input <= max {
-        DataResult::success(input.clone())
-    } else {
-        DataResult::error(format!("Value {input} is outside range [{min}, {max}]"))
-    }
-}
-
-/// A codec for a specific number range.
-pub struct RangeCodec<A: PartialOrd + Display, C: Codec<Value = A>> {
-    codec: C,
-    min: A,
-    max: A,
-}
-
-impl<A: PartialOrd + Display + Clone, C: Codec<Value = A>> HasValue for RangeCodec<A, C> {
-    type Value = A;
-}
-
-impl<A: PartialOrd + Display + Clone, C: Codec<Value = A>> Encoder for RangeCodec<A, C> {
-    fn encode<T: PartialEq + Clone>(
-        &self,
-        input: &Self::Value,
-        ops: &'static impl DynamicOps<Value = T>,
-        prefix: T,
-    ) -> DataResult<T> {
-        check_range(input, &self.min, &self.max).flat_map(|t| self.codec.encode(&t, ops, prefix))
-    }
-}
-
-impl<A: PartialOrd + Display + Clone, C: Codec<Value = A>> Decoder for RangeCodec<A, C> {
-    fn decode<T: PartialEq + Clone>(
-        &self,
-        input: T,
-        ops: &'static impl DynamicOps<Value = T>,
-    ) -> DataResult<(Self::Value, T)> {
-        self.codec
-            .decode(input, ops)
-            .flat_map(|(i, t)| check_range(&i, &self.min, &self.max).map(|n| (n, t)))
-    }
-}
-
 // Primitive codecs
 
-/// A primitive codec for Java's `boolean` (`bool` in Rust).
-pub const BOOL_CODEC: BoolCodec = BoolCodec;
+macro_rules! define_const_codec {
+    ($name:ident, $codec_ty:ident, $ty:ident, $java_ty:ident) => {
+        #[doc = concat!("A primitive codec for Java's `", stringify!($java_ty), "` (`", stringify!($ty), "` in Rust).")]
+        pub const $name: $codec_ty = $codec_ty;
+    };
+    (vec $name:ident, $codec_ty:ident, $vec_ty:ident, $java_ty:ident) => {
+        #[doc = concat!("A primitive codec for Java's `", stringify!($java_ty), "`.")]
+        #[doc = concat!("Here, this actually stores a [`Vec<", stringify!($vec_ty), ">`].")]
+        pub const $name: $codec_ty = $codec_ty;
+    };
+}
 
-/// A primitive codec for Java's `byte` (or `i8` in Rust).
-pub const BYTE_CODEC: ByteCodec = ByteCodec;
-/// A primitive codec for Java's `short` (or `i16` in Rust).
-pub const SHORT_CODEC: ShortCodec = ShortCodec;
-/// A primitive codec for Java's `int` (or `i32` in Rust).
-pub const INT_CODEC: IntCodec = IntCodec;
-/// A primitive codec for Java's `long` (or `i64` in Rust).
-pub const LONG_CODEC: LongCodec = LongCodec;
-/// A primitive codec for Java's `float` (or `f32` in Rust).
-pub const FLOAT_CODEC: FloatCodec = FloatCodec;
-/// A primitive codec for Java's `double` (or `f64` in Rust).
-pub const DOUBLE_CODEC: DoubleCodec = DoubleCodec;
+define_const_codec!(BOOL_CODEC, BoolCodec, bool, boolean);
 
-/// A primitive codec for Java's `String` (also `String` in Rust).
-pub const STRING_CODEC: StringCodec = StringCodec;
+define_const_codec!(BYTE_CODEC, ByteCodec, i8, byte);
+define_const_codec!(SHORT_CODEC, ShortCodec, i16, short);
+define_const_codec!(INT_CODEC, IntCodec, i32, int);
+define_const_codec!(LONG_CODEC, LongCodec, i64, long);
+define_const_codec!(FLOAT_CODEC, FloatCodec, f32, float);
+define_const_codec!(DOUBLE_CODEC, DoubleCodec, f64, double);
 
-/// A primitive codec for Java's `ByteBuffer`.
-/// Here, this actually stores a [`Vec<i8>`].
-pub const BYTE_BUFFER_CODEC: ByteBufferCodec = ByteBufferCodec;
-/// A primitive codec for Java's `IntStream`.
-/// Here, this actually stores a [`Vec<i32>`].
-pub const INT_STREAM_CODEC: IntStreamCodec = IntStreamCodec;
-/// A primitive codec for Java's `LongStream`.
-/// Here, this actually stores a [`Vec<i64>`].
-pub const LONG_STREAM_CODEC: LongStreamCodec = LongStreamCodec;
+define_const_codec!(STRING_CODEC, StringCodec, String, String);
+
+define_const_codec!(vec BYTE_BUFFER_CODEC, ByteBufferCodec, i8, ByteBuffer);
+define_const_codec!(vec INT_STREAM_CODEC, IntStreamCodec, i16, IntStream);
+define_const_codec!(vec LONG_STREAM_CODEC, LongStreamCodec, i32, LongStream);
 
 // - Modifier methods -
 
@@ -150,15 +108,15 @@ pub const fn list_of<C: Codec>(
 /// Helper macro to generate the shorthand types and functions of the transformer [`Codec`] methods.
 macro_rules! make_codec_transformation_function {
     ($name:ident, $short_type:ident, $encoder_type:ident, $decoder_type:ident, $encoder_func:ident, $decoder_func:ident, $to_func_result:ty, $from_func_result:ty, $a_equivalency:literal, $s_equivalency:literal) => {
-        type $short_type<A, S, C> = BaseCodec<S, $encoder_type<A, S, C>, $decoder_type<A, S, C>>;
+        type $short_type<A, S, C> = ComposedCodec<S, $encoder_type<A, S, C>, $decoder_type<A, S, C>>;
 
         #[doc = "Transforms a [`Codec`] of type `A` to another [`Codec`] of type `S`. Use this if:"]
-        #[doc = concat!("`A` is **", $a_equivalency, "** to `S`.")]
-        #[doc = concat!("`S` is **", $s_equivalency, "** to `A`.")]
+        #[doc = concat!("- `A` is **", $a_equivalency, "** to `S`.")]
+        #[doc = concat!("- `S` is **", $s_equivalency, "** to `A`.")]
         #[doc = ""]
         #[doc = "A type `A` is *equivalent* to `B` if *A can always successfully be converted to B*."]
         pub const fn $name<A, C: Codec<Value = A>, S>(codec: &'static C, to: fn(&A) -> $to_func_result, from: fn(&S) -> $from_func_result) -> $short_type<A, S, C> {
-            BaseCodec {
+            ComposedCodec {
                 encoder: $encoder_func(codec, from),
                 decoder: $decoder_func(codec, to)
             }
@@ -228,11 +186,7 @@ macro_rules! make_codec_range_function {
 
         #[doc = concat!("Returns a version of [`", stringify!($singleton_codec), "`] for `", stringify!($ty), "`s (or `", stringify!($java_type), "`s in Java) constrained to a minimum *(inclusive)* and maximum *(inclusive)* value.")]
         pub const fn $func_name(min: $ty, max: $ty) -> $shorthand_name {
-            RangeCodec {
-                codec: $singleton_codec,
-                min,
-                max
-            }
+            new_range_codec(&$singleton_codec, min, max)
         }
     };
 }
@@ -254,3 +208,17 @@ make_codec_range_function!(
     DOUBLE_CODEC,
     double
 );
+
+type FieldMapCodec<A, C> = ComposedMapCodec<A, FieldEncoder<A, C>, FieldDecoder<A, C>>;
+
+/// Creates a [`MapCodec`] for a field which relies on the provided [`Codec`] for serialization/deserialization.
+pub(crate) const fn field_of<A, C: Codec<Value = A>>(
+    name: &'static str,
+    codec: &'static C,
+) -> FieldMapCodec<A, C> {
+    ComposedMapCodec {
+        encoder: encoder_field_of(name, codec),
+        decoder: decoder_field_of(name, codec),
+        compressor: OnceLock::new(),
+    }
+}
