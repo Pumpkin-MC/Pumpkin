@@ -181,19 +181,29 @@ macro_rules! assert_eq_delta {
     };
 }
 
-/// Represents the player's dominant hand.
+/// Protocol hand value (`0`/`1`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hand {
-    /// Usually the player's off-hand.
+    /// Value `0`.
     Left,
-    /// Usually the player's primary hand.
+    /// Value `1`.
     Right,
 }
 
 impl Hand {
     #[must_use]
     pub const fn all() -> [Self; 2] {
-        [Self::Right, Self::Left]
+        [Self::Left, Self::Right]
+    }
+
+    #[must_use]
+    pub const fn is_main_interaction_hand(self) -> bool {
+        matches!(self, Self::Left)
+    }
+
+    #[must_use]
+    pub const fn is_off_interaction_hand(self) -> bool {
+        matches!(self, Self::Right)
     }
 }
 

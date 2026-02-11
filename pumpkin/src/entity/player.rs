@@ -2633,9 +2633,10 @@ impl Player {
         let world = self.world();
         let entity_id = VarInt(self.entity_id());
 
-        let animation = match hand {
-            Hand::Left => Animation::SwingMainArm,
-            Hand::Right => Animation::SwingOffhand,
+        let animation = if hand.is_main_interaction_hand() {
+            Animation::SwingMainArm
+        } else {
+            Animation::SwingOffhand
         };
 
         let packet = CEntityAnimation::new(entity_id, animation);

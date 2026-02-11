@@ -176,7 +176,7 @@ impl LivingEntity {
             .store(stack.get_max_use_time(), Ordering::Relaxed);
         *self.item_in_use.lock().await = Some(stack);
         self.set_living_flag(Self::USING_ITEM_FLAG, true).await;
-        self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Right)
+        self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand.is_off_interaction_hand())
             .await;
     }
 
@@ -1095,8 +1095,8 @@ impl LivingEntity {
         hand: Hand,
     ) -> Arc<Mutex<ItemStack>> {
         match hand {
-            Hand::Left => self.off_hand_item().await,
-            Hand::Right => self.held_item(caller).await,
+            Hand::Left => self.held_item(caller).await,
+            Hand::Right => self.off_hand_item().await,
         }
     }
 
