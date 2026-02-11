@@ -57,7 +57,6 @@ pub mod config;
 pub mod handshake;
 pub mod login;
 pub mod play;
-pub mod remapper;
 pub mod status;
 
 use crate::entity::player::Player;
@@ -172,7 +171,7 @@ impl JavaClient {
                 }
                 Err(error) => {
                     let text = format!("Error while reading incoming packet {error}");
-                    log::error!(
+                    log::debug!(
                         "Failed to read incoming packet with id {}: {}",
                         packet.id,
                         error

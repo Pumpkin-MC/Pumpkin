@@ -9,14 +9,23 @@ use pumpkin_protocol::{
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
 use pumpkin_world::CURRENT_MC_VERSION;
-use std::{fs::File, io::Read, path::Path};
+use std::{
+    fs::{self},
+    path::Path,
+};
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
 
 fn load_icon_from_file<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn error::Error>> {
-    let mut icon_file = File::open(path)?;
-    let mut buf = Vec::new();
-    icon_file.read_to_end(&mut buf)?;
+    let buf = fs::read(path)?;
+    if buf.len() >= 24 {
+        let width = u32::from_be_bytes([buf[16], buf[17], buf[18], buf[19]]);
+        let height = u32::from_be_bytes([buf[20], buf[21], buf[22], buf[23]]);
+
+        if width != 64 || height != 64 {
+            return Err("Invalid favicon dimensions (must be 64x64)".into());
+        }
+    }
     Ok(load_icon_from_bytes(&buf))
 }
 
@@ -116,28 +125,45 @@ impl CachedStatus {
 
     pub fn build_response(config: &BasicConfiguration) -> StatusResponse {
         let favicon = if config.use_favicon {
-            let icon_path = &config.favicon_path;
-            log::debug!("Attempting to load server favicon from '{icon_path}'");
-
-            match load_icon_from_file(icon_path) {
-                Ok(icon) => Some(icon),
-                Err(e) => {
-                    let error_message = e.downcast_ref::<std::io::Error>().map_or_else(
-                        || format!("other error: {e}; using default."),
-                        |io_err| {
-                            if io_err.kind() == std::io::ErrorKind::NotFound {
-                                "not found; using default.".to_string()
-                            } else {
-                                format!("I/O error: {io_err}; using default.")
-                            }
-                        },
-                    );
-                    log::warn!("Failed to load favicon from '{icon_path}': {error_message}");
+            config.favicon_path.as_ref().map_or_else(
+                || {
+                    log::debug!("Loading default icon");
 
                     // Attempt to load default icon
                     Some(load_icon_from_bytes(DEFAULT_ICON))
-                }
-            }
+                },
+                |icon_path| {
+                    if !std::path::Path::new(icon_path)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+                    {
+                        log::warn!("Favicon is not a PNG-image, using default.");
+                        return Some(load_icon_from_bytes(DEFAULT_ICON));
+                    }
+                    log::debug!("Attempting to load server favicon from '{icon_path}'");
+
+                    match load_icon_from_file(icon_path) {
+                        Ok(icon) => Some(icon),
+                        Err(e) => {
+                            let error_message = e.downcast_ref::<std::io::Error>().map_or_else(
+                                || format!("other error: {e}; using default."),
+                                |io_err| {
+                                    if io_err.kind() == std::io::ErrorKind::NotFound {
+                                        "not found; using default.".to_string()
+                                    } else {
+                                        format!("I/O error: {io_err}; using default.")
+                                    }
+                                },
+                            );
+                            log::warn!(
+                                "Failed to load favicon from '{icon_path}': {error_message}"
+                            );
+
+                            Some(load_icon_from_bytes(DEFAULT_ICON))
+                        }
+                    }
+                },
+            )
         } else {
             log::info!("Favicon usage is disabled.");
             None

@@ -1,17 +1,24 @@
+use std::sync::Arc;
+
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 use rand::{RngExt, rng};
 
-use crate::command::{
-    CommandExecutor, CommandResult, CommandSender,
-    args::{
-        Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
-        players::PlayersArgumentConsumer, position_3d::Position3DArgumentConsumer,
-        sound::SoundArgumentConsumer, sound_category::SoundCategoryArgumentConsumer,
-    },
-    tree::{CommandTree, builder::argument},
-};
 use crate::entity::EntityBase;
+use crate::{
+    command::{
+        CommandExecutor, CommandResult, CommandSender,
+        args::{
+            Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
+            players::PlayersArgumentConsumer, position_3d::Position3DArgumentConsumer,
+            sound::SoundArgumentConsumer, sound_category::SoundCategoryArgumentConsumer,
+        },
+        dispatcher::CommandError,
+        tree::{CommandTree, builder::argument},
+    },
+    entity::player::Player,
+};
 
 /// Command: playsound <sound> [<source>] [<targets>] [<pos>] [<volume>] [<pitch>] [<minVolume>]
 ///
@@ -78,13 +85,13 @@ impl CommandExecutor for Executor {
                 });
 
             // Get target players, defaults to sender if not specified
-            let targets = if let Ok(players) = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)
-            {
-                players
-            } else if let Some(player) = sender.as_player() {
-                &[player]
-            } else {
-                return Ok(());
+            let targets: &[Arc<Player>] = match (
+                PlayersArgumentConsumer::find_arg(args, ARG_TARGETS),
+                sender.as_player(),
+            ) {
+                (Ok(players), _) => players,
+                (_, Some(player)) => &[player],
+                (_, _) => &[],
             };
 
             // Get optional position, defaults to target's position
@@ -134,15 +141,16 @@ impl CommandExecutor for Executor {
 
             // Send appropriate message based on results
             if players_who_heard == 0 {
-                sender
-                    .send_message(TextComponent::translate("commands.playsound.failed", []))
-                    .await;
+                Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.playsound.failed",
+                    [],
+                )))
             } else {
                 let sound_name = sound.to_name();
                 if players_who_heard == 1 {
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.playsound.success.single",
+                            translation::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
                             [
                                 TextComponent::text(sound_name),
                                 targets[0].get_display_name().await,
@@ -152,7 +160,7 @@ impl CommandExecutor for Executor {
                 } else {
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.playsound.success.multiple",
+                            translation::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
                             [
                                 TextComponent::text(sound_name),
                                 TextComponent::text(players_who_heard.to_string()),
@@ -160,9 +168,9 @@ impl CommandExecutor for Executor {
                         ))
                         .await;
                 }
-            }
 
-            Ok(())
+                Ok(players_who_heard)
+            }
         })
     }
 }

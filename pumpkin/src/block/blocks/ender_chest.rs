@@ -4,13 +4,16 @@ use crate::block::{
     BlockBehaviour, BlockFuture, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
     registry::BlockActionResult,
 };
+use crate::world::World;
 use pumpkin_data::block_properties::{BlockProperties, LadderLikeProperties};
+use pumpkin_data::translation;
 use pumpkin_inventory::{
     generic_container_screen_handler::create_generic_9x3,
     player::player_inventory::PlayerInventory,
     screen_handler::{BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
 };
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::{
     BlockStateId, block::entities::ender_chest::EnderChestBlockEntity, inventory::Inventory,
@@ -35,7 +38,7 @@ impl ScreenHandlerFactory for EnderChestScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.enderchest", &[])
+        TextComponent::translate(translation::CONTAINER_ENDERCHEST, &[])
     }
 }
 
@@ -68,6 +71,10 @@ impl BlockBehaviour for EnderChestBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
+            if is_chest_blocked(args.world, args.position).await {
+                return BlockActionResult::Success;
+            }
+
             if let Some(block_entity) = args.world.get_block_entity(args.position).await
                 && let Some(block_entity) = block_entity
                     .as_any()
@@ -95,6 +102,15 @@ impl BlockBehaviour for EnderChestBlock {
     }
 }
 
+async fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
+    // TODO: Block opening when a cat is sitting on top.
+    has_block_on_top(world, block_pos).await
+}
+async fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
+    let above_pos = block_pos.up();
+    let above_state = world.get_block_state(&above_pos).await;
+    above_state.is_solid_block()
+}
 impl EnderChestBlock {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
 }

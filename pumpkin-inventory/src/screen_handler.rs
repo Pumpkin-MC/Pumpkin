@@ -94,6 +94,9 @@ pub trait InventoryPlayer: Send + Sync {
         slot: &'a EquipmentSlot,
         stack: &'a ItemStack,
     ) -> PlayerFuture<'a, ()>;
+
+    /// Awards experience points to the player (used for furnace smelting, etc.)
+    fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()>;
 }
 
 pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack) {

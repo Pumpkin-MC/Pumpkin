@@ -101,7 +101,6 @@ impl StructurePiece {
 
     const fn apply_x_transform(&self, x: i32, z: i32) -> i32 {
         match self.facing {
-            None => x,
             Some(BlockDirection::North | BlockDirection::South) => self.bounding_box.min.x + x,
             Some(BlockDirection::West) => self.bounding_box.max.x - z,
             Some(BlockDirection::East) => self.bounding_box.min.x + z,
@@ -118,7 +117,6 @@ impl StructurePiece {
 
     const fn apply_z_transform(&self, x: i32, z: i32) -> i32 {
         match self.facing {
-            None => z,
             Some(BlockDirection::North) => self.bounding_box.max.z - z,
             Some(BlockDirection::South) => self.bounding_box.min.z + z,
             Some(BlockDirection::West | BlockDirection::East) => self.bounding_box.min.z + x,
@@ -321,7 +319,7 @@ impl StructurePiece {
         let block_pos = self.offset_pos(x, y, z);
 
         if !box_limit.contains_pos(&block_pos) {
-            log::warn!("Structure out of bounds");
+            log::debug!("Structure out of bounds");
             return Block::AIR.default_state;
         }
 
@@ -341,7 +339,7 @@ impl StructurePiece {
 
         // Bounds and logic checks
         if !box_limit.contains_pos(&block_pos) {
-            log::warn!("Structure out of bounds");
+            log::debug!("Structure out of bounds");
             return;
         }
 

@@ -20,6 +20,8 @@ pub mod args;
 pub mod client_suggestions;
 pub mod commands;
 pub mod dispatcher;
+pub mod errors;
+pub mod string_reader;
 pub mod tree;
 
 /// Represents the source of a command execution.
@@ -76,7 +78,7 @@ impl CommandSender {
                     block_entity.as_any().downcast_ref().unwrap();
                 let mut last_output = command_entity.last_output.lock().await;
 
-                let now = time::OffsetDateTime::now_local().unwrap();
+                let now = time::OffsetDateTime::now_utc();
                 let format = time::macros::format_description!("[hour]:[minute]:[second]");
                 let timestamp = now.format(&format).unwrap();
 
@@ -179,7 +181,21 @@ impl CommandSender {
     }
 }
 
-pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<(), CommandError>> + Send + 'a>>;
+/// Represents the result of running a command after completion.
+///
+/// If the command **ran successfully**, an [`Ok`] is returned containing an [`i32`].
+/// This represents the 'output value' of the command, which is *homologous* to the
+/// `int` that command executors in vanilla return **upon success**.
+///
+/// **You should choose the successful result as `1` if**:
+/// - you don't know what value to use for a success for your
+///   own commands, or
+/// - you don't understand what this value means, or
+/// - you just simply don't care about this value at all
+///
+/// If the command **fails**, an [`Err`] is returned, containing the [`CommandError`]
+/// that led to this result.
+pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<i32, CommandError>> + Send + 'a>>;
 
 pub trait CommandExecutor: Sync + Send {
     fn execute<'a>(

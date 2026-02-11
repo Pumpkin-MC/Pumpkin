@@ -2,7 +2,7 @@ use core::f32;
 use std::sync::{
     Arc,
     atomic::{
-        AtomicBool, AtomicU32,
+        AtomicBool, AtomicU8, AtomicU32,
         Ordering::{self},
     },
 };
@@ -27,7 +27,7 @@ pub struct ItemEntity {
     // These cannot be atomic values because we mutate their state based on what they are; we run
     // into the ABA problem
     item_stack: Mutex<ItemStack>,
-    pickup_delay: Mutex<u8>,
+    pickup_delay: AtomicU8,
     health: AtomicCell<f32>,
     never_despawn: AtomicBool,
     never_pickup: AtomicBool,
@@ -47,7 +47,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
-            pickup_delay: Mutex::new(10), // Vanilla pickup delay is 10 ticks
+            pickup_delay: AtomicU8::new(10), // Vanilla pickup delay is 10 ticks
             health: AtomicCell::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
@@ -66,7 +66,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
-            pickup_delay: Mutex::new(pickup_delay), // Vanilla pickup delay is 10 ticks
+            pickup_delay: AtomicU8::new(pickup_delay), // Vanilla pickup delay is 10 ticks
             health: AtomicCell::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
@@ -109,8 +109,6 @@ impl ItemEntity {
     }
 
     async fn try_merge_with(&self, other: &Self) {
-        // Check if merge is possible
-
         let self_stack = self.item_stack.lock().await;
 
         let other_stack = other.item_stack.lock().await;
@@ -164,11 +162,10 @@ impl ItemEntity {
         target.never_pickup.store(never_pickup, Ordering::Relaxed);
 
         if !never_pickup {
-            let mut target_delay = target.pickup_delay.lock().await;
-
-            let delay = (*target_delay).max(*source.pickup_delay.lock().await);
-
-            *target_delay = delay;
+            let source_delay = source.pickup_delay.load(Ordering::Relaxed);
+            target
+                .pickup_delay
+                .fetch_max(source_delay, Ordering::Relaxed);
         }
 
         if empty1 {
@@ -195,11 +192,11 @@ impl EntityBase for ItemEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.entity;
-            entity.tick(caller.clone(), server).await;
-            {
-                let mut delay = self.pickup_delay.lock().await;
-                *delay = delay.saturating_sub(1);
-            };
+            self.pickup_delay
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
+                    Some(val.saturating_sub(1))
+                })
+                .ok();
 
             let original_velo = entity.velocity.load();
 
@@ -321,7 +318,7 @@ impl EntityBase for ItemEntity {
             let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
                 || entity.touching_water.load(Ordering::SeqCst)
                 || entity.touching_lava.load(Ordering::SeqCst)
-                || entity.velocity.load().sub(&original_velo).length_squared() > 0.01;
+                || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
 
             if velocity_dirty {
                 entity.send_pos_rot().await;
@@ -373,18 +370,17 @@ impl EntityBase for ItemEntity {
 
     fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {
-            let can_pickup = {
-                let delay = self.pickup_delay.lock().await;
-                *delay == 0
-            };
+            if self.pickup_delay.load(Ordering::Relaxed) > 0
+                || player.living_entity.health.load() <= 0.0
+            {
+                return;
+            }
 
-            if can_pickup
-                && player.living_entity.health.load() > 0.0
-                && (player
-                    .inventory
-                    .insert_stack_anywhere(&mut *self.item_stack.lock().await)
-                    .await
-                    || player.is_creative())
+            if player
+                .inventory
+                .insert_stack_anywhere(&mut *self.item_stack.lock().await)
+                .await
+                || player.is_creative()
             {
                 player
                     .client
@@ -402,7 +398,6 @@ impl EntityBase for ItemEntity {
                     .await
                     .send_content_updates()
                     .await;
-
                 if self.item_stack.lock().await.is_empty() {
                     self.entity.remove().await;
                 } else {

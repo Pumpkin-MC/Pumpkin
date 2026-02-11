@@ -1,5 +1,6 @@
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
+use rustc_hash::FxHashMap;
 
 use super::args::ConsumedArgs;
 
@@ -56,8 +57,8 @@ impl CommandError {
 
 #[derive(Default)]
 pub struct CommandDispatcher {
-    pub commands: HashMap<String, Command>,
-    pub permissions: HashMap<String, String>,
+    pub commands: FxHashMap<String, Command>,
+    pub permissions: FxHashMap<String, String>,
 }
 
 /// Stores registered [`CommandTree`]s and dispatches commands to them.

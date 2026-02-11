@@ -4,7 +4,7 @@ pub mod viewer;
 
 use std::collections::HashMap;
 
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockState, chunk_gen_settings::BlockBlueprint};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub use state::RawBlockState;
 
@@ -67,6 +67,23 @@ impl BlockStateCodec {
         let block_properties = block.from_properties(&props_iter);
         block_properties.to_state_id(block)
     }
+}
+
+#[must_use]
+pub fn to_state_id_from_blueprint(print: &BlockBlueprint) -> BlockStateId {
+    let block = Block::from_name(print.name)
+        .unwrap_or_else(|| panic!("Invalid block name in blueprint: {}", print.name));
+
+    match print.properties {
+        Some(props) => block.from_properties(props).to_state_id(block),
+        None => block.default_state.id,
+    }
+}
+
+/// Helper to get the full `BlockState` reference from the blueprint
+#[must_use]
+pub fn to_state_from_blueprint(print: &BlockBlueprint) -> &'static BlockState {
+    BlockState::from_id(to_state_id_from_blueprint(print))
 }
 
 #[cfg(test)]

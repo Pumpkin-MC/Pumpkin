@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use pumpkin_data::translation;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 
@@ -37,7 +38,9 @@ impl CommandExecutor for SelfExecutor {
             };
             let pos = player.position().to_block_pos();
             let yaw = player.living_entity.entity.yaw.load();
-            set_spawnpoint(sender, &player, pos, yaw).await
+            set_spawnpoint(sender, &player, pos, yaw).await;
+
+            Ok(1)
         })
     }
 }
@@ -58,9 +61,10 @@ impl CommandExecutor for TargetsExecutor {
             for target in targets {
                 let pos = target.position().to_block_pos();
                 let yaw = target.living_entity.entity.yaw.load();
-                set_spawnpoint(sender, target, pos, yaw).await?;
+                set_spawnpoint(sender, target, pos, yaw).await;
             }
-            Ok(())
+
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -83,9 +87,10 @@ impl CommandExecutor for TargetsPosExecutor {
 
             for target in targets {
                 let yaw = target.living_entity.entity.yaw.load();
-                set_spawnpoint(sender, target, *pos, yaw).await?;
+                set_spawnpoint(sender, target, *pos, yaw).await;
             }
-            Ok(())
+
+            Ok(targets.len() as i32)
         })
     }
 }
@@ -110,19 +115,15 @@ impl CommandExecutor for TargetsPosAngleExecutor {
             };
 
             for target in targets {
-                set_spawnpoint(sender, target, *pos, *yaw).await?;
+                set_spawnpoint(sender, target, *pos, *yaw).await;
             }
-            Ok(())
+
+            Ok(targets.len() as i32)
         })
     }
 }
 
-async fn set_spawnpoint(
-    sender: &CommandSender,
-    target: &Arc<Player>,
-    pos: BlockPos,
-    yaw: f32,
-) -> Result<(), CommandError> {
+async fn set_spawnpoint(sender: &CommandSender, target: &Arc<Player>, pos: BlockPos, yaw: f32) {
     let dimension = target.world().dimension;
 
     target
@@ -131,7 +132,7 @@ async fn set_spawnpoint(
 
     sender
         .send_message(TextComponent::translate(
-            "commands.spawnpoint.success.single",
+            translation::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
             [
                 TextComponent::text(pos.0.x.to_string()),
                 TextComponent::text(pos.0.y.to_string()),
@@ -143,8 +144,6 @@ async fn set_spawnpoint(
             ],
         ))
         .await;
-
-    Ok(())
 }
 
 #[must_use]

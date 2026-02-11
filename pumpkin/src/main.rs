@@ -60,11 +60,6 @@ async fn main() {
 
     pumpkin::init_logger(&advanced_config);
 
-    if let Some((logger_impl, level)) = pumpkin::LOGGER_IMPL.wait() {
-        log::set_logger(logger_impl).unwrap();
-        log::set_max_level(*level);
-    }
-
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         default_panic(info);
@@ -88,7 +83,7 @@ async fn main() {
 
     log::warn!("Pumpkin is currently under heavy development!");
     log::info!("Report issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
-    log::info!("Join our Discord for community support: https://discord.com/invite/wT8XjrjKkf");
+    log::info!("Join our Discord for community support: https://discord.gg/pumpkinmc");
 
     tokio::spawn(async {
         setup_sighandler()

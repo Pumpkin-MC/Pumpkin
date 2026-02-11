@@ -81,12 +81,12 @@ impl BlockEntity for MobSpawnerBlockEntity {
 
     fn tick<'a>(
         &'a self,
-        world: Arc<dyn SimpleWorld>,
+        world: &'a Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             if let Some(entity_type) = &self.entity_type.load() {
                 if self.delay.load(Ordering::Relaxed) == -1 {
-                    self.update_spawns(&world).await;
+                    self.update_spawns(world).await;
                 } else {
                     self.delay.fetch_sub(1, Ordering::Relaxed);
                     return;
@@ -128,7 +128,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
                     update_spawns = true;
                 }
                 if update_spawns {
-                    self.update_spawns(&world).await;
+                    self.update_spawns(world).await;
                 }
             }
         })

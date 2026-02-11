@@ -1,9 +1,10 @@
 use std::num::NonZeroU32;
 
-use pumpkin_util::random::{RandomGenerator, RandomImpl};
+use pumpkin_util::{
+    random::{RandomGenerator, RandomImpl},
+    y_offset::YOffset,
+};
 use serde::Deserialize;
-
-use super::y_offset::YOffset;
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]

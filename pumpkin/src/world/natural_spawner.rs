@@ -26,7 +26,6 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
 const MAGIC_NUMBER: i32 = 17 * 17;
@@ -316,14 +315,14 @@ pub fn get_filtered_spawning_categories(
 pub async fn spawn_for_chunk(
     world: &Arc<World>,
     chunk_pos: Vector2<i32>,
-    chunk: &Arc<RwLock<ChunkData>>,
+    chunk: &Arc<ChunkData>,
     spawn_state: &mut SpawnState,
     spawn_list: &Vec<&'static MobCategory>,
 ) {
     // debug!("spawn for chunk {:?}", chunk_pos);
     for category in spawn_list {
         if spawn_state.can_spawn_for_category_local(world, category, chunk_pos) {
-            let random_pos = get_random_pos_within(world.min_y, &chunk_pos, chunk).await;
+            let random_pos = get_random_pos_within(world.min_y, &chunk_pos, chunk);
             if random_pos.0.y > world.min_y {
                 spawn_category_for_position(category, world, random_pos, &chunk_pos, spawn_state)
                     .await;
@@ -331,19 +330,19 @@ pub async fn spawn_for_chunk(
         }
     }
 }
-pub async fn get_random_pos_within(
+pub fn get_random_pos_within(
     min_y: i32,
     chunk_pos: &Vector2<i32>,
-    chunk: &Arc<RwLock<ChunkData>>,
+    chunk: &Arc<ChunkData>,
 ) -> BlockPos {
     let mut rng = Xoroshiro::from_seed(get_seed());
 
     let x = (chunk_pos.x << 4) + rng.next_bounded_i32(16);
     let z = (chunk_pos.y << 4) + rng.next_bounded_i32(16);
     let temp_y = chunk
-        .read()
-        .await
         .heightmap
+        .lock()
+        .unwrap()
         .get(ChunkHeightmapType::WorldSurface, x, z, min_y)
         + 1;
     let y = rng.next_inbetween_i32(min_y, temp_y);
@@ -437,12 +436,13 @@ pub async fn spawn_category_for_position(
 
         {
             let chunk_handle = world.level.get_entity_chunk(*chunk_pos).await;
-            let mut chunk_lock = chunk_handle.write().await;
+            let mut data = chunk_handle.data.lock().await;
 
             for (uuid, nbt, _, _) in &prepared_data {
-                chunk_lock.data.insert(*uuid, nbt.clone());
+                data.insert(*uuid, nbt.clone());
             }
-            chunk_lock.mark_dirty(true);
+            drop(data);
+            chunk_handle.mark_dirty(true);
 
             world.entities.rcu(|current_entities| {
                 let mut new_entities = (**current_entities).clone();

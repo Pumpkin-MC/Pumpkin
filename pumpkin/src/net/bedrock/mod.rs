@@ -402,7 +402,7 @@ impl BedrockClient {
                 Self::handle_ack(&Ack::read(reader)?);
             }
             RAKNET_NACK => {
-                dbg!("received nack, client is missing packets");
+                log::debug!("received nack, client is missing packets");
             }
             0x80..0x8d => {
                 self.handle_frame_set(server, FrameSet::read(reader)?).await;

@@ -91,13 +91,17 @@ impl Taggable for Block {
 
 impl ToResourceLocation for &'static Block {
     fn to_resource_location(&self) -> ResourceLocation {
-        ResourceLocation::vanilla(self.name)
+        format!("minecraft:{}", self.name)
     }
 }
 
 impl FromResourceLocation for &'static Block {
     fn from_resource_location(resource_location: &ResourceLocation) -> Option<Self> {
-        Block::from_registry_key(&resource_location.path)
+        Block::from_registry_key(
+            resource_location
+                .strip_prefix("minecraft:")
+                .unwrap_or(resource_location),
+        )
     }
 }
 
@@ -113,12 +117,14 @@ impl Block {
     }
 
     /// Returns whether this block is solid (based on default state)
-    pub fn is_solid(&self) -> bool {
+    #[must_use]
+    pub const fn is_solid(&self) -> bool {
         self.default_state.is_solid()
     }
 
     /// Returns whether this block is air (based on default state)
-    pub fn is_air(&self) -> bool {
+    #[must_use]
+    pub const fn is_air(&self) -> bool {
         self.default_state.is_air()
     }
 }

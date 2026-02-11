@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -53,11 +54,10 @@ struct TickExecutor(SubCommand);
 
 impl TickExecutor {
     async fn handle_query(
-        &self,
         sender: &CommandSender,
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
-    ) -> Result<(), CommandError> {
+    ) -> Result<i32, CommandError> {
         let tickrate = manager.tickrate();
         let avg_tick_nanos = server.get_average_tick_time_nanos();
         let avg_mspt_str = nanos_to_millis_string(avg_tick_nanos);
@@ -65,13 +65,13 @@ impl TickExecutor {
         if manager.is_sprinting() {
             sender
                 .send_message(TextComponent::translate(
-                    "commands.tick.status.sprinting",
+                    translation::COMMANDS_TICK_STATUS_SPRINTING,
                     [],
                 ))
                 .await;
             sender
                 .send_message(TextComponent::translate(
-                    "commands.tick.query.rate.sprinting",
+                    translation::COMMANDS_TICK_QUERY_RATE_SPRINTING,
                     [
                         TextComponent::text(format!("{tickrate:.1}")),
                         TextComponent::text(avg_mspt_str),
@@ -79,13 +79,12 @@ impl TickExecutor {
                 ))
                 .await;
         } else {
-            self.handle_non_sprinting_status(sender, manager, avg_tick_nanos)
-                .await;
+            Self::handle_non_sprinting_status(sender, manager, avg_tick_nanos).await;
 
             let target_mspt_str = nanos_to_millis_string(manager.nanoseconds_per_tick());
             sender
                 .send_message(TextComponent::translate(
-                    "commands.tick.query.rate.running",
+                    translation::COMMANDS_TICK_QUERY_RATE_RUNNING,
                     [
                         TextComponent::text(format!("{tickrate:.1}")),
                         TextComponent::text(avg_mspt_str),
@@ -95,31 +94,39 @@ impl TickExecutor {
                 .await;
         }
 
-        self.send_percentiles(sender, server).await;
-        Ok(())
+        Self::send_percentiles(sender, server).await;
+        Ok(tickrate as i32)
     }
     async fn handle_non_sprinting_status(
-        &self,
         sender: &CommandSender,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         avg_tick_nanos: i64,
     ) {
         if manager.is_frozen() {
             sender
-                .send_message(TextComponent::translate("commands.tick.status.frozen", []))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_TICK_STATUS_FROZEN,
+                    [],
+                ))
                 .await;
         } else if avg_tick_nanos > manager.nanoseconds_per_tick() {
             sender
-                .send_message(TextComponent::translate("commands.tick.status.lagging", []))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_TICK_STATUS_LAGGING,
+                    [],
+                ))
                 .await;
         } else {
             sender
-                .send_message(TextComponent::translate("commands.tick.status.running", []))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_TICK_STATUS_RUNNING,
+                    [],
+                ))
                 .await;
         }
     }
 
-    async fn send_percentiles(&self, sender: &CommandSender, server: &crate::server::Server) {
+    async fn send_percentiles(sender: &CommandSender, server: &crate::server::Server) {
         let tick_count = server.tick_count.load(Ordering::Relaxed);
         let sample_size = (tick_count as usize).min(100);
 
@@ -134,7 +141,7 @@ impl TickExecutor {
 
             sender
                 .send_message(TextComponent::translate(
-                    "commands.tick.query.percentiles",
+                    translation::COMMANDS_TICK_QUERY_PERCENTILES,
                     [
                         TextComponent::text(nanos_to_millis_string(p50_nanos)),
                         TextComponent::text(nanos_to_millis_string(p95_nanos)),
@@ -146,54 +153,66 @@ impl TickExecutor {
         }
     }
     async fn handle_step_command(
-        &self,
         sender: &CommandSender,
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         ticks: i32,
-    ) -> Result<(), CommandError> {
+    ) {
         if manager.step_game_if_paused(server, ticks).await {
             sender
                 .send_message(TextComponent::translate(
-                    "commands.tick.step.success",
+                    translation::COMMANDS_TICK_STEP_SUCCESS,
                     [TextComponent::text(ticks.to_string())],
                 ))
                 .await;
         } else {
             sender
                 .send_message(
-                    TextComponent::translate("commands.tick.step.fail", [])
+                    TextComponent::translate(translation::COMMANDS_TICK_STEP_FAIL, [])
                         .color_named(NamedColor::Red),
                 )
                 .await;
         }
-        Ok(())
     }
     async fn handle_sprint_command(
-        &self,
         sender: &CommandSender,
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         ticks: i32,
-    ) -> Result<(), CommandError> {
+    ) {
         if manager
             .request_game_to_sprint(server, i64::from(ticks))
             .await
         {
             sender
                 .send_message(TextComponent::translate(
-                    "commands.tick.sprint.stop.success",
+                    translation::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
                     [],
                 ))
                 .await;
         }
         sender
             .send_message(TextComponent::translate(
-                "commands.tick.status.sprinting",
+                translation::COMMANDS_TICK_STATUS_SPRINTING,
                 [],
             ))
             .await;
-        Ok(())
+    }
+
+    async fn handle_set_tick_rate<E>(
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        manager: &crate::server::tick_rate_manager::ServerTickRateManager,
+        rate: f32,
+    ) -> Result<i32, E> {
+        manager.set_tick_rate(server, rate).await;
+        sender
+            .send_message(TextComponent::translate(
+                translation::COMMANDS_TICK_RATE_SUCCESS,
+                [TextComponent::text(format!("{rate:.1}"))],
+            ))
+            .await;
+        Ok(rate as i32)
     }
 }
 
@@ -206,29 +225,14 @@ impl CommandExecutor for TickExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let manager = &server.tick_rate_manager;
-
             match self.0 {
-                SubCommand::Query => self.handle_query(sender, server, manager).await,
+                SubCommand::Query => Self::handle_query(sender, server, manager).await,
                 SubCommand::Rate => {
                     let rate = BoundedNumArgumentConsumer::<f32>::find_arg(args, "rate")??;
-                    manager.set_tick_rate(server, rate).await;
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.rate.success",
-                            [TextComponent::text(format!("{rate:.1}"))],
-                        ))
-                        .await;
-                    Ok(())
+                    Self::handle_set_tick_rate(sender, server, manager, rate).await
                 }
                 SubCommand::RateLiteral(rate) => {
-                    manager.set_tick_rate(server, rate).await;
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.tick.rate.success",
-                            [TextComponent::text(format!("{rate:.1}"))],
-                        ))
-                        .await;
-                    Ok(())
+                    Self::handle_set_tick_rate(sender, server, manager, rate).await
                 }
                 SubCommand::Freeze(freeze) => {
                     manager.set_frozen(server, freeze).await;
@@ -240,64 +244,77 @@ impl CommandExecutor for TickExecutor {
                     sender
                         .send_message(TextComponent::translate(message_key, []))
                         .await;
-                    Ok(())
+                    Ok(freeze as i32)
                 }
                 SubCommand::StepDefault => {
-                    self.handle_step_command(sender, server, manager, 1).await
+                    Self::handle_step_command(sender, server, manager, 1).await;
+                    Ok(1)
                 }
                 SubCommand::StepTimed => {
                     let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
-                    self.handle_step_command(sender, server, manager, ticks)
-                        .await
+                    Self::handle_step_command(sender, server, manager, ticks).await;
+                    Ok(1)
                 }
                 SubCommand::StepLiteral(ticks) => {
-                    self.handle_step_command(sender, server, manager, ticks)
-                        .await
+                    Self::handle_step_command(sender, server, manager, ticks).await;
+                    Ok(1)
                 }
                 SubCommand::StepStop => {
                     if manager.stop_stepping(server).await {
                         sender
                             .send_message(TextComponent::translate(
-                                "commands.tick.step.stop.success",
+                                translation::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
                                 [],
                             ))
                             .await;
+                        Ok(1)
                     } else {
+                        // TODO: send feedback as error without Err
                         sender
                             .send_message(TextComponent::translate(
-                                "commands.tick.step.stop.fail",
+                                translation::COMMANDS_TICK_SPRINT_STOP_FAIL,
                                 [],
                             ))
                             .await;
+                        Ok(0)
                     }
-                    Ok(())
                 }
                 SubCommand::SprintTimed => {
-                    let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
-                    self.handle_sprint_command(sender, server, manager, ticks)
-                        .await
+                    Self::handle_sprint_command(
+                        sender,
+                        server,
+                        manager,
+                        TimeArgumentConsumer::find_arg(args, "time")?,
+                    )
+                    .await;
+                    Ok(1)
                 }
                 SubCommand::SprintLiteral(ticks) => {
-                    self.handle_sprint_command(sender, server, manager, ticks)
-                        .await
+                    Self::handle_sprint_command(sender, server, manager, ticks).await;
+                    Ok(1)
                 }
                 SubCommand::SprintStop => {
                     if manager.stop_sprinting(server).await {
                         sender
                             .send_message(TextComponent::translate(
-                                "commands.tick.sprint.stop.success",
+                                translation::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
                                 [],
                             ))
                             .await;
+                        Ok(1)
                     } else {
+                        // TODO: send feedback as error without Err
                         sender
                             .send_message(
-                                TextComponent::translate("commands.tick.sprint.stop.fail", [])
-                                    .color(Color::Named(NamedColor::Red)),
+                                TextComponent::translate(
+                                    translation::COMMANDS_TICK_SPRINT_STOP_FAIL,
+                                    [],
+                                )
+                                .color(Color::Named(NamedColor::Red)),
                             )
                             .await;
+                        Ok(0)
                     }
-                    Ok(())
                 }
             }
         })

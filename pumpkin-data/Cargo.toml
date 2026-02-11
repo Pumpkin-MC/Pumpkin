@@ -3,32 +3,98 @@ name = "pumpkin-data"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-build = "build/build.rs"
+
+[features]
+default = [
+    "item",
+    "packet", 
+    "jukebox_song",
+    "translation",
+    "registry",
+    "screen",
+    "particle",
+    "sound",
+    "recipes",
+    "data_component",
+    "attributes",
+    "tracked_data",
+    "meta_data_type",
+    "chunk",
+    "game_event",
+    "game_rules",
+    "entity",
+    "dimension",
+    "enchantment",
+    "world",
+    "scoreboard",
+    "damage",
+    "fluid",
+    "block",
+    "tag",
+    "noise_router",
+    "composter",
+    "flower_pot",
+    "fuels",
+    "effect",
+    "structures",
+    "potion",
+    "recipe_remainder",
+    "chunk_gen_settings",
+]
+
+item = []
+packet = []
+jukebox_song = []
+translation = []
+registry = []
+screen = []
+particle = []
+sound = []
+recipes = []
+data_component = []
+attributes = []
+tracked_data = []
+meta_data_type = []
+chunk = ["noise_parameter", "biome", "chunk_status"]
+game_event = []
+game_rules = []
+entity = ["entity_pose", "entity_status", "entity_type", "spawn_egg"]
+dimension = []
+enchantment = []
+world = ["world_event", "message_type"]
+scoreboard = []
+damage = []
+fluid = []
+tag = []
+noise_router = []
+composter = []
+flower_pot = []
+fuels = []
+effect = []
+structures = []
+potion = ["potion_brewing"]
+recipe_remainder = []
+chunk_gen_settings = []
+
+noise_parameter = []
+biome = []
+chunk_status = []
+entity_pose = []
+entity_status = []
+entity_type = []
+spawn_egg = []
+world_event = []
+message_type = []
+block = []
+item_id_remap = []
+potion_brewing = []
 
 [dependencies]
 phf = { workspace = true, features = ["macros"] }
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
-
 serde.workspace = true
 crc-fast.workspace = true
-
-[build-dependencies]
-indexmap = { workspace = true, features = ["serde"] }
-
-pumpkin-util.workspace = true
-pumpkin-nbt.workspace = true
-
-serde.workspace = true
-serde_json.workspace = true
-
-serde_json5.workspace = true
-heck.workspace = true
-proc-macro2.workspace = true
-quote.workspace = true
-syn.workspace = true
-
-rayon.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
@@ -37,9 +103,8 @@ criterion.workspace = true
 name = "has_random_ticks"
 harness = false
 
-# Generated files generate a lot of warns
-# [lints]
-# workspace = true
-
 [package.metadata.cargo-machete]
 ignored = ["phf"]
+
+# [lints]
+# workspace = true

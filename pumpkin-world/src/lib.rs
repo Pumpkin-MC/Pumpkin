@@ -1,5 +1,6 @@
-use generation::settings::GenerationSettings;
-use pumpkin_data::{BlockState, dimension::Dimension};
+use pumpkin_data::{
+    Block, BlockState, chunk_gen_settings::GenerationSettings, dimension::Dimension,
+};
 use pumpkin_util::math::vector2::Vector2;
 
 pub mod biome;
@@ -13,6 +14,7 @@ pub mod generation;
 pub mod inventory;
 pub mod item;
 pub mod level;
+pub mod lighting;
 pub mod lock;
 pub mod poi;
 pub mod tick;
@@ -45,7 +47,7 @@ macro_rules! global_path {
 // TODO: is there a way to do in-file benches?
 pub use generation::{
     GlobalRandomConfig, noise::router::proto_noise_router::ProtoNoiseRouters,
-    proto_chunk::ProtoChunk, settings::GENERATION_SETTINGS, settings::GeneratorSetting,
+    proto_chunk::ProtoChunk,
 };
 
 use crate::generation::{
@@ -78,7 +80,10 @@ pub fn bench_create_and_populate_noise(
     let generation_shape = &settings.shape;
     let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
     let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-        FluidLevel::new(settings.sea_level, settings.default_fluid.name),
+        FluidLevel::new(
+            settings.sea_level,
+            Block::from_registry_key(settings.default_fluid.name).unwrap(),
+        ),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
     ));
 
@@ -103,7 +108,7 @@ pub fn bench_create_and_populate_noise(
         biome_coords::from_block(start_z),
     );
     let horizontal_biome_end = biome_coords::from_block(
-        horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
     );
     let surface_config = SurfaceHeightSamplerBuilderOptions::new(
         biome_pos.x,
@@ -149,7 +154,7 @@ pub fn bench_create_and_populate_biome(
         biome_coords::from_block(start_z),
     );
     let horizontal_biome_end = biome_coords::from_block(
-        horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
     );
     let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
         biome_pos.x,
@@ -193,7 +198,7 @@ pub fn bench_create_and_populate_noise_with_surface(
         biome_coords::from_block(start_z),
     );
     let horizontal_biome_end = biome_coords::from_block(
-        horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
     );
     let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
         biome_pos.x,
@@ -205,7 +210,10 @@ pub fn bench_create_and_populate_noise_with_surface(
 
     // Noise sampler
     let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
-        FluidLevel::new(settings.sea_level, settings.default_fluid.name),
+        FluidLevel::new(
+            settings.sea_level,
+            Block::from_registry_key(settings.default_fluid.name).unwrap(),
+        ),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
     ));
 

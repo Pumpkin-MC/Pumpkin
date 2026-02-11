@@ -8,14 +8,14 @@ use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use super::{ItemBehaviour, ItemMetadata};
 
 #[derive(Default)]
 pub struct ItemRegistry {
-    items: HashMap<u16, Arc<dyn ItemBehaviour>>,
+    items: FxHashMap<u16, Arc<dyn ItemBehaviour>>,
 }
 
 impl ItemRegistry {

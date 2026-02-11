@@ -1,5 +1,6 @@
 use enum_dispatch::enum_dispatch;
 use pumpkin_data::noise_router::WrapperType;
+use pumpkin_util::math::vector3::Vector3;
 
 // These are for enum_dispatch
 use super::chunk_density_function::{
@@ -13,53 +14,16 @@ pub(crate) mod spline;
 
 #[cfg(test)]
 mod test;
-
 // Helper functions for deserializing unique density functions for testing
 #[cfg(test)]
 mod test_deserializer;
-
-pub trait NoisePos {
-    fn x(&self) -> i32;
-    fn y(&self) -> i32;
-    fn z(&self) -> i32;
-}
-
-pub struct UnblendedNoisePos {
-    x: i32,
-    y: i32,
-    z: i32,
-}
-
-impl UnblendedNoisePos {
-    #[must_use]
-    pub const fn new(x: i32, y: i32, z: i32) -> Self {
-        Self { x, y, z }
-    }
-}
-
-impl NoisePos for UnblendedNoisePos {
-    #[inline]
-    fn x(&self) -> i32 {
-        self.x
-    }
-
-    #[inline]
-    fn y(&self) -> i32 {
-        self.y
-    }
-
-    #[inline]
-    fn z(&self) -> i32 {
-        self.z
-    }
-}
 
 pub trait IndexToNoisePos {
     fn at(
         &self,
         index: usize,
         sample_options: Option<&mut ChunkNoiseFunctionSampleOptions>,
-    ) -> impl NoisePos + 'static;
+    ) -> Vector3<i32>;
 }
 
 #[enum_dispatch]
@@ -70,7 +34,7 @@ pub trait NoiseFunctionComponentRange {
 
 #[enum_dispatch]
 pub trait StaticIndependentChunkNoiseFunctionComponentImpl: NoiseFunctionComponentRange {
-    fn sample(&self, pos: &impl NoisePos) -> f64;
+    fn sample(&self, pos: &Vector3<i32>) -> f64;
     fn fill(&self, array: &mut [f64], mapper: &impl IndexToNoisePos) {
         array.iter_mut().enumerate().for_each(|(index, value)| {
             let pos = mapper.at(index, None);

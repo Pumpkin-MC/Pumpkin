@@ -1,6 +1,7 @@
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs};
 
+use pumpkin_data::translation;
 use pumpkin_inventory::crafting::crafting_screen_handler::CraftingTableScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -44,6 +45,6 @@ impl ScreenHandlerFactory for CraftingTableScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.crafting", &[])
+        TextComponent::translate(translation::CONTAINER_CRAFTING, &[])
     }
 }

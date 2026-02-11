@@ -1,8 +1,5 @@
-use pumpkin_data::damage::DamageType;
-use pumpkin_util::text::{
-    TextComponent,
-    color::{Color, NamedColor},
-};
+use pumpkin_data::{damage::DamageType, translation};
+use pumpkin_util::text::TextComponent;
 
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
@@ -11,6 +8,7 @@ use crate::command::{
         entity::EntityArgumentConsumer, position_3d::Position3DArgumentConsumer,
         resource::damage_type::DamageTypeArgumentConsumer,
     },
+    dispatcher::CommandError,
     tree::{
         CommandTree,
         builder::{argument, literal},
@@ -39,23 +37,22 @@ async fn send_damage_result(
     success: bool,
     amount: f32,
     target_name: TextComponent,
-) {
+) -> Result<i32, CommandError> {
     if !success {
-        sender
-            .send_message(
-                TextComponent::translate("commands.damage.invulnerable", [])
-                    .color(Color::Named(NamedColor::Red)),
-            )
-            .await;
-        return;
+        return Err(CommandError::CommandFailed(TextComponent::translate(
+            translation::COMMANDS_DAMAGE_INVULNERABLE,
+            [],
+        )));
     }
 
     sender
         .send_message(TextComponent::translate(
-            "commands.damage.success",
+            translation::COMMANDS_DAMAGE_SUCCESS,
             [TextComponent::text(amount.to_string()), target_name],
         ))
         .await;
+
+    Ok(1) // not arbitrary, this is what vanilla does
 }
 
 impl CommandExecutor for LocationExecutor {
@@ -70,13 +67,9 @@ impl CommandExecutor for LocationExecutor {
 
             let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
             else {
-                sender
-                    .send_message(
-                        TextComponent::text("Invalid damage amount")
-                            .color(Color::Named(NamedColor::Red)),
-                    )
-                    .await;
-                return Ok(());
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    "Invalid damage amount",
+                )));
             };
 
             let damage_type =
@@ -92,9 +85,7 @@ impl CommandExecutor for LocationExecutor {
                 .damage_with_context(&*target, amount, damage_type, Some(location), None, None)
                 .await;
 
-            send_damage_result(sender, success, amount, target.get_display_name().await).await;
-
-            Ok(())
+            send_damage_result(sender, success, amount, target.get_display_name().await).await
         })
     }
 }
@@ -111,13 +102,9 @@ impl CommandExecutor for EntityExecutor {
 
             let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
             else {
-                sender
-                    .send_message(
-                        TextComponent::text("Invalid damage amount")
-                            .color(Color::Named(NamedColor::Red)),
-                    )
-                    .await;
-                return Ok(());
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    "Invalid damage amount",
+                )));
             };
 
             let damage_type =
@@ -145,9 +132,7 @@ impl CommandExecutor for EntityExecutor {
                 )
                 .await;
 
-            send_damage_result(sender, success, amount, target.get_display_name().await).await;
-
-            Ok(())
+            send_damage_result(sender, success, amount, target.get_display_name().await).await
         })
     }
 }

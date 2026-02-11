@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
@@ -89,7 +90,7 @@ async fn send_success_message(sender: &CommandSender, target: &dyn crate::entity
     let target_name = target.get_display_name().await;
     sender
         .send_message(TextComponent::translate(
-            "commands.rotate.success",
+            translation::COMMANDS_ROTATE_SUCCESS,
             [target_name],
         ))
         .await;
@@ -113,7 +114,7 @@ impl CommandExecutor for RotateToRotationExecutor {
             rotate_entity(target.clone(), yaw, yaw_rel, pitch, pitch_rel).await;
             send_success_message(sender, target.as_ref()).await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }
@@ -143,7 +144,7 @@ impl CommandExecutor for RotateFacingLocationExecutor {
             rotate_entity(target.clone(), yaw, false, pitch, false).await;
             send_success_message(sender, target.as_ref()).await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }
@@ -176,7 +177,7 @@ impl CommandExecutor for RotateFacingEntityExecutor {
             rotate_entity(target.clone(), yaw, false, pitch, false).await;
             send_success_message(sender, target.as_ref()).await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }
@@ -210,7 +211,7 @@ impl CommandExecutor for RotateFacingEntityNoAnchorExecutor {
             rotate_entity(target.clone(), yaw, false, pitch, false).await;
             send_success_message(sender, target.as_ref()).await;
 
-            Ok(())
+            Ok(1)
         })
     }
 }

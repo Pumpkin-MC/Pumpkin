@@ -7,6 +7,7 @@ use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
 use end_portal::EndPortalBlockEntity;
 use furnace::FurnaceBlockEntity;
+use furnace_like_block_entity::ExperienceContainer;
 use piston::PistonBlockEntity;
 use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
@@ -17,6 +18,7 @@ use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity;
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
+use crate::block::entities::jukebox::JukeboxBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::block::entities::smoker::SmokerBlockEntity;
@@ -38,6 +40,7 @@ pub mod ender_chest;
 pub mod furnace;
 pub mod furnace_like_block_entity;
 pub mod hopper;
+pub mod jukebox;
 pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
@@ -55,7 +58,7 @@ pub trait BlockEntity: Send + Sync {
         Self: Sized;
     fn tick<'a>(
         &'a self,
-        _world: Arc<dyn SimpleWorld>,
+        _world: &'a Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {})
     }
@@ -115,6 +118,9 @@ pub trait BlockEntity: Send + Sync {
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
         None
     }
+    fn to_experience_container(self: Arc<Self>) -> Option<Arc<dyn ExperienceContainer>> {
+        None
+    }
 }
 
 #[must_use]
@@ -132,6 +138,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         EnderChestBlockEntity::ID => {
             Arc::new(block_entity_from_generic::<EnderChestBlockEntity>(nbt))
         }
+        JukeboxBlockEntity::ID => Arc::new(block_entity_from_generic::<JukeboxBlockEntity>(nbt)),
         SignBlockEntity::ID => Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt)),
         BedBlockEntity::ID => Arc::new(block_entity_from_generic::<BedBlockEntity>(nbt)),
         ComparatorBlockEntity::ID => {

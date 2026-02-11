@@ -5,7 +5,7 @@ use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
 use crate::block::blocks::carved_pumpkin::CarvedPumpkinBlock;
-use crate::block::blocks::chests::ChestBlock;
+use crate::block::blocks::chests::{ChestBlock, CopperChestBlock};
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
@@ -22,6 +22,7 @@ use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::hay::HayBlock;
+use crate::block::blocks::infested::InfestedBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::mangrove_roots::MangroveRootsBlock;
@@ -97,7 +98,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -119,6 +120,7 @@ use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::redstone::dispenser::DispenserBlock;
 use crate::block::blocks::redstone::dropper::DropperBlock;
+use crate::block::blocks::shelf::ShelfBlock;
 
 use super::BlockIsReplacing;
 use super::blocks::plant::crop::gourds::attached_stem::AttachedStemBlock;
@@ -161,6 +163,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
+    manager.register(CopperChestBlock);
     manager.register(EnderChestBlock);
     manager.register(CraftingTableBlock);
     manager.register(DirtPathBlock);
@@ -177,6 +180,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(HayBlock);
     manager.register(GrindstoneBlock);
     manager.register(IronBarsBlock);
+    manager.register(InfestedBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
     manager.register(BambooBlock);
@@ -229,6 +233,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CandleCakeBlock);
     manager.register(SkullBlock);
     manager.register(ChiseledBookshelfBlock);
+    manager.register(ShelfBlock);
     manager.register(LecternBlock);
     manager.register(StemBlock);
     manager.register(AttachedStemBlock);
@@ -310,8 +315,8 @@ impl BlockActionResult {
 
 #[derive(Default)]
 pub struct BlockRegistry {
-    blocks: HashMap<u16, Arc<dyn BlockBehaviour>>,
-    fluids: HashMap<u16, Arc<dyn FluidBehaviour>>,
+    blocks: FxHashMap<u16, Arc<dyn BlockBehaviour>>,
+    fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
 
 impl BlockRegistryExt for BlockRegistry {

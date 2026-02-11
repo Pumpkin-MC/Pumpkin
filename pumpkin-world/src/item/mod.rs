@@ -297,6 +297,11 @@ impl ItemStack {
         self.item_count = self.item_count.saturating_add(amount);
     }
 
+    /// Completely resets the stack to air
+    pub fn clear(&mut self) {
+        *self = Self::EMPTY.clone();
+    }
+
     pub fn enchant(&mut self, enchantment: &'static Enchantment, level: i32) {
         // TODO itemstack may not send update packet to client
         if level <= 0 {
