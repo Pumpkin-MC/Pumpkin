@@ -665,7 +665,11 @@ impl Player {
         let mut damage = base_damage + add_damage * damage_multiplier;
 
         // Apply Strength effect (+3 damage per level)
-        if let Some(effect) = self.living_entity.get_effect(&pumpkin_data::effect::StatusEffect::STRENGTH).await {
+        if let Some(effect) = self
+            .living_entity
+            .get_effect(&pumpkin_data::effect::StatusEffect::STRENGTH)
+            .await
+        {
             damage += 3.0 * f64::from(effect.amplifier + 1);
         }
 

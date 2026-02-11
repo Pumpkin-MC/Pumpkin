@@ -28,20 +28,31 @@ pub struct AttributeModifier {
 impl CUpdateAttributes {
     #[must_use]
     pub const fn new(entity_id: VarInt, properties: Vec<Property>) -> Self {
-        Self { entity_id, properties }
+        Self {
+            entity_id,
+            properties,
+        }
     }
 }
 
 impl Property {
     #[must_use]
     pub const fn new(id: VarInt, value: f64, modifiers: Vec<AttributeModifier>) -> Self {
-        Self { id, value, modifiers }
+        Self {
+            id,
+            value,
+            modifiers,
+        }
     }
 }
 
 impl AttributeModifier {
     #[must_use]
     pub const fn new(id: String, amount: f64, operation: i8) -> Self {
-        Self { id, amount, operation }
+        Self {
+            id,
+            amount,
+            operation,
+        }
     }
 }
