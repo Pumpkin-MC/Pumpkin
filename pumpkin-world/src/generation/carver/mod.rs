@@ -194,8 +194,7 @@ pub static CONFIGURED_CARVERS: LazyLock<HashMap<String, ConfiguredCarver>> = Laz
 });
 
 static BIOME_CARVERS: LazyLock<HashMap<String, Vec<String>>> = LazyLock::new(|| {
-    let raw: HashMap<String, BiomeGenerationSettings> =
-        pumpkin_util::include_json_static!("../../../../assets/biome.json", HashMap<String, BiomeGenerationSettings>);
+    let raw: HashMap<String, BiomeGenerationSettings> = pumpkin_util::include_json_static!("../../../../assets/biome.json", HashMap<String, BiomeGenerationSettings>);
     raw.into_iter()
         .map(|(name, settings)| (name, settings.carvers.into_vec()))
         .collect()
