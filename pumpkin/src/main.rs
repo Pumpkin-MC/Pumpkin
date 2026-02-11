@@ -69,8 +69,17 @@ async fn main() {
     }));
     log::info!(
         "{}",
-        TextComponent::from_legacy_string(&format!(
-            "Starting §6Pumpkin §a{CARGO_PKG_VERSION}§r Minecraft (Protocol §1{CURRENT_MC_PROTOCOL}§r)"
+        TextComponent::text(format!(
+            "Starting {} {} Minecraft (Protocol {})",
+            TextComponent::text("Pumpkin")
+                .color_named(NamedColor::Gold)
+                .to_pretty_console(),
+            TextComponent::text(format!("{CARGO_PKG_VERSION}"))
+                .color_named(NamedColor::Green)
+                .to_pretty_console(),
+            TextComponent::text(format!("{CURRENT_MC_PROTOCOL}"))
+                .color_named(NamedColor::DarkBlue)
+                .to_pretty_console()
         ))
         .to_pretty_console(),
     );
@@ -89,22 +98,24 @@ async fn main() {
 
     log::warn!(
         "{}",
-        TextComponent::from_legacy_string("§4Pumpkin is currently under heavy development!")
+        TextComponent::text("Pumpkin is currently under heavy development!")
+            .color_named(NamedColor::DarkRed)
             .to_pretty_console(),
     );
     log::info!(
-        "{}",
-        TextComponent::from_legacy_string(
-            "Report issues on §3https://github.com/Pumpkin-MC/Pumpkin/issues"
-        )
-        .to_pretty_console()
+        "Report issues on {}",
+        TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues")
+            .color_named(NamedColor::DarkAqua)
+            .to_pretty_console()
     );
     log::info!(
-        "{}",
-        TextComponent::from_legacy_string(
-            "Join our §1Discord§r for community support: §bhttps://discord.gg/pumpkinmc"
-        )
-        .to_pretty_console()
+        "Join our {} for community support: {}",
+        TextComponent::text("Discord")
+            .color_named(NamedColor::DarkBlue)
+            .to_pretty_console(),
+        TextComponent::text("https://discord.gg/pumpkinmc")
+            .color_named(NamedColor::Aqua)
+            .to_pretty_console()
     );
 
     tokio::spawn(async {
@@ -126,11 +137,15 @@ async fn main() {
     log::info!(
         "Server is now running. Connect using port: {}{}{}",
         if basic_config.java_edition {
-            TextComponent::from_legacy_string(&format!(
-                "§eJava Edition: §1{}§r",
-                basic_config.java_edition_address
-            ))
-            .to_pretty_console()
+            format!(
+                "{} {}",
+                TextComponent::text("Java Edition:")
+                    .color_named(NamedColor::Yellow)
+                    .to_pretty_console(),
+                TextComponent::text(format!("{}", basic_config.java_edition_address))
+                    .color_named(NamedColor::DarkBlue)
+                    .to_pretty_console()
+            )
         } else {
             TextComponent::text(String::new()).to_pretty_console()
         },
@@ -140,11 +155,15 @@ async fn main() {
             ""
         },
         if basic_config.bedrock_edition {
-            TextComponent::from_legacy_string(&format!(
-                "§6Bedrock Edition: §1{}§r",
-                basic_config.bedrock_edition_address
-            ))
-            .to_pretty_console()
+            format!(
+                "{} {}",
+                TextComponent::text("Bedrock Edition:")
+                    .color_named(NamedColor::Gold)
+                    .to_pretty_console(),
+                TextComponent::text(format!("{}", basic_config.bedrock_edition_address))
+                    .color_named(NamedColor::DarkBlue)
+                    .to_pretty_console()
+            )
         } else {
             TextComponent::text(String::new()).to_pretty_console()
         }
