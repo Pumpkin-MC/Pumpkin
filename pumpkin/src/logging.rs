@@ -240,6 +240,8 @@ impl ReadlineLogWrapper {
             .map_or_else(|_| None, |mut result| result.take())
     }
 
+    // This isn't really dead code. It is just only used by the lib and not the bin for this
+    // crate, and as such creates a compiler warning.
     #[allow(dead_code)]
     pub(crate) fn return_readline(&self, rl: Editor<PumpkinCommandCompleter, FileHistory>) {
         if let Ok(mut result) = self.readline.lock() {
