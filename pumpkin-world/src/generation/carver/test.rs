@@ -8,7 +8,7 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl, get_large_feature_seed, legacy_rand::LegacyRand},
 };
 
-use super::{CONFIGURED_CARVERS, Carver, ConfiguredCarver, cave, mask::CarvingMask, ravine};
+use super::{CONFIGURED_CARVERS, Carver, ConfiguredCarver, can_reach, mask::CarvingMask};
 
 // ── CarvingMask tests ──────────────────────────────────────────────────
 
@@ -253,21 +253,17 @@ fn can_reach_matches_vanilla() {
     let chunk = Vector2::new(0, 0);
     // Center of chunk (0,0) is at block (8.0, 8.0)
     // x=8.0, z=8.0 => dx=0, dz=0 => 0 - remaining^2 <= radius^2 => always true
-    assert!(cave::can_reach(chunk, 8.0, 8.0, 0, 100, 1.0));
+    assert!(can_reach(chunk, 8.0, 8.0, 0, 100, 1.0));
 
     // Test with a point far away: x=1000, z=1000
     // dx = 1000-8 = 992, dz = 1000-8 = 992
     // remaining = 100-0 = 100, radius = 1.0+2.0+16.0 = 19.0
     // 992^2 + 992^2 - 100^2 = 984064+984064-10000 = 1958128 >> 361
-    assert!(!cave::can_reach(chunk, 1000.0, 1000.0, 0, 100, 1.0));
-
-    // Verify ravine::can_reach has identical formula
-    assert!(ravine::can_reach(chunk, 8.0, 8.0, 0, 100, 1.0));
-    assert!(!ravine::can_reach(chunk, 1000.0, 1000.0, 0, 100, 1.0));
+    assert!(!can_reach(chunk, 1000.0, 1000.0, 0, 100, 1.0));
 
     // Edge case: exactly at boundary
     // dx=0, dz=0, remaining=19, radius=19 => 0 - 361 <= 361 => -361 <= 361 => true
-    assert!(cave::can_reach(chunk, 8.0, 8.0, 0, 19, 1.0));
+    assert!(can_reach(chunk, 8.0, 8.0, 0, 19, 1.0));
 }
 
 // ── Carver probability tests with known seeds ──────────────────────────

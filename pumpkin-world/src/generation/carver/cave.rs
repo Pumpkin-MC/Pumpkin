@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 use crate::generation::positions::chunk_pos;
 
-use super::{Carver, CarverConfig, CarverContext, carve_ellipsoid_skip};
+use super::{Carver, CarverConfig, CarverContext, can_reach, carve_ellipsoid_skip};
 
 #[derive(Deserialize)]
 pub struct CaveCarver {
@@ -354,21 +354,4 @@ impl CaveCarver {
             skip_checker,
         );
     }
-}
-
-pub(crate) fn can_reach(
-    chunk_pos: pumpkin_util::math::vector2::Vector2<i32>,
-    x: f64,
-    z: f64,
-    start_step: i32,
-    end_step: i32,
-    thickness: f32,
-) -> bool {
-    let center_x = chunk_pos::start_block_x(chunk_pos.x) as f64 + 8.0;
-    let center_z = chunk_pos::start_block_z(chunk_pos.y) as f64 + 8.0;
-    let dx = x - center_x;
-    let dz = z - center_z;
-    let remaining = (end_step - start_step) as f64;
-    let radius = thickness as f64 + 2.0 + 16.0;
-    dx * dx + dz * dz - remaining * remaining <= radius * radius
 }

@@ -945,79 +945,25 @@ pub fn carve_sphere<T: GenerationCache>(
     }
 }
 
-pub fn carve_ellipsoid<T: GenerationCache>(
-    context: &mut CarverContext<'_, '_, T>,
-    replaceable_tag: &str,
-    center_x: f64,
-    center_y: f64,
-    center_z: f64,
-    horizontal_radius: f64,
-    vertical_radius: f64,
-) {
-    let start_x = chunk_pos::start_block_x(context.chunk_pos.x);
-    let start_z = chunk_pos::start_block_z(context.chunk_pos.y);
-    let min_y = context.min_y as i32 + 1;
-    let max_y =
-        context.min_y as i32 + context.height as i32 - 1 - if context.upgrading { 0 } else { 7 };
-
-    let min_x = (center_x - horizontal_radius).floor() as i32;
-    let max_x = (center_x + horizontal_radius).ceil() as i32;
-    let min_z = (center_z - horizontal_radius).floor() as i32;
-    let max_z = (center_z + horizontal_radius).ceil() as i32;
-    let min_y_s = (center_y - vertical_radius).floor() as i32;
-    let max_y_s = (center_y + vertical_radius).ceil() as i32;
-
-    for x in min_x..=max_x {
-        let local_x = x - start_x;
-        if !(0..16).contains(&local_x) {
-            continue;
-        }
-        let dx = (x as f64 + 0.5 - center_x) / horizontal_radius;
-        let dx2 = dx * dx;
-        if dx2 >= 1.0 {
-            continue;
-        }
-        for z in min_z..=max_z {
-            let local_z = z - start_z;
-            if !(0..16).contains(&local_z) {
-                continue;
-            }
-            let dz = (z as f64 + 0.5 - center_z) / horizontal_radius;
-            let dz2 = dz * dz;
-            if dx2 + dz2 >= 1.0 {
-                continue;
-            }
-            let mut surface_flag = false;
-            for y in min_y_s..=max_y_s {
-                if y <= min_y || y > max_y {
-                    continue;
-                }
-                let dy = (y as f64 - 0.5 - center_y) / vertical_radius;
-                if dx2 + dy * dy + dz2 >= 1.0 {
-                    continue;
-                }
-                if !context.debug_enabled && context.is_masked(local_x, y, local_z) {
-                    continue;
-                }
-                let is_surface = y >= context.sea_level - 1;
-                context.mark_mask(CarvingStage::Air, local_x, y, local_z);
-                if let Some(stage) = carve_block(
-                    context,
-                    Vector3::new(x, y, z),
-                    replaceable_tag,
-                    is_surface,
-                    &mut surface_flag,
-                ) && stage == CarvingStage::Liquid
-                {
-                    context.mark_mask(stage, local_x, y, local_z);
-                }
-            }
-        }
-    }
+pub(crate) fn can_reach(
+    chunk_pos: Vector2<i32>,
+    x: f64,
+    z: f64,
+    start_step: i32,
+    end_step: i32,
+    thickness: f32,
+) -> bool {
+    let center_x = chunk_pos::start_block_x(chunk_pos.x) as f64 + 8.0;
+    let center_z = chunk_pos::start_block_z(chunk_pos.y) as f64 + 8.0;
+    let dx = x - center_x;
+    let dz = z - center_z;
+    let remaining = (end_step - start_step) as f64;
+    let radius = thickness as f64 + 2.0 + 16.0;
+    dx * dx + dz * dz - remaining * remaining <= radius * radius
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn carve_ellipsoid_skip<T: GenerationCache, F: Fn(f64, f64, f64) -> bool>(
+fn carve_ellipsoid_internal<T: GenerationCache, F: FnMut(f64, f64, f64, i32) -> bool>(
     context: &mut CarverContext<'_, '_, T>,
     replaceable_tag: &str,
     center_x: f64,
@@ -1025,83 +971,7 @@ pub fn carve_ellipsoid_skip<T: GenerationCache, F: Fn(f64, f64, f64) -> bool>(
     center_z: f64,
     horizontal_radius: f64,
     vertical_radius: f64,
-    should_skip: F,
-) {
-    let start_x = chunk_pos::start_block_x(context.chunk_pos.x);
-    let start_z = chunk_pos::start_block_z(context.chunk_pos.y);
-    let min_y = context.min_y as i32 + 1;
-    let max_y =
-        context.min_y as i32 + context.height as i32 - 1 - if context.upgrading { 0 } else { 7 };
-
-    let min_x = (center_x - horizontal_radius).floor() as i32;
-    let max_x = (center_x + horizontal_radius).ceil() as i32;
-    let min_z = (center_z - horizontal_radius).floor() as i32;
-    let max_z = (center_z + horizontal_radius).ceil() as i32;
-    let min_y_s = (center_y - vertical_radius).floor() as i32;
-    let max_y_s = (center_y + vertical_radius).ceil() as i32;
-
-    for x in min_x..=max_x {
-        let local_x = x - start_x;
-        if !(0..16).contains(&local_x) {
-            continue;
-        }
-        let dx = (x as f64 + 0.5 - center_x) / horizontal_radius;
-        let dx2 = dx * dx;
-        if dx2 >= 1.0 {
-            continue;
-        }
-        for z in min_z..=max_z {
-            let local_z = z - start_z;
-            if !(0..16).contains(&local_z) {
-                continue;
-            }
-            let dz = (z as f64 + 0.5 - center_z) / horizontal_radius;
-            let dz2 = dz * dz;
-            if dx2 + dz2 >= 1.0 {
-                continue;
-            }
-            let mut surface_flag = false;
-            for y in min_y_s..=max_y_s {
-                if y <= min_y || y > max_y {
-                    continue;
-                }
-                let dy = (y as f64 - 0.5 - center_y) / vertical_radius;
-                if dx2 + dy * dy + dz2 >= 1.0 {
-                    continue;
-                }
-                if should_skip(dx, dy, dz) {
-                    continue;
-                }
-                if !context.debug_enabled && context.is_masked(local_x, y, local_z) {
-                    continue;
-                }
-                let is_surface = y >= context.sea_level - 1;
-                context.mark_mask(CarvingStage::Air, local_x, y, local_z);
-                if let Some(stage) = carve_block(
-                    context,
-                    Vector3::new(x, y, z),
-                    replaceable_tag,
-                    is_surface,
-                    &mut surface_flag,
-                ) && stage == CarvingStage::Liquid
-                {
-                    context.mark_mask(stage, local_x, y, local_z);
-                }
-            }
-        }
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn carve_ellipsoid_skip_with_y<T: GenerationCache, F: Fn(f64, f64, f64, i32) -> bool>(
-    context: &mut CarverContext<'_, '_, T>,
-    replaceable_tag: &str,
-    center_x: f64,
-    center_y: f64,
-    center_z: f64,
-    horizontal_radius: f64,
-    vertical_radius: f64,
-    should_skip: F,
+    mut should_skip: F,
 ) {
     let start_x = chunk_pos::start_block_x(context.chunk_pos.x);
     let start_z = chunk_pos::start_block_z(context.chunk_pos.y);
@@ -1166,4 +1036,72 @@ pub fn carve_ellipsoid_skip_with_y<T: GenerationCache, F: Fn(f64, f64, f64, i32)
             }
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn carve_ellipsoid<T: GenerationCache>(
+    context: &mut CarverContext<'_, '_, T>,
+    replaceable_tag: &str,
+    center_x: f64,
+    center_y: f64,
+    center_z: f64,
+    horizontal_radius: f64,
+    vertical_radius: f64,
+) {
+    carve_ellipsoid_internal(
+        context,
+        replaceable_tag,
+        center_x,
+        center_y,
+        center_z,
+        horizontal_radius,
+        vertical_radius,
+        |_dx, _dy, _dz, _y| false,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn carve_ellipsoid_skip<T: GenerationCache, F: FnMut(f64, f64, f64) -> bool>(
+    context: &mut CarverContext<'_, '_, T>,
+    replaceable_tag: &str,
+    center_x: f64,
+    center_y: f64,
+    center_z: f64,
+    horizontal_radius: f64,
+    vertical_radius: f64,
+    mut should_skip: F,
+) {
+    carve_ellipsoid_internal(
+        context,
+        replaceable_tag,
+        center_x,
+        center_y,
+        center_z,
+        horizontal_radius,
+        vertical_radius,
+        |dx, dy, dz, _y| should_skip(dx, dy, dz),
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn carve_ellipsoid_skip_with_y<T: GenerationCache, F: FnMut(f64, f64, f64, i32) -> bool>(
+    context: &mut CarverContext<'_, '_, T>,
+    replaceable_tag: &str,
+    center_x: f64,
+    center_y: f64,
+    center_z: f64,
+    horizontal_radius: f64,
+    vertical_radius: f64,
+    should_skip: F,
+) {
+    carve_ellipsoid_internal(
+        context,
+        replaceable_tag,
+        center_x,
+        center_y,
+        center_z,
+        horizontal_radius,
+        vertical_radius,
+        should_skip,
+    );
 }
