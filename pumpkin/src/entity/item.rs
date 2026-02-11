@@ -351,12 +351,14 @@ impl EntityBase for ItemEntity {
         Box::pin(async move {
             // TODO: invulnerability, e.g. ancient debris
             loop {
-                let health = self.health.load(Relaxed);
-                if let Ok(new_health) =
-                    self.health
-                        .compare_exchange(health, health - amount, AcqRel, Relaxed)
+                let current = self.health.load(Relaxed);
+                let new = current - amount;
+                if self
+                    .health
+                    .compare_exchange(current, new, AcqRel, Relaxed)
+                    .is_ok()
                 {
-                    if new_health <= 0.0 {
+                    if new <= 0.0 {
                         self.entity.remove().await;
                     }
                     return true;
