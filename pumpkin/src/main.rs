@@ -74,10 +74,10 @@ async fn main() {
             TextComponent::text("Pumpkin")
                 .color_named(NamedColor::Gold)
                 .to_pretty_console(),
-            TextComponent::text(format!("{CARGO_PKG_VERSION}"))
+            TextComponent::text(CARGO_PKG_VERSION.to_string())
                 .color_named(NamedColor::Green)
                 .to_pretty_console(),
-            TextComponent::text(format!("{CURRENT_MC_PROTOCOL}"))
+            TextComponent::text(CURRENT_MC_PROTOCOL.to_string())
                 .color_named(NamedColor::DarkBlue)
                 .to_pretty_console()
         ))
