@@ -146,6 +146,9 @@ pub enum AttachedNode {
     Argument(ArgumentAttachedNode),
 }
 
+/// Returned when a literal could not be parsed.
+pub struct CouldNotParseLiteral;
+
 impl AttachedNode {
     /// Creates an [`AttachedNode`] from its properties allowing any [`NodeMetadata`].
     #[must_use]
@@ -251,12 +254,12 @@ impl AttachedNode {
 
     /// Gets the redirection of this node.
     #[must_use]
-    pub fn redirect(&self) -> Option<Redirection> {
+    pub const fn redirect(&self) -> Option<Redirection> {
         match self {
             Self::Root(_) => None,
-            Self::Literal(node) => node.redirect.clone(),
-            Self::Command(node) => node.redirect.clone(),
-            Self::Argument(node) => node.redirect.clone(),
+            Self::Literal(node) => node.redirect,
+            Self::Command(node) => node.redirect,
+            Self::Argument(node) => node.redirect,
         }
     }
 
@@ -364,16 +367,20 @@ impl AttachedNode {
         literal: &str,
     ) -> Result<StringRange, CommandSyntaxError> {
         let start = reader.cursor();
-        match Self::parse_literal(reader, literal) {
-            Ok(end) => Ok(StringRange::between(start, end)),
-            Err(()) => {
-                Err(LITERAL_INCORRECT.create(reader, TextComponent::text(literal.to_string())))
-            }
-        }
+        Self::parse_literal(reader, literal)
+        .map_or_else(
+            |_| Err(
+                LITERAL_INCORRECT.create(
+                    reader,
+                    TextComponent::text(literal.to_string())
+                )
+            ),
+            |end| Ok(StringRange::between(start, end))
+        )
     }
 
     /// Internal function to parse a literal. Used by [`Tree`].
-    pub fn parse_literal(reader: &mut StringReader, literal: &str) -> Result<usize, ()> {
+    pub fn parse_literal(reader: &mut StringReader, literal: &str) -> Result<usize, CouldNotParseLiteral> {
         let start = reader.cursor();
         let len = literal.len();
         if reader.can_read_bytes(len) {
@@ -386,7 +393,7 @@ impl AttachedNode {
                 reader.set_cursor(start);
             }
         }
-        Err(())
+        Err(CouldNotParseLiteral)
     }
 
     /// Gets examples accepted by this node.

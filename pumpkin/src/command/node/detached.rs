@@ -30,6 +30,12 @@ impl GlobalNodeId {
     }
 }
 
+impl Default for GlobalNodeId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Represents a literal, non-command node that has not been attached
 /// to a tree yet.
 ///

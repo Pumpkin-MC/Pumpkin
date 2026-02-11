@@ -448,19 +448,16 @@ impl<'a> CommandContextBuilder<'a> {
         );
         if self.range.end < cursor {
             self.child.as_ref().map_or_else(|| {
-                if let Some(child) = &self.child {
-                    child.find_suggestion_context(cursor)
-                } else if let Some(last_node) = self.nodes.last() {
-                    SuggestionContext {
+                self.nodes.last().as_ref().map_or_else(
+                    || SuggestionContext {
+                        parent: self.root,
+                        starting_position: self.range.start,
+                    },
+                    |last_node| SuggestionContext {
                         parent: last_node.node,
                         starting_position: last_node.range.end + 1,
                     }
-                } else {
-                    SuggestionContext {
-                        parent: self.root,
-                        starting_position: self.range.start,
-                    }
-                }
+                )
             }, |child| child.find_suggestion_context(cursor))
         } else {
             let mut previous = self.root;

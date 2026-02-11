@@ -15,7 +15,6 @@ use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use std::num::NonZero;
 use std::ops::{Index, IndexMut};
 use std::sync::Arc;
-use crate::command::node::dispatcher::CommandDispatcher;
 
 /// The constant local ID occupied by the root node.
 pub const ROOT_NODE_ID: NodeId = NodeId(NonZero::new(1).unwrap());
@@ -66,7 +65,7 @@ pub struct Tree {
 
 impl Default for Tree {
     fn default() -> Self {
-        Tree::new()
+        Self::new()
     }
 }
 

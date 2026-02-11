@@ -58,7 +58,7 @@ pub struct CommandDispatcher {
 
 impl Default for CommandDispatcher {
     fn default() -> Self {
-        CommandDispatcher::new()
+        Self::new()
     }
 }
 
