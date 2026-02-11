@@ -9,6 +9,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::damage::DamageType;
+use crate::entity::EntityBase;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -99,28 +101,75 @@ impl FireBlock {
         fire_props.to_state_id(block)
     }
 
-    pub async fn try_spreading_fire(
-        &self,
-        world: &Arc<World>,
-        pos: &BlockPos,
-        spread_factor: i32,
-        current_age: u16,
-    ) {
-        if world.get_fluid(pos).await.name != Fluid::EMPTY.name {
-            return; // Skip if there is a fluid
+    // Used for spreading fire
+    pub async fn get_burn_chance(&self, world: &Arc<World>, pos: &BlockPos) -> i32 {
+        let block_state = world.get_block_state(pos).await;
+        if !block_state.is_air() {
+            return 0;
         }
-        let spread_chance: i32 = world
-            .get_block(pos)
-            .await
+        let mut total_burn_chance = 0;
+
+        for dir in BlockDirection::all() {
+            let neighbor_block = world.get_block(&pos.offset(dir.to_offset())).await;
+            if world.get_fluid(&pos.offset(dir.to_offset())).await.name != Fluid::EMPTY.name {
+                continue; // Skip if there is a fluid
+            }
+            if let Some(flammable) = &neighbor_block.flammable {
+                total_burn_chance = total_burn_chance.max(i32::from(flammable.spread_chance));
+            }
+        }
+
+        total_burn_chance
+    }
+
+    async fn is_near_rain(_world: &World, _pos: &BlockPos) -> bool {
+        // TODO: Implement proper rain checking when weather is implemented
+        // For now, return false to allow fire to work
+        false
+    }
+
+    // Get burn odds for a block, used in check_burn_out
+    fn get_burn_odds(&self, block: &Block) -> i32 {
+        block
             .flammable
             .as_ref()
-            .map_or(0, |f| f.spread_chance)
-            .into();
-        if rand::rng().random_range(0..spread_factor) < spread_chance {
-            let block = world.get_block(pos).await;
-            if rand::rng().random_range(0..current_age + 10) < 5 {
-                let new_age = (current_age + rand::rng().random_range(0..5) / 4).min(15);
-                let state_id = self.get_state_for_position(world, &Block::FIRE, pos).await;
+            .map_or(0, |f| f.burn_chance.into())
+    }
+
+    async fn is_increased_burnout_biome(world: &World, pos: &BlockPos) -> bool {
+        // Fire burnout increases in the Nether
+        if world.dimension == Dimension::THE_NETHER {
+            return true;
+        }
+
+        // Fire burnout increases in specific biomes
+        // TODO: Use proper tag or bool for this when available
+        let biome = world.level.get_rough_biome(pos).await;
+        match biome.registry_id {
+            "bamboo_jungle"
+            | "mushroom_fields"
+            | "mangrove_swamp"
+            | "snowy_slopes"
+            | "frozen_peaks"
+            | "jagged_peaks"
+            | "swamp"
+            | "jungle" => true,
+            _ => false,
+        }
+    }
+
+    async fn check_burn_out(&self, world: &Arc<World>, pos: &BlockPos, chance: i32, age: u16) {
+        let block = world.get_block(pos).await;
+        let odds = self.get_burn_odds(block);
+        if rand::rng().random_range(0..chance) < odds {
+            let old_block = block;
+            if rand::rng().random_range(0..(age + 10) as i32) < 5
+                && !Self::is_near_rain(world.as_ref(), pos).await
+            {
+                let new_age = (age + (rand::rng().random_range(0..5) / 4)).min(15);
+                let state_id = self
+                    .get_state_for_position(world.as_ref(), &Block::FIRE, pos)
+                    .await;
                 let mut fire_props = FireProperties::from_state_id(state_id, &Block::FIRE);
                 fire_props.age = EnumVariants::from_index(new_age);
                 let new_state_id = fire_props.to_state_id(&Block::FIRE);
@@ -137,30 +186,10 @@ impl FireBlock {
                     .await;
             }
 
-            if block == &Block::TNT {
+            if old_block == &Block::TNT {
                 TNTBlock::prime(world, pos).await;
             }
         }
-    }
-
-    pub async fn get_burn_chance(&self, world: &Arc<World>, pos: &BlockPos) -> i32 {
-        let block_state = world.get_block_state(pos).await;
-        if !block_state.is_air() {
-            return 0;
-        }
-        let mut total_burn_chance = 0;
-
-        for dir in BlockDirection::all() {
-            let neighbor_block = world.get_block(&pos.offset(dir.to_offset())).await;
-            if world.get_fluid(&pos.offset(dir.to_offset())).await.name != Fluid::EMPTY.name {
-                continue; // Skip if there is a fluid
-            }
-            if let Some(flammable) = &neighbor_block.flammable {
-                total_burn_chance += i32::from(flammable.burn_chance);
-            }
-        }
-
-        total_burn_chance
     }
 }
 
@@ -196,8 +225,10 @@ impl BlockBehaviour for FireBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let base_entity = args.entity.get_entity();
-            if !base_entity.entity_type.fire_immune {
+            if !base_entity.entity_type.fire_immune && !base_entity.fire_immune.load(Ordering::Relaxed) {
                 let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
+                
+                // Timer logic
                 if ticks < 0 {
                     base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
                 } else if base_entity.entity_type == &EntityType::PLAYER {
@@ -206,8 +237,17 @@ impl BlockBehaviour for FireBlock {
                         .fire_ticks
                         .store(ticks + rnd_ticks, Ordering::Relaxed);
                 }
+
+                // Apply fire ticks
                 if base_entity.fire_ticks.load(Ordering::Relaxed) >= 0 {
                     base_entity.set_on_fire_for(8.0);
+                }
+
+                // Damage entities that aren't living (ex. items)
+                if args.entity.get_living_entity().is_none() {
+                    base_entity
+                        .damage(args.entity, 1.0, DamageType::IN_FIRE)
+                        .await;
                 }
             }
         })
@@ -262,6 +302,18 @@ impl BlockBehaviour for FireBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let (world, block, pos) = (args.world, args.block, args.position);
+
+            // Schedule next tick first
+            world
+                .schedule_block_tick(
+                    block,
+                    *pos,
+                    Self::get_fire_tick_delay() as u8,
+                    TickPriority::Normal,
+                )
+                .await;
+
+            // Check if fire can survive
             if !Self
                 .can_place_at(CanPlaceAtArgs {
                     server: None,
@@ -285,11 +337,36 @@ impl BlockBehaviour for FireBlock {
                     .await;
                 return;
             }
-            let block_state = world.get_block_state(pos).await;
-            //TODO add checks for raining and infiniburn
-            let mut fire_props = FireProperties::from_state_id(block_state.id, &Block::FIRE);
-            let age = fire_props.age.to_index() + 1;
 
+            let block_state = world.get_block_state(pos).await;
+            let block_below = world.get_block(&pos.down()).await;
+
+            // Check for infiniburn blocks (soul sand, soul soil, netherrack in certain dimensions)
+            // TODO: Add proper dimension infiniburn tag checking when available
+            let infiniburn = block_below == &Block::NETHERRACK
+                || block_below == &Block::MAGMA_BLOCK
+                || block_below == &Block::SOUL_SAND
+                || block_below == &Block::SOUL_SOIL;
+
+            let mut fire_props = FireProperties::from_state_id(block_state.id, &Block::FIRE);
+            let age = fire_props.age.to_index();
+
+            // Check if rain should extinguish the fire
+            if !infiniburn && Self::is_near_rain(world.as_ref(), pos).await {
+                let rain_chance = 0.2 + (age as f32) * 0.03;
+                if rand::random::<f32>() < rain_chance {
+                    world
+                        .set_block_state(
+                            pos,
+                            Block::AIR.default_state.id,
+                            BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                    return;
+                }
+            }
+
+            // Increment age
             let random = rand::rng().random_range(0..3) / 2;
             let new_age = (age + random).min(15);
             if new_age != age {
@@ -300,9 +377,27 @@ impl BlockBehaviour for FireBlock {
                     .await;
             }
 
-            if !Self.are_blocks_around_flammable(world.as_ref(), pos).await {
-                let block_below_state = world.get_block_state(&pos.down()).await;
-                if block_below_state.is_side_solid(BlockDirection::Up) {
+            if !infiniburn {
+                // Check if fire should extinguish due to lack of fuel
+                if !self.are_blocks_around_flammable(world.as_ref(), pos).await {
+                    let block_below_state = world.get_block_state(&pos.down()).await;
+                    if !block_below_state.is_side_solid(BlockDirection::Up) || new_age > 3 {
+                        world
+                            .set_block_state(
+                                pos,
+                                Block::AIR.default_state.id,
+                                BlockFlags::NOTIFY_NEIGHBORS,
+                            )
+                            .await;
+                        return;
+                    }
+                }
+
+                // At max age, fire has a chance to extinguish if not on flammable block
+                if new_age == 15
+                    && rand::rng().random_range(0..4) == 0
+                    && !Self::is_flammable(world.get_block_state(&pos.down()).await)
+                {
                     world
                         .set_block_state(
                             pos,
@@ -310,85 +405,109 @@ impl BlockBehaviour for FireBlock {
                             BlockFlags::NOTIFY_NEIGHBORS,
                         )
                         .await;
+                    return;
                 }
-                return;
             }
 
-            if age == 15
-                && rand::rng().random_range(0..4) == 0
-                && !Self::is_flammable(world.get_block_state(&pos.down()).await)
-            {
-                world
-                    .set_block_state(
-                        pos,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
-                return;
+            // Burn adjacent blocks
+            let mut extra = 0;
+            if Self::is_increased_burnout_biome(world, pos).await {
+                extra = -50; // Increases chance of block being destroyed
             }
 
-            Self.try_spreading_fire(
+            self.check_burn_out(
                 world,
                 &pos.offset(BlockDirection::East.to_offset()),
-                300,
-                age,
+                300 + extra,
+                new_age,
             )
             .await;
-            Self.try_spreading_fire(
+            self.check_burn_out(
                 world,
                 &pos.offset(BlockDirection::West.to_offset()),
-                300,
-                age,
+                300 + extra,
+                new_age,
             )
             .await;
-            Self.try_spreading_fire(
-                world,
-                &pos.offset(BlockDirection::North.to_offset()),
-                300,
-                age,
-            )
-            .await;
-            Self.try_spreading_fire(
-                world,
-                &pos.offset(BlockDirection::South.to_offset()),
-                300,
-                age,
-            )
-            .await;
-            Self.try_spreading_fire(world, &pos.offset(BlockDirection::Up.to_offset()), 250, age)
-                .await;
-            Self.try_spreading_fire(
+            self.check_burn_out(
                 world,
                 &pos.offset(BlockDirection::Down.to_offset()),
-                250,
-                age,
+                250 + extra,
+                new_age,
+            )
+            .await;
+            self.check_burn_out(
+                world,
+                &pos.offset(BlockDirection::Up.to_offset()),
+                250 + extra,
+                new_age,
+            )
+            .await;
+            self.check_burn_out(
+                world,
+                &pos.offset(BlockDirection::North.to_offset()),
+                300 + extra,
+                new_age,
+            )
+            .await;
+            self.check_burn_out(
+                world,
+                &pos.offset(BlockDirection::South.to_offset()),
+                300 + extra,
+                new_age,
             )
             .await;
 
-            let difficulty = world.level_info.load().difficulty as i32;
-            for l in -1..=1 {
-                for m in -1..=1 {
-                    for n in -1..=4 {
-                        if l != 0 || n != 0 || m != 0 {
-                            let offset_pos = pos.offset(Vector3::new(l, n, m));
-                            let burn_chance = Self.get_burn_chance(world, &offset_pos).await;
-                            if burn_chance > 0 {
-                                let o = 100 + if n > 1 { (n - 1) * 100 } else { 0 };
-                                let p: i32 =
-                                    burn_chance + 40 + (difficulty) * 7 / i32::from(age + 30);
+            // Respect the `fire_spread_radius_around_player` gamerule.
+            // -1 = disabled (allow unlimited spread), 0 = disabled (no spread), >0 = radius in blocks
+            let spread_radius = world.level_info.load().game_rules.fire_spread_radius_around_player;
 
-                                if p > 0 && rand::rng().random_range(0..o) <= p {
-                                    let new_age =
-                                        (age + rand::rng().random_range(0..5) / 4).min(15);
+            // Try to spread fire to nearby air blocks
+            let difficulty = world.level_info.load().difficulty as i32;
+            for xx in -1..=1 {
+                for zz in -1..=1 {
+                    for yy in -1..=4 {
+                        if xx != 0 || yy != 0 || zz != 0 {
+                            let offset_pos = pos.offset(Vector3::new(xx, yy, zz));
+                            let ignite_odds = self.get_burn_chance(world, &offset_pos).await;
+
+                            if ignite_odds > 0 {
+                                // Skip if spreding is disabled or if there are no players nearby
+                                if spread_radius == 0 {
+                                    continue;
+                                }
+                                if spread_radius != -1 {
+                                    let center = offset_pos.to_centered_f64();
+                                    if world.get_closest_player(center, spread_radius as f64).is_none() {
+                                        continue;
+                                    }
+                                }
+
+                                // Calculate spread rate based on height
+                                let rate = if yy > 1 { 100 + (yy - 1) * 100 } else { 100 };
+
+                                // Calculate odds of spreading
+                                let mut odds =
+                                    (ignite_odds + 40 + difficulty * 7) / (new_age as i32 + 30);
+                                
+                                // Reduce spread odds in certain biomes
+                                if Self::is_increased_burnout_biome(world, &offset_pos).await {
+                                    odds /= 2; // Fire spreads 50% slower
+                                }
+
+                                if odds > 0
+                                    && rand::rng().random_range(0..rate) <= odds
+                                    && !Self::is_near_rain(world.as_ref(), &offset_pos).await
+                                {
+                                    let spread_age =
+                                        (new_age + rand::rng().random_range(0..5) / 4).min(15);
                                     let fire_state_id = self
-                                        .get_state_for_position(world, block, &offset_pos)
+                                        .get_state_for_position(world.as_ref(), block, &offset_pos)
                                         .await;
                                     let mut new_fire_props =
                                         FireProperties::from_state_id(fire_state_id, &Block::FIRE);
-                                    new_fire_props.age = EnumVariants::from_index(new_age);
+                                    new_fire_props.age = EnumVariants::from_index(spread_age);
 
-                                    //TODO drop items for burned blocks
                                     world
                                         .set_block_state(
                                             &offset_pos,
@@ -401,18 +520,6 @@ impl BlockBehaviour for FireBlock {
                         }
                     }
                 }
-            }
-            // Only schedule a new tick if the block at the position is still this fire block.
-            let current_block = world.get_block(pos).await;
-            if current_block.id == block.id {
-                world
-                    .schedule_block_tick(
-                        block,
-                        *pos,
-                        Self::get_fire_tick_delay() as u8,
-                        TickPriority::Normal,
-                    )
-                    .await;
             }
         })
     }
