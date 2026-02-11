@@ -110,11 +110,27 @@ impl Velocity {
             from_long(q_z, scale),
         )))
     }
+
+    pub fn write_legacy<W: std::io::Write>(&self, writer: &mut W) -> Result<(), WritingError> {
+        writer.write_i16_be(encode_legacy_velocity_component(self.0.x))?;
+        writer.write_i16_be(encode_legacy_velocity_component(self.0.y))?;
+        writer.write_i16_be(encode_legacy_velocity_component(self.0.z))?;
+        Ok(())
+    }
 }
 
 const MAX_VELOCITY_CLAMP: f64 = 1.717_986_918_3E10;
+const LEGACY_COMPONENT_CLAMP: f64 = 3.9;
+const LEGACY_COMPONENT_SCALE: f64 = 8000.0;
 const MIN_VELOCITY_MAGNITUDE: f64 = 3.051_944_088_384_301E-5;
 const MAX_15_BIT_VALUE: f64 = 32766.0;
+
+#[must_use]
+pub fn encode_legacy_velocity_component(component: f64) -> i16 {
+    // Legacy clients (<= 1.21.8 / protocol 772) encode velocity as clamped component * 8000.
+    (component.clamp(-LEGACY_COMPONENT_CLAMP, LEGACY_COMPONENT_CLAMP) * LEGACY_COMPONENT_SCALE)
+        as i16
+}
 
 fn clamp_value(value: f64) -> f64 {
     if value.is_nan() {
@@ -169,5 +185,27 @@ impl<'de> de::Deserialize<'de> for Velocity {
         }
 
         deserializer.deserialize_bytes(VelocityVisitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Velocity, encode_legacy_velocity_component};
+    use pumpkin_util::math::vector3::Vector3;
+
+    #[test]
+    fn legacy_component_is_clamped_and_scaled() {
+        assert_eq!(encode_legacy_velocity_component(0.5), 4000);
+        assert_eq!(encode_legacy_velocity_component(-0.5), -4000);
+        assert_eq!(encode_legacy_velocity_component(4.0), 31200);
+        assert_eq!(encode_legacy_velocity_component(-4.0), -31200);
+    }
+
+    #[test]
+    fn write_legacy_writes_three_i16_be_components() {
+        let velocity = Velocity(Vector3::new(0.5, -0.5, 0.0));
+        let mut buf = Vec::new();
+        velocity.write_legacy(&mut buf).unwrap();
+        assert_eq!(buf, vec![0x0F, 0xA0, 0xF0, 0x60, 0x00, 0x00]);
     }
 }
