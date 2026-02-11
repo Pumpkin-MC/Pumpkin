@@ -4,7 +4,7 @@ use core::error;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::{
-    Players, StatusResponse, Version,
+    Players, Sample, StatusResponse, Version,
     codec::var_int::VarInt,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
@@ -14,8 +14,10 @@ use std::{
     path::Path,
 };
 use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
+const MAX_SAMPLE_PLAYERS: usize = 12;
 
 fn load_icon_from_file<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn error::Error>> {
     let buf = fs::read(path)?;
@@ -42,6 +44,7 @@ pub struct CachedStatus {
     // We cache the json response here so we don't parse it every time someone makes a status request.
     // Keep in mind that we must parse this again when the StatusResponse changes, which usually happen when a player joins or leaves.
     status_response_json: String,
+    player_samples: Vec<(Uuid, String)>,
 }
 
 pub struct CachedBranding {
@@ -80,6 +83,7 @@ impl CachedStatus {
         Self {
             status_response,
             status_response_json,
+            player_samples: Vec::new(),
         }
     }
 
@@ -87,41 +91,54 @@ impl CachedStatus {
         CStatusResponse::new(self.status_response_json.clone())
     }
 
-    // TODO: Player samples
-    pub fn add_player(&mut self, _player: &Player) {
-        let status_response = &mut self.status_response;
-        if let Some(players) = &mut status_response.players {
-            // TODO
-            // if player
-            //     .client
-            //     .added_to_server_listing
-            //     .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-            //     .is_ok()
-            // {
-            players.online = players.online.saturating_add(1);
-            // }
-        }
-
-        self.status_response_json = serde_json::to_string(&status_response)
-            .expect("Failed to parse status response into JSON");
+    fn build_sample_list(&self) -> Vec<Sample> {
+        self.player_samples
+            .iter()
+            .take(MAX_SAMPLE_PLAYERS)
+            .map(|(id, name)| Sample {
+                name: name.clone(),
+                id: id.to_string(),
+            })
+            .collect()
     }
 
-    pub fn remove_player(&mut self, _player: &Player) {
-        let status_response = &mut self.status_response;
-        if let Some(players) = &mut status_response.players {
-            // TODO
-            // if player
-            //     .client
-            //     .added_to_server_listing
-            //     .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
-            //     .is_ok()
-            // {
-            players.online = players.online.saturating_sub(1);
-            // }
-        }
+    pub fn add_player(&mut self, player: &Player) {
+        let player_id = player.gameprofile.id;
+        let player_name = player.gameprofile.name.clone();
 
-        self.status_response_json = serde_json::to_string(&status_response)
-            .expect("Failed to parse status response into JSON");
+        // Only add if player is not already in the list
+        if !self.player_samples.iter().any(|(id, _)| *id == player_id) {
+            self.player_samples.push((player_id, player_name));
+            let sample = self.build_sample_list();
+
+            let status_response = &mut self.status_response;
+            if let Some(players) = &mut status_response.players {
+                players.online = players.online.saturating_add(1);
+                players.sample = sample;
+            }
+
+            self.status_response_json = serde_json::to_string(&status_response)
+                .expect("Failed to parse status response into JSON");
+        }
+    }
+
+    pub fn remove_player(&mut self, player: &Player) {
+        let player_id = player.gameprofile.id;
+
+        // Only decrement if player was actually in the list
+        if self.player_samples.iter().any(|(id, _)| *id == player_id) {
+            self.player_samples.retain(|(id, _)| *id != player_id);
+            let sample = self.build_sample_list();
+
+            let status_response = &mut self.status_response;
+            if let Some(players) = &mut status_response.players {
+                players.online = players.online.saturating_sub(1);
+                players.sample = sample;
+            }
+
+            self.status_response_json = serde_json::to_string(&status_response)
+                .expect("Failed to parse status response into JSON");
+        }
     }
 
     pub fn build_response(config: &BasicConfiguration) -> StatusResponse {
