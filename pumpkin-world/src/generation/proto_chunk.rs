@@ -911,7 +911,7 @@ impl ProtoChunk {
                 chunk.recompute_heightmaps_for_column(local_x, local_z);
             }
         }
-        cache.get_center_chunk_mut().stage = StagedChunkEnum::Carvers;
+        cache.get_center_chunk_mut().stage = StagedChunkEnum::Surface;
     }
 
     pub fn populate_biomes(

@@ -158,11 +158,47 @@ pub enum ConfiguredCarver {
     NetherCave(CaveCarver),
 }
 
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum BiomeCarversField {
+    Single(String),
+    List(Vec<String>),
+}
+
+impl Default for BiomeCarversField {
+    fn default() -> Self {
+        Self::List(Vec::new())
+    }
+}
+
+impl BiomeCarversField {
+    fn into_vec(self) -> Vec<String> {
+        match self {
+            Self::Single(value) => vec![value],
+            Self::List(values) => values,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct BiomeGenerationSettings {
+    #[serde(default)]
+    carvers: BiomeCarversField,
+}
+
 pub static CONFIGURED_CARVERS: LazyLock<HashMap<String, ConfiguredCarver>> = LazyLock::new(|| {
     pumpkin_util::include_json_static!(
         "../../../../assets/carver.json",
         HashMap<String, ConfiguredCarver>
     )
+});
+
+static BIOME_CARVERS: LazyLock<HashMap<String, Vec<String>>> = LazyLock::new(|| {
+    let raw: HashMap<String, BiomeGenerationSettings> =
+        pumpkin_util::include_json_static!("../../../../assets/biome.json", HashMap<String, BiomeGenerationSettings>);
+    raw.into_iter()
+        .map(|(name, settings)| (name, settings.carvers.into_vec()))
+        .collect()
 });
 
 static DEFAULT_DEBUG_SETTINGS: LazyLock<CarverDebugSettings> =
@@ -557,7 +593,12 @@ fn carve_dimension<T: GenerationCache>(
                 biome_coords::from_block(chunk_pos::start_block_z(neighbor_z)),
             );
 
-            for (carver_index, carver_id) in biome.carvers.iter().enumerate() {
+            let Some(carver_ids) = BIOME_CARVERS.get(biome.registry_id) else {
+                continue;
+            };
+
+            for (carver_index, carver_id) in carver_ids.iter().enumerate() {
+                let carver_id = carver_id.as_str();
                 let carver_key = carver_id.strip_prefix("minecraft:").unwrap_or(carver_id);
                 let Some(configured) = CONFIGURED_CARVERS.get(carver_key) else {
                     continue;
