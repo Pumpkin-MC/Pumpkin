@@ -3,6 +3,7 @@ use crate::serialization::dynamic_ops::DynamicOps;
 use crate::serialization::lifecycle::Lifecycle;
 
 /// A trait specifying a builder to add key-value pairs in order to create a composite type.
+///
 /// `Value` is the dynamic type for this builder.
 /// For a struct, some methods here can be implemented via the `impl_struct_builder` macro.
 pub trait StructBuilder {
