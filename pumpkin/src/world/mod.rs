@@ -105,6 +105,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::version::MinecraftVersion;
 use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
@@ -377,24 +378,25 @@ impl World {
         }
     }
 
-    /// Broadcasts a packet to all connected players within the world.
-    /// Please avoid this as we want to replace it with `broadcast_editioned`
-    ///
-    /// Sends the specified packet to every player currently logged in to the world.
-    ///
-    /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
-    pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
-        let players = self.players.load();
-        let mut recipients_by_version: BTreeMap<_, Vec<&JavaClient>> = BTreeMap::new();
-        for player in players.iter() {
+    fn collect_java_recipients_by_version<'a>(
+        players: impl Iterator<Item = &'a Arc<Player>>,
+    ) -> BTreeMap<MinecraftVersion, Vec<&'a JavaClient>> {
+        let mut recipients_by_version = BTreeMap::new();
+        for player in players {
             if let ClientPlatform::Java(java_client) = &player.client {
                 recipients_by_version
                     .entry(java_client.version.load())
-                    .or_insert(Vec::new())
+                    .or_default()
                     .push(java_client);
             }
         }
+        recipients_by_version
+    }
 
+    async fn broadcast_java_grouped<P: ClientPacket>(
+        packet: &P,
+        recipients_by_version: BTreeMap<MinecraftVersion, Vec<&JavaClient>>,
+    ) {
         for (version, recipients) in recipients_by_version {
             let packet_data = match JavaClient::serialize_packet_for_version(packet, version) {
                 Ok(packet_data) => packet_data,
@@ -413,6 +415,18 @@ impl World {
                 recipient.enqueue_packet_data(packet_data.clone()).await;
             }
         }
+    }
+
+    /// Broadcasts a packet to all connected players within the world.
+    /// Please avoid this as we want to replace it with `broadcast_editioned`
+    ///
+    /// Sends the specified packet to every player currently logged in to the world.
+    ///
+    /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
+    pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
+        let players = self.players.load();
+        let recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
+        Self::broadcast_java_grouped(packet, recipients_by_version).await;
     }
 
     pub async fn broadcast_message(
@@ -436,39 +450,16 @@ impl World {
         be_packet: &B,
     ) {
         let players = self.players.load();
-        let mut je_recipients_by_version: BTreeMap<_, Vec<&JavaClient>> = BTreeMap::new();
+        let je_recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
         let mut be_recipients = Vec::new();
 
         for player in players.iter() {
-            match &player.client {
-                ClientPlatform::Java(java_client) => {
-                    je_recipients_by_version
-                        .entry(java_client.version.load())
-                        .or_insert(Vec::new())
-                        .push(java_client);
-                }
-                ClientPlatform::Bedrock(be_client) => be_recipients.push(be_client.clone()),
+            if let ClientPlatform::Bedrock(be_client) = &player.client {
+                be_recipients.push(be_client.clone());
             }
         }
 
-        for (version, recipients) in je_recipients_by_version {
-            let packet_data = match JavaClient::serialize_packet_for_version(je_packet, version) {
-                Ok(packet_data) => packet_data,
-                Err(err) => {
-                    log::error!(
-                        "Failed to serialize packet {} for version {:?}: {}",
-                        std::any::type_name::<J>(),
-                        version,
-                        err
-                    );
-                    continue;
-                }
-            };
-
-            for recipient in recipients {
-                recipient.enqueue_packet_data(packet_data.clone()).await;
-            }
-        }
+        Self::broadcast_java_grouped(je_packet, je_recipients_by_version).await;
 
         for recipient in be_recipients {
             recipient.send_game_packet(be_packet).await;
@@ -537,37 +528,12 @@ impl World {
         packet: &P,
     ) {
         let players = self.players.load();
-        let mut recipients_by_version: BTreeMap<_, Vec<&JavaClient>> = BTreeMap::new();
-        for player in players
-            .iter()
-            .filter(|candidate| !except.contains(&candidate.gameprofile.id))
-        {
-            if let ClientPlatform::Java(java_client) = &player.client {
-                recipients_by_version
-                    .entry(java_client.version.load())
-                    .or_insert(Vec::new())
-                    .push(java_client);
-            }
-        }
-
-        for (version, recipients) in recipients_by_version {
-            let packet_data = match JavaClient::serialize_packet_for_version(packet, version) {
-                Ok(packet_data) => packet_data,
-                Err(err) => {
-                    log::error!(
-                        "Failed to serialize packet {} for version {:?}: {}",
-                        std::any::type_name::<P>(),
-                        version,
-                        err
-                    );
-                    continue;
-                }
-            };
-
-            for recipient in recipients {
-                recipient.enqueue_packet_data(packet_data.clone()).await;
-            }
-        }
+        let recipients_by_version = Self::collect_java_recipients_by_version(
+            players
+                .iter()
+                .filter(|candidate| !except.contains(&candidate.gameprofile.id)),
+        );
+        Self::broadcast_java_grouped(packet, recipients_by_version).await;
     }
 
     pub async fn spawn_particle(
@@ -737,7 +703,7 @@ impl World {
             let chunk_section = chunk_section_from_pos(&position);
             block_state_updates_by_chunk_section
                 .entry(chunk_section)
-                .or_insert(Vec::new())
+                .or_default()
                 .push((position, block_state_id));
         }
 

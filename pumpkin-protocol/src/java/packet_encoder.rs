@@ -1,8 +1,6 @@
 use aes::cipher::KeyIvInit;
 use bytes::Bytes;
 use flate2::{Compress, Compression, FlushCompress, Status};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
 use thiserror::Error;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
@@ -12,12 +10,6 @@ use crate::{
 };
 
 // raw -> compress -> encrypt
-
-const JAVA_ENCODER_METRICS_LOG_EVERY: u64 = 4096;
-static JAVA_ENCODER_PACKET_COUNT: AtomicU64 = AtomicU64::new(0);
-static JAVA_ENCODER_COMPRESSED_PACKET_COUNT: AtomicU64 = AtomicU64::new(0);
-static JAVA_ENCODER_PAYLOAD_BYTES: AtomicU64 = AtomicU64::new(0);
-static JAVA_ENCODER_WIRE_PAYLOAD_BYTES: AtomicU64 = AtomicU64::new(0);
 
 pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
     Encrypt(Box<StreamEncryptor<W>>),
@@ -206,13 +198,10 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     /// NOTE: This method does not flush. Call [`Self::flush`] to flush buffered data.
     #[expect(clippy::too_many_lines)]
     pub async fn write_packet(&mut self, packet_data: Bytes) -> Result<(), PacketEncodeError> {
-        let encode_start = Instant::now();
         // We need to know the length of the compressed buffer and serde is not async :(
         // We need to write to a buffer here 😔
 
         let data_len = packet_data.len();
-        let mut wire_payload_len = data_len;
-        let mut packet_was_compressed = false;
         if data_len > MAX_PACKET_DATA_SIZE {
             return Err(PacketEncodeError::TooLong(data_len));
         }
@@ -225,7 +214,6 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
 
         if let Some((compression_threshold, compression_level)) = self.compression {
             if data_len >= compression_threshold {
-                let compress_start = Instant::now();
                 // Pushed before data:
                 // Length of (Data Length) + length of compressed (Packet ID + Data)
                 // Length of uncompressed (Packet ID + Data)
@@ -234,8 +222,6 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 // buf here :( Is there a magic way to find a compressed length?
                 self.compress_packet_data(packet_data.as_ref(), compression_level)?;
                 debug_assert!(!self.compression_scratch.is_empty());
-                packet_was_compressed = true;
-                wire_payload_len = self.compression_scratch.len();
 
                 let full_packet_len_var_int: VarInt = (data_len_var_int.written_size()
                     + self.compression_scratch.len())
@@ -264,14 +250,6 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                     .write_all(&self.compression_scratch)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-
-                let compress_elapsed = compress_start.elapsed();
-                if compress_elapsed.as_micros() >= 1_000 {
-                    let compressed_len = self.compression_scratch.len();
-                    log::trace!(
-                        "java encoder compression took {compress_elapsed:?} (input={data_len}B output={compressed_len}B)"
-                    );
-                }
             } else {
                 // Pushed before data:
                 // Length of (Data Length) + length of compressed (Packet ID + Data)
@@ -325,29 +303,6 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 .write_all(&packet_data)
                 .await
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-        }
-
-        let encoded_packet_count = JAVA_ENCODER_PACKET_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
-        JAVA_ENCODER_PAYLOAD_BYTES.fetch_add(data_len as u64, Ordering::Relaxed);
-        JAVA_ENCODER_WIRE_PAYLOAD_BYTES.fetch_add(wire_payload_len as u64, Ordering::Relaxed);
-        if packet_was_compressed {
-            JAVA_ENCODER_COMPRESSED_PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
-        }
-
-        if encoded_packet_count.is_multiple_of(JAVA_ENCODER_METRICS_LOG_EVERY) {
-            let compressed = JAVA_ENCODER_COMPRESSED_PACKET_COUNT.load(Ordering::Relaxed);
-            let payload_bytes = JAVA_ENCODER_PAYLOAD_BYTES.load(Ordering::Relaxed);
-            let wire_bytes = JAVA_ENCODER_WIRE_PAYLOAD_BYTES.load(Ordering::Relaxed);
-            log::trace!(
-                "java encoder stats packets={encoded_packet_count} compressed={compressed} payload={payload_bytes}B wire_payload={wire_bytes}B"
-            );
-        }
-
-        let encode_elapsed = encode_start.elapsed();
-        if encode_elapsed.as_micros() >= 1_000 {
-            log::trace!(
-                "java encoder write_packet took {encode_elapsed:?} (payload={data_len}B, compressed={packet_was_compressed})"
-            );
         }
 
         Ok(())

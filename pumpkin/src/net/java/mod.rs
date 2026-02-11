@@ -1,12 +1,5 @@
 use std::net::SocketAddr;
-use std::{
-    io::Write,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::Instant,
-};
+use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
@@ -69,14 +62,6 @@ pub mod status;
 use crate::entity::player::Player;
 use crate::net::{GameProfile, PlayerConfig};
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
-
-const JAVA_OUTGOING_METRICS_LOG_EVERY: u64 = 2048;
-static JAVA_OUTGOING_PRIORITY_ENQUEUE_COUNT: AtomicU64 = AtomicU64::new(0);
-static JAVA_OUTGOING_BATCH_COUNT: AtomicU64 = AtomicU64::new(0);
-static JAVA_OUTGOING_PACKET_COUNT: AtomicU64 = AtomicU64::new(0);
-static JAVA_OUTGOING_FULL_BATCH_COUNT: AtomicU64 = AtomicU64::new(0);
-static JAVA_OUTGOING_FLUSH_COUNT: AtomicU64 = AtomicU64::new(0);
-static JAVA_OUTGOING_FAILURE_COUNT: AtomicU64 = AtomicU64::new(0);
 
 pub struct JavaClient {
     pub id: u64,
@@ -214,7 +199,7 @@ impl JavaClient {
                 }
                 Err(error) => {
                     let text = format!("Error while reading incoming packet {error}");
-                    log::error!(
+                    log::debug!(
                         "Failed to read incoming packet with id {}: {}",
                         packet.id,
                         error
@@ -374,8 +359,6 @@ impl JavaClient {
             }
             return;
         }
-
-        JAVA_OUTGOING_PRIORITY_ENQUEUE_COUNT.fetch_add(1, Ordering::Relaxed);
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
             // The outgoing packet task dropped before confirming the write.
@@ -538,13 +521,6 @@ impl JavaClient {
                     }
                 }
 
-                let batch_count = JAVA_OUTGOING_BATCH_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
-                JAVA_OUTGOING_PACKET_COUNT.fetch_add(packet_batch.len() as u64, Ordering::Relaxed);
-                if packet_batch.len() == MAX_BATCH_SIZE {
-                    JAVA_OUTGOING_FULL_BATCH_COUNT.fetch_add(1, Ordering::Relaxed);
-                }
-
-                let batch_start = Instant::now();
                 let mut writer = writer.lock().await;
                 let mut send_failed = false;
                 for packet in &packet_batch {
@@ -567,31 +543,9 @@ impl JavaClient {
                 drop(writer);
 
                 if send_failed {
-                    JAVA_OUTGOING_FAILURE_COUNT.fetch_add(1, Ordering::Relaxed);
                     // We now need to close the connection to the client since the stream is in an unknown state.
                     close_token.cancel();
                     break;
-                }
-                JAVA_OUTGOING_FLUSH_COUNT.fetch_add(1, Ordering::Relaxed);
-
-                let batch_elapsed = batch_start.elapsed();
-                if batch_elapsed.as_micros() >= 1_000 {
-                    let packet_count = packet_batch.len();
-                    log::trace!(
-                        "java outgoing batch for client {id} took {batch_elapsed:?} (packets={packet_count})"
-                    );
-                }
-
-                if batch_count.is_multiple_of(JAVA_OUTGOING_METRICS_LOG_EVERY) {
-                    let flushed_batches = JAVA_OUTGOING_FLUSH_COUNT.load(Ordering::Relaxed);
-                    let sent_packets = JAVA_OUTGOING_PACKET_COUNT.load(Ordering::Relaxed);
-                    let full_batches = JAVA_OUTGOING_FULL_BATCH_COUNT.load(Ordering::Relaxed);
-                    let priority_packets =
-                        JAVA_OUTGOING_PRIORITY_ENQUEUE_COUNT.load(Ordering::Relaxed);
-                    let failures = JAVA_OUTGOING_FAILURE_COUNT.load(Ordering::Relaxed);
-                    log::trace!(
-                        "java outgoing stats batches={batch_count} flushed={flushed_batches} packets={sent_packets} full_batches={full_batches} priority={priority_packets} failures={failures}"
-                    );
                 }
 
                 for packet in packet_batch {
