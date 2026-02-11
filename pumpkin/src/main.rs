@@ -95,28 +95,7 @@ async fn main() {
             "Release"
         }
     );
-
-    log::warn!(
-        "{}",
-        TextComponent::text("Pumpkin is currently under heavy development!")
-            .color_named(NamedColor::DarkRed)
-            .to_pretty_console(),
-    );
-    log::info!(
-        "Report issues on {}",
-        TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues")
-            .color_named(NamedColor::DarkAqua)
-            .to_pretty_console()
-    );
-    log::info!(
-        "Join our {} for community support: {}",
-        TextComponent::text("Discord")
-            .color_named(NamedColor::DarkBlue)
-            .to_pretty_console(),
-        TextComponent::text("https://discord.gg/pumpkinmc")
-            .color_named(NamedColor::Aqua)
-            .to_pretty_console()
-    );
+    print_support_links_and_warning();
 
     tokio::spawn(async {
         setup_sighandler()
@@ -177,7 +156,29 @@ async fn main() {
             .to_pretty_console()
     );
 }
-
+fn print_support_links_and_warning() {
+    log::warn!(
+        "{}",
+        TextComponent::text("Pumpkin is currently under heavy development!")
+            .color_named(NamedColor::DarkRed)
+            .to_pretty_console(),
+    );
+    log::info!(
+        "Report issues on {}",
+        TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues")
+            .color_named(NamedColor::DarkAqua)
+            .to_pretty_console()
+    );
+    log::info!(
+        "Join our {} for community support: {}",
+        TextComponent::text("Discord")
+            .color_named(NamedColor::DarkBlue)
+            .to_pretty_console(),
+        TextComponent::text("https://discord.gg/pumpkinmc")
+            .color_named(NamedColor::Aqua)
+            .to_pretty_console()
+    );
+}
 fn handle_interrupt() {
     log::warn!(
         "{}",
