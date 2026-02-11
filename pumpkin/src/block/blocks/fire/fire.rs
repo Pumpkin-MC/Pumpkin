@@ -262,14 +262,6 @@ impl BlockBehaviour for FireBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let (world, block, pos) = (args.world, args.block, args.position);
-            world
-                .schedule_block_tick(
-                    block,
-                    *pos,
-                    Self::get_fire_tick_delay() as u8,
-                    TickPriority::Normal,
-                )
-                .await;
             if !Self
                 .can_place_at(CanPlaceAtArgs {
                     server: None,
@@ -409,6 +401,18 @@ impl BlockBehaviour for FireBlock {
                         }
                     }
                 }
+            }
+            // Only schedule a new tick if the block at the position is still this fire block.
+            let current_block = world.get_block(pos).await;
+            if current_block.id == block.id {
+                world
+                    .schedule_block_tick(
+                        block,
+                        *pos,
+                        Self::get_fire_tick_delay() as u8,
+                        TickPriority::Normal,
+                    )
+                    .await;
             }
         })
     }
