@@ -877,7 +877,7 @@ impl Entity {
 
     async fn tick_block_collisions(&self, caller: &Arc<dyn EntityBase>, server: &Server) -> bool {
         let bounding_box = self.bounding_box.load();
-        let aabb = bounding_box.expand(-0.00001, -0.00001, -0.00001);
+        let aabb = bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7);
 
         let min = aabb.min_block_pos();
         let max = aabb.max_block_pos();
