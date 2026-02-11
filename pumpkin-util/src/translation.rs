@@ -22,6 +22,7 @@ static PUMPKIN_JA_JP_JSON: &str = include_str!("../../assets/translations/ja_jp.
 static PUMPKIN_ZH_CN_JSON: &str = include_str!("../../assets/translations/zh_cn.json");
 static PUMPKIN_TR_TR_JSON: &str = include_str!("../../assets/translations/tr_tr.json");
 static PUMPKIN_VI_VN_JSON: &str = include_str!("../../assets/translations/vi_vn.json");
+static PUMPKIN_PT_BR_JSON: &str = include_str!("../../assets/translations/pt_br.json");
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct SubstitutionRange {
@@ -212,6 +213,8 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
             serde_json::from_str(PUMPKIN_TR_TR_JSON).expect("Could not parse tr_tr.json.");
         let pumpkin_vi_vn: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_VI_VN_JSON).expect("Could not parse vi_vn.json.");
+        let pumpkin_pt_br: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_PT_BR_JSON).expect("Could not parse pt_br.json.");
 
         for (key, value) in vanilla_en_us {
             array[Locale::EnUs as usize].insert(format!("minecraft:{key}"), value);
@@ -235,6 +238,9 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
             array[Locale::TrTr as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_vi_vn {
+            array[Locale::ViVn as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_pt_br {
             array[Locale::ViVn as usize].insert(format!("pumpkin:{key}"), value);
         }
         Mutex::new(array)
