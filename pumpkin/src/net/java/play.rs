@@ -30,7 +30,7 @@ use pumpkin_data::block_properties::{
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, translation};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
@@ -136,30 +136,47 @@ impl PumpkinError for ChatError {
         match self {
             Self::OversizedMessage => Some("Chat message too long".into()),
             Self::IllegalCharacters => Some(
-                TextComponent::translate("multiplayer.disconnect.illegal_characters", [])
-                    .get_text(),
+                TextComponent::translate(
+                    translation::MULTIPLAYER_DISCONNECT_ILLEGAL_CHARACTERS,
+                    [],
+                )
+                .get_text(),
             ),
             Self::UnsignedChat => Some(
-                TextComponent::translate("multiplayer.disconnect.unsigned_chat", []).get_text(),
+                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_UNSIGNED_CHAT, [])
+                    .get_text(),
             ),
             Self::TooManyPendingChats => Some(
-                TextComponent::translate("multiplayer.disconnect.too_many_pending_chats", [])
-                    .get_text(),
+                TextComponent::translate(
+                    translation::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                    [],
+                )
+                .get_text(),
             ),
             Self::ChatValidationFailed => Some(
-                TextComponent::translate("multiplayer.disconnect.chat_validation_failed", [])
-                    .get_text(),
+                TextComponent::translate(
+                    translation::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
+                    [],
+                )
+                .get_text(),
             ),
             Self::OutOfOrderChat => Some(
-                TextComponent::translate("multiplayer.disconnect.out_of_order_chat", []).get_text(),
+                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_OUT_OF_ORDER_CHAT, [])
+                    .get_text(),
             ),
             Self::ExpiredPublicKey => Some(
-                TextComponent::translate("multiplayer.disconnect.expired_public_key", [])
-                    .get_text(),
+                TextComponent::translate(
+                    translation::MULTIPLAYER_DISCONNECT_EXPIRED_PUBLIC_KEY,
+                    [],
+                )
+                .get_text(),
             ),
             Self::InvalidPublicKey => Some(
-                TextComponent::translate("multiplayer.disconnect.invalid_public_key_signature", [])
-                    .get_text(),
+                TextComponent::translate(
+                    translation::MULTIPLAYER_DISCONNECT_INVALID_PUBLIC_KEY_SIGNATURE,
+                    [],
+                )
+                .get_text(),
             ),
         }
     }
@@ -206,7 +223,7 @@ impl JavaClient {
             );
             player
                 .send_system_message(&TextComponent::translate(
-                    "commands.gamemode.success.self",
+                    translation::COMMANDS_GAMEMODE_SUCCESS_SELF,
                     [TextComponent::translate(gamemode_string, [])],
                 ))
                 .await;
@@ -274,7 +291,7 @@ impl JavaClient {
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
             self.kick(TextComponent::translate(
-                "multiplayer.disconnect.invalid_player_movement",
+                translation::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
             ))
             .await;
@@ -388,7 +405,7 @@ impl JavaClient {
             || !packet.pitch.is_finite()
         {
             self.kick(TextComponent::translate(
-                "multiplayer.disconnect.invalid_player_movement",
+                translation::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
             ))
             .await;
@@ -519,7 +536,7 @@ impl JavaClient {
         }
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
             self.kick(TextComponent::translate(
-                "multiplayer.disconnect.invalid_player_movement",
+                translation::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
             ))
             .await;
@@ -1220,7 +1237,7 @@ impl JavaClient {
                 if entity_id.0 == player.entity_id() {
                     // This can't be triggered from a non-modded client.
                     self.kick(TextComponent::translate(
-                        "multiplayer.disconnect.invalid_entity_attacked",
+                        translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                         [],
                     ))
                     .await;
@@ -1254,7 +1271,7 @@ impl JavaClient {
                         entity_id.0
                     );
                     self.kick(TextComponent::translate(
-                        "multiplayer.disconnect.invalid_entity_attacked",
+                        translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                         [],
                     ))
                     .await;
@@ -1835,7 +1852,9 @@ impl JavaClient {
         }
         let is_negative = packet.slot < 0;
         let valid_slot = packet.slot >= 1 && packet.slot as usize <= 45;
-        let item_stack = packet.clicked_item.to_stack();
+        let item_stack = packet
+            .clicked_item
+            .to_stack_for_version(&self.version.load());
         let is_legal =
             item_stack.is_empty() || item_stack.item_count <= item_stack.get_max_stack_size();
 
@@ -1981,7 +2000,7 @@ impl JavaClient {
             player
                 .send_system_message_raw(
                     &TextComponent::translate(
-                        "build.tooHigh",
+                        translation::BUILD_TOOHIGH,
                         vec![TextComponent::text((world.get_top_y()).to_string())],
                     )
                     .color_named(NamedColor::Red),

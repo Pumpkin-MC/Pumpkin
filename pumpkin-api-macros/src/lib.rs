@@ -7,9 +7,13 @@ use std::sync::LazyLock;
 use std::sync::Mutex;
 use syn::{ImplItem, ItemFn, ItemImpl, ItemStruct, parse_macro_input, parse_quote};
 
+/// Stores all functions annotated with `#[plugin_method]` for later use in the impl.
 static PLUGIN_METHODS: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// Marks a function as a plugin method, wrapping it to return a `PluginFuture`.
+///
+/// The function body will be executed asynchronously using the global runtime.
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -44,6 +48,10 @@ pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::new()
 }
 
+/// Wraps a struct as a plugin implementation.
+///
+/// This generates the `Plugin` impl for the struct, including all `#[plugin_method]` annotated functions,
+/// and provides a `plugin()` function to return it as a boxed trait object.
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -98,6 +106,7 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+/// Wraps all functions in an `impl` block to execute with a runtime.
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn with_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {

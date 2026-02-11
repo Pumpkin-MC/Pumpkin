@@ -489,9 +489,8 @@ pub trait FlowingFluid: Send + Sync {
 
     /// Spreads fluid horizontally to adjacent positions using pathfinding.
     ///
-    /// Uses `get_spread` to find optimal flow directions (shortest distance to holes).
-    /// Decreases fluid level by dropoff amount when flowing to sides.
-    /// Falling fluids maintain higher levels when spreading horizontally.
+    /// Uses `get_spread` to find optimal flow directions (shortest distance to holes)
+    /// and the computed fluid state for each target position.
     fn flow_to_sides<'a>(
         &'a self,
         world: &'a Arc<World>,
@@ -504,7 +503,7 @@ pub trait FlowingFluid: Send + Sync {
             let drop_off = self.get_level_decrease_per_block(world);
             let current_level = i32::from(props.level.to_index()) + 1;
             let effective_level = if props.falling == Falling::True {
-                (8 - drop_off).min(8)
+                7
             } else {
                 current_level - drop_off
             };
@@ -514,33 +513,11 @@ pub trait FlowingFluid: Send + Sync {
             }
 
             let (spread_dirs, count) = pathfinder::get_spread(self, world, fluid, block_pos).await;
-            let mut min_dist = i32::MAX;
-            for (_, dist) in spread_dirs.iter().take(count) {
-                min_dist = min_dist.min(*dist);
-            }
 
-            for (direction, slope_dist) in spread_dirs.iter().take(count).copied() {
-                if slope_dist != min_dist {
-                    continue;
-                }
+            for &(direction, state_id) in spread_dirs.iter().take(count) {
                 let side_pos = block_pos.offset(direction.to_offset());
 
-                // Re-verify the target position is still replaceable right before spreading
-                let side_state = world.get_block_state(&side_pos).await;
-                let side_block = Block::from_state_id(side_state.id);
-
-                if !physics::can_be_replaced(side_state, side_block, fluid) {
-                    continue;
-                }
-
-                // Calculate the new fluid state
-                let level_index = (effective_level as u16).saturating_sub(1);
-                let new_props = self.get_flowing(fluid, Level::from_index(level_index), false);
-                let final_state_id = new_props.to_state_id(fluid);
-
-                // Call spread_to with the calculated fluid state ID
-                self.spread_to(world, fluid, &side_pos, final_state_id)
-                    .await;
+                self.spread_to(world, fluid, &side_pos, state_id).await;
             }
         }
     }

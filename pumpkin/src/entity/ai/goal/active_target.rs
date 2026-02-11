@@ -12,7 +12,6 @@ use std::sync::Arc;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
 
-#[expect(dead_code)]
 pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
@@ -35,7 +34,7 @@ impl ActiveTargetGoal {
         Fut: Future<Output = bool> + Send + 'static,
     {
         let track_target_goal = TrackTargetGoal::new(check_visibility, check_can_navigate);
-        let mut target_predicate = TargetPredicate::attackable();
+        let mut target_predicate = TargetPredicate::create_attackable();
         target_predicate.base_max_distance = TrackTargetGoal::get_follow_range(mob);
         if let Some(predicate) = predicate {
             target_predicate.set_predicate(predicate);
@@ -56,7 +55,7 @@ impl ActiveTargetGoal {
         check_visibility: bool,
     ) -> Box<Self> {
         let track_target_goal = TrackTargetGoal::with_default(check_visibility);
-        let mut target_predicate = TargetPredicate::attackable();
+        let mut target_predicate = TargetPredicate::create_attackable();
         target_predicate.base_max_distance = TrackTargetGoal::get_follow_range(mob);
         Box::new(Self {
             track_target_goal,
@@ -70,19 +69,38 @@ impl ActiveTargetGoal {
     fn find_closest_target(&mut self, mob: &MobEntity) {
         let world = mob.living_entity.entity.world.load();
         if self.target_type == &EntityType::PLAYER {
-            self.target = world
+            let potential_player = world
                 .get_closest_player(
                     mob.living_entity.entity.pos.load(),
-                    TrackTargetGoal::get_follow_range(mob).into(),
+                    TrackTargetGoal::get_follow_range(mob),
                 )
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+            if let Some(potential_entity) = potential_player
+                && let Some(living) = potential_entity.get_living_entity()
+                && self
+                    .target_predicate
+                    .test(&world, Some(&mob.living_entity), living)
+            {
+                self.target = Some(potential_entity);
+                return;
+            }
         } else {
-            self.target = world.get_closest_entity(
+            let potential_entity = world.get_closest_entity(
                 mob.living_entity.entity.pos.load(),
-                TrackTargetGoal::get_follow_range(mob).into(),
+                TrackTargetGoal::get_follow_range(mob),
                 Some(&[self.target_type]),
             );
+            if let Some(potential_entity) = potential_entity
+                && let Some(living) = potential_entity.get_living_entity()
+                && self
+                    .target_predicate
+                    .test(&world, Some(&mob.living_entity), living)
+            {
+                self.target = Some(potential_entity);
+                return;
+            }
         }
+        self.target = None;
     }
 }
 

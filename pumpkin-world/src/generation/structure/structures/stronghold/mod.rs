@@ -53,7 +53,7 @@ pub mod spiral_staircase;
 pub mod square_room;
 pub mod stairs;
 
-/// Great reference: https://minecraft.wiki/w/Stronghold
+/// Great reference: <https://minecraft.wiki/w/Stronghold>
 #[derive(Deserialize)]
 pub struct StrongholdGenerator;
 
@@ -223,7 +223,7 @@ impl PieceWeight {
         }
     }
 
-    fn can_generate_chained(&self, chain_length: u32) -> bool {
+    const fn can_generate_chained(&self, chain_length: u32) -> bool {
         match self.piece_type {
             StrongholdPieceType::Library => self.can_generate() && chain_length > 4,
             StrongholdPieceType::PortalRoom => self.can_generate() && chain_length > 5,
@@ -231,7 +231,7 @@ impl PieceWeight {
         }
     }
 
-    fn can_generate(&self) -> bool {
+    const fn can_generate(&self) -> bool {
         self.limit == 0 || self.generated_count < self.limit
     }
 }

@@ -1,7 +1,10 @@
 use crate::VarInt;
 use crate::codec::data_component::{deserialize, serialize};
+use crate::ser::{WritingError, serializer};
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
+use pumpkin_util::version::MinecraftVersion;
 use pumpkin_world::item::ItemStack;
 use serde::ser::SerializeStruct;
 use serde::{
@@ -11,6 +14,53 @@ use serde::{
 use std::borrow::Cow;
 
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
+
+fn item_component_counts(stack: &ItemStack) -> (u8, u8) {
+    let mut to_add = 0u8;
+    let mut to_remove = 0u8;
+
+    for (_id, data) in &stack.patch {
+        if data.is_none() {
+            to_remove += 1;
+        } else {
+            to_add += 1;
+        }
+    }
+
+    (to_add, to_remove)
+}
+
+fn serialize_item_stack_with_id<S: Serializer>(
+    stack: &ItemStack,
+    item_id: u16,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    if stack.is_empty() {
+        VarInt(0).serialize(serializer)
+    } else {
+        let (to_add, to_remove) = item_component_counts(stack);
+        let mut seq = serializer.serialize_struct("", 0)?;
+        seq.serialize_field::<VarInt>("", &VarInt::from(stack.item_count))?;
+        seq.serialize_field::<VarInt>("", &VarInt::from(item_id))?;
+        seq.serialize_field::<VarInt>("", &VarInt::from(to_add))?;
+        seq.serialize_field::<VarInt>("", &VarInt::from(to_remove))?;
+
+        for (id, data) in &stack.patch {
+            if let Some(data) = data {
+                seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
+                serialize(*id, data.as_ref(), &mut seq)?;
+            }
+        }
+
+        for (id, data) in &stack.patch {
+            if data.is_none() {
+                seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
+            }
+        }
+
+        seq.end()
+    }
+}
 
 impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
     fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -93,47 +143,36 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
 
 impl Serialize for ItemStackSerializer<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if self.0.is_empty() {
-            VarInt(0).serialize(serializer)
-        } else {
-            let calc = || {
-                let mut to_add = 0u8;
-                let mut to_remove = 0u8;
-                for (_id, data) in &self.0.patch {
-                    if data.is_none() {
-                        to_remove += 1;
-                    } else {
-                        to_add += 1;
-                    }
-                }
-                (to_add, to_remove)
-            };
-            let (to_add, to_remove) = calc();
-            let mut seq = serializer.serialize_struct("", 0)?;
-            seq.serialize_field::<VarInt>("", &VarInt::from(self.0.item_count))?;
-            seq.serialize_field::<VarInt>("", &VarInt::from(self.0.item.id))?;
-            seq.serialize_field::<VarInt>("", &VarInt::from(to_add))?;
-            seq.serialize_field::<VarInt>("", &VarInt::from(to_remove))?;
-            for (id, data) in &self.0.patch {
-                if let Some(data) = data {
-                    seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
-                    serialize(*id, data.as_ref(), &mut seq)?;
-                }
-            }
-            for (id, data) in &self.0.patch {
-                if data.is_none() {
-                    seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
-                }
-            }
-            seq.end()
-        }
+        serialize_item_stack_with_id(self.0.as_ref(), self.0.item.id, serializer)
     }
 }
 
 impl ItemStackSerializer<'_> {
+    pub fn write_with_version(
+        &self,
+        write: impl std::io::Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
+        let mut network_serializer = serializer::Serializer::new(write);
+        serialize_item_stack_with_id(self.0.as_ref(), remapped_item_id, &mut network_serializer)
+    }
+
     #[must_use]
     pub fn to_stack(self) -> ItemStack {
         self.0.into_owned()
+    }
+
+    #[must_use]
+    pub fn to_stack_for_version(self, version: &MinecraftVersion) -> ItemStack {
+        let mut stack = self.0.into_owned();
+        if stack.is_empty() {
+            return stack;
+        }
+
+        let remapped_item_id = remap_item_id_from_version(stack.item.id, *version);
+        stack.item = Item::from_id(remapped_item_id).unwrap_or(&Item::AIR);
+        stack
     }
 }
 

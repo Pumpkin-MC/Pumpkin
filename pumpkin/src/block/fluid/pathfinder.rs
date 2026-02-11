@@ -5,6 +5,7 @@ use pumpkin_data::{
     fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
 };
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use std::sync::Arc;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 use super::physics;
@@ -29,18 +30,15 @@ async fn is_hole(world: &Arc<World>, fluid: &Fluid, pos: &BlockPos) -> bool {
 ///
 /// - Holes (downward flow opportunities) get distance 0 priority
 /// - All directions with equal minimum distance are returned
-/// - Returns up to 4 directions in a fixed array with count
-///
-/// # Returns
-/// Tuple of (directions array, valid direction count)
+/// - Returns up to 4 directions with their computed fluid states
 pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
     fluid_impl: &T,
     world: &Arc<World>,
     fluid: &Fluid,
     block_pos: &BlockPos,
-) -> ([(BlockDirection, i32); 4], usize) {
+) -> ([(BlockDirection, BlockStateId); 4], usize) {
     let mut min_dist = 1000;
-    let mut result = [(BlockDirection::North, 1000); 4];
+    let mut result = [(BlockDirection::North, BlockStateId::default()); 4];
     let mut result_count = 0;
 
     for direction in [
@@ -63,17 +61,17 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
             continue;
         }
 
-        // Calculate what the new fluid state would be
         let new_fluid_state = fluid_impl.get_new_liquid(world, fluid, &side_pos).await;
 
-        // Skip if we can't actually place fluid here
+        // Skip if no valid fluid state for this position
         if new_fluid_state.is_none() {
             continue;
         }
 
         let new_fluid_props = new_fluid_state.unwrap();
+        let new_state_id = new_fluid_props.to_state_id(fluid);
 
-        // Hole-first priority: holes get distance 0
+        // Holes get distance 0
         let slope_dist = if is_hole(world, fluid, &side_pos).await {
             0
         } else {
@@ -90,7 +88,6 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
         // Clear results if we find a shorter path
         if slope_dist < min_dist {
             result_count = 0;
-            min_dist = slope_dist;
         }
 
         // Add all directions with equal minimum distance
@@ -107,9 +104,11 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
             };
 
             if can_replace && result_count < 4 {
-                result[result_count] = (direction, slope_dist);
+                result[result_count] = (direction, new_state_id);
                 result_count += 1;
             }
+
+            min_dist = slope_dist;
         }
     }
     (result, result_count)

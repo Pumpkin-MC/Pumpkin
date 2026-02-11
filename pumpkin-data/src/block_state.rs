@@ -1,7 +1,8 @@
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::block_properties::{COLLISION_SHAPES, Instrument};
-use crate::{Block, BlockDirection, CollisionShape};
+use crate::{Block, BlockDirection};
 
 /// Represents a specific state of a block, including its properties and physical behaviors.
 ///
@@ -142,21 +143,21 @@ impl BlockState {
         })
     }
 
-    pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = CollisionShape> + '_ {
+    pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
         self.collision_shapes
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize])
     }
 
-    pub fn get_block_outline_shapes(&self) -> impl Iterator<Item = CollisionShape> + '_ {
+    pub fn get_block_outline_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
         let base_shapes = self
             .outline_shapes
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize]);
 
-        let water_shape = self.is_waterlogged().then(|| {
-            CollisionShape::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0))
-        });
+        let water_shape = self
+            .is_waterlogged()
+            .then(|| BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0)));
 
         base_shapes.chain(water_shape)
     }

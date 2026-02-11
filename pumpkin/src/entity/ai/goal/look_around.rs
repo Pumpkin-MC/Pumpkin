@@ -44,7 +44,7 @@ impl Goal for LookAroundGoal {
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             let mob_entity = mob.get_mob_entity();
-            self.look_time = (self.look_time - 1).max(0);
+            self.look_time -= 1;
             let mut look_control = mob_entity.look_control.lock().await;
 
             let pos = mob_entity.living_entity.entity.pos.load();

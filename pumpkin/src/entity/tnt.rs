@@ -115,4 +115,8 @@ impl EntityBase for TNTEntity {
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
+
+    fn is_immune_to_explosion(&self) -> bool {
+        true
+    }
 }
