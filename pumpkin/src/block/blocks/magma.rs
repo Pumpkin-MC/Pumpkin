@@ -33,7 +33,8 @@ impl BlockBehaviour for MagmaBlock {
             }
 
             // Damage the entity
-            let _ = args.entity
+            let _ = args
+                .entity
                 .damage(args.entity, 1.0, DamageType::HOT_FLOOR)
                 .await;
         })

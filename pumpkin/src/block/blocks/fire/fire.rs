@@ -8,9 +8,9 @@ use rand::RngExt;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use pumpkin_data::{Block, BlockDirection, BlockState};
-use pumpkin_data::damage::DamageType;
 use crate::entity::EntityBase;
+use pumpkin_data::damage::DamageType;
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -122,18 +122,15 @@ impl FireBlock {
         total_burn_chance
     }
 
-    async fn is_near_rain(_world: &World, _pos: &BlockPos) -> bool {
+    const fn is_near_rain(_world: &World, _pos: &BlockPos) -> bool {
         // TODO: Implement proper rain checking when weather is implemented
         // For now, return false to allow fire to work
         false
     }
 
     // Get burn odds for a block, used in check_burn_out
-    fn get_burn_odds(&self, block: &Block) -> i32 {
-        block
-            .flammable
-            .as_ref()
-            .map_or(0, |f| f.burn_chance.into())
+    fn get_burn_odds(block: &Block) -> i32 {
+        block.flammable.as_ref().map_or(0, |f| f.burn_chance.into())
     }
 
     async fn is_increased_burnout_biome(world: &World, pos: &BlockPos) -> bool {
@@ -145,26 +142,26 @@ impl FireBlock {
         // Fire burnout increases in specific biomes
         // TODO: Use proper tag or bool for this when available
         let biome = world.level.get_rough_biome(pos).await;
-        match biome.registry_id {
+        matches!(
+            biome.registry_id,
             "bamboo_jungle"
-            | "mushroom_fields"
-            | "mangrove_swamp"
-            | "snowy_slopes"
-            | "frozen_peaks"
-            | "jagged_peaks"
-            | "swamp"
-            | "jungle" => true,
-            _ => false,
-        }
+                | "mushroom_fields"
+                | "mangrove_swamp"
+                | "snowy_slopes"
+                | "frozen_peaks"
+                | "jagged_peaks"
+                | "swamp"
+                | "jungle"
+        )
     }
 
     async fn check_burn_out(&self, world: &Arc<World>, pos: &BlockPos, chance: i32, age: u16) {
         let block = world.get_block(pos).await;
-        let odds = self.get_burn_odds(block);
+        let odds = Self::get_burn_odds(block);
         if rand::rng().random_range(0..chance) < odds {
             let old_block = block;
             if rand::rng().random_range(0..(age + 10) as i32) < 5
-                && !Self::is_near_rain(world.as_ref(), pos).await
+                && !Self::is_near_rain(world.as_ref(), pos)
             {
                 let new_age = (age + (rand::rng().random_range(0..5) / 4)).min(15);
                 let state_id = self
@@ -225,9 +222,11 @@ impl BlockBehaviour for FireBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let base_entity = args.entity.get_entity();
-            if !base_entity.entity_type.fire_immune && !base_entity.fire_immune.load(Ordering::Relaxed) {
+            if !base_entity.entity_type.fire_immune
+                && !base_entity.fire_immune.load(Ordering::Relaxed)
+            {
                 let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
-                
+
                 // Timer logic
                 if ticks < 0 {
                     base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
@@ -352,7 +351,7 @@ impl BlockBehaviour for FireBlock {
             let age = fire_props.age.to_index();
 
             // Check if rain should extinguish the fire
-            if !infiniburn && Self::is_near_rain(world.as_ref(), pos).await {
+            if !infiniburn && Self::is_near_rain(world.as_ref(), pos) {
                 let rain_chance = 0.2 + (age as f32) * 0.03;
                 if rand::random::<f32>() < rain_chance {
                     world
@@ -410,10 +409,11 @@ impl BlockBehaviour for FireBlock {
             }
 
             // Burn adjacent blocks
-            let mut extra = 0;
-            if Self::is_increased_burnout_biome(world, pos).await {
-                extra = -50; // Increases chance of block being destroyed
-            }
+            let extra = if Self::is_increased_burnout_biome(world, pos).await {
+                -50 // Increases chance of block being destroyed
+            } else {
+                0
+            };
 
             self.check_burn_out(
                 world,
@@ -460,7 +460,11 @@ impl BlockBehaviour for FireBlock {
 
             // Respect the `fire_spread_radius_around_player` gamerule.
             // -1 = disabled (allow unlimited spread), 0 = disabled (no spread), >0 = radius in blocks
-            let spread_radius = world.level_info.load().game_rules.fire_spread_radius_around_player;
+            let spread_radius = world
+                .level_info
+                .load()
+                .game_rules
+                .fire_spread_radius_around_player;
 
             // Try to spread fire to nearby air blocks
             let difficulty = world.level_info.load().difficulty as i32;
@@ -478,7 +482,10 @@ impl BlockBehaviour for FireBlock {
                                 }
                                 if spread_radius != -1 {
                                     let center = offset_pos.to_centered_f64();
-                                    if world.get_closest_player(center, spread_radius as f64).is_none() {
+                                    if world
+                                        .get_closest_player(center, spread_radius as f64)
+                                        .is_none()
+                                    {
                                         continue;
                                     }
                                 }
@@ -489,7 +496,7 @@ impl BlockBehaviour for FireBlock {
                                 // Calculate odds of spreading
                                 let mut odds =
                                     (ignite_odds + 40 + difficulty * 7) / (new_age as i32 + 30);
-                                
+
                                 // Reduce spread odds in certain biomes
                                 if Self::is_increased_burnout_biome(world, &offset_pos).await {
                                     odds /= 2; // Fire spreads 50% slower
@@ -497,7 +504,7 @@ impl BlockBehaviour for FireBlock {
 
                                 if odds > 0
                                     && rand::rng().random_range(0..rate) <= odds
-                                    && !Self::is_near_rain(world.as_ref(), &offset_pos).await
+                                    && !Self::is_near_rain(world.as_ref(), &offset_pos)
                                 {
                                     let spread_age =
                                         (new_age + rand::rng().random_range(0..5) / 4).min(15);

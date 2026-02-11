@@ -1233,7 +1233,6 @@ impl EntityBase for LivingEntity {
                 return false;
             }
 
-            
             let world = self.entity.world.load();
 
             // Check if fire damage is disabled

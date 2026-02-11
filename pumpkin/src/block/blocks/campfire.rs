@@ -32,13 +32,14 @@ impl BlockBehaviour for CampfireBlock {
             if state.lit && args.entity.get_living_entity().is_some() {
                 // Set correct damage amount
                 let damage_amount = if args.block.id == Block::SOUL_CAMPFIRE.id {
-                    2.0 
+                    2.0
                 } else {
                     1.0
                 };
 
                 // Damage the entity
-                let _ = args.entity
+                let _ = args
+                    .entity
                     .damage(args.entity, damage_amount, DamageType::CAMPFIRE)
                     .await;
             }

@@ -9,11 +9,11 @@ use crate::block::{
 
 use super::FireBlockBase;
 use crate::block::OnEntityCollisionArgs;
-use std::sync::atomic::Ordering;
-use pumpkin_data::entity::EntityType;
-use pumpkin_data::damage::DamageType;
-use rand::RngExt;
 use crate::entity::EntityBase;
+use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EntityType;
+use rand::RngExt;
+use std::sync::atomic::Ordering;
 
 #[pumpkin_block("minecraft:soul_fire")]
 pub struct SoulFireBlock;
@@ -29,9 +29,11 @@ impl BlockBehaviour for SoulFireBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let base_entity = args.entity.get_entity();
-            if !base_entity.entity_type.fire_immune && !base_entity.fire_immune.load(Ordering::Relaxed) {
+            if !base_entity.entity_type.fire_immune
+                && !base_entity.fire_immune.load(Ordering::Relaxed)
+            {
                 let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
-                
+
                 // Timer logic
                 if ticks < 0 {
                     base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);

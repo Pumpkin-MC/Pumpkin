@@ -186,7 +186,7 @@ impl BoundingBox {
         // max is exactly on a block boundary does not include the adjacent
         // block. This mirrors vanilla behavior where max block is inclusive
         // only when the entity actually overlaps that block.
-        let eps = 1e-9_f64;
+        let eps = 1e-9f64;
         BlockPos::floored_v(super::vector3::Vector3::new(
             self.max.x - eps,
             self.max.y - eps,

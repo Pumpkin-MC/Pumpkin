@@ -2178,7 +2178,8 @@ impl EntityBase for Entity {
             let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
 
             // Check for fire immunity (or if the specific entity is)
-            let is_immune = self.entity_type.fire_immune || self.fire_immune.load(Ordering::Relaxed);
+            let is_immune =
+                self.entity_type.fire_immune || self.fire_immune.load(Ordering::Relaxed);
             if fire_ticks > 0 {
                 if is_immune {
                     self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
