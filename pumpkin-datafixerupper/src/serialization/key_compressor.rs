@@ -9,31 +9,28 @@ pub struct KeyCompressor {
 }
 
 impl KeyCompressor {
-    /// Returns a new `KeyCompressor` with the calculated compressor and decompressor maps .
-    pub(crate) fn new<T>(
-        key_iter: impl Iterator<Item = T>,
-        ops: &'static impl DynamicOps<Value = T>,
-    ) -> Self {
-        let mut c = Self {
+    /// Returns a new `KeyCompressor`, which can be populated later via [`KeyCompressor::populate`].
+    ///
+    pub(crate) fn new() -> Self {
+        Self {
             compress_map: HashMap::new(),
             decompress_map: HashMap::new(),
             size: 0,
-        };
+        }
+    }
 
+    /// Populates a `KeyCompressor` with the calculated compressor and decompressor maps.
+    pub(crate) fn populate(&mut self, keys: impl IntoIterator<Item = String>) {
         // Iterate over every key.
-        key_iter
-            .filter_map(|dynamic_key| ops.get_string(&dynamic_key).into_result())
-            .for_each(|key| {
-                if c.compress_map.contains_key(&key) {
-                    return;
-                }
-                // The index that the key will correspond to.
-                let i = c.size;
-                c.compress_map.insert(key.clone(), i);
-                c.decompress_map.insert(i, key);
-            });
-
-        c
+        keys.into_iter().for_each(|key: String| {
+            if self.compress_map.contains_key(&key) {
+                return;
+            }
+            // The index that the key will correspond to.
+            let i = self.size;
+            self.compress_map.insert(key.clone(), i);
+            self.decompress_map.insert(i, key);
+        });
     }
 
     /// Gets the decompressed key of an index with the provided dynamic type.
@@ -66,6 +63,7 @@ impl KeyCompressor {
     }
 
     /// Returns the size of the compressed/decompressed maps.
+    #[must_use]
     pub const fn size(&self) -> usize {
         self.size
     }
