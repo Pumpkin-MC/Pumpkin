@@ -67,7 +67,13 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
+    log::info!(
+        "{}",
+        TextComponent::from_legacy_string(&format!(
+            "Starting §6Pumpkin §a{CARGO_PKG_VERSION}§r Minecraft (Protocol §1{CURRENT_MC_PROTOCOL}§r)"
+        ))
+        .to_pretty_console(),
+    );
 
     log::debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
@@ -81,9 +87,25 @@ async fn main() {
         }
     );
 
-    log::warn!("Pumpkin is currently under heavy development!");
-    log::info!("Report issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
-    log::info!("Join our Discord for community support: https://discord.gg/pumpkinmc");
+    log::warn!(
+        "{}",
+        TextComponent::from_legacy_string("§4Pumpkin is currently under heavy development!")
+            .to_pretty_console(),
+    );
+    log::info!(
+        "{}",
+        TextComponent::from_legacy_string(
+            "Report issues on §3https://github.com/Pumpkin-MC/Pumpkin/issues"
+        )
+        .to_pretty_console()
+    );
+    log::info!(
+        "{}",
+        TextComponent::from_legacy_string(
+            "Join our §1Discord§r for community support: §bhttps://discord.gg/pumpkinmc"
+        )
+        .to_pretty_console()
+    );
 
     tokio::spawn(async {
         setup_sighandler()
@@ -94,14 +116,23 @@ async fn main() {
     let pumpkin_server = PumpkinServer::new(basic_config, advanced_config, vanilla_data).await;
     pumpkin_server.init_plugins().await;
 
-    log::info!("Started server; took {}ms", time.elapsed().as_millis());
+    log::info!(
+        "Started server; took {}",
+        TextComponent::text(format!("{}ms", time.elapsed().as_millis()))
+            .color_named(NamedColor::Gold)
+            .to_pretty_console()
+    );
     let basic_config = &pumpkin_server.server.basic_config;
     log::info!(
         "Server is now running. Connect using port: {}{}{}",
         if basic_config.java_edition {
-            format!("Java Edition: {}", basic_config.java_edition_address)
+            TextComponent::from_legacy_string(&format!(
+                "§eJava Edition: §1{}§r",
+                basic_config.java_edition_address
+            ))
+            .to_pretty_console()
         } else {
-            String::new()
+            TextComponent::text(String::new()).to_pretty_console()
         },
         if basic_config.java_edition && basic_config.bedrock_edition {
             " | " // Separator if both are enabled
@@ -109,14 +140,23 @@ async fn main() {
             ""
         },
         if basic_config.bedrock_edition {
-            format!("Bedrock Edition: {}", basic_config.bedrock_edition_address)
+            TextComponent::from_legacy_string(&format!(
+                "§6Bedrock Edition: §1{}§r",
+                basic_config.bedrock_edition_address
+            ))
+            .to_pretty_console()
         } else {
-            String::new()
+            TextComponent::text(String::new()).to_pretty_console()
         }
     );
 
     pumpkin_server.start().await;
-    log::info!("The server has stopped.");
+    log::info!(
+        "{}",
+        TextComponent::text("The server has stopped.")
+            .color_named(NamedColor::Red)
+            .to_pretty_console()
+    );
 }
 
 fn handle_interrupt() {

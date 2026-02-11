@@ -19,6 +19,7 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
 
 use crate::command::CommandSender;
@@ -263,7 +264,12 @@ impl Server {
             let config = Arc::new(server.advanced_config.world.clone());
 
             tokio::task::spawn_blocking(move || {
-                log::info!("Loading {}", dim.minecraft_name);
+                log::info!(
+                    "Loading {}",
+                    TextComponent::text(format!("{}", dim.minecraft_name))
+                        .color_named(NamedColor::DarkGreen)
+                        .to_pretty_console()
+                );
                 World::load(
                     into_level(dim, &config, path, registry.clone(), seed),
                     l_info,
