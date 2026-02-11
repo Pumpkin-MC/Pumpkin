@@ -1,0 +1,3 @@
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "If you need a map, use BTreeMap for deterministic ordering. Otherwise it forces a rebuild after every change.", replacement = "std::collections::BTreeMap" },
+]

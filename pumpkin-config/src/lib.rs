@@ -27,7 +27,9 @@ mod commands;
 
 mod chat;
 pub mod chunk;
+pub mod lighting;
 pub mod op;
+
 mod player_data;
 mod pvp;
 mod server_links;

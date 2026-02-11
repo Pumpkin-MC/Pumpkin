@@ -84,7 +84,7 @@ async fn main() {
 
     warn!("Pumpkin is currently under heavy development!");
     info!("Report issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
-    info!("Join our Discord for community support: https://discord.com/invite/wT8XjrjKkf");
+    info!("Join our Discord for community support: https://discord.gg/pumpkinmc");
 
     tokio::spawn(async {
         setup_sighandler()
