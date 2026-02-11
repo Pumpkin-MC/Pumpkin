@@ -51,6 +51,7 @@ use pumpkin_protocol::java::server::play::{
     SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
     SUpdateSign, SUseItem, SUseItemOn, Status,
 };
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::text::color::NamedColor;
@@ -1964,6 +1965,54 @@ impl JavaClient {
         );
     }
 
+    fn entity_blocks_block_placement(entity: &dyn EntityBase) -> bool {
+        let base_entity = entity.get_entity();
+        if base_entity.is_removed()
+            || base_entity.no_clip.load(Ordering::Relaxed)
+            || entity.is_spectator()
+        {
+            return false;
+        }
+
+        if entity.get_living_entity().is_some() {
+            return true;
+        }
+
+        // Matches vanilla's "blocksBuilding" intent for non-living entities:
+        // minecarts/boats/rafts + a few special entities.
+        let entity_type = base_entity.entity_type;
+        let resource_name = entity_type.resource_name;
+        entity_type == &EntityType::END_CRYSTAL
+            || entity_type == &EntityType::FALLING_BLOCK
+            || entity_type == &EntityType::TNT
+            || resource_name.ends_with("_minecart")
+            || resource_name.ends_with("_boat")
+            || resource_name.ends_with("_raft")
+    }
+
+    fn has_blocking_entity_in_box(world: &World, placed_box: &BoundingBox) -> bool {
+        let players = world.players.load();
+        if players.iter().any(|player| {
+            !player.is_spectator()
+                && player
+                    .get_entity()
+                    .bounding_box
+                    .load()
+                    .intersects(placed_box)
+        }) {
+            return true;
+        }
+
+        world.entities.load().iter().any(|entity| {
+            Self::entity_blocks_block_placement(entity.as_ref())
+                && entity
+                    .get_entity()
+                    .bounding_box
+                    .load()
+                    .intersects(placed_box)
+        })
+    }
+
     #[expect(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
@@ -2112,16 +2161,13 @@ impl JavaClient {
             )
             .await;
 
-        // Check if any collidable non-item entity is in the way of the block being placed.
+        // Mirror vanilla obstruction checks: only entities that block building should prevent
+        // placement. (e.g. arrows/xp orbs/displays/markers should not)
         let state = BlockState::from_id(new_state);
         for shape in state.get_block_collision_shapes() {
             let placed_box = shape.at_pos(final_block_pos);
 
-            if world
-                .get_all_at_box(&placed_box)
-                .into_iter()
-                .any(|entity| entity.get_entity().entity_type != &EntityType::ITEM)
-            {
+            if Self::has_blocking_entity_in_box(world.as_ref(), &placed_box) {
                 return Ok(false);
             }
         }
