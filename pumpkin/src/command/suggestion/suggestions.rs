@@ -22,9 +22,9 @@ impl SuggestionsBuilder {
     /// Constructs a new [`SuggestionsBuilder`] from the given
     /// input string and a starting position relative to it.
     #[must_use]
-    pub fn new(input: String, start: usize) -> Self {
+    pub fn new(input: &str, start: usize) -> Self {
         Self {
-            input: input.clone(),
+            input: input.to_string(),
             input_lowercase: input.to_lowercase(),
             start,
             result: Vec::new(),
@@ -84,7 +84,7 @@ impl SuggestionsBuilder {
 
     /// Adds all suggestions from another [`SuggestionsBuilder`] to this one.
     #[must_use]
-    pub fn add(mut self, other: &Self) -> Self {
+    pub fn append(mut self, other: &Self) -> Self {
         for suggestion in &other.result {
             self.result.push(suggestion.clone());
         }

@@ -41,7 +41,7 @@ pub trait ResultConsumer {
 }
 
 /// A [`ResultConsumer`] which does nothing.
-struct EmptyResultConsumer;
+pub struct EmptyResultConsumer;
 
 impl ResultConsumer for EmptyResultConsumer {
     fn on_command_completion(&self, _context: &CommandContext, _result: ReturnValue) {}
@@ -54,6 +54,12 @@ pub static EMPTY_CONSUMER: LazyLock<Arc<EmptyResultConsumer>> =
 pub struct CommandDispatcher {
     tree: Arc<Tree>,
     consumer: Arc<dyn ResultConsumer>,
+}
+
+impl Default for CommandDispatcher {
+    fn default() -> Self {
+        CommandDispatcher::new()
+    }
 }
 
 impl CommandDispatcher {
@@ -214,10 +220,9 @@ impl CommandDispatcher {
                         errors: parsed.errors,
                         reader: parsed.reader,
                     };
-                } else {
-                    let parsed = self.parse_nodes(child, &mut reader, &mut context);
-                    potentials.push(parsed);
                 }
+                let parsed = self.parse_nodes(child, &mut reader, &mut context);
+                potentials.push(parsed);
             } else {
                 potentials.push(ParsingResult {
                     context,

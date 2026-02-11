@@ -16,7 +16,7 @@ static NEXT_DETACHED_NODE_ID: AtomicU64 = AtomicU64::new(1);
 ///
 /// This is important for nodes not bound to a
 /// tree.
-#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug)]
 pub struct GlobalNodeId(pub NonZero<u64>);
 
 impl GlobalNodeId {

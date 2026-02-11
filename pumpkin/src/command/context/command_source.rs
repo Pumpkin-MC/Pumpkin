@@ -18,7 +18,7 @@ pub const REQUIRES_PLAYER: CommandErrorType<0> =
 pub const REQUIRES_ENTITY: CommandErrorType<0> =
     CommandErrorType::new("permissions.requires.entity");
 
-trait ReturnValueCallable: Send + Sync {
+pub trait ReturnValueCallable: Send + Sync {
     fn call(&self, value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
@@ -46,6 +46,12 @@ impl ResultValueTaker {
     #[must_use]
     pub fn new() -> Self {
         Self(Vec::new())
+    }
+}
+
+impl Default for ResultValueTaker {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -231,6 +237,7 @@ impl CommandSource {
 
     /// Returns a new [`CommandSource`] with the specified world and
     /// everything else from the `source` provided.
+    #[must_use]
     pub fn with_world(self, world: Arc<World>) -> Self {
         Self {
             output: self.output,
@@ -250,6 +257,7 @@ impl CommandSource {
     /// Returns a new [`CommandSource`] with the rotation changed in such
     /// a way that the source faces the anchor of the entity and
     /// everything else from the `source` provided.
+    #[must_use]
     pub fn with_looking_at_entity(
         self,
         entity: &Arc<dyn EntityBase>,
@@ -418,11 +426,12 @@ impl EntityAnchor {
     /// Gets the position of a source with respect to this anchor.
     #[must_use]
     pub fn position_at_source(self, command_source: &CommandSource) -> Vector3<f64> {
-        if let Some(entity) = &command_source.entity {
-            self.position_at_entity(entity)
-        } else {
-            command_source.position
-        }
+        command_source.entity
+            .as_ref()
+            .map_or(
+                command_source.position,
+                |entity| self.position_at_entity(entity)
+            )
     }
 }
 

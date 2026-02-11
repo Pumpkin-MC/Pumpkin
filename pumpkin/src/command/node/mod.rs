@@ -161,7 +161,7 @@ pub enum NodeMetadata {
 }
 
 /// Stores where this redirection would lead to.
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Redirection {
     Root,
     Global(GlobalNodeId),

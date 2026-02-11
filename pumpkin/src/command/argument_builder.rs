@@ -11,7 +11,7 @@ use std::sync::Arc;
 /// building arguments for commands.
 ///
 /// Note: This is an implementation detail.
-struct CommonArgumentBuilder {
+pub struct CommonArgumentBuilder {
     pub arguments: Vec<DetachedNode>,
     pub command: Option<Command>,
     pub requirement: Requirement,
@@ -53,27 +53,35 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
     /// # Panics
     ///
     /// Panics if this node is redirected to another node.
+    #[must_use]
     fn then(self, argument: impl Into<DetachedNode>) -> Self;
 
     /// Gets the command to execute for the node being built.
+    #[must_use]
     fn command(&self) -> Option<Command>;
 
     /// Sets the command to execute for the node being built.
+    #[must_use]
     fn executes(self, command: Command) -> Self;
 
-    /// Gets a reference t`o the arguments of the node to be built.
+    /// Gets a reference to the arguments of the node to be built.
+    #[must_use]
     fn arguments(&self) -> &[DetachedNode];
 
     /// Gets the node to which the node being built by this [`ArgumentBuilder`] redirects.
+    #[must_use]
     fn target(&self) -> Option<Redirection>;
 
     /// Gets the redirect modifier of the node this [`ArgumentBuilder`] is building.
+    #[must_use]
     fn redirect_modifier(&self) -> RedirectModifier;
 
     /// Whether this builder forks.
+    #[must_use]
     fn forks(&self) -> bool;
 
     /// Builds the node represented by this builder, consuming itself in the process.
+    #[must_use]
     fn build(self) -> N;
 }
 
