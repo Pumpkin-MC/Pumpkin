@@ -266,7 +266,7 @@ impl Server {
             tokio::task::spawn_blocking(move || {
                 log::info!(
                     "Loading {}",
-                    TextComponent::text(format!("{}", dim.minecraft_name))
+                    TextComponent::text(dim.minecraft_name.to_string())
                         .color_named(NamedColor::DarkGreen)
                         .to_pretty_console()
                 );
