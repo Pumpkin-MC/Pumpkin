@@ -88,7 +88,7 @@ impl BlockState {
     pub const fn is_solid(&self) -> bool {
         self.state_flags & IS_SOLID != 0
     }
-    
+
     #[must_use]
     pub const fn is_full_cube(&self) -> bool {
         self.state_flags & IS_FULL_CUBE != 0
