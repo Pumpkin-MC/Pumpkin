@@ -64,7 +64,7 @@ impl Goal for CreeperIgniteGoal {
             let target_lock = mob.get_mob_entity().target.lock().await;
 
             let Some(target) = target_lock.as_ref() else {
-                self.creeper.set_fuse_speed(-1).await;
+                self.creeper.set_fuse_speed(-1);
                 return;
             };
 
@@ -75,11 +75,11 @@ impl Goal for CreeperIgniteGoal {
                 .squared_distance_to_vec(&target.get_entity().pos.load());
 
             if dist_sq > 49.0 {
-                self.creeper.set_fuse_speed(-1).await;
+                self.creeper.set_fuse_speed(-1);
             }
             // TODO: Check line of sight
             else {
-                self.creeper.set_fuse_speed(1).await;
+                self.creeper.set_fuse_speed(1);
             }
         })
     }
