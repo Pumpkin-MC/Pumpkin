@@ -150,14 +150,13 @@ async fn handle_packet(
                             hostname: CString::new(server.basic_config.motd.as_str())?,
                             version: CString::new(CURRENT_MC_VERSION)?,
                             plugins: CString::new(plugins)?,
-                            map: CString::new(server.worlds.load().first().map_or("world", |w| {
-                                w.level
-                                    .level_folder
-                                    .root_folder
-                                    .file_name()
-                                    .and_then(|n| n.to_str())
-                                    .unwrap_or("world")
-                            }))?,
+                            map: CString::new(
+                                server
+                                    .worlds
+                                    .load()
+                                    .first()
+                                    .map_or("world", |w| w.get_world_name()),
+                            )?,
                             num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,
                             host_port: bound_addr.port(),
@@ -172,14 +171,13 @@ async fn handle_packet(
                         let response = CBasicStatus {
                             session_id: packet.session_id,
                             motd: CString::new(server.basic_config.motd.as_str())?,
-                            map: CString::new(server.worlds.load().first().map_or("world", |w| {
-                                w.level
-                                    .level_folder
-                                    .root_folder
-                                    .file_name()
-                                    .and_then(|n| n.to_str())
-                                    .unwrap_or("world")
-                            }))?,
+                            map: CString::new(
+                                server
+                                    .worlds
+                                    .load()
+                                    .first()
+                                    .map_or("world", |w| w.get_world_name()),
+                            )?,
                             num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,
                             host_port: bound_addr.port(),

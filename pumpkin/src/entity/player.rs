@@ -605,13 +605,7 @@ impl Player {
         log::debug!(
             "Removed player id {} from world {} ({} chunks remain cached)",
             self.gameprofile.name,
-            self.world()
-                .level
-                .level_folder
-                .root_folder
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("world"),
+            self.world().get_world_name(),
             level.loaded_chunk_count(),
         );
 
