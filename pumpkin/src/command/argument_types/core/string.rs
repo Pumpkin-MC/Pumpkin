@@ -27,11 +27,11 @@ impl ArgumentType<String> for StringArgumentType {
         }
     }
 
-    fn examples(&self) -> &'static [&'static str] {
+    fn examples(&self) -> Vec<String> {
         match self {
-            Self::SingleWord => &["word", "words_with_underscores"],
-            Self::QuotablePhrase => &["\"quoted phrase\"", "word", "\"\""],
-            Self::GreedyPhrase => &["word", "words with spaces", "\"and symbols\""],
+            Self::SingleWord => examples!("word", "words_with_underscores"),
+            Self::QuotablePhrase => examples!("\"quoted phrase\"", "word", "\"\""),
+            Self::GreedyPhrase => examples!("word", "words with spaces", "\"and symbols\""),
         }
     }
 }

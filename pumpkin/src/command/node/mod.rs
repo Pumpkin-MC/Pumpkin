@@ -4,16 +4,33 @@ pub mod detached;
 pub mod attached;
 
 use std::borrow::Cow;
-use std::sync::{Arc, LazyLock};
-use crate::command::argument_types::argument_type::{AnyArgumentType, ArgumentType};
+use std::pin::Pin;
+use std::sync::Arc;
+use crate::command::argument_types::argument_type::AnyArgumentType;
 use crate::command::context::command_context::{CommandContext};
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::node::attached::NodeId;
 use crate::command::node::detached::GlobalNodeId;
 
+/// Represents a [`CommandExecutor`]'s result.
+pub type CommandExecutorResult = Pin<Box<dyn Future<Output = Result<i32, CommandSyntaxError>> + Send>>;
+
+/// A struct implementing this trait is able to run with a given context.
+pub trait CommandExecutor: Sync + Send {
+    /// Executes this executor for a command.
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult;
+}
+
 /// A function that takes a context and returns a command result.
-pub type Command = Arc<dyn Fn(&CommandContext) -> Result<i32, CommandSyntaxError>>;
+pub type Command = Arc<dyn CommandExecutor>;
+
+/// Represents the result of [`Arc<CommandSource>`]s from a [`CommandContext`].
+pub type RedirectModifierResult<'a> = Pin<Box<dyn Future<Output = Result<Vec<Arc<CommandSource>>, CommandSyntaxError>> + Send + 'a>>;
+
+fn assert_sync<T: Sync>() {
+    assert_sync::<RedirectModifier>();
+}
 
 /// A function that returns a new collection of sources from a given context.
 #[derive(Clone)]
@@ -23,21 +40,26 @@ pub enum RedirectModifier {
 
     /// Returns multiple [`CommandSource`]s from one context via
     /// custom behavior.
-    Custom(Arc<dyn Fn(&CommandContext) -> Vec<Arc<CommandSource>>>)
+    Custom(Arc<dyn Fn(&CommandContext) -> RedirectModifierResult<'_> + Send + Sync>)
 }
 
 impl RedirectModifier {
-    /// Returns a [`Vec`] of [`Arc<CommandSource>`] from a
+    /// Tries to provide a [`Vec`] of [`Arc<CommandSource>`] from a
     /// given [`CommandContext`].
-    pub fn sources(&self, command_context: &CommandContext) -> Vec<Arc<CommandSource>> {
+    pub fn sources<'c>(&self, command_context: &'c CommandContext) -> RedirectModifierResult<'c> {
         match self {
-            Self::OneSource => vec![command_context.source.clone()],
+            Self::OneSource => Box::pin(
+                async move {
+                    Ok(vec![command_context.source.clone()])
+                }
+            ),
             Self::Custom(function) => function(command_context)
         }
     }
 }
 
 /// A structure that returns if the source is qualified enough to run the command.
+#[derive(Clone)]
 pub enum Requirement {
     /// Always returns `true`, i.e. no matter the source,
     /// it will always be qualified enough to run the command.
@@ -45,7 +67,7 @@ pub enum Requirement {
 
     /// The given source must satisfy the condition to
     /// be allowed to run the command.
-    Condition(Arc<dyn Fn(&CommandSource) -> bool>)
+    Condition(Arc<dyn Fn(&CommandSource) -> bool + Send + Sync>)
 }
 
 impl Requirement {
@@ -60,6 +82,7 @@ impl Requirement {
 }
 
 /// Stores common owned data for a node.
+#[derive(Clone)]
 pub struct OwnedNodeData {
     pub global_id: GlobalNodeId,
     pub requirement: Requirement,
@@ -140,151 +163,5 @@ pub enum NodeMetadata {
 #[derive(Clone)]
 pub enum Redirection {
     Root,
-    Global(GlobalNodeId),
-    Local(NodeId)
+    Global(GlobalNodeId)
 }
-
-/*
-impl Node {
-    /// Gets a reference to the common data of this node that all nodes can have.
-    pub fn common(&self) -> &CommonNode {
-        match self {
-            Node::Root(node) => &node.common_data,
-            Node::Literal(node) => &node.common_data,
-            Node::Command(node) => &node.common_data,
-            Node::Argument(node) => &node.common_data
-        }
-    }
-
-    /// Gets a mutable reference to the common data of this node that all nodes can have.
-    pub fn common_mut(&mut self) -> &mut CommonNode {
-        match self {
-            Node::Root(node) => &mut node.common_data,
-            Node::Literal(node) => &mut node.common_data,
-            Node::Command(node) => &mut node.common_data,
-            Node::Argument(node) => &mut node.common_data
-        }
-    }
-
-    /// Returns the optional command of this node.
-    pub fn command(&self) -> &Option<Command> {
-        &self.common().command
-    }
-
-    /// Get all children of this node.
-    pub fn children(&self) -> &FxHashMap<String, NodeId> {
-        &self.common().children
-    }
-
-    /// Get the requirement of this node.
-    pub fn requirement(&self) -> &dyn Fn(&CommandSource) -> bool {
-        &*self.common().requirement
-    }
-
-    /// Get a child of this node by name.
-    pub fn child(&self, name: &str) -> Option<NodeId> {
-        self.common().children.get(name).copied()
-    }
-
-    /// Get the node this node redirects to.
-    pub fn redirect(&self) -> Option<NodeId> {
-        self.common().redirect
-    }
-
-    /// Get the redirect modifier of this node.
-    pub fn modifier(&self) -> &RedirectModifier {
-        &self.common().modifier
-    }
-
-    /// Sets the optional command of this node.
-    pub fn set_command(&mut self, command: Option<Command>) {
-         self.common_mut().command = command;
-    }
-
-    /// Sets the requirement of this node.
-    pub fn set_requirement(&mut self, requirement: Requirement) {
-        self.common_mut().requirement = requirement;
-    }
-
-    /// Sets the node this node redirects to.
-    pub fn set_redirect(&mut self, redirect: Option<NodeId>) {
-        self.common_mut().redirect = redirect;
-    }
-
-    /// Sets the redirect modifier of this node.
-    pub fn set_modifier(&mut self, modifier: RedirectModifier) {
-        self.common_mut().modifier = modifier;
-    }
-
-    /// Returns whether the source provided can use this node.
-    pub fn can_be_used(&self, source: &CommandSource) -> bool {
-        (self.common().requirement)(source)
-    }
-
-    /// Returns whether the given input is valid for this node.
-    pub fn is_valid_input(&self, input: &str) -> bool {
-        match self {
-            Node::Root(_) => false,
-            Node::Literal(node) => {
-                let mut reader = StringReader::new(input);
-                Self::parse_literal(&mut reader, &node.literal).is_ok()
-            }
-            Node::Command(node) => {
-                let mut reader = StringReader::new(input);
-                Self::parse_literal(&mut reader, &node.literal).is_ok()
-            }
-            Node::Argument(node) => {
-                let mut reader = StringReader::new(input);
-                let parsed = node.argument_type.parse(&mut reader);
-                if parsed.is_ok() {
-                    matches!(reader.peek(), Some(' ') | None)
-                } else {
-                    false
-                }
-            }
-        }
-    }
-
-    pub fn parse(reader: &mut StringReader, context_builder: &mut ContextBuilder) {
-
-    }
-
-    /// Internal function for assisting in parsing a literal.
-    fn parse_literal(reader: &mut StringReader, literal: &str) -> Result<usize, ()> {
-        let start = reader.cursor();
-        let len = literal.len();
-        if reader.can_read_bytes(len) {
-            let end = start + len;
-            if &reader.string()[start..end] == literal {
-                reader.set_cursor(end);
-                if matches!(reader.peek(), Some(' ') | None) {
-                    return Ok(end);
-                } else {
-                    reader.set_cursor(start);
-                }
-            }
-        }
-        Err(())
-    }
-
-    /// Gets the name of this node.
-    pub fn name(&self) -> String {
-        match self {
-            Node::Root(_) => String::new(),
-            Node::Literal(node) => node.literal.to_string(),
-            Node::Command(node) => node.literal.to_string(),
-            Node::Argument(node) => node.name.to_string()
-        }
-    }
-
-    /// Gets the usage text of this node.
-    pub fn usage_text(&self) -> String {
-        match self {
-            Node::Root(_) => String::new(),
-            Node::Literal(node) => node.literal.to_string(),
-            Node::Command(node) => node.literal.to_string(),
-            Node::Argument(node) => format!("<{}>", node.name.to_string())
-        }
-    }
-}
-*/

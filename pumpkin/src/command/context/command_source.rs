@@ -1,3 +1,4 @@
+use std::pin::Pin;
 use std::sync::Arc;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
@@ -15,7 +16,11 @@ use crate::world::World;
 pub const REQUIRES_PLAYER: CommandErrorType<0> = CommandErrorType::new("permissions.requires.player");
 pub const REQUIRES_ENTITY: CommandErrorType<0> = CommandErrorType::new("permissions.requires.entity");
 
-pub type ReturnValueCallback = Arc<dyn Fn(ReturnValue) + Send + Sync>;
+trait ReturnValueCallable: Send + Sync {
+    fn call(&self, value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+}
+
+pub type ReturnValueCallback = Arc<dyn ReturnValueCallable>;
 
 /// Represents a collection of 'return value callbacks'.
 #[derive(Clone)]

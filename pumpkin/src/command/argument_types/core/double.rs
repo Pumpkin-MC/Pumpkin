@@ -26,8 +26,8 @@ impl ArgumentType<f64> for DoubleArgumentType {
         )
     }
 
-    fn examples(&self) -> &'static [&'static str] {
-        &["0", "1.2", ".5", "-1", "-.5", "-1234.56"]
+    fn examples(&self) -> Vec<String> {
+        examples!("0", "1.2", ".5", "-1", "-.5", "-1234.56")
     }
 }
 

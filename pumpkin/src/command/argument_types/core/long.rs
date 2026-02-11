@@ -26,8 +26,8 @@ impl ArgumentType<i64> for LongArgumentType {
         )
     }
 
-    fn examples(&self) -> &'static [&'static str] {
-        &["0", "123", "-123"]
+    fn examples(&self) -> Vec<String> {
+        examples!("0", "123", "-123")
     }
 }
 

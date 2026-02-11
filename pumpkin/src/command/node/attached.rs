@@ -1,7 +1,13 @@
 use std::num::NonZero;
 use rustc_hash::FxHashMap;
+use pumpkin_util::text::TextComponent;
+use crate::command::context::string_range::StringRange;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::LITERAL_INCORRECT;
 use crate::command::node::{ArgumentNodeMetadata, Command, CommandNodeMetadata, LiteralNodeMetadata, NodeMetadata, OwnedNodeData, RedirectModifier, Redirection, Requirement};
 use crate::command::node::detached::GlobalNodeId;
+use crate::command::node::tree::{Tree, ROOT_NODE_ID};
+use crate::command::string_reader::StringReader;
 
 /// Represents the unique integral number
 /// of any node, with respect to a tree.
@@ -11,6 +17,7 @@ use crate::command::node::detached::GlobalNodeId;
 /// same size as of [`NodeId`], but comes at the cost of
 /// ID `0` being unassignable.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Hash)]
 pub struct NodeId(pub NonZero<usize>);
 
 /// Represents the unique integral number
@@ -23,19 +30,17 @@ pub struct RootNodeId;
 /// Represents the unique integral number
 /// of a specific literal node, with respect to a tree.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct LiteralNodeId(NonZero<usize>);
+pub struct LiteralNodeId(pub NonZero<usize>);
 
 /// Represents the unique integral number
 /// of a specific command node, with respect to a tree.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct CommandNodeId(NonZero<usize>);
+pub struct CommandNodeId(pub NonZero<usize>);
 
 /// Represents the unique integral number
 /// of a specific argument node, with respect to a tree.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct ArgumentNodeId(NonZero<usize>);
-
-pub const ROOT_NODE_ID: NodeId = NodeId(NonZero::new(1).unwrap());
+pub struct ArgumentNodeId(pub NonZero<usize>);
 
 impl From<RootNodeId> for NodeId {
     fn from(_id: RootNodeId) -> Self {
@@ -62,6 +67,7 @@ impl From<ArgumentNodeId> for NodeId {
 }
 
 /// Represents a node which has been attached as the root of a [`Tree`].
+#[derive(Clone)]
 pub struct RootAttachedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, NodeId>
@@ -84,8 +90,7 @@ impl RootAttachedNode {
 
 /// Represents a literal, non-command node that has already been attached
 /// to a [`Tree`].
-///
-/// If you want to start a command with this node, use [`CommandAttachedNode`] instead.
+#[derive(Clone)]
 pub struct LiteralAttachedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, NodeId>,
@@ -95,8 +100,7 @@ pub struct LiteralAttachedNode {
 
 /// Represents a literal, command node that has already been attached
 /// to a [`Tree`].
-///
-/// If you don't want to start a command with this node, use [`LiteralAttachedNode`] instead.
+#[derive(Clone)]
 pub struct CommandAttachedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, NodeId>,
@@ -106,6 +110,7 @@ pub struct CommandAttachedNode {
 
 /// Represents a node that accepts a specific type of argument that has already been attached
 /// to a [`Tree`].
+#[derive(Clone)]
 pub struct ArgumentAttachedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, NodeId>,
@@ -113,7 +118,18 @@ pub struct ArgumentAttachedNode {
     pub meta: ArgumentNodeMetadata
 }
 
+/// Allows a way to store the kind of node
+/// without any actual cloning of [`NodeMetadata`].
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum NodeClassification {
+    Root,
+    Literal,
+    Command,
+    Argument
+}
+
 /// Represents a node not attached to a [`Tree`] yet.
+#[derive(Clone)]
 pub enum AttachedNode {
     Root(RootAttachedNode),
     Literal(LiteralAttachedNode),
@@ -160,6 +176,17 @@ impl AttachedNode {
                     meta
                 }
             ),
+        }
+    }
+
+    /// Gets the classification of this node.
+    /// This is a relatively cheap operation.
+    pub fn classification(&self) -> NodeClassification {
+        match self {
+            AttachedNode::Root(_) => NodeClassification::Root,
+            AttachedNode::Literal(_) => NodeClassification::Literal,
+            AttachedNode::Command(_) => NodeClassification::Command,
+            AttachedNode::Argument(_) => NodeClassification::Argument
         }
     }
 
@@ -244,23 +271,115 @@ impl AttachedNode {
     //     pub forks: bool,
     //     pub command: Option<Command>
 
-    /// Get the requirement for this node to be run.
+    /// Gets the requirement for this node to be run.
     pub fn requirement(&self) -> &Requirement {
         &self.owned_node_data_ref().requirement
     }
 
-    /// Set the requirement for this node to be run to a value.
+    /// Sets the requirement for this node to be run to a value.
     pub fn set_requirement(&mut self, requirement: Requirement) {
         self.owned_node_data_mut_ref().requirement = requirement;
     }
 
-    /// Get the modifier for this node to be run.
+    /// Gets the modifier for this node to be run.
     pub fn modifier(&self) -> &RedirectModifier {
         &self.owned_node_data_ref().modifier
     }
 
-    /// Set the modifier for this node to a value.
+    /// Sets the modifier for this node to a value.
     pub fn set_modifier(&mut self, modifier: RedirectModifier) {
         self.owned_node_data_mut_ref().modifier = modifier;
+    }
+
+    /// Whether this node forks [`CommandSources`] or not.
+    pub fn forks(&self) -> bool {
+        self.owned_node_data_ref().forks
+    }
+
+    /// Sets whether this node forks [`CommandSources`] or not.
+    pub fn set_forks(&mut self, forks: bool) {
+        self.owned_node_data_mut_ref().forks = forks;
+    }
+
+    /// Gets the executable command for this node.
+    pub fn command(&self) -> &Option<Command> {
+        &self.owned_node_data_ref().command
+    }
+
+    /// Sets the executable command for this node.
+    pub fn set_command(&mut self, command: Option<Command>) {
+        self.owned_node_data_mut_ref().command = command;
+    }
+
+    /// Get the usage text of this node.
+    pub fn usage_text(&self) -> String {
+        match self {
+            Self::Root(_) => String::new(),
+            Self::Literal(node) => node.meta.literal.to_string(),
+            Self::Command(node) => node.meta.literal.to_string(),
+            Self::Argument(node) => format!("<{}>", node.meta.name.to_string())
+        }
+    }
+
+    /// Checks if the given input is valid for this node.
+    pub fn is_valid_input(&self, input: &str) -> bool {
+        match self {
+            Self::Root(_) => false,
+            Self::Literal(node) => {
+                let mut reader = StringReader::new(input);
+                Self::parse_literal(&mut reader, &node.meta.literal).is_ok()
+            }
+            Self::Command(node) => {
+                let mut reader = StringReader::new(input);
+                Self::parse_literal(&mut reader, &node.meta.literal).is_ok()
+            }
+            Self::Argument(node) => {
+                let mut reader = StringReader::new(input);
+                let parsed = node.meta.argument_type.parse(&mut reader);
+                if parsed.is_ok() {
+                    matches!(reader.peek(), Some(' ') | None)
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    /// Parses the given input for this node.
+    /// Prefer using a [`CommandDispatcher`] over this function directly.
+    pub fn parse(&self, reader: &mut StringReader, literal: &str) -> Result<StringRange, CommandSyntaxError> {
+        let start = reader.cursor();
+        match Self::parse_literal(reader, literal) {
+            Ok(end) => Ok(StringRange::between(start, end)),
+            Err(()) => Err(LITERAL_INCORRECT.create(reader, TextComponent::text(literal.to_string())))
+        }
+    }
+
+    /// Internal function to parse a literal. Used by [`Tree`].
+    pub fn parse_literal(reader: &mut StringReader, literal: &str) -> Result<usize, ()> {
+        let start = reader.cursor();
+        let len = literal.len();
+        if reader.can_read_bytes(len) {
+            let end = start + len;
+            if &reader.string()[start..end] == literal {
+                reader.set_cursor(end);
+                if matches!(reader.peek(), Some(' ') | None) {
+                    return Ok(end);
+                } else {
+                    reader.set_cursor(start);
+                }
+            }
+        }
+        Err(())
+    }
+
+    /// Gets examples accepted by this node.
+    pub fn examples(&self) -> Vec<String> {
+        match self {
+            Self::Root(_) => Vec::new(),
+            Self::Literal(node) => vec![node.meta.literal.to_string()],
+            Self::Command(node) => vec![node.meta.literal.to_string()],
+            Self::Argument(node) => node.meta.argument_type.examples()
+        }
     }
 }

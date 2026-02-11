@@ -51,7 +51,21 @@ use crate::command::errors::{
 };
 use pumpkin_util::text::TextComponent;
 
+/// Represents text that is generated at
+/// compile time and cannot change at runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompileTimeText {
+    /// This is first translated, then arguments are substituted (which are not constant)
+    /// when it needs to be displayed.
+    TranslationKey(&'static str),
+
+    /// Directly shows up to the user without any translation done.
+    Literal(&'static str)
+}
+
 /// A command error that requires **exactly** `N` translation arguments.
+/// This takes a translation key. If you want the non-translatable version,
+/// use [`LiteralCommandErrorType`].
 ///
 /// **Comparison with Brigadier**:
 /// - [`CommandErrorType<0>`] = `SimpleCommandExceptionType`
@@ -101,6 +115,50 @@ impl<const N: usize> CommandErrorType<N> {
     }
 }
 
+/// A command error that requires **exactly** `N` translation arguments.
+/// This takes a constant string literal. If you want the translatable version,
+/// use [`CommandErrorType`].
+///
+/// **Use this for custom Pumpkin error messages.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LiteralCommandErrorType {
+    pub literal: &'static str,
+}
+
+impl LiteralCommandErrorType {
+    /// Creates an error type from a given literal string.
+    #[must_use]
+    pub const fn new(literal: &'static str) -> Self {
+        Self { literal }
+    }
+
+    /// Creates an error without context from itself.
+    #[must_use]
+    pub fn create_without_context(
+        &'static self,
+    ) -> CommandSyntaxError {
+        CommandSyntaxError::create_without_context(
+            self,
+            TextComponent::text(self.literal),
+        )
+    }
+
+    /// Creates an error with context from itself.
+    pub fn create<C>(
+        &'static self,
+        context_provider: &C
+    ) -> CommandSyntaxError
+    where
+        C: ContextProvider,
+    {
+        CommandSyntaxError::create(
+            self,
+            TextComponent::text(self.literal),
+            context_provider,
+        )
+    }
+}
+
 // Prevent other crates from using this trait
 // Thus, we can effectively 'seal' our trait meant
 // only for `CommandErrorType<N>`.
@@ -116,7 +174,7 @@ mod sealed {
 /// key and the number of arguments (at runtime).
 pub trait AnyCommandErrorType: Sealed + std::fmt::Debug {
     /// Returns the underlying translation key of this specific error type.
-    fn translation_key(&self) -> &'static str;
+    fn text(&self) -> CompileTimeText;
 
     /// Returns the number of arguments supported by this error type.
     fn argument_count(&self) -> usize;
@@ -126,21 +184,31 @@ impl Eq for dyn AnyCommandErrorType {}
 
 impl PartialEq for dyn AnyCommandErrorType {
     fn eq(&self, other: &Self) -> bool {
-        self.translation_key() == other.translation_key()
+        self.text() == other.text()
             && self.argument_count() == other.argument_count()
     }
 }
 
 // Implement the private trait for our types.
 impl<const N: usize> Sealed for CommandErrorType<N> {}
-
 impl<const N: usize> AnyCommandErrorType for CommandErrorType<N> {
-    fn translation_key(&self) -> &'static str {
-        self.translation_key
+    fn text(&self) -> CompileTimeText {
+        CompileTimeText::TranslationKey(self.translation_key)
     }
 
     fn argument_count(&self) -> usize {
         N
+    }
+}
+
+impl Sealed for LiteralCommandErrorType {}
+impl AnyCommandErrorType for LiteralCommandErrorType {
+    fn text(&self) -> CompileTimeText {
+        CompileTimeText::Literal(self.literal)
+    }
+
+    fn argument_count(&self) -> usize {
+        0
     }
 }
 

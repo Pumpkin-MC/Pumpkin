@@ -1,3 +1,13 @@
+/// Creates a [`Vec<String>`] of examples from
+/// the given string literals.
+macro_rules! examples {
+    ( $( $example:literal ),* ) => {
+        vec! [
+            $( $example.to_string(), )*
+        ]
+    };
+}
+
 // Helper methods for assertion with a `StringReader`:
 
 /// Asserts that the result read by `reader` with the argument
@@ -14,6 +24,7 @@ macro_rules! assert_parse_ok_reset {
         $reader.set_cursor(0)
     }};
 }
+
 /// Asserts that the result read by `reader` with the argument
 /// type `$argument_type` used to parse is an `Err` containing the type of error as `$error_type`.
 /// Also resets the reader's cursor back to the start.

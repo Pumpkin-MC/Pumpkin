@@ -48,7 +48,7 @@ pub mod sign;
 pub mod smoker;
 
 //TODO: We need a mark_dirty for chests
-pub trait BlockEntity: Send + Sync {
+pub trait BlockEntity: Any + Send + Sync {
     fn write_nbt<'a>(
         &'a self,
         nbt: &'a mut NbtCompound,

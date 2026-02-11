@@ -12,8 +12,8 @@ impl ArgumentType<bool> for BoolArgumentType {
         reader.read_bool()
     }
 
-    fn examples(&self) -> &'static [&'static str] {
-        &["true", "false"]
+    fn examples(&self) -> Vec<String> {
+        examples!("true", "false")
     }
 }
 

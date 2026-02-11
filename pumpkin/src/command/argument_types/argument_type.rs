@@ -10,7 +10,7 @@ use crate::command::suggestion::Suggestions;
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
 
 /// Represents an argument type that parses a particular type `T`.
-pub trait ArgumentType<T> {
+pub trait ArgumentType<T: Send + Sync>: Send + Sync {
     /// Parses a `T` by using a [`StringReader`]. Call this only if you have no source.
     ///
     /// Errors should be propagated using the `?` operator, which will
@@ -49,8 +49,8 @@ pub trait ArgumentType<T> {
     ///
     /// Used for conflicts.
     #[must_use]
-    fn examples(&self) -> &'static [&'static str] {
-        &[]
+    fn examples(&self) -> Vec<String> {
+        Vec::new()
     }
 }
 
@@ -63,18 +63,18 @@ mod sealed {
 }
 
 /// Represents an argument type with any parsable type.
-pub trait AnyArgumentType: Sealed {
+pub trait AnyArgumentType: Sealed + Send + Sync {
     /// Parses a value by using a [`StringReader`]. Call this only if you have no source.
     ///
     /// Errors should be propagated using the `?` operator, which will
     /// replicate Brigadier's behavior of exceptions.
-    fn parse(&self, reader: &mut StringReader) -> Result<Box<dyn Any>, CommandSyntaxError>;
+    fn parse(&self, reader: &mut StringReader) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError>;
 
     /// Parses a value by using a [`StringReader`]. Call this only if you have no source.
     ///
     /// Errors should be propagated using the `?` operator, which will
     /// replicate Brigadier's behavior of exceptions.
-    fn parse_with_source(&self, reader: &mut StringReader, source: &CommandSource) -> Result<Box<dyn Any>, CommandSyntaxError>;
+    fn parse_with_source(&self, reader: &mut StringReader, source: &CommandSource) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError>;
 
     /// Provides a list of suggestions from this argument type.
     #[must_use]
@@ -89,23 +89,23 @@ pub trait AnyArgumentType: Sealed {
     ///
     /// Used for conflicts.
     #[must_use]
-    fn examples(&self) -> &'static [&'static str] {
-        &[]
+    fn examples(&self) -> Vec<String> {
+        Vec::new()
     }
 }
 
 // Implement our private trait for all argument types.
-impl<T> Sealed for dyn ArgumentType<T> {}
+impl<T: Send + Sync> Sealed for dyn ArgumentType<T> {}
 
-impl<T: 'static> AnyArgumentType for dyn ArgumentType<T> {
-    fn parse(&self, reader: &mut StringReader) -> Result<Box<dyn Any>, CommandSyntaxError> {
+impl<T: 'static + Send + Sync> AnyArgumentType for dyn ArgumentType<T> {
+    fn parse(&self, reader: &mut StringReader) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError> {
         match self.parse(reader) {
             Ok(value) => Ok(Box::new(value)),
             Err(error) => Err(error)
         }
     }
 
-    fn parse_with_source(&self, reader: &mut StringReader, source: &CommandSource) -> Result<Box<dyn Any>, CommandSyntaxError> {
+    fn parse_with_source(&self, reader: &mut StringReader, source: &CommandSource) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError> {
         match self.parse_with_source(reader, source) {
             Ok(value) => Ok(Box::new(value)),
             Err(error) => Err(error)
@@ -116,7 +116,7 @@ impl<T: 'static> AnyArgumentType for dyn ArgumentType<T> {
         self.list_suggestions(context, suggestions_builder)
     }
 
-    fn examples(&self) -> &'static [&'static str] {
+    fn examples(&self) -> Vec<String> {
         self.examples()
     }
 }
