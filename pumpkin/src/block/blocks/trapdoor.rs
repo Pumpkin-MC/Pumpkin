@@ -90,11 +90,7 @@ impl BlockBehaviour for TrapDoorBlock {
             let powered = block_receives_redstone_power(args.world, args.position).await;
 
             // Optimized vanilla trapdoor facing logic
-            let player_facing = args
-                .player
-                .living_entity
-                .entity
-                .get_horizontal_facing();
+            let player_facing = args.player.living_entity.entity.get_horizontal_facing();
 
             let facing = match args.direction {
                 BlockDirection::North
@@ -103,7 +99,6 @@ impl BlockBehaviour for TrapDoorBlock {
                 | BlockDirection::West => {
                     HorizontalFacing::from_block_direction(args.direction)
                 }
-
                 BlockDirection::Up | BlockDirection::Down => player_facing,
             };
 
