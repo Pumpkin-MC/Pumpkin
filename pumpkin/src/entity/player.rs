@@ -1,5 +1,5 @@
 use core::f32;
-use std::collections::{BinaryHeap, HashSet, VecDeque};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
@@ -135,7 +135,7 @@ pub struct ChunkManager {
     center: Vector2<i32>,
     view_distance: u8,
     chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
-    chunk_sent: HashSet<Vector2<i32>>,
+    chunk_sent: HashMap<Vector2<i32>, usize>,
     chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
@@ -157,7 +157,7 @@ impl ChunkManager {
             center: Vector2::<i32>::new(0, 0),
             view_distance: 0,
             chunk_listener,
-            chunk_sent: HashSet::new(),
+            chunk_sent: HashMap::new(),
             chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
@@ -171,6 +171,14 @@ impl ChunkManager {
         &self.world
     }
 
+    fn should_enqueue_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) -> bool {
+        let chunk_ptr = Arc::as_ptr(chunk) as usize;
+        match self.chunk_sent.insert(position, chunk_ptr) {
+            Some(old_ptr) => old_ptr != chunk_ptr,
+            None => true,
+        }
+    }
+
     pub fn pull_new_chunks(&mut self) {
         // log::debug!("pull new chunks");
         while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
@@ -180,7 +188,7 @@ impl ChunkManager {
             if dst > i32::from(self.view_distance) {
                 continue;
             }
-            if self.chunk_sent.insert(pos) {
+            if self.should_enqueue_chunk(pos, &chunk) {
                 // log::debug!("receive new chunk {pos:?}");
                 self.chunk_queue.push(HeapNode(dst, pos, chunk));
             }
@@ -221,7 +229,7 @@ impl ChunkManager {
         let view_distance_i32 = i32::from(view_distance);
         let unloading_chunks: HashSet<Vector2<i32>> = unloading_chunks.iter().copied().collect();
 
-        self.chunk_sent.retain(|pos| {
+        self.chunk_sent.retain(|pos, _| {
             (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
                 && !unloading_chunks.contains(pos)
         });
@@ -236,7 +244,7 @@ impl ChunkManager {
         self.chunk_queue = new_queue;
 
         for pos in loading_chunks {
-            if !self.chunk_sent.contains(pos)
+            if !self.chunk_sent.contains_key(pos)
                 && let Some(chunk) = level.loaded_chunks.get(pos)
             {
                 self.push_chunk(*pos, chunk.value().clone());
@@ -282,11 +290,12 @@ impl ChunkManager {
     }
 
     pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
-        self.chunk_sent.insert(position);
-        let dst = (position.x - self.center.x)
-            .abs()
-            .max((position.y - self.center.y).abs());
-        self.chunk_queue.push(HeapNode(dst, position, chunk));
+        if self.should_enqueue_chunk(position, &chunk) {
+            let dst = (position.x - self.center.x)
+                .abs()
+                .max((position.y - self.center.y).abs());
+            self.chunk_queue.push(HeapNode(dst, position, chunk));
+        }
     }
 
     pub fn push_entity(&mut self, position: Vector2<i32>, chunk: SyncEntityChunk) {
