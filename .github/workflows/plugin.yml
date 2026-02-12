@@ -1,4 +1,4 @@
-name: Build Hello Pumpkin plugin
+name: Build plugin
 
 on:
   push:
