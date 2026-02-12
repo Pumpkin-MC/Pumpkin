@@ -22,7 +22,6 @@ serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 bytes.workspace = true
-log.workspace = true
 
 # encryption
 aes.workspace = true
