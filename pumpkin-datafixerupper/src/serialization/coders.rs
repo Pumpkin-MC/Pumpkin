@@ -3,12 +3,13 @@ use crate::serialization::{
     HasValue, data_result::DataResult, dynamic_ops::DynamicOps,
     map_codecs::field_coders::FieldEncoder,
 };
+use std::fmt::Display;
 
 /// A trait describing the way to encode something of a type `Value` into something else  (`Value -> ?`).
 pub trait Encoder: HasValue {
     /// Encodes an input of this encoder's type (`A`) into an output of type `T`,
     /// along with a prefix (already encoded data).
-    fn encode<T: PartialEq + Clone>(
+    fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
@@ -17,7 +18,7 @@ pub trait Encoder: HasValue {
 
     /// Encodes an input of this encoder's type (`A`) into an output of type `T`
     /// with no prefix (no already encoded data).
-    fn encode_start<T: PartialEq + Clone>(
+    fn encode_start<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
@@ -36,7 +37,7 @@ impl<A, B, E> HasValue for ComappedEncoderImpl<A, B, E> {
 }
 
 impl<A, B, E: Encoder<Value = A>> Encoder for ComappedEncoderImpl<A, B, E> {
-    fn encode<T: PartialEq + Clone>(
+    fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
@@ -68,7 +69,7 @@ impl<A, B, E> HasValue for FlatComappedEncoderImpl<A, B, E> {
 }
 
 impl<A, B, E: Encoder<Value = A>> Encoder for FlatComappedEncoderImpl<A, B, E> {
-    fn encode<T: PartialEq + Clone>(
+    fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
@@ -101,7 +102,7 @@ pub(crate) const fn encoder_field_of<A, E: Encoder<Value = A>>(
 pub trait Decoder: HasValue {
     /// Decodes an input of this decoder's type (`A`) into an output of type `T`,
     /// keeping the remaining undecoded data as another element of the tuple.
-    fn decode<T: PartialEq + Clone>(
+    fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: T,
         ops: &'static impl DynamicOps<Value = T>,
@@ -109,7 +110,7 @@ pub trait Decoder: HasValue {
 
     /// Decodes an input of this decoder's type (`A`) into an output of type `T`,
     /// ignoring any remaining undecoded data (of type `A`).
-    fn parse<T: PartialEq + Clone>(
+    fn parse<T: Display + PartialEq + Clone>(
         &self,
         input: T,
         ops: &'static impl DynamicOps<Value = T>,
@@ -128,7 +129,7 @@ impl<A, B, D> HasValue for MappedDecoderImpl<A, B, D> {
 }
 
 impl<A, B, D: Decoder<Value = A>> Decoder for MappedDecoderImpl<A, B, D> {
-    fn decode<T: PartialEq + Clone>(
+    fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: T,
         ops: &'static impl DynamicOps<Value = T>,
@@ -161,7 +162,7 @@ impl<A, B, D> HasValue for FlatMappedDecoderImpl<A, B, D> {
 }
 
 impl<A, B, D: Decoder<Value = A>> Decoder for FlatMappedDecoderImpl<A, B, D> {
-    fn decode<T: PartialEq + Clone>(
+    fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: T,
         ops: &'static impl DynamicOps<Value = T>,

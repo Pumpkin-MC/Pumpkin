@@ -82,7 +82,7 @@ pub trait UniversalStructBuilder: ResultStructBuilder {
 /// Make sure to have a struct field of type [`DataResult<Self::Value>`] of name `$builder`.
 #[macro_export]
 macro_rules! impl_struct_builder {
-    ($builder:ident, $ops:ident) => {
+    ($builder:ident) => {
         fn set_lifecycle(&mut self, lifecycle: Lifecycle) {
             self.$builder = self.$builder.clone().with_lifecycle(lifecycle);
         }
@@ -100,14 +100,6 @@ macro_rules! impl_struct_builder {
                 .clone()
                 .flat_map(|b| self.build_with_builder(b, prefix))
         }
-
-        fn add_string_key_value(&mut self, key: &str, value: Self::Value) {
-            self.add_key_value(self.$ops.create_string(key), value);
-        }
-
-        fn add_string_key_value_result(&mut self, key: &str, value: DataResult<Self::Value>) {
-            self.add_key_value_result(self.$ops.create_string(key), value);
-        }
     };
 }
 
@@ -117,18 +109,63 @@ macro_rules! impl_struct_builder {
 /// This automatically implements the methods to add key-value pairs to the builder.
 #[macro_export]
 macro_rules! impl_string_struct_builder {
-    ($builder:ident) => {
+    (@internal $builder:ident) => {
+        fn add_string_key_value(&mut self, key: &str, value: Self::Value) {
+            self.$builder = self.$builder.clone().map(|r| self.append(key, value, r))
+        }
+
+        fn add_string_key_value_result(&mut self, key: &str, value: DataResult<Self::Value>) {
+            self.$builder = self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(key, v, r), value);
+        }
+    };
+
+    // For constant ops
+    ($builder:ident, $ops:ident) => {
+
+        impl_string_struct_builder!(@internal $builder);
+
+        fn add_key_value(&mut self, key: Self::Value, value: Self::Value) {
+            self.$builder = $ops.get_string(&key).flat_map(|s| {
+                self.add_string_key_value(&*s, value);
+                return self.$builder.clone();
+            })
+        }
+
+        fn add_key_value_result(&mut self, key: Self::Value, value: DataResult<Self::Value>) {
+            self.$builder = $ops.get_string(&key).flat_map(|s| {
+                self.add_string_key_value_result(&*s, value);
+                return self.$builder.clone();
+            })
+        }
+
+        fn add_key_result_value_result(
+            &mut self,
+            key: DataResult<Self::Value>,
+            value: DataResult<Self::Value>,
+        ) {
+            self.$builder = key.flat_map(|v| $ops.get_string(&v)).flat_map(|s| {
+                self.add_string_key_value_result(&*s, value);
+                return self.$builder.clone();
+            })
+        }
+    };
+
+    // For stored ops
+    ($builder:ident, self. $ops:ident) => {
+
+        impl_string_struct_builder!(@internal $builder);
+
         fn add_key_value(&mut self, key: Self::Value, value: Self::Value) {
             self.$builder = self.$ops.get_string(&key).flat_map(|s| {
                 self.add_string_key_value(&*s, value);
-                return self.$builder;
+                return self.$builder.clone();
             })
         }
 
         fn add_key_value_result(&mut self, key: Self::Value, value: DataResult<Self::Value>) {
             self.$builder = self.$ops.get_string(&key).flat_map(|s| {
                 self.add_string_key_value_result(&*s, value);
-                return self.$builder;
+                return self.$builder.clone();
             })
         }
 
@@ -139,7 +176,7 @@ macro_rules! impl_string_struct_builder {
         ) {
             self.$builder = key.flat_map(|v| self.$ops.get_string(&v)).flat_map(|s| {
                 self.add_string_key_value_result(&*s, value);
-                return self.$builder;
+                return self.$builder.clone();
             })
         }
     };
@@ -151,7 +188,7 @@ macro_rules! impl_string_struct_builder {
 /// This automatically implements the methods to add key-value pairs to the builder.
 #[macro_export]
 macro_rules! impl_universal_struct_builder {
-    ($builder:ident) => {
+    (@internal $builder:ident) => {
         fn add_key_value(&mut self, key: Self::Value, value: Self::Value) {
             self.$builder = self.$builder.clone().map(|b| self.append(key, value, b))
         }
@@ -174,6 +211,32 @@ macro_rules! impl_universal_struct_builder {
                 .apply(key.apply_2_and_make_stable(|k, v| (|b| self.append(k, v, b)), value));
         }
     };
+
+    // For constant ops
+    ($builder:ident, $ops:ident) => {
+        impl_universal_struct_builder!(@internal $builder);
+
+        fn add_string_key_value(&mut self, key: &str, value: Self::Value) {
+            self.add_key_value($ops.create_string(key), value);
+        }
+
+        fn add_string_key_value_result(&mut self, key: &str, value: DataResult<Self::Value>) {
+            self.add_key_value_result($ops.create_string(key), value);
+        }
+    };
+
+    // For stored ops
+    ($builder:ident, self. $ops:ident) => {
+        impl_universal_struct_builder!(@internal $builder);
+
+        fn add_string_key_value(&mut self, key: &str, value: Self::Value) {
+            self.add_key_value(self.$ops.create_string(key), value);
+        }
+
+        fn add_string_key_value_result(&mut self, key: &str, value: DataResult<Self::Value>) {
+            self.add_key_value_result(self.$ops.create_string(key), value);
+        }
+    };
 }
 
 pub struct MapBuilder<T, O: DynamicOps<Value = T> + 'static> {
@@ -193,8 +256,8 @@ impl<T: Clone, O: DynamicOps<Value = T>> MapBuilder<T, O> {
 impl<T: Clone, O: DynamicOps<Value = T>> StructBuilder for MapBuilder<T, O> {
     type Value = T;
 
-    impl_struct_builder!(builder, ops);
-    impl_universal_struct_builder!(builder);
+    impl_struct_builder!(builder);
+    impl_universal_struct_builder!(builder, self.ops);
 }
 
 impl<T: Clone, O: DynamicOps<Value = T>> ResultStructBuilder for MapBuilder<T, O> {

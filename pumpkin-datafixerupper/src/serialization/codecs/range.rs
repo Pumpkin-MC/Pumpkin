@@ -6,20 +6,29 @@ use crate::serialization::dynamic_ops::DynamicOps;
 use std::fmt::Display;
 
 /// A codec for a specific number range.
-/// `A` is the type of number to restrict (by providing a range), while
-/// `C` is the type of codec used to serialize them (as if there was no range).
-pub struct RangeCodec<A: PartialOrd + Display, C: Codec<Value = A> + 'static> {
+/// - `C` is the type of codec used to serialize them (as if there was no range).
+/// - `C::Value` (the codec type) is the type of number to restrict (by providing a range), while
+pub struct RangeCodec<C: Codec + 'static>
+where
+    C::Value: PartialOrd + Display + Clone,
+{
     codec: &'static C,
-    min: A,
-    max: A,
+    min: C::Value,
+    max: C::Value,
 }
 
-impl<A: PartialOrd + Display + Clone, C: Codec<Value = A>> HasValue for RangeCodec<A, C> {
-    type Value = A;
+impl<C: Codec> HasValue for RangeCodec<C>
+where
+    <C as HasValue>::Value: PartialOrd + Display + Clone,
+{
+    type Value = C::Value;
 }
 
-impl<A: PartialOrd + Display + Clone, C: Codec<Value = A>> Encoder for RangeCodec<A, C> {
-    fn encode<T: PartialEq + Clone>(
+impl<C: Codec> Encoder for RangeCodec<C>
+where
+    <C as HasValue>::Value: PartialOrd + Display + Clone,
+{
+    fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
@@ -29,8 +38,11 @@ impl<A: PartialOrd + Display + Clone, C: Codec<Value = A>> Encoder for RangeCode
     }
 }
 
-impl<A: PartialOrd + Display + Clone, C: Codec<Value = A>> Decoder for RangeCodec<A, C> {
-    fn decode<T: PartialEq + Clone>(
+impl<C: Codec> Decoder for RangeCodec<C>
+where
+    <C as HasValue>::Value: PartialOrd + Display + Clone,
+{
+    fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: T,
         ops: &'static impl DynamicOps<Value = T>,
@@ -50,10 +62,10 @@ fn check_range<T: PartialOrd + Display + Clone>(input: &T, min: &T, max: &T) -> 
     }
 }
 
-pub(crate) const fn new_range_codec<A: Display + PartialOrd, C: Codec<Value = A>>(
+pub(crate) const fn new_range_codec<A: Display + PartialOrd + Clone, C: Codec<Value = A>>(
     codec: &'static C,
     min: A,
     max: A,
-) -> RangeCodec<A, C> {
+) -> RangeCodec<C> {
     RangeCodec { codec, min, max }
 }

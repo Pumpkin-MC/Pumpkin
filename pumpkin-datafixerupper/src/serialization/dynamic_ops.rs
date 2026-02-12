@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::serialization::struct_builder::{MapBuilder, StructBuilder};
+use crate::serialization::struct_builder::ResultStructBuilder;
 use crate::serialization::{
     Number,
     data_result::DataResult,
@@ -26,6 +26,7 @@ macro_rules! create_number_impl {
 /// The `Value` of this trait is the type that can be used to represent anything in this format.
 pub trait DynamicOps {
     type Value: PartialEq + Display + Clone;
+    type StructBuilder: ResultStructBuilder<Value = Self::Value>;
 
     /// Returns how an empty value is represented by this `DynamicOps`.
     fn empty(&self) -> Self::Value;
@@ -360,10 +361,5 @@ where {
     }
 
     /// Returns a [`MapBuilder`] for this `DynamicOps`.
-    fn map_builder(&'static self) -> impl StructBuilder<Value = Self::Value>
-    where
-        Self: Sized,
-    {
-        MapBuilder::new(self)
-    }
+    fn map_builder(&'static self) -> Self::StructBuilder;
 }
