@@ -51,7 +51,9 @@ use pumpkin_protocol::{
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
+use rand::RngExt;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 /// Represents a living entity within the game world.
 ///
@@ -1430,6 +1432,66 @@ impl LivingEntity {
 
         self.dead.store(false, Relaxed);
     }
+
+    /// Try to spawn silverfish when this entity is infested and hurt.
+    async fn try_spawn_infested_silverfish(&self) {
+        if !self.has_effect(&StatusEffect::INFESTED).await {
+            return;
+        }
+
+        // Wither, ender dragon and silverfish are immune
+        if self.entity.entity_type == &EntityType::WITHER
+            || self.entity.entity_type == &EntityType::ENDER_DRAGON
+            || self.entity.entity_type == &EntityType::SILVERFISH
+        {
+            return;
+        }
+
+        let world = self.entity.world.load();
+
+        // 10% chance
+        if rand::rng().random::<f32>() <= 0.1 {
+            let count = rand::rng().random_range(1..3);
+            for _ in 0..count {
+                // Spawn at center of entity
+                let bbox = self.entity.bounding_box.load();
+                let center = Vector3::new(
+                    f64::midpoint(bbox.min.x, bbox.max.x),
+                    f64::midpoint(bbox.min.y, bbox.max.y),
+                    f64::midpoint(bbox.min.z, bbox.max.z),
+                );
+
+                // Random direction
+                let yaw_rad = self.entity.yaw.load().to_radians() as f64;
+                let random_angle = rand::rng().random::<f64>() * std::f64::consts::PI
+                    - std::f64::consts::FRAC_PI_2;
+                let angle = yaw_rad + random_angle;
+                let speed = 0.3f64;
+                let dx = -angle.sin() * speed;
+                let dz = angle.cos() * speed;
+                let dy = 0.1f64;
+
+                // Spawn
+                let silver = crate::entity::r#type::from_type(
+                    &EntityType::SILVERFISH,
+                    center,
+                    &world,
+                    Uuid::new_v4(),
+                )
+                .await;
+
+                silver.get_entity().set_pos(center);
+                silver.get_entity().velocity.store(Vector3::new(dx, dy, dz));
+
+                world.spawn_entity(silver).await;
+
+                // Play sound
+                world
+                    .play_sound(Sound::EntitySilverfishHurt, SoundCategory::Players, &center)
+                    .await;
+            }
+        }
+    }
 }
 
 impl NBTStorage for LivingEntity {
@@ -1574,6 +1636,9 @@ impl EntityBase for LivingEntity {
                     position,
                 ))
                 .await;
+
+            // Try to spawn infested silverfish
+            self.try_spawn_infested_silverfish().await;
 
             if play_sound {
                 world
