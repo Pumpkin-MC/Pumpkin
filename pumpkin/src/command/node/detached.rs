@@ -94,6 +94,7 @@ impl CommandDetachedNode {
     ///
     /// # Note
     /// Prefer using the [`LiteralArgumentBuilder`] over this function.
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         global_id: GlobalNodeId,
         literal: impl Into<Cow<'static, str>>,
@@ -133,6 +134,7 @@ impl ArgumentDetachedNode {
     ///
     /// # Note
     /// Prefer using the [`RequiredArgumentBuilder`] over this function.
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         global_id: GlobalNodeId,
         name: impl Into<Cow<'static, str>>,

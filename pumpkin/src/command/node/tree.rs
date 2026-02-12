@@ -116,11 +116,13 @@ impl Tree {
     }
 
     /// Gets the size of this [`Tree`], which is the number of nodes this tree contains.
-    pub fn size(&self) -> usize {
+    #[must_use]
+    pub const fn size(&self) -> usize {
         self.nodes.len()
     }
 
     /// Gets the size of this [`Tree`], which is the number of nodes this tree contains.
+    #[must_use]
     pub fn size_nonzero(&self) -> NonZero<usize> {
         self.nodes
             .len()
@@ -306,7 +308,7 @@ impl Tree {
         match redirect {
             Redirection::Root => Some(ROOT_NODE_ID),
             Redirection::Global(id) => self.ids_map.get(&id).copied(),
-            Redirection::Local(id) => (id.0 < self.size_nonzero()).then(|| id),
+            Redirection::Local(id) => (id.0 < self.size_nonzero()).then_some(id),
         }
     }
 }

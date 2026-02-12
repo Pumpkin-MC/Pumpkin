@@ -99,14 +99,15 @@ impl CommandSource {
     /// The returned [`CommandSource`] does not contain
     /// a server or a world. If there is attempt to fetch the server or a world from
     /// the returned source, there will be a panic!
+    #[must_use]
     pub fn dummy() -> Self {
-        CommandSource {
+        Self {
             output: CommandSender::Dummy,
             world: None,
             entity: None,
-            position: Default::default(),
-            rotation: Default::default(),
-            name: "".to_string(),
+            position: Vector3::default(),
+            rotation: Vector2::default(),
+            name: String::new(),
             display_name: TextComponent::text(""),
             server: None,
             silent: false,
@@ -116,6 +117,7 @@ impl CommandSource {
     }
 
     /// Creates a usable [`CommandSource`] for running commands in an actual environment.
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         output: CommandSender,
         world: Arc<World>,
@@ -129,7 +131,7 @@ impl CommandSource {
         command_result_taker: ResultValueTaker,
         entity_anchor: EntityAnchor,
     ) -> Self {
-        CommandSource {
+        Self {
             output,
             world: Some(world),
             entity,
@@ -348,6 +350,7 @@ impl CommandSource {
     ///
     /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain a world, but it may not in a unit test.
+    #[must_use]
     pub fn world(&self) -> Arc<World> {
         self.world.clone().expect("Expected world to exist")
     }
@@ -356,6 +359,7 @@ impl CommandSource {
     ///
     /// - If this source actually contains a server, it returns that..
     /// - If it doesn't, this function **panics**. Ideally, a source should contain the server, but it may not in a unit test.
+    #[must_use]
     pub fn server(&self) -> Arc<Server> {
         self.server.clone().expect("Expected server to exist")
     }

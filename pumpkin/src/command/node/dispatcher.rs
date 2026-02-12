@@ -154,21 +154,21 @@ impl CommandDispatcher {
 
     /// Parses a command owned by a [`StringReader`] with the provided source.
     pub fn parse(&self, reader: &mut StringReader, source: &CommandSource) -> ParsingResult<'_> {
-        let mut context = CommandContextBuilder::new(
+        let context = CommandContextBuilder::new(
             self,
             Arc::new(source.clone()),
             self.tree.clone(),
             ROOT_NODE_ID,
             reader.cursor(),
         );
-        self.parse_nodes(ROOT_NODE_ID, reader, &mut context)
+        self.parse_nodes(ROOT_NODE_ID, reader, &context)
     }
 
     fn parse_nodes<'a>(
         &'a self,
         node: NodeId,
         original_reader: &mut StringReader,
-        context_so_far: &mut CommandContextBuilder<'a>,
+        context_so_far: &CommandContextBuilder<'a>,
     ) -> ParsingResult<'a> {
         let source = context_so_far.source.clone();
         let mut errors: FxHashMap<NodeId, CommandSyntaxError> = FxHashMap::default();
@@ -210,14 +210,14 @@ impl CommandDispatcher {
                         reader.set_cursor(cursor);
                         continue;
                     };
-                    let mut child_context = CommandContextBuilder::new(
+                    let child_context = CommandContextBuilder::new(
                         self,
                         source,
                         self.tree.clone(),
                         redirect,
                         reader.cursor(),
                     );
-                    let parsed = self.parse_nodes(redirect, &mut reader, &mut child_context);
+                    let parsed = self.parse_nodes(redirect, &mut reader, &child_context);
                     context.with_child(parsed.context);
                     return ParsingResult {
                         context,
@@ -225,7 +225,7 @@ impl CommandDispatcher {
                         reader: parsed.reader,
                     };
                 }
-                let parsed = self.parse_nodes(child, &mut reader, &mut context);
+                let parsed = self.parse_nodes(child, &mut reader, &context);
                 potentials.push(parsed);
             } else {
                 potentials.push(ParsingResult {
@@ -236,7 +236,13 @@ impl CommandDispatcher {
             }
         }
 
-        if !potentials.is_empty() {
+        if potentials.is_empty() {
+            ParsingResult {
+                context: context_so_far.clone(),
+                errors,
+                reader: original_reader.clone_into_owned(),
+            }
+        } else {
             potentials
                 .into_iter()
                 .min_by(|a, b| {
@@ -249,12 +255,6 @@ impl CommandDispatcher {
                     (a_reader_remaining, a_has_errors).cmp(&(b_reader_remaining, b_has_errors))
                 })
                 .unwrap()
-        } else {
-            ParsingResult {
-                context: context_so_far.clone(),
-                errors,
-                reader: original_reader.clone_into_owned(),
-            }
         }
     }
 }

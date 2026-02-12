@@ -134,14 +134,11 @@ impl CommandContext {
             )))
         })?;
         let dyn_ref = &*arg.result;
-        dyn_ref
-            .downcast_ref::<T>()
-            .map(|value| value.clone())
-            .ok_or_else(|| {
-                DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(format!(
-                    "Could not downcast argument '{name}'"
-                )))
-            })
+        dyn_ref.downcast_ref::<T>().cloned().ok_or_else(|| {
+            DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(format!(
+                "Could not downcast argument '{name}'"
+            )))
+        })
     }
 }
 
