@@ -11814,30 +11814,6 @@ pub mod Item {
     pub const MINECRAFT_NAUTILUS_TAMING_ITEMS: super::Tag =
         (&["pufferfish_bucket", "pufferfish"], &[1019u16, 1060u16]);
     pub const MINECRAFT_NETHERITE_TOOL_MATERIALS: super::Tag = (&["netherite_ingot"], &[909u16]);
-    pub const MINECRAFT_NETHERITE_ITEMS: super::Tag = (
-        &[
-            "netherite_sword",
-            "netherite_shovel",
-            "netherite_pickaxe",
-            "netherite_axe",
-            "netherite_hoe",
-            "netherite_spear",
-            "netherite_helmet",
-            "netherite_chestplate",
-            "netherite_leggings",
-            "netherite_boots",
-            "netherite_horse_armor",
-            "netherite_nautilus_armor",
-            "netherite_block",
-            "netherite_ingot",
-            "netherite_scrap",
-            "ancient_debris",
-        ],
-        &[
-            941u16, 942u16, 943u16, 944u16, 945u16, 1302u16, 978u16, 979u16, 980u16, 981u16,
-            1259u16, 1336u16, 94u16, 909u16, 910u16, 82u16,
-        ],
-    );
     pub const MINECRAFT_NON_FLAMMABLE_WOOD: super::Tag = (
         &[
             "warped_stem",
