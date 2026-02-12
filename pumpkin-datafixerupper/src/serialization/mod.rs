@@ -16,6 +16,7 @@ pub mod map_codecs;
 pub mod map_coders;
 pub mod map_like;
 pub mod struct_builder;
+pub mod struct_codec_builder;
 
 /// A trait specifying a single type.
 /// This is used to prevent type conflicts for `Codec`s and `MapCodec`s implementing an encoder and decoder.
