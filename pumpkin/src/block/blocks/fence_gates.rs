@@ -121,20 +121,22 @@ impl BlockBehaviour for FenceGateBlock {
                 FenceGateProperties::from_state_id(block_state.id, args.block);
             let powered = block_receives_redstone_power(args.world, args.position).await;
 
-            if powered != fence_gate_props.powered {
-                fence_gate_props.powered = powered;
+            if powered == fence_gate_props.powered {
+                return;
+            }
 
-                if powered != fence_gate_props.open {
-                    fence_gate_props.open = powered;
+            fence_gate_props.powered = powered;
 
-                    args.world
-                        .play_block_sound(
-                            get_sound(args.block, powered),
-                            SoundCategory::Blocks,
-                            *args.position,
-                        )
-                        .await;
-                }
+            if powered != fence_gate_props.open {
+                fence_gate_props.open = powered;
+
+                args.world
+                    .play_block_sound(
+                        get_sound(args.block, powered),
+                        SoundCategory::Blocks,
+                        *args.position,
+                    )
+                    .await;
             }
 
             args.world
