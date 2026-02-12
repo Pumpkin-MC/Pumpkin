@@ -7,6 +7,7 @@ use crate::serialization::keyable::Keyable;
 use crate::serialization::map_coders::{CompressorHolder, MapDecoder, MapEncoder};
 use crate::serialization::map_like::MapLike;
 use crate::serialization::struct_builder::StructBuilder;
+use std::fmt::Display;
 use std::sync::OnceLock;
 
 /// A type of *codec* which encodes/decodes fields of a map.
@@ -33,9 +34,9 @@ impl<A, E: MapEncoder<Value = A>, D: MapDecoder<Value = A>> HasValue for Compose
 }
 
 impl<A, E: MapEncoder<Value = A>, D: MapDecoder<Value = A>> Keyable for ComposedMapCodec<A, E, D> {
-    fn iter_keys(&self) -> Vec<String> {
-        let mut vec = self.encoder.iter_keys();
-        vec.extend(self.decoder.iter_keys());
+    fn keys(&self) -> Vec<String> {
+        let mut vec = self.encoder.keys();
+        vec.extend(self.decoder.keys());
         vec
     }
 }
@@ -49,7 +50,7 @@ impl<A, E: MapEncoder<Value = A>, D: MapDecoder<Value = A>> CompressorHolder
 impl<A, E: MapEncoder<Value = A>, D: MapDecoder<Value = A>> MapEncoder
     for ComposedMapCodec<A, E, D>
 {
-    fn encode<T: PartialEq + Clone>(
+    fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
@@ -62,7 +63,7 @@ impl<A, E: MapEncoder<Value = A>, D: MapDecoder<Value = A>> MapEncoder
 impl<A, E: MapEncoder<Value = A>, D: MapDecoder<Value = A>> MapDecoder
     for ComposedMapCodec<A, E, D>
 {
-    fn decode<T: PartialEq + Clone>(
+    fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: &impl MapLike<Value = T>,
         ops: &'static impl DynamicOps<Value = T>,
