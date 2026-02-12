@@ -19,7 +19,7 @@ use pumpkin_world::block::entities::bell::BellBlockEntity;
 use pumpkin_world::world::BlockFlags;
 use pumpkin_world::BlockStateId;
 
-fn reverse_horizontal_facing(direction: HorizontalFacing) -> HorizontalFacing{
+const fn reverse_horizontal_facing(direction: HorizontalFacing) -> HorizontalFacing{
     match direction {
         HorizontalFacing::North => HorizontalFacing::South,
         HorizontalFacing::South => HorizontalFacing::North,
@@ -27,17 +27,11 @@ fn reverse_horizontal_facing(direction: HorizontalFacing) -> HorizontalFacing{
         HorizontalFacing::West => HorizontalFacing::East
     }
 }
-async fn ring_bell<'a>(position: BlockPos, world:&Arc<World>, direction2: Option<HorizontalFacing>) -> (){
+async fn ring_bell(position: BlockPos, world:&Arc<World>, direction2: Option<HorizontalFacing>) -> (){
     let state = world.get_block_state(&position).await;
 
     let props = BellLikeProperties::from_state_id(state.id, world.get_block(&position).await);
-    let direction;
-
-    if let Some(direction3) = direction2 {
-        direction=direction3;
-    } else {
-        direction=props.facing;
-    }
+    let direction= direction2.map_or(props.facing, |direction3| direction3);
 
     if let Some(block_entity)=world.get_block_entity(&position).await{
 
@@ -62,7 +56,7 @@ fn is_point_on_bell(hit: &BlockHitResult, attachment: Attachment, block_face: Ho
     if hit.face==&BlockDirection::Up || hit.face==&BlockDirection::Down {
         return false;
     }
-    if hit.face.to_axis() != Axis::Y && !(hit.cursor_pos.y > 0.8124f32) {
+    if hit.face.to_axis() != Axis::Y && hit.cursor_pos.y <= 0.8124f32 {
         match attachment {
             Attachment::Floor => hit.face.to_axis() == block_face.to_block_direction().to_axis(),
             Attachment::SingleWall | Attachment::DoubleWall => hit.face.to_axis() != block_face.to_block_direction().to_axis(),
@@ -94,8 +88,7 @@ impl WallMountedBlock for BellBlock {
         match props.attachment {
             Attachment::Ceiling => BlockDirection::Down,
             Attachment::Floor => BlockDirection::Up,
-            Attachment::SingleWall => reverse_horizontal_facing(props.facing).to_block_direction(),
-            Attachment::DoubleWall => reverse_horizontal_facing(props.facing).to_block_direction()
+            Attachment::SingleWall | Attachment::DoubleWall => reverse_horizontal_facing(props.facing).to_block_direction(),
         }
     }
 }
@@ -133,15 +126,15 @@ impl BlockBehaviour for BellBlock {
                 WallMountedBlock::get_placement_face(self, args.player, args.direction);
 
             props.facing = match block_face{
-                BlockFace::Floor => facing,
-                BlockFace::Ceiling => facing,
+                BlockFace::Floor | BlockFace::Ceiling => facing,
                 BlockFace::Wall => reverse_horizontal_facing(facing),
             };
 
             props.attachment=match block_face {
-                BlockFace::Wall => match is_single_wall(*args.position,reverse_horizontal_facing(props.facing),args.world).await{
-                    true => Attachment::SingleWall,
-                    false => Attachment::DoubleWall
+                BlockFace::Wall => if is_single_wall(*args.position,reverse_horizontal_facing(props.facing),args.world).await{
+                    Attachment::SingleWall
+                } else {
+                    Attachment::DoubleWall
                 }
                 BlockFace::Floor => Attachment::Floor,
                 BlockFace::Ceiling => Attachment::Ceiling
@@ -159,7 +152,7 @@ impl BlockBehaviour for BellBlock {
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
 
-            let world: &World = &*args.world;
+            let world: &World = args.world;
 
             let is_receiving_power = block_receives_redstone_power(world, args.position).await;
             let state = args.world.get_block_state(args.position).await;
@@ -195,7 +188,6 @@ impl BlockBehaviour for BellBlock {
 
             }
 
-            ()
         })
     }
 

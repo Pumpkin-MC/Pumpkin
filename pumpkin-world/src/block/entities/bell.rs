@@ -53,7 +53,6 @@ impl BlockEntity for BellBlockEntity {
 
     fn write_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> Pin<Box<dyn Future<Output=()> + Send + 'a>> {
         Box::pin(async move {
-            ()
         })
     }
 
