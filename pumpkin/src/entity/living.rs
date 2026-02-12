@@ -249,12 +249,18 @@ impl LivingEntity {
                     .damage(&*dyn_self, damage_amount, DamageType::MAGIC)
                     .await;
             }
-        }
+        } else {
+            self.active_effects
+                .lock()
+                .await
+                .insert(effect.effect_type, effect.clone());
 
-        self.active_effects
-            .lock()
-            .await
-            .insert(effect.effect_type, effect.clone());
+            // Effects that modify attributes (ex. speed) should also update the
+            // entity's attributes so the client updates movement prediction.
+            if !effect.effect_type.attribute_modifiers.is_empty() {
+                self.send_attribute_update().await;
+            }
+        }
 
         // Broadcast effect to nearby players
         let mut flag: i8 = 0;
@@ -280,10 +286,6 @@ impl LivingEntity {
         );
 
         self.entity.world.load().broadcast_packet_all(&packet).await;
-
-        // Effects that modify attributes (ex. speed) should also update the
-        // entity's attributes so the client updates movement prediction.
-        self.send_attribute_update().await;
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -300,8 +302,9 @@ impl LivingEntity {
             .await;
 
         // Effect removal may change attributes
-        self.send_attribute_update().await;
-
+        if !effect_type.attribute_modifiers.is_empty() {
+            self.send_attribute_update().await;
+        }
         succeeded
     }
 
@@ -1182,8 +1185,11 @@ impl LivingEntity {
                 .await;
         }
 
-        // If we removed any effects, update attributes once
-        if !effects_to_remove.is_empty() {
+        // If we removed any effects with attribute modifiers, send an attribute update
+        if effects_to_remove
+            .iter()
+            .any(|e| !e.attribute_modifiers.is_empty())
+        {
             self.send_attribute_update().await;
         }
 
