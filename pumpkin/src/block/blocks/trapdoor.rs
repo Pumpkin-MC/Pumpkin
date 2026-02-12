@@ -87,26 +87,22 @@ impl BlockBehaviour for TrapDoorBlock {
             trapdoor_props.waterlogged = args.replacing.water_source();
 
             let powered = block_receives_redstone_power(args.world, args.position).await;
-           // Optimized vanilla trapdoor facing logic
-let player_facing = args
-    .player
-    .living_entity
-    .entity
-    .get_horizontal_facing();
 
-let facing = match args.direction {
-    // Clicking the side of a block → face that side
-    BlockDirection::North
-    | BlockDirection::South
-    | BlockDirection::East
-    | BlockDirection::West => args.direction,
+            // Optimized vanilla trapdoor facing logic
+            let player_facing = args.player.living_entity.entity.get_horizontal_facing();
 
-    // Clicking top or bottom → face the player's direction
-    BlockDirection::Up | BlockDirection::Down => player_facing,
-};
+            let facing = match args.direction {
+                // Clicking the side of a block → face that side
+                BlockDirection::North
+                | BlockDirection::South
+                | BlockDirection::East
+                | BlockDirection::West => args.direction,
 
-trapdoor_props.facing = facing;
+                // Clicking top or bottom → face the player's direction
+                BlockDirection::Up | BlockDirection::Down => player_facing,
+            };
 
+            trapdoor_props.facing = facing;
 
             trapdoor_props.half = match args.direction {
                 BlockDirection::Up => BlockHalf::Top,
@@ -116,6 +112,7 @@ trapdoor_props.facing = facing;
                     _ => BlockHalf::Top,
                 },
             };
+
             trapdoor_props.powered = powered;
             trapdoor_props.open = powered;
 
@@ -128,6 +125,7 @@ trapdoor_props.facing = facing;
             let block_state = args.world.get_block_state(args.position).await;
             let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id, args.block);
             let powered = block_receives_redstone_power(args.world, args.position).await;
+
             if powered != trapdoor_props.powered {
                 trapdoor_props.powered = !trapdoor_props.powered;
 
