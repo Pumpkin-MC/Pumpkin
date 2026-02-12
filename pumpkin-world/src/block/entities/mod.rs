@@ -29,6 +29,7 @@ use crate::{
 
 pub mod barrel;
 pub mod bed;
+pub mod bell;
 pub mod blasting_furnace;
 pub mod chest;
 pub mod chiseled_bookshelf;
@@ -46,7 +47,6 @@ pub mod piston;
 pub mod shulker_box;
 pub mod sign;
 pub mod smoker;
-pub mod bell;
 
 //TODO: We need a mark_dirty for chests
 pub trait BlockEntity: Send + Sync {
