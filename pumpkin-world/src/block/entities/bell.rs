@@ -41,6 +41,12 @@ impl BellBlockEntity {
             self.ringing.store(true);
         }
     }
+    pub fn raiders_hear_bell(&self) -> bool {
+        //TODO
+
+        false
+
+    }
 }
 
 impl BlockEntity for BellBlockEntity {
@@ -69,7 +75,7 @@ impl BlockEntity for BellBlockEntity {
                 self.ringing.store(false);
                 self.ring_ticks.store(0);
             }
-            if self.ring_ticks.load()>=5 && self.resonate_time.load()==0 {
+            if self.ring_ticks.load()>=5 && self.resonate_time.load()==0 && self.raiders_hear_bell() {
                 self.resonating.store(true);
                 world.play_sound_fine(Sound::BlockBellResonate, SoundCategory::Blocks, &self.position.to_f64(), 1.0, 1.0).await;
             }
@@ -84,6 +90,7 @@ impl BlockEntity for BellBlockEntity {
         })
 
     }
+
     fn resource_location(&self) -> &'static str {
         Self::ID
     }

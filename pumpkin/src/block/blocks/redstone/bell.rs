@@ -71,7 +71,6 @@ fn is_point_on_bell(hit: &BlockHitResult, attachment: Attachment, block_face: Ho
     } else {
         false
     }
-    //TODO check sides and y-position
 }
 
 async fn is_single_wall(position: BlockPos, facing: HorizontalFacing, world: &World) -> bool{
