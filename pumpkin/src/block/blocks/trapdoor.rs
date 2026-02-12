@@ -96,9 +96,7 @@ impl BlockBehaviour for TrapDoorBlock {
                 BlockDirection::North
                 | BlockDirection::South
                 | BlockDirection::East
-                | BlockDirection::West => {
-                    HorizontalFacing::from_block_direction(args.direction)
-                }
+                | BlockDirection::West => HorizontalFacing::from_block_direction(args.direction),
                 BlockDirection::Up | BlockDirection::Down => player_facing,
             };
 
