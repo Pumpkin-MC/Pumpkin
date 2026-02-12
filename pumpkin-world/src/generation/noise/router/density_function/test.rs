@@ -611,7 +611,7 @@ struct DensityFunctionReprs {
 
 macro_rules! read_data_from_file_json5 {
     ($path:expr) => {
-        serde_json5::from_str(
+        json5::from_str(
             &fs::read_to_string(
                 Path::new(env!("CARGO_MANIFEST_DIR"))
                     .parent()
