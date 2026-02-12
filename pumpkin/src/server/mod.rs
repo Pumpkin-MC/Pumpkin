@@ -19,6 +19,7 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
 use tracing::{debug, error, info, warn};
 
@@ -264,7 +265,12 @@ impl Server {
             let config = Arc::new(server.advanced_config.world.clone());
 
             tokio::task::spawn_blocking(move || {
-                info!("Loading {}", dim.minecraft_name);
+                info!(
+                    "Loading {}",
+                    TextComponent::text(dim.minecraft_name.to_string())
+                        .color_named(NamedColor::DarkGreen)
+                        .to_pretty_console()
+                );
                 World::load(
                     into_level(dim, &config, path, registry.clone(), seed),
                     l_info,
@@ -472,9 +478,7 @@ impl Server {
     /// * `packet`: A reference to the packet to be broadcast. The packet must implement the `ClientPacket` trait.
     pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         for world in self.worlds.load().iter() {
-            for player in world.players.load().iter() {
-                player.client.enqueue_packet(packet).await;
-            }
+            world.broadcast_packet_all(packet).await;
         }
     }
 

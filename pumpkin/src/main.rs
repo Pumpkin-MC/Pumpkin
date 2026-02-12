@@ -68,7 +68,22 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-    info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
+    info!(
+        "{}",
+        TextComponent::text(format!(
+            "Starting {} {} Minecraft (Protocol {})",
+            TextComponent::text("Pumpkin")
+                .color_named(NamedColor::Gold)
+                .to_pretty_console(),
+            TextComponent::text(CARGO_PKG_VERSION.to_string())
+                .color_named(NamedColor::Green)
+                .to_pretty_console(),
+            TextComponent::text(CURRENT_MC_PROTOCOL.to_string())
+                .color_named(NamedColor::DarkBlue)
+                .to_pretty_console()
+        ))
+        .to_pretty_console(),
+    );
 
     debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
@@ -81,10 +96,7 @@ async fn main() {
             "Release"
         }
     );
-
-    warn!("Pumpkin is currently under heavy development!");
-    info!("Report issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
-    info!("Join our Discord for community support: https://discord.gg/pumpkinmc");
+    print_support_links_and_warning();
 
     tokio::spawn(async {
         setup_sighandler()
@@ -95,14 +107,27 @@ async fn main() {
     let pumpkin_server = PumpkinServer::new(basic_config, advanced_config, vanilla_data).await;
     pumpkin_server.init_plugins().await;
 
-    info!("Started server; took {}ms", time.elapsed().as_millis());
+    info!(
+        "Started server; took {}",
+        TextComponent::text(format!("{}ms", time.elapsed().as_millis()))
+            .color_named(NamedColor::Gold)
+            .to_pretty_console()
+    );
     let basic_config = &pumpkin_server.server.basic_config;
     info!(
         "Server is now running. Connect using port: {}{}{}",
         if basic_config.java_edition {
-            format!("Java Edition: {}", basic_config.java_edition_address)
+            format!(
+                "{} {}",
+                TextComponent::text("Java Edition:")
+                    .color_named(NamedColor::Yellow)
+                    .to_pretty_console(),
+                TextComponent::text(format!("{}", basic_config.java_edition_address))
+                    .color_named(NamedColor::DarkBlue)
+                    .to_pretty_console()
+            )
         } else {
-            String::new()
+            TextComponent::text(String::new()).to_pretty_console()
         },
         if basic_config.java_edition && basic_config.bedrock_edition {
             " | " // Separator if both are enabled
@@ -110,16 +135,51 @@ async fn main() {
             ""
         },
         if basic_config.bedrock_edition {
-            format!("Bedrock Edition: {}", basic_config.bedrock_edition_address)
+            format!(
+                "{} {}",
+                TextComponent::text("Bedrock Edition:")
+                    .color_named(NamedColor::Gold)
+                    .to_pretty_console(),
+                TextComponent::text(format!("{}", basic_config.bedrock_edition_address))
+                    .color_named(NamedColor::DarkBlue)
+                    .to_pretty_console()
+            )
         } else {
-            String::new()
+            TextComponent::text(String::new()).to_pretty_console()
         }
     );
 
     pumpkin_server.start().await;
-    info!("The server has stopped.");
+    info!(
+        "{}",
+        TextComponent::text("The server has stopped.")
+            .color_named(NamedColor::Red)
+            .to_pretty_console()
+    );
 }
-
+fn print_support_links_and_warning() {
+    warn!(
+        "{}",
+        TextComponent::text("Pumpkin is currently under heavy development!")
+            .color_named(NamedColor::DarkRed)
+            .to_pretty_console(),
+    );
+    info!(
+        "Report issues on {}",
+        TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues")
+            .color_named(NamedColor::DarkAqua)
+            .to_pretty_console()
+    );
+    info!(
+        "Join our {} for community support: {}",
+        TextComponent::text("Discord")
+            .color_named(NamedColor::DarkBlue)
+            .to_pretty_console(),
+        TextComponent::text("https://discord.gg/pumpkinmc")
+            .color_named(NamedColor::Aqua)
+            .to_pretty_console()
+    );
+}
 fn handle_interrupt() {
     warn!(
         "{}",

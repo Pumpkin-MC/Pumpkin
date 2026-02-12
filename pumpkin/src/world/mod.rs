@@ -1,7 +1,10 @@
 use std::pin::Pin;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
-use std::{collections::HashMap, sync::atomic::Ordering};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::atomic::Ordering,
+};
 use tracing::{debug, error, info, trace, warn};
 
 pub mod chunker;
@@ -24,7 +27,7 @@ use crate::{
     command::client_suggestions,
     entity::{Entity, EntityBase, player::Player, r#type::from_type},
     error::PumpkinError,
-    net::ClientPlatform,
+    net::{ClientPlatform, java::JavaClient},
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
@@ -103,6 +106,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::version::MinecraftVersion;
 use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
@@ -249,6 +253,17 @@ impl World {
             .unwrap_or_default()
     }
 
+    /// Get the world folder name (e.g., `world`, `world_nether`, `world_the_end`).
+    /// Falls back to "world" if the name cannot be determined.
+    pub fn get_world_name(&self) -> &str {
+        self.level
+            .level_folder
+            .root_folder
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("world")
+    }
+
     pub async fn shutdown(&self) {
         for entity in self.entities.load().iter() {
             self.save_entity(entity).await;
@@ -375,6 +390,46 @@ impl World {
         }
     }
 
+    fn collect_java_recipients_by_version<'a>(
+        players: impl Iterator<Item = &'a Arc<Player>>,
+    ) -> BTreeMap<MinecraftVersion, Vec<&'a JavaClient>> {
+        let mut recipients_by_version: BTreeMap<MinecraftVersion, Vec<&'a JavaClient>> =
+            BTreeMap::new();
+        for player in players {
+            if let ClientPlatform::Java(java_client) = &player.client {
+                recipients_by_version
+                    .entry(java_client.version.load())
+                    .or_default()
+                    .push(java_client);
+            }
+        }
+        recipients_by_version
+    }
+
+    async fn broadcast_java_grouped<P: ClientPacket>(
+        packet: &P,
+        recipients_by_version: BTreeMap<MinecraftVersion, Vec<&JavaClient>>,
+    ) {
+        for (version, recipients) in recipients_by_version {
+            let packet_data = match JavaClient::serialize_packet_for_version(packet, version) {
+                Ok(packet_data) => packet_data,
+                Err(err) => {
+                    error!(
+                        "Failed to serialize packet {} for version {:?}: {}",
+                        std::any::type_name::<P>(),
+                        version,
+                        err
+                    );
+                    continue;
+                }
+            };
+
+            for recipient in recipients {
+                recipient.enqueue_packet_data(packet_data.clone()).await;
+            }
+        }
+    }
+
     /// Broadcasts a packet to all connected players within the world.
     /// Please avoid this as we want to replace it with `broadcast_editioned`
     ///
@@ -382,9 +437,9 @@ impl World {
     ///
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
     pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
-        for player in self.players.load().iter() {
-            player.client.enqueue_packet(packet).await;
-        }
+        let players = self.players.load();
+        let recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
+        Self::broadcast_java_grouped(packet, recipients_by_version).await;
     }
 
     pub async fn broadcast_message(
@@ -407,11 +462,20 @@ impl World {
         je_packet: &J,
         be_packet: &B,
     ) {
-        for player in self.players.load().iter() {
-            match &player.client {
-                ClientPlatform::Java(client) => client.enqueue_packet(je_packet).await,
-                ClientPlatform::Bedrock(client) => client.send_game_packet(be_packet).await,
+        let players = self.players.load();
+        let je_recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
+        let mut be_recipients = Vec::new();
+
+        for player in players.iter() {
+            if let ClientPlatform::Bedrock(be_client) = &player.client {
+                be_recipients.push(be_client.clone());
             }
+        }
+
+        Self::broadcast_java_grouped(je_packet, je_recipients_by_version).await;
+
+        for recipient in be_recipients {
+            recipient.send_game_packet(be_packet).await;
         }
     }
 
@@ -476,14 +540,13 @@ impl World {
         except: &[uuid::Uuid],
         packet: &P,
     ) {
-        for player in self
-            .players
-            .load()
-            .iter()
-            .filter(|c| !except.contains(&c.gameprofile.id))
-        {
-            player.client.enqueue_packet(packet).await;
-        }
+        let players = self.players.load();
+        let recipients_by_version = Self::collect_java_recipients_by_version(
+            players
+                .iter()
+                .filter(|candidate| !except.contains(&candidate.gameprofile.id)),
+        );
+        Self::broadcast_java_grouped(packet, recipients_by_version).await;
     }
 
     pub async fn spawn_particle(
@@ -648,12 +711,15 @@ impl World {
     }
 
     pub async fn flush_block_updates(&self) {
-        let mut block_state_updates_by_chunk_section = HashMap::new();
+        let mut block_state_updates_by_chunk_section: HashMap<
+            Vector3<i32>,
+            Vec<(BlockPos, BlockStateId)>,
+        > = HashMap::new();
         for (position, block_state_id) in self.unsent_block_changes.lock().await.drain() {
             let chunk_section = chunk_section_from_pos(&position);
             block_state_updates_by_chunk_section
                 .entry(chunk_section)
-                .or_insert(Vec::new())
+                .or_default()
                 .push((position, block_state_id));
         }
 
@@ -3590,6 +3656,34 @@ impl pumpkin_world::world::SimpleWorld for World {
     ) -> WorldFuture<'static, ()> {
         Box::pin(async move {
             ExperienceOrbEntity::spawn(&self, position, amount).await;
+        })
+    }
+
+    fn update_from_neighbor_shapes(
+        self: Arc<Self>,
+        block_state_id: BlockStateId,
+        position: &BlockPos,
+    ) -> WorldFuture<'_, BlockStateId> {
+        Box::pin(async move {
+            let block = Block::from_state_id(block_state_id);
+            let mut state_id = block_state_id;
+            for direction in BlockDirection::update_order() {
+                let neighbor_pos = position.offset(direction.to_offset());
+                let neighbor_state_id = self.get_block_state_id(&neighbor_pos).await;
+                state_id = self
+                    .block_registry
+                    .get_state_for_neighbor_update(
+                        &self,
+                        block,
+                        state_id,
+                        position,
+                        direction,
+                        &neighbor_pos,
+                        neighbor_state_id,
+                    )
+                    .await;
+            }
+            state_id
         })
     }
 }
