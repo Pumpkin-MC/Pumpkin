@@ -659,15 +659,15 @@ impl Entity {
         }
 
         let pos = self.pos.load();
-        
+
         // Check 0.2 blocks below the feet.
         // This handles carpets, soul sand, and slight floating errors.
         let adjust_y = pos.y - 0.2;
-        
+
         Some(BlockPos::new(
             pos.x.floor() as i32,
             adjust_y.floor() as i32,
-            pos.z.floor() as i32
+            pos.z.floor() as i32,
         ))
     }
 

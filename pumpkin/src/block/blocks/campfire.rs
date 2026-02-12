@@ -38,8 +38,7 @@ impl BlockBehaviour for CampfireBlock {
                 };
 
                 // Damage the entity
-                args
-                    .entity
+                args.entity
                     .damage(args.entity, damage_amount, DamageType::CAMPFIRE)
                     .await;
             }
