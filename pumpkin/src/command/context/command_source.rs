@@ -87,7 +87,6 @@ pub struct CommandSource {
     pub silent: bool,
     pub command_result_taker: ResultValueTaker,
     pub entity_anchor: EntityAnchor,
-
     // TODO: Add permission
 }
 
@@ -141,7 +140,7 @@ impl CommandSource {
             server: Some(server),
             silent,
             command_result_taker,
-            entity_anchor
+            entity_anchor,
         }
     }
 
@@ -350,9 +349,7 @@ impl CommandSource {
     /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain a world, but it may not in a unit test.
     pub fn world(&self) -> Arc<World> {
-        self.world
-            .clone()
-            .expect("Expected world to exist")
+        self.world.clone().expect("Expected world to exist")
     }
 
     /// Gets the server as a result:
@@ -360,9 +357,7 @@ impl CommandSource {
     /// - If this source actually contains a server, it returns that..
     /// - If it doesn't, this function **panics**. Ideally, a source should contain the server, but it may not in a unit test.
     pub fn server(&self) -> Arc<Server> {
-        self.server
-            .clone()
-            .expect("Expected server to exist")
+        self.server.clone().expect("Expected server to exist")
     }
 
     /// Gets the player as an option:
@@ -405,12 +400,7 @@ impl CommandSource {
         let Some(server) = &self.server else {
             return;
         };
-        if server
-            .level_info
-            .load()
-            .game_rules
-            .send_command_feedback
-        {
+        if server.level_info.load().game_rules.send_command_feedback {
             let output_player = match &self.output {
                 CommandSender::Player(sender) => Some(sender),
                 _ => None,

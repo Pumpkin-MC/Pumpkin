@@ -57,7 +57,7 @@ pub enum CommandSender {
     /// world context it exists in for coordinate-relative execution (e.g., `~ ~ ~`).
     CommandBlock(Arc<CommandBlockEntity>, Arc<World>),
     /// Nothingness. Anything sent to this sender is void.
-    Dummy
+    Dummy,
 }
 
 impl fmt::Display for CommandSender {
@@ -90,7 +90,7 @@ impl CommandSender {
                 let timestamp = now.format(&format).unwrap();
 
                 *last_output = format!("[{}] {}", timestamp, text.get_text());
-            },
+            }
             Self::Dummy => {}
         }
     }
@@ -201,7 +201,7 @@ impl CommandSender {
                     .send_command_feedback
             }
             Self::Console | Self::Rcon(_) => true,
-            Self::Dummy => false
+            Self::Dummy => false,
         }
     }
 
@@ -211,7 +211,7 @@ impl CommandSender {
             Self::CommandBlock(_, world) => world.level_info.load().game_rules.command_block_output,
             // TODO: should Console and Rcon be decided by server config?
             Self::Player(..) | Self::Console | Self::Rcon(_) => true,
-            Self::Dummy => false
+            Self::Dummy => false,
         }
     }
 
@@ -219,7 +219,7 @@ impl CommandSender {
     pub const fn should_track_output(&self) -> bool {
         match self {
             Self::Dummy => false,
-            Self::Player(..) | Self::Console | Self::Rcon(_) | Self::CommandBlock(..) => true
+            Self::Player(..) | Self::Console | Self::Rcon(_) | Self::CommandBlock(..) => true,
         }
     }
 }

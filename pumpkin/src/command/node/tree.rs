@@ -122,7 +122,10 @@ impl Tree {
 
     /// Gets the size of this [`Tree`], which is the number of nodes this tree contains.
     pub fn size_nonzero(&self) -> NonZero<usize> {
-        self.nodes.len().try_into().expect("Expected non-zero size, but Tree was somehow zero-sized")
+        self.nodes
+            .len()
+            .try_into()
+            .expect("Expected non-zero size, but Tree was somehow zero-sized")
     }
 
     /// Adds a [`CommandDetachedNode`] to the root node of this tree.
@@ -303,7 +306,7 @@ impl Tree {
         match redirect {
             Redirection::Root => Some(ROOT_NODE_ID),
             Redirection::Global(id) => self.ids_map.get(&id).copied(),
-            Redirection::Local(id) => (id.0 < self.size_nonzero()).then(|| id)
+            Redirection::Local(id) => (id.0 < self.size_nonzero()).then(|| id),
         }
     }
 }

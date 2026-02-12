@@ -1,15 +1,15 @@
 use crate::command::context::command_source::{CommandSource, ReturnValue};
 use crate::command::context::string_range::StringRange;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::DISPATCHER_PARSE_EXCEPTION;
 use crate::command::node::attached::NodeId;
 use crate::command::node::dispatcher::{CommandDispatcher, ResultConsumer};
 use crate::command::node::tree::Tree;
 use crate::command::node::{Command, RedirectModifier};
+use pumpkin_util::text::TextComponent;
 use rustc_hash::FxHashMap;
 use std::any::Any;
 use std::sync::Arc;
-use pumpkin_util::text::TextComponent;
-use crate::command::errors::error_types::DISPATCHER_PARSE_EXCEPTION;
 
 /// Represents the current stage of the chain.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -128,20 +128,20 @@ impl CommandContext {
     /// Gets a particular argument with type `T`.
     /// If it fails, an error is returned.
     pub fn get_argument<T: Clone + 'static>(&self, name: &str) -> Result<T, CommandSyntaxError> {
-        let arg = self.arguments.get(name).ok_or_else(
-            || DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                TextComponent::text(format!("Could not find argument with name '{name}'"))
-            )
-        )?;
+        let arg = self.arguments.get(name).ok_or_else(|| {
+            DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(format!(
+                "Could not find argument with name '{name}'"
+            )))
+        })?;
         let dyn_ref = &*arg.result;
         dyn_ref
             .downcast_ref::<T>()
             .map(|value| value.clone())
-            .ok_or_else(
-                || DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                    TextComponent::text(format!("Could not downcast argument '{name}'"))
-                )
-            )
+            .ok_or_else(|| {
+                DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(format!(
+                    "Could not downcast argument '{name}'"
+                )))
+            })
     }
 }
 

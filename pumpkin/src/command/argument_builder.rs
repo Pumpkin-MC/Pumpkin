@@ -1,10 +1,12 @@
 use crate::command::argument_builder::private::Sealed;
 use crate::command::argument_types::argument_type::AnyArgumentType;
-use crate::command::node::detached::{ArgumentDetachedNode, CommandDetachedNode, DetachedNode, GlobalNodeId, LiteralDetachedNode};
+use crate::command::node::detached::{
+    ArgumentDetachedNode, CommandDetachedNode, DetachedNode, GlobalNodeId, LiteralDetachedNode,
+};
 use crate::command::node::{Command, CommandExecutor, RedirectModifier, Redirection, Requirement};
+use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::sync::Arc;
-use rustc_hash::FxHashMap;
 
 /// Represents an intermediate struct for
 /// building arguments for commands.
@@ -90,15 +92,25 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
 
     /// Sets the redirect target of the node being built to another, with a given modifier.
     #[must_use]
-    fn redirect_with_modifier(self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier) -> Self;
+    fn redirect_with_modifier(
+        self,
+        redirection: impl Into<Redirection>,
+        redirect_modifier: RedirectModifier,
+    ) -> Self;
 
     /// Forks the given context, using multiple for later.
     #[must_use]
-    fn fork(self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier) -> Self;
+    fn fork(self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier)
+    -> Self;
 
     /// Forwards the given context, with the given `fork` flag.
     #[must_use]
-    fn forward(self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier, fork: bool) -> Self;
+    fn forward(
+        self,
+        redirection: impl Into<Redirection>,
+        redirect_modifier: RedirectModifier,
+        fork: bool,
+    ) -> Self;
 
     /// Gets a reference to the arguments of the node to be built.
     #[must_use]
@@ -228,7 +240,10 @@ impl LiteralArgumentBuilder {
 
 impl CommandArgumentBuilder {
     /// Creates a new [`CommandArgumentBuilder`] from a literal and a command description.
-    pub fn new(literal: impl Into<Cow<'static, str>>, description: impl Into<Cow<'static, str>>) -> Self {
+    pub fn new(
+        literal: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
+    ) -> Self {
         Self {
             common: CommonArgumentBuilder::new(),
             literal: literal.into(),
@@ -239,7 +254,10 @@ impl CommandArgumentBuilder {
 
 impl RequiredArgumentBuilder {
     /// Creates a new [`RequiredArgumentBuilder`] from a name and an argument type.
-    pub fn new(name: impl Into<Cow<'static, str>>, arg_type: impl AnyArgumentType + 'static) -> Self {
+    pub fn new(
+        name: impl Into<Cow<'static, str>>,
+        arg_type: impl AnyArgumentType + 'static,
+    ) -> Self {
         Self {
             common: CommonArgumentBuilder::new(),
             name: name.into(),

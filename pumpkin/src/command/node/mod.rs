@@ -7,11 +7,11 @@ use crate::command::argument_types::argument_type::AnyArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::node::attached::NodeId;
 use crate::command::node::detached::GlobalNodeId;
 use std::borrow::Cow;
 use std::pin::Pin;
 use std::sync::Arc;
-use crate::command::node::attached::NodeId;
 
 /// Represents a [`CommandExecutor`]'s result.
 pub type CommandExecutorResult<'a> =
@@ -25,7 +25,7 @@ pub trait CommandExecutor: Sync + Send {
 
 impl<F> CommandExecutor for F
 where
-    F: for<'c> Fn(&'c CommandContext) -> CommandExecutorResult<'c> + Send + Sync
+    F: for<'c> Fn(&'c CommandContext) -> CommandExecutorResult<'c> + Send + Sync,
 {
     fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         self(context)
@@ -40,7 +40,8 @@ pub type RedirectModifierResult<'a> =
     Pin<Box<dyn Future<Output = Result<Vec<Arc<CommandSource>>, CommandSyntaxError>> + Send + 'a>>;
 
 /// A function that performs the required modification.
-pub type RedirectModifierExecutor = dyn Fn(&CommandContext) -> RedirectModifierResult<'_> + Send + Sync;
+pub type RedirectModifierExecutor =
+    dyn Fn(&CommandContext) -> RedirectModifierResult<'_> + Send + Sync;
 
 /// A function that returns a new collection of sources from a given context.
 #[derive(Clone)]

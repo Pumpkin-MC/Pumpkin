@@ -9,7 +9,7 @@ pub struct BoolArgumentType;
 
 impl ArgumentType for BoolArgumentType {
     type Item = bool;
-    
+
     fn parse(&self, reader: &mut StringReader) -> Result<bool, CommandSyntaxError> {
         reader.read_bool()
     }

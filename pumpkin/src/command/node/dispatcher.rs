@@ -261,21 +261,22 @@ impl CommandDispatcher {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-    use crate::command::argument_builder::{ArgumentBuilder, CommandArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder};
+    use crate::command::argument_builder::{
+        ArgumentBuilder, CommandArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder,
+    };
     use crate::command::argument_types::core::integer::IntegerArgumentType;
     use crate::command::context::command_context::CommandContext;
     use crate::command::context::command_source::CommandSource;
     use crate::command::errors::error_types::DISPATCHER_UNKNOWN_COMMAND;
-    use crate::command::node::{CommandExecutor, CommandExecutorResult, RedirectModifier};
     use crate::command::node::dispatcher::CommandDispatcher;
+    use crate::command::node::{CommandExecutor, CommandExecutorResult, RedirectModifier};
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn unknown_command() {
         let mut dispatcher = CommandDispatcher::new();
         dispatcher.register(
-            CommandArgumentBuilder::new("unknown", "A command without an executor")
-                .build()
+            CommandArgumentBuilder::new("unknown", "A command without an executor").build(),
         );
         let source = CommandSource::dummy();
         let result = dispatcher.execute_input("unknown", &source).await;
@@ -285,13 +286,10 @@ mod test {
     #[tokio::test]
     async fn simple_command() {
         let mut dispatcher = CommandDispatcher::new();
-        let executor: for<'c> fn(&'c CommandContext) -> CommandExecutorResult<'c> = |_| {
-            Box::pin(async move { Ok(1) })
-        };
-        dispatcher.register(
-            CommandArgumentBuilder::new("simple", "A simple command")
-                .executes(executor)
-        );
+        let executor: for<'c> fn(&'c CommandContext) -> CommandExecutorResult<'c> =
+            |_| Box::pin(async move { Ok(1) });
+        dispatcher
+            .register(CommandArgumentBuilder::new("simple", "A simple command").executes(executor));
         let source = CommandSource::dummy();
         let result = dispatcher.execute_input("simple", &source).await;
         assert_eq!(result, Ok(1));
@@ -301,85 +299,90 @@ mod test {
     async fn arithmetic_command() {
         let mut dispatcher = CommandDispatcher::new();
 
-        enum Operation { ADD, SUBTRACT, MULTIPLY, DIVIDE }
+        enum Operation {
+            ADD,
+            SUBTRACT,
+            MULTIPLY,
+            DIVIDE,
+        }
         struct Executor(Operation);
 
         impl CommandExecutor for Executor {
             fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-                Box::pin(
-                    async move {
-                        let operand1: i32 = context.get_argument("operand1")?;
-                        let operand2: i32 = context.get_argument("operand2")?;
-                        Ok(
-                            match self.0 {
-                                Operation::ADD => operand1 + operand2,
-                                Operation::SUBTRACT => operand1 - operand2,
-                                Operation::MULTIPLY => operand1 * operand2,
-                                Operation::DIVIDE => operand1 / operand2,
-                            }
-                        )
-                    }
-                )
+                Box::pin(async move {
+                    let operand1: i32 = context.get_argument("operand1")?;
+                    let operand2: i32 = context.get_argument("operand2")?;
+                    Ok(match self.0 {
+                        Operation::ADD => operand1 + operand2,
+                        Operation::SUBTRACT => operand1 - operand2,
+                        Operation::MULTIPLY => operand1 * operand2,
+                        Operation::DIVIDE => operand1 / operand2,
+                    })
+                })
             }
         }
 
         dispatcher.register(
-            CommandArgumentBuilder::new("arithmetic", "A command which adds two integers, returning the result")
-                .then(
-                    RequiredArgumentBuilder::new("operand1", IntegerArgumentType::any())
-                        .then(
-                            LiteralArgumentBuilder::new("+")
-                                .then(
-                                    RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
-                                        .executes(Executor(Operation::ADD))
-                                )
-                        )
-                        .then(
-                            LiteralArgumentBuilder::new("-")
-                                .then(
-                                    RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
-                                        .executes(Executor(Operation::SUBTRACT))
-                                )
-                        )
-                        .then(
-                            LiteralArgumentBuilder::new("*")
-                                .then(
-                                    RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
-                                        .executes(Executor(Operation::MULTIPLY))
-                                )
-                        )
-                        .then(
-                            LiteralArgumentBuilder::new("/")
-                                .then(
-                                    RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
-                                        .executes(Executor(Operation::DIVIDE))
-                                )
-                        )
-                )
+            CommandArgumentBuilder::new(
+                "arithmetic",
+                "A command which adds two integers, returning the result",
+            )
+            .then(
+                RequiredArgumentBuilder::new("operand1", IntegerArgumentType::any())
+                    .then(
+                        LiteralArgumentBuilder::new("+").then(
+                            RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
+                                .executes(Executor(Operation::ADD)),
+                        ),
+                    )
+                    .then(
+                        LiteralArgumentBuilder::new("-").then(
+                            RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
+                                .executes(Executor(Operation::SUBTRACT)),
+                        ),
+                    )
+                    .then(
+                        LiteralArgumentBuilder::new("*").then(
+                            RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
+                                .executes(Executor(Operation::MULTIPLY)),
+                        ),
+                    )
+                    .then(
+                        LiteralArgumentBuilder::new("/").then(
+                            RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
+                                .executes(Executor(Operation::DIVIDE)),
+                        ),
+                    ),
+            ),
         );
         let source = CommandSource::dummy();
-        assert_eq!(dispatcher.execute_input("arithmetic 3 + -7", &source).await, Ok(-4));
-        assert_eq!(dispatcher.execute_input("arithmetic 4 - -8", &source).await, Ok(12));
-        assert_eq!(dispatcher.execute_input("arithmetic 2 * 9", &source).await, Ok(18));
-        assert_eq!(dispatcher.execute_input("arithmetic 9 / 2", &source).await, Ok(4));
+        assert_eq!(
+            dispatcher.execute_input("arithmetic 3 + -7", &source).await,
+            Ok(-4)
+        );
+        assert_eq!(
+            dispatcher.execute_input("arithmetic 4 - -8", &source).await,
+            Ok(12)
+        );
+        assert_eq!(
+            dispatcher.execute_input("arithmetic 2 * 9", &source).await,
+            Ok(18)
+        );
+        assert_eq!(
+            dispatcher.execute_input("arithmetic 9 / 2", &source).await,
+            Ok(4)
+        );
     }
 
     #[tokio::test]
     async fn alias_simple() {
         let mut dispatcher = CommandDispatcher::new();
-        let executor: for<'c> fn(&'c CommandContext) -> CommandExecutorResult<'c> = |_| {
-            Box::pin(async move { Ok(1) })
-        };
-        dispatcher.register(
-            CommandArgumentBuilder::new("a", "A command")
-                .executes(executor)
-        );
+        let executor: for<'c> fn(&'c CommandContext) -> CommandExecutorResult<'c> =
+            |_| Box::pin(async move { Ok(1) });
+        dispatcher.register(CommandArgumentBuilder::new("a", "A command").executes(executor));
         // Note that we CANNOT use redirect here as node itself needs to execute the command,
         // not its 'children'.
-        dispatcher.register(
-            CommandArgumentBuilder::new("b", "An alias for /a")
-                .executes(executor)
-        );
+        dispatcher.register(CommandArgumentBuilder::new("b", "An alias for /a").executes(executor));
         let source = CommandSource::dummy();
         assert_eq!(dispatcher.execute_input("a", &source).await, Ok(1));
         assert_eq!(dispatcher.execute_input("b", &source).await, Ok(1));
@@ -393,26 +396,15 @@ mod test {
 
         impl CommandExecutor for Executor {
             fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-                Box::pin(
-                    async move {
-                        context.get_argument("result")
-                    }
-                )
+                Box::pin(async move { context.get_argument("result") })
             }
         }
 
-        let a = dispatcher.register(
-            CommandArgumentBuilder::new("a", "A command")
-                .then(
-                    RequiredArgumentBuilder::new("result", IntegerArgumentType::any())
-                        .executes(Executor)
-                )
-        );
+        let a = dispatcher.register(CommandArgumentBuilder::new("a", "A command").then(
+            RequiredArgumentBuilder::new("result", IntegerArgumentType::any()).executes(Executor),
+        ));
         // Note that this time, we SHOULD use redirect - it is leading to another node having command.
-        dispatcher.register(
-            CommandArgumentBuilder::new("b", "An alias for /a")
-                .redirect(a)
-        );
+        dispatcher.register(CommandArgumentBuilder::new("b", "An alias for /a").redirect(a));
         let source = CommandSource::dummy();
         assert_eq!(dispatcher.execute_input("a 5", &source).await, Ok(5));
         assert_eq!(dispatcher.execute_input("b 7", &source).await, Ok(7));
@@ -426,24 +418,21 @@ mod test {
 
         impl CommandExecutor for Executor {
             fn execute<'a>(&'a self, _context: &'a CommandContext) -> CommandExecutorResult<'a> {
-                Box::pin(
-                    async move {
-                        Ok(1)
-                    }
-                )
+                Box::pin(async move { Ok(1) })
             }
         }
 
-        let mut builder = CommandArgumentBuilder::new("recurse", "Recurses itself, doing nothing with the numbers provided")
-            .executes(Executor);
+        let mut builder = CommandArgumentBuilder::new(
+            "recurse",
+            "Recurses itself, doing nothing with the numbers provided",
+        )
+        .executes(Executor);
 
         let id = builder.id();
         builder = builder.then(
             RequiredArgumentBuilder::new("value", IntegerArgumentType::any())
                 .executes(Executor)
-                .fork(id, RedirectModifier::Custom(Arc::new(
-                    |c| Box::pin(async move { Ok(vec![c.source.clone()]) })
-                )))
+                .redirect(id),
         );
 
         dispatcher.register(builder);
@@ -451,8 +440,21 @@ mod test {
         let source = CommandSource::dummy();
         assert_eq!(dispatcher.execute_input("recurse", &source).await, Ok(1));
         assert_eq!(dispatcher.execute_input("recurse 4", &source).await, Ok(1));
-        assert_eq!(dispatcher.execute_input("recurse 9 -1", &source).await, Ok(1));
-        assert_eq!(dispatcher.execute_input("recurse 9 7 -6 5 -4", &source).await, Ok(1));
-        assert_eq!(dispatcher.execute_input("recurse 1 2 4 8 16 32 64 128 256 512", &source).await, Ok(1));
+        assert_eq!(
+            dispatcher.execute_input("recurse 9 -1", &source).await,
+            Ok(1)
+        );
+        assert_eq!(
+            dispatcher
+                .execute_input("recurse 9 7 -6 5 -4", &source)
+                .await,
+            Ok(1)
+        );
+        assert_eq!(
+            dispatcher
+                .execute_input("recurse 1 2 4 8 16 32 64 128 256 512", &source)
+                .await,
+            Ok(1)
+        );
     }
 }
