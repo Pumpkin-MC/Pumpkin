@@ -7,7 +7,7 @@ use crate::serialization::{
     lifecycle::Lifecycle,
     list_builder::ListBuilder,
 };
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 /// A list codec type. For a type `A`, this codec serializes/deserializes a [`Vec<A>`].
 /// `C` is the codec used for each element of this list.
@@ -44,7 +44,7 @@ impl<C: Codec> HasValue for ListCodec<C> {
 }
 
 impl<C: Codec> Encoder for ListCodec<C> {
-    fn encode<T: PartialEq + Clone>(
+    fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
@@ -69,7 +69,7 @@ impl<C> Decoder for ListCodec<C>
 where
     C: Codec,
 {
-    fn decode<T: PartialEq + Clone>(
+    fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: T,
         ops: &'static impl DynamicOps<Value = T>,
@@ -108,4 +108,77 @@ where
             result.with_complete_or_partial(pair)
         })
     }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::assert_success;
+    use crate::serialization::codec::*;
+    use crate::serialization::codecs::list::ListCodec;
+    use crate::serialization::codecs::primitive::{BoolCodec, IntCodec, StringCodec};
+    use crate::serialization::coders::Encoder;
+    use crate::serialization::json_ops;
+    use serde_json::json;
+
+    #[test]
+    fn encoding() {
+        pub static INT_LIST_CODEC: ListCodec<IntCodec> = list(&INT_CODEC, 1, 3);
+
+        assert_success!(
+            &INT_LIST_CODEC.encode_start(&vec![1, 2], &json_ops::INSTANCE),
+            json!([1, 2])
+        );
+        assert!(
+            &INT_LIST_CODEC
+                .encode_start(&vec![], &json_ops::INSTANCE)
+                .is_error()
+        );
+        assert!(
+            &INT_LIST_CODEC
+                .encode_start(&vec![50, 52, 54, 56], &json_ops::INSTANCE)
+                .is_error()
+        );
+
+        pub static STRING_LIST_CODEC: ListCodec<StringCodec> = limited_list(&STRING_CODEC, 2);
+
+        assert_success!(
+            &STRING_LIST_CODEC
+                .encode_start(&vec!["a".to_string(), "b".to_string()], &json_ops::INSTANCE),
+            json!(["a", "b"])
+        );
+        assert_success!(
+            &STRING_LIST_CODEC.encode_start(&vec!["one".to_string()], &json_ops::INSTANCE),
+            json!(["one"])
+        );
+        assert!(
+            &STRING_LIST_CODEC
+                .encode_start(
+                    &vec!["1".to_string(), "2".to_string(), "3".to_string()],
+                    &json_ops::INSTANCE
+                )
+                .is_error()
+        );
+
+        // The inner lists have a max size of 2, while the main list has a max size of 3.
+        pub static BOOL_LIST_LIST_CODEC: ListCodec<ListCodec<BoolCodec>> =
+            limited_list(&limited_list(&BOOL_CODEC, 2), 3);
+
+        assert_success!(
+            &BOOL_LIST_LIST_CODEC.encode_start(&vec![vec![true, true]], &json_ops::INSTANCE),
+            json!([[true, true]])
+        );
+        assert_success!(
+            &BOOL_LIST_LIST_CODEC
+                .encode_start(&vec![vec![], vec![false, true]], &json_ops::INSTANCE),
+            json!([[], [false, true]])
+        );
+        assert!(
+            &BOOL_LIST_LIST_CODEC
+                .encode_start(&vec![vec![true, false, true, false]], &json_ops::INSTANCE)
+                .is_error()
+        );
+    }
+
+    #[test]
+    fn decoding() {}
 }

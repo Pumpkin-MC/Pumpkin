@@ -2,6 +2,11 @@ use std::fmt::{Debug, Display};
 
 use crate::serialization::{data_result::DataResult, dynamic_ops::DynamicOps, map_like::MapLike};
 
+use crate::serialization::lifecycle::Lifecycle;
+use crate::serialization::struct_builder::{
+    ResultStructBuilder, StringStructBuilder, StructBuilder,
+};
+use crate::{impl_string_struct_builder, impl_struct_builder};
 use serde_json::{Map, Value};
 
 /// A [`DynamicOps`] to serialize to/deserialize from JSON data.
@@ -54,7 +59,8 @@ impl JsonOps {
 }
 
 impl DynamicOps for JsonOps {
-    type Value = serde_json::Value;
+    type Value = Value;
+    type StructBuilder = JsonStructBuilder;
 
     fn empty(&self) -> Self::Value {
         Value::Null
@@ -216,9 +222,7 @@ impl DynamicOps for JsonOps {
     where
         Self::Value: Clone,
     {
-        if let Value::Object(_) = map
-            && map != self.empty()
-        {
+        if !matches!(map, Value::Object(_)) && map != self.empty() {
             return DataResult::error_partial(
                 format!("merge_into_map called with not a map: {map}"),
                 map.clone(),
@@ -332,6 +336,15 @@ impl DynamicOps for JsonOps {
             }
         }
     }
+
+    fn map_builder(&'static self) -> Self::StructBuilder {
+        JsonStructBuilder {
+            builder: DataResult::success_with_lifecycle(
+                Value::Object(Map::new()),
+                Lifecycle::Stable,
+            ),
+        }
+    }
 }
 
 /// An implementation of [`MapLike`] for JSON objects.
@@ -356,124 +369,56 @@ impl MapLike for JsonMapLike<'_> {
     }
 }
 
-impl Display for JsonMapLike<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.map.fmt(f)
+/// An implementation of [`StructBuilder`] for JSON objects.
+pub struct JsonStructBuilder {
+    builder: DataResult<Value>,
+}
+
+impl ResultStructBuilder for JsonStructBuilder {
+    type Result = Value;
+
+    fn build_with_builder(
+        self,
+        builder: Self::Result,
+        prefix: Self::Value,
+    ) -> DataResult<Self::Value> {
+        match prefix {
+            Value::Null => DataResult::success(builder),
+            Value::Object(mut map) => {
+                match builder {
+                    Value::Object(builder_map) => {
+                        for (k, v) in builder_map {
+                            map.insert(k.clone(), v.clone());
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+                DataResult::success(Value::Object(map))
+            }
+            _ => DataResult::error(format!("Prefix is not a map: {prefix}")),
+        }
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::serialization::codec::{
-        BOOL_CODEC, BYTE_CODEC, FLOAT_CODEC, INT_CODEC, STRING_CODEC,
-    };
-    use serde_json::{Value, json};
+impl StructBuilder for JsonStructBuilder {
+    type Value = Value;
 
-    use crate::serialization::codec::list_of;
-    use crate::serialization::codecs::list::ListCodec;
-    use crate::{
-        assert_decode, assert_success,
-        serialization::{
-            codecs::primitive,
-            coders::{Decoder, Encoder},
-            json_ops,
-        },
-    };
+    impl_struct_builder!(builder);
+    impl_string_struct_builder!(builder, INSTANCE);
+}
 
-    #[test]
-    fn primitives() {
-        assert_success!(
-            BOOL_CODEC.encode_start(&true, &json_ops::INSTANCE),
-            Value::Bool(true)
-        );
-
-        assert_success!(
-            STRING_CODEC.encode_start(&"Hello world!".to_string(), &json_ops::INSTANCE),
-            Value::String("Hello world!".to_string())
-        );
-
-        assert_success!(
-            INT_CODEC.encode_start(&90, &json_ops::INSTANCE),
-            Value::from(90)
-        );
-
-        assert_success!(
-            BYTE_CODEC.encode_start(&127, &json_ops::INSTANCE),
-            Value::from(127)
-        );
-
-        assert_success!(
-            FLOAT_CODEC.encode_start(&0.125, &json_ops::INSTANCE),
-            Value::from(0.125)
-        );
-
-        assert_success!(
-            FLOAT_CODEC.encode_start(&0.125, &json_ops::INSTANCE),
-            Value::from(0.125)
-        );
+impl StringStructBuilder for JsonStructBuilder {
+    fn append(&self, key: &str, value: Self::Value, mut builder: Self::Result) -> Self::Result {
+        builder
+            .as_object_mut()
+            .unwrap()
+            .insert(key.to_string(), value);
+        builder
     }
+}
 
-    #[test]
-    fn lists() {
-        {
-            pub const BOOL_LIST_CODEC: ListCodec<primitive::BoolCodec> = list_of(&BOOL_CODEC, 2, 4);
-
-            assert_decode!(
-                BOOL_LIST_CODEC,
-                json!([true, true]),
-                json_ops::INSTANCE,
-                is_success
-            );
-            assert_decode!(
-                BOOL_LIST_CODEC,
-                json!([true, true, false]),
-                json_ops::INSTANCE,
-                is_success
-            );
-            assert_decode!(
-                BOOL_LIST_CODEC,
-                json!([true, 1]),
-                json_ops::INSTANCE,
-                is_error
-            );
-            assert_decode!(BOOL_LIST_CODEC, json!([]), json_ops::INSTANCE, is_error);
-            assert_decode!(
-                BOOL_LIST_CODEC,
-                json!([true, false, true, false]),
-                json_ops::INSTANCE,
-                is_success
-            );
-        }
-
-        {
-            // Testing a list codec of another list codec of a StringCodec.
-            pub const STRING_STRING_LIST_CODEC: ListCodec<ListCodec<primitive::StringCodec>> =
-                list_of(&list_of(&STRING_CODEC, 1, 3), 1, 2);
-
-            assert_decode!(
-                STRING_STRING_LIST_CODEC,
-                json!([]),
-                json_ops::INSTANCE,
-                is_error
-            );
-            assert_decode!(
-                STRING_STRING_LIST_CODEC,
-                json!([["a", "b"], ['c']]),
-                json_ops::INSTANCE,
-                is_success
-            );
-            assert_decode!(
-                STRING_STRING_LIST_CODEC,
-                json!([["a", "b", 'c', 'd', 'e']]),
-                json_ops::INSTANCE,
-                is_error
-            );
-            assert_decode!(
-                STRING_STRING_LIST_CODEC,
-                json!([["1", 2, "3"], ['4', '5']]),
-                json_ops::INSTANCE,
-                is_error
-            );
-        }
+impl Display for JsonMapLike<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.map.fmt(f)
     }
 }

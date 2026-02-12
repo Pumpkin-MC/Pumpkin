@@ -52,11 +52,6 @@ impl KeyCompressor {
         self.compress_key_str(&string)
     }
 
-    /// Gets the decompressed string key of an index.
-    fn decompress_key_str(&self, key: usize) -> Option<String> {
-        self.decompress_map.get(&key).cloned()
-    }
-
     /// Gets the compressed key of a string value.
     pub(crate) fn compress_key_str(&self, key: &str) -> Option<usize> {
         self.compress_map.get(key).copied()
