@@ -75,6 +75,19 @@ impl BoundingBox {
     }
 
     #[must_use]
+    pub fn at_pos(&self, pos: BlockPos) -> Self {
+        let vec3 = Vector3 {
+            x: f64::from(pos.0.x),
+            y: f64::from(pos.0.y),
+            z: f64::from(pos.0.z),
+        };
+        Self {
+            min: self.min + vec3,
+            max: self.max + vec3,
+        }
+    }
+
+    #[must_use]
     pub fn offset(&self, other: Self) -> Self {
         Self {
             min: self.min.add(&other.min),
@@ -92,6 +105,14 @@ impl BoundingBox {
         Self {
             min: Vector3::new(min[0], min[1], min[2]),
             max: Vector3::new(max[0], max[1], max[2]),
+        }
+    }
+
+    #[must_use]
+    pub const fn full_block() -> Self {
+        Self {
+            min: Vector3::new(0f64, 0f64, 0f64),
+            max: Vector3::new(1f64, 1f64, 1f64),
         }
     }
 
@@ -163,12 +184,12 @@ impl BoundingBox {
     }
 
     #[must_use]
-    pub fn min_block_pos(&self) -> BlockPos {
+    pub const fn min_block_pos(&self) -> BlockPos {
         BlockPos::floored_v(self.min)
     }
 
     #[must_use]
-    pub fn max_block_pos(&self) -> BlockPos {
+    pub const fn max_block_pos(&self) -> BlockPos {
         BlockPos::ceiled_v(self.max)
     }
 

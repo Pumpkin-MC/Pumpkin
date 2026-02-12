@@ -11,7 +11,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
+use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -146,6 +146,11 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         true
     }
 
+    /// Whether the entity is immune from explosion knockback and damage
+    fn is_immune_to_explosion(&self) -> bool {
+        false
+    }
+
     fn get_gravity(&self) -> f64 {
         0.0
     }
@@ -194,9 +199,12 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            caller
-                .damage_with_context(caller, amount, damage_type, position, source, cause)
-                .await
+            if caller.get_living_entity().is_some() {
+                return caller
+                    .damage_with_context(caller, amount, damage_type, position, source, cause)
+                    .await;
+            }
+            false
         })
     }
 
@@ -479,6 +487,10 @@ impl Entity {
             velocity_dirty: AtomicBool::new(true),
             removed: AtomicBool::new(false),
         }
+    }
+
+    pub async fn add_velocity(&self, velocity: Vector3<f64>) {
+        self.set_velocity(self.velocity.load() + velocity).await;
     }
 
     pub async fn set_velocity(&self, velocity: Vector3<f64>) {
@@ -865,7 +877,7 @@ impl Entity {
 
     async fn tick_block_collisions(&self, caller: &Arc<dyn EntityBase>, server: &Server) -> bool {
         let bounding_box = self.bounding_box.load();
-        let aabb = bounding_box.expand(-0.001, -0.001, -0.001);
+        let aabb = bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7);
 
         let min = aabb.min_block_pos();
         let max = aabb.max_block_pos();
@@ -876,18 +888,20 @@ impl Entity {
         eye_level_box.max.y = eye_level_box.min.y;
 
         let mut suffocating = false;
-        let pos_iter = BlockPos::iterate(min, max);
         let world = self.world.load();
 
-        for pos in pos_iter {
+        for pos in BlockPos::iterate(min, max) {
             let (block, state) = world.get_block_and_state(&pos).await;
             if state.is_air() {
                 continue;
             }
 
-            let check_suffocation = !suffocating && state.is_solid();
+            // TODO: this is default predicate, vanilla overwrites it for some blocks,
+            // see .suffocates(...) in Blocks.java
+            let check_suffocation =
+                !suffocating && blocks_movement(state, block.id) && state.is_full_cube();
 
-            let collided = World::check_outline(
+            World::check_collision(
                 &bounding_box,
                 pos,
                 state,
@@ -899,7 +913,12 @@ impl Entity {
                 },
             );
 
-            if collided {
+            let collision_shape = world
+                .block_registry
+                .get_inside_collision_shape(block, &world, state, &pos)
+                .await;
+
+            if bounding_box.intersects(&collision_shape.at_pos(pos)) {
                 world
                     .block_registry
                     .on_entity_collision(block, &world, caller.as_ref(), &pos, state, server)
@@ -1708,11 +1727,6 @@ impl Entity {
         //assert!(self.sneaking.load(Relaxed) != sneaking);
         self.sneaking.store(sneaking, Relaxed);
         self.set_flag(Flag::Sneaking, sneaking).await;
-        if sneaking {
-            self.set_pose(EntityPose::Crouching).await;
-        } else {
-            self.set_pose(EntityPose::Standing).await;
-        }
     }
 
     pub async fn set_invisible(&self, invisible: bool) {
@@ -1940,6 +1954,7 @@ impl Entity {
 
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
         *damage_type != DamageType::GENERIC_KILL
+            && *damage_type != DamageType::OUT_OF_WORLD
             && (self.invulnerable.load(Relaxed) || self.damage_immunities.contains(damage_type))
     }
 
@@ -2015,6 +2030,15 @@ impl Entity {
                 self.on_ground.load(Ordering::SeqCst),
             ))
             .await;
+    }
+
+    pub fn get_eye_pos(&self) -> Vector3<f64> {
+        let pos = self.pos.load();
+        Vector3::new(
+            pos.x,
+            pos.y + f64::from(self.entity_dimension.load().eye_height),
+            pos.z,
+        )
     }
 
     pub fn get_eye_y(&self) -> f64 {

@@ -219,14 +219,17 @@ impl ChunkManager {
         self.center = center;
         self.view_distance = view_distance;
         let view_distance_i32 = i32::from(view_distance);
+        let unloading_chunks: HashSet<Vector2<i32>> = unloading_chunks.iter().copied().collect();
 
-        self.chunk_sent
-            .retain(|pos| !unloading_chunks.contains(pos));
+        self.chunk_sent.retain(|pos| {
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
+                && !unloading_chunks.contains(pos)
+        });
 
         let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
         for node in self.chunk_queue.drain() {
             let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
-            if dst <= view_distance_i32 {
+            if dst <= view_distance_i32 && !unloading_chunks.contains(&node.1) {
                 new_queue.push(HeapNode(dst, node.1, node.2));
             }
         }
@@ -250,6 +253,12 @@ impl ChunkManager {
         let (_rx, tx) = crossbeam::channel::unbounded();
         // drop old channel
         self.chunk_listener = tx;
+
+        // Drop any held chunk references to allow chunks to be unloaded.
+        self.chunk_sent.clear();
+        self.chunk_queue.clear();
+        self.entity_chunk_queue.clear();
+        self.batches_sent_since_ack = BatchState::Initial;
     }
 
     pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
@@ -267,7 +276,7 @@ impl ChunkManager {
         self.batches_sent_since_ack = BatchState::Initial;
     }
 
-    pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
+    pub const fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
         self.batches_sent_since_ack = BatchState::Count(0);
         self.chunks_per_tick = chunks_per_tick.ceil() as usize;
     }
@@ -599,7 +608,7 @@ impl Player {
         log::debug!(
             "Removed player id {} from world {} ({} chunks remain cached)",
             self.gameprofile.name,
-            "world", // TODO: Add world names
+            self.world().get_world_name(),
             level.loaded_chunk_count(),
         );
 
@@ -1149,6 +1158,79 @@ impl Player {
         abilities.flying
     }
 
+    fn is_sleeping(&self) -> bool {
+        // TODO: Track sleeping position state explicitly (vanilla checks sleepingPosition.isPresent()).
+        self.sleeping_since.load().is_some()
+    }
+
+    async fn is_swimming(&self, flying: bool) -> bool {
+        let entity = self.get_entity();
+        let swim_height = self.living_entity.get_swim_height();
+
+        // TODO: Replace this inferred check with vanilla-equivalent swimming state tracking
+        // (LivingEntity#updateSwimming + entity swimming flag).
+        entity.touching_water.load(Ordering::Relaxed)
+            && entity.water_height.load() > swim_height
+            && entity.sprinting.load(Ordering::Relaxed)
+            && !entity.on_ground.load(Ordering::Relaxed)
+            && !flying
+            && !entity.has_vehicle().await
+    }
+
+    const fn is_auto_spin_attack() -> bool {
+        // TODO: Track active auto-spin/riptide state and return true while it is active.
+        false
+    }
+
+    async fn can_fit_pose(&self, pose: EntityPose) -> bool {
+        let entity = self.get_entity();
+        let dimensions = Entity::get_entity_dimensions(pose);
+        let position = entity.pos.load();
+        let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimensions);
+        entity
+            .world
+            .load()
+            .is_space_empty(aabb.contract_all(1.0E-7))
+            .await
+    }
+
+    pub async fn update_player_pose(&self) {
+        let entity = self.get_entity();
+        if !self.can_fit_pose(EntityPose::Swimming).await {
+            return;
+        }
+
+        let flying = self.is_flying().await;
+        let desired_pose = if self.is_sleeping() {
+            EntityPose::Sleeping
+        } else if self.is_swimming(flying).await {
+            EntityPose::Swimming
+        } else if entity.fall_flying.load(Ordering::Relaxed) {
+            EntityPose::FallFlying
+        } else if Self::is_auto_spin_attack() {
+            EntityPose::SpinAttack
+        } else if entity.sneaking.load(Ordering::Relaxed) && !flying {
+            EntityPose::Crouching
+        } else {
+            EntityPose::Standing
+        };
+
+        let new_pose = if self.gamemode.load() == GameMode::Spectator
+            || entity.has_vehicle().await
+            || self.can_fit_pose(desired_pose).await
+        {
+            desired_pose
+        } else if self.can_fit_pose(EntityPose::Crouching).await {
+            EntityPose::Crouching
+        } else {
+            EntityPose::Swimming
+        };
+
+        if entity.pose.load() != new_pose {
+            entity.set_pose(new_pose).await;
+        }
+    }
+
     pub async fn wake_up(&self) {
         let world = self.world();
         let respawn_point = self
@@ -1360,6 +1442,8 @@ impl Player {
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
         self.living_entity.tick(self.clone(), server).await;
+        // Vanilla updates pose in PlayerEntity#tick after super.tick().
+        self.update_player_pose().await;
         self.breath_manager.tick(self).await;
         self.hunger_manager.tick(self).await;
 
@@ -2129,27 +2213,34 @@ impl Player {
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
-        // should be locked first otherwise cause deadlock in tick() (this thread lock stack, that thread lock screen_handler)
+        // Do not hold both item stack and screen handler locks at the same time.
+        let (dropped_stack, updated_stack, selected_slot) = {
+            let binding = self.inventory.held_item();
+            let mut item_stack = binding.lock().await;
 
-        let binding = self.inventory.held_item();
-        let mut item_stack = binding.lock().await;
-
-        if !item_stack.is_empty() {
-            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            self.drop_item(item_stack.copy_with_count(drop_amount))
-                .await;
-            item_stack.decrement(drop_amount);
-            let selected_slot = self.inventory.get_selected_slot();
-            let inv: Arc<dyn Inventory> = self.inventory.clone();
-            let screen_binding = self.current_screen_handler.lock().await;
-            let mut screen_handler = screen_binding.lock().await;
-            let slot_index = screen_handler
-                .get_slot_index(&inv, selected_slot as usize)
-                .await;
-
-            if let Some(slot_index) = slot_index {
-                screen_handler.set_received_stack(slot_index, item_stack.clone());
+            if item_stack.is_empty() {
+                return;
             }
+
+            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
+            let dropped_stack = item_stack.copy_with_count(drop_amount);
+            item_stack.decrement(drop_amount);
+            let updated_stack = item_stack.clone();
+            let selected_slot = self.inventory.get_selected_slot();
+
+            (dropped_stack, updated_stack, selected_slot)
+        };
+
+        self.drop_item(dropped_stack).await;
+
+        let inv: Arc<dyn Inventory> = self.inventory.clone();
+        let screen_binding = self.current_screen_handler.lock().await;
+        let mut screen_handler = screen_binding.lock().await;
+        if let Some(slot_index) = screen_handler
+            .get_slot_index(&inv, selected_slot as usize)
+            .await
+        {
+            screen_handler.set_received_stack(slot_index, updated_stack);
         }
     }
 
@@ -2895,7 +2986,10 @@ impl EntityBase for Player {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
+            if self.abilities.lock().await.invulnerable
+                && damage_type != DamageType::GENERIC_KILL
+                && damage_type != DamageType::OUT_OF_WORLD
+            {
                 return false;
             }
             let result = self
@@ -2996,6 +3090,12 @@ impl EntityBase for Player {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    fn tick_in_void<'a>(&'a self, dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.living_entity.tick_in_void(dyn_self).await;
+        })
     }
 }
 

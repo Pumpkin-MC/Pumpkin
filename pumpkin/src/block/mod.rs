@@ -21,6 +21,7 @@ use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_protocol::java::server::play::SUseItemOn;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -95,7 +96,9 @@ pub trait BlockBehaviour: Send + Sync {
     fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if let Some(living) = args.entity.get_living_entity() {
-                living.handle_fall_damage(args.fall_distance, 1.0).await;
+                living
+                    .handle_fall_damage(args.entity, args.fall_distance, 1.0)
+                    .await;
             }
         })
     }
@@ -159,6 +162,13 @@ pub trait BlockBehaviour: Send + Sync {
         _args: GetComparatorOutputArgs<'a>,
     ) -> BlockFuture<'a, Option<u8>> {
         Box::pin(async move { None })
+    }
+
+    fn get_inside_collision_shape<'a>(
+        &'a self,
+        _args: GetInsideCollisionShapeArgs<'a>,
+    ) -> BlockFuture<'a, BoundingBox> {
+        Box::pin(async move { BoundingBox::full_block() })
     }
 }
 
@@ -336,6 +346,13 @@ pub struct GetRedstonePowerArgs<'a> {
 }
 
 pub struct GetComparatorOutputArgs<'a> {
+    pub world: &'a World,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+}
+
+pub struct GetInsideCollisionShapeArgs<'a> {
     pub world: &'a World,
     pub block: &'a Block,
     pub state: &'a BlockState,
