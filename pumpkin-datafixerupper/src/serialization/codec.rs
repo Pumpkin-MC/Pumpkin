@@ -13,8 +13,12 @@ use crate::serialization::coders::{
 };
 use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
+use crate::serialization::keyable::Keyable;
 use crate::serialization::map_codec::ComposedMapCodec;
 use crate::serialization::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
+use crate::serialization::map_codecs::simple::SimpleMapCodec;
+use std::fmt::Display;
+use std::hash::Hash;
 use std::sync::{LazyLock, OnceLock};
 
 /// A type of *codec* describing the way to **encode from and decode into** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
@@ -208,6 +212,24 @@ make_codec_range_function!(
     DOUBLE_CODEC,
     double
 );
+
+// Map codec functions
+
+/// Creates a [`SimpleMapCodec`] with the provided key codec, value (element) codec and the possible key values.
+pub const fn simple_map<K: Display + Eq + Hash, V, KC: Codec<Value = K>, VC: Codec<Value = V>>(
+    key_codec: &'static KC,
+    element_codec: &'static VC,
+    keyable: Box<dyn Keyable>,
+) -> SimpleMapCodec<K, V, KC, VC> {
+    SimpleMapCodec {
+        key_codec,
+        element_codec,
+        keyable,
+        compressor: OnceLock::new(),
+    }
+}
+
+// Field functions
 
 type FieldMapCodec<A, C> = ComposedMapCodec<A, FieldEncoder<A, C>, FieldDecoder<A, C>>;
 

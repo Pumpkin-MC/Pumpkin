@@ -9,6 +9,7 @@ use crate::serialization::struct_builder::{
     ResultStructBuilder, StructBuilder, UniversalStructBuilder,
 };
 use crate::{impl_struct_builder, impl_universal_struct_builder};
+use std::fmt::Display;
 
 /// A trait specifying that an object holds a [`KeyCompressor`].
 pub trait CompressorHolder: Keyable {
@@ -19,7 +20,7 @@ pub trait CompressorHolder: Keyable {
 /// A different encoder that encodes a value of type `Value` for a map.
 pub trait MapEncoder: HasValue + Keyable + CompressorHolder {
     /// Encodes an input by working on a [`StructBuilder`].
-    fn encode<T: PartialEq + Clone>(
+    fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
@@ -94,13 +95,13 @@ pub trait MapEncoder: HasValue + Keyable + CompressorHolder {
 /// A different decoder that decodes into something of type `Value` for a map.
 pub trait MapDecoder: HasValue + Keyable + CompressorHolder {
     /// Decodes a map input.
-    fn decode<T: PartialEq + Clone>(
+    fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: &impl MapLike<Value = T>,
         ops: &'static impl DynamicOps<Value = T>,
     ) -> DataResult<Self::Value>;
 
-    fn compressed_decode<T: PartialEq + Clone>(
+    fn compressed_decode<T: Display + PartialEq + Clone>(
         &self,
         input: T,
         ops: &'static impl DynamicOps<Value = T>,
@@ -167,7 +168,7 @@ macro_rules! impl_compressor {
         fn compressor(&self) -> &KeyCompressor {
             &self.$compressor.get_or_init(|| {
                 let mut c = KeyCompressor::new();
-                c.populate(self.iter_keys());
+                c.populate(self.keys());
                 c
             })
         }

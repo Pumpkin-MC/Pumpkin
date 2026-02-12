@@ -571,11 +571,11 @@ macro_rules! assert_success {
 /// Asserts that the decoding of some value by a [`DynamicOps`] via a [`Codec`] is a success/error.
 /// # Example
 /// ```
-/// use crate::serialization::codecs::primitive;
+/// use crate::serialization::codec;
 ///
-/// assert_decode!(primitive::INT_CODEC, json!(2), json_ops::INSTANCE, is_success);
-/// assert_decode!(primitive::STRING_CODEC, json!("hello"), json_ops::INSTANCE, is_success);
-/// assert_decode!(primitive::FLOAT_CODEC, json!(true), json_ops::INSTANCE, is_error);
+/// assert_decode!(codec::INT_CODEC, json!(2), json_ops::INSTANCE, is_success);
+/// assert_decode!(codec::STRING_CODEC, json!("hello"), json_ops::INSTANCE, is_success);
+/// assert_decode!(codec::FLOAT_CODEC, json!(true), json_ops::INSTANCE, is_error);
 /// ```
 #[macro_export]
 #[cfg(test)]
