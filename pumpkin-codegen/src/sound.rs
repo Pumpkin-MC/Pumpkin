@@ -7,15 +7,16 @@ use quote::{format_ident, quote};
 use crate::array_to_tokenstream;
 
 pub fn build() -> TokenStream {
-    let mut sound: Vec<String> =
+    let sound: Vec<String> =
         serde_json::from_str(&fs::read_to_string("../assets/sounds.json").unwrap())
             .expect("Failed to parse sounds.json");
 
-    sound.sort();
-
     let variants = array_to_tokenstream(&sound);
 
-    let lookup_table = sound.iter().map(|s| {
+    let mut sorted_sound = sound.clone();
+    sorted_sound.sort();
+
+    let lookup_table = sorted_sound.iter().map(|s| {
         let variant_name = format_ident!("{}", s.to_pascal_case());
         quote! { (#s, Self::#variant_name) }
     });

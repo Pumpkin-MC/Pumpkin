@@ -1,5 +1,6 @@
 use num_traits::{Float, One, PrimInt, Zero};
 
+pub mod atomic_f32;
 pub mod block_box;
 pub mod boundingbox;
 pub mod euler_angle;

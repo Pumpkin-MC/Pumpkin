@@ -30,7 +30,10 @@ impl PistonBlockEntity {
                 let state = if self.source {
                     Block::AIR.default_state.id
                 } else {
-                    self.pushed_block_state.id
+                    world
+                        .clone()
+                        .update_from_neighbor_shapes(self.pushed_block_state.id, &pos)
+                        .await
                 };
                 world
                     .clone()
@@ -79,17 +82,21 @@ impl BlockEntity for PistonBlockEntity {
                             )
                             .await;
                     } else {
+                        let updated_state = world
+                            .clone()
+                            .update_from_neighbor_shapes(self.pushed_block_state.id, &pos)
+                            .await;
                         world
                             .clone()
                             .set_block_state(
                                 &pos,
-                                self.pushed_block_state.id,
+                                updated_state,
                                 BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
                             )
                             .await;
                         world
                             .clone()
-                            .update_neighbor(&pos, Block::from_state_id(self.pushed_block_state.id))
+                            .update_neighbor(&pos, Block::from_state_id(updated_state))
                             .await;
                     }
                 }

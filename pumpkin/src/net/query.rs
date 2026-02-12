@@ -9,6 +9,7 @@ use std::{
 use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::CURRENT_MC_VERSION;
 use rand::RngExt;
 use tokio::{net::UdpSocket, sync::RwLock, time};
@@ -37,10 +38,15 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
 
     log::info!(
         "Server query running on port {}",
-        socket
-            .local_addr()
-            .expect("Unable to find running address!")
-            .port()
+        TextComponent::text(format!(
+            "{}",
+            socket
+                .local_addr()
+                .expect("Unable to find running address!")
+                .port()
+        ))
+        .color_named(NamedColor::DarkBlue)
+        .to_pretty_console()
     );
 
     while !SHOULD_STOP.load(Ordering::Relaxed) {
@@ -150,7 +156,13 @@ async fn handle_packet(
                             hostname: CString::new(server.basic_config.motd.as_str())?,
                             version: CString::new(CURRENT_MC_VERSION)?,
                             plugins: CString::new(plugins)?,
-                            map: CString::new("world")?, // TODO: Get actual world name
+                            map: CString::new(
+                                server
+                                    .worlds
+                                    .load()
+                                    .first()
+                                    .map_or("world", |w| w.get_world_name()),
+                            )?,
                             num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,
                             host_port: bound_addr.port(),
@@ -165,7 +177,13 @@ async fn handle_packet(
                         let response = CBasicStatus {
                             session_id: packet.session_id,
                             motd: CString::new(server.basic_config.motd.as_str())?,
-                            map: CString::new("world")?,
+                            map: CString::new(
+                                server
+                                    .worlds
+                                    .load()
+                                    .first()
+                                    .map_or("world", |w| w.get_world_name()),
+                            )?,
                             num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,
                             host_port: bound_addr.port(),

@@ -1,11 +1,16 @@
 use std::sync::Arc;
 
-use crate::block::BlockFuture;
-use crate::block::GetStateForNeighborUpdateArgs;
-use crate::block::NormalUseArgs;
-use crate::block::OnPlaceArgs;
+use crate::block::blocks::redstone::block_receives_redstone_power;
+use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs,
+};
 use crate::entity::player::Player;
+use crate::world::World;
+use pumpkin_data::Block;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -13,11 +18,24 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::BlockBehaviour;
-use crate::block::registry::BlockActionResult;
-use crate::world::World;
-
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
+
+fn get_sound(block: &Block, open: bool) -> Sound {
+    match (block, open) {
+        (b, true) if b == &Block::BAMBOO_FENCE_GATE => Sound::BlockBambooWoodFenceGateOpen,
+        (b, false) if b == &Block::BAMBOO_FENCE_GATE => Sound::BlockBambooWoodFenceGateClose,
+        (b, true) if b == &Block::CHERRY_FENCE_GATE => Sound::BlockCherryWoodFenceGateOpen,
+        (b, false) if b == &Block::CHERRY_FENCE_GATE => Sound::BlockCherryWoodFenceGateClose,
+        (b, true) if b == &Block::CRIMSON_FENCE_GATE || b == &Block::WARPED_FENCE_GATE => {
+            Sound::BlockNetherWoodFenceGateOpen
+        }
+        (b, false) if b == &Block::CRIMSON_FENCE_GATE || b == &Block::WARPED_FENCE_GATE => {
+            Sound::BlockNetherWoodFenceGateClose
+        }
+        (_, true) => Sound::BlockFenceGateOpen,
+        (_, false) => Sound::BlockFenceGateClose,
+    }
+}
 
 pub async fn toggle_fence_gate(
     world: &Arc<World>,
@@ -41,6 +59,16 @@ pub async fn toggle_fence_gate(
         }
         fence_gate_props.open = true;
     }
+
+    world
+        .play_block_sound_expect(
+            player,
+            get_sound(block, fence_gate_props.open),
+            SoundCategory::Blocks,
+            *block_pos,
+        )
+        .await;
+
     world
         .set_block_state(
             block_pos,
@@ -48,7 +76,6 @@ pub async fn toggle_fence_gate(
             BlockFlags::NOTIFY_LISTENERS,
         )
         .await;
-    // TODO playSound depend on WoodType
     fence_gate_props.to_state_id(block)
 }
 
@@ -60,6 +87,11 @@ impl BlockBehaviour for FenceGateBlock {
         Box::pin(async move {
             let mut fence_gate_props = FenceGateProperties::default(args.block);
             fence_gate_props.facing = args.player.living_entity.entity.get_horizontal_facing();
+
+            let powered = block_receives_redstone_power(args.world, args.position).await;
+            fence_gate_props.powered = powered;
+            fence_gate_props.open = powered;
+
             fence_gate_props.to_state_id(args.block)
         })
     }
@@ -79,6 +111,41 @@ impl BlockBehaviour for FenceGateBlock {
             toggle_fence_gate(args.world, args.position, args.player).await;
 
             BlockActionResult::Success
+        })
+    }
+
+    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let block_state = args.world.get_block_state(args.position).await;
+            let mut fence_gate_props =
+                FenceGateProperties::from_state_id(block_state.id, args.block);
+            let powered = block_receives_redstone_power(args.world, args.position).await;
+
+            if powered == fence_gate_props.powered {
+                return;
+            }
+
+            fence_gate_props.powered = powered;
+
+            if powered != fence_gate_props.open {
+                fence_gate_props.open = powered;
+
+                args.world
+                    .play_block_sound(
+                        get_sound(args.block, powered),
+                        SoundCategory::Blocks,
+                        *args.position,
+                    )
+                    .await;
+            }
+
+            args.world
+                .set_block_state(
+                    args.position,
+                    fence_gate_props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_LISTENERS,
+                )
+                .await;
         })
     }
 }

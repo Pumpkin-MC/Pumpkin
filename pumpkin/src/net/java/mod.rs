@@ -44,10 +44,10 @@ use tokio::{
         TcpStream,
         tcp::{OwnedReadHalf, OwnedWriteHalf},
     },
-    sync::Mutex,
+    sync::{Mutex, oneshot},
 };
 use tokio::{
-    sync::mpsc::{Receiver, Sender},
+    sync::mpsc::{Receiver, Sender, error::TryRecvError},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -82,10 +82,14 @@ pub struct JavaClient {
     tasks: TaskTracker,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
-    /// A queue of serialized packets to send to the network
-    outgoing_packet_queue_send: Sender<Bytes>,
-    /// A queue of serialized packets to send to the network
-    outgoing_packet_queue_recv: Option<Receiver<Bytes>>,
+    /// A normal-priority queue of serialized packets to send to the network.
+    outgoing_packet_queue_send: Sender<OutgoingPacket>,
+    /// A normal-priority queue of serialized packets to send to the network.
+    outgoing_packet_queue_recv: Option<Receiver<OutgoingPacket>>,
+    /// A high-priority queue of serialized packets to send to the network.
+    outgoing_packet_priority_send: Sender<OutgoingPacket>,
+    /// A high-priority queue of serialized packets to send to the network.
+    outgoing_packet_priority_recv: Option<Receiver<OutgoingPacket>>,
     /// The packet encoder for outgoing packets.
     network_writer: Arc<Mutex<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
@@ -98,11 +102,33 @@ pub enum PacketHandlerResult {
     ReadyToPlay(GameProfile, PlayerConfig),
 }
 
+struct OutgoingPacket {
+    data: Bytes,
+    completion: Option<oneshot::Sender<()>>,
+}
+
+impl OutgoingPacket {
+    const fn normal(data: Bytes) -> Self {
+        Self {
+            data,
+            completion: None,
+        }
+    }
+
+    const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
+        Self {
+            data,
+            completion: Some(completion),
+        }
+    }
+}
+
 impl JavaClient {
     #[must_use]
     pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: u64) -> Self {
         let (read, write) = tcp_stream.into_split();
         let (send, recv) = tokio::sync::mpsc::channel(128);
+        let (priority_send, priority_recv) = tokio::sync::mpsc::channel(128);
         Self {
             id,
             gameprofile: Mutex::new(None),
@@ -114,6 +140,8 @@ impl JavaClient {
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
+            outgoing_packet_priority_send: priority_send,
+            outgoing_packet_priority_recv: Some(priority_recv),
             version: AtomicCell::new(MinecraftVersion::from_protocol(CURRENT_MC_PROTOCOL)),
             network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
@@ -240,7 +268,11 @@ impl JavaClient {
     ///
     /// * `packet`: A reference to a packet object implementing the `ClientPacket` trait.
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
-        if let Err(err) = self.outgoing_packet_queue_send.send(packet_data).await {
+        if let Err(err) = self
+            .outgoing_packet_queue_send
+            .send(OutgoingPacket::normal(packet_data))
+            .await
+        {
             // This is expected to fail if we are closed
             if !self.close_token.is_cancelled() {
                 log::error!(
@@ -303,25 +335,54 @@ impl JavaClient {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
         self.write_packet(packet, writer).unwrap();
-        self.send_packet_now_data(packet_buf).await;
+        self.send_packet_now_data(packet_buf.into()).await;
     }
 
-    pub async fn send_packet_now_data(&self, packet: Vec<u8>) {
+    pub async fn send_packet_now_data(&self, packet: Bytes) {
+        let (completion_tx, completion_rx) = oneshot::channel();
+
         if let Err(err) = self
-            .network_writer
-            .lock()
-            .await
-            .write_packet(packet.into())
+            .outgoing_packet_priority_send
+            .send(OutgoingPacket::high_priority(packet, completion_tx))
             .await
         {
             // It is expected that the packet will fail if we are closed
             if !self.close_token.is_cancelled() {
-                log::warn!("Failed to send packet to client {}: {}", self.id, err);
+                log::warn!(
+                    "Failed to add high-priority packet to the outgoing packet queue for client {}: {}",
+                    self.id,
+                    err
+                );
                 // We now need to close the connection to the client since the stream is in an
                 // unknown state
                 self.close();
             }
+            return;
         }
+
+        if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
+            // The outgoing packet task dropped before confirming the write.
+            self.close();
+        }
+    }
+
+    pub fn write_packet_for_version<P: ClientPacket>(
+        packet: &P,
+        version: MinecraftVersion,
+        write: impl Write,
+    ) -> Result<(), WritingError> {
+        let mut write = write;
+        write.write_var_int(&VarInt(P::PACKET_ID.to_id(version)))?;
+        packet.write_packet_data(write, &version)
+    }
+
+    pub fn serialize_packet_for_version<P: ClientPacket>(
+        packet: &P,
+        version: MinecraftVersion,
+    ) -> Result<Bytes, WritingError> {
+        let mut packet_buf = Vec::new();
+        Self::write_packet_for_version(packet, version, &mut packet_buf)?;
+        Ok(packet_buf.into())
     }
 
     pub fn write_packet<P: ClientPacket>(
@@ -329,10 +390,7 @@ impl JavaClient {
         packet: &P,
         write: impl Write,
     ) -> Result<(), WritingError> {
-        let mut write = write;
-        let version = self.version.load();
-        write.write_var_int(&VarInt(P::PACKET_ID.to_id(version)))?;
-        packet.write_packet_data(write, &version)
+        Self::write_packet_for_version(packet, self.version.load(), write)
     }
 
     /// Handles an incoming packet, routing it to the appropriate handler based on the current connection state.
@@ -419,8 +477,14 @@ impl JavaClient {
     }
 
     pub fn start_outgoing_packet_task(&mut self) {
+        const MAX_BATCH_SIZE: usize = 64;
+
         let mut packet_receiver = self
             .outgoing_packet_queue_recv
+            .take()
+            .expect("This was set in the new fn");
+        let mut priority_packet_receiver = self
+            .outgoing_packet_priority_recv
             .take()
             .expect("This was set in the new fn");
         let close_token = self.close_token.clone();
@@ -429,7 +493,9 @@ impl JavaClient {
         self.spawn_task(async move {
             while !close_token.is_cancelled() {
                 let recv_result = tokio::select! {
-                    () =  close_token.cancelled() => None,
+                    biased;
+                    () = close_token.cancelled() => None,
+                    res = priority_packet_receiver.recv() => res,
                     res = packet_receiver.recv() => res,
                 };
 
@@ -437,14 +503,54 @@ impl JavaClient {
                     break;
                 };
 
-                if let Err(err) = writer.lock().await.write_packet(packet_data).await {
-                    // It is expected that the packet will fail if we are closed
-                    if !close_token.is_cancelled() {
-                        log::warn!("Failed to send packet to client {id}: {err}",);
-                        // We now need to close the connection to the client since the stream is in an
-                        // unknown state
-                        close_token.cancel();
+                let mut packet_batch = Vec::with_capacity(MAX_BATCH_SIZE);
+                packet_batch.push(packet_data);
+
+                while packet_batch.len() < MAX_BATCH_SIZE {
+                    match priority_packet_receiver.try_recv() {
+                        Ok(packet_data) => {
+                            packet_batch.push(packet_data);
+                            continue;
+                        }
+                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => {}
+                    }
+
+                    match packet_receiver.try_recv() {
+                        Ok(packet_data) => packet_batch.push(packet_data),
+                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => break,
+                    }
+                }
+
+                let mut writer = writer.lock().await;
+                let mut send_failed = false;
+                for packet in &packet_batch {
+                    if let Err(err) = writer.write_packet(packet.data.clone()).await {
+                        send_failed = true;
+                        // It is expected that the packet will fail if we are closed
+                        if !close_token.is_cancelled() {
+                            log::warn!("Failed to send packet to client {id}: {err}");
+                        }
                         break;
+                    }
+                }
+
+                if !send_failed && let Err(err) = writer.flush().await {
+                    send_failed = true;
+                    if !close_token.is_cancelled() {
+                        log::warn!("Failed to flush packet batch for client {id}: {err}");
+                    }
+                }
+                drop(writer);
+
+                if send_failed {
+                    // We now need to close the connection to the client since the stream is in an unknown state.
+                    close_token.cancel();
+                    break;
+                }
+
+                for packet in packet_batch {
+                    if let Some(completion) = packet.completion {
+                        let _ = completion.send(());
                     }
                 }
             }

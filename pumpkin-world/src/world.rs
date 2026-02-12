@@ -137,6 +137,14 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
         position: Vector3<f64>,
         amount: u32,
     ) -> WorldFuture<'static, ()>;
+
+    /// `Block.updateFromNeighbourShapes`: updates a block state by calling
+    /// `get_state_for_neighbor_update` on itself for each of the 6 directions.
+    fn update_from_neighbor_shapes(
+        self: Arc<Self>,
+        block_state_id: BlockStateId,
+        position: &BlockPos,
+    ) -> WorldFuture<'_, BlockStateId>;
 }
 
 pub trait BlockRegistryExt: Send + Sync {
