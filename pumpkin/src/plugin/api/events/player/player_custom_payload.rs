@@ -19,7 +19,7 @@ pub struct PlayerCustomPayloadEvent {
 
 impl PlayerCustomPayloadEvent {
     #[must_use]
-    pub fn new(player: Arc<Player>, channel: String, data: Bytes) -> Self {
+    pub const fn new(player: Arc<Player>, channel: String, data: Bytes) -> Self {
         Self {
             player,
             channel,
