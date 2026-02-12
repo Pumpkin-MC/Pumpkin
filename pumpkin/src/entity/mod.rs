@@ -11,7 +11,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
+use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -877,7 +877,7 @@ impl Entity {
 
     async fn tick_block_collisions(&self, caller: &Arc<dyn EntityBase>, server: &Server) -> bool {
         let bounding_box = self.bounding_box.load();
-        let aabb = bounding_box.expand(-0.001, -0.001, -0.001);
+        let aabb = bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7);
 
         let min = aabb.min_block_pos();
         let max = aabb.max_block_pos();
@@ -888,18 +888,20 @@ impl Entity {
         eye_level_box.max.y = eye_level_box.min.y;
 
         let mut suffocating = false;
-        let pos_iter = BlockPos::iterate(min, max);
         let world = self.world.load();
 
-        for pos in pos_iter {
+        for pos in BlockPos::iterate(min, max) {
             let (block, state) = world.get_block_and_state(&pos).await;
             if state.is_air() {
                 continue;
             }
 
-            let check_suffocation = !suffocating && state.is_solid();
+            // TODO: this is default predicate, vanilla overwrites it for some blocks,
+            // see .suffocates(...) in Blocks.java
+            let check_suffocation =
+                !suffocating && blocks_movement(state, block.id) && state.is_full_cube();
 
-            let collided = World::check_outline(
+            World::check_collision(
                 &bounding_box,
                 pos,
                 state,
@@ -911,7 +913,12 @@ impl Entity {
                 },
             );
 
-            if collided {
+            let collision_shape = world
+                .block_registry
+                .get_inside_collision_shape(block, &world, state, &pos)
+                .await;
+
+            if bounding_box.intersects(&collision_shape.at_pos(pos)) {
                 world
                     .block_registry
                     .on_entity_collision(block, &world, caller.as_ref(), &pos, state, server)
