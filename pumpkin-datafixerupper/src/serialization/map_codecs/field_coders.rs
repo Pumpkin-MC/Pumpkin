@@ -8,6 +8,7 @@ use crate::serialization::keyable::Keyable;
 use crate::serialization::map_coders::{CompressorHolder, MapDecoder, MapEncoder};
 use crate::serialization::map_like::MapLike;
 use crate::serialization::struct_builder::StructBuilder;
+use std::fmt::Display;
 use std::sync::OnceLock;
 
 /// A [`MapEncoder`] that knows how to encode an entire field (key + value).
@@ -26,7 +27,7 @@ impl<A, E: Encoder<Value = A>> HasValue for FieldEncoder<A, E> {
 }
 
 impl<A, E: Encoder<Value = A>> Keyable for FieldEncoder<A, E> {
-    fn iter_keys(&self) -> Vec<String> {
+    fn keys(&self) -> Vec<String> {
         vec![self.name.to_string()]
     }
 }
@@ -36,7 +37,7 @@ impl<A, E: Encoder<Value = A>> CompressorHolder for FieldEncoder<A, E> {
 }
 
 impl<A, E: Encoder<Value = A>> MapEncoder for FieldEncoder<A, E> {
-    fn encode<T: PartialEq + Clone>(
+    fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
@@ -75,7 +76,7 @@ impl<A, D: Decoder<Value = A>> HasValue for FieldDecoder<A, D> {
 }
 
 impl<A, D: Decoder<Value = A>> Keyable for FieldDecoder<A, D> {
-    fn iter_keys(&self) -> Vec<String> {
+    fn keys(&self) -> Vec<String> {
         vec![self.name.to_string()]
     }
 }
@@ -85,7 +86,7 @@ impl<A, D: Decoder<Value = A>> CompressorHolder for FieldDecoder<A, D> {
 }
 
 impl<A, D: Decoder<Value = A>> MapDecoder for FieldDecoder<A, D> {
-    fn decode<T: PartialEq + Clone>(
+    fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: &impl MapLike<Value = T>,
         ops: &'static impl DynamicOps<Value = T>,
