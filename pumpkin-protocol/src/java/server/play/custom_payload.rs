@@ -6,8 +6,8 @@ use pumpkin_util::resource_location::ResourceLocation;
 
 use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
 
-/// The maximum allowed size for a custom payload (1 MiB).
-const MAX_PAYLOAD_SIZE: usize = 1_048_576;
+/// The maximum allowed size for a play custom payload (32 KiB).
+const MAX_PAYLOAD_SIZE: usize = 32_767;
 
 /// A packet used for custom communication between the client and server.
 ///

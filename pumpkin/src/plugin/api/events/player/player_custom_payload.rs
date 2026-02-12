@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use pumpkin_macros::Event;
 use std::sync::Arc;
 
@@ -13,12 +14,12 @@ pub struct PlayerCustomPayloadEvent {
     /// The payload channel identifier (e.g. `voicechat:request_secret`).
     pub channel: String,
     /// The raw payload data.
-    pub data: Vec<u8>,
+    pub data: Bytes,
 }
 
 impl PlayerCustomPayloadEvent {
     #[must_use]
-    pub const fn new(player: Arc<Player>, channel: String, data: Vec<u8>) -> Self {
+    pub fn new(player: Arc<Player>, channel: String, data: Bytes) -> Self {
         Self {
             player,
             channel,
