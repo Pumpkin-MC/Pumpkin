@@ -20,6 +20,70 @@ macro_rules! collect_partial_and_message {
     };
 }
 
+/// A macro to generate a function to apply a function to each result of `n` `DataResult`s.
+macro_rules! impl_apply {
+    (@internal_method $self:ident $f:ident $($result:ident),+) => {
+        let result_1 = $self;
+        if !(result_1.is_error() $(|| $result.is_error())+) {
+            // All n results are successful.
+            return DataResult::success($f(
+                result_1.into_result().unwrap()
+                $( , $result.into_result().unwrap() )+
+            ));
+        }
+        let mut messages: Vec<String> = vec![];
+
+        // Collect any found errors.
+        collect_partial_and_message!(partial_1, result_1, messages);
+        $( collect_partial_and_message!($result, $result, messages); )+
+
+        return DataResult::error_any_with_lifecycle(
+            messages.join("; "),
+            match (partial_1, $($result, )+) {
+                (Some(result_1), $(Some($result), )+) => Some($f(result_1 $(, $result )+)),
+                _ => None,
+            },
+            Lifecycle::Experimental,
+        );
+    };
+
+    ($name:ident, $n:literal, $($ty:ident, $result:ident),+) => {
+        #[doc = concat!("Applies a function to each result of ", stringify!($n), " `DataResult`s of different types.")]
+        ///
+        /// - If any of the given results is a non-result, the returned result will also be a non-result.
+        /// - Any errors found in error results (non-result or partial result) will be added to the returned result.
+        /// - If all results are at least partial, `f` is called, which should return the final item to be wrapped in the returned result.
+        ///
+        /// The returned result is a *success* **if and only if** all provided results are successes as well.
+        #[must_use]
+        pub fn $name<$($ty,)+ T>(
+            self,
+            f: impl FnOnce(R $(,$ty)+) -> T
+            $(, $result: DataResult<$ty>)+
+        ) -> DataResult<T> {
+            impl_apply!(@internal_method self f $($result),+);
+        }
+    };
+    (expect $name:ident, $n:literal, $($ty:ident, $result:ident),+) => {
+        #[doc = concat!("Applies a function to each result of ", stringify!($n), " `DataResult`s of different types.")]
+        ///
+        /// - If any of the given results is a non-result, the returned result will also be a non-result.
+        /// - Any errors found in error results (non-result or partial result) will be added to the returned result.
+        /// - If all results are at least partial, `f` is called, which should return the final item to be wrapped in the returned result.
+        ///
+        /// The returned result is a *success* **if and only if** all provided results are successes as well.
+        #[must_use]
+        #[expect(clippy::too_many_arguments)]
+        pub fn $name<$($ty,)+ T>(
+            self,
+            f: impl FnOnce(R $(,$ty)+) -> T
+            $(, $result: DataResult<$ty>)+
+        ) -> DataResult<T> {
+            impl_apply!(@internal_method self f $($result),+);
+        }
+    };
+}
+
 // TODO: maybe use pub(crate) for certain functions? (certain functions here are not used outside the library)
 
 /// A result that can either represent a successful result, or a
@@ -316,12 +380,18 @@ impl<R> DataResult<R> {
         }
     }
 
-    /// Applies a function to each result of two `DataResult`s of different types.
+    /// Applies a function to each result of 2 `DataResult`s of different types.
+    ///
+    /// - If any of the given results is a non-result, the returned result will also be a non-result.
+    /// - Any errors found in error results (non-result or partial result) will be added to the returned result.
+    /// - If both results are at least partial, `f` is called, which should return the final item to be wrapped in the returned result.
+    ///
+    /// The returned result is a *success* **if and only if** both results are successes as well.
     #[must_use]
-    pub fn apply_2<A, T>(
+    pub fn apply_2<R2, T>(
         self,
-        f: impl FnOnce(R, A) -> T,
-        second_result: DataResult<A>,
+        f: impl FnOnce(R, R2) -> T,
+        second_result: DataResult<R2>,
     ) -> DataResult<T> {
         match (self, second_result) {
             // Both results are successful, just apply f.
@@ -356,7 +426,7 @@ impl<R> DataResult<R> {
         }
     }
 
-    /// Applies a function to each result of two `DataResult`s of different types, marking the resulting `DataResult` as [`Lifecycle::Stable`].
+    /// Similar to [`apply_2`], but this also marks the returned `DataResult` as [`Lifecycle::Stable`].
     #[must_use]
     pub fn apply_2_and_make_stable<R2, T>(
         self,
@@ -367,50 +437,24 @@ impl<R> DataResult<R> {
             .with_lifecycle(Lifecycle::Stable)
     }
 
-    /// Applies a function to each result of three `DataResult`s of different types.
-    #[must_use]
-    pub fn apply_3<A, B, T>(
-        self,
-        second_result: DataResult<A>,
-        third_result: DataResult<B>,
-        f: impl FnOnce(R, A, B) -> T,
-    ) -> DataResult<T> {
-        let r = self;
-        let a = second_result;
-        let b = third_result;
-
-        let has_error = r.is_error() || a.is_error() || b.is_error();
-
-        if !has_error {
-            // All 3 results are successful.
-            let Self::Success { result: r, .. } = r else {
-                unreachable!()
-            };
-            let DataResult::Success { result: a, .. } = a else {
-                unreachable!()
-            };
-            let DataResult::Success { result: b, .. } = b else {
-                unreachable!()
-            };
-            return DataResult::success(f(r, a, b));
-        }
-
-        let mut messages: Vec<String> = vec![];
-
-        // Collect any found errors.
-        collect_partial_and_message!(r_partial, r, messages);
-        collect_partial_and_message!(a_partial, a, messages);
-        collect_partial_and_message!(b_partial, b, messages);
-
-        DataResult::error_any_with_lifecycle(
-            messages.join("; "),
-            match (r_partial, a_partial, b_partial) {
-                (Some(r), Some(a), Some(b)) => Some(f(r, a, b)),
-                _ => None,
-            },
-            Lifecycle::Experimental,
-        )
-    }
+    impl_apply!(apply_3, 3, R2, result_2, R3, result_3);
+    impl_apply!(apply_4, 4, R2, result_2, R3, result_3, R4, result_4);
+    impl_apply!(
+        apply_5, 5, R2, result_2, R3, result_3, R4, result_4, R5, result_5
+    );
+    impl_apply!(
+        apply_6, 6, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6
+    );
+    impl_apply!(expect apply_7, 7, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6, R7, result_7);
+    impl_apply!(expect apply_8, 8, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6, R7, result_7, R8, result_8);
+    impl_apply!(expect apply_9, 9, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6, R7, result_7, R8, result_8, R9, result_9);
+    impl_apply!(expect apply_10, 10, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6, R7, result_7, R8, result_8, R9, result_9, R10, result_10);
+    impl_apply!(expect apply_11, 11, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6, R7, result_7, R8, result_8, R9, result_9, R10, result_10, R11, result_11);
+    impl_apply!(expect apply_12, 12, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6, R7, result_7, R8, result_8, R9, result_9, R10, result_10, R11, result_11, R12, result_12);
+    impl_apply!(expect apply_13, 13, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6, R7, result_7, R8, result_8, R9, result_9, R10, result_10, R11, result_11, R12, result_12, R13, result_13);
+    impl_apply!(expect apply_14, 14, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6, R7, result_7, R8, result_8, R9, result_9, R10, result_10, R11, result_11, R12, result_12, R13, result_13, R14, result_14);
+    impl_apply!(expect apply_15, 15, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6, R7, result_7, R8, result_8, R9, result_9, R10, result_10, R11, result_11, R12, result_12, R13, result_13, R14, result_14, R15, result_15);
+    impl_apply!(expect apply_16, 16, R2, result_2, R3, result_3, R4, result_4, R5, result_5, R6, result_6, R7, result_7, R8, result_8, R9, result_9, R10, result_10, R11, result_11, R12, result_12, R13, result_13, R14, result_14, R15, result_15, R16, result_16);
 
     /// Applies a function to `DataResult` errors, leaving successes untouched.
     /// This can be used to provide additional context to an error.
@@ -549,9 +593,10 @@ impl<R> DataResult<R> {
     }
 }
 
+// Assertion functions
+
 /// Asserts that the `$left` `DataResult` is a complete result (success) whose stored result is `$right`.
 #[macro_export]
-#[cfg(test)]
 macro_rules! assert_success {
     ($left:expr, $right:expr $(,)?) => {{
         let result = $left;
@@ -560,27 +605,10 @@ macro_rules! assert_success {
             "Expected a `DataResult` success, got: {:?}",
             result
         );
-        let value = result.unwrap();
+        let value = result.clone().unwrap();
         assert_eq!(
             value, $right,
             "`DataResult` was successful but the value doesn't match"
         );
-    }};
-}
-
-/// Asserts that the decoding of some value by a [`DynamicOps`] via a [`Codec`] is a success/error.
-/// # Example
-/// ```
-/// use crate::serialization::codec;
-///
-/// assert_decode!(codec::INT_CODEC, json!(2), json_ops::INSTANCE, is_success);
-/// assert_decode!(codec::STRING_CODEC, json!("hello"), json_ops::INSTANCE, is_success);
-/// assert_decode!(codec::FLOAT_CODEC, json!(true), json_ops::INSTANCE, is_error);
-/// ```
-#[macro_export]
-#[cfg(test)]
-macro_rules! assert_decode {
-    ($codec:expr, $value:expr, $ops:expr, $assertion:ident) => {{
-        assert!($codec.decode($value, &$ops).$assertion());
     }};
 }
