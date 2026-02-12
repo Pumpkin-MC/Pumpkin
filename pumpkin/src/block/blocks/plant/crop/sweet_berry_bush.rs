@@ -1,5 +1,14 @@
 use std::sync::Arc;
 
+use crate::{
+    block::{
+        BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+        OnEntityCollisionArgs, RandomTickArgs, UseWithItemArgs,
+        blocks::plant::{PlantBlockBase, crop::CropBlockBase},
+        registry::BlockActionResult,
+    },
+    world::World,
+};
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties},
@@ -10,22 +19,13 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{
     BlockStateId,
     item::ItemStack,
     world::{BlockAccessor, BlockFlags},
 };
 use rand::RngExt;
-use pumpkin_util::math::vector3::Vector3;
-use crate::{
-    block::{
-        BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
-        OnEntityCollisionArgs, RandomTickArgs, UseWithItemArgs,
-        blocks::plant::{PlantBlockBase, crop::CropBlockBase},
-        registry::BlockActionResult,
-    },
-    world::World,
-};
 
 #[pumpkin_block("minecraft:sweet_berry_bush")]
 pub struct SweetBerryBushBlock;
@@ -105,12 +105,17 @@ impl BlockBehaviour for SweetBerryBushBlock {
             let entity = args.entity.get_entity();
 
             let living_entity_opt = args.entity.get_living_entity();
-            if living_entity_opt.is_none() || entity.entity_type == &EntityType::FOX || entity.entity_type == &EntityType::BEE {
+            if living_entity_opt.is_none()
+                || entity.entity_type == &EntityType::FOX
+                || entity.entity_type == &EntityType::BEE
+            {
                 return;
             }
 
             let living_entity = living_entity_opt.expect("Living entity should exist");
-            entity.slow_movement(args.state, Vector3::new(0.8, 0.75, 0.8)).await;
+            entity
+                .slow_movement(args.state, Vector3::new(0.8, 0.75, 0.8))
+                .await;
             let mov = if living_entity.is_controlled_by_player() {
                 living_entity.get_movement()
             } else {
