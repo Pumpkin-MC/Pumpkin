@@ -94,14 +94,15 @@ impl BlockBehaviour for TrapDoorBlock {
                 .player
                 .living_entity
                 .entity
-                .get_horizontal_facing()
-                .to_block_direction();
+                .get_horizontal_facing();
 
             let facing = match args.direction {
                 BlockDirection::North
                 | BlockDirection::South
                 | BlockDirection::East
-                | BlockDirection::West => args.direction,
+                | BlockDirection::West => {
+                    HorizontalFacing::from_block_direction(args.direction)
+                }
 
                 BlockDirection::Up | BlockDirection::Down => player_facing,
             };
