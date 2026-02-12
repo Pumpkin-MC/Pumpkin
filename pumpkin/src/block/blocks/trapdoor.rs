@@ -4,7 +4,6 @@ use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateA
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::{BlockHalf, BlockProperties, HorizontalFacing};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
@@ -96,7 +95,7 @@ impl BlockBehaviour for TrapDoorBlock {
                 BlockDirection::North
                 | BlockDirection::South
                 | BlockDirection::East
-                | BlockDirection::West => HorizontalFacingExt::from_block_direction(args.direction),
+                | BlockDirection::West => args.direction.to_horizontal_facing(),
                 BlockDirection::Up | BlockDirection::Down => player_facing,
             };
 
