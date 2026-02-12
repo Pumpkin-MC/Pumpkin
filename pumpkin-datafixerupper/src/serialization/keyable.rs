@@ -2,5 +2,5 @@
 pub trait Keyable {
     /// Returns a new copy of a [`Vec`] of the keys of this `Keyable`.
     #[must_use]
-    fn iter_keys(&self) -> Vec<String>;
+    fn keys(&self) -> Vec<String>;
 }
