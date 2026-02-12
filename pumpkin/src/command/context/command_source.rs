@@ -63,37 +63,88 @@ impl Default for ResultValueTaker {
 /// - permissions
 /// - name
 /// - display name
-/// - the internal server,
-/// - whether it is silent or no
+/// - the internal server
+/// - whether it is silent or not
 /// - entity which it could represent
 ///
 /// Not to be confused with [`CommandSender`], [`CommandSource`]
-/// stores contextual information which could change due
-/// to subcommands as it passes along the command.
+/// can be modified by commands to change how another
+/// command works later in the command chain.
 ///
 /// A source having a player and a particular position does
 /// not necessarily mean that the player does have that position;
 /// but rather is a state for more complex functionality.
-///
-/// The `/execute` command heavily takes advantage of this source structure,
-/// and can help you get a better understanding of this structure.
 #[derive(Clone)]
 pub struct CommandSource {
     pub output: CommandSender,
-    pub world: Arc<World>,
+    pub world: Option<Arc<World>>,
     pub entity: Option<Arc<dyn EntityBase>>,
     pub position: Vector3<f64>,
     pub rotation: Vector2<f32>,
-    // pub permission_predicate: TODO,
     pub name: String,
     pub display_name: TextComponent,
-    pub server: Arc<Server>,
+    pub server: Option<Arc<Server>>,
     pub silent: bool,
     pub command_result_taker: ResultValueTaker,
     pub entity_anchor: EntityAnchor,
+
+    // TODO: Add permission
 }
 
 impl CommandSource {
+    /// Creates a dummy [`CommandSource`], great for unit testing.
+    ///
+    /// # Note
+    /// **This should only be used for unit tests!!!**
+    ///
+    /// The returned [`CommandSource`] does not contain
+    /// a server or a world. If there is attempt to fetch the server or a world from
+    /// the returned source, there will be a panic!
+    pub fn dummy() -> Self {
+        CommandSource {
+            output: CommandSender::Dummy,
+            world: None,
+            entity: None,
+            position: Default::default(),
+            rotation: Default::default(),
+            name: "".to_string(),
+            display_name: TextComponent::text(""),
+            server: None,
+            silent: false,
+            command_result_taker: ResultValueTaker::new(),
+            entity_anchor: EntityAnchor::Feet,
+        }
+    }
+
+    /// Creates a usable [`CommandSource`] for running commands in an actual environment.
+    pub fn new(
+        output: CommandSender,
+        world: Arc<World>,
+        entity: Option<Arc<dyn EntityBase>>,
+        position: Vector3<f64>,
+        rotation: Vector2<f32>,
+        name: String,
+        display_name: TextComponent,
+        server: Arc<Server>,
+        silent: bool,
+        command_result_taker: ResultValueTaker,
+        entity_anchor: EntityAnchor,
+    ) -> Self {
+        CommandSource {
+            output,
+            world: Some(world),
+            entity,
+            position,
+            rotation,
+            name,
+            display_name,
+            server: Some(server),
+            silent,
+            command_result_taker,
+            entity_anchor
+        }
+    }
+
     /// Returns a new [`CommandSource`] with the specified output and
     /// everything else from the `source` provided.
     #[must_use]
@@ -113,18 +164,39 @@ impl CommandSource {
         }
     }
 
-    /// Returns a new [`CommandSource`] with the specified entity and
+    /// Returns a new [`CommandSource`] with the specified world and
     /// everything else from the `source` provided.
     #[must_use]
-    pub fn with_entity(self, entity: Option<Arc<dyn EntityBase>>) -> Self {
+    pub fn with_world(self, world: Arc<World>) -> Self {
         Self {
             output: self.output,
-            world: self.world,
-            entity,
+            world: Some(world),
+            entity: self.entity,
             position: self.position,
             rotation: self.rotation,
             name: self.name,
             display_name: self.display_name,
+            server: self.server,
+            silent: true,
+            command_result_taker: self.command_result_taker,
+            entity_anchor: self.entity_anchor,
+        }
+    }
+
+    /// Returns a new [`CommandSource`] with the specified entity and
+    /// everything else from the `source` provided.
+    #[must_use]
+    pub async fn with_entity(self, entity: Arc<dyn EntityBase>) -> Self {
+        let name = entity.get_name().get_text();
+        let display_name = entity.get_display_name().await;
+        Self {
+            output: self.output,
+            world: self.world,
+            entity: Some(entity),
+            position: self.position,
+            rotation: self.rotation,
+            name,
+            display_name,
             server: self.server,
             silent: self.silent,
             command_result_taker: self.command_result_taker,
@@ -170,25 +242,6 @@ impl CommandSource {
         }
     }
 
-    /// Returns a new [`CommandSource`] with the specified command result taker and
-    /// everything else from the `source` provided.
-    #[must_use]
-    pub fn with_command_result_taker(self, command_result_taker: ResultValueTaker) -> Self {
-        Self {
-            output: self.output,
-            world: self.world,
-            entity: self.entity,
-            position: self.position,
-            rotation: self.rotation,
-            name: self.name,
-            display_name: self.display_name,
-            server: self.server,
-            silent: self.silent,
-            command_result_taker,
-            entity_anchor: self.entity_anchor,
-        }
-    }
-
     /// Merges the given takers with this one, returning a new [`CommandSource`] with
     /// the merged taker.
     #[must_use]
@@ -216,6 +269,25 @@ impl CommandSource {
         }
     }
 
+    /// Returns a new [`CommandSource`] with the specified command result taker and
+    /// everything else from the `source` provided.
+    #[must_use]
+    pub fn with_command_result_taker(self, command_result_taker: ResultValueTaker) -> Self {
+        Self {
+            output: self.output,
+            world: self.world,
+            entity: self.entity,
+            position: self.position,
+            rotation: self.rotation,
+            name: self.name,
+            display_name: self.display_name,
+            server: self.server,
+            silent: self.silent,
+            command_result_taker,
+            entity_anchor: self.entity_anchor,
+        }
+    }
+
     /// Returns a new [`CommandSource`] with the specified entity anchor and
     /// everything else from the `source` provided.
     #[must_use]
@@ -232,25 +304,6 @@ impl CommandSource {
             silent: true,
             command_result_taker: self.command_result_taker,
             entity_anchor,
-        }
-    }
-
-    /// Returns a new [`CommandSource`] with the specified world and
-    /// everything else from the `source` provided.
-    #[must_use]
-    pub fn with_world(self, world: Arc<World>) -> Self {
-        Self {
-            output: self.output,
-            world,
-            entity: self.entity,
-            position: self.position,
-            rotation: self.rotation,
-            name: self.name,
-            display_name: self.display_name,
-            server: self.server,
-            silent: true,
-            command_result_taker: self.command_result_taker,
-            entity_anchor: self.entity_anchor,
         }
     }
 
@@ -292,6 +345,26 @@ impl CommandSource {
             .ok_or(REQUIRES_ENTITY.create_without_context())
     }
 
+    /// Gets the world as a result:
+    ///
+    /// - If this source actually contains a server, it returns that.
+    /// - If it doesn't, this function **panics**. Ideally, a source should contain a world, but it may not in a unit test.
+    pub fn world(&self) -> Arc<World> {
+        self.world
+            .clone()
+            .expect("Expected world to exist")
+    }
+
+    /// Gets the server as a result:
+    ///
+    /// - If this source actually contains a server, it returns that..
+    /// - If it doesn't, this function **panics**. Ideally, a source should contain the server, but it may not in a unit test.
+    pub fn server(&self) -> Arc<Server> {
+        self.server
+            .clone()
+            .expect("Expected server to exist")
+    }
+
     /// Gets the player as an option:
     ///
     /// - If this source actually contains a player, it returns that wrapped in a [`Some`].
@@ -329,8 +402,10 @@ impl CommandSource {
             TextComponent::translate("chat.type.admin", &[self.display_name.clone(), message])
                 .color(Color::Named(NamedColor::Gray))
                 .italic();
-        if self
-            .world
+        let Some(server) = &self.server else {
+            return;
+        };
+        if server
             .level_info
             .load()
             .game_rules
@@ -340,9 +415,9 @@ impl CommandSource {
                 CommandSender::Player(sender) => Some(sender),
                 _ => None,
             };
-            for player in self.server.get_all_players() {
+            for player in server.get_all_players() {
                 if output_player != Some(&player)
-                    && player.permission_lvl.load() >= self.server.basic_config.op_permission_level
+                    && player.permission_lvl.load() >= server.basic_config.op_permission_level
                 {
                     player.send_system_message(&text).await;
                 }
@@ -426,12 +501,12 @@ impl EntityAnchor {
     /// Gets the position of a source with respect to this anchor.
     #[must_use]
     pub fn position_at_source(self, command_source: &CommandSource) -> Vector3<f64> {
-        command_source.entity
+        command_source
+            .entity
             .as_ref()
-            .map_or(
-                command_source.position,
-                |entity| self.position_at_entity(entity)
-            )
+            .map_or(command_source.position, |entity| {
+                self.position_at_entity(entity)
+            })
     }
 }
 

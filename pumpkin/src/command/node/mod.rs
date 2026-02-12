@@ -11,15 +11,25 @@ use crate::command::node::detached::GlobalNodeId;
 use std::borrow::Cow;
 use std::pin::Pin;
 use std::sync::Arc;
+use crate::command::node::attached::NodeId;
 
 /// Represents a [`CommandExecutor`]'s result.
-pub type CommandExecutorResult =
-    Pin<Box<dyn Future<Output = Result<i32, CommandSyntaxError>> + Send>>;
+pub type CommandExecutorResult<'a> =
+    Pin<Box<dyn Future<Output = Result<i32, CommandSyntaxError>> + Send + 'a>>;
 
 /// A struct implementing this trait is able to run with a given context.
 pub trait CommandExecutor: Sync + Send {
     /// Executes this executor for a command.
-    fn execute(&self, context: &CommandContext) -> CommandExecutorResult;
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a>;
+}
+
+impl<F> CommandExecutor for F
+where
+    F: for<'c> Fn(&'c CommandContext) -> CommandExecutorResult<'c> + Send + Sync
+{
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+        self(context)
+    }
 }
 
 /// A function that takes a context and returns a command result.
@@ -29,6 +39,9 @@ pub type Command = Arc<dyn CommandExecutor>;
 pub type RedirectModifierResult<'a> =
     Pin<Box<dyn Future<Output = Result<Vec<Arc<CommandSource>>, CommandSyntaxError>> + Send + 'a>>;
 
+/// A function that performs the required modification.
+pub type RedirectModifierExecutor = dyn Fn(&CommandContext) -> RedirectModifierResult<'_> + Send + Sync;
+
 /// A function that returns a new collection of sources from a given context.
 #[derive(Clone)]
 pub enum RedirectModifier {
@@ -37,7 +50,7 @@ pub enum RedirectModifier {
 
     /// Returns multiple [`CommandSource`]s from one context via
     /// custom behavior.
-    Custom(Arc<dyn Fn(&CommandContext) -> RedirectModifierResult<'_> + Send + Sync>),
+    Custom(Arc<RedirectModifierExecutor>),
 }
 
 impl RedirectModifier {
@@ -98,7 +111,7 @@ impl LiteralNodeMetadata {
         let literal = literal.into();
         Self {
             literal: literal.clone(),
-            literal_lowercase: literal.to_uppercase(),
+            literal_lowercase: literal.to_lowercase(),
         }
     }
 }
@@ -120,7 +133,7 @@ impl CommandNodeMetadata {
         let literal = literal.into();
         Self {
             literal: literal.clone(),
-            literal_lowercase: literal.to_uppercase(),
+            literal_lowercase: literal.to_lowercase(),
             description: description.into(),
         }
     }
@@ -163,6 +176,24 @@ pub enum NodeMetadata {
 /// Stores where this redirection would lead to.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Redirection {
+    /// Leads to the root of the tree.
     Root,
+
+    /// Leads to a node in the tree from its tree-local ID.
+    Local(NodeId),
+
+    /// Leads to a node in the tree from its global ID.
     Global(GlobalNodeId),
+}
+
+impl<T: Into<NodeId>> From<T> for Redirection {
+    fn from(value: T) -> Self {
+        Self::Local(value.into())
+    }
+}
+
+impl From<GlobalNodeId> for Redirection {
+    fn from(value: GlobalNodeId) -> Self {
+        Self::Global(value)
+    }
 }

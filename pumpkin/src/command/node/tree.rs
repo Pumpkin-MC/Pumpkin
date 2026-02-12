@@ -115,18 +115,31 @@ impl Tree {
         self.add(node)
     }
 
+    /// Gets the size of this [`Tree`], which is the number of nodes this tree contains.
+    pub fn size(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Gets the size of this [`Tree`], which is the number of nodes this tree contains.
+    pub fn size_nonzero(&self) -> NonZero<usize> {
+        self.nodes.len().try_into().expect("Expected non-zero size, but Tree was somehow zero-sized")
+    }
+
     /// Adds a [`CommandDetachedNode`] to the root node of this tree.
-    pub fn add_child_to_root(&mut self, node: CommandDetachedNode) {
+    pub fn add_child_to_root(&mut self, node: CommandDetachedNode) -> CommandNodeId {
         // First, attach the node to this tree.
         let node = self.attach(node.into());
         self.add_attached_child(ROOT_NODE_ID, node);
+        // This is safe as the node ID now points to a `CommandAttachedNode`.
+        CommandNodeId(node.0)
     }
 
     /// Adds a child to a given node.
-    pub fn add_child(&mut self, parent: NodeId, node: DetachedNode) {
+    pub fn add_child(&mut self, parent: NodeId, node: DetachedNode) -> NodeId {
         // First, attach the node to this tree.
         let node = self.attach(node);
         self.add_attached_child(parent, node);
+        node
     }
 
     /// Adds an already-attached child to a given node.
@@ -280,7 +293,8 @@ impl Tree {
         Ok(())
     }
 
-    /// Resolves the given redirection with respect to this tree.
+    /// Resolves the given redirection with respect to this tree, which is the node from
+    /// which redirection takes place.
     ///
     /// Returns [`Some`] if the node required could be found, and
     /// returns [`None`] otherwise.
@@ -289,6 +303,7 @@ impl Tree {
         match redirect {
             Redirection::Root => Some(ROOT_NODE_ID),
             Redirection::Global(id) => self.ids_map.get(&id).copied(),
+            Redirection::Local(id) => (id.0 < self.size_nonzero()).then(|| id)
         }
     }
 }

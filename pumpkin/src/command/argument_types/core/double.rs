@@ -11,7 +11,9 @@ pub struct DoubleArgumentType {
     pub max: f64,
 }
 
-impl ArgumentType<f64> for DoubleArgumentType {
+impl ArgumentType for DoubleArgumentType {
+    type Item = f64;
+
     fn parse(&self, reader: &mut StringReader) -> Result<f64, CommandSyntaxError> {
         let reader_start = reader.cursor();
         let result = reader.read_double()?;

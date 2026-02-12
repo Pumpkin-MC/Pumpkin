@@ -367,20 +367,17 @@ impl AttachedNode {
         literal: &str,
     ) -> Result<StringRange, CommandSyntaxError> {
         let start = reader.cursor();
-        Self::parse_literal(reader, literal)
-        .map_or_else(
-            |_| Err(
-                LITERAL_INCORRECT.create(
-                    reader,
-                    TextComponent::text(literal.to_string())
-                )
-            ),
-            |end| Ok(StringRange::between(start, end))
+        Self::parse_literal(reader, literal).map_or_else(
+            |_| Err(LITERAL_INCORRECT.create(reader, TextComponent::text(literal.to_string()))),
+            |end| Ok(StringRange::between(start, end)),
         )
     }
 
     /// Internal function to parse a literal. Used by [`Tree`].
-    pub fn parse_literal(reader: &mut StringReader, literal: &str) -> Result<usize, CouldNotParseLiteral> {
+    pub fn parse_literal(
+        reader: &mut StringReader,
+        literal: &str,
+    ) -> Result<usize, CouldNotParseLiteral> {
         let start = reader.cursor();
         let len = literal.len();
         if reader.can_read_bytes(len) {

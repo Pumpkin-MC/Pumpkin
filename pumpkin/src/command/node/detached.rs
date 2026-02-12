@@ -54,6 +54,7 @@ impl LiteralDetachedNode {
     /// # Note
     /// Prefer using the [`LiteralArgumentBuilder`] over this function.
     pub fn new(
+        global_id: GlobalNodeId,
         literal: impl Into<Cow<'static, str>>,
         command: Option<Command>,
         requirement: Requirement,
@@ -63,7 +64,7 @@ impl LiteralDetachedNode {
     ) -> Self {
         Self {
             owned: OwnedNodeData {
-                global_id: GlobalNodeId::new(),
+                global_id,
                 requirement,
                 modifier,
                 forks,
@@ -94,6 +95,7 @@ impl CommandDetachedNode {
     /// # Note
     /// Prefer using the [`LiteralArgumentBuilder`] over this function.
     pub fn new(
+        global_id: GlobalNodeId,
         literal: impl Into<Cow<'static, str>>,
         description: impl Into<Cow<'static, str>>,
         command: Option<Command>,
@@ -104,7 +106,7 @@ impl CommandDetachedNode {
     ) -> Self {
         Self {
             owned: OwnedNodeData {
-                global_id: GlobalNodeId::new(),
+                global_id,
                 requirement,
                 modifier,
                 forks,
@@ -132,6 +134,7 @@ impl ArgumentDetachedNode {
     /// # Note
     /// Prefer using the [`RequiredArgumentBuilder`] over this function.
     pub fn new(
+        global_id: GlobalNodeId,
         name: impl Into<Cow<'static, str>>,
         argument_type: Arc<dyn AnyArgumentType>,
         command: Option<Command>,
@@ -142,7 +145,7 @@ impl ArgumentDetachedNode {
     ) -> Self {
         Self {
             owned: OwnedNodeData {
-                global_id: GlobalNodeId::new(),
+                global_id,
                 requirement,
                 modifier,
                 forks,
@@ -214,6 +217,15 @@ impl DetachedNode {
                 redirect: node.redirect,
                 meta: NodeMetadata::Argument(node.meta),
             },
+        }
+    }
+
+    #[must_use]
+    pub fn name(&self) -> String {
+        match self {
+            Self::Literal(node) => node.meta.literal.to_string(),
+            Self::Command(node) => node.meta.literal.to_string(),
+            Self::Argument(node) => node.meta.name.to_string(),
         }
     }
 }

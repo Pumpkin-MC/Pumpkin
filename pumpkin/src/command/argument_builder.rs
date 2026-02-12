@@ -1,18 +1,18 @@
 use crate::command::argument_builder::private::Sealed;
 use crate::command::argument_types::argument_type::AnyArgumentType;
-use crate::command::node::detached::{
-    ArgumentDetachedNode, CommandDetachedNode, DetachedNode, LiteralDetachedNode,
-};
-use crate::command::node::{Command, RedirectModifier, Redirection, Requirement};
+use crate::command::node::detached::{ArgumentDetachedNode, CommandDetachedNode, DetachedNode, GlobalNodeId, LiteralDetachedNode};
+use crate::command::node::{Command, CommandExecutor, RedirectModifier, Redirection, Requirement};
 use std::borrow::Cow;
 use std::sync::Arc;
+use rustc_hash::FxHashMap;
 
 /// Represents an intermediate struct for
 /// building arguments for commands.
 ///
 /// Note: This is an implementation detail.
-pub struct CommonArgumentBuilder {
-    pub arguments: Vec<DetachedNode>,
+struct CommonArgumentBuilder {
+    pub global_id: GlobalNodeId,
+    pub arguments: FxHashMap<String, DetachedNode>,
     pub command: Option<Command>,
     pub requirement: Requirement,
     pub target: Option<Redirection>,
@@ -20,24 +20,44 @@ pub struct CommonArgumentBuilder {
     pub forks: bool,
 }
 
+impl CommonArgumentBuilder {
+    fn new() -> Self {
+        Self {
+            global_id: GlobalNodeId::new(),
+            arguments: FxHashMap::default(),
+            command: None,
+            requirement: Requirement::AlwaysQualified,
+            target: None,
+            modifier: RedirectModifier::OneSource,
+            forks: false,
+        }
+    }
+}
+
+impl Default for CommonArgumentBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// A builder that builds a literal, non-command [`DetachedNode`].
 pub struct LiteralArgumentBuilder {
-    pub common: CommonArgumentBuilder,
-    pub literal: Cow<'static, str>,
+    common: CommonArgumentBuilder,
+    literal: Cow<'static, str>,
 }
 
 /// A builder that builds a command [`DetachedNode`].
 pub struct CommandArgumentBuilder {
-    pub common: CommonArgumentBuilder,
-    pub literal: Cow<'static, str>,
-    pub description: Cow<'static, str>,
+    common: CommonArgumentBuilder,
+    literal: Cow<'static, str>,
+    description: Cow<'static, str>,
 }
 
 /// A builder that builds an argument [`DetachedNode`].
 pub struct RequiredArgumentBuilder {
-    pub common: CommonArgumentBuilder,
-    pub name: String,
-    pub argument_type: Arc<dyn AnyArgumentType>,
+    common: CommonArgumentBuilder,
+    name: Cow<'static, str>,
+    argument_type: Arc<dyn AnyArgumentType>,
 }
 
 mod private {
@@ -62,11 +82,27 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
 
     /// Sets the command to execute for the node being built.
     #[must_use]
-    fn executes(self, command: Command) -> Self;
+    fn executes(self, command: impl CommandExecutor + 'static) -> Self;
+
+    /// Sets the redirect target of the node being built to another, without a modifier.
+    #[must_use]
+    fn redirect(self, redirection: impl Into<Redirection>) -> Self;
+
+    /// Sets the redirect target of the node being built to another, with a given modifier.
+    #[must_use]
+    fn redirect_with_modifier(self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier) -> Self;
+
+    /// Forks the given context, using multiple for later.
+    #[must_use]
+    fn fork(self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier) -> Self;
+
+    /// Forwards the given context, with the given `fork` flag.
+    #[must_use]
+    fn forward(self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier, fork: bool) -> Self;
 
     /// Gets a reference to the arguments of the node to be built.
     #[must_use]
-    fn arguments(&self) -> &[DetachedNode];
+    fn arguments(&self) -> &FxHashMap<String, DetachedNode>;
 
     /// Gets the node to which the node being built by this [`ArgumentBuilder`] redirects.
     #[must_use]
@@ -79,6 +115,11 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
     /// Whether this builder forks.
     #[must_use]
     fn forks(&self) -> bool;
+
+    /// Returns the 'future [`GlobalId`]' of the node that will be produced by this Builder.
+    /// Very useful for redirects.
+    #[must_use]
+    fn id(&self) -> GlobalNodeId;
 
     /// Builds the node represented by this builder, consuming itself in the process.
     #[must_use]
@@ -99,7 +140,7 @@ macro_rules! impl_boilerplate_argument_builder {
                 "Cannot add children to a redirected node"
             );
             let node = argument.into();
-            self.common.arguments.push(node);
+            self.common.arguments.insert(node.name(), node);
             self
         }
 
@@ -107,12 +148,32 @@ macro_rules! impl_boilerplate_argument_builder {
             self.common.command.clone()
         }
 
-        fn executes(mut self, command: Command) -> Self {
-            self.common.command = Some(command);
+        fn executes(mut self, command: impl CommandExecutor + 'static) -> Self {
+            self.common.command = Some(Arc::new(command));
             self
         }
 
-        fn arguments(&self) -> &[DetachedNode] {
+        fn redirect(self, redirection: impl Into<Redirection>) -> Self {
+            self.forward(redirection.into(), RedirectModifier::OneSource, false)
+        }
+
+        fn redirect_with_modifier(self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier) -> Self {
+            self.forward(redirection.into(), redirect_modifier, false)
+        }
+
+        fn fork(self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier) -> Self {
+            self.forward(redirection.into(), redirect_modifier, true)
+        }
+
+        fn forward(mut self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier, fork: bool) -> Self {
+            assert!(self.common.arguments.is_empty(), "Cannot forward a node with children. The node must have no children to redirect somewhere else.");
+            self.common.target = Some(redirection.into());
+            self.common.modifier = redirect_modifier;
+            self.common.forks = fork;
+            self
+        }
+
+        fn arguments(&self) -> &FxHashMap<String, DetachedNode> {
             &self.common.arguments
         }
 
@@ -127,21 +188,81 @@ macro_rules! impl_boilerplate_argument_builder {
         fn forks(&self) -> bool {
             self.common.forks
         }
+
+        fn id(&self) -> GlobalNodeId {
+            self.common.global_id
+        }
     };
+}
+
+/// Helper macro to generate `From` impl blocks for each builder.
+macro_rules! impl_builder_from_impls {
+    ($builder: ty => $detached_node: ty) => {
+        impl From<$builder> for $detached_node {
+            fn from(value: $builder) -> Self {
+                value.build()
+            }
+        }
+
+        impl From<$builder> for DetachedNode {
+            fn from(value: $builder) -> Self {
+                value.build().into()
+            }
+        }
+    };
+}
+
+impl_builder_from_impls!(LiteralArgumentBuilder => LiteralDetachedNode);
+impl_builder_from_impls!(CommandArgumentBuilder => CommandDetachedNode);
+impl_builder_from_impls!(RequiredArgumentBuilder => ArgumentDetachedNode);
+
+impl LiteralArgumentBuilder {
+    /// Creates a new [`LiteralArgumentBuilder`] from a literal.
+    pub fn new(literal: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            common: CommonArgumentBuilder::new(),
+            literal: literal.into(),
+        }
+    }
+}
+
+impl CommandArgumentBuilder {
+    /// Creates a new [`CommandArgumentBuilder`] from a literal and a command description.
+    pub fn new(literal: impl Into<Cow<'static, str>>, description: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            common: CommonArgumentBuilder::new(),
+            literal: literal.into(),
+            description: description.into(),
+        }
+    }
+}
+
+impl RequiredArgumentBuilder {
+    /// Creates a new [`RequiredArgumentBuilder`] from a name and an argument type.
+    pub fn new(name: impl Into<Cow<'static, str>>, arg_type: impl AnyArgumentType + 'static) -> Self {
+        Self {
+            common: CommonArgumentBuilder::new(),
+            name: name.into(),
+            argument_type: Arc::new(arg_type),
+        }
+    }
 }
 
 impl ArgumentBuilder<LiteralDetachedNode> for LiteralArgumentBuilder {
     impl_boilerplate_argument_builder!();
 
     fn build(self) -> LiteralDetachedNode {
-        LiteralDetachedNode::new(
+        let mut node = LiteralDetachedNode::new(
+            self.common.global_id,
             self.literal,
             self.common.command,
             self.common.requirement,
             self.common.target,
             self.common.modifier,
             self.common.forks,
-        )
+        );
+        node.children = self.common.arguments;
+        node
     }
 }
 
@@ -149,7 +270,8 @@ impl ArgumentBuilder<CommandDetachedNode> for CommandArgumentBuilder {
     impl_boilerplate_argument_builder!();
 
     fn build(self) -> CommandDetachedNode {
-        CommandDetachedNode::new(
+        let mut node = CommandDetachedNode::new(
+            self.common.global_id,
             self.literal,
             self.description,
             self.common.command,
@@ -157,7 +279,9 @@ impl ArgumentBuilder<CommandDetachedNode> for CommandArgumentBuilder {
             self.common.target,
             self.common.modifier,
             self.common.forks,
-        )
+        );
+        node.children = self.common.arguments;
+        node
     }
 }
 
@@ -165,7 +289,8 @@ impl ArgumentBuilder<ArgumentDetachedNode> for RequiredArgumentBuilder {
     impl_boilerplate_argument_builder!();
 
     fn build(self) -> ArgumentDetachedNode {
-        ArgumentDetachedNode::new(
+        let mut node = ArgumentDetachedNode::new(
+            self.common.global_id,
             self.name,
             self.argument_type,
             self.common.command,
@@ -173,6 +298,8 @@ impl ArgumentBuilder<ArgumentDetachedNode> for RequiredArgumentBuilder {
             self.common.target,
             self.common.modifier,
             self.common.forks,
-        )
+        );
+        node.children = self.common.arguments;
+        node
     }
 }

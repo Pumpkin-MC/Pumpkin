@@ -33,7 +33,7 @@ impl CommandExecutor for Executor {
             let entity_type = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
             let (world, pos) = match sender {
-                CommandSender::Console | CommandSender::Rcon(_) => {
+                CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
                     let guard = server.worlds.load();
                     let world = guard
                         .first()

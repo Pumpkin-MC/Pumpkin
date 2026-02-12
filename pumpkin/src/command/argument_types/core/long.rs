@@ -11,7 +11,9 @@ pub struct LongArgumentType {
     pub max: i64,
 }
 
-impl ArgumentType<i64> for LongArgumentType {
+impl ArgumentType for LongArgumentType {
+    type Item = i64;
+
     fn parse(&self, reader: &mut StringReader) -> Result<i64, CommandSyntaxError> {
         let reader_start = reader.cursor();
         let result = reader.read_long()?;

@@ -176,6 +176,12 @@ impl PartialEq for dyn AnyCommandErrorType {
     }
 }
 
+impl<T: AnyCommandErrorType> PartialEq<T> for dyn AnyCommandErrorType {
+    fn eq(&self, other: &T) -> bool {
+        self.text() == other.text() && self.argument_count() == other.argument_count()
+    }
+}
+
 // Implement the private trait for our types.
 impl<const N: usize> Sealed for CommandErrorType<N> {}
 impl<const N: usize> AnyCommandErrorType for CommandErrorType<N> {

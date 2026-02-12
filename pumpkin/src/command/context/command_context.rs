@@ -8,6 +8,8 @@ use crate::command::node::{Command, RedirectModifier};
 use rustc_hash::FxHashMap;
 use std::any::Any;
 use std::sync::Arc;
+use pumpkin_util::text::TextComponent;
+use crate::command::errors::error_types::DISPATCHER_PARSE_EXCEPTION;
 
 /// Represents the current stage of the chain.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -122,6 +124,25 @@ impl CommandContext {
         }
         current_child
     }
+
+    /// Gets a particular argument with type `T`.
+    /// If it fails, an error is returned.
+    pub fn get_argument<T: Clone + 'static>(&self, name: &str) -> Result<T, CommandSyntaxError> {
+        let arg = self.arguments.get(name).ok_or_else(
+            || DISPATCHER_PARSE_EXCEPTION.create_without_context(
+                TextComponent::text(format!("Could not find argument with name '{name}'"))
+            )
+        )?;
+        let dyn_ref = &*arg.result;
+        dyn_ref
+            .downcast_ref::<T>()
+            .map(|value| value.clone())
+            .ok_or_else(
+                || DISPATCHER_PARSE_EXCEPTION.create_without_context(
+                    TextComponent::text(format!("Could not downcast argument '{name}'"))
+                )
+            )
+    }
 }
 
 /// Represents a linked chain of [`CommandContext`]s, where the previous links to the next as a child.
@@ -149,7 +170,7 @@ impl ContextChain {
         Self { modifiers, execute }
     }
 
-    /// Tries to flatten a [`CommandContext`] in a [`Box`]. If no command
+    /// Tries to flatten a [`CommandContext`]. If no command
     /// is available at the end of chain, [`None`] is returned.
     #[must_use]
     pub fn try_flatten(root: &CommandContext) -> Option<Self> {
@@ -447,18 +468,21 @@ impl<'a> CommandContextBuilder<'a> {
             "Could not find node before cursor"
         );
         if self.range.end < cursor {
-            self.child.as_ref().map_or_else(|| {
-                self.nodes.last().as_ref().map_or_else(
-                    || SuggestionContext {
-                        parent: self.root,
-                        starting_position: self.range.start,
-                    },
-                    |last_node| SuggestionContext {
-                        parent: last_node.node,
-                        starting_position: last_node.range.end + 1,
-                    }
-                )
-            }, |child| child.find_suggestion_context(cursor))
+            self.child.as_ref().map_or_else(
+                || {
+                    self.nodes.last().as_ref().map_or_else(
+                        || SuggestionContext {
+                            parent: self.root,
+                            starting_position: self.range.start,
+                        },
+                        |last_node| SuggestionContext {
+                            parent: last_node.node,
+                            starting_position: last_node.range.end + 1,
+                        },
+                    )
+                },
+                |child| child.find_suggestion_context(cursor),
+            )
         } else {
             let mut previous = self.root;
             for node in &self.nodes {

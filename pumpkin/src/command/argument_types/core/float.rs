@@ -11,7 +11,9 @@ pub struct FloatArgumentType {
     pub max: f32,
 }
 
-impl ArgumentType<f32> for FloatArgumentType {
+impl ArgumentType for FloatArgumentType {
+    type Item = f32;
+
     fn parse(&self, reader: &mut StringReader) -> Result<f32, CommandSyntaxError> {
         let reader_start = reader.cursor();
         let result = reader.read_float()?;

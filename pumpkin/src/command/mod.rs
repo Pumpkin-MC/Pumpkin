@@ -56,6 +56,8 @@ pub enum CommandSender {
     /// Contains the block entity responsible for the command and the
     /// world context it exists in for coordinate-relative execution (e.g., `~ ~ ~`).
     CommandBlock(Arc<CommandBlockEntity>, Arc<World>),
+    /// Nothingness. Anything sent to this sender is void.
+    Dummy
 }
 
 impl fmt::Display for CommandSender {
@@ -68,6 +70,7 @@ impl fmt::Display for CommandSender {
                 Self::Rcon(_) => "Rcon",
                 Self::Player(p) => &p.gameprofile.name,
                 Self::CommandBlock(..) => "@",
+                Self::Dummy => "",
             }
         )
     }
@@ -87,7 +90,8 @@ impl CommandSender {
                 let timestamp = now.format(&format).unwrap();
 
                 *last_output = format!("[{}] {}", timestamp, text.get_text());
-            }
+            },
+            Self::Dummy => {}
         }
     }
 
@@ -121,7 +125,7 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => PermissionLvl::Four,
             Self::Player(p) => p.permission_lvl.load(),
-            Self::CommandBlock(..) => PermissionLvl::Two,
+            Self::CommandBlock(..) | Self::Dummy => PermissionLvl::Two,
         }
     }
 
@@ -130,7 +134,7 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => true,
             Self::Player(p) => p.permission_lvl.load().ge(&lvl),
-            Self::CommandBlock(..) => PermissionLvl::Two >= lvl,
+            Self::CommandBlock(..) | Self::Dummy => PermissionLvl::Two >= lvl,
         }
     }
 
@@ -139,7 +143,7 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
             Self::Player(p) => p.has_permission(server, node).await,
-            Self::CommandBlock(..) => {
+            Self::CommandBlock(..) | Self::Dummy => {
                 let perm_reg = server.permission_registry.read().await;
                 let Some(p) = perm_reg.get_permission(node) else {
                     return false;
@@ -156,7 +160,7 @@ impl CommandSender {
     #[must_use]
     pub fn position(&self) -> Option<Vector3<f64>> {
         match self {
-            Self::Console | Self::Rcon(..) => None,
+            Self::Console | Self::Rcon(..) | Self::Dummy => None,
             Self::Player(p) => Some(p.living_entity.entity.pos.load()),
             Self::CommandBlock(c, _) => Some(c.get_position().to_centered_f64()),
         }
@@ -166,7 +170,7 @@ impl CommandSender {
     pub fn world(&self) -> Option<Arc<World>> {
         match self {
             // TODO: maybe return first world when console
-            Self::Console | Self::Rcon(..) => None,
+            Self::Console | Self::Rcon(..) | Self::Dummy => None,
             Self::Player(p) => Some(p.living_entity.entity.world.load_full()),
             Self::CommandBlock(_, w) => Some(w.clone()),
         }
@@ -175,7 +179,7 @@ impl CommandSender {
     #[must_use]
     pub fn get_locale(&self) -> Locale {
         match self {
-            Self::CommandBlock(..) | Self::Console | Self::Rcon(..) => Locale::EnUs, // Default locale for console and RCON
+            Self::CommandBlock(..) | Self::Console | Self::Rcon(..) | Self::Dummy => Locale::EnUs, // Default locale for console and RCON
             Self::Player(player) => {
                 Locale::from_str(&player.config.load().locale).unwrap_or(Locale::EnUs)
             }
@@ -197,6 +201,7 @@ impl CommandSender {
                     .send_command_feedback
             }
             Self::Console | Self::Rcon(_) => true,
+            Self::Dummy => false
         }
     }
 
@@ -206,12 +211,16 @@ impl CommandSender {
             Self::CommandBlock(_, world) => world.level_info.load().game_rules.command_block_output,
             // TODO: should Console and Rcon be decided by server config?
             Self::Player(..) | Self::Console | Self::Rcon(_) => true,
+            Self::Dummy => false
         }
     }
 
     #[must_use]
     pub const fn should_track_output(&self) -> bool {
-        true
+        match self {
+            Self::Dummy => false,
+            Self::Player(..) | Self::Console | Self::Rcon(_) | Self::CommandBlock(..) => true
+        }
     }
 }
 

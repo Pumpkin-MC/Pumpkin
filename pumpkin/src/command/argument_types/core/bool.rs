@@ -7,7 +7,9 @@ use crate::command::{
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct BoolArgumentType;
 
-impl ArgumentType<bool> for BoolArgumentType {
+impl ArgumentType for BoolArgumentType {
+    type Item = bool;
+    
     fn parse(&self, reader: &mut StringReader) -> Result<bool, CommandSyntaxError> {
         reader.read_bool()
     }

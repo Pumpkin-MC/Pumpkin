@@ -11,7 +11,9 @@ pub struct IntegerArgumentType {
     pub max: i32,
 }
 
-impl ArgumentType<i32> for IntegerArgumentType {
+impl ArgumentType for IntegerArgumentType {
+    type Item = i32;
+
     fn parse(&self, reader: &mut StringReader) -> Result<i32, CommandSyntaxError> {
         let reader_start = reader.cursor();
         let result = reader.read_int()?;

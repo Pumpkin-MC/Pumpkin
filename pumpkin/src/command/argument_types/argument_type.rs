@@ -9,13 +9,16 @@ use crate::command::{
 use std::any::Any;
 use std::pin::Pin;
 
-/// Represents an argument type that parses a particular type `T`.
-pub trait ArgumentType<T: Send + Sync>: Send + Sync {
+/// Represents an argument type that parses a particular type `Item`.
+pub trait ArgumentType: Send + Sync {
+    /// The data type that this argument type parses.
+    type Item: Send + Sync + Clone + 'static;
+
     /// Parses a `T` by using a [`StringReader`]. Call this only if you have no source.
     ///
     /// Errors should be propagated using the `?` operator, which will
     /// replicate Brigadier's behavior of exceptions.
-    fn parse(&self, reader: &mut StringReader) -> Result<T, CommandSyntaxError>;
+    fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError>;
 
     /// Parses a `T` by using a [`StringReader`],
     /// along with a particular source of type `S`.
@@ -26,7 +29,7 @@ pub trait ArgumentType<T: Send + Sync>: Send + Sync {
         &self,
         reader: &mut StringReader,
         _source: &CommandSource,
-    ) -> Result<T, CommandSyntaxError> {
+    ) -> Result<Self::Item, CommandSyntaxError> {
         self.parse(reader)
     }
 
@@ -98,9 +101,9 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
 }
 
 // Implement our private trait for all argument types.
-impl<T: Send + Sync> Sealed for dyn ArgumentType<T> {}
+impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> Sealed for U {}
 
-impl<T: 'static + Send + Sync> AnyArgumentType for dyn ArgumentType<T> {
+impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> AnyArgumentType for U {
     fn parse(
         &self,
         reader: &mut StringReader,

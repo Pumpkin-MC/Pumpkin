@@ -14,7 +14,9 @@ pub enum StringArgumentType {
     GreedyPhrase,
 }
 
-impl ArgumentType<String> for StringArgumentType {
+impl ArgumentType for StringArgumentType {
+    type Item = String;
+
     fn parse(&self, reader: &mut StringReader) -> Result<String, CommandSyntaxError> {
         match self {
             Self::SingleWord => reader.read_unquoted_string(),
