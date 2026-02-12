@@ -87,14 +87,27 @@ impl BlockBehaviour for TrapDoorBlock {
             trapdoor_props.waterlogged = args.replacing.water_source();
 
             let powered = block_receives_redstone_power(args.world, args.position).await;
-            let direction = args
-                .player
-                .living_entity
-                .entity
-                .get_horizontal_facing()
-                .opposite();
+           // Optimized vanilla trapdoor facing logic
+let player_facing = args
+    .player
+    .living_entity
+    .entity
+    .get_horizontal_facing();
 
-            trapdoor_props.facing = direction;
+let facing = match args.direction {
+    // Clicking the side of a block → face that side
+    BlockDirection::North
+    | BlockDirection::South
+    | BlockDirection::East
+    | BlockDirection::West => args.direction,
+
+    // Clicking top or bottom → face the player's direction
+    BlockDirection::Up | BlockDirection::Down => player_facing,
+};
+
+trapdoor_props.facing = facing;
+
+
             trapdoor_props.half = match args.direction {
                 BlockDirection::Up => BlockHalf::Top,
                 BlockDirection::Down => BlockHalf::Bottom,
