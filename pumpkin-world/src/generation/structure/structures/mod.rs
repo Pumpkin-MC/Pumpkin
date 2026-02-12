@@ -497,6 +497,23 @@ impl StructurePiecesCollector {
         bbox
     }
 
+    /// Shifts structure to fit within a Y range. Used by NetherFortress.
+    /// Matches vanilla's deprecated 'shiftInto(Random random, int baseY, int topY)'
+    pub fn shift_into_y_range(&mut self, random: &mut RandomGenerator, base_y: i32, top_y: i32) {
+        let bounding_box = self.get_bounding_box();
+        let height = bounding_box.max.y - bounding_box.min.y + 1;
+        let available_space = top_y - base_y + 1 - height;
+
+        let new_min_y = if available_space > 1 {
+            base_y + random.next_bounded_i32(available_space)
+        } else {
+            base_y
+        };
+
+        let shift_amount = new_min_y - bounding_box.min.y;
+        self.shift(shift_amount);
+    }
+
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.pieces.is_empty()

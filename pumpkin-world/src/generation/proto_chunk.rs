@@ -463,6 +463,13 @@ impl ProtoChunk {
     }
 
     pub fn set_block_state(&mut self, x: i32, y: i32, z: i32, block_state: &BlockState) {
+        // Check if coordinates are within this chunk
+        let chunk_x = x >> 4;
+        let chunk_z = z >> 4;
+        if chunk_x != self.x || chunk_z != self.z {
+            return; // Outside this chunk, skip
+        }
+
         let local_x = x & 15;
         let local_y = y - self.bottom_y() as i32;
         let local_z = z & 15;
