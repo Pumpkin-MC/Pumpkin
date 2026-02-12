@@ -173,10 +173,7 @@ impl ChunkManager {
 
     fn should_enqueue_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) -> bool {
         let chunk_ptr = Arc::as_ptr(chunk) as usize;
-        match self.chunk_sent.insert(position, chunk_ptr) {
-            Some(old_ptr) => old_ptr != chunk_ptr,
-            None => true,
-        }
+        self.chunk_sent.insert(position, chunk_ptr) != Some(chunk_ptr)
     }
 
     pub fn pull_new_chunks(&mut self) {
