@@ -2081,11 +2081,10 @@ impl Entity {
     pub async fn slow_movement(&self, state: &BlockState, multiplier: Vector3<f64>) {
         match self.entity_type.id {
             v if v == EntityType::PLAYER.id => {
-                if let Some(player_entity) = self.get_player() {
-                    if player_entity.is_flying().await {
-                        return;
-                    }
-                    player_entity.living_entity.fall_distance.store(0f32);
+                if let Some(player_entity) = self.get_player()
+                    && player_entity.is_flying().await
+                {
+                    return;
                 }
             }
             v if v == EntityType::SPIDER.id || v == EntityType::CAVE_SPIDER.id => {
@@ -2097,6 +2096,9 @@ impl Entity {
                 return;
             }
             _ => {}
+        }
+        if let Some(living) = self.get_living_entity() {
+            living.fall_distance.store(0f32);
         }
         self.movement_multiplier.store(multiplier);
     }
