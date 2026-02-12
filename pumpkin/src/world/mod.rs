@@ -3605,6 +3605,34 @@ impl pumpkin_world::world::SimpleWorld for World {
             ExperienceOrbEntity::spawn(&self, position, amount).await;
         })
     }
+
+    fn update_from_neighbor_shapes(
+        self: Arc<Self>,
+        block_state_id: BlockStateId,
+        position: &BlockPos,
+    ) -> WorldFuture<'_, BlockStateId> {
+        Box::pin(async move {
+            let block = Block::from_state_id(block_state_id);
+            let mut state_id = block_state_id;
+            for direction in BlockDirection::update_order() {
+                let neighbor_pos = position.offset(direction.to_offset());
+                let neighbor_state_id = self.get_block_state_id(&neighbor_pos).await;
+                state_id = self
+                    .block_registry
+                    .get_state_for_neighbor_update(
+                        &self,
+                        block,
+                        state_id,
+                        position,
+                        direction,
+                        &neighbor_pos,
+                        neighbor_state_id,
+                    )
+                    .await;
+            }
+            state_id
+        })
+    }
 }
 
 impl BlockAccessor for World {

@@ -60,20 +60,18 @@ impl PistonBlock {
         }
         if block == &Block::PISTON || block == &Block::STICKY_PISTON {
             let props = PistonProps::from_state_id(state.id, block);
-            if props.extended {
-                return false;
-            }
-        } else {
-            #[expect(clippy::float_cmp)]
-            if state.hardness == -1.0 {
-                return false;
-            }
-            match state.piston_behavior {
-                pumpkin_data::block_state::PistonBehavior::Destroy => return can_break,
-                pumpkin_data::block_state::PistonBehavior::Block => return false,
-                pumpkin_data::block_state::PistonBehavior::PushOnly => return dir == piston_dir,
-                _ => {}
-            }
+            // Extended pistons are immovable. Non-extended pistons are movable
+            return !props.extended;
+        }
+        #[expect(clippy::float_cmp)]
+        if state.hardness == -1.0 {
+            return false;
+        }
+        match state.piston_behavior {
+            pumpkin_data::block_state::PistonBehavior::Destroy => return can_break,
+            pumpkin_data::block_state::PistonBehavior::Block => return false,
+            pumpkin_data::block_state::PistonBehavior::PushOnly => return dir == piston_dir,
+            _ => {}
         }
         !has_block_block_entity(block)
     }
