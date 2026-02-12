@@ -1,4 +1,14 @@
+use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
+use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_protocol::{
+    codec::item_stack_seralizer::ItemStackSerializer,
+    java::client::play::{CTakeItemEntity, Metadata},
+};
+use pumpkin_util::math::atomic_f32::AtomicF32;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::item::ItemStack;
+use std::sync::atomic::Ordering::{AcqRel, Relaxed};
 use std::sync::{
     Arc,
     atomic::{
@@ -6,18 +16,7 @@ use std::sync::{
         Ordering::{self},
     },
 };
-
-use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
-use pumpkin_protocol::{
-    codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CTakeItemEntity, Metadata},
-};
-use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
-
-use crate::{entity::EntityBaseFuture, server::Server};
 
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
@@ -28,7 +27,7 @@ pub struct ItemEntity {
     // into the ABA problem
     item_stack: Mutex<ItemStack>,
     pickup_delay: AtomicU8,
-    health: AtomicCell<f32>,
+    health: AtomicF32,
     never_despawn: AtomicBool,
     never_pickup: AtomicBool,
 }
@@ -48,7 +47,7 @@ impl ItemEntity {
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(10), // Vanilla pickup delay is 10 ticks
-            health: AtomicCell::new(5.0),
+            health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
         }
@@ -67,7 +66,7 @@ impl ItemEntity {
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(pickup_delay), // Vanilla pickup delay is 10 ticks
-            health: AtomicCell::new(5.0),
+            health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
         }
@@ -350,22 +349,22 @@ impl EntityBase for ItemEntity {
         _cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            //TODO: invulnerability, e.g. ancient debris
-            self.health.store(self.health.load() - amount);
-            if self.health.load() <= 0.0 {
-                self.entity.remove().await;
+            // TODO: invulnerability, e.g. ancient debris
+            loop {
+                let current = self.health.load(Relaxed);
+                let new = current - amount;
+                if self
+                    .health
+                    .compare_exchange(current, new, AcqRel, Relaxed)
+                    .is_ok()
+                {
+                    if new <= 0.0 {
+                        self.entity.remove().await;
+                    }
+                    return true;
+                }
             }
-            true
         })
-    }
-
-    fn damage<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
-        _amount: f32,
-        _damage_type: DamageType,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async { false })
     }
 
     fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
