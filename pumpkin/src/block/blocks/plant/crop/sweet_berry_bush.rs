@@ -16,7 +16,7 @@ use pumpkin_world::{
     world::{BlockAccessor, BlockFlags},
 };
 use rand::RngExt;
-
+use pumpkin_util::math::vector3::Vector3;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
@@ -104,9 +104,18 @@ impl BlockBehaviour for SweetBerryBushBlock {
         Box::pin(async move {
             let entity = args.entity.get_entity();
 
-            if entity.entity_type == &EntityType::FOX || entity.entity_type == &EntityType::BEE {
+            let living_entity_opt = args.entity.get_living_entity();
+            if living_entity_opt.is_none() || entity.entity_type == &EntityType::FOX || entity.entity_type == &EntityType::BEE {
                 return;
             }
+
+            let living_entity = living_entity_opt.expect("Living entity should exist");
+            entity.slow_movement(args.state, Vector3::new(0.8, 0.75, 0.8)).await;
+            let mov = if living_entity.is_controlled_by_player() {
+                living_entity.get_movement()
+            } else {
+                entity.last_pos.load() - entity.pos.load()
+            };
 
             let state_id = args.world.get_block_state_id(args.position).await;
             let props = NetherWartLikeProperties::from_state_id(state_id, args.block);
@@ -114,10 +123,8 @@ impl BlockBehaviour for SweetBerryBushBlock {
                 return;
             }
 
-            let velocity = entity.velocity.load(); // FIXME: velocity != momentum/movement
-
-            if velocity.horizontal_length_squared() <= 0.0
-                || (velocity.x.abs() < 0.003 && velocity.z.abs() < 0.003)
+            if mov.horizontal_length_squared() <= 0.0
+                || (mov.x.abs() < 0.003 && mov.z.abs() < 0.003)
             {
                 return;
             }
