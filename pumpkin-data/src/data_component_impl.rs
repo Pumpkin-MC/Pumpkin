@@ -4,8 +4,8 @@ use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DeathProtection,
-    Enchantments, Equippable, Food, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize,
-    PotionContents, Tool, Unbreakable,
+    Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemName, JukeboxPlayable,
+    MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable,
 };
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
@@ -721,10 +721,152 @@ pub struct ProvidesBannerPatternsImpl;
 pub struct RecipesImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct LodestoneTrackerImpl;
+/// Firework explosion shape types
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FireworkExplosionShape {
+    SmallBall = 0,
+    LargeBall = 1,
+    Star = 2,
+    Creeper = 3,
+    Burst = 4,
+}
+
+impl FireworkExplosionShape {
+    pub fn from_id(id: i32) -> Option<Self> {
+        match id {
+            0 => Some(Self::SmallBall),
+            1 => Some(Self::LargeBall),
+            2 => Some(Self::Star),
+            3 => Some(Self::Creeper),
+            4 => Some(Self::Burst),
+            _ => None,
+        }
+    }
+
+    pub fn to_id(&self) -> i32 {
+        *self as i32
+    }
+
+    pub fn to_name(&self) -> &str {
+        match self {
+            Self::SmallBall => "small_ball",
+            Self::LargeBall => "large_ball",
+            Self::Star => "star",
+            Self::Creeper => "creeper",
+            Self::Burst => "burst",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "small_ball" => Some(Self::SmallBall),
+            "large_ball" => Some(Self::LargeBall),
+            "star" => Some(Self::Star),
+            "creeper" => Some(Self::Creeper),
+            "burst" => Some(Self::Burst),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct FireworkExplosionImpl;
+pub struct FireworkExplosionImpl {
+    pub shape: FireworkExplosionShape,
+    pub colors: Vec<i32>,
+    pub fade_colors: Vec<i32>,
+    pub has_trail: bool,
+    pub has_twinkle: bool,
+}
+
+impl FireworkExplosionImpl {
+    pub fn new(
+        shape: FireworkExplosionShape,
+        colors: Vec<i32>,
+        fade_colors: Vec<i32>,
+        has_trail: bool,
+        has_twinkle: bool,
+    ) -> Self {
+        Self {
+            shape,
+            colors,
+            fade_colors,
+            has_trail,
+            has_twinkle,
+        }
+    }
+}
+
+impl DataComponentImpl for FireworkExplosionImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("shape", self.shape.to_name().to_string());
+        compound.put("colors", NbtTag::IntArray(self.colors.clone()));
+        compound.put("fade_colors", NbtTag::IntArray(self.fade_colors.clone()));
+        compound.put_bool("has_trail", self.has_trail);
+        compound.put_bool("has_twinkle", self.has_twinkle);
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        digest.update(&[self.shape.to_id() as u8]);
+        for color in &self.colors {
+            digest.update(&get_i32_hash(*color).to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        for color in &self.fade_colors {
+            digest.update(&get_i32_hash(*color).to_le_bytes());
+        }
+        digest.update(&[4u8]);
+        digest.update(&[self.has_trail as u8]);
+        digest.update(&[self.has_twinkle as u8]);
+        digest.finalize() as i32
+    }
+
+    default_impl!(FireworkExplosion);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct FireworksImpl;
+pub struct FireworksImpl {
+    pub flight_duration: i32,
+    pub explosions: Vec<FireworkExplosionImpl>,
+}
+
+impl FireworksImpl {
+    pub fn new(flight_duration: i32, explosions: Vec<FireworkExplosionImpl>) -> Self {
+        Self {
+            flight_duration,
+            explosions,
+        }
+    }
+}
+
+impl DataComponentImpl for FireworksImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("flight_duration", self.flight_duration);
+        let explosions_list: Vec<NbtTag> = self.explosions
+            .iter()
+            .map(|e| e.write_data())
+            .collect();
+        compound.put_list("explosions", explosions_list);
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        digest.update(&get_i32_hash(self.flight_duration).to_le_bytes());
+        for explosion in &self.explosions {
+            digest.update(&get_i32_hash(explosion.get_hash()).to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        digest.finalize() as i32
+    }
+
+    default_impl!(Fireworks);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProfileImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

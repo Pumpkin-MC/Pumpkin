@@ -2,7 +2,8 @@ use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    DamageImpl, DataComponentImpl, EnchantmentsImpl, MaxStackSizeImpl, PotionContentsImpl,
+    DamageImpl, DataComponentImpl, EnchantmentsImpl, FireworkExplosionImpl,
+    FireworkExplosionShape, FireworksImpl, MaxStackSizeImpl, PotionContentsImpl,
     StatusEffectInstance, UnbreakableImpl, get,
 };
 use serde::de;
@@ -260,6 +261,119 @@ fn skip_effect_parameters<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<(), A::Er
     Ok(())
 }
 
+impl DataComponentCodec<Self> for FireworkExplosionImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        // Shape (VarInt enum)
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.shape.to_id()))?;
+        // Colors list
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.colors.len() as i32))?;
+        for color in &self.colors {
+            seq.serialize_field::<VarInt>("", &VarInt::from(*color))?;
+        }
+        // Fade colors list
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.fade_colors.len() as i32))?;
+        for color in &self.fade_colors {
+            seq.serialize_field::<VarInt>("", &VarInt::from(*color))?;
+        }
+        // hasTrail
+        seq.serialize_field::<bool>("", &self.has_trail)?;
+        // hasTwinkle
+        seq.serialize_field::<bool>("", &self.has_twinkle)?;
+        Ok(())
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        // Shape (VarInt enum)
+        let shape_id = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No FireworkExplosionImpl shape_id VarInt!"))?
+            .0;
+        let shape = FireworkExplosionShape::from_id(shape_id)
+            .ok_or(de::Error::custom("Invalid FireworkExplosionShape id!"))?;
+
+        // Colors list
+        let colors_len = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No FireworkExplosionImpl colors_len VarInt!"))?
+            .0 as usize;
+        let mut colors = Vec::with_capacity(colors_len);
+        for _ in 0..colors_len {
+            let color = seq
+                .next_element::<VarInt>()?
+                .ok_or(de::Error::custom("No FireworkExplosionImpl color VarInt!"))?
+                .0;
+            colors.push(color);
+        }
+
+        // Fade colors list
+        let fade_colors_len = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No FireworkExplosionImpl fade_colors_len VarInt!"))?
+            .0 as usize;
+        let mut fade_colors = Vec::with_capacity(fade_colors_len);
+        for _ in 0..fade_colors_len {
+            let color = seq
+                .next_element::<VarInt>()?
+                .ok_or(de::Error::custom("No FireworkExplosionImpl fade_color VarInt!"))?
+                .0;
+            fade_colors.push(color);
+        }
+
+        // hasTrail
+        let has_trail = seq
+            .next_element::<bool>()?
+            .ok_or(de::Error::custom("No FireworkExplosionImpl has_trail bool!"))?;
+
+        // hasTwinkle
+        let has_twinkle = seq
+            .next_element::<bool>()?
+            .ok_or(de::Error::custom("No FireworkExplosionImpl has_twinkle bool!"))?;
+
+        Ok(Self::new(
+            shape,
+            colors,
+            fade_colors,
+            has_trail,
+            has_twinkle,
+        ))
+    }
+}
+
+impl DataComponentCodec<Self> for FireworksImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        // Flight duration (VarInt)
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.flight_duration))?;
+        // Explosions list
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.explosions.len() as i32))?;
+        for explosion in &self.explosions {
+            explosion.serialize(seq)?;
+        }
+        Ok(())
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        // Flight duration (VarInt)
+        let flight_duration = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No FireworksImpl flight_duration VarInt!"))?
+            .0;
+
+        // Explosions list
+        let explosions_len = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No FireworksImpl explosions_len VarInt!"))?
+            .0 as usize;
+        let mut explosions = Vec::with_capacity(explosions_len);
+        for _ in 0..explosions_len {
+            // Recursively deserialize each explosion
+            let explosion = FireworkExplosionImpl::deserialize(seq)?;
+            explosions.push(explosion);
+        }
+
+        Ok(Self::new(flight_duration, explosions))
+    }
+}
+
 pub fn deserialize<'a, A: SeqAccess<'a>>(
     id: DataComponent,
     seq: &mut A,
@@ -270,6 +384,8 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::Damage => Ok(DamageImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Unbreakable => Ok(UnbreakableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::PotionContents => Ok(PotionContentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
         _ => todo!("{} not yet implemented", id.to_name()),
     }
 }
@@ -284,6 +400,8 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::Damage => get::<DamageImpl>(value).serialize(seq),
         DataComponent::Unbreakable => get::<UnbreakableImpl>(value).serialize(seq),
         DataComponent::PotionContents => get::<PotionContentsImpl>(value).serialize(seq),
+        DataComponent::FireworkExplosion => get::<FireworkExplosionImpl>(value).serialize(seq),
+        DataComponent::Fireworks => get::<FireworksImpl>(value).serialize(seq),
         _ => todo!("{} not yet implemented", id.to_name()),
     }
 }
