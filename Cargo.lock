@@ -2135,7 +2135,6 @@ dependencies = [
  "bytes",
  "cfb8",
  "flate2",
- "log",
  "pumpkin-data",
  "pumpkin-macros",
  "pumpkin-nbt",
