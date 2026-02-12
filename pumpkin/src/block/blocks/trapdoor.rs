@@ -4,7 +4,7 @@ use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateA
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockHalf, BlockProperties, HorizontalFacing};
+use pumpkin_data::block_properties::{BlockHalf, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -46,7 +46,6 @@ fn can_open_trapdoor(block: &Block) -> bool {
     true
 }
 
-// Todo: The sounds should be from BlockSetType
 fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
         if block.has_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) {
@@ -88,16 +87,13 @@ impl BlockBehaviour for TrapDoorBlock {
 
             let powered = block_receives_redstone_power(args.world, args.position).await;
 
-            // Optimized vanilla trapdoor facing logic
             let player_facing = args.player.living_entity.entity.get_horizontal_facing();
 
-            let facing = match args.direction {
-                BlockDirection::North
-                | BlockDirection::South
-                | BlockDirection::East
-                | BlockDirection::West => args.direction.to_horizontal_facing(),
-                BlockDirection::Up | BlockDirection::Down => player_facing,
-            };
+            // Correct facing logic using Option unwrap
+            let facing = args
+                .direction
+                .to_horizontal_facing()
+                .unwrap_or(player_facing);
 
             trapdoor_props.facing = facing;
 
