@@ -2595,6 +2595,7 @@ impl World {
                 for player in current_players.iter() {
                     player.send_system_message(&event.join_message).await;
                 }
+                // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
                 info!("{}", event.join_message.to_pretty_console());
             }
         });
