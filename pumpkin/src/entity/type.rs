@@ -13,8 +13,15 @@ use crate::{
         },
         living::LivingEntity,
         mob::{
-            creeper::CreeperEntity, drowned::DrownedEntity, silverfish::SilverfishEntity,
-            zombie::ZombieEntity, zombie_villager::ZombieVillagerEntity,
+            creeper::CreeperEntity,
+            enderman::EndermanEntity,
+            silverfish::SilverfishEntity,
+            skeleton::{
+                bogged::BoggedSkeletonEntity, parched::ParchedSkeletonEntity,
+                skeleton::SkeletonEntity, stray::StraySkeletonEntity, wither::WitherSkeletonEntity,
+            },
+            zombie::{ZombieEntity, drowned::DrownedEntity, husk::HuskEntity},
+            zombie_villager::ZombieVillagerEntity,
         },
         passive::{iron_golem::IronGolemEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity},
     },
@@ -30,10 +37,22 @@ pub async fn from_type(
     let entity = Entity::from_uuid(uuid, world.clone(), position, entity_type);
 
     let mob: Arc<dyn EntityBase> = match entity_type.id {
+        // Zombie
         id if id == EntityType::ZOMBIE.id => ZombieEntity::new(entity).await,
         id if id == EntityType::DROWNED.id => DrownedEntity::new(entity).await,
+        id if id == EntityType::HUSK.id => HuskEntity::new(entity).await,
         id if id == EntityType::ZOMBIE_VILLAGER.id => ZombieVillagerEntity::new(entity).await,
+
+        // Sekelton
+        id if id == EntityType::SKELETON.id => SkeletonEntity::new(entity).await,
+        id if id == EntityType::BOGGED.id => BoggedSkeletonEntity::new(entity).await,
+        id if id == EntityType::PARCHED.id => ParchedSkeletonEntity::new(entity).await,
+        id if id == EntityType::WITHER_SKELETON.id => WitherSkeletonEntity::new(entity).await,
+        id if id == EntityType::STRAY.id => StraySkeletonEntity::new(entity).await,
+
         id if id == EntityType::CREEPER.id => CreeperEntity::new(entity).await,
+        id if id == EntityType::ENDERMAN.id => EndermanEntity::new(entity).await,
+
         id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::new(entity).await,
         id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity).await,
         id if id == EntityType::WOLF.id => WolfEntity::new(entity).await,
