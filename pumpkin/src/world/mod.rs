@@ -2875,6 +2875,9 @@ impl World {
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
 
+            // Close container screens for any players viewing this block
+            self.close_container_screens_at(position).await;
+
             if Block::from_state_id(broken_state_id) != &Block::FIRE {
                 let particles_packet = CWorldEvent::new(
                     WorldEvent::BlockBroken as i32,
@@ -2901,6 +2904,16 @@ impl World {
             return Some(new_state_id);
         }
         None
+    }
+
+    /// Close container screens for all players who have a container open at the given block position.
+    pub async fn close_container_screens_at(&self, position: &BlockPos) {
+        let players = self.players.load();
+        for player in players.iter() {
+            if player.open_container_pos.load() == Some(*position) {
+                player.close_handled_screen().await;
+            }
+        }
     }
 
     pub async fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {

@@ -370,6 +370,8 @@ pub struct Player {
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
+    /// The block position of the currently open container screen (if any).
+    pub open_container_pos: AtomicCell<Option<BlockPos>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
     /// The player's abilities and special powers.
@@ -486,6 +488,7 @@ impl Player {
             hunger_manager: HungerManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
             open_container: AtomicCell::new(None),
+            open_container_pos: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
             packet_sequence: AtomicI32::new(-1),
             start_mining_time: AtomicI32::new(0),
@@ -2565,6 +2568,7 @@ impl Player {
         }
 
         *self.current_screen_handler.lock().await = self.player_screen_handler.clone();
+        self.open_container_pos.store(None);
     }
 
     pub async fn on_screen_handler_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
@@ -2582,6 +2586,7 @@ impl Player {
     pub async fn open_handled_screen(
         &self,
         screen_handler_factory: &dyn ScreenHandlerFactory,
+        block_pos: Option<BlockPos>,
     ) -> Option<u8> {
         if !self
             .current_screen_handler
@@ -2619,6 +2624,7 @@ impl Player {
             drop(screen_handler_temp);
             self.on_screen_handler_opened(screen_handler.clone()).await;
             *self.current_screen_handler.lock().await = screen_handler;
+            self.open_container_pos.store(block_pos);
             Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
         } else {
             //TODO: Send message if spectator
