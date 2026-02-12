@@ -1,10 +1,10 @@
-use pumpkin_data::HorizontalFacingExt;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs};
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::{BlockHalf, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
