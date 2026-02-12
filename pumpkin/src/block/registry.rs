@@ -24,6 +24,7 @@ use crate::block::blocks::fence_gates::FenceGateBlock;
 use crate::block::blocks::fences::FenceBlock;
 use crate::block::blocks::fire::fire::FireBlock;
 use crate::block::blocks::fire::soul_fire::SoulFireBlock;
+use crate::block::blocks::magma::MagmaBlock;
 use crate::block::blocks::flower_pots::FlowerPotBlock;
 use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
@@ -146,6 +147,7 @@ use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
+use crate::block::OnEntityStepArgs;
 
 #[must_use]
 #[expect(clippy::too_many_lines)]
@@ -250,6 +252,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     // Fire
     manager.register(SoulFireBlock);
     manager.register(FireBlock);
+    manager.register(MagmaBlock);
 
     // Redstone
     manager.register(ButtonBlock);
@@ -401,6 +404,27 @@ impl BlockRegistry {
             pumpkin_block
                 .on_entity_collision(OnEntityCollisionArgs {
                     server,
+                    world,
+                    block,
+                    state,
+                    position,
+                    entity,
+                })
+                .await;
+        }
+    }
+
+    pub async fn on_entity_step(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        entity: &dyn EntityBase,
+        position: &BlockPos,
+        state: &BlockState,
+    ) {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
+            pumpkin_block
+                .on_entity_step(OnEntityStepArgs {
                     world,
                     block,
                     state,

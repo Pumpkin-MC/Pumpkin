@@ -1361,6 +1361,17 @@ impl EntityBase for LivingEntity {
             if caller.get_player().is_none() {
                 self.entity.send_pos_rot().await;
             }
+            // Notify the block under the entity each tick if the entity is supported
+            if let Some(supporting) = self.entity.get_supporting_block_pos() {
+                if self.entity.on_ground.load(Relaxed) {
+                    let world = self.entity.world.load();
+                    let (block, state) = world.get_block_and_state(&supporting).await;
+                    world
+                        .block_registry
+                        .on_entity_step(block, &world, caller.as_ref() as &dyn EntityBase, &supporting, state)
+                        .await;
+                }
+            }
             self.tick_effects().await;
             // Current active item
             {

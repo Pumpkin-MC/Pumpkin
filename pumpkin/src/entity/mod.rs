@@ -650,6 +650,27 @@ impl Entity {
         }
     }
 
+    /// Returns the block position of the block the entity is standing on, if any.
+    /// This is different from `supporting_block_pos`, which may return blocks the entity is not actually standing on (like walls), or None if the entity is still.
+    pub fn get_supporting_block_pos(&self) -> Option<BlockPos> {
+        // Check if the entity is on the ground
+        if !self.on_ground.load(Ordering::Relaxed) {
+            return None;
+        }
+
+        let pos = self.pos.load();
+        
+        // Check 0.2 blocks below the feet.
+        // This handles carpets, soul sand, and slight floating errors.
+        let adjust_y = pos.y - 0.2;
+        
+        Some(BlockPos::new(
+            pos.x.floor() as i32,
+            adjust_y.floor() as i32,
+            pos.z.floor() as i32
+        ))
+    }
+
     #[expect(clippy::float_cmp)]
     async fn adjust_movement_for_collisions(&self, movement: Vector3<f64>) -> Vector3<f64> {
         self.on_ground.store(false, Ordering::SeqCst);
