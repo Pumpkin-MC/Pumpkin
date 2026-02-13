@@ -94,7 +94,7 @@ pub struct LevelData {
     pub level_version: i32, // TODO: Implement the rest of the fields
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct WorldGenSettings {
     // the numerical seed of the world
     pub seed: i64,
@@ -102,22 +102,31 @@ pub struct WorldGenSettings {
 }
 
 pub type Dimensions = HashMap<String, Dimension>;
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Dimension {
     pub generator: Generator,
     #[serde(rename = "type")]
     pub dimension_type: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Generator {
-    pub settings: String,
+    pub settings: GeneratorSettings,
     pub biome_source: BiomeSource,
     #[serde(rename = "type")]
     pub generator_type: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+// Generator settings can be either a string reference for normal worlds
+// or a NBT superflat world
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum GeneratorSettings {
+    Reference(String),
+    Inline(pumpkin_nbt::compound::NbtCompound),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum BiomeSource {
     WithPreset {
@@ -149,7 +158,7 @@ impl WorldGenSettings {
             "minecraft:overworld".to_string(),
             Dimension {
                 generator: Generator {
-                    settings: "minecraft:overworld".to_string(),
+                    settings: GeneratorSettings::Reference("minecraft:overworld".to_string()),
                     biome_source: BiomeSource::WithPreset {
                         preset: "minecraft:overworld".to_string(),
                         biome_type: "minecraft:multi_noise".to_string(),
@@ -163,7 +172,7 @@ impl WorldGenSettings {
             "minecraft:the_nether".to_string(),
             Dimension {
                 generator: Generator {
-                    settings: "minecraft:nether".to_string(),
+                    settings: GeneratorSettings::Reference("minecraft:nether".to_string()),
                     biome_source: BiomeSource::WithPreset {
                         preset: "minecraft:nether".to_string(),
                         biome_type: "minecraft:multi_noise".to_string(),
@@ -177,7 +186,7 @@ impl WorldGenSettings {
             "minecraft:the_end".to_string(),
             Dimension {
                 generator: Generator {
-                    settings: "minecraft:end".to_string(),
+                    settings: GeneratorSettings::Reference("minecraft:end".to_string()),
                     biome_source: BiomeSource::Simple {
                         biome_type: "minecraft:the_end".to_string(),
                     },
