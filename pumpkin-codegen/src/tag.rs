@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fs,
 };
 
@@ -16,7 +16,7 @@ use quote::{ToTokens, format_ident, quote};
 // --- EnumCreator with from_string support ---
 pub struct EnumCreator {
     pub name: String,
-    pub values: Vec<String>,
+    pub values: BTreeSet<String>,
 }
 
 impl ToTokens for EnumCreator {
