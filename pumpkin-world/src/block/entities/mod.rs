@@ -32,6 +32,7 @@ pub mod barrel;
 pub mod bed;
 pub mod blasting_furnace;
 pub mod chest;
+pub mod chest_like_block_entity;
 pub mod chiseled_bookshelf;
 pub mod command_block;
 pub mod comparator;
