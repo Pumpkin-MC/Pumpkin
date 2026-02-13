@@ -4,6 +4,8 @@ use std::sync::{
 };
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::attributes::Attributes;
+use crate::entity::attributes::AttributeBuilder;
 
 use crate::entity::{
     Entity, NBTStorage,
@@ -54,6 +56,10 @@ impl CreeperEntity {
         };
 
         mob_arc
+    }
+
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.25)
     }
 
     pub fn set_fuse_speed(&self, speed: i32) {

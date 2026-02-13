@@ -34,15 +34,10 @@ use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::bedrock::client::update_artributes::{
-    Attribute as BAttribute, CUpdateAttributes as BUpdateAttributes,
-};
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::codec::{var_uint::VarUInt, var_ulong::VarULong};
 use pumpkin_protocol::java::client::play::AttributeModifier;
 use pumpkin_protocol::java::client::play::{
-    Animation, CEntityAnimation, CHurtAnimation, CSetPlayerInventory, CTakeItemEntity,
-    CUpdateAttributes, CUpdateMobEffect,
+    Animation, CEntityAnimation, CHurtAnimation, CSetPlayerInventory, CTakeItemEntity, CUpdateMobEffect,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -54,6 +49,9 @@ use pumpkin_world::item::ItemStack;
 use rand::RngExt;
 use tokio::sync::Mutex;
 use uuid::Uuid;
+use pumpkin_data::data_component_impl::Operation;
+use crate::entity::attributes::ModifierOperation;
+use crate::entity::attributes::Modifier;
 
 /// Represents a living entity within the game world.
 ///
@@ -116,8 +114,8 @@ impl LivingEntity {
         } else {
             0.8
         };
-        // TODO: Extract default MOVEMENT_SPEED Entity Attribute
-        let default_movement_speed = 0.1;
+        // Read default MOVEMENT_SPEED from the entity's attribute registry
+        let default_movement_speed = entity.get_attribute_base(&Attributes::MOVEMENT_SPEED);
         let health = entity.entity_type.max_health.unwrap_or(20.0);
         Self {
             entity,
@@ -258,8 +256,29 @@ impl LivingEntity {
                 .insert(effect.effect_type, effect.clone());
 
             // Effects that modify attributes (ex. speed) should also update the
-            // entity's attributes so the client updates movement prediction.
+            // entity's attribute instances (server-side) and then notify clients.
             if !effect.effect_type.attribute_modifiers.is_empty() {
+                // Apply each attribute modifier into the local AttributeInstance
+                for m in effect.effect_type.attribute_modifiers.iter() {
+                    let uuid = Uuid::new_v3(&Uuid::NAMESPACE_OID, m.id.as_bytes());
+                    let op = match m.operation {
+                        Operation::AddValue =>
+                            ModifierOperation::Add,
+                        Operation::AddMultipliedBase =>
+                            ModifierOperation::MultiplyBase,
+                        Operation::AddMultipliedTotal =>
+                            ModifierOperation::MultiplyTotal,
+                    };
+                    let mod_inst = Modifier {
+                        id: uuid,
+                        amount: m.base_value,
+                        operation: op,
+                    };
+
+                    self.entity.update_attribute(m.attribute, |inst| inst.add_modifier(mod_inst.clone()));
+                }
+
+                // Recompute packet modifiers from active effects (same logic as before)
                 self.send_attribute_update().await;
             }
         }
@@ -303,8 +322,13 @@ impl LivingEntity {
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
 
-        // Effect removal may change attributes
+        // Effect removal may change attributes: remove modifier entries from instances
         if !effect_type.attribute_modifiers.is_empty() {
+            for m in effect_type.attribute_modifiers.iter() {
+                let uuid = Uuid::new_v3(&Uuid::NAMESPACE_OID, m.id.as_bytes());
+                self.entity.update_attribute(m.attribute, |inst| inst.remove_modifier(uuid));
+            }
+
             self.send_attribute_update().await;
         }
         succeeded
@@ -341,70 +365,32 @@ impl LivingEntity {
     }
 
     /// Sends an attribute update for this entity to clients.
-    /// This recomputes movement attribute modifiers from active effects and broadcasts them.
+    /// TODO: move to attributes module and generalize to support any attribute (not just movement speed)
     pub async fn send_attribute_update(&self) {
+        // Build modifiers from active effects (retain previous behaviour for packet contents)
         let base_speed = self.movement_speed.load();
-
         let mut modifiers: Vec<AttributeModifier> = Vec::new();
 
-        // Add Speed modifier if present
         if let Some(effect) = self.get_effect(&StatusEffect::SPEED).await {
             let amount = 0.20000000298023224 * f64::from(effect.amplifier + 1);
-            modifiers.push(AttributeModifier::new(
-                "minecraft:effect.speed".to_string(),
-                amount,
-                2,
-            ));
+            modifiers.push(AttributeModifier::new("minecraft:effect.speed".to_string(), amount, 2));
         }
-
-        // Add Slowness modifier if present
         if let Some(effect) = self.get_effect(&StatusEffect::SLOWNESS).await {
             let amount = -0.15000000596046448 * f64::from(effect.amplifier + 1);
-            modifiers.push(AttributeModifier::new(
-                "minecraft:effect.slowness".to_string(),
-                amount,
-                2,
-            ));
+            modifiers.push(AttributeModifier::new("minecraft:effect.slowness".to_string(), amount, 2));
         }
 
-        let modifiers_count = modifiers.len();
-
-        // Build Java attribute representation
-        let property = pumpkin_protocol::java::client::play::Property::new(
-            VarInt(i32::from(Attributes::MOVEMENT_SPEED.id)),
-            base_speed,
-            modifiers,
-        );
-
-        let je_packet = CUpdateAttributes::new(self.entity_id().into(), vec![property]);
-
-        // Build Bedrock attribute representation
         let effective_speed = self.get_effective_movement_speed().await;
 
-        let be_attribute = BAttribute {
-            min_value: 0.0,
-            max_value: 3.402_823_5E38,
-            current_value: effective_speed as f32,
-            default_min_value: 0.0,
-            default_max_value: 3.402_823_5E38,
-            default_value: base_speed as f32,
-            name: "minecraft:movement".to_string(),
-            modifiers_list_size: VarUInt(modifiers_count as _),
-        };
-
-        let runtime_id = self.entity_id() as u64;
-        let be_packet = BUpdateAttributes {
-            runtime_id: VarULong(runtime_id),
-            attributes: vec![be_attribute],
-            player_tick: VarULong(0),
-        };
-
-        // Broadcast to both Java and Bedrock clients
-        self.entity
-            .world
-            .load()
-            .broadcast_editioned(&je_packet, &be_packet)
-            .await;
+        // Delegate actual packet building & broadcasting to the attributes module
+        crate::entity::attributes::broadcast_attribute_update(
+            &self.entity,
+            Attributes::MOVEMENT_SPEED,
+            base_speed,
+            modifiers,
+            effective_speed,
+        )
+        .await;
     }
 
     pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
@@ -942,10 +928,11 @@ impl LivingEntity {
     }
 
     async fn get_jump_velocity(&self, mut strength: f64) -> f64 {
-        strength *= 0.42; // TODO: Read from Entity Attribute JUMP_STRENGTH (default 0.42)
+        strength *= self.entity.get_attribute_value(&Attributes::JUMP_STRENGTH);
 
         strength *= f64::from(self.entity.get_jump_velocity_multiplier().await);
 
+        // TODO: redundant?
         if let Some(effect) = self.get_effect(&StatusEffect::JUMP_BOOST).await {
             strength += 0.1 * f64::from(effect.amplifier + 1);
         }
@@ -1009,8 +996,8 @@ impl LivingEntity {
             return;
         }
 
-        // TODO: use attributes
-        let safe_fall_distance = 3.0;
+        // Fetches the safe fall distance attribute
+        let safe_fall_distance = self.entity.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE) as f32;
         let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
 
         let damage = (unsafe_fall_distance * damage_per_distance).floor();
@@ -1299,11 +1286,45 @@ impl LivingEntity {
         }
     }
 
+    /// Tries to use a totem of undying from the entity's hands. If successful, applies the totem effects and returns true.
     async fn try_use_death_protector(&self, caller: &dyn EntityBase) -> bool {
         for hand in Hand::all() {
             let stack = self.get_stack_in_hand(caller, hand).await;
             let mut stack = stack.lock().await;
-            // TODO: effects...
+
+            // Set Absorbtion, Regeneration, and Fire Resistance effects
+            self.add_effect(Effect {
+                effect_type: &StatusEffect::ABSORPTION,
+                duration: 100,
+                amplifier: 1,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            })
+            .await;
+            self.add_effect(Effect {
+                effect_type: &StatusEffect::REGENERATION,
+                duration: 900,
+                amplifier: 1,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            })
+            .await;
+            self.add_effect(Effect {
+                effect_type: &StatusEffect::FIRE_RESISTANCE,
+                duration: 800,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            })
+            .await;
+
+            // Clear the stack and use the totem of undying
             if stack.get_data_component::<DeathProtectionImpl>().is_some() {
                 stack.clear();
                 self.set_health(1.0).await;
@@ -1595,22 +1616,34 @@ impl EntityBase for LivingEntity {
             let bypasses_cooldown_protection =
                 damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
 
+            // Apply Resistance effect reduction (20% per level), excluding bypasses_cooldown_protection and starvation damage
+            let resistance_reduction = if !bypasses_cooldown_protection && damage_type != DamageType::STARVE {
+                self.get_effect(&pumpkin_data::effect::StatusEffect::RESISTANCE)
+                    .await
+                    .map(|e| 0.2 * (e.amplifier + 1) as f32)
+                    .unwrap_or(0.0)
+            } else {
+                0.0
+            };
+
+            // Total damage after reductions
+            let effective_amount = amount * (1.0 - resistance_reduction);
+
+            // Apply hurt cooldown logic
             let last_damage = self.last_damage_taken.load();
-            let play_sound;
-            let mut damage_amount =
-                if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
-                    if amount <= last_damage {
-                        return false;
-                    }
-                    play_sound = false;
-                    amount - self.last_damage_taken.load()
-                } else {
-                    self.hurt_cooldown.store(20, Relaxed);
-                    play_sound = true;
-                    amount
-                };
+            let (damage_amount, play_sound) = if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
+                if effective_amount <= last_damage {
+                    return false;
+                }
+                (effective_amount - last_damage, false)
+            } else {
+                self.hurt_cooldown.store(20, Relaxed);
+                (effective_amount, true)
+            };
+
+            // Finalize state
             self.last_damage_taken.store(amount);
-            damage_amount = damage_amount.max(0.0);
+            let damage_amount = damage_amount.max(0.0);
 
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
 

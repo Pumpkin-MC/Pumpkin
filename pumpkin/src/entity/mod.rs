@@ -55,12 +55,17 @@ use std::sync::{
         Ordering::{self, Relaxed},
     },
 };
+use std::sync::RwLock;
+use std::collections::HashMap;
 use tokio::sync::Mutex;
+use crate::entity::attributes::{AttributeInstance, DEFAULT_ATTRIBUTE_REGISTRY};
+use pumpkin_data::attributes::Attributes;
 use uuid::Uuid;
 
 pub mod ai;
 pub mod boss;
 pub mod breath;
+pub mod attributes;
 pub mod decoration;
 pub mod effect;
 pub mod experience_orb;
@@ -404,6 +409,8 @@ pub struct Entity {
     pub velocity_dirty: AtomicBool,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
+    /// The attributes of the entity 
+    pub attributes: RwLock<HashMap<u8, AttributeInstance>>,
 }
 
 impl Entity {
@@ -486,7 +493,68 @@ impl Entity {
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             removed: AtomicBool::new(false),
+            // Populate local attribute instances from the default registry exactly once.
+            attributes: {
+                let mut m = std::collections::HashMap::new();
+                let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
+
+                if let Some(overrides) = reg.get_overrides_for_entity(entity_type.id) {
+                    for (attr_id, base) in overrides {
+                        m.insert(attr_id, AttributeInstance::new(base));
+                    }
+                }
+                std::sync::RwLock::new(m)
+            },
         }
+    }
+
+    /// Update or insert the base value for an attribute on this entity.
+    /// If the attribute doesn't exist locally yet, it will be inserted.
+    pub fn set_attribute_base(&self, attribute: &Attributes, new_base: f64) {
+        let mut map = self.attributes.write().unwrap();
+        if let Some(inst) = map.get_mut(&attribute.id) {
+            inst.base_value = new_base;
+            inst.dirty.store(true, Ordering::Relaxed);
+        } else {
+            let ai = AttributeInstance::new(new_base);
+            ai.dirty.store(true, Ordering::Relaxed);
+            map.insert(attribute.id, ai);
+        }
+    }
+
+    /// Convenience helper to mutate an attribute instance. Automatically inserts
+    /// a new instance populated from the registry base if needed.
+    pub fn update_attribute<F: FnOnce(&mut AttributeInstance)>(&self, attribute: &Attributes, f: F) {
+        let mut map = self.attributes.write().unwrap();
+
+        if !map.contains_key(&attribute.id) {
+            let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
+            let base = reg.get_base_value(self.entity_type.id, attribute);
+            map.insert(attribute.id, AttributeInstance::new(base));
+        }
+
+        if let Some(inst) = map.get_mut(&attribute.id) {
+            f(inst);
+            inst.dirty.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Returns the computed value for `attribute` using the local instance, falling back
+    /// to `attribute.default_value` if no local instance exists.
+    pub fn get_attribute_value(&self, attribute: &Attributes) -> f64 {
+        let map = self.attributes.read().unwrap();
+        if let Some(inst) = map.get(&attribute.id) {
+            inst.value()
+        } else {
+            attribute.default_value
+        }
+    }
+
+    /// Returns the base attribute value for `attribute` for this entity's type.
+    /// This performs a fast registry lookup and does not touch per-entity modifiers.
+    pub fn get_attribute_base(&self, attribute: &Attributes) -> f64 {
+        let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
+        reg.get_base_value(self.entity_type.id, attribute)
     }
 
     pub async fn add_velocity(&self, velocity: Vector3<f64>) {

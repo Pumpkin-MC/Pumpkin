@@ -13,6 +13,8 @@ use crate::entity::{
 use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::attributes::Attributes;
+use crate::entity::attributes::AttributeBuilder;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
 use rand::{RngExt, rng};
@@ -55,6 +57,15 @@ impl ZombieEntity {
         };
 
         mob_arc
+    }
+
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::MAX_HEALTH, 20.0)
+            .add(Attributes::MOVEMENT_SPEED, 0.23)
+            .add(Attributes::ATTACK_DAMAGE, 3.0)
+            .add(Attributes::FOLLOW_RANGE, 35.0)
+            .add(Attributes::ARMOR, 2.0)
     }
 }
 

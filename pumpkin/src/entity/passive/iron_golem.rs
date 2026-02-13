@@ -1,6 +1,8 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::attributes::Attributes;
+use crate::entity::attributes::AttributeBuilder;
 
 use crate::entity::{
     Entity, NBTStorage,
@@ -34,6 +36,15 @@ impl IronGolemEntity {
         };
 
         mob_arc
+    }
+
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::MAX_HEALTH, 100.0)
+            .add(Attributes::MOVEMENT_SPEED, 0.25)
+            .add(Attributes::ATTACK_DAMAGE, 15.0)
+            .add(Attributes::KNOCKBACK_RESISTANCE, 1.0)
+            .add(Attributes::STEP_HEIGHT, 1.0)
     }
 }
 

@@ -5,6 +5,7 @@ use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
@@ -129,13 +130,30 @@ impl MobEntity {
     }
 
     pub async fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
-        // TODO: Use entity attributes for damage once implemented
-        const ZOMBIE_ATTACK_DAMAGE: f32 = 3.0;
+        let mut attack_damage: f32 = self.living_entity.entity.get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
+
+        // Apply Strength effect (+3 damage per level)
+        if let Some(effect) = self
+            .living_entity
+            .get_effect(&pumpkin_data::effect::StatusEffect::STRENGTH)
+            .await
+        {
+            attack_damage += 3.0 * f64::from(effect.amplifier + 1) as f32;
+        }
+
+        // Apply Weakness effect (-4 damage per level or increased if negative)
+        if let Some(effect) = self
+            .living_entity
+            .get_effect(&pumpkin_data::effect::StatusEffect::WEAKNESS)
+            .await
+        {
+            attack_damage -= 4.0 * f64::from(effect.amplifier + 1) as f32;
+        }
 
         target
             .damage_with_context(
                 target,
-                ZOMBIE_ATTACK_DAMAGE,
+                attack_damage,
                 DamageType::MOB_ATTACK,
                 None,
                 Some(caller),

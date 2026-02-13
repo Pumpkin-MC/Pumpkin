@@ -1,6 +1,8 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::attributes::Attributes;
+use crate::entity::attributes::AttributeBuilder;
 
 use crate::entity::{
     Entity, NBTStorage,
@@ -34,6 +36,11 @@ impl SnowGolemEntity {
         };
 
         mob_arc
+    }
+
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::MOVEMENT_SPEED, 0.2)
     }
 }
 

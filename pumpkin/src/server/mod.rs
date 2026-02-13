@@ -247,6 +247,9 @@ impl Server {
         };
         let server = Arc::new(server);
 
+        // Initialize attribute registry for all entities
+        crate::entity::attributes::init_all_attributes();
+
         let server_clone = server.clone();
         tokio::spawn(async move {
             server_clone

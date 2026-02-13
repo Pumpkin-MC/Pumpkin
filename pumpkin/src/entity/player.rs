@@ -35,6 +35,8 @@ use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::attributes::Attributes;
+use crate::entity::attributes::AttributeBuilder;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
@@ -554,6 +556,10 @@ impl Player {
         }
     }
 
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.1)
+    }
+
     /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
     /// when the client. This means tasks should complete in a reasonable amount of time or select
     /// on `Self::await_close_interrupt` to cancel the task when the client is closed
@@ -671,6 +677,15 @@ impl Player {
             .await
         {
             damage += 3.0 * f64::from(effect.amplifier + 1);
+        }
+
+        // Apply Weakness effect (-4 damage per level or increased if negative)
+        if let Some(effect) = self
+            .living_entity
+            .get_effect(&pumpkin_data::effect::StatusEffect::WEAKNESS)
+            .await
+        {
+            damage -= 4.0 * f64::from(effect.amplifier + 1);
         }
 
         let pos = victim_entity.pos.load();
