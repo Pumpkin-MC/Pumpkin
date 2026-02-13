@@ -116,7 +116,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
             entity
                 .slow_movement(args.state, Vector3::new(0.8, 0.75, 0.8))
                 .await;
-            let mov = if living_entity.is_controlled_by_player() {
+            let mov = if living_entity.is_player() {
                 living_entity.get_movement()
             } else {
                 entity.last_pos.load() - entity.pos.load()

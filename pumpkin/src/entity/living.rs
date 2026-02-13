@@ -1143,7 +1143,7 @@ impl LivingEntity {
         self.dead.store(false, Relaxed);
     }
 
-    pub fn is_controlled_by_player(&self) -> bool {
+    pub fn is_player(&self) -> bool {
         let world = self.entity.world.load();
         world.get_player_by_id(self.entity.entity_id).is_some()
     }
