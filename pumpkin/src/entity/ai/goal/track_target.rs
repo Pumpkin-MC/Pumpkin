@@ -4,6 +4,7 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::mob::MobEntity;
+use crate::entity::EntityBase;
 use rand::RngExt;
 
 const UNSET: i32 = 0;
@@ -65,9 +66,9 @@ impl TrackTargetGoal {
         let mob_entity = mob.get_mob_entity();
         let target = target.unwrap();
 
-        // ⭐ Prevent targeting creative players (NEW)
+        // Prevent targeting creative players
         if let Some(player) = target.entity.get_player() {
-            let gm = player.gamemode().load();
+            let gm = player.gamemode.load();
             if gm.is_creative() {
                 return false;
             }
