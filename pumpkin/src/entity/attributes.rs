@@ -9,11 +9,12 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
+#[repr(i8)]
 pub enum ModifierOperation {
-    Add,         // add value
-    MultiplyBase, // multiply base (base * (1 + x))
-    MultiplyTotal, // multiply total (applied last)
+    Add = 0,         // add value
+    MultiplyBase = 1, // multiply base (base * (1 + x))
+    MultiplyTotal = 2, // multiply total (applied last)
 }
 
 #[derive(Clone, Debug)]
@@ -83,49 +84,81 @@ impl AttributeInstance {
     }
 }
 
-/// Broadcast attribute update packets (Java & Bedrock) for a single attribute on an entity.
-/// `modifiers` should be the Java `AttributeModifier` list (id string, amount, operation)
-pub async fn broadcast_attribute_update(
-    entity: &crate::entity::Entity,
-    attribute: Attributes,
-    base_value: f64,
-    modifiers: Vec<pumpkin_protocol::java::client::play::AttributeModifier>,
-    effective_value: f64,
+/// Send updates for multiple attributes in a single packet for the given living entity.
+pub async fn send_attribute_updates_for_living(
+    living: &crate::entity::living::LivingEntity,
+    attributes: Vec<Attributes>,
 ) {
     use pumpkin_protocol::java::client::play::Property as JeProperty;
     use pumpkin_protocol::java::client::play::CUpdateAttributes as JePacket;
     use pumpkin_protocol::bedrock::client::update_artributes::{Attribute as BeAttribute, CUpdateAttributes as BePacket};
     use pumpkin_protocol::codec::var_int::VarInt;
     use pumpkin_protocol::codec::{var_uint::VarUInt, var_ulong::VarULong};
+    use pumpkin_protocol::java::client::play::AttributeModifier as JeAttrMod;
 
-    let property = JeProperty::new(VarInt(i32::from(attribute.id)), base_value, modifiers);
-    let je_packet = JePacket::new(entity.entity_id.into(), vec![property]);
+    let mut je_properties: Vec<JeProperty> = Vec::with_capacity(attributes.len());
+    let mut be_attributes: Vec<BeAttribute> = Vec::with_capacity(attributes.len());
 
-    let name = match attribute.id {
-        22 => "minecraft:movement".to_string(),
-        _ => format!("minecraft:attribute.{}", attribute.id),
-    };
+    for attribute in attributes.into_iter() {
+        let base_value = living.entity.get_attribute_base(&attribute);
+        let effective_value = living.entity.get_attribute_value(&attribute);
 
-    let be_attribute = BeAttribute {
-        min_value: 0.0,
-        max_value: 3.402_823_5E38,
-        current_value: effective_value as f32,
-        default_min_value: 0.0,
-        default_max_value: 3.402_823_5E38,
-        default_value: base_value as f32,
-        name,
-        modifiers_list_size: VarUInt(0),
-    };
+        // Pull modifiers for this attribute
+        let mut modifiers = Vec::new();
+        if let Some(inst) = living.entity.attributes.read().unwrap().get(&attribute.id) {
+            for mod_inst in &inst.modifiers {
+                modifiers.push(JeAttrMod::new(
+                    mod_inst.id.to_string(), 
+                    mod_inst.amount, 
+                    mod_inst.operation.clone() as i8
+                ));
+            }
+        }
 
-    let runtime_id = entity.entity_id as u64;
+        let modifiers_count = modifiers.len();
+
+        // Move modifiers into the property
+        je_properties.push(JeProperty::new(VarInt(i32::from(attribute.id)), base_value, modifiers));
+
+        let name = match attribute.id {
+            22 => "minecraft:movement".to_string(),
+            19 => "minecraft:health".to_string(),
+            18 => "minecraft:absorption".to_string(),
+            2  => "minecraft:attack_damage".to_string(),
+            0  => "minecraft:armor".to_string(),
+            16 => "minecraft:knockback_resistance".to_string(),
+            17 => "minecraft:luck".to_string(),
+            13 => "minecraft:follow_range".to_string(),
+            15 => "minecraft:horse.jump_strength".to_string(),
+            // Fallback for others
+            _ => format!("minecraft:attribute.{}", attribute.id), 
+        };
+
+        let be_attribute = BeAttribute {
+            min_value: 0.0,
+            max_value: 3.402_823_5E38,
+            current_value: effective_value as f32,
+            default_min_value: 0.0,
+            default_max_value: 3.402_823_5E38,
+            default_value: base_value as f32,
+            name,
+            modifiers_list_size: VarUInt(modifiers_count as u32),
+        };
+
+        be_attributes.push(be_attribute);
+    }
+
+    let je_packet = JePacket::new(living.entity.entity_id.into(), je_properties);
+
+    let runtime_id = living.entity.entity_id as u64;
     let be_packet = BePacket {
         runtime_id: VarULong(runtime_id),
-        attributes: vec![be_attribute],
+        attributes: be_attributes,
         player_tick: VarULong(0),
     };
 
-    // Broadcast to all connected clients
-    entity
+    living
+        .entity
         .world
         .load()
         .broadcast_editioned(&je_packet, &be_packet)
@@ -174,7 +207,7 @@ impl AttributeRegistry {
         attribute.default_value
     }
 
-    /// Return a vector of overrides (attribute_id, base_value) for the given entity type id.
+    /// Return a vector of overrides for the given entity type id.
     /// This allows populating per-entity local attribute instances at spawn time.
     pub fn get_overrides_for_entity(&self, entity_type_id: u16) -> Option<Vec<(u8, f64)>> {
         self.map.get(&entity_type_id).map(|m| m.iter().map(|(&k, &v)| (k, v)).collect())

@@ -35,7 +35,6 @@ use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::AttributeModifier;
 use pumpkin_protocol::java::client::play::{
     Animation, CEntityAnimation, CHurtAnimation, CSetPlayerInventory, CTakeItemEntity, CUpdateMobEffect,
 };
@@ -269,17 +268,27 @@ impl LivingEntity {
                         Operation::AddMultipliedTotal =>
                             ModifierOperation::MultiplyTotal,
                     };
+                    let scaled_amount = m.base_value * f64::from(effect.amplifier + 1);
                     let mod_inst = Modifier {
                         id: uuid,
-                        amount: m.base_value,
+                        amount: scaled_amount,
                         operation: op,
                     };
 
                     self.entity.update_attribute(m.attribute, |inst| inst.add_modifier(mod_inst.clone()));
                 }
 
-                // Recompute packet modifiers from active effects (same logic as before)
-                self.send_attribute_update().await;
+                // Recompute packet modifiers from active effects for each affected attribute
+                let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
+                for m in effect.effect_type.attribute_modifiers.iter() {
+                    if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
+                        touched_attrs.push(m.attribute.clone());
+                    }
+                }
+
+                if !touched_attrs.is_empty() {
+                    crate::entity::attributes::send_attribute_updates_for_living(self, touched_attrs).await;
+                }
             }
         }
 
@@ -310,26 +319,43 @@ impl LivingEntity {
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
+        // Remove the effect
         let succeeded = self
             .active_effects
             .lock()
             .await
             .remove(&effect_type)
             .is_some();
+
+        // Broadcast effect removal
         self.entity
             .world
             .load()
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
 
-        // Effect removal may change attributes: remove modifier entries from instances
+        // Remove attribute modifiers, if any
         if !effect_type.attribute_modifiers.is_empty() {
-            for m in effect_type.attribute_modifiers.iter() {
+            let mut touched_attrs = Vec::new();
+
+            for m in effect_type.attribute_modifiers {
                 let uuid = Uuid::new_v3(&Uuid::NAMESPACE_OID, m.id.as_bytes());
-                self.entity.update_attribute(m.attribute, |inst| inst.remove_modifier(uuid));
+                
+                // Clean local server state
+                self.entity.update_attribute(m.attribute, |inst| {
+                    inst.modifiers.retain(|mod_inst| mod_inst.id != uuid);
+                });
+
+                // Track unique attributes for the packet update
+                if !touched_attrs.iter().any(|a: &Attributes| a.id == m.attribute.id) {
+                    touched_attrs.push(m.attribute.clone());
+                }
             }
 
-            self.send_attribute_update().await;
+            // Sync the clean state to the client
+            if !touched_attrs.is_empty() {
+                crate::entity::attributes::send_attribute_updates_for_living(self, touched_attrs).await;
+            }
         }
         succeeded
     }
@@ -345,6 +371,7 @@ impl LivingEntity {
     }
 
     /// Calculates the movement speed with all effect modifiers applied
+    /// TODO: remove this
     pub async fn get_effective_movement_speed(&self) -> f64 {
         let base_speed = self.movement_speed.load();
         let mut speed = base_speed;
@@ -364,34 +391,7 @@ impl LivingEntity {
         speed
     }
 
-    /// Sends an attribute update for this entity to clients.
-    /// TODO: move to attributes module and generalize to support any attribute (not just movement speed)
-    pub async fn send_attribute_update(&self) {
-        // Build modifiers from active effects (retain previous behaviour for packet contents)
-        let base_speed = self.movement_speed.load();
-        let mut modifiers: Vec<AttributeModifier> = Vec::new();
-
-        if let Some(effect) = self.get_effect(&StatusEffect::SPEED).await {
-            let amount = 0.20000000298023224 * f64::from(effect.amplifier + 1);
-            modifiers.push(AttributeModifier::new("minecraft:effect.speed".to_string(), amount, 2));
-        }
-        if let Some(effect) = self.get_effect(&StatusEffect::SLOWNESS).await {
-            let amount = -0.15000000596046448 * f64::from(effect.amplifier + 1);
-            modifiers.push(AttributeModifier::new("minecraft:effect.slowness".to_string(), amount, 2));
-        }
-
-        let effective_speed = self.get_effective_movement_speed().await;
-
-        // Delegate actual packet building & broadcasting to the attributes module
-        crate::entity::attributes::broadcast_attribute_update(
-            &self.entity,
-            Attributes::MOVEMENT_SPEED,
-            base_speed,
-            modifiers,
-            effective_speed,
-        )
-        .await;
-    }
+    
 
     pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
         let block_pos = self.entity.block_pos.load();
@@ -692,7 +692,8 @@ impl LivingEntity {
 
             let mut speed = 0.02;
 
-            let mut water_movement_efficiency = 0.0; // TODO: Entity attribute
+            // Apply water movement efficiency attribute
+            let mut water_movement_efficiency = self.entity.get_attribute_value(&Attributes::WATER_MOVEMENT_EFFICIENCY);
 
             if water_movement_efficiency > 0.0 {
                 if !self.entity.on_ground.load(SeqCst) {
@@ -932,7 +933,6 @@ impl LivingEntity {
 
         strength *= f64::from(self.entity.get_jump_velocity_multiplier().await);
 
-        // TODO: redundant?
         if let Some(effect) = self.get_effect(&StatusEffect::JUMP_BOOST).await {
             strength += 0.1 * f64::from(effect.amplifier + 1);
         }
@@ -1167,19 +1167,35 @@ impl LivingEntity {
 
         // Remove expired effects packets and attribute updates
         for &effect_type in &effects_to_remove {
+            // Notify client to remove the icon/particle effects
             self.entity
                 .world
                 .load()
                 .send_remove_mob_effect(&self.entity, effect_type)
                 .await;
+
+            // Remove the actual modifiers from the attribute system
+            for m in effect_type.attribute_modifiers.iter() {
+                let uuid = Uuid::new_v3(&Uuid::NAMESPACE_OID, m.id.as_bytes());
+                self.entity.update_attribute(m.attribute, |inst| {
+                    inst.modifiers.retain(|mod_inst| mod_inst.id != uuid);
+                });
+            }
         }
 
-        // If we removed any effects with attribute modifiers, send an attribute update
-        if effects_to_remove
-            .iter()
-            .any(|e| !e.attribute_modifiers.is_empty())
-        {
-            self.send_attribute_update().await;
+        // Identify which attributes need a network sync
+        let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
+        for &eff in &effects_to_remove {
+            for m in eff.attribute_modifiers.iter() {
+                if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
+                    touched_attrs.push(m.attribute.clone());
+                }
+            }
+        }
+
+        // Broadcast the cleaned-up attributes
+        if !touched_attrs.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(self, touched_attrs).await;
         }
 
         // Apply active effects
@@ -1191,7 +1207,7 @@ impl LivingEntity {
     /// Determines if an effect should apply its tick effect this frame
     /// Based on vanilla Minecraft's effect tick frequencies
     ///
-    /// TODO: villager, infested, beacon, and other effects.
+    /// TODO: villager, beacon, and other effects.
     fn should_apply_effect_tick(effect: &pumpkin_data::potion::Effect) -> bool {
         let duration = effect.duration;
         let effect_type = effect.effect_type;
