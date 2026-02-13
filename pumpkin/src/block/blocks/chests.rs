@@ -658,9 +658,7 @@ impl BlockBehaviour for TrappedChestBlock {
         &'a self,
         args: OnSyncedBlockEventArgs<'a>,
     ) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            args.r#type == ChestBlock::LID_ANIMATION_EVENT_TYPE
-        })
+        Box::pin(async move { args.r#type == ChestBlock::LID_ANIMATION_EVENT_TYPE })
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
@@ -800,8 +798,11 @@ impl BlockBehaviour for TrappedChestBlock {
         Box::pin(async move {
             use pumpkin_world::block::entities::trapped_chest::TrappedChestBlockEntity;
 
-            let viewer_count = if let Some(block_entity) = args.world.get_block_entity(args.position).await
-                && let Some(trapped_chest) = block_entity.as_any().downcast_ref::<TrappedChestBlockEntity>()
+            let viewer_count = if let Some(block_entity) =
+                args.world.get_block_entity(args.position).await
+                && let Some(trapped_chest) = block_entity
+                    .as_any()
+                    .downcast_ref::<TrappedChestBlockEntity>()
             {
                 trapped_chest.get_viewer_count()
             } else {

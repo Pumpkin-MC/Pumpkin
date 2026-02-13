@@ -132,10 +132,7 @@ impl ViewerCountListener for TrappedChestBlockEntity {
 
             // Update neighbors for redstone signal when viewer count changes
             if old != new {
-                world
-                    .clone()
-                    .update_neighbors(position, None)
-                    .await;
+                world.clone().update_neighbors(position, None).await;
             }
         })
     }
