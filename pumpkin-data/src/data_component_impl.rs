@@ -846,10 +846,7 @@ impl DataComponentImpl for FireworksImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
         compound.put_int("flight_duration", self.flight_duration);
-        let explosions_list: Vec<NbtTag> = self.explosions
-            .iter()
-            .map(|e| e.write_data())
-            .collect();
+        let explosions_list: Vec<NbtTag> = self.explosions.iter().map(|e| e.write_data()).collect();
         compound.put_list("explosions", explosions_list);
         NbtTag::Compound(compound)
     }

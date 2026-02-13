@@ -2,9 +2,9 @@ use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    DamageImpl, DataComponentImpl, EnchantmentsImpl, FireworkExplosionImpl,
-    FireworkExplosionShape, FireworksImpl, MaxStackSizeImpl, PotionContentsImpl,
-    StatusEffectInstance, UnbreakableImpl, get,
+    DamageImpl, DataComponentImpl, EnchantmentsImpl, FireworkExplosionImpl, FireworkExplosionShape,
+    FireworksImpl, MaxStackSizeImpl, PotionContentsImpl, StatusEffectInstance, UnbreakableImpl,
+    get,
 };
 use serde::de;
 use serde::de::SeqAccess;
@@ -286,7 +286,9 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
         // Shape (VarInt enum)
         let shape_id = seq
             .next_element::<VarInt>()?
-            .ok_or(de::Error::custom("No FireworkExplosionImpl shape_id VarInt!"))?
+            .ok_or(de::Error::custom(
+                "No FireworkExplosionImpl shape_id VarInt!",
+            ))?
             .0;
         let shape = FireworkExplosionShape::from_id(shape_id)
             .ok_or(de::Error::custom("Invalid FireworkExplosionShape id!"))?;
@@ -294,7 +296,9 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
         // Colors list
         let colors_len = seq
             .next_element::<VarInt>()?
-            .ok_or(de::Error::custom("No FireworkExplosionImpl colors_len VarInt!"))?
+            .ok_or(de::Error::custom(
+                "No FireworkExplosionImpl colors_len VarInt!",
+            ))?
             .0 as usize;
         let mut colors = Vec::with_capacity(colors_len);
         for _ in 0..colors_len {
@@ -308,26 +312,30 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
         // Fade colors list
         let fade_colors_len = seq
             .next_element::<VarInt>()?
-            .ok_or(de::Error::custom("No FireworkExplosionImpl fade_colors_len VarInt!"))?
+            .ok_or(de::Error::custom(
+                "No FireworkExplosionImpl fade_colors_len VarInt!",
+            ))?
             .0 as usize;
         let mut fade_colors = Vec::with_capacity(fade_colors_len);
         for _ in 0..fade_colors_len {
             let color = seq
                 .next_element::<VarInt>()?
-                .ok_or(de::Error::custom("No FireworkExplosionImpl fade_color VarInt!"))?
+                .ok_or(de::Error::custom(
+                    "No FireworkExplosionImpl fade_color VarInt!",
+                ))?
                 .0;
             fade_colors.push(color);
         }
 
         // hasTrail
-        let has_trail = seq
-            .next_element::<bool>()?
-            .ok_or(de::Error::custom("No FireworkExplosionImpl has_trail bool!"))?;
+        let has_trail = seq.next_element::<bool>()?.ok_or(de::Error::custom(
+            "No FireworkExplosionImpl has_trail bool!",
+        ))?;
 
         // hasTwinkle
-        let has_twinkle = seq
-            .next_element::<bool>()?
-            .ok_or(de::Error::custom("No FireworkExplosionImpl has_twinkle bool!"))?;
+        let has_twinkle = seq.next_element::<bool>()?.ok_or(de::Error::custom(
+            "No FireworkExplosionImpl has_twinkle bool!",
+        ))?;
 
         Ok(Self::new(
             shape,
@@ -355,7 +363,9 @@ impl DataComponentCodec<Self> for FireworksImpl {
         // Flight duration (VarInt)
         let flight_duration = seq
             .next_element::<VarInt>()?
-            .ok_or(de::Error::custom("No FireworksImpl flight_duration VarInt!"))?
+            .ok_or(de::Error::custom(
+                "No FireworksImpl flight_duration VarInt!",
+            ))?
             .0;
 
         // Explosions list
