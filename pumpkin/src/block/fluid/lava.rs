@@ -38,7 +38,7 @@ impl FlowingLava {
         let is_still = world.get_block_state_id(block_pos).await == Block::LAVA.default_state.id;
 
         for dir in BlockDirection::flow_directions() {
-            let neighbor_pos = block_pos.offset(dir.opposite().to_offset());
+            let neighbor_pos = block_pos.offset(dir.to_offset());
             if world.get_block(&neighbor_pos).await == &Block::WATER {
                 let block = if is_still {
                     Block::OBSIDIAN
