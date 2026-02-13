@@ -5,11 +5,11 @@ use crate::entity::{
     mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
 };
 
-pub struct SkeletonEntity {
+pub struct ParchedSkeletonEntity {
     entity: Arc<SkeletonEntityBase>,
 }
 
-impl SkeletonEntity {
+impl ParchedSkeletonEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
         let entity = SkeletonEntityBase::new(entity).await;
         let zombie = Self { entity };
@@ -17,9 +17,9 @@ impl SkeletonEntity {
     }
 }
 
-impl NBTStorage for SkeletonEntity {}
+impl NBTStorage for ParchedSkeletonEntity {}
 
-impl Mob for SkeletonEntity {
+impl Mob for ParchedSkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
     }
