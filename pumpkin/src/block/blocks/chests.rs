@@ -12,7 +12,7 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
-use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
@@ -23,8 +23,8 @@ use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
 
 use crate::block::{
-    BlockFuture, BrokenArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
-    RandomTickArgs,
+    BlockFuture, BrokenArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs, NormalUseArgs,
+    OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs, RandomTickArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -628,6 +628,206 @@ async fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
     let above_state = world.get_block_state(&above_pos).await;
     above_state.is_solid_block()
 }
+/// Trapped chests have the same behavior as wooden chests but also emit redstone power based on viewer count.
+#[pumpkin_block("minecraft:trapped_chest")]
+pub struct TrappedChestBlock;
+
+impl BlockBehaviour for TrappedChestBlock {
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut chest_props = ChestLikeProperties::default(args.block);
+
+            chest_props.waterlogged = args.replacing.water_source();
+
+            let (r#type, facing) = compute_chest_props(
+                args.world,
+                args.player,
+                args.block,
+                args.position,
+                args.direction,
+            )
+            .await;
+            chest_props.facing = facing;
+            chest_props.r#type = r#type;
+
+            chest_props.to_state_id(args.block)
+        })
+    }
+
+    fn on_synced_block_event<'a>(
+        &'a self,
+        args: OnSyncedBlockEventArgs<'a>,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            args.r#type == ChestBlock::LID_ANIMATION_EVENT_TYPE
+        })
+    }
+
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            use pumpkin_world::block::entities::trapped_chest::TrappedChestBlockEntity;
+
+            let chest = TrappedChestBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(chest)).await;
+
+            let chest_props = ChestLikeProperties::from_state_id(args.state_id, args.block);
+            let connected_towards = match chest_props.r#type {
+                ChestType::Single => return,
+                ChestType::Left => chest_props.facing.rotate_clockwise(),
+                ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
+            };
+
+            if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
+                args.world,
+                args.block,
+                args.position,
+                chest_props.facing,
+                connected_towards,
+                ChestType::Single,
+            )
+            .await
+            {
+                neighbor_props.r#type = chest_props.r#type.opposite();
+
+                args.world
+                    .set_block_state(
+                        &args.position.offset(connected_towards.to_offset()),
+                        neighbor_props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_LISTENERS,
+                    )
+                    .await;
+            }
+        })
+    }
+
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let (state, first_chest) = join(
+                args.world.get_block_state_id(args.position),
+                args.world.get_block_entity(args.position),
+            )
+            .await;
+
+            let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
+                return BlockActionResult::Fail;
+            };
+
+            let chest_props = ChestLikeProperties::from_state_id(state, args.block);
+            let connected_towards = match chest_props.r#type {
+                ChestType::Single => None,
+                ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
+                ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
+            };
+
+            if is_chest_blocked(args.world, args.position).await {
+                return BlockActionResult::Success;
+            }
+
+            if let Some(direction) = connected_towards {
+                let neighbor_pos = args.position.offset(direction.to_offset());
+                if is_chest_blocked(args.world, &neighbor_pos).await {
+                    return BlockActionResult::Success;
+                }
+            }
+
+            let inventory = if let Some(direction) = connected_towards
+                && let Some(second_inventory) = args
+                    .world
+                    .get_block_entity(&args.position.offset(direction.to_offset()))
+                    .await
+                    .and_then(BlockEntity::get_inventory)
+            {
+                if matches!(chest_props.r#type, ChestType::Right) {
+                    DoubleInventory::new(first_inventory, second_inventory)
+                } else {
+                    DoubleInventory::new(second_inventory, first_inventory)
+                }
+            } else {
+                first_inventory
+            };
+
+            args.player
+                .open_handled_screen(&ChestScreenFactory(inventory))
+                .await;
+
+            BlockActionResult::Success
+        })
+    }
+
+    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let chest_props = ChestLikeProperties::from_state_id(args.state.id, args.block);
+            let connected_towards = match chest_props.r#type {
+                ChestType::Single => return,
+                ChestType::Left => chest_props.facing.rotate_clockwise(),
+                ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
+            };
+
+            if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
+                args.world,
+                args.block,
+                args.position,
+                chest_props.facing,
+                connected_towards,
+                chest_props.r#type.opposite(),
+            )
+            .await
+            {
+                neighbor_props.r#type = ChestType::Single;
+
+                args.world
+                    .set_block_state(
+                        &args.position.offset(connected_towards.to_offset()),
+                        neighbor_props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_LISTENERS,
+                    )
+                    .await;
+            }
+        })
+    }
+
+    fn emits_redstone_power<'a>(
+        &'a self,
+        _args: EmitsRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move { true })
+    }
+
+    fn get_weak_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            use pumpkin_world::block::entities::trapped_chest::TrappedChestBlockEntity;
+
+            let viewer_count = if let Some(block_entity) = args.world.get_block_entity(args.position).await
+                && let Some(trapped_chest) = block_entity.as_any().downcast_ref::<TrappedChestBlockEntity>()
+            {
+                trapped_chest.get_viewer_count()
+            } else {
+                0
+            };
+
+            viewer_count.min(15) as u8
+        })
+    }
+
+    fn get_strong_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            // Strong power only emitted upward (Direction::UP)
+            if args.direction == BlockDirection::Down {
+                // When checking from below (direction is Down), emit strong power
+                self.get_weak_redstone_power(args).await
+            } else {
+                0
+            }
+        })
+    }
+}
+
 trait ChestTypeExt {
     fn opposite(&self) -> ChestType;
 }

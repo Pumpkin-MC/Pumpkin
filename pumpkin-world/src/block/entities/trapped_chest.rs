@@ -29,7 +29,7 @@ use crate::{
 
 use super::BlockEntity;
 
-pub struct ChestBlockEntity {
+pub struct TrappedChestBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub dirty: AtomicBool,
@@ -38,7 +38,7 @@ pub struct ChestBlockEntity {
     viewers: ViewerCountTracker,
 }
 
-impl BlockEntity for ChestBlockEntity {
+impl BlockEntity for TrappedChestBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
@@ -70,8 +70,6 @@ impl BlockEntity for ChestBlockEntity {
         Box::pin(async move {
             self.write_data(nbt, &self.items, true).await;
         })
-        // Safety precaution
-        //self.clear().await;
     }
 
     fn tick<'a>(
@@ -98,7 +96,7 @@ impl BlockEntity for ChestBlockEntity {
     }
 }
 
-impl ViewerCountListener for ChestBlockEntity {
+impl ViewerCountListener for TrappedChestBlockEntity {
     fn on_container_open<'a>(
         &'a self,
         world: &'a Arc<dyn SimpleWorld>,
@@ -123,20 +121,30 @@ impl ViewerCountListener for ChestBlockEntity {
         &'a self,
         world: &'a Arc<dyn SimpleWorld>,
         position: &'a BlockPos,
-        _old: u16,
+        old: u16,
         new: u16,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
+            // Trigger block animation
             world
                 .add_synced_block_event(*position, Self::LID_ANIMATION_EVENT_TYPE, new as u8)
                 .await;
+
+            // Update neighbors for redstone signal when viewer count changes
+            if old != new {
+                world
+                    .clone()
+                    .update_neighbors(position, None)
+                    .await;
+            }
         })
     }
 }
-impl ChestBlockEntity {
+
+impl TrappedChestBlockEntity {
     pub const INVENTORY_SIZE: usize = 27;
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
-    pub const ID: &'static str = "minecraft:chest";
+    pub const ID: &'static str = "minecraft:trapped_chest";
 
     /// Returns the number of players currently viewing this chest
     pub fn get_viewer_count(&self) -> u16 {
@@ -188,7 +196,7 @@ impl ChestBlockEntity {
     }
 }
 
-impl Inventory for ChestBlockEntity {
+impl Inventory for TrappedChestBlockEntity {
     fn size(&self) -> usize {
         self.items.len()
     }
@@ -249,7 +257,7 @@ impl Inventory for ChestBlockEntity {
     }
 }
 
-impl Clearable for ChestBlockEntity {
+impl Clearable for TrappedChestBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
             for slot in &self.items {
