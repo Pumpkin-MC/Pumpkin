@@ -64,6 +64,14 @@ impl TrackTargetGoal {
         }
         let mob_entity = mob.get_mob_entity();
         let target = target.unwrap();
+
+        // Prevent targeting creative players
+        if let Some(player) = target.entity.as_player() {
+            if player.gamemode().is_creative() {
+                return false;
+            }
+        }
+
         let world = mob_entity.living_entity.entity.world.load_full();
         if !target_predicate.test(&world, Some(&mob_entity.living_entity), target) {
             return false;
