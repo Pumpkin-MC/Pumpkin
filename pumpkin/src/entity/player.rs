@@ -140,12 +140,14 @@ pub struct ChunkManager {
     chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
+    last_chunk_batch_sent_at: Instant,
     /// The current world for chunk loading. Updated on dimension change.
     world: Arc<World>,
 }
 
 impl ChunkManager {
     pub const NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE: u8 = 10;
+    const ACK_STALL_FALLBACK_DELAY: Duration = Duration::from_millis(250);
 
     #[must_use]
     pub fn new(
@@ -162,6 +164,7 @@ impl ChunkManager {
             chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
+            last_chunk_batch_sent_at: Instant::now(),
             world,
         }
     }
@@ -177,6 +180,21 @@ impl ChunkManager {
             .insert(position, Arc::downgrade(chunk))
             .and_then(|old_chunk| old_chunk.upgrade())
             .is_none_or(|old_chunk| !Arc::ptr_eq(&old_chunk, chunk))
+    }
+
+    #[must_use]
+    const fn ack_window_open(&self) -> bool {
+        match self.batches_sent_since_ack {
+            BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
+            BatchState::Initial => true,
+            BatchState::Waiting => false,
+        }
+    }
+
+    #[must_use]
+    fn ack_fallback_ready(&self) -> bool {
+        !self.ack_window_open()
+            && self.last_chunk_batch_sent_at.elapsed() >= Self::ACK_STALL_FALLBACK_DELAY
     }
 
     pub fn pull_new_chunks(&mut self) {
@@ -267,6 +285,7 @@ impl ChunkManager {
         self.chunk_queue.clear();
         self.entity_chunk_queue.clear();
         self.batches_sent_since_ack = BatchState::Initial;
+        self.last_chunk_batch_sent_at = Instant::now();
     }
 
     pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
@@ -282,6 +301,7 @@ impl ChunkManager {
         self.world = new_world;
         // Reset batch state so chunks can be sent immediately in the new dimension
         self.batches_sent_since_ack = BatchState::Initial;
+        self.last_chunk_batch_sent_at = Instant::now();
     }
 
     pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
@@ -304,17 +324,13 @@ impl ChunkManager {
 
     #[must_use]
     pub fn can_send_chunk(&self) -> bool {
-        let state_available = match self.batches_sent_since_ack {
-            BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
-            BatchState::Initial => true,
-            BatchState::Waiting => false,
-        };
+        let state_available = self.ack_window_open() || self.ack_fallback_ready();
 
         state_available && !self.chunk_queue.is_empty()
     }
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
-        let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
+        let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick.max(1));
         let mut chunks = Vec::<Arc<ChunkData>>::with_capacity(chunk_size);
         while chunk_size > 0 {
             chunks.push(self.chunk_queue.pop().unwrap().2);
@@ -327,6 +343,7 @@ impl ChunkManager {
             state @ BatchState::Initial => *state = BatchState::Waiting,
             BatchState::Waiting => (),
         }
+        self.last_chunk_batch_sent_at = Instant::now();
 
         chunks.into_boxed_slice()
     }
