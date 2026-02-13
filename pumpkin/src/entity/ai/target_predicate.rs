@@ -1,7 +1,7 @@
-use pumpkin_util::Difficulty;
 use crate::entity::EntityBase;
 use crate::entity::living::LivingEntity;
 use crate::world::World;
+use pumpkin_util::Difficulty;
 use pumpkin_util::gamemode::GameMode;
 use std::future::Future;
 use std::pin::Pin;
