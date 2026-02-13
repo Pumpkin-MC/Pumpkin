@@ -636,7 +636,7 @@ impl Fluid {
             _ => None,
         }
     }
-    #[allow(unreachable_patterns)]
+    #[allow(unreachable_patterns, clippy::match_overlapping_arm)]
     pub const fn from_state_id(id: u16) -> Option<&'static Self> {
         match id {
             0u16..=0u16 => Some(&Fluid::EMPTY),

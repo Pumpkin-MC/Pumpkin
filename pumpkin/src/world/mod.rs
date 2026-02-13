@@ -3110,7 +3110,7 @@ impl World {
         let block = Block::from_state_id(id);
 
         let fluid = Fluid::from_state_id(id)
-            .map(|f| f.to_flowing())
+            .map(Fluid::to_flowing)
             .ok_or(&Fluid::EMPTY)
             .unwrap_or_else(|_| {
                 block

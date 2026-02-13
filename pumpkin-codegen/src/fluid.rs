@@ -732,7 +732,7 @@ pub fn build() -> TokenStream {
                     _ => None
                 }
             }
-            #[allow(unreachable_patterns)]
+            #[allow(unreachable_patterns, clippy::match_overlapping_arm)]
             pub const fn from_state_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #fluid_from_state_id
