@@ -65,9 +65,10 @@ impl TrackTargetGoal {
         let mob_entity = mob.get_mob_entity();
         let target = target.unwrap();
 
-        // Prevent targeting creative players
-        if let Some(player) = target.entity.as_player() {
-            if player.gamemode().is_creative() {
+        // ⭐ Prevent targeting creative players (NEW)
+        if let Some(player) = target.entity.get_player() {
+            let gm = player.gamemode().load();
+            if gm.is_creative() {
                 return false;
             }
         }
