@@ -107,7 +107,7 @@ impl TargetPredicate {
             return false;
         }
 
-        // Prevent targeting Creative‑mode players 
+        // Prevent targeting Creative‑mode players
         if let Some(player) = target.entity.get_player() {
             let gm = player.gamemode.load();
             if gm == GameMode::Creative {
