@@ -464,7 +464,7 @@ impl BlockBehaviour for TrappedChestBlock {
             use pumpkin_world::block::entities::trapped_chest::TrappedChestBlockEntity;
 
             // Get viewer count from this chest
-            let mut viewer_count = if let Some(block_entity) =
+            let viewer_count = if let Some(block_entity) =
                 args.world.get_block_entity(args.position).await
                 && let Some(trapped_chest) = block_entity
                     .as_any()
@@ -474,25 +474,6 @@ impl BlockBehaviour for TrappedChestBlock {
             } else {
                 0
             };
-
-            // For double chests, check the connected chest too
-            let chest_props = ChestLikeProperties::from_state_id(args.state.id, args.block);
-            if chest_props.r#type != ChestType::Single {
-                let connected_direction = match chest_props.r#type {
-                    ChestType::Left => chest_props.facing.rotate_clockwise(),
-                    ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
-                    ChestType::Single => unreachable!(),
-                };
-
-                let connected_pos = args.position.offset(connected_direction.to_offset());
-                if let Some(connected_entity) = args.world.get_block_entity(&connected_pos).await
-                    && let Some(connected_chest) = connected_entity
-                        .as_any()
-                        .downcast_ref::<TrappedChestBlockEntity>()
-                {
-                    viewer_count = viewer_count.max(connected_chest.get_viewer_count());
-                }
-            }
 
             viewer_count.min(15) as u8
         })
