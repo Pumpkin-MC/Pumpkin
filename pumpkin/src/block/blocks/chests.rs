@@ -182,7 +182,7 @@ impl BlockBehaviour for ChestBlock {
             };
 
             args.player
-                .open_handled_screen(&ChestScreenFactory(inventory))
+                .open_handled_screen(&ChestScreenFactory(inventory), Some(*args.position))
                 .await;
 
             BlockActionResult::Success
@@ -330,7 +330,7 @@ impl BlockBehaviour for CopperChestBlock {
             };
 
             args.player
-                .open_handled_screen(&ChestScreenFactory(inventory))
+                .open_handled_screen(&ChestScreenFactory(inventory), Some(*args.position))
                 .await;
 
             BlockActionResult::Success

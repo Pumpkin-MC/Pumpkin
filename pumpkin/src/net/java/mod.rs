@@ -61,6 +61,7 @@ pub mod status;
 
 use crate::entity::player::Player;
 use crate::net::{GameProfile, PlayerConfig};
+use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
 pub struct JavaClient {
@@ -790,7 +791,13 @@ impl JavaClient {
                     .await;
             }
             id if id == SCustomPayload::PACKET_ID => {
-                // TODO: this fixes Failed to handle player packet id for now
+                let payload = SCustomPayload::read(payload)?;
+                let event = PlayerCustomPayloadEvent::new(
+                    player.clone(),
+                    payload.channel,
+                    Bytes::from(payload.data),
+                );
+                server.plugin_manager.fire(event).await;
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);

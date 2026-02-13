@@ -89,7 +89,7 @@ impl BlockBehaviour for DropperBlock {
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
-                    .open_handled_screen(&DropperScreenFactory(inventory))
+                    .open_handled_screen(&DropperScreenFactory(inventory), Some(*args.position))
                     .await;
             }
             BlockActionResult::Success
