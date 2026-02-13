@@ -1993,7 +1993,7 @@ impl JavaClient {
     fn has_blocking_entity_in_box(world: &World, placed_box: &BoundingBox) -> bool {
         let players = world.players.load();
         if players.iter().any(|player| {
-            !player.is_spectator()
+            Self::entity_blocks_block_placement(player.as_ref())
                 && player
                     .get_entity()
                     .bounding_box
