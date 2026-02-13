@@ -463,7 +463,8 @@ impl BlockBehaviour for TrappedChestBlock {
         Box::pin(async move {
             use pumpkin_world::block::entities::trapped_chest::TrappedChestBlockEntity;
 
-            let viewer_count = if let Some(block_entity) =
+            // Get viewer count from this chest
+            let mut viewer_count = if let Some(block_entity) =
                 args.world.get_block_entity(args.position).await
                 && let Some(trapped_chest) = block_entity
                     .as_any()
@@ -474,6 +475,25 @@ impl BlockBehaviour for TrappedChestBlock {
                 0
             };
 
+            // For double chests, check the connected chest too
+            let chest_props = ChestLikeProperties::from_state_id(args.state.id, args.block);
+            if chest_props.r#type != ChestType::Single {
+                let connected_direction = match chest_props.r#type {
+                    ChestType::Left => chest_props.facing.rotate_clockwise(),
+                    ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
+                    ChestType::Single => unreachable!(),
+                };
+
+                let connected_pos = args.position.offset(connected_direction.to_offset());
+                if let Some(connected_entity) = args.world.get_block_entity(&connected_pos).await
+                    && let Some(connected_chest) = connected_entity
+                        .as_any()
+                        .downcast_ref::<TrappedChestBlockEntity>()
+                {
+                    viewer_count = viewer_count.max(connected_chest.get_viewer_count());
+                }
+            }
+
             viewer_count.min(15) as u8
         })
     }
@@ -483,9 +503,9 @@ impl BlockBehaviour for TrappedChestBlock {
         args: GetRedstonePowerArgs<'a>,
     ) -> BlockFuture<'a, u8> {
         Box::pin(async move {
-            // Strong power only emitted downward to blocks beneath the trapped chest
-            if args.direction == BlockDirection::Down {
-                // Checking the bottom face of the trapped chest - emit strong power
+            // Strong power emitted to the block beneath the trapped chest
+            // The block below queries with direction Up (from below looking up at the chest)
+            if args.direction == BlockDirection::Up {
                 self.get_weak_redstone_power(args).await
             } else {
                 0
