@@ -4,8 +4,8 @@ use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
 use std::ops::AddAssign;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
@@ -135,7 +135,7 @@ pub struct ChunkManager {
     center: Vector2<i32>,
     view_distance: u8,
     chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
-    chunk_sent: HashMap<Vector2<i32>, usize>,
+    chunk_sent: HashMap<Vector2<i32>, Weak<ChunkData>>,
     chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
@@ -172,8 +172,10 @@ impl ChunkManager {
     }
 
     fn should_enqueue_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) -> bool {
-        let chunk_ptr = Arc::as_ptr(chunk) as usize;
-        self.chunk_sent.insert(position, chunk_ptr) != Some(chunk_ptr)
+        self.chunk_sent
+            .insert(position, Arc::downgrade(chunk))
+            .and_then(|old_chunk| old_chunk.upgrade())
+            .is_none_or(|old_chunk| !Arc::ptr_eq(&old_chunk, chunk))
     }
 
     pub fn pull_new_chunks(&mut self) {
