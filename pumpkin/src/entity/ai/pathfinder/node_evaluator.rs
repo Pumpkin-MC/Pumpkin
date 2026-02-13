@@ -108,7 +108,7 @@ impl MobData {
     }
 
     #[must_use]
-    pub fn block_position(&self) -> (i32, i32, i32) {
+    pub const fn block_position(&self) -> (i32, i32, i32) {
         (
             self.position.x.floor() as i32,
             self.position.y.floor() as i32,

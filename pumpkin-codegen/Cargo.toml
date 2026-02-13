@@ -1,28 +1,24 @@
 [package]
 name = "pumpkin-codegen"
-version = "0.1.0-dev+1.21.11"
-edition = "2024"
-rust-version = "1.89"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-indexmap = { version = "2.7", features = ["serde"] }
-heck = "0.5"
+indexmap = { workspace = true, features = ["serde"] }
+heck.workspace = true
 
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_json5 = "0.2"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
-rayon = "1.11.0"
+rayon.workspace = true
 
-proc-macro2 = "1.0"
-quote = "1.0"
-syn = { version = "2.0", features = ["full", "extra-traits"] }
+proc-macro2.workspace = true
+quote.workspace = true
+syn = { workspace = true, features = ["full", "extra-traits"] }
 
 pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-nbt = { path = "../pumpkin-nbt" }
 
-# [lints]
-# all = { level = "deny", priority = -1 }
-# nursery = { level = "deny", priority = -1 }
-# pedantic = { level = "deny", priority = -1 }
-# cargo = { level = "deny", priority = -1 }
+[lints]
+workspace = true

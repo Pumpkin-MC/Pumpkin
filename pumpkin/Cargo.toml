@@ -77,7 +77,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 # Remove time in favor of chrono?
-time = { workspace = true, features = ["parsing", "macros"] }
+time = { workspace = true, features = ["macros", "parsing"] }
 
 # plugins
 libloading.workspace = true

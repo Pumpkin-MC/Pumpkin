@@ -998,7 +998,7 @@ macro_rules! fix_final_density {
 
 pub fn build() -> TokenStream {
     let mut reprs: NoiseRouterReprs =
-        serde_json5::from_str(&fs::read_to_string("../assets/density_function.json").unwrap())
+        json5::from_str(&fs::read_to_string("../assets/density_function.json").unwrap())
             .expect("could not deserialize density_function.json");
 
     // The `final_density` function is mutated at runtime for the aquifer generator in Java.

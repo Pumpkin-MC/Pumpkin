@@ -54,10 +54,10 @@ pub struct GenerationSchedule {
 
     io_lock: IOLock,
     running_task_count: u16,
-    recv_chunk: crossfire::compat::MRx<(ChunkPos, RecvChunk)>,
-    io_read: crossfire::compat::MTx<ChunkPos>,
-    io_write: crossfire::compat::Tx<Vec<(ChunkPos, Chunk)>>,
-    generate: crossfire::compat::MTx<(ChunkPos, Cache, StagedChunkEnum)>,
+    recv_chunk: crossfire::MRx<crossfire::mpmc::List<(ChunkPos, RecvChunk)>>,
+    io_read: crossfire::MTx<crossfire::mpmc::Array<ChunkPos>>,
+    io_write: crossfire::Tx<crossfire::spsc::Array<Vec<(ChunkPos, Chunk)>>>,
+    generate: crossfire::MTx<crossfire::mpmc::Array<(ChunkPos, Cache, StagedChunkEnum)>>,
     listener: Arc<ChunkListener>,
     lighting_config: LightingEngineConfig,
 }
@@ -71,18 +71,17 @@ impl GenerationSchedule {
         listener: Arc<ChunkListener>,
         thread_tracker: &mut Vec<thread::JoinHandle<()>>,
     ) {
-        let (send_chunk, recv_chunk) = crossfire::compat::mpmc::unbounded_blocking();
+        let (send_chunk, recv_chunk) = crossfire::mpmc::unbounded_blocking();
 
         let (send_read_io, recv_read_io) =
-            crossfire::compat::mpmc::bounded_tx_blocking_rx_async(io_read_thread_count + 5);
+            crossfire::mpmc::bounded_blocking_async(io_read_thread_count + 5);
 
         // Use a bounded single-producer/single-consumer channel to prevent unbounded memory growth
         // when IO can't keep up. If the queue reaches capacity, producers will block until
         // the disk catches up.
-        let (send_write_io, recv_write_io) =
-            crossfire::compat::spsc::bounded_tx_blocking_rx_async(500);
+        let (send_write_io, recv_write_io) = crossfire::spsc::bounded_blocking_async(500);
 
-        let (send_gen, recv_gen) = crossfire::compat::mpmc::bounded_blocking(gen_thread_count + 5);
+        let (send_gen, recv_gen) = crossfire::mpmc::bounded_blocking(gen_thread_count + 5);
 
         let io_lock = Arc::new((Mutex::new(HashMapType::default()), Condvar::new()));
 

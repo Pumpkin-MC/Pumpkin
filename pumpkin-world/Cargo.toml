@@ -18,8 +18,6 @@ tokio = { workspace = true, features = [
     "macros",
     # Maybe remove this in the future
     "rt-multi-thread",
-    "sync",
-    "io-std",
     "signal",
     "fs",
     "io-util",
@@ -59,7 +57,7 @@ crossfire.workspace = true
 criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
 temp-dir.workspace = true
 # Deserialize NaN and Inf
-serde_json5.workspace = true
+json5.workspace = true
 
 [[bench]]
 name = "chunk"

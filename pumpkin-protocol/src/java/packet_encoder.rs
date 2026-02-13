@@ -1,6 +1,7 @@
 use aes::cipher::KeyIvInit;
 use bytes::Bytes;
 use flate2::{Compress, Compression, FlushCompress, Status};
+use replace_with::replace_with_or_abort;
 use thiserror::Error;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
@@ -113,7 +114,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             panic!("Cannot upgrade a stream that already has a cipher!");
         }
         let cipher = Aes128Cfb8Enc::new_from_slices(key, key).expect("invalid key");
-        take_mut::take(&mut self.writer, |encoder| encoder.upgrade(cipher));
+        replace_with_or_abort(&mut self.writer, |encoder| encoder.upgrade(cipher));
     }
 
     fn compress_packet_data(

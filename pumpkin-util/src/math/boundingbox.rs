@@ -184,12 +184,12 @@ impl BoundingBox {
     }
 
     #[must_use]
-    pub fn min_block_pos(&self) -> BlockPos {
+    pub const fn min_block_pos(&self) -> BlockPos {
         BlockPos::floored_v(self.min)
     }
 
     #[must_use]
-    pub fn max_block_pos(&self) -> BlockPos {
+    pub const fn max_block_pos(&self) -> BlockPos {
         BlockPos::ceiled_v(self.max)
     }
 

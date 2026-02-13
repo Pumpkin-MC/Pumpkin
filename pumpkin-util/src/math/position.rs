@@ -280,7 +280,7 @@ impl BlockPos {
     }
 
     #[must_use]
-    pub fn floored(x: f64, y: f64, z: f64) -> Self {
+    pub const fn floored(x: f64, y: f64, z: f64) -> Self {
         Self(Vector3::new(
             x.floor() as i32,
             y.floor() as i32,
@@ -289,7 +289,7 @@ impl BlockPos {
     }
 
     #[must_use]
-    pub fn floored_v(pos: Vector3<f64>) -> Self {
+    pub const fn floored_v(pos: Vector3<f64>) -> Self {
         Self(Vector3::new(
             pos.x.floor() as i32,
             pos.y.floor() as i32,
@@ -298,7 +298,7 @@ impl BlockPos {
     }
 
     #[must_use]
-    pub fn ceiled_v(pos: Vector3<f64>) -> Self {
+    pub const fn ceiled_v(pos: Vector3<f64>) -> Self {
         Self(Vector3::new(
             pos.x.ceil() as i32,
             pos.y.ceil() as i32,

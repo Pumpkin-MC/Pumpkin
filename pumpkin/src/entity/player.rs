@@ -284,7 +284,7 @@ impl ChunkManager {
         self.batches_sent_since_ack = BatchState::Initial;
     }
 
-    pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
+    pub const fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
         self.batches_sent_since_ack = BatchState::Count(0);
         self.chunks_per_tick = chunks_per_tick.ceil() as usize;
     }

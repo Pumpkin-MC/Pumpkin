@@ -6,7 +6,7 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::level::Level;
-use crossfire::compat::AsyncRx;
+use crossfire::AsyncRx;
 use itertools::Itertools;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
@@ -54,8 +54,8 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConf
 }
 
 pub async fn io_read_work(
-    recv: crossfire::compat::MAsyncRx<ChunkPos>,
-    send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
+    recv: crossfire::MAsyncRx<crossfire::mpmc::Array<ChunkPos>>,
+    send: crossfire::MTx<crossfire::mpmc::List<(ChunkPos, RecvChunk)>>,
     level: Arc<Level>,
     lock: IOLock,
 ) {
@@ -171,7 +171,11 @@ pub async fn io_read_work(
     log::debug!("io read thread stop");
 }
 
-pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
+pub async fn io_write_work(
+    recv: AsyncRx<crossfire::spsc::Array<Vec<(ChunkPos, Chunk)>>>,
+    level: Arc<Level>,
+    lock: IOLock,
+) {
     loop {
         // Don't check cancel_token here (keep saving chunks)
         let data = match recv.recv().await {
@@ -226,8 +230,8 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
 }
 
 pub fn generation_work(
-    recv: crossfire::compat::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
-    send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
+    recv: crossfire::MRx<crossfire::mpmc::Array<(ChunkPos, Cache, StagedChunkEnum)>>,
+    send: crossfire::MTx<crossfire::mpmc::List<(ChunkPos, RecvChunk)>>,
     level: Arc<Level>,
 ) {
     let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
