@@ -1,7 +1,8 @@
 use pumpkin_util::Difficulty;
-
+use crate::entity::EntityBase;
 use crate::entity::living::LivingEntity;
 use crate::world::World;
+use pumpkin_util::gamemode::GameMode;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -104,6 +105,14 @@ impl TargetPredicate {
 
         if !target.is_part_of_game() {
             return false;
+        }
+
+        // Prevent targeting Creative‑mode players 
+        if let Some(player) = target.entity.get_player() {
+            let gm = player.gamemode.load();
+            if gm == GameMode::Creative {
+                return false;
+            }
         }
 
         // if let Some(ref p) = self.predicate {
