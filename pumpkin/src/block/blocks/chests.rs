@@ -168,7 +168,7 @@ async fn normal_use_chest_impl(args: NormalUseArgs<'_>) -> BlockActionResult {
     };
 
     args.player
-        .open_handled_screen(&ChestScreenFactory(inventory))
+        .open_handled_screen(&ChestScreenFactory(inventory), Some(*args.position))
         .await;
 
     BlockActionResult::Success

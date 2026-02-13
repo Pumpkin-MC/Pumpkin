@@ -59,7 +59,7 @@ impl BlockBehaviour for HopperBlock {
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
-                    .open_handled_screen(&HopperBlockScreenFactory(inventory))
+                    .open_handled_screen(&HopperBlockScreenFactory(inventory), Some(*args.position))
                     .await;
             }
 
