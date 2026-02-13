@@ -689,7 +689,7 @@ impl JavaClient {
                 let event = PlayerCustomPayloadEvent::new(
                     player.clone(),
                     payload.channel,
-                    Bytes::from(payload.data.into_vec()),
+                    Bytes::from(payload.data),
                 );
                 server.plugin_manager.fire(event).await;
             }
