@@ -5,6 +5,7 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::mob::MobEntity;
+use pumpkin_util::gamemode::GameMode;
 use rand::RngExt;
 
 const UNSET: i32 = 0;
@@ -69,7 +70,7 @@ impl TrackTargetGoal {
         // Prevent targeting creative players
         if let Some(player) = target.entity.get_player() {
             let gm = player.gamemode.load();
-            if gm.is_creative() {
+            if gm == GameMode::Creative {
                 return false;
             }
         }
