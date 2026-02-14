@@ -29,6 +29,7 @@ use crate::{
     server::{Server, seasonal_events},
     world::chunker::{self},
 };
+use tracing::{debug, info};
 
 impl BedrockClient {
     pub async fn handle_request_chunk_radius(
@@ -68,11 +69,9 @@ impl BedrockClient {
         };
 
         if old_view_distance.get() != view_distance as u8 {
-            log::debug!(
+            debug!(
                 "Player {} updated their render distance: {} -> {}.",
-                player.gameprofile.name,
-                old_view_distance,
-                view_distance
+                player.gameprofile.name, old_view_distance, view_distance
             );
             chunker::update_position(player).await;
         }
@@ -145,7 +144,7 @@ impl BedrockClient {
             PlayerChatEvent::new(player.clone(), packet.message, vec![]);
 
             'after: {
-                log::info!("<chat> {}: {}", gameprofile.name, event.message);
+                info!("<chat> {}: {}", gameprofile.name, event.message);
 
                 let config = &server.advanced_config;
 
@@ -213,7 +212,7 @@ impl BedrockClient {
                 });
 
                 if server.advanced_config.commands.log_console {
-                    log::info!(
+                    info!(
                         "Player ({}): executed command /{}",
                         player.gameprofile.name,
                         command

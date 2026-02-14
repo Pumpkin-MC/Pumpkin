@@ -8,6 +8,7 @@ use pumpkin_util::{
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl, get_carver_seed, xoroshiro128::Xoroshiro},
 };
+use tracing::debug;
 
 use crate::generation::structure::structures::stronghold::PieceWeight;
 use crate::generation::structure::structures::stronghold::StrongholdPieceType;
@@ -319,7 +320,7 @@ impl StructurePiece {
         let block_pos = self.offset_pos(x, y, z);
 
         if !box_limit.contains_pos(&block_pos) {
-            log::debug!("Structure out of bounds");
+            debug!("Structure out of bounds");
             return Block::AIR.default_state;
         }
 
@@ -339,7 +340,7 @@ impl StructurePiece {
 
         // Bounds and logic checks
         if !box_limit.contains_pos(&block_pos) {
-            log::debug!("Structure out of bounds");
+            debug!("Structure out of bounds");
             return;
         }
 

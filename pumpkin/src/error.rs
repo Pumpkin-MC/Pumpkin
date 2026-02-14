@@ -1,17 +1,19 @@
-use log::log;
 use pumpkin_inventory::InventoryError;
 use pumpkin_protocol::ser::ReadingError;
 use pumpkin_world::data::player_data::PlayerDataError;
 use std::fmt::Display;
+use tracing::Level;
+
+use crate::log_at_level;
 
 pub trait PumpkinError: Send + std::error::Error + Display {
     fn is_kick(&self) -> bool;
 
     fn log(&self) {
-        log!(self.severity(), "{self}");
+        log_at_level!(self.severity(), "{self}");
     }
 
-    fn severity(&self) -> log::Level;
+    fn severity(&self) -> Level;
 
     fn client_kick_reason(&self) -> Option<String>;
 }
@@ -32,7 +34,7 @@ impl PumpkinError for InventoryError {
             LockError | OutOfOrderDragging | MultiplePlayersDragging => false,
         }
     }
-    fn severity(&self) -> log::Level {
+    fn severity(&self) -> Level {
         use InventoryError::{
             ClosedContainerInteract, InvalidPacket, InvalidSlot, LockError,
             MultiplePlayersDragging, OutOfOrderDragging, PermissionError,
@@ -42,9 +44,9 @@ impl PumpkinError for InventoryError {
             | InvalidSlot
             | ClosedContainerInteract(..)
             | InvalidPacket
-            | PermissionError => log::Level::Error,
-            OutOfOrderDragging => log::Level::Info,
-            MultiplePlayersDragging => log::Level::Warn,
+            | PermissionError => Level::ERROR,
+            OutOfOrderDragging => Level::INFO,
+            MultiplePlayersDragging => Level::WARN,
         }
     }
 
@@ -58,8 +60,8 @@ impl PumpkinError for ReadingError {
         true
     }
 
-    fn severity(&self) -> log::Level {
-        log::Level::Error
+    fn severity(&self) -> Level {
+        Level::ERROR
     }
 
     fn client_kick_reason(&self) -> Option<String> {
@@ -72,8 +74,8 @@ impl PumpkinError for PlayerDataError {
         false
     }
 
-    fn severity(&self) -> log::Level {
-        log::Level::Warn
+    fn severity(&self) -> Level {
+        Level::WARN
     }
 
     fn client_kick_reason(&self) -> Option<String> {

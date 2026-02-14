@@ -8,6 +8,7 @@ use crate::command::tree::RawArgs;
 use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
+use tracing::debug;
 
 use super::super::args::ArgumentConsumer;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
@@ -48,13 +49,13 @@ impl ArgumentConsumer for EntityArgumentConsumer {
         let entity_selector = match s.parse::<TargetSelector>() {
             Ok(selector) => selector,
             Err(e) => {
-                log::debug!("Failed to parse target selector '{s}': {e}");
+                debug!("Failed to parse target selector '{s}': {e}");
                 return Box::pin(async move { None });
             }
         };
 
         if entity_selector.get_limit() > 1 {
-            log::debug!("Target selector '{s}' has limit > 1, expected single entity");
+            debug!("Target selector '{s}' has limit > 1, expected single entity");
             return Box::pin(async move { None });
         }
 
