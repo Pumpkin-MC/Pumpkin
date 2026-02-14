@@ -20,6 +20,7 @@ use crate::error::PumpkinError;
 use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
+use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
@@ -1533,7 +1534,7 @@ impl JavaClient {
 
     pub async fn handle_use_item_on(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         use_item_on: SUseItemOn,
         server: &Arc<Server>,
     ) -> Result<(), BlockPlacingError> {
@@ -2031,7 +2032,7 @@ impl JavaClient {
     #[expect(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         block: &'static Block,
         server: &Server,
         use_item_on: SUseItemOn,
@@ -2185,6 +2186,13 @@ impl JavaClient {
             if Self::has_blocking_entity_in_box(world.as_ref(), &placed_box) {
                 return Ok(false);
             }
+        }
+
+        let event =
+            BlockPlaceEvent::new(player.clone(), block, clicked_block, final_block_pos, true);
+        let event = server.plugin_manager.fire::<BlockPlaceEvent>(event).await;
+        if event.cancelled {
+            return Ok(false);
         }
 
         let _replaced_id = world
