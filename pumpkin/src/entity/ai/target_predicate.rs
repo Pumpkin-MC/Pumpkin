@@ -2,7 +2,6 @@ use crate::entity::EntityBase;
 use crate::entity::living::LivingEntity;
 use crate::world::World;
 use pumpkin_util::Difficulty;
-use pumpkin_util::gamemode::GameMode;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -107,27 +106,23 @@ impl TargetPredicate {
             return false;
         }
 
-        // Prevent targeting Creative‑mode players
-        // (updated to use invulnerability flag as suggested)
-        if let Some(player) = target.entity.get_player() {
-            // Spectator check (vanilla behavior)
-            let gm = player.gamemode.load();
-            if gm == GameMode::Spectator {
-                return false;
-            }
-
-            // Invulnerability check (covers Creative mode)
-            if player.abilities_snapshot().invulnerable {
-                return false;
-            }
+        // This covers both Creative and Spectator players because both are invulnerable.
+        // can_take_damage() is synchronous and uses the entity-level invulnerability flag.
+        if self.attackable && !target.can_take_damage() {
+            return false;
         }
+
+        // if let Some(ref p) = self.predicate {
+        //     if !p(Arc::new(target.clone()), world.clone()).await {
+        //         return false;
+        //     }
+        // }
 
         match tester {
             None => {
                 // 3. Logic for when there is no tester (e.g. searching for a random target)
                 if self.attackable
-                    && (!target.can_take_damage()
-                        || world.level_info.load().difficulty == Difficulty::Peaceful)
+                    && world.level_info.load().difficulty == Difficulty::Peaceful
                 {
                     return false;
                 }
