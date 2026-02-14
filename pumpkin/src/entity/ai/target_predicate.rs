@@ -1,4 +1,3 @@
-use crate::entity::EntityBase;
 use crate::entity::living::LivingEntity;
 use crate::world::World;
 use pumpkin_util::Difficulty;
