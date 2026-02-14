@@ -138,6 +138,7 @@ pub mod scoreboard;
 pub mod weather;
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
+use crate::plugin::events::player::{player_spawn};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
@@ -2153,6 +2154,12 @@ impl World {
 
         // Send teleport packet after at least the center chunk was delivered
         player.request_teleport(position, yaw, pitch).await;
+
+        // Call spawn event
+        if let Some(server) = self.server.upgrade() {
+            let spawnevent = player_spawn::PlayerSpawnEvent::new(player.clone());
+            server.plugin_manager.fire(spawnevent).await;
+        }
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.

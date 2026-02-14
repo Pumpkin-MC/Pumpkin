@@ -1,0 +1,1 @@
+mod inventory_open_event;
