@@ -141,6 +141,7 @@ pkcs8 = "=0.11.0-rc.11"
 proc-macro2 = "1.0"
 pumpkin-config = { path = "pumpkin-config" }
 pumpkin-data = { path = "pumpkin-data" }
+pumpkin-datafixerupper = { path = "pumpkin-datafixerupper" }
 pumpkin-inventory = { path = "pumpkin-inventory" }
 pumpkin-macros = { path = "pumpkin-macros" }
 pumpkin-nbt = { path = "pumpkin-nbt" }
