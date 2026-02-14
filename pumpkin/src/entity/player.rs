@@ -3,7 +3,6 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
-use std::ops::AddAssign;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
@@ -338,7 +337,7 @@ impl ChunkManager {
         }
         match &mut self.batches_sent_since_ack {
             BatchState::Count(count) => {
-                count.add_assign(1);
+                *count = count.saturating_add(1);
             }
             state @ BatchState::Initial => *state = BatchState::Waiting,
             BatchState::Waiting => (),
@@ -359,7 +358,7 @@ impl ChunkManager {
 
         match &mut self.batches_sent_since_ack {
             BatchState::Count(count) => {
-                count.add_assign(1);
+                *count = count.saturating_add(1);
             }
             state @ BatchState::Initial => *state = BatchState::Waiting,
             BatchState::Waiting => unreachable!(),
