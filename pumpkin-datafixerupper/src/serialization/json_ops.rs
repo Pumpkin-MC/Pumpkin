@@ -14,10 +14,10 @@ pub struct JsonOps {
     compressed: bool,
 }
 
-/// A normal instance of [`JsonOps`], which serializes/deserialized normal JSON data.
+/// A normal instance of [`JsonOps`], which serializes/deserializes normal JSON data.
 pub static INSTANCE: JsonOps = JsonOps { compressed: false };
 
-/// A normal instance of [`JsonOps`], which serializes/deserialized compressed JSON data.
+/// A normal instance of [`JsonOps`], which serializes/deserializes compressed JSON data.
 ///
 /// *Compressed* JSON data is a little more lenient with placing values at places that expect something else.
 pub static COMPRESSED: JsonOps = JsonOps { compressed: true };
@@ -158,13 +158,10 @@ impl DynamicOps for JsonOps {
         }
     }
 
-    fn get_iter<'a>(
-        &self,
-        input: &'a Self::Value,
-    ) -> DataResult<impl Iterator<Item = &'a Self::Value> + 'a> {
+    fn get_iter(&self, input: Self::Value) -> DataResult<impl Iterator<Item = Self::Value>> {
         // This only works for JSON arrays.
         if let Value::Array(list) = input {
-            DataResult::success(list.iter())
+            DataResult::success(list.into_iter())
         } else {
             DataResult::error(format!("Not a JSON array: {input}"))
         }
@@ -174,10 +171,7 @@ impl DynamicOps for JsonOps {
         if let Value::Array(_) = list
             && list != self.empty()
         {
-            return DataResult::error_partial(
-                format!("merge_into_list called with not a list: {list}"),
-                list,
-            );
+            return DataResult::partial_error(format!("Not a list: {list}"), list);
         }
 
         let mut result_vec = vec![];
@@ -197,10 +191,7 @@ impl DynamicOps for JsonOps {
         if let Value::Array(_) = list
             && list != self.empty()
         {
-            return DataResult::error_partial(
-                format!("merge_values_into_list called with not a list: {list}"),
-                list,
-            );
+            return DataResult::partial_error(format!("Not a list: {list}"), list);
         }
 
         let mut result_vec = vec![];
@@ -223,14 +214,11 @@ impl DynamicOps for JsonOps {
         Self::Value: Clone,
     {
         if !matches!(map, Value::Object(_)) && map != self.empty() {
-            return DataResult::error_partial(
-                format!("merge_into_map called with not a map: {map}"),
-                map.clone(),
-            );
+            return DataResult::partial_error(format!("Not a map: {map}"), map.clone());
         }
 
         if self.is_valid_key(&key) {
-            return DataResult::error_partial(format!("key is not a string: {key}"), map);
+            return DataResult::partial_error(format!("Key is not a string: {key}"), map);
         }
 
         let mut output_map = Map::new();
@@ -255,10 +243,7 @@ impl DynamicOps for JsonOps {
         if let Value::Object(_) = map
             && map != self.empty()
         {
-            return DataResult::error_partial(
-                format!("merge_map_like_into_map called with not a map: {map}"),
-                map.clone(),
-            );
+            return DataResult::partial_error(format!("Not a map: {map}"), map.clone());
         }
 
         let mut output_map = Map::new();
@@ -283,7 +268,7 @@ impl DynamicOps for JsonOps {
         if missed.is_empty() {
             DataResult::success(object)
         } else {
-            DataResult::error_partial(
+            DataResult::partial_error(
                 format!(
                     "Some keys are not strings{}",
                     pretty_missed.map_or_else(|_| String::new(), |r| format!(": {r}"))
@@ -305,11 +290,11 @@ impl DynamicOps for JsonOps {
         self.compressed
     }
 
-    fn convert_to<U>(&self, out_ops: &impl DynamicOps<Value = U>, input: &Self::Value) -> U {
+    fn convert_to<U>(&self, out_ops: &impl DynamicOps<Value = U>, input: Self::Value) -> U {
         match input {
             Value::Null => out_ops.empty(),
-            Value::Bool(b) => out_ops.create_bool(*b),
-            Value::String(s) => out_ops.create_string(s),
+            Value::Bool(b) => out_ops.create_bool(b),
+            Value::String(s) => out_ops.create_string(&s),
             Value::Array(_) => self.convert_list(out_ops, input),
             Value::Object(_) => self.convert_map(out_ops, input),
 
@@ -369,6 +354,12 @@ impl MapLike for JsonMapLike<'_> {
     }
 }
 
+impl Display for JsonMapLike<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.map.fmt(f)
+    }
+}
+
 /// An implementation of [`StructBuilder`] for JSON objects.
 pub struct JsonStructBuilder {
     builder: DataResult<Value>,
@@ -395,7 +386,7 @@ impl ResultStructBuilder for JsonStructBuilder {
                 }
                 DataResult::success(Value::Object(map))
             }
-            _ => DataResult::error(format!("Prefix is not a map: {prefix}")),
+            _ => DataResult::partial_error(format!("Prefix is not a map: {prefix}"), prefix),
         }
     }
 }
@@ -414,11 +405,5 @@ impl StringStructBuilder for JsonStructBuilder {
             .unwrap()
             .insert(key.to_string(), value);
         builder
-    }
-}
-
-impl Display for JsonMapLike<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.map.fmt(f)
     }
 }

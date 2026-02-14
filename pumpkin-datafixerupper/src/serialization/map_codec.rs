@@ -11,8 +11,10 @@ use std::fmt::Display;
 use std::sync::OnceLock;
 
 /// A type of *codec* which encodes/decodes fields of a map.
-/// `Value` is the type of field/value this is responsible for.
-/// This is functionally different from [`Codec`].
+///
+/// The number of keys a `MapCodec` can work with can be one or many keys.
+///
+/// **This is functionally different from [`Codec`].**
 pub trait MapCodec: MapEncoder + MapDecoder {}
 
 // Any struct implementing MapEncoder<Value = A> and MapDecoder<Value = A> will also implement MapCodec<Value = A>.
