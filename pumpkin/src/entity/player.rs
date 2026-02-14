@@ -258,7 +258,7 @@ impl ChunkManager {
             self.center,
             ChunkLoading::get_level_from_view_distance(self.view_distance),
         );
-        let (_rx, tx) = crossbeam::channel::unbounded();
+        let (_rx, tx) = crossbeam::channel::bounded(0);
         // drop old channel
         self.chunk_listener = tx;
 

@@ -26,8 +26,13 @@ impl ChunkListener {
         self.single.lock().unwrap().push((pos, tx));
         rx
     }
+    /// Capacity for the global listener channel. Large enough to buffer several ticks
+    /// of chunk notifications without blocking, but bounded to prevent memory growth
+    /// when chunks are produced faster than the consumer can drain (e.g. void worlds).
+    const GLOBAL_LISTENER_CAPACITY: usize = 512;
+
     pub fn add_global_chunk_listener(&self) -> Receiver<(ChunkPos, SyncChunk)> {
-        let (tx, rx) = crossbeam::channel::unbounded();
+        let (tx, rx) = crossbeam::channel::bounded(Self::GLOBAL_LISTENER_CAPACITY);
         self.global.lock().unwrap().push(tx);
         rx
     }
@@ -59,13 +64,18 @@ impl ChunkListener {
             let mut i = 0;
             let mut len = global.len();
             while i < len {
-                if matches!(global[i].send((pos, chunk.clone())), Ok(())) {
-                    // log::debug!("global listener {i} send {pos:?}");
-                } else {
-                    // log::debug!("one global listener dropped");
-                    global.remove(i);
-                    len -= 1;
-                    continue;
+                match global[i].try_send((pos, chunk.clone())) {
+                    Ok(()) => {}
+                    Err(crossbeam::channel::TrySendError::Full(_)) => {
+                        // Channel full - drop this notification. The player will
+                        // pick up the chunk via DashMap lookup on the next view
+                        // distance update, so missing a notification is safe.
+                    }
+                    Err(crossbeam::channel::TrySendError::Disconnected(_)) => {
+                        global.remove(i);
+                        len -= 1;
+                        continue;
+                    }
                 }
                 i += 1;
             }
