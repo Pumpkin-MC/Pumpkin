@@ -272,7 +272,7 @@ pub fn init_all_attributes() {
     // Register per-entity attribute builders here. Add entries as modules implement
     // `create_attributes()` on their entity types.
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::CREEPER,
+        &pumpkin_data::entity::EntityType::CREEPER, // Aw man
         crate::entity::mob::creeper::CreeperEntity::create_attributes(),
     );
 
@@ -282,13 +282,13 @@ pub fn init_all_attributes() {
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::IRON_GOLEM,
-        crate::entity::passive::iron_golem::IronGolemEntity::create_attributes(),
+        &pumpkin_data::entity::EntityType::WOLF,
+        crate::entity::passive::wolf::WolfEntity::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::WOLF,
-        crate::entity::passive::wolf::WolfEntity::create_attributes(),
+        &pumpkin_data::entity::EntityType::IRON_GOLEM,
+        crate::entity::passive::iron_golem::IronGolemEntity::create_attributes(),
     );
 
     reg.register_builder(
@@ -301,9 +301,42 @@ pub fn init_all_attributes() {
         crate::entity::mob::skeleton::SkeletonEntityBase::create_attributes(),
     );
 
+    // Register skeleton variants that reuse the base skeleton attributes
+    reg.register_builder(
+        &pumpkin_data::entity::EntityType::STRAY,
+        crate::entity::mob::skeleton::SkeletonEntityBase::create_attributes(),
+    );
+
+    reg.register_builder(
+        &pumpkin_data::entity::EntityType::WITHER_SKELETON,
+        crate::entity::mob::skeleton::SkeletonEntityBase::create_attributes(),
+    );
+
     reg.register_builder(
         &pumpkin_data::entity::EntityType::ZOMBIE,
         crate::entity::mob::zombie::ZombieEntity::create_attributes(),
+    );
+
+    // Register zombie-family variants that reuse the zombie attributes
+    reg.register_builder(
+        &pumpkin_data::entity::EntityType::HUSK,
+        crate::entity::mob::zombie::ZombieEntity::create_attributes(),
+    );
+
+    reg.register_builder(
+        &pumpkin_data::entity::EntityType::DROWNED,
+        crate::entity::mob::zombie::ZombieEntity::create_attributes(),
+    );
+
+    reg.register_builder(
+        &pumpkin_data::entity::EntityType::ZOMBIE_VILLAGER,
+        crate::entity::mob::zombie::ZombieEntity::create_attributes(),
+    );
+
+    // Boss entities
+    reg.register_builder(
+        &pumpkin_data::entity::EntityType::WITHER,
+        crate::entity::boss::wither::WitherEntity::create_attributes(),
     );
 
     reg.register_builder(

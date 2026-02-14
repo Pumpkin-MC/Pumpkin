@@ -54,9 +54,7 @@ impl SkeletonEntityBase {
 
     #[must_use]
     pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new()
-            .add(Attributes::MAX_HEALTH, 20.0)
-            .add(Attributes::MOVEMENT_SPEED, 0.25)
+        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.25)
     }
 }
 

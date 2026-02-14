@@ -41,8 +41,8 @@ impl WolfEntity {
     #[must_use]
     pub fn create_attributes() -> AttributeBuilder {
         AttributeBuilder::new()
-            .add(Attributes::MAX_HEALTH, 8.0)
             .add(Attributes::MOVEMENT_SPEED, 0.3)
+            .add(Attributes::MAX_HEALTH, 8.0)
     }
 }
 

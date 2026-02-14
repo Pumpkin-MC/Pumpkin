@@ -40,7 +40,9 @@ impl SnowGolemEntity {
 
     #[must_use]
     pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.2)
+        AttributeBuilder::new()
+            .add(Attributes::ATTACK_DAMAGE, 0.0)
+            .add(Attributes::MOVEMENT_SPEED, 0.2)
     }
 }
 

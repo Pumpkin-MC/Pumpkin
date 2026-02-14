@@ -44,11 +44,11 @@ impl EndermanEntity {
     #[must_use]
     pub fn create_attributes() -> AttributeBuilder {
         AttributeBuilder::new()
-            .add(Attributes::MAX_HEALTH, 40.0)
-            .add(Attributes::MOVEMENT_SPEED, 0.3)
             .add(Attributes::ATTACK_DAMAGE, 7.0)
             .add(Attributes::FOLLOW_RANGE, 64.0)
+            .add(Attributes::MOVEMENT_SPEED, 0.3)
             .add(Attributes::STEP_HEIGHT, 1.0)
+            .add(Attributes::MAX_HEALTH, 40.0)
     }
 }
 
