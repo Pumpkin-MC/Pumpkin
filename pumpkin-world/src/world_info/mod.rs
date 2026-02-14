@@ -123,6 +123,7 @@ pub struct Generator {
 #[serde(untagged)]
 pub enum GeneratorSettings {
     Reference(String),
+    // TODO: Typed struct instead of opaque NbtCompound when flat world generation is implemented.
     Inline(pumpkin_nbt::compound::NbtCompound),
 }
 
