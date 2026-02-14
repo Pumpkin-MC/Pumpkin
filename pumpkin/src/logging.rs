@@ -182,6 +182,10 @@ impl GzipRollingLogger {
         }
 
         if let Some((path, _)) = oldest_log {
+            eprintln!(
+                "Max log ids ({MAX_ATTEMPTS}) used for {date_format}; overwriting oldest log file: {}",
+                path.display()
+            );
             return Ok(path);
         }
 
