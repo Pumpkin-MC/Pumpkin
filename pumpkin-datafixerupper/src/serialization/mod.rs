@@ -16,7 +16,7 @@ pub mod map_codecs;
 pub mod map_coders;
 pub mod map_like;
 pub mod struct_builder;
-pub mod struct_codec_builder;
+pub mod struct_codecs;
 
 /// A trait specifying a single type.
 /// This is used to prevent type conflicts for `Codec`s and `MapCodec`s implementing an encoder and decoder.
@@ -70,6 +70,12 @@ impl From<Number> for i16 {
 impl From<Number> for i8 {
     fn from(num: Number) -> Self {
         // Similar to Java, we will first convert the number to an `i32`, and then to an `i8`.
+        i32::from(num) as Self
+    }
+}
+
+impl From<Number> for u8 {
+    fn from(num: Number) -> Self {
         i32::from(num) as Self
     }
 }

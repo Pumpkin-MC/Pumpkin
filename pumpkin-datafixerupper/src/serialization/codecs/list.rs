@@ -74,7 +74,7 @@ where
         input: T,
         ops: &'static impl DynamicOps<Value = T>,
     ) -> DataResult<(Self::Value, T)> {
-        let iter = ops.get_iter(&input).with_lifecycle(Lifecycle::Stable);
+        let iter = ops.get_iter(input).with_lifecycle(Lifecycle::Stable);
         iter.flat_map(|i| {
             let mut total_count = 0;
             let mut elements: Self::Value = vec![];
@@ -112,12 +112,15 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::assert_success;
     use crate::serialization::codec::*;
     use crate::serialization::codecs::list::ListCodec;
-    use crate::serialization::codecs::primitive::{BoolCodec, IntCodec, StringCodec};
+    use crate::serialization::codecs::primitive::{
+        BoolCodec, DoubleCodec, IntCodec, ShortCodec, StringCodec,
+    };
+    use crate::serialization::coders::Decoder;
     use crate::serialization::coders::Encoder;
     use crate::serialization::json_ops;
+    use crate::{assert_decode, assert_success};
     use serde_json::json;
 
     #[test]
@@ -125,16 +128,16 @@ mod test {
         pub static INT_LIST_CODEC: ListCodec<IntCodec> = list(&INT_CODEC, 1, 3);
 
         assert_success!(
-            &INT_LIST_CODEC.encode_start(&vec![1, 2], &json_ops::INSTANCE),
+            INT_LIST_CODEC.encode_start(&vec![1, 2], &json_ops::INSTANCE),
             json!([1, 2])
         );
         assert!(
-            &INT_LIST_CODEC
+            INT_LIST_CODEC
                 .encode_start(&vec![], &json_ops::INSTANCE)
                 .is_error()
         );
         assert!(
-            &INT_LIST_CODEC
+            INT_LIST_CODEC
                 .encode_start(&vec![50, 52, 54, 56], &json_ops::INSTANCE)
                 .is_error()
         );
@@ -142,16 +145,16 @@ mod test {
         pub static STRING_LIST_CODEC: ListCodec<StringCodec> = limited_list(&STRING_CODEC, 2);
 
         assert_success!(
-            &STRING_LIST_CODEC
+            STRING_LIST_CODEC
                 .encode_start(&vec!["a".to_string(), "b".to_string()], &json_ops::INSTANCE),
             json!(["a", "b"])
         );
         assert_success!(
-            &STRING_LIST_CODEC.encode_start(&vec!["one".to_string()], &json_ops::INSTANCE),
+            STRING_LIST_CODEC.encode_start(&vec!["one".to_string()], &json_ops::INSTANCE),
             json!(["one"])
         );
         assert!(
-            &STRING_LIST_CODEC
+            STRING_LIST_CODEC
                 .encode_start(
                     &vec!["1".to_string(), "2".to_string(), "3".to_string()],
                     &json_ops::INSTANCE
@@ -164,21 +167,84 @@ mod test {
             limited_list(&limited_list(&BOOL_CODEC, 2), 3);
 
         assert_success!(
-            &BOOL_LIST_LIST_CODEC.encode_start(&vec![vec![true, true]], &json_ops::INSTANCE),
+            BOOL_LIST_LIST_CODEC.encode_start(&vec![vec![true, true]], &json_ops::INSTANCE),
             json!([[true, true]])
         );
         assert_success!(
-            &BOOL_LIST_LIST_CODEC
+            BOOL_LIST_LIST_CODEC
                 .encode_start(&vec![vec![], vec![false, true]], &json_ops::INSTANCE),
             json!([[], [false, true]])
         );
         assert!(
-            &BOOL_LIST_LIST_CODEC
+            BOOL_LIST_LIST_CODEC
                 .encode_start(&vec![vec![true, false, true, false]], &json_ops::INSTANCE)
                 .is_error()
         );
     }
 
     #[test]
-    fn decoding() {}
+    fn decoding() {
+        pub static SHORT_LIST_CODEC: ListCodec<ShortCodec> = list(&SHORT_CODEC, 2, 4);
+
+        assert_decode!(
+            SHORT_LIST_CODEC,
+            json!([1, 2]),
+            &json_ops::INSTANCE,
+            is_success
+        );
+        assert_decode!(
+            SHORT_LIST_CODEC,
+            json!([1, 2, 6, 24]),
+            &json_ops::INSTANCE,
+            is_success
+        );
+        assert_decode!(
+            SHORT_LIST_CODEC,
+            json!([1, 2, 6, 24, 120]),
+            &json_ops::INSTANCE,
+            is_error
+        );
+        assert_decode!(
+            SHORT_LIST_CODEC,
+            json!([-45, 252, 1000]),
+            &json_ops::INSTANCE,
+            is_success
+        );
+        assert_decode!(
+            SHORT_LIST_CODEC,
+            json!(["string", "b"]),
+            &json_ops::INSTANCE,
+            is_error
+        );
+        assert_decode!(
+            SHORT_LIST_CODEC,
+            json!(["1", "2"]),
+            &json_ops::INSTANCE,
+            is_error
+        );
+
+        // The inner lists have a size of 3, while the main list has a max size of 2.
+        pub static POS_LIST_CODEC: ListCodec<ListCodec<DoubleCodec>> =
+            limited_list(&list(&DOUBLE_CODEC, 3, 3), 2);
+
+        assert_decode!(
+            POS_LIST_CODEC,
+            json!([[0, 0.5, 1.0]]),
+            &json_ops::INSTANCE,
+            is_success
+        );
+        assert_decode!(
+            POS_LIST_CODEC,
+            json!([0, 0.5, 1.0]),
+            &json_ops::INSTANCE,
+            is_error
+        );
+        assert_decode!(
+            POS_LIST_CODEC,
+            json!([[3.56, 123.4, -0.144], [12.34, 56.78]]),
+            &json_ops::INSTANCE,
+            is_error
+        );
+        assert_decode!(POS_LIST_CODEC, json!([]), &json_ops::INSTANCE, is_success);
+    }
 }

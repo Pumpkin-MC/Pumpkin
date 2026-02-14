@@ -162,8 +162,8 @@ impl<R> DataResult<R> {
     /// Returns an *errored* `DataResult` with a partial result and an experimental lifecycle.
     #[inline]
     #[must_use]
-    pub const fn error_partial(error: String, partial_result: R) -> Self {
-        Self::error_partial_with_lifecycle(error, partial_result, Lifecycle::Experimental)
+    pub const fn partial_error(error: String, partial_result: R) -> Self {
+        Self::partial_error_with_lifecycle(error, partial_result, Lifecycle::Experimental)
     }
 
     /// Returns an *errored* `DataResult` with no result and a given lifecycle.
@@ -179,7 +179,7 @@ impl<R> DataResult<R> {
 
     /// Returns an *errored* `DataResult` with a partial result and a given lifecycle.
     #[inline]
-    pub const fn error_partial_with_lifecycle(
+    pub const fn partial_error_with_lifecycle(
         message: String,
         partial_result: R,
         lifecycle: Lifecycle,
@@ -309,7 +309,7 @@ impl<R> DataResult<R> {
                     let new_lifecycle = second_result.lifecycle().add(lifecycle);
                     match second_result {
                         DataResult::Success { result, .. } => {
-                            DataResult::error_partial_with_lifecycle(message, result, new_lifecycle)
+                            DataResult::partial_error_with_lifecycle(message, result, new_lifecycle)
                         }
                         DataResult::Error {
                             partial_result,
@@ -512,7 +512,7 @@ impl<R> DataResult<R> {
             Self::Success { .. } => self,
             Self::Error {
                 message, lifecycle, ..
-            } => Self::error_partial_with_lifecycle(message, partial_value, lifecycle),
+            } => Self::partial_error_with_lifecycle(message, partial_value, lifecycle),
         }
     }
 
@@ -528,7 +528,7 @@ impl<R> DataResult<R> {
                 message,
                 lifecycle,
                 partial_result: Some(_),
-            } => DataResult::error_partial_with_lifecycle(message, value, lifecycle),
+            } => DataResult::partial_error_with_lifecycle(message, value, lifecycle),
             Self::Error {
                 message, lifecycle, ..
             } => Self::error_with_lifecycle(message, lifecycle),

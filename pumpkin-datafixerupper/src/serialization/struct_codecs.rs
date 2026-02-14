@@ -482,3 +482,80 @@ impl_struct_map_codec!(
     C16,
     field_16
 );
+
+#[cfg(test)]
+mod test {
+    use crate::serialization::codec::*;
+    use crate::serialization::codecs::primitive::StringCodec;
+    use crate::serialization::coders::{Decoder, Encoder};
+    use crate::serialization::json_ops;
+    use crate::serialization::struct_codecs::StructCodec3;
+    use crate::{assert_decode, struct_codec};
+    use serde_json::json;
+
+    #[test]
+    fn simple_struct() {
+        #[derive(Debug, PartialEq)]
+        struct Book {
+            name: String,
+            author: String,
+            pages: u32,
+        }
+
+        pub static BOOK_CODEC: StructCodec3<
+            Book,
+            FieldMapCodec<StringCodec>,
+            FieldMapCodec<StringCodec>,
+            FieldMapCodec<UnsignedIntCodec>,
+        > = struct_codec!(
+            for_getter(field_of(&STRING_CODEC, "name"), |book: &Book| &book.name),
+            for_getter(field_of(&STRING_CODEC, "author"), |book: &Book| &book
+                .author),
+            for_getter(field_of(&UNSIGNED_INT_CODEC, "pages"), |book: &Book| &book
+                .pages),
+            |name, author, pages| Book {
+                name,
+                author,
+                pages
+            }
+        );
+
+        let object = Book {
+            name: "Sample Book".to_string(),
+            author: "Sample Author".to_string(),
+            pages: 16,
+        };
+
+        assert_eq!(
+            BOOK_CODEC
+                .encode_start(&object, &json_ops::INSTANCE)
+                .unwrap(),
+            json![{
+                "name": "Sample Book",
+                "author": "Sample Author",
+                "pages": 16
+            }]
+        );
+
+        assert_eq!(BOOK_CODEC.parse(json!({"name": "The Great Gatsby", "author": "F. Scott Fitzgerald", "pages": 180}), &json_ops::INSTANCE).unwrap(),
+                   Book {
+                       name: "The Great Gatsby".to_string(),
+                       author: "F. Scott Fitzgerald".to_string(),
+                       pages: 180
+                   }
+        );
+
+        assert_decode!(
+            BOOK_CODEC,
+            json!({"name": "Untitled Book", "pages": 345}),
+            &json_ops::INSTANCE,
+            is_error
+        );
+        assert_decode!(
+            BOOK_CODEC,
+            json!({"name": "Untitled Book 2", "author": "Untitled Author", "pages": "98"}),
+            &json_ops::INSTANCE,
+            is_error
+        );
+    }
+}
