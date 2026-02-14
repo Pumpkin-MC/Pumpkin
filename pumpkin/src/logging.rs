@@ -165,6 +165,29 @@ impl GzipRollingLogger {
             }
         }
 
+        let (mut oldest_modified_path, mut oldest_modified_path_time) = (None, None);
+
+        for id in 1..=MAX_ATTEMPTS {
+            let filename = log_path.join(format!("{date_format}-{id}.log.gz"));
+            let Ok(modified_time) = filename.metadata().and_then(|m| m.modified()) else { continue };
+
+            if let Some(oldest_time) = oldest_modified_path_time {
+                if modified_time < oldest_time {
+                    oldest_modified_path_time = Some(modified_time);
+                    oldest_modified_path = Some(filename);
+                }
+
+                continue;
+            }
+
+            oldest_modified_path_time = Some(modified_time);
+            oldest_modified_path = Some(filename);
+        }
+
+        if let Some(path) = oldest_modified_path {
+            return Ok(path);
+        }
+
         Err(format!(
             "Failed to find a unique log filename for date {date_format} after {MAX_ATTEMPTS} attempts.",
         )
