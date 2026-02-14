@@ -394,6 +394,7 @@ impl LivingEntity {
                     .await;
             }
         } else {
+            // Apply non-instant effects
             self.active_effects
                 .lock()
                 .await
@@ -438,12 +439,23 @@ impl LivingEntity {
                     .await;
                 }
             }
+
             // Apply absorption effect (+4 absorption per level)
             if effect.effect_type == &StatusEffect::ABSORPTION {
                 let added = 4.0 * (effect.amplifier as f32 + 1.0);
                 let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
                 let new_abs = (self.absorption.load() + added).min(max_abs);
                 self.set_absorption(new_abs).await;
+            }
+
+            // Apply invisible effect
+            if effect.effect_type == &StatusEffect::INVISIBILITY {
+                self.entity.set_invisible(true).await;
+            }
+
+            // Apply glowing effect
+            if effect.effect_type == &StatusEffect::GLOWING {
+                self.entity.set_glowing(true).await;
             }
         }
 
@@ -529,6 +541,17 @@ impl LivingEntity {
                 // Update local health and send both health and absorption metadata together
                 self.set_health(new_max.max(0.0)).await;
             }
+        }
+
+        // If invisible effect removed, disable invisibility
+        if effect_type == &StatusEffect::INVISIBILITY {
+            self.entity.set_invisible(false).await;
+        }
+
+        // If glowing effect removed, disable glowing
+        // Apply glowing effect
+        if effect_type == &StatusEffect::GLOWING {
+            self.entity.set_glowing(false).await;
         }
 
         succeeded
