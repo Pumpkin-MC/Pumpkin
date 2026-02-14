@@ -143,6 +143,7 @@ proc-macro2 = "1.0"
 pumpkin-codecs = { path = "pumpkin-codecs" }
 pumpkin-config = { path = "pumpkin-config" }
 pumpkin-data = { path = "pumpkin-data" }
+pumpkin-datafixerupper = { path = "pumpkin-datafixerupper" }
 pumpkin-inventory = { path = "pumpkin-inventory" }
 pumpkin-macros = { path = "pumpkin-macros" }
 pumpkin-nbt = { path = "pumpkin-nbt" }
