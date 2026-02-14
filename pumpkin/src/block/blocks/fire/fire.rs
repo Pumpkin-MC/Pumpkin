@@ -1,3 +1,4 @@
+use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalAxis};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
@@ -128,7 +129,7 @@ impl FireBlock {
         false
     }
 
-    // Get burn odds for a block, used in check_burn_out
+    // Get burn odds for a block, used in try_spreading_fire
     fn get_burn_odds(block: &Block) -> i32 {
         block.flammable.as_ref().map_or(0, |f| f.burn_chance.into())
     }
@@ -141,21 +142,21 @@ impl FireBlock {
 
         // Fire burnout increases in specific biomes
         // TODO: Use proper tag or bool for this when available
-        let biome = world.level.get_rough_biome(pos).await;
+        let biome_id = world.level.get_rough_biome(pos).await.id;
         matches!(
-            biome.registry_id,
-            "bamboo_jungle"
-                | "mushroom_fields"
-                | "mangrove_swamp"
-                | "snowy_slopes"
-                | "frozen_peaks"
-                | "jagged_peaks"
-                | "swamp"
-                | "jungle"
+            biome_id,
+            id if id == Biome::BAMBOO_JUNGLE.id
+                || id == Biome::MUSHROOM_FIELDS.id
+                || id == Biome::MANGROVE_SWAMP.id
+                || id == Biome::SNOWY_SLOPES.id
+                || id == Biome::FROZEN_PEAKS.id
+                || id == Biome::JAGGED_PEAKS.id
+                || id == Biome::SWAMP.id
+                || id == Biome::JUNGLE.id
         )
     }
 
-    async fn check_burn_out(&self, world: &Arc<World>, pos: &BlockPos, chance: i32, age: u16) {
+    async fn try_spreading_fire(&self, world: &Arc<World>, pos: &BlockPos, chance: i32, age: u16) {
         let block = world.get_block(pos).await;
         let odds = Self::get_burn_odds(block);
         if rand::rng().random_range(0..chance) < odds {
@@ -415,42 +416,42 @@ impl BlockBehaviour for FireBlock {
                 0
             };
 
-            self.check_burn_out(
+            self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::East.to_offset()),
                 300 + extra,
                 new_age,
             )
             .await;
-            self.check_burn_out(
+            self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::West.to_offset()),
                 300 + extra,
                 new_age,
             )
             .await;
-            self.check_burn_out(
+            self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::Down.to_offset()),
                 250 + extra,
                 new_age,
             )
             .await;
-            self.check_burn_out(
+            self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::Up.to_offset()),
                 250 + extra,
                 new_age,
             )
             .await;
-            self.check_burn_out(
+            self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::North.to_offset()),
                 300 + extra,
                 new_age,
             )
             .await;
-            self.check_burn_out(
+            self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::South.to_offset()),
                 300 + extra,
