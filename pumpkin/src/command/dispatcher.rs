@@ -1,6 +1,7 @@
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
 use rustc_hash::FxHashMap;
+use tracing::{debug, error, warn};
 
 use super::args::ConsumedArgs;
 
@@ -33,19 +34,19 @@ impl CommandError {
     pub fn into_component(self, cmd: &str) -> TextComponent {
         match self {
             InvalidConsumption(s) => {
-                log::error!(
+                error!(
                     "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
                 );
                 TextComponent::text("Internal error (See logs for details)")
             }
             InvalidRequirement => {
-                log::error!(
+                error!(
                     "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
                 );
                 TextComponent::text("Internal error (See logs for details)")
             }
             PermissionDenied => {
-                log::warn!("Permission denied for command \"{cmd}\"");
+                warn!("Permission denied for command \"{cmd}\"");
                 TextComponent::text(
                     "I'm sorry, but you do not have permission to perform this command. Please contact the server administrator if you believe this is an error.",
                 )
@@ -110,30 +111,30 @@ impl CommandDispatcher {
                 .await
             {
                 Err(InvalidConsumption(s)) => {
-                    log::debug!(
+                    debug!(
                         "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
                     );
                     return Vec::new();
                 }
                 Err(InvalidRequirement) => {
-                    log::debug!(
+                    debug!(
                         "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
                     );
                     return Vec::new();
                 }
                 Err(PermissionDenied) => {
-                    log::debug!("Permission denied for command \"{cmd}\"");
+                    debug!("Permission denied for command \"{cmd}\"");
                     return Vec::new();
                 }
                 Err(CommandFailed(_)) => {
-                    log::debug!("Command failed");
+                    debug!("Command failed");
                     return Vec::new();
                 }
                 Ok(Some(new_suggestions)) => {
                     suggestions.extend(new_suggestions);
                 }
                 Ok(None) => {
-                    log::debug!("Command none");
+                    debug!("Command none");
                 }
             }
         }
@@ -286,7 +287,7 @@ impl CommandDispatcher {
             Command::Tree(tree) => Ok(tree),
             Command::Alias(target) => {
                 let Some(Command::Tree(tree)) = self.commands.get(target) else {
-                    log::error!(
+                    error!(
                         "Error while parsing command alias \"{key}\": pointing to \"{target}\" which is not a valid tree"
                     );
                     return Err(CommandFailed(TextComponent::text(
@@ -314,7 +315,7 @@ impl CommandDispatcher {
                         executor.execute(src, server, &parsed_args).await?;
                         Ok(true)
                     } else {
-                        log::debug!(
+                        debug!(
                             "Error while parsing command: {raw_args:?} was not consumed, but should have been"
                         );
                         Ok(false)
@@ -322,7 +323,7 @@ impl CommandDispatcher {
                 }
                 NodeType::Literal { string, .. } => {
                     if raw_args.pop() != Some(string) {
-                        log::debug!("Error while parsing command: {raw_args:?}: expected {string}");
+                        debug!("Error while parsing command: {raw_args:?}: expected {string}");
                         return Ok(false);
                     }
                 }
@@ -330,7 +331,7 @@ impl CommandDispatcher {
                     if let Some(consumed) = consumer.consume(src, server, raw_args).await {
                         parsed_args.insert(name, consumed);
                     } else {
-                        log::debug!(
+                        debug!(
                             "Error while parsing command: {raw_args:?}: cannot parse argument {name}"
                         );
                         return Ok(false);
@@ -338,7 +339,7 @@ impl CommandDispatcher {
                 }
                 NodeType::Require { predicate, .. } => {
                     if !predicate(src) {
-                        log::debug!(
+                        debug!(
                             "Error while parsing command: {raw_args:?} does not meet the requirement"
                         );
                         return Ok(false);
@@ -347,9 +348,7 @@ impl CommandDispatcher {
             }
         }
 
-        log::debug!(
-            "Error while parsing command: {raw_args:?} was not consumed, but should have been"
-        );
+        debug!("Error while parsing command: {raw_args:?} was not consumed, but should have been");
         Ok(false)
     }
 

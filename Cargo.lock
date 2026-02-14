@@ -2026,7 +2026,6 @@ dependencies = [
  "futures",
  "hmac 0.13.0-rc.5",
  "libloading",
- "log",
  "num-bigint",
  "pkcs8 0.11.0-rc.10",
  "pumpkin-config",
@@ -2070,10 +2069,10 @@ dependencies = [
 name = "pumpkin-config"
 version = "0.1.0-dev+1.21.11"
 dependencies = [
- "log",
  "pumpkin-util",
  "serde",
  "toml",
+ "tracing",
  "uuid",
 ]
 
@@ -2094,13 +2093,13 @@ name = "pumpkin-inventory"
 version = "0.1.0-dev+1.21.11"
 dependencies = [
  "crossbeam-utils",
- "log",
  "pumpkin-data",
  "pumpkin-protocol",
  "pumpkin-util",
  "pumpkin-world",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2185,7 +2184,6 @@ dependencies = [
  "flate2",
  "futures",
  "itertools 0.14.0",
- "log",
  "lz4-java-wrc",
  "num_cpus",
  "pumpkin-config",
@@ -2204,6 +2202,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "tracing",
  "uuid",
 ]
 

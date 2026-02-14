@@ -2,6 +2,7 @@ use std::{env, fs, path::Path};
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
+use tracing::{debug, error, warn};
 
 const DATA_FOLDER: &str = "data/";
 
@@ -41,7 +42,7 @@ pub trait LoadJSONConfiguration {
         let exe_dir = env::current_dir().unwrap();
         let data_dir = exe_dir.join(DATA_FOLDER);
         if !data_dir.exists() {
-            log::debug!("creating new data root folder");
+            debug!("creating new data root folder");
             fs::create_dir(&data_dir).expect("Failed to create data root folder");
         }
         let path = data_dir.join(Self::get_path());
@@ -60,7 +61,7 @@ pub trait LoadJSONConfiguration {
             let content = Self::default();
 
             if let Err(err) = fs::write(&path, serde_json::to_string_pretty(&content).unwrap()) {
-                log::error!(
+                error!(
                     "Couldn't write default data config to {}. Reason: {err}. This is probably caused by a config update. Just delete the old data config and restart.",
                     path.display(),
                 );
@@ -86,7 +87,7 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
         let exe_dir = env::current_dir().unwrap();
         let data_dir = exe_dir.join(DATA_FOLDER);
         if !data_dir.exists() {
-            log::debug!("creating new data root folder");
+            debug!("creating new data root folder");
             fs::create_dir(&data_dir).expect("Failed to create data root folder");
         }
         let path = data_dir.join(Self::get_path());
@@ -94,7 +95,7 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
         let content = match serde_json::to_string_pretty(self) {
             Ok(content) => content,
             Err(err) => {
-                log::warn!(
+                warn!(
                     "Couldn't serialize operator data config to {}. Reason: {err}",
                     path.display()
                 );
@@ -103,7 +104,7 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
         };
 
         if let Err(err) = std::fs::write(&path, content) {
-            log::warn!(
+            warn!(
                 "Couldn't write operator config to {}. Reason: {err}",
                 path.display()
             );

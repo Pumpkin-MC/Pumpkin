@@ -1,12 +1,12 @@
 use super::{ChunkLevel, ChunkPos, HashMapType, LevelChannel};
 use crate::chunk_system::chunk_state::StagedChunkEnum; // Fixed path
 use itertools::Itertools;
-use log::debug;
 use std::cmp::{Ordering, PartialEq, min};
 use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry;
 use std::mem::swap;
 use std::sync::Arc;
+use tracing::debug;
 
 pub struct HeapNode(i8, ChunkPos);
 impl PartialEq for HeapNode {
@@ -316,13 +316,13 @@ impl ChunkLoading {
     }
 
     pub fn add_force_ticket(&mut self, pos: ChunkPos) {
-        // log::debug!("add force ticket at {pos:?}");
+        // debug!("add force ticket at {pos:?}");
         self.high_priority.push(pos);
         self.is_priority_dirty = true;
         self.add_ticket(pos, Self::FULL_CHUNK_LEVEL);
     }
     pub fn remove_force_ticket(&mut self, pos: ChunkPos) {
-        // log::debug!("remove force ticket at {pos:?}");
+        // debug!("remove force ticket at {pos:?}");
         let index = self
             .high_priority
             .iter()
@@ -334,7 +334,7 @@ impl ChunkLoading {
         self.remove_ticket(pos, Self::FULL_CHUNK_LEVEL);
     }
     pub fn add_ticket(&mut self, pos: ChunkPos, level: i8) {
-        // log::debug!("add ticket at {pos:?} level {level}");
+        // debug!("add ticket at {pos:?} level {level}");
         debug_assert!(level < Self::MAX_LEVEL);
         match self.ticket.entry(pos) {
             Entry::Occupied(mut vec) => {
@@ -359,14 +359,14 @@ impl ChunkLoading {
         debug_assert!(self.debug_check_error());
     }
     pub fn remove_ticket(&mut self, pos: ChunkPos, level: i8) {
-        // log::debug!("remove ticket at {pos:?} level {level}");
+        // debug!("remove ticket at {pos:?} level {level}");
         debug_assert!(level < Self::MAX_LEVEL);
         let Some(vec) = self.ticket.get_mut(&pos) else {
-            // log::warn!("No ticket found at {pos:?}");
+            // warn!("No ticket found at {pos:?}");
             return;
         };
         let Some((index, _)) = vec.iter().find_position(|x| **x == level) else {
-            // log::warn!("No ticket found at {pos:?}");
+            // warn!("No ticket found at {pos:?}");
             return;
         };
         vec.remove(index);

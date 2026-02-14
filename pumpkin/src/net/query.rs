@@ -9,9 +9,11 @@ use std::{
 use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::CURRENT_MC_VERSION;
 use rand::RngExt;
 use tokio::{net::UdpSocket, sync::RwLock, time};
+use tracing::{error, info};
 
 use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
@@ -35,12 +37,17 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
         }
     });
 
-    log::info!(
+    info!(
         "Server query running on port {}",
-        socket
-            .local_addr()
-            .expect("Unable to find running address!")
-            .port()
+        TextComponent::text(format!(
+            "{}",
+            socket
+                .local_addr()
+                .expect("Unable to find running address!")
+                .port()
+        ))
+        .color_named(NamedColor::DarkBlue)
+        .to_pretty_console()
     );
 
     while !SHOULD_STOP.load(Ordering::Relaxed) {
@@ -69,7 +76,7 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
             )
             .await
             {
-                log::error!("Interior 0 bytes found! Cannot encode query response! {err}");
+                error!("Interior 0 bytes found! Cannot encode query response! {err}");
             }
         });
     }
