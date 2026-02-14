@@ -5,6 +5,7 @@ use pumpkin_util::{
     y_offset::YOffset,
 };
 use serde::Deserialize;
+use tracing::warn;
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -76,7 +77,7 @@ impl TrapezoidHeightProvider {
         let j = self.max_inclusive.get_y(min_y as i16, height);
 
         if i > j {
-            log::warn!("Empty height range");
+            warn!("Empty height range");
             return i;
         }
 

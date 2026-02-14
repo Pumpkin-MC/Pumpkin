@@ -21,6 +21,7 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::{Hand, text::TextComponent, version::MinecraftVersion};
+use tracing::{debug, trace, warn};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 
@@ -29,7 +30,7 @@ impl JavaClient {
         &self,
         client_information: SClientInformationConfig,
     ) {
-        log::debug!("Handling client settings");
+        debug!("Handling client settings");
         if client_information.view_distance <= 0 {
             self.kick(TextComponent::text(
                 "Cannot have zero or negative view distance!",
@@ -60,9 +61,9 @@ impl JavaClient {
     }
 
     pub async fn handle_plugin_message(&self, plugin_message: SPluginMessage) {
-        log::debug!("Handling plugin message");
+        debug!("Handling plugin message");
         if plugin_message.channel.starts_with(BRAND_CHANNEL_PREFIX) {
-            log::debug!("Got a client brand");
+            debug!("Got a client brand");
             match str::from_utf8(&plugin_message.data) {
                 Ok(brand) => *self.brand.lock().await = Some(brand.to_string()),
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
@@ -83,57 +84,56 @@ impl JavaClient {
             if packet.uuid == expected_uuid {
                 match packet.response_result() {
                     ResourcePackResponseResult::DownloadSuccess => {
-                        log::trace!(
+                        trace!(
                             "Client {} successfully downloaded the resource pack",
                             self.id
                         );
                     }
                     ResourcePackResponseResult::DownloadFail => {
-                        log::warn!(
+                        warn!(
                             "Client {} failed to downloaded the resource pack. Is it available on the internet?",
                             self.id
                         );
                     }
                     ResourcePackResponseResult::Downloaded => {
-                        log::trace!("Client {} already has the resource pack", self.id);
+                        trace!("Client {} already has the resource pack", self.id);
                     }
                     ResourcePackResponseResult::Accepted => {
-                        log::trace!("Client {} accepted the resource pack", self.id);
+                        trace!("Client {} accepted the resource pack", self.id);
 
                         // Return here to wait for the next response update
                         return;
                     }
                     ResourcePackResponseResult::Declined => {
-                        log::trace!("Client {} declined the resource pack", self.id);
+                        trace!("Client {} declined the resource pack", self.id);
                     }
                     ResourcePackResponseResult::InvalidUrl => {
-                        log::warn!(
+                        warn!(
                             "Client {} reported that the resource pack URL is invalid!",
                             self.id
                         );
                     }
                     ResourcePackResponseResult::ReloadFailed => {
-                        log::trace!("Client {} failed to reload the resource pack", self.id);
+                        trace!("Client {} failed to reload the resource pack", self.id);
                     }
                     ResourcePackResponseResult::Discarded => {
-                        log::trace!("Client {} discarded the resource pack", self.id);
+                        trace!("Client {} discarded the resource pack", self.id);
                     }
                     ResourcePackResponseResult::Unknown(result) => {
-                        log::warn!(
+                        warn!(
                             "Client {} responded with a bad result: {}!",
-                            self.id,
-                            result
+                            self.id, result
                         );
                     }
                 }
             } else {
-                log::warn!(
+                warn!(
                     "Client {} returned a response for a resource pack we did not set!",
                     self.id
                 );
             }
         } else {
-            log::warn!(
+            warn!(
                 "Client {} returned a response for a resource pack that was not enabled!",
                 self.id
             );
@@ -143,7 +143,7 @@ impl JavaClient {
 
     pub fn handle_config_cookie_response(&self, packet: &SConfigCookieResponse) {
         // TODO: allow plugins to access this
-        log::debug!(
+        debug!(
             "Received cookie_response[config]: key: \"{}\", has_payload: \"{}\", payload_length: \"{:?}\"",
             packet.key,
             packet.has_payload,
@@ -152,7 +152,7 @@ impl JavaClient {
     }
 
     pub async fn handle_known_packs(&self, _config_acknowledged: SKnownPacks) {
-        log::debug!("Handling known packs");
+        debug!("Handling known packs");
         // let mut tags_to_send = Vec::new();
         let registry = Registry::get_synced(self.version.load());
         for registry in registry {
@@ -186,12 +186,12 @@ impl JavaClient {
         self.send_packet_now(&CUpdateTags::new(&tags)).await;
 
         // We are done with configuring
-        log::debug!("Finished config");
+        debug!("Finished config");
         self.send_packet_now(&CFinishConfig).await;
     }
 
     pub async fn handle_config_acknowledged(&self, server: &Arc<Server>) -> PacketHandlerResult {
-        log::debug!("Handling config acknowledgement");
+        debug!("Handling config acknowledgement");
         self.connection_state.store(ConnectionState::Play);
 
         let profile = self.gameprofile.lock().await.clone();

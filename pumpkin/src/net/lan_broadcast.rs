@@ -4,6 +4,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::{select, time};
+use tracing::{info, warn};
 
 use crate::{SHOULD_STOP, STOP_INTERRUPT};
 
@@ -28,7 +29,7 @@ impl LANBroadcast {
         let advanced_motd = config.motd.clone().unwrap_or_default();
 
         let motd = if advanced_motd.is_empty() {
-            log::warn!(
+            warn!(
                 "Using the server MOTD as the LAN broadcast MOTD. Note that the LAN broadcast MOTD does not support multiple lines, RGB colors, or gradients so consider defining it accordingly."
             );
             basic_config.motd.replace('\n', " ")
@@ -61,7 +62,7 @@ impl LANBroadcast {
 
         let advertisement = format!("[MOTD]{}[/MOTD][AD]{}[/AD]", &self.motd, bound_addr.port());
 
-        log::info!(
+        info!(
             "LAN broadcast running on {}",
             socket
                 .local_addr()

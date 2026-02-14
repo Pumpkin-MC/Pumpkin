@@ -11,7 +11,6 @@ use std::time::{Duration, Instant};
 use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
-use log::warn;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
@@ -27,6 +26,7 @@ use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
@@ -602,7 +602,7 @@ impl Player {
         // Given enough time, all of these chunks will be in memory.
         let radial_chunks = cylindrical.all_chunks_within();
 
-        log::debug!(
+        debug!(
             "Removing player {}, unwatching {} chunks",
             self.gameprofile.name,
             radial_chunks.len()
@@ -617,7 +617,7 @@ impl Player {
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
-        log::debug!(
+        debug!(
             "Removed player id {} from world {} ({} chunks remain cached)",
             self.gameprofile.name,
             self.world().get_world_name(),
@@ -894,10 +894,9 @@ impl Player {
                     f64::from(pos.0.y) + 0.1,
                     f64::from(pos.0.z) + 0.5,
                 );
-                log::debug!(
+                debug!(
                     "Returning forced spawn point at {:?}, dimension: {:?}",
-                    position,
-                    respawn_point.dimension
+                    position, respawn_point.dimension
                 );
                 return Some(CalculatedRespawnPoint {
                     position,
@@ -3498,9 +3497,9 @@ impl InventoryPlayer for Player {
 
     fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()> {
         Box::pin(async move {
-            log::debug!("Player::award_experience called with amount={amount}");
+            debug!("Player::award_experience called with amount={amount}");
             if amount > 0 {
-                log::debug!("Player: adding {amount} experience points");
+                debug!("Player: adding {amount} experience points");
                 self.add_experience_points(amount).await;
             }
         })

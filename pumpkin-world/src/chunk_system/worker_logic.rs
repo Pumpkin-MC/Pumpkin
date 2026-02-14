@@ -14,6 +14,7 @@ use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
+use tracing::{debug, error, warn};
 
 pub enum RecvChunk {
     IO(Chunk),
@@ -60,7 +61,7 @@ pub async fn io_read_work(
     lock: IOLock,
 ) {
     use crate::biome::hash_seed;
-    log::debug!("io read thread start");
+    debug!("io read thread start");
     let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
     let dimension = &level.world_gen.dimension;
     let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
@@ -92,7 +93,7 @@ pub async fn io_read_work(
                     let needs_relight = needs_relighting(&chunk, &level.lighting_config);
 
                     if needs_relight {
-                        log::debug!(
+                        debug!(
                             "Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting"
                         );
 
@@ -147,7 +148,7 @@ pub async fn io_read_work(
             }
             LoadedData::Missing(_) => {}
             LoadedData::Error(_) => {
-                log::warn!("chunk data read error pos: {pos:?}. regenerating");
+                warn!("chunk data read error pos: {pos:?}. regenerating");
             }
         }
 
@@ -168,7 +169,7 @@ pub async fn io_read_work(
             break;
         }
     }
-    log::debug!("io read thread stop");
+    debug!("io read thread stop");
 }
 
 pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
@@ -197,7 +198,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
             .save_chunks(&level.level_folder, vec)
             .await
         {
-            log::error!("Failed to save chunks: {:?}", e);
+            error!("Failed to save chunks: {:?}", e);
         }
 
         for i in pos {
@@ -214,7 +215,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                     }
                 }
                 Entry::Vacant(_) => {
-                    log::warn!(
+                    warn!(
                         "io_write: attempted to release missing lock entry for {:?}",
                         i
                     );
@@ -236,7 +237,7 @@ pub fn generation_work(
         let (pos, mut cache, stage) = match recv.recv() {
             Ok(data) => data,
             Err(_) => {
-                log::debug!("generation channel closed, exiting");
+                debug!("generation channel closed, exiting");
                 break;
             }
         };
@@ -269,7 +270,7 @@ pub fn generation_work(
                     .or_else(|| payload.downcast_ref::<String>().map(|s| s.as_str()))
                     .unwrap_or("Unknown panic payload");
 
-                log::error!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");
+                error!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");
 
                 // Send failure notification
                 let _ = send.send((
