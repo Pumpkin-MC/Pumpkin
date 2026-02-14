@@ -87,7 +87,6 @@ debug = true
 strip = false
 
 [workspace.dependencies]
-log = "0.4"
 tokio = { version = "1.49", default-features = false }
 syn = { version = "2.0", default-features = false, features = ["printing"] }
 

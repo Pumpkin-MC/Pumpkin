@@ -1,4 +1,3 @@
-use log::warn;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
 use pumpkin_nbt::compound::NbtCompound;
@@ -13,6 +12,7 @@ use std::{
     },
 };
 use tokio::sync::Mutex;
+use tracing::warn;
 
 use crate::inventory::InventoryFuture;
 use crate::{

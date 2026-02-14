@@ -4,6 +4,7 @@ use std::{
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
+use tracing::error;
 
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
@@ -38,7 +39,7 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
 
     let info: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(raw_nbt))
         .map_err(|e|{
-            log::error!("The level.dat file does not have a data version! This means it is either corrupt or very old (read unsupported)");
+            error!("The level.dat file does not have a data version! This means it is either corrupt or very old (read unsupported)");
             WorldInfoError::DeserializationError(e.to_string())})?;
 
     let data_version = info.data.data_version;
@@ -65,7 +66,7 @@ fn check_file_level_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
 
     let info: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(raw_nbt))
         .map_err(|e|{
-            log::error!("The level.dat file does not have a level version! This means it is either corrupt or very old (read unsupported)");
+            error!("The level.dat file does not have a level version! This means it is either corrupt or very old (read unsupported)");
             WorldInfoError::DeserializationError(e.to_string())})?;
 
     let level_version = info.data.version;

@@ -19,7 +19,7 @@ impl BlockBehaviour for CraftingTableBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             args.player
-                .open_handled_screen(&CraftingTableScreenFactory)
+                .open_handled_screen(&CraftingTableScreenFactory, Some(*args.position))
                 .await;
 
             BlockActionResult::Success
