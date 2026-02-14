@@ -9,9 +9,9 @@ use crate::entity::ai::pathfinder::node_evaluator::{MobData, NodeEvaluator};
 use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::ai::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_util::math::wrap_degrees;
 use std::sync::atomic::Ordering;
-use pumpkin_data::attributes::Attributes;
 
 pub mod binary_heap;
 pub mod node;
@@ -141,7 +141,8 @@ impl Navigator {
                 let dz = (current.pos.0.z - start_pos.z) as f32;
                 (dx * dx + dy * dy + dz * dz).sqrt()
             };
-            if euclidean_from_start >= entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32 {
+            if euclidean_from_start >= entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32
+            {
                 continue;
             }
 
@@ -153,7 +154,8 @@ impl Navigator {
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
 
                 let in_heap = open_set.contains(&neighbor);
-                if neighbor.walked_dist < entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32
+                if neighbor.walked_dist
+                    < entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32
                     && (!in_heap
                         || open_set
                             .get_node(&neighbor)
@@ -322,13 +324,16 @@ impl Navigator {
                 entity.entity.body_yaw.store(target_yaw);
 
                 // Vanilla sets both movementSpeed and forwardSpeed to the same value
-                let mob_speed = goal.speed * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+                let mob_speed =
+                    goal.speed * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
                 entity
                     .movement_input
                     .store(Vector3::new(0.0, 0.0, mob_speed));
 
                 // Jump when the next node is above step height and we're close enough horizontally
-                if dy > entity.get_attribute_value(&Attributes::STEP_HEIGHT) && horizontal_dist < 2.0 {
+                if dy > entity.get_attribute_value(&Attributes::STEP_HEIGHT)
+                    && horizontal_dist < 2.0
+                {
                     entity
                         .jumping
                         .store(true, std::sync::atomic::Ordering::SeqCst);

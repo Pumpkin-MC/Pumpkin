@@ -1,8 +1,8 @@
 use std::sync::{Arc, Weak};
 
-use pumpkin_data::entity::EntityType;
-use pumpkin_data::attributes::Attributes;
 use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
+use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
     Entity, NBTStorage,
@@ -52,6 +52,7 @@ impl SkeletonEntityBase {
         mob_arc
     }
 
+    #[must_use]
     pub fn create_attributes() -> AttributeBuilder {
         AttributeBuilder::new()
             .add(Attributes::MAX_HEALTH, 20.0)

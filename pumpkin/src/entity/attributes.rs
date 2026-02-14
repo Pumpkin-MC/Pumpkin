@@ -1,18 +1,18 @@
-use std::sync::RwLock;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use std::collections::HashMap;
 use std::sync::LazyLock;
-use uuid::Uuid;
-use std::sync::atomic::AtomicU64;
+use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use uuid::Uuid;
 
 #[derive(Clone, Debug, Copy)]
 #[repr(i8)]
 pub enum ModifierOperation {
-    Add = 0,         // add value
-    MultiplyBase = 1, // multiply base (base * (1 + x))
+    Add = 0,           // add value
+    MultiplyBase = 1,  // multiply base (base * (1 + x))
     MultiplyTotal = 2, // multiply total (applied last)
 }
 
@@ -33,7 +33,8 @@ pub struct AttributeInstance {
 }
 
 impl AttributeInstance {
-    pub fn new(base_value: f64) -> Self {
+    #[must_use]
+    pub const fn new(base_value: f64) -> Self {
         Self {
             base_value,
             modifiers: Vec::new(),
@@ -95,17 +96,19 @@ pub async fn send_attribute_updates_for_living(
     living: &crate::entity::living::LivingEntity,
     attributes: Vec<Attributes>,
 ) {
-    use pumpkin_protocol::java::client::play::Property as JeProperty;
-    use pumpkin_protocol::java::client::play::CUpdateAttributes as JePacket;
-    use pumpkin_protocol::bedrock::client::update_artributes::{Attribute as BeAttribute, CUpdateAttributes as BePacket};
+    use pumpkin_protocol::bedrock::client::update_artributes::{
+        Attribute as BeAttribute, CUpdateAttributes as BePacket,
+    };
     use pumpkin_protocol::codec::var_int::VarInt;
     use pumpkin_protocol::codec::{var_uint::VarUInt, var_ulong::VarULong};
     use pumpkin_protocol::java::client::play::AttributeModifier as JeAttrMod;
+    use pumpkin_protocol::java::client::play::CUpdateAttributes as JePacket;
+    use pumpkin_protocol::java::client::play::Property as JeProperty;
 
     let mut je_properties: Vec<JeProperty> = Vec::with_capacity(attributes.len());
     let mut be_attributes: Vec<BeAttribute> = Vec::with_capacity(attributes.len());
 
-    for attribute in attributes.into_iter() {
+    for attribute in attributes {
         let base_value = living.get_attribute_base(&attribute);
         let effective_value = living.get_attribute_value(&attribute);
 
@@ -114,9 +117,9 @@ pub async fn send_attribute_updates_for_living(
         if let Some(inst) = living.attributes.read().unwrap().get(&attribute.id) {
             for mod_inst in &inst.modifiers {
                 modifiers.push(JeAttrMod::new(
-                    mod_inst.id.to_string(), 
-                    mod_inst.amount, 
-                    mod_inst.operation.clone() as i8
+                    mod_inst.id.to_string(),
+                    mod_inst.amount,
+                    mod_inst.operation as i8,
                 ));
             }
         }
@@ -124,20 +127,24 @@ pub async fn send_attribute_updates_for_living(
         let modifiers_count = modifiers.len();
 
         // Move modifiers into the property
-        je_properties.push(JeProperty::new(VarInt(i32::from(attribute.id)), base_value, modifiers));
+        je_properties.push(JeProperty::new(
+            VarInt(i32::from(attribute.id)),
+            base_value,
+            modifiers,
+        ));
 
         let name = match attribute.id {
             22 => "minecraft:movement".to_string(),
             19 => "minecraft:health".to_string(),
             18 => "minecraft:absorption".to_string(),
-            2  => "minecraft:attack_damage".to_string(),
-            0  => "minecraft:armor".to_string(),
+            2 => "minecraft:attack_damage".to_string(),
+            0 => "minecraft:armor".to_string(),
             16 => "minecraft:knockback_resistance".to_string(),
             17 => "minecraft:luck".to_string(),
             13 => "minecraft:follow_range".to_string(),
             15 => "minecraft:horse.jump_strength".to_string(),
             // Fallback for others
-            _ => format!("minecraft:attribute.{}", attribute.id), 
+            _ => format!("minecraft:attribute.{}", attribute.id),
         };
 
         let be_attribute = BeAttribute {
@@ -183,76 +190,58 @@ impl Clone for AttributeInstance {
 }
 
 /// Registry storing per-entity-type base attribute overrides.
-/// Internally stores a map from `entity_type.id` -> HashMap<attribute.id, f64> for O(1) lookup.
+/// Internally stores a map from `entity_type.id` -> `HashMap`<attribute.id, f64> for O(1) lookup.
+#[derive(Default)]
 pub struct AttributeRegistry {
     map: HashMap<u16, HashMap<u8, f64>>,
 }
 
 impl AttributeRegistry {
+    #[must_use]
     pub fn new() -> Self {
-        Self {
-            map: HashMap::new(),
-        }
-    }
-
-    /// Begin registering overrides for an entity type.
-    pub fn register<'a>(&'a mut self, entity_type: &'static EntityType) -> RegisterBuilder<'a> {
-        let id = entity_type.id;
-        self.map.entry(id).or_insert_with(HashMap::new);
-        RegisterBuilder { registry: self, id }
+        Self::default()
     }
 
     /// Get the base value for `attribute` for the given entity type id.
     /// If no override exists, returns `attribute.default_value`.
+    #[must_use]
     pub fn get_base_value(&self, entity_type_id: u16, attribute: &Attributes) -> f64 {
-        if let Some(map) = self.map.get(&entity_type_id) {
-            if let Some(val) = map.get(&attribute.id) {
-                return *val;
-            }
-        }
-        attribute.default_value
+        self.map
+            .get(&entity_type_id)
+            .and_then(|map| map.get(&attribute.id))
+            .copied()
+            .unwrap_or(attribute.default_value)
     }
 
     /// Return a vector of overrides for the given entity type id.
     /// This allows populating per-entity local attribute instances at spawn time.
+    #[must_use]
     pub fn get_overrides_for_entity(&self, entity_type_id: u16) -> Option<Vec<(u8, f64)>> {
-        self.map.get(&entity_type_id).map(|m| m.iter().map(|(&k, &v)| (k, v)).collect())
-    }
-}
-
-pub struct RegisterBuilder<'a> {
-    registry: &'a mut AttributeRegistry,
-    id: u16,
-}
-
-impl<'a> RegisterBuilder<'a> {
-    pub fn add(self, attribute: Attributes, base: f64) -> Self {
-        if let Some(map) = self.registry.map.get_mut(&self.id) {
-            map.insert(attribute.id, base);
-        } else {
-            let mut m = HashMap::new();
-            m.insert(attribute.id, base);
-            self.registry.map.insert(self.id, m);
-        }
-        self
+        self.map
+            .get(&entity_type_id)
+            .map(|m| m.iter().map(|(&k, &v)| (k, v)).collect())
     }
 }
 
 /// Builder to declaratively assemble attribute overrides for an entity type.
+#[derive(Default)]
 pub struct AttributeBuilder {
     entries: Vec<(Attributes, f64)>,
 }
 
 impl AttributeBuilder {
+    #[must_use]
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self::default()
     }
 
+    #[must_use]
     pub fn add(mut self, attribute: Attributes, base: f64) -> Self {
         self.entries.push((attribute, base));
         self
     }
 
+    #[must_use]
     pub fn build(self) -> Vec<(Attributes, f64)> {
         self.entries
     }
@@ -260,9 +249,12 @@ impl AttributeBuilder {
 
 impl AttributeRegistry {
     /// Register overrides created by an `AttributeBuilder` for `entity_type`.
-    pub fn register_builder(&mut self, entity_type: &'static EntityType, builder: AttributeBuilder) {
-        let id = entity_type.id;
-        let inner = self.map.entry(id).or_insert_with(HashMap::new);
+    pub fn register_builder(
+        &mut self,
+        entity_type: &'static EntityType,
+        builder: AttributeBuilder,
+    ) {
+        let inner = self.map.entry(entity_type.id).or_default();
         for (attr, val) in builder.build() {
             inner.insert(attr.id, val);
         }
@@ -270,9 +262,8 @@ impl AttributeRegistry {
 }
 
 // Provide a global default registry that can be referenced.
-pub static DEFAULT_ATTRIBUTE_REGISTRY: LazyLock<RwLock<AttributeRegistry>> = LazyLock::new(|| {
-    RwLock::new(AttributeRegistry::new())
-});
+pub static DEFAULT_ATTRIBUTE_REGISTRY: LazyLock<RwLock<AttributeRegistry>> =
+    LazyLock::new(|| RwLock::new(AttributeRegistry::new()));
 
 /// Initialize the global attribute registry with per-entity registrations.
 pub fn init_all_attributes() {

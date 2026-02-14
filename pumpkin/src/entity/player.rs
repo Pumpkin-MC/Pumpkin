@@ -29,14 +29,14 @@ use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
-use pumpkin_data::attributes::Attributes;
-use crate::entity::attributes::AttributeBuilder;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
@@ -571,6 +571,7 @@ impl Player {
         }
     }
 
+    #[must_use]
     pub fn create_attributes() -> AttributeBuilder {
         AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.1)
     }
