@@ -4,6 +4,7 @@ use pumpkin_data::{
 };
 use pumpkin_protocol::{ConnectionState, java::server::handshake::SHandShake};
 use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
+use tracing::debug;
 
 use crate::net::java::JavaClient;
 
@@ -13,7 +14,7 @@ impl JavaClient {
         *self.server_address.lock().await = handshake.server_address;
         self.version.store(MinecraftVersion::from_protocol(version));
 
-        log::debug!("Handshake: next state is {:?}", &handshake.next_state);
+        debug!("Handshake: next state is {:?}", &handshake.next_state);
         self.connection_state.store(handshake.next_state);
         if self.connection_state.load() != ConnectionState::Status {
             let protocol = version;

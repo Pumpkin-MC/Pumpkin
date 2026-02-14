@@ -4,6 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::time::sleep;
+use tracing::debug;
 
 pub struct Ticker;
 
@@ -56,6 +57,6 @@ impl Ticker {
 
             last_tick = Instant::now();
         }
-        log::debug!("Ticker stopped");
+        debug!("Ticker stopped");
     }
 }

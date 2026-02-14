@@ -1,17 +1,16 @@
 use core::f32;
-use std::collections::{BinaryHeap, HashSet, VecDeque};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
 use std::ops::AddAssign;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
-use log::warn;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
@@ -27,6 +26,7 @@ use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
@@ -53,13 +53,14 @@ use pumpkin_protocol::IdOr;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
-    CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
-    CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
-    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetEquipment,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
-    CUpdateTime, GameEvent, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CCustomPayload,
+    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive,
+    COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+    CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
+    CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory,
+    CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTitleAnimation,
+    CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata, PlayerAction,
+    PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_util::math::{
@@ -135,7 +136,7 @@ pub struct ChunkManager {
     center: Vector2<i32>,
     view_distance: u8,
     chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
-    chunk_sent: HashSet<Vector2<i32>>,
+    chunk_sent: HashMap<Vector2<i32>, Weak<ChunkData>>,
     chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
@@ -157,7 +158,7 @@ impl ChunkManager {
             center: Vector2::<i32>::new(0, 0),
             view_distance: 0,
             chunk_listener,
-            chunk_sent: HashSet::new(),
+            chunk_sent: HashMap::new(),
             chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
@@ -171,6 +172,13 @@ impl ChunkManager {
         &self.world
     }
 
+    fn should_enqueue_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) -> bool {
+        self.chunk_sent
+            .insert(position, Arc::downgrade(chunk))
+            .and_then(|old_chunk| old_chunk.upgrade())
+            .is_none_or(|old_chunk| !Arc::ptr_eq(&old_chunk, chunk))
+    }
+
     pub fn pull_new_chunks(&mut self) {
         // log::debug!("pull new chunks");
         while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
@@ -180,7 +188,7 @@ impl ChunkManager {
             if dst > i32::from(self.view_distance) {
                 continue;
             }
-            if self.chunk_sent.insert(pos) {
+            if self.should_enqueue_chunk(pos, &chunk) {
                 // log::debug!("receive new chunk {pos:?}");
                 self.chunk_queue.push(HeapNode(dst, pos, chunk));
             }
@@ -221,7 +229,7 @@ impl ChunkManager {
         let view_distance_i32 = i32::from(view_distance);
         let unloading_chunks: HashSet<Vector2<i32>> = unloading_chunks.iter().copied().collect();
 
-        self.chunk_sent.retain(|pos| {
+        self.chunk_sent.retain(|pos, _| {
             (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
                 && !unloading_chunks.contains(pos)
         });
@@ -236,7 +244,7 @@ impl ChunkManager {
         self.chunk_queue = new_queue;
 
         for pos in loading_chunks {
-            if !self.chunk_sent.contains(pos)
+            if !self.chunk_sent.contains_key(pos)
                 && let Some(chunk) = level.loaded_chunks.get(pos)
             {
                 self.push_chunk(*pos, chunk.value().clone());
@@ -282,11 +290,12 @@ impl ChunkManager {
     }
 
     pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
-        self.chunk_sent.insert(position);
-        let dst = (position.x - self.center.x)
-            .abs()
-            .max((position.y - self.center.y).abs());
-        self.chunk_queue.push(HeapNode(dst, position, chunk));
+        if self.should_enqueue_chunk(position, &chunk) {
+            let dst = (position.x - self.center.x)
+                .abs()
+                .max((position.y - self.center.y).abs());
+            self.chunk_queue.push(HeapNode(dst, position, chunk));
+        }
     }
 
     pub fn push_entity(&mut self, position: Vector2<i32>, chunk: SyncEntityChunk) {
@@ -373,6 +382,8 @@ pub struct Player {
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
+    /// The block position of the currently open container screen (if any).
+    pub open_container_pos: AtomicCell<Option<BlockPos>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
     /// The player's abilities and special powers.
@@ -489,6 +500,7 @@ impl Player {
             hunger_manager: HungerManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
             open_container: AtomicCell::new(None),
+            open_container_pos: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
             packet_sequence: AtomicI32::new(-1),
             start_mining_time: AtomicI32::new(0),
@@ -590,7 +602,7 @@ impl Player {
         // Given enough time, all of these chunks will be in memory.
         let radial_chunks = cylindrical.all_chunks_within();
 
-        log::debug!(
+        debug!(
             "Removing player {}, unwatching {} chunks",
             self.gameprofile.name,
             radial_chunks.len()
@@ -605,7 +617,7 @@ impl Player {
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
-        log::debug!(
+        debug!(
             "Removed player id {} from world {} ({} chunks remain cached)",
             self.gameprofile.name,
             self.world().get_world_name(),
@@ -882,10 +894,9 @@ impl Player {
                     f64::from(pos.0.y) + 0.1,
                     f64::from(pos.0.z) + 0.5,
                 );
-                log::debug!(
+                debug!(
                     "Returning forced spawn point at {:?}, dimension: {:?}",
-                    position,
-                    respawn_point.dimension
+                    position, respawn_point.dimension
                 );
                 return Some(CalculatedRespawnPoint {
                     position,
@@ -2185,6 +2196,14 @@ impl Player {
             .await;
     }
 
+    /// Sends a custom payload packet to this player (Java edition only).
+    pub async fn send_custom_payload(&self, channel: &str, data: &[u8]) {
+        if let ClientPlatform::Java(java) = &self.client {
+            java.enqueue_packet(&CCustomPayload::new(channel, data))
+                .await;
+        }
+    }
+
     pub async fn drop_item(&self, item_stack: ItemStack) {
         let item_pos = self.living_entity.entity.pos.load()
             + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
@@ -2568,6 +2587,7 @@ impl Player {
         }
 
         *self.current_screen_handler.lock().await = self.player_screen_handler.clone();
+        self.open_container_pos.store(None);
     }
 
     pub async fn on_screen_handler_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
@@ -2585,6 +2605,7 @@ impl Player {
     pub async fn open_handled_screen(
         &self,
         screen_handler_factory: &dyn ScreenHandlerFactory,
+        block_pos: Option<BlockPos>,
     ) -> Option<u8> {
         if !self
             .current_screen_handler
@@ -2622,6 +2643,7 @@ impl Player {
             drop(screen_handler_temp);
             self.on_screen_handler_opened(screen_handler.clone()).await;
             *self.current_screen_handler.lock().await = screen_handler;
+            self.open_container_pos.store(block_pos);
             Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
         } else {
             //TODO: Send message if spectator
@@ -3475,9 +3497,9 @@ impl InventoryPlayer for Player {
 
     fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()> {
         Box::pin(async move {
-            log::debug!("Player::award_experience called with amount={amount}");
+            debug!("Player::award_experience called with amount={amount}");
             if amount > 0 {
-                log::debug!("Player: adding {amount} experience points");
+                debug!("Player: adding {amount} experience points");
                 self.add_experience_points(amount).await;
             }
         })

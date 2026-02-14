@@ -83,7 +83,10 @@ impl BlockBehaviour for EnderChestBlock {
                 let inventory = args.player.ender_chest_inventory();
                 inventory.set_tracker(block_entity.get_tracker()).await;
                 args.player
-                    .open_handled_screen(&EnderChestScreenFactory(inventory.clone()))
+                    .open_handled_screen(
+                        &EnderChestScreenFactory(inventory.clone()),
+                        Some(*args.position),
+                    )
                     .await;
 
                 // TODO: player.incrementStat(Stats.OPEN_ENDERCHEST);
