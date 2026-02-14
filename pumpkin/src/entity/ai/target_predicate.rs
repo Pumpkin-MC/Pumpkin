@@ -110,7 +110,14 @@ impl TargetPredicate {
         // Prevent targeting Creative‑mode players
         // (updated to use invulnerability flag as suggested)
         if let Some(player) = target.entity.get_player() {
-            if player.abilities.load().invulnerable {
+            // Spectator check (vanilla behavior)
+            let gm = player.gamemode.load();
+            if gm == GameMode::Spectator {
+                return false;
+            }
+
+            // Invulnerability check (covers Creative mode)
+            if player.abilities.lock().invulnerable {
                 return false;
             }
         }
