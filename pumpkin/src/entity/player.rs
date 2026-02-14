@@ -2728,47 +2728,51 @@ impl Player {
             screen_handler.window_type().is_none(),
         );
 
-        let event = server.plugin_manager.fire(event).await;
-
-        tracing::info!(
-            "PlayerInventoryClickEvent fired, cancelled={}",
-            event.cancelled
-        );
-
-        if event.cancelled {
-            if i32::from(slot) >= 0 && (slot as usize) < screen_handler.get_behaviour().slots.len()
-            {
+        send_cancellable! {{
+            server;
+            event;
+            'after: {
+                tracing::info!("PlayerInventoryClickEvent not cancelled, processing click");
+                screen_handler.disable_sync();
                 screen_handler
-                    .check_slot_updates(slot as usize, clicked_slot_stack)
+                    .on_slot_click(
+                        i32::from(slot),
+                        i32::from(packet.button),
+                        packet.mode.clone(),
+                        &**self,
+                    )
                     .await;
+
+                for (key, value) in packet.array_of_changed_slots {
+                    screen_handler.set_received_hash(key as usize, value);
+                }
+
+                screen_handler.set_received_cursor_hash(packet.carried_item);
+                screen_handler.enable_sync();
+
+                if not_in_sync {
+                    screen_handler.update_to_client().await;
+                } else {
+                    screen_handler.send_content_updates().await;
+                    drop(screen_handler);
+                }
+            };
+            'cancelled: {
+                tracing::info!("PlayerInventoryClickEvent cancelled, reverting client state");
+                if i32::from(slot) >= 0 && (slot as usize) < screen_handler.get_behaviour().slots.len()
+                {
+                    screen_handler
+                        .check_slot_updates(slot as usize, clicked_slot_stack)
+                        .await;
+                }
+                screen_handler.check_cursor_stack_updates().await;
+                return;
             }
-            screen_handler.check_cursor_stack_updates().await;
-            return;
-        }
-
-        screen_handler.disable_sync();
-        screen_handler
-            .on_slot_click(
-                i32::from(slot),
-                i32::from(packet.button),
-                packet.mode.clone(),
-                &**self,
-            )
-            .await;
-
-        for (key, value) in packet.array_of_changed_slots {
-            screen_handler.set_received_hash(key as usize, value);
-        }
-
-        screen_handler.set_received_cursor_hash(packet.carried_item);
-        screen_handler.enable_sync();
-
-        if not_in_sync {
-            screen_handler.update_to_client().await;
-        } else {
-            screen_handler.send_content_updates().await;
-            drop(screen_handler);
-        }
+        }}
+        //tracing::info!(
+        //    "PlayerInventoryClickEvent fired, cancelled={}",
+        //    event.cancelled
+        //);
     }
 
     /// Check if the player has a specific permission
