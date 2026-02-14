@@ -3,11 +3,10 @@ use crate::block::blocks::abstract_wall_mounting::WallMountedBlock;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockHitResult, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
-    PlacedArgs,
+    BlockBehaviour, BlockFuture, BlockHitResult, BrokenArgs, CanPlaceAtArgs, NormalUseArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
 };
 use crate::world::World;
-use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BellLikeProperties;
 use pumpkin_data::block_properties::BlockFace;
 use pumpkin_data::block_properties::BlockProperties;
@@ -15,21 +14,15 @@ use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::{Attachment, Axis};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::bell::BellBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
-const fn reverse_horizontal_facing(direction: HorizontalFacing) -> HorizontalFacing {
-    match direction {
-        HorizontalFacing::North => HorizontalFacing::South,
-        HorizontalFacing::South => HorizontalFacing::North,
-        HorizontalFacing::East => HorizontalFacing::West,
-        HorizontalFacing::West => HorizontalFacing::East,
-    }
-}
 async fn ring_bell(
     position: BlockPos,
     world: &Arc<World>,
@@ -40,12 +33,10 @@ async fn ring_bell(
     let props = BellLikeProperties::from_state_id(state.id, world.get_block(&position).await);
     let direction = direction2.map_or(props.facing, |direction3| direction3);
 
-    if let Some(block_entity) = world.get_block_entity(&position).await {
-        block_entity
-            .as_any()
-            .downcast_ref::<BellBlockEntity>()
-            .unwrap()
-            .activate(direction);
+    if let Some(block_entity) = world.get_block_entity(&position).await
+        && let Some(be) = block_entity.as_any().downcast_ref::<BellBlockEntity>()
+    {
+        be.activate(direction);
     }
 
     world
@@ -104,13 +95,43 @@ impl WallMountedBlock for BellBlock {
             Attachment::Ceiling => BlockDirection::Down,
             Attachment::Floor => BlockDirection::Up,
             Attachment::SingleWall | Attachment::DoubleWall => {
-                reverse_horizontal_facing(props.facing).to_block_direction()
+                props.facing.opposite().to_block_direction()
             }
         }
     }
 }
 
 impl BlockBehaviour for BellBlock {
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            if let Some(direction) = args.direction
+                && let Some(world) = args.world
+            {
+                if direction == BlockDirection::Up {
+                    let block: &Block = world.get_block(args.position).await;
+
+                    if block.has_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER) {
+                        false
+                    } else {
+                        let block_pos = args.position.offset(direction.to_offset());
+                        let block_state = world.get_block_state(&block_pos).await;
+                        block_state.is_center_solid(direction)
+                    }
+                } else {
+                    WallMountedBlock::can_place_at(self, world, args.position, direction).await
+                }
+            } else {
+                false
+            }
+        })
+    }
+    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let world: &World = args.world;
+            world.remove_block_entity(args.position).await;
+        })
+    }
+
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             args.world
@@ -149,18 +170,12 @@ impl BlockBehaviour for BellBlock {
 
             props.facing = match block_face {
                 BlockFace::Floor | BlockFace::Ceiling => facing,
-                BlockFace::Wall => reverse_horizontal_facing(facing),
+                BlockFace::Wall => facing.opposite(),
             };
 
             props.attachment = match block_face {
                 BlockFace::Wall => {
-                    if is_single_wall(
-                        *args.position,
-                        reverse_horizontal_facing(props.facing),
-                        args.world,
-                    )
-                    .await
-                    {
+                    if is_single_wall(*args.position, props.facing.opposite(), args.world).await {
                         Attachment::SingleWall
                     } else {
                         Attachment::DoubleWall
@@ -196,14 +211,6 @@ impl BlockBehaviour for BellBlock {
 
                 if is_receiving_power {
                     ring_bell(*args.position, args.world, None).await;
-
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            props.to_state_id(args.block),
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
                 }
             }
         })
