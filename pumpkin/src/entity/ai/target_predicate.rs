@@ -121,9 +121,7 @@ impl TargetPredicate {
         match tester {
             None => {
                 // 3. Logic for when there is no tester (e.g. searching for a random target)
-                if self.attackable
-                    && world.level_info.load().difficulty == Difficulty::Peaceful
-                {
+                if self.attackable && world.level_info.load().difficulty == Difficulty::Peaceful {
                     return false;
                 }
             }
