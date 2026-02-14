@@ -169,7 +169,9 @@ impl GzipRollingLogger {
 
         for id in 1..=MAX_ATTEMPTS {
             let filename = log_path.join(format!("{date_format}-{id}.log.gz"));
-            let Ok(modified_time) = filename.metadata().and_then(|m| m.modified()) else { continue };
+            let Ok(modified_time) = filename.metadata().and_then(|m| m.modified()) else {
+                continue;
+            };
 
             if let Some(oldest_time) = oldest_modified_path_time {
                 if modified_time < oldest_time {
