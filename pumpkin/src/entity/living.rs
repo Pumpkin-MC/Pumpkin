@@ -1419,7 +1419,7 @@ impl LivingEntity {
                     .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
                     .await;
 
-                // Set Absorbtion, Regeneration, and Fire Resistance effects
+                // Set Absorption, Regeneration, and Fire Resistance effects
                 self.add_effect(Effect {
                     effect_type: &StatusEffect::ABSORPTION,
                     duration: 100,
