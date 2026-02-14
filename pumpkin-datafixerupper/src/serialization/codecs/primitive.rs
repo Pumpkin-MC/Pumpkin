@@ -6,10 +6,12 @@ use crate::serialization::{
     dynamic_ops::DynamicOps,
 };
 
+// DFU types
+
 /// Helper macro to generate the struct and [`HasValue`] trait implementation for a `PrimitiveCodec` struct.
 macro_rules! impl_primitive_codec_start {
     ($name:ident, $prim:ty) => {
-        /// A primitive macro for the
+        /// A primitive [`Codec`] for the
         #[doc = concat!("[`", stringify!($prim), "`]")]
         /// data type.
         pub struct $name;
@@ -50,7 +52,7 @@ macro_rules! impl_primitive_list_codec {
                 ops: &'static impl DynamicOps<Value = T>,
                 input: T,
             ) -> DataResult<Vec<$elem>> {
-                ops.$get_func(&input)
+                ops.$get_func(input)
             }
 
             fn write<T>(&self, ops: &'static impl DynamicOps<Value = T>, value: &Vec<$elem>) -> T {
@@ -123,7 +125,17 @@ impl PrimitiveCodec for StringCodec {
     }
 }
 
-impl_primitive_list_codec!(ByteBufferCodec, i8, get_byte_buffer, create_byte_buffer);
+impl_primitive_codec_start!(ByteBufferCodec, Box<[u8]>);
+impl PrimitiveCodec for ByteBufferCodec {
+    fn read<T>(&self, ops: &'static impl DynamicOps<Value = T>, input: T) -> DataResult<Box<[u8]>> {
+        ops.get_byte_buffer(input)
+    }
+
+    fn write<T>(&self, ops: &'static impl DynamicOps<Value = T>, value: &Box<[u8]>) -> T {
+        ops.create_byte_buffer(value.to_vec())
+    }
+}
+
 impl_primitive_list_codec!(IntStreamCodec, i32, get_int_list, create_int_list);
 impl_primitive_list_codec!(LongStreamCodec, i64, get_long_list, create_long_list);
 
@@ -137,57 +149,62 @@ mod test {
 
     #[test]
     fn encoding() {
-        assert_success!(&INT_CODEC.encode_start(&3, &json_ops::INSTANCE), json!(3));
+        assert_success!(INT_CODEC.encode_start(&3, &json_ops::INSTANCE), json!(3));
         assert_success!(
-            &BYTE_CODEC.encode_start(&-68i8, &json_ops::INSTANCE),
+            BYTE_CODEC.encode_start(&-68i8, &json_ops::INSTANCE),
             json!(-68)
         );
         assert_success!(
-            &LONG_CODEC.encode_start(&-913813743, &json_ops::INSTANCE),
+            LONG_CODEC.encode_start(&-913813743, &json_ops::INSTANCE),
             json!(-913813743)
         );
 
         assert_success!(
-            &STRING_CODEC.encode_start(&"Hello, world!".to_string(), &json_ops::INSTANCE),
+            STRING_CODEC.encode_start(&"Hello, world!".to_string(), &json_ops::INSTANCE),
             json!("Hello, world!")
         );
         assert_success!(
-            &STRING_CODEC.encode_start(&"".to_string(), &json_ops::INSTANCE),
+            STRING_CODEC.encode_start(&"".to_string(), &json_ops::INSTANCE),
             json!("")
         );
 
         assert_success!(
-            &BYTE_BUFFER_CODEC.encode_start(&vec![1i8, 2i8, 3i8], &json_ops::INSTANCE),
+            BYTE_BUFFER_CODEC.encode_start(&Box::from([1u8, 2u8, 3u8]), &json_ops::INSTANCE),
             json!([1, 2, 3])
         );
         assert_success!(
-            &LONG_STREAM_CODEC.encode_start(&vec![4, 6, 9, 12], &json_ops::INSTANCE),
+            LONG_STREAM_CODEC.encode_start(&vec![4, 6, 9, 12], &json_ops::INSTANCE),
             json!([4, 6, 9, 12])
         );
     }
 
     #[test]
     fn decoding() {
-        assert_decode!(INT_CODEC, json!(-2), json_ops::INSTANCE, is_success);
+        assert_decode!(INT_CODEC, json!(-2), &json_ops::INSTANCE, is_success);
 
-        assert_decode!(SHORT_CODEC, json!("hello"), json_ops::INSTANCE, is_error);
-        assert_decode!(BOOL_CODEC, json!(0), json_ops::INSTANCE, is_error);
+        assert_decode!(SHORT_CODEC, json!("hello"), &json_ops::INSTANCE, is_error);
+        assert_decode!(BOOL_CODEC, json!(0), &json_ops::INSTANCE, is_error);
 
         assert_decode!(
             INT_STREAM_CODEC,
             json!([1, 2, 3]),
-            json_ops::INSTANCE,
+            &json_ops::INSTANCE,
             is_success
         );
-        assert_decode!(LONG_STREAM_CODEC, json!([]), json_ops::INSTANCE, is_success);
+        assert_decode!(
+            LONG_STREAM_CODEC,
+            json!([]),
+            &json_ops::INSTANCE,
+            is_success
+        );
         assert_decode!(
             BYTE_BUFFER_CODEC,
             json!(["not a number"]),
-            json_ops::INSTANCE,
+            &json_ops::INSTANCE,
             is_error
         );
 
-        assert_decode!(STRING_CODEC, json!("cool"), json_ops::INSTANCE, is_success);
-        assert_decode!(STRING_CODEC, json!(1), json_ops::INSTANCE, is_error);
+        assert_decode!(STRING_CODEC, json!("cool"), &json_ops::INSTANCE, is_success);
+        assert_decode!(STRING_CODEC, json!(1), &json_ops::INSTANCE, is_error);
     }
 }

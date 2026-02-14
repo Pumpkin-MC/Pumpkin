@@ -2127,6 +2127,7 @@ dependencies = [
  "bytes",
  "cesu8",
  "flate2",
+ "pumpkin-datafixerupper",
  "serde",
  "tempfile",
  "thiserror",
