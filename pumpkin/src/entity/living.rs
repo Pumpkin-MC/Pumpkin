@@ -257,7 +257,7 @@ impl LivingEntity {
 
     /// Sets the maximum health for this entity
     pub async fn set_max_health(&self, max_health: f32) {
-        // Update base attribtute
+        // Update base attribute
         self.set_attribute_base(&Attributes::MAX_HEALTH, max_health as f64);
 
         // Broadcast the attribute change
