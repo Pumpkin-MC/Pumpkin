@@ -117,16 +117,10 @@ impl TargetPredicate {
             }
 
             // Invulnerability check (covers Creative mode)
-            if player.abilities.lock().invulnerable {
+            if player.abilities_snapshot().invulnerable {
                 return false;
             }
         }
-
-        // if let Some(ref p) = self.predicate {
-        //     if !p(Arc::new(target.clone()), world.clone()).await {
-        //         return false;
-        //     }
-        // }
 
         match tester {
             None => {
