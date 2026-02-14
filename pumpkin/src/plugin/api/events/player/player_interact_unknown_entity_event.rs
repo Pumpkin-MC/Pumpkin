@@ -19,7 +19,7 @@ pub struct PlayerInteractUnknownEntityEvent {
     /// The entity ID that was targeted.
     pub entity_id: i32,
 
-    /// The type of interaction (Interact, Attack, or InteractAt).
+    /// The type of interaction (Interact, Attack, or `InteractAt`).
     pub action: ActionType,
 }
 

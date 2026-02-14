@@ -22,10 +22,10 @@ pub struct PlayerInteractEntityEvent {
     /// The entity that was interacted with.
     pub target: Arc<dyn EntityBase>,
 
-    /// The type of interaction (Interact, Attack, or InteractAt).
+    /// The type of interaction (Interact, Attack, or `InteractAt`).
     pub action: ActionType,
 
-    /// The position on the entity that was clicked (only for InteractAt).
+    /// The position on the entity that was clicked (only for `InteractAt`).
     pub target_position: Option<Vector3<f32>>,
 
     /// Whether the player was sneaking during the interaction.

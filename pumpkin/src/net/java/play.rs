@@ -1217,7 +1217,6 @@ impl JavaClient {
             return;
         };
 
-        // Resolve the target entity for the event
         let world = player_entity.world.load_full();
         let player_target = world.get_player_by_id(entity_id.0);
         let target: Option<Arc<dyn EntityBase>> = player_target
@@ -1284,7 +1283,6 @@ impl JavaClient {
                 }
             }}
         } else {
-            // Entity not found
             send_cancellable! {{
                 server;
                 PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
