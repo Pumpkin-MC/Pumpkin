@@ -283,6 +283,11 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
     }
 
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        // Needs a length cap during deserialization to prevent OOM from malicious packets
+        // Vanilla doesn't have any limits (Integer.MAX_VALUE is technically a limit but not enforced in practice)
+        const MAX_COLORS: usize = 256;
+        const MAX_FADE_COLORS: usize = 256;
+
         // Shape (VarInt enum)
         let shape_id = seq
             .next_element::<VarInt>()?
@@ -294,9 +299,6 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
             .ok_or(de::Error::custom("Invalid FireworkExplosionShape id!"))?;
 
         // Colors list
-        // Needs a length cap during deserialization to prevent OOM from malicious packets
-        // Vanilla doesn't have any limits (Integer.MAX_VALUE is technically a limit but not enforced in practice)
-        const MAX_COLORS: usize = 256;
         let colors_len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom(
@@ -305,8 +307,7 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
             .0 as usize;
         if colors_len > MAX_COLORS {
             return Err(de::Error::custom(format!(
-                "FireworkExplosionImpl colors_len {} exceeds maximum of {}",
-                colors_len, MAX_COLORS
+                "FireworkExplosionImpl colors_len {colors_len} exceeds maximum of {MAX_COLORS}"
             )));
         }
         let mut colors = Vec::with_capacity(colors_len);
@@ -318,9 +319,6 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
         }
 
         // Fade colors list
-        // Needs a length cap during deserialization to prevent OOM from malicious packets
-        // Vanilla doesn't have any limits (Integer.MAX_VALUE is technically a limit but not enforced in practice)
-        const MAX_FADE_COLORS: usize = 256;
         let fade_colors_len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom(
@@ -329,8 +327,7 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
             .0 as usize;
         if fade_colors_len > MAX_FADE_COLORS {
             return Err(de::Error::custom(format!(
-                "FireworkExplosionImpl fade_colors_len {} exceeds maximum of {}",
-                fade_colors_len, MAX_FADE_COLORS
+                "FireworkExplosionImpl fade_colors_len {fade_colors_len} exceeds maximum of {MAX_FADE_COLORS}"
             )));
         }
         let mut fade_colors = Vec::with_capacity(fade_colors_len);
@@ -374,34 +371,33 @@ impl DataComponentCodec<Self> for FireworksImpl {
     }
 
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
-        // Flight duration (VarInt)
+        // Needs a length cap during deserialization to prevent OOM from malicious packets
+        // Vanilla doesn't have any limits
+        const MAX_EXPLOSIONS: usize = 256;
         // Vanilla restricts to 0-255 (UNSIGNED_BYTE in data component codec) (do not trust client NBT to limit it)
         const MAX_FLIGHT_DURATION: i32 = 255;
+
+        // Flight duration
         let flight_duration = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom(
                 "No FireworksImpl flight_duration VarInt!",
             ))?
             .0;
-        if flight_duration < 0 || flight_duration > MAX_FLIGHT_DURATION {
+        if !(0..=MAX_FLIGHT_DURATION).contains(&flight_duration) {
             return Err(de::Error::custom(format!(
-                "FireworksImpl flight_duration {} is out of bounds (0-{})",
-                flight_duration, MAX_FLIGHT_DURATION
+                "FireworksImpl flight_duration {flight_duration} is out of bounds (0-{MAX_FLIGHT_DURATION})"
             )));
         }
 
         // Explosions list
-        // Needs a length cap during deserialization to prevent OOM from malicious packets
-        // Vanilla doesn't have any limits
-        const MAX_EXPLOSIONS: usize = 256;
         let explosions_len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom("No FireworksImpl explosions_len VarInt!"))?
             .0 as usize;
         if explosions_len > MAX_EXPLOSIONS {
             return Err(de::Error::custom(format!(
-                "FireworksImpl explosions_len {} exceeds maximum of {}",
-                explosions_len, MAX_EXPLOSIONS
+                "FireworksImpl explosions_len {explosions_len} exceeds maximum of {MAX_EXPLOSIONS}"
             )));
         }
         let mut explosions = Vec::with_capacity(explosions_len);
