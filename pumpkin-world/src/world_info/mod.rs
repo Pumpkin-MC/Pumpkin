@@ -91,18 +91,39 @@ const DEFAULT_DIFFICULTY: Difficulty = Difficulty::Normal;
 const DEFAULT_LEVEL_NAME: &str = "world";
 const DEFAULT_SPAWN_Y: i32 = 200;
 
-fn default_border_damage_per_block() -> f64 { DEFAULT_BORDER_DAMAGE_PER_BLOCK }
-fn default_border_size() -> f64 { DEFAULT_BORDER_SIZE }
-fn default_border_safe_zone() -> f64 { DEFAULT_BORDER_SAFE_ZONE }
-fn default_border_warning_blocks() -> f64 { DEFAULT_BORDER_WARNING_BLOCKS }
-fn default_border_warning_time() -> f64 { DEFAULT_BORDER_WARNING_TIME }
-fn default_data_packs() -> DataPacks {
-    DataPacks { disabled: vec![], enabled: vec!["vanilla".to_string()] }
+fn default_border_damage_per_block() -> f64 {
+    DEFAULT_BORDER_DAMAGE_PER_BLOCK
 }
-fn default_difficulty() -> Difficulty { DEFAULT_DIFFICULTY }
-fn default_level_name() -> String { DEFAULT_LEVEL_NAME.to_string() }
-fn default_spawn_y() -> i32 { DEFAULT_SPAWN_Y }
-fn default_level_version() -> i32 { MAXIMUM_SUPPORTED_LEVEL_VERSION }
+fn default_border_size() -> f64 {
+    DEFAULT_BORDER_SIZE
+}
+fn default_border_safe_zone() -> f64 {
+    DEFAULT_BORDER_SAFE_ZONE
+}
+fn default_border_warning_blocks() -> f64 {
+    DEFAULT_BORDER_WARNING_BLOCKS
+}
+fn default_border_warning_time() -> f64 {
+    DEFAULT_BORDER_WARNING_TIME
+}
+fn default_data_packs() -> DataPacks {
+    DataPacks {
+        disabled: vec![],
+        enabled: vec!["vanilla".to_string()],
+    }
+}
+fn default_difficulty() -> Difficulty {
+    DEFAULT_DIFFICULTY
+}
+fn default_level_name() -> String {
+    DEFAULT_LEVEL_NAME.to_string()
+}
+fn default_spawn_y() -> i32 {
+    DEFAULT_SPAWN_Y
+}
+fn default_level_version() -> i32 {
+    MAXIMUM_SUPPORTED_LEVEL_VERSION
+}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct WorldGenSettings {
