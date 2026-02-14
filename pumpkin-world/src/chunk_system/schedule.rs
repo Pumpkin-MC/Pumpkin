@@ -63,6 +63,41 @@ pub struct GenerationSchedule {
 }
 
 impl GenerationSchedule {
+    /// Returns `true` if the task is orphaned: no longer needed by the chunk
+    /// itself AND no valid dependent tasks remain in the graph.
+    fn is_orphaned_task(&self, node_key: NodeKey, pos: ChunkPos, stage: StagedChunkEnum) -> bool {
+        // If the chunk's own target_stage still requires this task, keep it.
+        if let Some(holder) = self.chunk_map.get(&pos)
+            && holder.target_stage >= stage
+        {
+            return false;
+        }
+        // Check whether any outgoing edge still points to a live node.
+        if let Some(n) = self.graph.nodes.get(node_key) {
+            let mut edge = n.edge;
+            while !edge.is_null() {
+                if let Some(e) = self.graph.edges.get(edge) {
+                    if self.graph.nodes.contains_key(e.to) {
+                        return false; // still has a valid dependent
+                    }
+                    edge = e.next;
+                } else {
+                    break;
+                }
+            }
+        }
+        true
+    }
+
+    /// Drop an orphaned task: remove it from the holder's task array and from
+    /// the DAG so dependents (if any) get unblocked.
+    fn drop_orphaned_task(&mut self, node_key: NodeKey, pos: ChunkPos, stage: StagedChunkEnum) {
+        if let Some(holder) = self.chunk_map.get_mut(&pos) {
+            holder.tasks[stage as usize] = NodeKey::null();
+        }
+        self.drop_node(node_key);
+    }
+
     pub fn create(
         io_read_thread_count: usize,
         gen_thread_count: usize,
@@ -329,25 +364,43 @@ impl GenerationSchedule {
                                 if ano_chunk.current_stage >= req_stage {
                                     continue;
                                 }
-                                let ano_task = &mut ano_chunk.tasks[req_stage as usize];
-                                if ano_task.is_null() {
-                                    *ano_task =
-                                        self.graph.nodes.insert(Node::new(new_pos, req_stage));
-
-                                    // Ensure the implicitly created task is queued
-                                    let node = self.graph.nodes.get_mut(*ano_task).unwrap();
-                                    node.in_queue = true;
-                                    self.queue.push(TaskHeapNode(
-                                        Self::calc_priority(
-                                            &self.last_level,
-                                            &self.last_high_priority,
-                                            new_pos,
-                                            req_stage,
-                                        ),
-                                        *ano_task,
-                                    ));
+                                // Create tasks for ALL prerequisite stages from
+                                // current_stage+1 to req_stage so the dependency
+                                // chain can actually complete (Empty→…→req_stage).
+                                let start = ano_chunk.current_stage as u8 + 1;
+                                let mut prev_key = NodeKey::null();
+                                for sid in start..=(req_stage as u8) {
+                                    let stg = StagedChunkEnum::from(sid);
+                                    let slot = &mut ano_chunk.tasks[stg as usize];
+                                    if slot.is_null() {
+                                        *slot = self.graph.nodes.insert(Node::new(new_pos, stg));
+                                        if !ano_chunk.occupied.is_null() {
+                                            self.graph.add_edge(ano_chunk.occupied, *slot);
+                                        }
+                                    }
+                                    let cur_key = *slot;
+                                    // Chain: previous stage → current stage
+                                    if !prev_key.is_null() {
+                                        self.graph.add_edge(prev_key, cur_key);
+                                    }
+                                    // Queue if ready (in_degree == 0)
+                                    let n = self.graph.nodes.get_mut(cur_key).unwrap();
+                                    if n.in_degree == 0 && !n.in_queue {
+                                        n.in_queue = true;
+                                        self.queue.push(TaskHeapNode(
+                                            Self::calc_priority(
+                                                &self.last_level,
+                                                &self.last_high_priority,
+                                                new_pos,
+                                                stg,
+                                            ),
+                                            cur_key,
+                                        ));
+                                    }
+                                    prev_key = cur_key;
                                 }
-                                self.graph.add_edge(*ano_task, task); // task depend on ano_task
+                                let ano_task = ano_chunk.tasks[req_stage as usize];
+                                self.graph.add_edge(ano_task, task); // task depend on ano_task
                             }
                         }
                     }
@@ -857,6 +910,11 @@ impl GenerationSchedule {
                                 }
                             }
                             if !ready {
+                                // Drop orphaned tasks instead of spinning
+                                if self.is_orphaned_task(task.1, node.pos, node.stage) {
+                                    self.drop_orphaned_task(task.1, node.pos, node.stage);
+                                    continue;
+                                }
                                 // requeue this task for later
                                 if let Some(n) = self.graph.nodes.get_mut(task.1) {
                                     n.in_queue = true;
@@ -894,6 +952,11 @@ impl GenerationSchedule {
                         }
 
                         if missing_chunk {
+                            // Drop orphaned tasks instead of spinning
+                            if self.is_orphaned_task(task.1, node.pos, node.stage) {
+                                self.drop_orphaned_task(task.1, node.pos, node.stage);
+                                continue;
+                            }
                             // Requeue for later when chunks arrive
                             if let Some(n) = self.graph.nodes.get_mut(task.1) {
                                 n.in_queue = true;
