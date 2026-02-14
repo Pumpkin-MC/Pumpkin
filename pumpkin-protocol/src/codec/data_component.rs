@@ -335,11 +335,9 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
         }
         let mut fade_colors = Vec::with_capacity(fade_colors_len);
         for _ in 0..fade_colors_len {
-            let color = seq
-                .next_element::<i32>()?
-                .ok_or(de::Error::custom(
-                    "No FireworkExplosionImpl fade_color i32!",
-                ))?;
+            let color = seq.next_element::<i32>()?.ok_or(de::Error::custom(
+                "No FireworkExplosionImpl fade_color i32!",
+            ))?;
             fade_colors.push(color);
         }
 
