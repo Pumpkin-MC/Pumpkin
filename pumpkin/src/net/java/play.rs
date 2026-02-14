@@ -24,6 +24,7 @@ use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
+use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -1284,18 +1285,25 @@ impl JavaClient {
             }}
         } else {
             // Entity not found
-            if action == ActionType::Attack {
-                error!(
-                    "Player id {} interacted with entity id {}, which was not found.",
-                    player.entity_id(),
-                    entity_id.0
-                );
-                self.kick(TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                    [],
-                ))
-                .await;
-            }
+            send_cancellable! {{
+                server;
+                PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
+
+                'after: {
+                    if event.action == ActionType::Attack {
+                        error!(
+                            "Player id {} interacted with entity id {}, which was not found.",
+                            player.entity_id(),
+                            event.entity_id
+                        );
+                        self.kick(TextComponent::translate(
+                            translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                            [],
+                        ))
+                        .await;
+                    }
+                }
+            }}
         }
     }
 
