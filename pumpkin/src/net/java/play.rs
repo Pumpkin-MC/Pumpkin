@@ -22,6 +22,7 @@ use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
+use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
@@ -1195,7 +1196,7 @@ impl JavaClient {
 
     pub async fn handle_interact(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         interact: SInteract,
         server: &Arc<Server>,
     ) {
@@ -1215,72 +1216,85 @@ impl JavaClient {
             return;
         };
 
-        match action {
-            ActionType::Attack => {
-                let config = &server.advanced_config.pvp;
-                // TODO: do validation and stuff
-                if !config.enabled {
-                    return;
-                }
+        // Resolve the target entity for the event
+        let world = player_entity.world.load_full();
+        let player_target = world.get_player_by_id(entity_id.0);
+        let target: Option<Arc<dyn EntityBase>> = player_target
+            .as_ref()
+            .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
+            .or_else(|| world.get_entity_by_id(entity_id.0));
 
-                // TODO: set as camera entity when spectator
+        if let Some(target) = target {
+            send_cancellable! {{
+                server;
+                PlayerInteractEntityEvent::new(
+                    player,
+                    Arc::clone(&target),
+                    action.clone(),
+                    interact.target_position,
+                    sneaking,
+                );
 
-                let world = player_entity.world.load_full();
-                let player_victim = world.get_player_by_id(entity_id.0);
-                if entity_id.0 == player.entity_id() {
-                    // This can't be triggered from a non-modded client.
-                    self.kick(TextComponent::translate(
-                        translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                        [],
-                    ))
-                    .await;
-                    return;
-                }
-                if let Some(player_victim) = player_victim {
-                    if player_victim.living_entity.health.load() <= 0.0 {
-                        // You can trigger this from a non-modded / innocent client,
-                        // so we shouldn't kick the player.
-                        return;
+                'after: {
+                    match event.action {
+                        ActionType::Attack => {
+                            let config = &server.advanced_config.pvp;
+                            if !config.enabled {
+                                return;
+                            }
+
+                            if entity_id.0 == player.entity_id() {
+                                self.kick(TextComponent::translate(
+                                    translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                                    [],
+                                ))
+                                .await;
+                                return;
+                            }
+
+                            if let Some(player_victim) = &player_target {
+                                if player_victim.living_entity.health.load() <= 0.0 {
+                                    return;
+                                }
+                                if config.protect_creative
+                                    && player_victim.gamemode.load() == GameMode::Creative
+                                {
+                                    world
+                                        .play_sound(
+                                            Sound::EntityPlayerAttackNodamage,
+                                            SoundCategory::Players,
+                                            &player_victim.position(),
+                                        )
+                                        .await;
+                                    return;
+                                }
+                            }
+                            player.attack(event.target).await;
+                        }
+                        ActionType::Interact | ActionType::InteractAt => {
+                            let held = player.inventory.held_item();
+                            let mut stack = held.lock().await;
+                            server
+                                .item_registry
+                                .use_on_entity(&mut stack, player, event.target)
+                                .await;
+                        }
                     }
-                    if config.protect_creative
-                        && player_victim.gamemode.load() == GameMode::Creative
-                    {
-                        world
-                            .play_sound(
-                                Sound::EntityPlayerAttackNodamage,
-                                SoundCategory::Players,
-                                &player_victim.position(),
-                            )
-                            .await;
-                        return;
-                    }
-                    player.attack(player_victim).await;
-                } else if let Some(entity_victim) = world.get_entity_by_id(entity_id.0) {
-                    player.attack(entity_victim).await;
-                } else {
-                    error!(
-                        "Player id {} interacted with entity id {}, which was not found.",
-                        player.entity_id(),
-                        entity_id.0
-                    );
-                    self.kick(TextComponent::translate(
-                        translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                        [],
-                    ))
-                    .await;
                 }
-            }
-            ActionType::Interact | ActionType::InteractAt => {
-                // TODO: split this up
-                let entity = player.world().get_player_by_id(entity_id.0);
-                if let Some(entity) = entity {
-                    let held = player.inventory.held_item();
-                    let mut stack = held.lock().await;
-                    server
-                        .item_registry
-                        .use_on_entity(&mut stack, player, entity)
-                        .await;
-                }
+            }}
+        } else {
+            // Entity not found
+            if action == ActionType::Attack {
+                error!(
+                    "Player id {} interacted with entity id {}, which was not found.",
+                    player.entity_id(),
+                    entity_id.0
+                );
+                self.kick(TextComponent::translate(
+                    translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                    [],
+                ))
+                .await;
             }
         }
     }
