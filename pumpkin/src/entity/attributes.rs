@@ -1,4 +1,3 @@
-// Cell is not needed with atomics; removed to avoid unused import warnings
 use std::sync::RwLock;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
@@ -65,13 +64,20 @@ impl AttributeInstance {
         value *= 1.0 + mul_base;
         value *= mul_total;
 
+        if value.is_nan() || value.is_infinite() {
+            value = self.base_value;
+        }
+
         self.cached_value.store(value.to_bits(), Ordering::Relaxed);
         self.dirty.store(false, Ordering::Relaxed);
 
         value
     }
 
-    pub fn add_modifier(&mut self, modifier: Modifier) {
+    pub fn add_or_replace_modifier(&mut self, modifier: Modifier) {
+        if let Some(pos) = self.modifiers.iter().position(|m| m.id == modifier.id) {
+            self.modifiers.remove(pos);
+        }
         self.modifiers.push(modifier);
         self.dirty.store(true, Ordering::Relaxed);
     }
@@ -100,12 +106,12 @@ pub async fn send_attribute_updates_for_living(
     let mut be_attributes: Vec<BeAttribute> = Vec::with_capacity(attributes.len());
 
     for attribute in attributes.into_iter() {
-        let base_value = living.entity.get_attribute_base(&attribute);
-        let effective_value = living.entity.get_attribute_value(&attribute);
+        let base_value = living.get_attribute_base(&attribute);
+        let effective_value = living.get_attribute_value(&attribute);
 
         // Pull modifiers for this attribute
         let mut modifiers = Vec::new();
-        if let Some(inst) = living.entity.attributes.read().unwrap().get(&attribute.id) {
+        if let Some(inst) = living.attributes.read().unwrap().get(&attribute.id) {
             for mod_inst in &inst.modifiers {
                 modifiers.push(JeAttrMod::new(
                     mod_inst.id.to_string(), 

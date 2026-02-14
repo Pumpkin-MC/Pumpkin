@@ -1946,7 +1946,7 @@ impl Player {
 
     pub fn can_food_heal(&self) -> bool {
         let health = self.living_entity.health.load();
-        let max_health = 20.0; // TODO
+        let max_health = self.living_entity.get_max_health();
         health > 0.0 && health < max_health
     }
 

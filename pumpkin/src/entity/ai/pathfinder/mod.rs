@@ -11,6 +11,7 @@ use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::ai::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 use pumpkin_util::math::wrap_degrees;
 use std::sync::atomic::Ordering;
+use pumpkin_data::attributes::Attributes;
 
 pub mod binary_heap;
 pub mod node;
@@ -61,17 +62,8 @@ const MAX_ITERS: usize = 560;
 
 const TARGET_DISTANCE_MULTIPLIER: f32 = 1.5;
 
-// TODO: Read from mob attributes
-const FOLLOW_RANGE: f32 = 35.0;
-
 const NODE_REACH_XZ: f64 = 0.5;
 const NODE_REACH_Y: f64 = 1.0;
-
-// TODO: Read from entity attributes (vanilla default 0.6)
-const MOB_STEP_HEIGHT: f64 = 0.6;
-
-// TODO: Read from entity attributes (zombie = 0.23, default = 0.25)
-const DEFAULT_MOVEMENT_SPEED: f64 = 0.23;
 
 const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 
@@ -149,7 +141,7 @@ impl Navigator {
                 let dz = (current.pos.0.z - start_pos.z) as f32;
                 (dx * dx + dy * dy + dz * dz).sqrt()
             };
-            if euclidean_from_start >= FOLLOW_RANGE {
+            if euclidean_from_start >= entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32 {
                 continue;
             }
 
@@ -161,7 +153,7 @@ impl Navigator {
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
 
                 let in_heap = open_set.contains(&neighbor);
-                if neighbor.walked_dist < FOLLOW_RANGE
+                if neighbor.walked_dist < entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32
                     && (!in_heap
                         || open_set
                             .get_node(&neighbor)
@@ -330,14 +322,13 @@ impl Navigator {
                 entity.entity.body_yaw.store(target_yaw);
 
                 // Vanilla sets both movementSpeed and forwardSpeed to the same value
-                let mob_speed = goal.speed * DEFAULT_MOVEMENT_SPEED;
-                entity.movement_speed.store(mob_speed);
+                let mob_speed = goal.speed * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
                 entity
                     .movement_input
                     .store(Vector3::new(0.0, 0.0, mob_speed));
 
                 // Jump when the next node is above step height and we're close enough horizontally
-                if dy > MOB_STEP_HEIGHT && horizontal_dist < 2.0 {
+                if dy > entity.get_attribute_value(&Attributes::STEP_HEIGHT) && horizontal_dist < 2.0 {
                     entity
                         .jumping
                         .store(true, std::sync::atomic::Ordering::SeqCst);

@@ -130,7 +130,7 @@ impl MobEntity {
     }
 
     pub async fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
-        let mut attack_damage: f32 = self.living_entity.entity.get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
+        let mut attack_damage: f32 = self.living_entity.get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
 
         // Apply Strength effect (+3 damage per level)
         if let Some(effect) = self
