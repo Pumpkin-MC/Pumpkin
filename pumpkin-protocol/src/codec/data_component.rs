@@ -377,12 +377,20 @@ impl DataComponentCodec<Self> for FireworksImpl {
 
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
         // Flight duration (VarInt)
+        // Vanilla restricts to 0-255 (UNSIGNED_BYTE in data component codec) (do not trust client NBT to limit it)
+        const MAX_FLIGHT_DURATION: i32 = 255;
         let flight_duration = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom(
                 "No FireworksImpl flight_duration VarInt!",
             ))?
             .0;
+        if flight_duration < 0 || flight_duration > MAX_FLIGHT_DURATION {
+            return Err(de::Error::custom(format!(
+                "FireworksImpl flight_duration {} is out of bounds (0-{})",
+                flight_duration, MAX_FLIGHT_DURATION
+            )));
+        }
 
         // Explosions list
         // Needs a length cap during deserialization to prevent OOM from malicious packets
