@@ -69,3 +69,104 @@ pub(crate) const fn new_range_codec<A: Display + PartialOrd + Clone, C: Codec<Va
 ) -> RangeCodec<C> {
     RangeCodec { codec, min, max }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::serialization::codec::*;
+    use crate::serialization::coders::*;
+    use crate::serialization::json_ops;
+    use crate::{assert_decode, assert_success};
+    use serde_json::json;
+
+    #[test]
+    fn encoding() {
+        // A codec that does not allow negative numbers.
+        pub static NON_NEGATIVE_INT_CODEC: IntRangeCodec = int_range(0, i32::MAX);
+
+        assert_success!(
+            NON_NEGATIVE_INT_CODEC.encode_start(&3, &json_ops::INSTANCE),
+            json!(3)
+        );
+        assert_success!(
+            NON_NEGATIVE_INT_CODEC.encode_start(&6745, &json_ops::INSTANCE),
+            json!(6745)
+        );
+        assert_success!(
+            NON_NEGATIVE_INT_CODEC.encode_start(&0, &json_ops::INSTANCE),
+            json!(0)
+        );
+        assert!(
+            NON_NEGATIVE_INT_CODEC
+                .encode_start(&-93, &json_ops::INSTANCE)
+                .is_error()
+        );
+
+        // A codec accepting a double value from 0 to 100.
+        pub static PERCENTAGE_CODEC: DoubleRangeCodec = double_range(0.0, 100.0);
+
+        assert!(
+            PERCENTAGE_CODEC
+                .encode_start(&16.0, &json_ops::INSTANCE)
+                .is_success()
+        );
+        assert!(
+            PERCENTAGE_CODEC
+                .encode_start(&45.5, &json_ops::INSTANCE)
+                .is_success()
+        );
+        assert!(
+            PERCENTAGE_CODEC
+                .encode_start(&99.999, &json_ops::INSTANCE)
+                .is_success()
+        );
+        assert!(
+            PERCENTAGE_CODEC
+                .encode_start(&134.4, &json_ops::INSTANCE)
+                .is_error()
+        );
+    }
+
+    #[test]
+    fn decoding() {
+        assert_decode!(int_range(1, 5), json!(3), &json_ops::INSTANCE, is_success);
+        assert_decode!(int_range(-5, 5), json!(6), &json_ops::INSTANCE, is_error);
+
+        assert_decode!(
+            double_range(-100.0, 100.0),
+            json!(45.5),
+            &json_ops::INSTANCE,
+            is_success
+        );
+        assert_decode!(
+            double_range(-100.0, 100.0),
+            json!(-100),
+            &json_ops::INSTANCE,
+            is_success
+        );
+        assert_decode!(
+            double_range(1.0, f64::MAX),
+            json!(88.44),
+            &json_ops::INSTANCE,
+            is_success
+        );
+        assert_decode!(
+            double_range(1.0, f64::MAX),
+            json!(0.999),
+            &json_ops::INSTANCE,
+            is_error
+        );
+
+        assert_decode!(
+            float_range(0.04, 0.08),
+            json!(0.05),
+            &json_ops::INSTANCE,
+            is_success
+        );
+        assert_decode!(
+            float_range(0.06, 0.012),
+            json!(0.013),
+            &json_ops::INSTANCE,
+            is_error
+        );
+    }
+}
