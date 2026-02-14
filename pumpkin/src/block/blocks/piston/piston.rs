@@ -60,20 +60,18 @@ impl PistonBlock {
         }
         if block == &Block::PISTON || block == &Block::STICKY_PISTON {
             let props = PistonProps::from_state_id(state.id, block);
-            if props.extended {
-                return false;
-            }
-        } else {
-            #[expect(clippy::float_cmp)]
-            if state.hardness == -1.0 {
-                return false;
-            }
-            match state.piston_behavior {
-                pumpkin_data::block_state::PistonBehavior::Destroy => return can_break,
-                pumpkin_data::block_state::PistonBehavior::Block => return false,
-                pumpkin_data::block_state::PistonBehavior::PushOnly => return dir == piston_dir,
-                _ => {}
-            }
+            // Extended pistons are immovable. Non-extended pistons are movable
+            return !props.extended;
+        }
+        #[expect(clippy::float_cmp)]
+        if state.hardness == -1.0 {
+            return false;
+        }
+        match state.piston_behavior {
+            pumpkin_data::block_state::PistonBehavior::Destroy => return can_break,
+            pumpkin_data::block_state::PistonBehavior::Block => return false,
+            pumpkin_data::block_state::PistonBehavior::PushOnly => return dir == piston_dir,
+            _ => {}
         }
         !has_block_block_entity(block)
     }
@@ -227,11 +225,11 @@ impl BlockBehaviour for PistonBlock {
 
             world.update_neighbors(pos, None).await;
             if sticky {
-                let pos = pos.offset_dir(dir.to_offset(), 2);
-                let (block, state) = world.get_block_and_state(&pos).await;
+                let pull_pos = pos.offset_dir(dir.to_offset(), 2);
+                let (block, state) = world.get_block_and_state(&pull_pos).await;
                 let mut bl2 = false;
                 if block == &Block::MOVING_PISTON
-                    && let Some(entity) = world.get_block_entity(&pos).await
+                    && let Some(entity) = world.get_block_entity(&pull_pos).await
                 {
                     let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
                     if piston.facing == dir && piston.extending {
@@ -247,7 +245,7 @@ impl BlockBehaviour for PistonBlock {
                             || block == &Block::PISTON
                             || block == &Block::STICKY_PISTON)
                     {
-                        move_piston(world, dir, &pos, false, sticky).await;
+                        move_piston(world, dir, pos, false, sticky).await;
                     } else {
                         // remove
                         world
@@ -419,10 +417,10 @@ async fn move_piston(
             .set_block_state(&target_pos, state, BlockFlags::MOVED)
             .await;
 
-        if let Some(moved_state) = moved_block_states.get(index) {
+        if let Some(moved_state) = moved_block_states.get(moved_blocks.len() - 1 - index) {
             world
                 .add_block_entity(Arc::new(PistonBlockEntity {
-                    position: extended_pos,
+                    position: target_pos,
                     facing: dir.to_facing().to_block_direction(),
                     pushed_block_state: moved_state,
                     current_progress: 0.0.into(),
