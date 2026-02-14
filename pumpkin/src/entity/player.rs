@@ -1,5 +1,4 @@
 use core::f32;
-use std::any::Any;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
@@ -34,7 +33,6 @@ use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFa
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
-use pumpkin_data::screen::WindowType;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
@@ -64,7 +62,7 @@ use pumpkin_protocol::java::client::play::{
     CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata, PlayerAction,
     PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::java::server::play::{SClickSlot, SlotActionType};
+use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -2694,6 +2692,60 @@ impl Player {
 
         let not_in_sync = packet.revision.0 != (behaviour.revision.load(Ordering::Relaxed) as i32);
 
+        let server = self.world().server.upgrade().unwrap();
+        let cursor_stack = screen_handler
+            .get_behaviour()
+            .cursor_stack
+            .lock()
+            .await
+            .clone();
+        let clicked_slot_stack = if i32::from(slot) >= 0
+            && (slot as usize) < screen_handler.get_behaviour().slots.len()
+        {
+            screen_handler.get_behaviour().slots[slot as usize]
+                .get_cloned_stack()
+                .await
+        } else {
+            ItemStack::EMPTY.clone()
+        };
+
+        tracing::info!(
+            "Firing PlayerInventoryClickEvent: slot={}, button={}, mode={:?}",
+            i32::from(slot),
+            i32::from(packet.button),
+            packet.mode
+        );
+
+        let event = PlayerInventoryClickEvent::new(
+            self.clone(),
+            i32::from(slot),
+            i32::from(packet.button),
+            packet.mode.clone(),
+            cursor_stack.clone(),
+            clicked_slot_stack.clone(),
+            screen_handler.window_type(),
+            screen_handler.sync_id() as u16,
+            screen_handler.window_type().is_none(),
+        );
+
+        let event = server.plugin_manager.fire(event).await;
+
+        tracing::info!(
+            "PlayerInventoryClickEvent fired, cancelled={}",
+            event.cancelled
+        );
+
+        if event.cancelled {
+            if i32::from(slot) >= 0 && (slot as usize) < screen_handler.get_behaviour().slots.len()
+            {
+                screen_handler
+                    .check_slot_updates(slot as usize, clicked_slot_stack)
+                    .await;
+            }
+            screen_handler.check_cursor_stack_updates().await;
+            return;
+        }
+
         screen_handler.disable_sync();
         screen_handler
             .on_slot_click(
@@ -2701,7 +2753,6 @@ impl Player {
                 i32::from(packet.button),
                 packet.mode.clone(),
                 &**self,
-                Some(self.clone()),
             )
             .await;
 
@@ -3508,47 +3559,4 @@ impl InventoryPlayer for Player {
             }
         })
     }
-
-    fn fire_inventory_click_event<'a>(
-        &'a self,
-        slot_index: i32,
-        button: i32,
-        action_type: SlotActionType,
-        cursor_stack: &'a ItemStack,
-        clicked_slot_stack: &'a ItemStack,
-        window_type: Option<WindowType>,
-        sync_id: u16,
-        player_arc: Option<Arc<dyn Any + Send + Sync>>,
-    ) -> PlayerFuture<'a, bool> {
-        Box::pin(async move {
-            let player_arc = match player_arc {
-                Some(arc) => match arc.downcast::<Player>() {
-                    Ok(player) => player,
-                    Err(_) => return false,
-                },
-                None => return false,
-            };
-
-            let server = match player_arc.world().server.upgrade() {
-                Some(s) => s,
-                None => return false,
-            };
-            
-            let event = PlayerInventoryClickEvent::new(
-                player_arc,
-                slot_index,
-                button,
-                action_type,
-                cursor_stack.clone(),
-                clicked_slot_stack.clone(),
-                window_type,
-                sync_id,
-                window_type.is_none(),
-            );
-            
-            let event = server.plugin_manager.fire(event).await;
-            event.cancelled
-        })
-    }
-
 }
