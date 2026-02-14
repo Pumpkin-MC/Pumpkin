@@ -1,0 +1,37 @@
+
+    /// Retrieves the slot index associated with the inventory interacted with.
+    ///
+    /// # Returns
+    /// A reference to the `i32` involved in the event.
+    fn get_slot(&self) -> &i32;
+
+    /// Retrieves the id of the click button type.
+    ///
+    /// # Returns
+    /// A reference to the `i32` involved in the click.
+    fn get_click_button(&self) -> &i32;
+
+    /// Retrieves the type of click performed in the inventory interaction.
+    ///
+    /// # Returns
+    /// A reference to the `ClickType` enum representing the type of click performed.
+    fn get_click_type(&self) -> &ClickType;
+
+    /// Retrieves the ItemStack currently being held by the player's cursor during the inventory interaction.
+    ///
+    /// # Returns
+    /// An `ItemStack` representing the item currently held by the player's cursor.
+    fn get_cursor_stack(&self) -> ItemStack;
+
+    /// Retrieves the ItemStack present in the slot that was clicked during the inventory interaction.
+    /// 
+    /// # Returns
+    /// An `ItemStack` representing the item present in the clicked slot.
+    fn get_clicked_slot_stack(&self) -> ItemStack;
+
+
+    /// Determines whether the inventory click event occurred within the player's own inventory.
+    /// 
+    /// # Returns
+    /// A `bool` indicating whether the click event occurred in the player's inventory (`true`) or in another container (`false`).
+    fn is_player_inventory_click(&self) -> bool;
