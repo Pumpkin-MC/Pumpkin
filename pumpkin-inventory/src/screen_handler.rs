@@ -97,6 +97,21 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Awards experience points to the player (used for furnace smelting, etc.)
     fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()>;
+
+    // Inventory Click Event
+    // Since Pumpkin Inv cannot call Pumpkin (would create circ dependency issue) a callback function when 
+    // clicks are handled is neccesary in how the code base is currently structured.
+    fn fire_inventory_click_event<'a>(
+        &'a self,
+        slot_index: i32,
+        button: i32,
+        action_type: SlotActionType,
+        cursor_stack: &'a ItemStack,
+        clicked_slot_stack: &'a ItemStack,
+        window_type: Option<WindowType>,
+        sync_id: u16,
+        player_arc: Option<Arc<dyn Any + Send + Sync>>,
+    ) -> PlayerFuture<'a, bool>;
 }
 
 pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack) {
@@ -630,9 +645,10 @@ pub trait ScreenHandler: Send + Sync {
         button: i32,
         action_type: SlotActionType,
         player: &'a dyn InventoryPlayer,
+        player_arc: Option<Arc<dyn Any + Send + Sync>>,
     ) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
-            self.internal_on_slot_click(slot_index, button, action_type, player)
+            self.internal_on_slot_click(slot_index, button, action_type, player, player_arc)
                 .await;
         })
     }
@@ -644,8 +660,36 @@ pub trait ScreenHandler: Send + Sync {
         button: i32,
         action_type: SlotActionType,
         player: &'a dyn InventoryPlayer,
+        player_arc: Option<Arc<dyn Any + Send + Sync>>,
     ) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
+
+            let original_cursor = self.get_behaviour().cursor_stack.lock().await.clone();
+            let original_slot = if slot_index >= 0 && slot_index < self.get_behaviour().slots.len() as i32 {
+                self.get_behaviour().slots[slot_index as usize].get_cloned_stack().await
+            } else {
+                ItemStack::EMPTY.clone()
+            };
+            
+            let cancelled = player.fire_inventory_click_event(
+                slot_index,
+                button,
+                action_type.clone(),
+                &original_cursor,
+                &original_slot,
+                self.window_type(),
+                self.sync_id() as u16,
+                player_arc,
+            ).await;
+
+            if cancelled {
+                if slot_index >= 0 && slot_index < self.get_behaviour().slots.len() as i32 {
+                    self.check_slot_updates(slot_index as usize, original_slot).await;
+                }
+                self.check_cursor_stack_updates().await;
+                return;
+            }
+
             if action_type == SlotActionType::PickupAll && button == 0 {
                 let behavior = self.get_behaviour_mut();
                 let mut cursor_stack = behavior.cursor_stack.lock().await;
@@ -709,6 +753,7 @@ pub trait ScreenHandler: Send + Sync {
                             drag_button,
                             SlotActionType::Pickup,
                             player,
+                            None,
                         )
                         .await;
 

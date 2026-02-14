@@ -1,10 +1,10 @@
-use std::sync::Arc;
-use pumpkin_data::screen::WindowType;
-use pumpkin_inventory::container_click::ClickType;
-use pumpkin_macros::{cancellable, Event};
-use pumpkin_world::item::ItemStack;
 use crate::entity::player::Player;
 use crate::plugin::player::inventory::PlayerInventoryEvent;
+use pumpkin_data::screen::WindowType;
+use pumpkin_macros::{Event, cancellable};
+use pumpkin_protocol::java::server::play::SlotActionType;
+use pumpkin_world::item::ItemStack;
+use std::sync::Arc;
 
 #[cancellable]
 #[derive(Event, Clone)]
@@ -12,21 +12,21 @@ pub struct PlayerInventoryClickEvent {
     pub player: Arc<Player>,
     pub slot_index: i32,
     pub click_button: i32,
-    pub click_type: ClickType,
-    pub cursor_stack: ItemStack,        // Verify this is a clone
-    pub clicked_slot_stack: ItemStack,  // Verify this is a clone
-    pub window_type: Option<WindowType>, // Know if it's chest/furnace/etc // Verify this is a clone
+    pub action_type: SlotActionType,
+    pub cursor_stack: ItemStack,
+    pub clicked_slot_stack: ItemStack,
+    pub window_type: Option<WindowType>,
     pub sync_id: u16,
     pub is_player_inventory_click: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl PlayerInventoryClickEvent {
-
     pub const fn new(
         player: Arc<Player>,
         slot_index: i32,
         click_button: i32,
-        click_type: ClickType,
+        action_type: SlotActionType,
         cursor_stack: ItemStack,
         clicked_slot_stack: ItemStack,
         window_type: Option<WindowType>,
@@ -37,16 +37,15 @@ impl PlayerInventoryClickEvent {
             player,
             slot_index,
             click_button,
-            click_type,
+            action_type,
             cursor_stack,
             clicked_slot_stack,
             window_type,
             sync_id,
             is_player_inventory_click,
-            cancelled: false
+            cancelled: false,
         }
     }
-
 }
 
 impl PlayerInventoryEvent for PlayerInventoryClickEvent {
@@ -59,6 +58,6 @@ impl PlayerInventoryEvent for PlayerInventoryClickEvent {
     }
 
     fn get_sync_id(&self) -> u16 {
-        self.sync_id.clone()
+        self.sync_id
     }
 }

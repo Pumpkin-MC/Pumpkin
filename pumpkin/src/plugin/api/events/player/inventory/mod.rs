@@ -1,12 +1,10 @@
 pub mod inventory_click_event;
-pub mod inventory_open_event;
 pub mod inventory_close_event;
+pub mod inventory_open_event;
 
-use std::sync::Arc;
-use pumpkin_inventory::container_click::{DropType, KeyClick, MouseClick, MouseDragState};
-use pumpkin_data::screen::WindowType;
-use pumpkin_world::item::ItemStack;
 use crate::entity::player::Player;
+use pumpkin_data::screen::WindowType;
+use std::sync::Arc;
 
 pub trait PlayerInventoryEvent: Send + Sync {
     /// Retrieves a reference to the player associated with the event.

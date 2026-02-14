@@ -1,24 +1,17 @@
-
-
-use std::sync::Arc;
-use pumpkin_macros::Event;
-use crate::entity::player::Player;
-use crate::plugin::player::player_join::PlayerJoinEvent;
 use super::PlayerEvent;
+use crate::entity::player::Player;
+use pumpkin_macros::Event;
+use std::sync::Arc;
 
 #[derive(Event, Clone)]
 pub struct PlayerSpawnEvent {
-    pub player: Arc<Player>
+    pub player: Arc<Player>,
 }
 
 impl PlayerSpawnEvent {
-
     pub const fn new(player: Arc<Player>) -> Self {
-        Self {
-            player
-        }
+        Self { player }
     }
-
 }
 
 impl PlayerEvent for PlayerSpawnEvent {

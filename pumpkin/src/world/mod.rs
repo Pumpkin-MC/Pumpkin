@@ -137,8 +137,8 @@ pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
 
+use crate::plugin::player::player_spawn::PlayerSpawnEvent;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
-use crate::plugin::events::player::{player_spawn};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
@@ -2157,7 +2157,7 @@ impl World {
 
         // Call spawn event
         if let Some(server) = self.server.upgrade() {
-            let spawnevent = player_spawn::PlayerSpawnEvent::new(player.clone());
+            let spawnevent = PlayerSpawnEvent::new(player.clone());
             server.plugin_manager.fire(spawnevent).await;
         }
     }

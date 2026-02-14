@@ -1,4 +1,5 @@
 use core::f32;
+use std::any::Any;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
@@ -33,6 +34,7 @@ use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFa
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
+use pumpkin_data::screen::WindowType;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
@@ -62,7 +64,7 @@ use pumpkin_protocol::java::client::play::{
     CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata, PlayerAction,
     PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::java::server::play::SClickSlot;
+use pumpkin_protocol::java::server::play::{SClickSlot, SlotActionType};
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -84,6 +86,7 @@ use crate::command::dispatcher::CommandDispatcher;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
+use crate::plugin::player::inventory::inventory_click_event::PlayerInventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
@@ -2652,7 +2655,7 @@ impl Player {
         }
     }
 
-    pub async fn on_slot_click(&self, packet: SClickSlot) {
+    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot) {
         self.update_last_action_time();
         let screen_handler = self.current_screen_handler.lock().await;
         let mut screen_handler = screen_handler.lock().await;
@@ -2668,7 +2671,7 @@ impl Player {
             return;
         }
 
-        if !screen_handler.can_use(self) {
+        if !screen_handler.can_use(&**self) {
             warn!(
                 "Player {} interacted with invalid menu {:?}",
                 self.gameprofile.name,
@@ -2697,7 +2700,8 @@ impl Player {
                 i32::from(slot),
                 i32::from(packet.button),
                 packet.mode.clone(),
-                self,
+                &**self,
+                Some(self.clone()),
             )
             .await;
 
@@ -3504,4 +3508,47 @@ impl InventoryPlayer for Player {
             }
         })
     }
+
+    fn fire_inventory_click_event<'a>(
+        &'a self,
+        slot_index: i32,
+        button: i32,
+        action_type: SlotActionType,
+        cursor_stack: &'a ItemStack,
+        clicked_slot_stack: &'a ItemStack,
+        window_type: Option<WindowType>,
+        sync_id: u16,
+        player_arc: Option<Arc<dyn Any + Send + Sync>>,
+    ) -> PlayerFuture<'a, bool> {
+        Box::pin(async move {
+            let player_arc = match player_arc {
+                Some(arc) => match arc.downcast::<Player>() {
+                    Ok(player) => player,
+                    Err(_) => return false,
+                },
+                None => return false,
+            };
+
+            let server = match player_arc.world().server.upgrade() {
+                Some(s) => s,
+                None => return false,
+            };
+            
+            let event = PlayerInventoryClickEvent::new(
+                player_arc,
+                slot_index,
+                button,
+                action_type,
+                cursor_stack.clone(),
+                clicked_slot_stack.clone(),
+                window_type,
+                sync_id,
+                window_type.is_none(),
+            );
+            
+            let event = server.plugin_manager.fire(event).await;
+            event.cancelled
+        })
+    }
+
 }
