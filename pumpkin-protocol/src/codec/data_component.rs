@@ -268,12 +268,12 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
         // Colors list
         seq.serialize_field::<VarInt>("", &VarInt::from(self.colors.len() as i32))?;
         for color in &self.colors {
-            seq.serialize_field::<VarInt>("", &VarInt::from(*color))?;
+            seq.serialize_field::<i32>("", color)?;
         }
         // Fade colors list
         seq.serialize_field::<VarInt>("", &VarInt::from(self.fade_colors.len() as i32))?;
         for color in &self.fade_colors {
-            seq.serialize_field::<VarInt>("", &VarInt::from(*color))?;
+            seq.serialize_field::<i32>("", color)?;
         }
         // hasTrail
         seq.serialize_field::<bool>("", &self.has_trail)?;
@@ -294,36 +294,52 @@ impl DataComponentCodec<Self> for FireworkExplosionImpl {
             .ok_or(de::Error::custom("Invalid FireworkExplosionShape id!"))?;
 
         // Colors list
+        // Needs a length cap during deserialization to prevent OOM from malicious packets
+        // Vanilla doesn't have any limits (Integer.MAX_VALUE is technically a limit but not enforced in practice)
+        const MAX_COLORS: usize = 256;
         let colors_len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom(
                 "No FireworkExplosionImpl colors_len VarInt!",
             ))?
             .0 as usize;
+        if colors_len > MAX_COLORS {
+            return Err(de::Error::custom(format!(
+                "FireworkExplosionImpl colors_len {} exceeds maximum of {}",
+                colors_len, MAX_COLORS
+            )));
+        }
         let mut colors = Vec::with_capacity(colors_len);
         for _ in 0..colors_len {
             let color = seq
-                .next_element::<VarInt>()?
-                .ok_or(de::Error::custom("No FireworkExplosionImpl color VarInt!"))?
-                .0;
+                .next_element::<i32>()?
+                .ok_or(de::Error::custom("No FireworkExplosionImpl color i32!"))?;
             colors.push(color);
         }
 
         // Fade colors list
+        // Needs a length cap during deserialization to prevent OOM from malicious packets
+        // Vanilla doesn't have any limits (Integer.MAX_VALUE is technically a limit but not enforced in practice)
+        const MAX_FADE_COLORS: usize = 256;
         let fade_colors_len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom(
                 "No FireworkExplosionImpl fade_colors_len VarInt!",
             ))?
             .0 as usize;
+        if fade_colors_len > MAX_FADE_COLORS {
+            return Err(de::Error::custom(format!(
+                "FireworkExplosionImpl fade_colors_len {} exceeds maximum of {}",
+                fade_colors_len, MAX_FADE_COLORS
+            )));
+        }
         let mut fade_colors = Vec::with_capacity(fade_colors_len);
         for _ in 0..fade_colors_len {
             let color = seq
-                .next_element::<VarInt>()?
+                .next_element::<i32>()?
                 .ok_or(de::Error::custom(
-                    "No FireworkExplosionImpl fade_color VarInt!",
-                ))?
-                .0;
+                    "No FireworkExplosionImpl fade_color i32!",
+                ))?;
             fade_colors.push(color);
         }
 
@@ -369,10 +385,19 @@ impl DataComponentCodec<Self> for FireworksImpl {
             .0;
 
         // Explosions list
+        // Needs a length cap during deserialization to prevent OOM from malicious packets
+        // Vanilla doesn't have any limits
+        const MAX_EXPLOSIONS: usize = 256;
         let explosions_len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom("No FireworksImpl explosions_len VarInt!"))?
             .0 as usize;
+        if explosions_len > MAX_EXPLOSIONS {
+            return Err(de::Error::custom(format!(
+                "FireworksImpl explosions_len {} exceeds maximum of {}",
+                explosions_len, MAX_EXPLOSIONS
+            )));
+        }
         let mut explosions = Vec::with_capacity(explosions_len);
         for _ in 0..explosions_len {
             // Recursively deserialize each explosion
