@@ -10,7 +10,9 @@ pub mod look_at_entity;
 pub mod melee_attack;
 pub mod move_to_target_pos;
 pub mod step_and_destroy_block;
+pub mod swim;
 mod track_target;
+pub mod wander_around;
 pub mod zombie_attack;
 
 #[must_use]

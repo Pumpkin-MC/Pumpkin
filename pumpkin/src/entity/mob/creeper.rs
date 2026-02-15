@@ -10,7 +10,7 @@ use crate::entity::{
     ai::goal::{
         active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
         look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal,
+        melee_attack::MeleeAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -38,8 +38,10 @@ impl CreeperEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
+            goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(mob_arc.clone())));
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
 
             goal_selector.add_goal(
                 6,
