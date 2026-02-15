@@ -120,7 +120,7 @@ pub trait Decoder: HasValue {
 
 pub struct MappedDecoderImpl<B, D: Decoder + 'static> {
     decoder: &'static D,
-    function: fn(&D::Value) -> B,
+    function: fn(D::Value) -> B,
 }
 
 impl<B, D: Decoder> HasValue for MappedDecoderImpl<B, D> {
@@ -135,7 +135,7 @@ impl<B, D: Decoder> Decoder for MappedDecoderImpl<B, D> {
     ) -> DataResult<(Self::Value, T)> {
         self.decoder
             .decode(input, ops)
-            .map(|(a, t)| ((self.function)(&a), t))
+            .map(|(a, t)| ((self.function)(a), t))
     }
 }
 
@@ -143,7 +143,7 @@ impl<B, D: Decoder> Decoder for MappedDecoderImpl<B, D> {
 /// A *mapped* decoder transforms the output after decoding.
 pub(crate) const fn map<B, D: Decoder>(
     decoder: &'static D,
-    f: fn(&D::Value) -> B,
+    f: fn(D::Value) -> B,
 ) -> MappedDecoderImpl<B, D> {
     MappedDecoderImpl {
         decoder,
@@ -153,7 +153,7 @@ pub(crate) const fn map<B, D: Decoder>(
 
 pub struct FlatMappedDecoderImpl<B, D: Decoder + 'static> {
     decoder: &'static D,
-    function: fn(&D::Value) -> DataResult<B>,
+    function: fn(D::Value) -> DataResult<B>,
 }
 
 impl<B, D: Decoder> HasValue for FlatMappedDecoderImpl<B, D> {
@@ -168,7 +168,7 @@ impl<B, D: Decoder> Decoder for FlatMappedDecoderImpl<B, D> {
     ) -> DataResult<(Self::Value, T)> {
         self.decoder
             .decode(input, ops)
-            .flat_map(|(a, t)| (self.function)(&a).map(|b| (b, t)))
+            .flat_map(|(a, t)| (self.function)(a).map(|b| (b, t)))
     }
 }
 
@@ -176,7 +176,7 @@ impl<B, D: Decoder> Decoder for FlatMappedDecoderImpl<B, D> {
 /// A *flat-mapped* decoder transforms the output after decoding, but the transformation can fail.
 pub(crate) const fn flat_map<B, D: Decoder>(
     decoder: &'static D,
-    f: fn(&D::Value) -> DataResult<B>,
+    f: fn(D::Value) -> DataResult<B>,
 ) -> FlatMappedDecoderImpl<B, D> {
     FlatMappedDecoderImpl {
         decoder,

@@ -9,6 +9,8 @@ use crate::serialization::codecs::primitive::{
 };
 use crate::serialization::codecs::range::RangeCodec;
 use crate::serialization::codecs::range::new_range_codec;
+use crate::serialization::codecs::unbounded_map::UnboundedMapCodec;
+use crate::serialization::codecs::validated::{ValidatedCodec, new_validated_codec};
 use crate::serialization::coders::{
     ComappedEncoderImpl, Decoder, Encoder, FlatComappedEncoderImpl, FlatMappedDecoderImpl,
     MappedDecoderImpl, comap, decoder_field, encoder_field, flat_comap, flat_map, map,
@@ -38,11 +40,11 @@ use std::sync::{LazyLock, OnceLock};
 ///
 /// # Primitive Codecs
 /// This trait's module (`codec`) provides many common codecs that can be used for more complex codec types:
-/// - Java primitive codecs (all except `char`)
-/// - String codec
-/// - Unsigned number type codecs (for `u8`, `u16`, `u32` and `u64`)
-/// - Byte buffer codec (for `Box<[u8]>`)
-/// - Java `int` and `long` stream codecs (for `Vec<i32>` and `Vec<i64`)
+/// - [`BYTE_CODEC`], [`SHORT_CODEC`], [`INT_CODEC`], [`LONG_CODEC`], [`BOOL_CODEC`], [`FLOAT_CODEC`] and [`DOUBLE_CODEC`] for Java primitive types.
+/// - [`STRING_CODEC`] for `String`s.
+/// - [`UNSIGNED_BYTE_CODEC`], [`UNSIGNED_SHORT_CODEC`], [`UNSIGNED_INT_CODEC`] and [`UNSIGNED_LONG_CODEC`] for unsigned versions of Java primitive number types (`u8`, `u16`, `u32` and `u64`).
+/// - [`BYTE_BUFFER_CODEC`] for byte buffers (equivalent to `Box<[u8]>`).
+/// - [`INT_STREAM_CODEC`] and [`LONG_STREAM_CODEC`] for Java's `int` and `long` stream codecs (equivalent to `Vec<i32>` and `Vec<i64`).
 ///
 /// # Creating a Codec
 /// There are a few codec types that can be created for custom types. **Keep in mind that codecs are meant
@@ -83,6 +85,7 @@ use std::sync::{LazyLock, OnceLock};
 ///
 /// ## Unbounded Maps
 /// Use the [`unbounded_map`] function to create a codec encoding/decoding a [`HashMap`] of any arbitrary key.
+/// **Unbounded map codecs only support keys that can encode from/decode to strings.**
 ///
 /// # Transformers
 /// A map codec of a type `B` can be implemented by *transforming* another codec of type `A` to work with type `B`.
@@ -174,7 +177,7 @@ macro_rules! impl_unsigned_transformer_codec {
         #[doc = concat!("A [`Codec`] for `", stringify!($unsigned_prim), "`, which is a transformer codec of [`", stringify!($transformed_codec), "`].")]
         pub static $name: $unsigned_codec_type = flat_xmap(
             &$transformed_codec,
-            |i| <$unsigned_prim>::try_from(*i)
+            |i| <$unsigned_prim>::try_from(i)
                     .map_or_else(|_| DataResult::error(concat!("Could not fit ", stringify!($signed_prim), " into ", stringify!($unsigned_prim)).to_string()), DataResult::success),
             |u| <$signed_prim>::try_from(*u)
                 .map_or_else(|_| DataResult::error(concat!("Could not fit ", stringify!($unsigned_prim), " into ", stringify!($signed_prim)).to_string()), DataResult::success),
@@ -261,7 +264,7 @@ macro_rules! make_codec_transformation_function {
         #[doc = concat!("- `S` is **", $s_equivalency, "** to `A`.")]
         #[doc = ""]
         #[doc = "A type `A` is *fully equivalent* to `B` if *A can always successfully be converted to B*."]
-        pub const fn $name<A, C: Codec<Value = A>, S>(codec: &'static C, to: fn(&A) -> $to_func_result, from: fn(&S) -> $from_func_result) -> $short_type<S, C> {
+        pub const fn $name<A, C: Codec<Value = A>, S>(codec: &'static C, to: fn(A) -> $to_func_result, from: fn(&S) -> $from_func_result) -> $short_type<S, C> {
             ComposedCodec {
                 encoder: $encoder_func(codec, from),
                 decoder: $decoder_func(codec, to)
@@ -324,16 +327,17 @@ make_codec_transformation_function!(
     "partially equivalent"
 );
 
-/// A validated codec.
-pub type ValidatedCodec<C> = FlatXmapCodec<<C as HasValue>::Value, C>;
-
 /// Returns a transformer codec that validates a value before encoding and after decoding by calling a function,
 /// which provides a [`DataResult`] depending on that value's validity.
+///
+/// `validator` is a function that takes the pointer of a value and returns a [`Result`].
+/// - If the returned result is an [`Ok`], the codec works as normal.
+/// - Otherwise, it always returns a non-result with the message [`String`].
 pub const fn validate<C: Codec>(
     codec: &'static C,
-    validator: fn(&C::Value) -> DataResult<C::Value>,
+    validator: fn(&C::Value) -> Result<(), String>,
 ) -> ValidatedCodec<C> {
-    flat_xmap(codec, validator, validator)
+    new_validated_codec(codec, validator)
 }
 
 // Range codec functions
@@ -395,22 +399,19 @@ where
 pub const fn unbounded_map<KC: Codec, VC: Codec>(
     key_codec: &'static KC,
     element_codec: &'static VC,
-    keyable: Box<dyn Keyable>,
-) -> SimpleMapCodec<KC, VC>
+) -> UnboundedMapCodec<KC, VC>
 where
     <KC as HasValue>::Value: Display + Eq + Hash,
 {
-    SimpleMapCodec {
+    UnboundedMapCodec {
         key_codec,
         element_codec,
-        keyable,
-        compressor: OnceLock::new(),
     }
 }
 
 // Struct codec functions
 
-/// Creates a structure [`Codec`]. This macro supports up to *16* fields.
+/// Creates a structure [`Codec`]. This macro supports up to *16* [`MapCodec`]s.
 ///
 /// Struct codec types are usually pretty large. To combat this, use `pub type ... = ...` to
 /// only store the complicated type once and never use it again. Rust can easily infer the type
@@ -418,6 +419,11 @@ where
 ///
 /// # Example
 /// ```rust
+/// use pumpkin_datafixerupper::serialization::codec::*;
+/// use pumpkin_datafixerupper::serialization::codecs::primitive::*;
+/// use pumpkin_datafixerupper::serialization::struct_codecs::*;
+/// use pumpkin_datafixerupper::struct_codec;
+///
 /// // An example struct to make a codec for.
 /// pub struct Person {
 ///     name: String,
@@ -591,6 +597,12 @@ where
 /// Asserts that the decoding of some value by a [`DynamicOps`] via a [`Codec`] is a success/error.
 /// # Example
 /// ```
+/// # use pumpkin_datafixerupper::assert_decode;
+/// # use serde_json::json;
+/// # use pumpkin_datafixerupper::serialization::json_ops;
+/// # use pumpkin_datafixerupper::serialization::codec;
+/// # use crate::pumpkin_datafixerupper::serialization::coders::Decoder;
+///
 /// assert_decode!(codec::INT_CODEC, json!(2), &json_ops::INSTANCE, is_success);
 /// assert_decode!(codec::STRING_CODEC, json!("hello"), &json_ops::INSTANCE, is_success);
 /// assert_decode!(codec::FLOAT_CODEC, json!(true), &json_ops::INSTANCE, is_error);
