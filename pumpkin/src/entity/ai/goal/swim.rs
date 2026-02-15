@@ -16,21 +16,20 @@ impl Default for SwimGoal {
     }
 }
 
+impl SwimGoal {
+    fn is_in_fluid(mob: &dyn Mob) -> bool {
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        entity.touching_water.load(Ordering::SeqCst) || entity.touching_lava.load(Ordering::SeqCst)
+    }
+}
+
 impl Goal for SwimGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let entity = &mob.get_mob_entity().living_entity.entity;
-            entity.touching_water.load(Ordering::SeqCst)
-                || entity.touching_lava.load(Ordering::SeqCst)
-        })
+        Box::pin(async move { Self::is_in_fluid(mob) })
     }
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let entity = &mob.get_mob_entity().living_entity.entity;
-            entity.touching_water.load(Ordering::SeqCst)
-                || entity.touching_lava.load(Ordering::SeqCst)
-        })
+        Box::pin(async move { Self::is_in_fluid(mob) })
     }
 
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {

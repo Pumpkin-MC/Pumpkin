@@ -231,9 +231,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
 
-            // Per-mob tick (e.g. creeper fuse countdown) runs before AI, matching vanilla
             self.mob_tick(&caller).await;
 
+            // AI runs before physics (vanilla order: goals → navigator → look → physics)
             let age = mob_entity.living_entity.entity.age.load(Relaxed);
             if (age + mob_entity.living_entity.entity.entity_id) % 2 != 0 && age > 1 {
                 mob_entity
