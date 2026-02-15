@@ -71,7 +71,8 @@ impl GenerationSchedule {
         listener: Arc<ChunkListener>,
         thread_tracker: &mut Vec<thread::JoinHandle<()>>,
     ) {
-        let (send_chunk, recv_chunk) = crossfire::compat::mpmc::unbounded_blocking();
+        let (send_chunk, recv_chunk) =
+            crossfire::compat::mpmc::bounded_blocking(io_read_thread_count + gen_thread_count + 16);
 
         let (send_read_io, recv_read_io) =
             crossfire::compat::mpmc::bounded_tx_blocking_rx_async(io_read_thread_count + 5);
@@ -376,6 +377,9 @@ impl GenerationSchedule {
                 let mut tmp = None;
                 swap(&mut holder.chunk, &mut tmp);
                 let Some(tmp) = tmp else {
+                    // Holder has no chunk data and isn't occupied - remove the
+                    // empty entry so chunk_map doesn't grow without bound.
+                    self.chunk_map.remove(&pos);
                     continue;
                 };
                 match tmp {
