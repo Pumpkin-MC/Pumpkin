@@ -2011,8 +2011,6 @@ impl JavaClient {
             || entity_type == &EntityType::FISHING_BOBBER
             || entity_type == &EntityType::SHULKER_BULLET
 
-    }
-
     fn has_blocking_entity_in_box(world: &World, placed_box: &BoundingBox) -> bool {
         let players = world.players.load();
         if players.iter().any(|player| {
