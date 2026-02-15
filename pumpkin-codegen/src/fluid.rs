@@ -351,6 +351,14 @@ pub fn build() -> TokenStream {
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut fluid_from_state_id = TokenStream::new();
 
+    // Collect from_state_id arms to sort by range width (narrower first)
+    struct StateIdArm {
+        start: u16,
+        end: u16,
+        const_name: String,
+    }
+    let mut state_id_arms: Vec<StateIdArm> = Vec::new();
+
     let mut fluid_properties_from_state_and_name = TokenStream::new();
     let mut fluid_properties_from_props_and_name = TokenStream::new();
 
@@ -440,8 +448,10 @@ pub fn build() -> TokenStream {
                 },
             ));
         }
-        fluid_from_state_id.extend(quote! {
-            #state_id_start..=#state_id_end => Some(&Fluid::#const_ident),
+        state_id_arms.push(StateIdArm {
+            start: state_id_start,
+            end: state_id_end,
+            const_name: const_fluid_name_from_fluid_name(&fluid.name),
         });
 
         type_from_name.extend(quote! {
@@ -460,7 +470,7 @@ pub fn build() -> TokenStream {
             let block_state_id = state.block_state_id;
             let is_still = state.is_still;
             // Derive these values based on existing fields
-            let is_source = level == 0 && is_still; // Level 0 and still means it's a source
+            let is_source = is_still; // Level 0 and still means it's a source
             let falling = false; // Default to false - we'll handle falling in the fluid behavior code
 
             quote! {
@@ -549,7 +559,7 @@ pub fn build() -> TokenStream {
         let blast_resistance = state.blast_resistance;
         let block_state_id = state.block_state_id;
         let is_still = state.is_still;
-        let is_source = level == 0 && is_still;
+        let is_source = is_still;
         let falling = false;
         quote! {
             PartialFluidState {
@@ -564,6 +574,17 @@ pub fn build() -> TokenStream {
             }
         }
     });
+
+    // Narrower ranges first so still fluids match before their flowing variant
+    state_id_arms.sort_by_key(|arm| arm.end - arm.start);
+    for arm in &state_id_arms {
+        let start = LitInt::new(&arm.start.to_string(), Span::call_site());
+        let end = LitInt::new(&arm.end.to_string(), Span::call_site());
+        let const_ident = format_ident!("{}", arm.const_name);
+        fluid_from_state_id.extend(quote! {
+            #start..=#end => Some(&Fluid::#const_ident),
+        });
+    }
 
     for property_group in property_collection_map.into_values() {
         for fluid_name in &property_group.fluid_names {
@@ -711,7 +732,7 @@ pub fn build() -> TokenStream {
                     _ => None
                 }
             }
-            #[allow(unreachable_patterns)]
+            #[allow(unreachable_patterns, clippy::match_overlapping_arm)]
             pub const fn from_state_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #fluid_from_state_id
@@ -742,6 +763,24 @@ pub fn build() -> TokenStream {
                 match self.name {
                     #fluid_properties_from_props_and_name
                     _ => panic!("Invalid props")
+                }
+            }
+
+            pub fn same_fluid_type(a: u16, b: u16) -> bool {
+                a == b
+                    || (a == 1 && b == 2)
+                    || (a == 2 && b == 1)
+                    || (a == 3 && b == 4)
+                    || (a == 4 && b == 3)
+            }
+            pub fn matches_type(&self, other: &Fluid) -> bool {
+                Self::same_fluid_type(self.id, other.id)
+            }
+            pub fn to_flowing(&self) -> &'static Fluid {
+                match self.id {
+                    2 => &Fluid::FLOWING_WATER,
+                    4 => &Fluid::FLOWING_LAVA,
+                    _ => Fluid::from_id(self.id).unwrap_or(&Fluid::EMPTY),
                 }
             }
 
