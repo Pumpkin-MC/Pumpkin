@@ -13,7 +13,9 @@ pub enum Lifecycle {
 }
 
 impl Lifecycle {
-    /// Adds a lifecycle to another, returning a resultant lifecycle. This function follows this order:
+    /// Adds a lifecycle to another, returning a resultant lifecycle which matches the more restrictive of the two.
+    ///
+    /// This function follows this order:
     /// - If at least one of the lifecycles is *experimental*, [`Lifecycle::Experimental`] is returned.
     /// - If both lifecycles are *deprecated*, this returns the earlier-deprecated one (where the date is lower).
     /// - If exactly one lifecycle is *deprecated*, [`Lifecycle::Deprecated`] is returned.

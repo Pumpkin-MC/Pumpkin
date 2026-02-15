@@ -27,16 +27,16 @@ pub trait Encoder: HasValue {
     }
 }
 
-pub struct ComappedEncoderImpl<A, B, E: 'static> {
+pub struct ComappedEncoderImpl<B, E: Encoder + 'static> {
     encoder: &'static E,
-    function: fn(&B) -> A,
+    function: fn(&B) -> E::Value,
 }
 
-impl<A, B, E> HasValue for ComappedEncoderImpl<A, B, E> {
+impl<B, E: Encoder> HasValue for ComappedEncoderImpl<B, E> {
     type Value = B;
 }
 
-impl<A, B, E: Encoder<Value = A>> Encoder for ComappedEncoderImpl<A, B, E> {
+impl<B, E: Encoder> Encoder for ComappedEncoderImpl<B, E> {
     fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
@@ -49,26 +49,26 @@ impl<A, B, E: Encoder<Value = A>> Encoder for ComappedEncoderImpl<A, B, E> {
 
 /// Returns a *contramapped* (*comapped*) transformation of a provided [`Encoder`].
 /// A *comapped* encoder transforms the input before encoding.
-pub(crate) const fn comap<A, B, E: Encoder<Value = A>>(
+pub(crate) const fn comap<B, E: Encoder>(
     encoder: &'static E,
-    f: fn(&B) -> A,
-) -> ComappedEncoderImpl<A, B, E> {
+    f: fn(&B) -> E::Value,
+) -> ComappedEncoderImpl<B, E> {
     ComappedEncoderImpl {
         encoder,
         function: f,
     }
 }
 
-pub struct FlatComappedEncoderImpl<A, B, E: 'static> {
+pub struct FlatComappedEncoderImpl<B, E: Encoder + 'static> {
     encoder: &'static E,
-    function: fn(&B) -> DataResult<A>,
+    function: fn(&B) -> DataResult<E::Value>,
 }
 
-impl<A, B, E> HasValue for FlatComappedEncoderImpl<A, B, E> {
+impl<B, E: Encoder> HasValue for FlatComappedEncoderImpl<B, E> {
     type Value = B;
 }
 
-impl<A, B, E: Encoder<Value = A>> Encoder for FlatComappedEncoderImpl<A, B, E> {
+impl<B, E: Encoder> Encoder for FlatComappedEncoderImpl<B, E> {
     fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
@@ -81,17 +81,17 @@ impl<A, B, E: Encoder<Value = A>> Encoder for FlatComappedEncoderImpl<A, B, E> {
 
 /// Returns a *flat contramapped* (*flat-comapped*) transformation of a provided [`Encoder`].
 /// A *flat comapped* encoder transforms the input before encoding, but the transformation can fail.
-pub(crate) const fn flat_comap<A, B, E: Encoder<Value = A>>(
+pub(crate) const fn flat_comap<B, E: Encoder>(
     encoder: &'static E,
-    f: fn(&B) -> DataResult<A>,
-) -> FlatComappedEncoderImpl<A, B, E> {
+    f: fn(&B) -> DataResult<E::Value>,
+) -> FlatComappedEncoderImpl<B, E> {
     FlatComappedEncoderImpl {
         encoder,
         function: f,
     }
 }
 
-pub(crate) const fn encoder_field_of<A, E: Encoder<Value = A>>(
+pub(crate) const fn encoder_field<A, E: Encoder<Value = A>>(
     name: &'static str,
     encoder: &'static E,
 ) -> FieldEncoder<A, E> {
@@ -108,8 +108,7 @@ pub trait Decoder: HasValue {
         ops: &'static impl DynamicOps<Value = T>,
     ) -> DataResult<(Self::Value, T)>;
 
-    /// Decodes an input of this decoder's type (`A`) into an output of type `T`,
-    /// ignoring any remaining undecoded data (of type `A`).
+    /// Decodes an input of this decoder's type (`A`) into an output of type `T`.
     fn parse<T: Display + PartialEq + Clone>(
         &self,
         input: T,
@@ -119,16 +118,16 @@ pub trait Decoder: HasValue {
     }
 }
 
-pub struct MappedDecoderImpl<A, B, D: 'static> {
+pub struct MappedDecoderImpl<B, D: Decoder + 'static> {
     decoder: &'static D,
-    function: fn(&A) -> B,
+    function: fn(&D::Value) -> B,
 }
 
-impl<A, B, D> HasValue for MappedDecoderImpl<A, B, D> {
+impl<B, D: Decoder> HasValue for MappedDecoderImpl<B, D> {
     type Value = B;
 }
 
-impl<A, B, D: Decoder<Value = A>> Decoder for MappedDecoderImpl<A, B, D> {
+impl<B, D: Decoder> Decoder for MappedDecoderImpl<B, D> {
     fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: T,
@@ -142,26 +141,26 @@ impl<A, B, D: Decoder<Value = A>> Decoder for MappedDecoderImpl<A, B, D> {
 
 /// Returns a *covariant mapped* transformation of a provided [`Decoder`].
 /// A *mapped* decoder transforms the output after decoding.
-pub(crate) const fn map<A, B, D: Decoder<Value = A>>(
+pub(crate) const fn map<B, D: Decoder>(
     decoder: &'static D,
-    f: fn(&A) -> B,
-) -> MappedDecoderImpl<A, B, D> {
+    f: fn(&D::Value) -> B,
+) -> MappedDecoderImpl<B, D> {
     MappedDecoderImpl {
         decoder,
         function: f,
     }
 }
 
-pub struct FlatMappedDecoderImpl<A, B, D: 'static> {
+pub struct FlatMappedDecoderImpl<B, D: Decoder + 'static> {
     decoder: &'static D,
-    function: fn(&A) -> DataResult<B>,
+    function: fn(&D::Value) -> DataResult<B>,
 }
 
-impl<A, B, D> HasValue for FlatMappedDecoderImpl<A, B, D> {
+impl<B, D: Decoder> HasValue for FlatMappedDecoderImpl<B, D> {
     type Value = B;
 }
 
-impl<A, B, D: Decoder<Value = A>> Decoder for FlatMappedDecoderImpl<A, B, D> {
+impl<B, D: Decoder> Decoder for FlatMappedDecoderImpl<B, D> {
     fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: T,
@@ -175,17 +174,17 @@ impl<A, B, D: Decoder<Value = A>> Decoder for FlatMappedDecoderImpl<A, B, D> {
 
 /// Returns a *covariant flat-mapped* transformation of a provided [`Decoder`].
 /// A *flat-mapped* decoder transforms the output after decoding, but the transformation can fail.
-pub(crate) const fn flat_map<A, B, D: Decoder<Value = A>>(
+pub(crate) const fn flat_map<B, D: Decoder>(
     decoder: &'static D,
-    f: fn(&A) -> DataResult<B>,
-) -> FlatMappedDecoderImpl<A, B, D> {
+    f: fn(&D::Value) -> DataResult<B>,
+) -> FlatMappedDecoderImpl<B, D> {
     FlatMappedDecoderImpl {
         decoder,
         function: f,
     }
 }
 
-pub(crate) const fn decoder_field_of<A, D: Decoder<Value = A>>(
+pub(crate) const fn decoder_field<A, D: Decoder<Value = A>>(
     name: &'static str,
     decoder: &'static D,
 ) -> FieldDecoder<A, D> {

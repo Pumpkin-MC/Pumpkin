@@ -55,12 +55,7 @@ macro_rules! impl_struct_map_codec {
 
         impl<T, C1: MapCodec $(, $codec_type: MapCodec)* > MapEncoder for $name<T, C1 $(, $codec_type)*> {
             #[allow(clippy::let_and_return)]
-            fn encode<U: Display + PartialEq + Clone>(
-                &self,
-                input: &Self::Value,
-                ops: &'static impl DynamicOps<Value = U>,
-                prefix: impl StructBuilder<Value = U>,
-            ) -> impl StructBuilder<Value = U> {
+            fn encode<U: Display + PartialEq + Clone, B: StructBuilder<Value = U>>(&self, input: &Self::Value, ops: &'static impl DynamicOps<Value=U>, prefix: B) -> B {
                 let prefix =
                     self.field_1
                         .map_codec
@@ -89,7 +84,7 @@ macro_rules! impl_struct_map_codec {
         }
 
         #[doc = concat!("A type alias of a struct [`Codec`] with ", stringify!($n), " field(s).")]
-        pub type $alias<T, C1 $(, $codec_type)* > = MapCodecCodec<T, $name<T, C1 $(, $codec_type)*>>;
+        pub type $alias<T, C1 $(, $codec_type)* > = MapCodecCodec<$name<T, C1 $(, $codec_type)*>>;
     };
 
     ($n:literal, $name:ident, $alias:ident, $apply_func:ident, $func_name:ident $(,)? $($codec_type:ident, $field:ident),*) => {
@@ -508,10 +503,9 @@ mod test {
             FieldMapCodec<StringCodec>,
             FieldMapCodec<UnsignedIntCodec>,
         > = struct_codec!(
-            for_getter(field_of(&STRING_CODEC, "name"), |book: &Book| &book.name),
-            for_getter(field_of(&STRING_CODEC, "author"), |book: &Book| &book
-                .author),
-            for_getter(field_of(&UNSIGNED_INT_CODEC, "pages"), |book: &Book| &book
+            for_getter(field(&STRING_CODEC, "name"), |book: &Book| &book.name),
+            for_getter(field(&STRING_CODEC, "author"), |book: &Book| &book.author),
+            for_getter(field(&UNSIGNED_INT_CODEC, "pages"), |book: &Book| &book
                 .pages),
             |name, author, pages| Book {
                 name,
