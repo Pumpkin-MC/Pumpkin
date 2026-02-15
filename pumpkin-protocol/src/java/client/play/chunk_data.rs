@@ -33,21 +33,27 @@ impl ClientPacket for CChunkData<'_> {
         // Chunk Z
         write.write_i32_be(self.0.z)?;
 
-        let heightmaps = &self.0.heightmap.lock().unwrap();
-        write.write_var_int(&VarInt(3))?; // Map size
+        let heightmaps = self.0.heightmap.lock().unwrap();
+        if version < &MinecraftVersion::V_1_21_5 {
+            pumpkin_nbt::serializer::to_bytes_unnamed(&*heightmaps, &mut write)
+                .map_err(|err| WritingError::Serde(err.to_string()))?;
+        } else {
+            write.write_var_int(&VarInt(3))?; // Map size
 
-        let mut write_heightmap = |index: i32, data: &[i64]| -> Result<(), WritingError> {
-            write.write_var_int(&VarInt(index))?;
-            write.write_var_int(&VarInt(data.len() as i32))?;
-            for val in data {
-                write.write_i64_be(*val)?;
-            }
-            Ok(())
-        };
+            let mut write_heightmap = |index: i32, data: &[i64]| -> Result<(), WritingError> {
+                write.write_var_int(&VarInt(index))?;
+                write.write_var_int(&VarInt(data.len() as i32))?;
+                for val in data {
+                    write.write_i64_be(*val)?;
+                }
+                Ok(())
+            };
 
-        write_heightmap(1, &heightmaps.world_surface)?;
-        write_heightmap(4, &heightmaps.motion_blocking)?;
-        write_heightmap(5, &heightmaps.motion_blocking_no_leaves)?;
+            write_heightmap(1, &heightmaps.world_surface)?;
+            write_heightmap(4, &heightmaps.motion_blocking)?;
+            write_heightmap(5, &heightmaps.motion_blocking_no_leaves)?;
+        }
+        drop(heightmaps);
 
         {
             let mut blocks_and_biomes_buf = Vec::new();
