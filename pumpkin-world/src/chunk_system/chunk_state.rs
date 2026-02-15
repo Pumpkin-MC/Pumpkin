@@ -91,8 +91,10 @@ impl StagedChunkEnum {
         if level <= 43 {
             Self::Full
         } else if level <= 44 {
-            Self::Features
+            Self::Lighting
         } else if level <= 45 {
+            Self::Features
+        } else if level <= 46 {
             Self::Surface
         } else {
             Self::None
@@ -100,7 +102,7 @@ impl StagedChunkEnum {
     }
     pub const FULL_DEPENDENCIES: &'static [Self] =
         &[Self::Full, Self::Lighting, Self::Features, Self::Surface];
-    pub const FULL_RADIUS: i32 = 2;
+    pub const FULL_RADIUS: i32 = 3;
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
         match self {

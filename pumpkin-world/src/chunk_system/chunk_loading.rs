@@ -129,7 +129,7 @@ pub struct ChunkLoading {
 impl ChunkLoading {
     // pub const FULL_CHUNK_LEVEL: i8 = 33;
     pub const FULL_CHUNK_LEVEL: i8 = 43;
-    pub const MAX_LEVEL: i8 = 46; // level 46 will be unloaded.
+    pub const MAX_LEVEL: i8 = 47; // level 47 will be unloaded.
     fn debug_check_error(&self) -> bool {
         let mut temp = ChunkLevel::default();
         for (ticket_pos, levels) in &self.ticket {
