@@ -2021,7 +2021,14 @@ impl Entity {
         pitch: Option<f32>,
         _world: Arc<World>,
     ) {
-        // TODO: handle world change
+        // Update server-side position and bounding box
+        self.set_pos(position);
+        if let Some(yaw) = yaw {
+            self.yaw.store(yaw);
+        }
+        if let Some(pitch) = pitch {
+            self.set_pitch(pitch);
+        }
         self.world
             .load()
             .broadcast_packet_all(&CEntityPositionSync::new(
