@@ -348,7 +348,10 @@ impl ChunkManager {
     }
 
     pub fn next_entity(&mut self) -> Box<[SyncEntityChunk]> {
-        let chunk_size = self.entity_chunk_queue.len().min(self.chunks_per_tick);
+        let chunk_size = self
+            .entity_chunk_queue
+            .len()
+            .min(self.chunks_per_tick.max(1));
 
         let chunks: Box<[Arc<ChunkEntityData>]> = self
             .entity_chunk_queue
@@ -361,8 +364,9 @@ impl ChunkManager {
                 *count = count.saturating_add(1);
             }
             state @ BatchState::Initial => *state = BatchState::Waiting,
-            BatchState::Waiting => unreachable!(),
+            BatchState::Waiting => (),
         }
+        self.last_chunk_batch_sent_at = Instant::now();
 
         chunks
     }
