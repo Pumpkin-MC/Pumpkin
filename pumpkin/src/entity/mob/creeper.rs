@@ -5,12 +5,14 @@ use std::sync::{
 
 use pumpkin_data::{
     entity::EntityType,
+    item::Item,
     meta_data_type::MetaDataType,
     sound::{Sound, SoundCategory},
     tracked_data::TrackedData,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
+use pumpkin_world::item::ItemStack;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
@@ -21,6 +23,7 @@ use crate::entity::{
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    player::Player,
 };
 
 const DEFAULT_FUSE_TIME: i32 = 30;
@@ -191,6 +194,47 @@ impl Mob for CreeperEntity {
                 self.current_fuse_time.store(fuse_time, Ordering::Relaxed);
                 self.explode().await;
             }
+        })
+    }
+
+    fn mob_interact<'a>(
+        &'a self,
+        player: &'a Player,
+        item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            if item_stack.item.id != Item::FLINT_AND_STEEL.id {
+                return false;
+            }
+
+            let entity = &self.mob_entity.living_entity.entity;
+            let world = entity.world.load();
+            let pos = entity.pos.load();
+
+            world
+                .play_sound_fine(
+                    Sound::ItemFlintandsteelUse,
+                    SoundCategory::Hostile,
+                    &pos,
+                    1.0,
+                    rand::random::<f32>() * 0.4 + 0.8,
+                )
+                .await;
+
+            self.ignited.store(true, Ordering::Relaxed);
+            entity
+                .send_meta_data(&[Metadata::new(
+                    TrackedData::DATA_IGNITED,
+                    MetaDataType::Boolean,
+                    true,
+                )])
+                .await;
+
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                item_stack.damage_item_with_context(1, false);
+            }
+
+            true
         })
     }
 }

@@ -45,6 +45,7 @@ use pumpkin_util::math::{
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::version::MinecraftVersion;
+use pumpkin_world::item::ItemStack;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::pin::Pin;
@@ -212,6 +213,16 @@ pub trait EntityBase: Send + Sync + NBTStorage {
             }
             false
         })
+    }
+
+    /// Called when a player right-clicks this entity with an item.
+    /// Returns true if the interaction was handled.
+    fn interact<'a>(
+        &'a self,
+        _player: &'a Player,
+        _item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async { false })
     }
 
     /// Called when a player collides with a entity
