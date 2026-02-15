@@ -16,7 +16,8 @@ use crate::entity::{
     ai::goal::{
         active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
         look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -69,6 +70,7 @@ impl CreeperEntity {
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
+            target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
         };
 
         mob_arc

@@ -75,7 +75,8 @@ impl Goal for CreeperIgniteGoal {
             if dist_sq > 49.0 {
                 self.creeper.set_fuse_speed(-1).await;
             }
-            // TODO: Check line of sight
+            // TODO: add line of sight check — needs world raycast implementation
+            // vanilla: if (!this.creeper.getVisibilityCache().canSee(target)) defuse
             else {
                 self.creeper.set_fuse_speed(1).await;
             }
