@@ -31,10 +31,7 @@ impl BlockBehaviour for CampfireBlock {
             if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit
                 && args.entity.get_living_entity().is_some()
             {
-                let Some(living_entity) = args.entity.get_living_entity() else {
-                    //not a living entity
-                    return;
-                };
+                let living_entity = args.entity.get_living_entity().unwrap();
                 let has_frost_walker_enchantment = {
                     let equipment = living_entity.entity_equipment.lock().await;
                     let boots = equipment.get(&EquipmentSlot::FEET);
