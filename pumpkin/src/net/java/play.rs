@@ -2004,6 +2004,13 @@ impl JavaClient {
             || resource_name.ends_with("_minecart")
             || resource_name.ends_with("_boat")
             || resource_name.ends_with("_raft")
+            || entity_type == &EntityType::ARMOR_STAND
+            || entity_type == &EntityType::ITEM_FRAME
+            || entity_type == &EntityType::GLOW_ITEM_FRAME
+            || entity_type == &EntityType::PAINTING
+            || entity_type == &EntityType::FISHING_BOBBER
+            || entity_type == &EntityType::SHULKER_BULLET
+
     }
 
     fn has_blocking_entity_in_box(world: &World, placed_box: &BoundingBox) -> bool {
