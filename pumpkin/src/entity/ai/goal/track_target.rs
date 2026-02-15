@@ -1,4 +1,5 @@
 use super::{Controls, Goal, to_goal_ticks};
+use crate::entity::EntityBase;
 use crate::entity::ai::goal::GoalFuture;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
@@ -112,6 +113,13 @@ impl Goal for TrackTargetGoal {
             };
 
             if !target.entity.is_alive() {
+                return false;
+            }
+
+            if target_base
+                .get_player()
+                .is_some_and(|p| p.is_creative() || p.is_spectator())
+            {
                 return false;
             }
 
