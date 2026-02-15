@@ -11,7 +11,7 @@ pub struct LazyCodec<C>
 where
     C: Codec,
 {
-    pub(crate) codec: LazyLock<C>,
+    codec: LazyLock<C>,
 }
 
 impl<C: Codec> HasValue for LazyCodec<C> {
@@ -36,5 +36,12 @@ impl<C: Codec> Decoder for LazyCodec<C> {
         ops: &'static impl DynamicOps<Value = T>,
     ) -> DataResult<(Self::Value, T)> {
         self.codec.decode(input, ops)
+    }
+}
+
+/// Creates a new [`LazyCodec`].
+pub(crate) const fn new_lazy_codec<C: Codec>(f: fn() -> C) -> LazyCodec<C> {
+    LazyCodec {
+        codec: LazyLock::new(f),
     }
 }
