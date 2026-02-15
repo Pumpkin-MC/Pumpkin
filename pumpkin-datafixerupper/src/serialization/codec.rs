@@ -1,15 +1,14 @@
 pub use super::map_codec::for_getter;
 use crate::serialization::HasValue;
-use crate::serialization::codecs::lazy::LazyCodec;
-use crate::serialization::codecs::list::ListCodec;
-use crate::serialization::codecs::map_codec::MapCodecCodec;
+use crate::serialization::codecs::lazy::{LazyCodec, new_lazy_codec};
+use crate::serialization::codecs::list::{ListCodec, new_list_codec};
 use crate::serialization::codecs::primitive::{
     BoolCodec, ByteBufferCodec, ByteCodec, DoubleCodec, FloatCodec, IntCodec, IntStreamCodec,
     LongCodec, LongStreamCodec, ShortCodec, StringCodec,
 };
 use crate::serialization::codecs::range::RangeCodec;
 use crate::serialization::codecs::range::new_range_codec;
-use crate::serialization::codecs::unbounded_map::UnboundedMapCodec;
+use crate::serialization::codecs::unbounded_map::{UnboundedMapCodec, new_unbounded_map_codec};
 use crate::serialization::codecs::validated::{ValidatedCodec, new_validated_codec};
 use crate::serialization::coders::{
     ComappedEncoderImpl, Decoder, Encoder, FlatComappedEncoderImpl, FlatMappedDecoderImpl,
@@ -18,16 +17,15 @@ use crate::serialization::coders::{
 use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
 use crate::serialization::keyable::Keyable;
-use crate::serialization::map_codec::{ComposedMapCodec, MapCodec};
+use crate::serialization::map_codec::ComposedMapCodec;
 use crate::serialization::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
 use crate::serialization::map_codecs::optional_field::{
     DefaultValueProviderMapCodec, OptionalFieldMapCodec, new_default_value_provider_map_codec,
     new_optional_field_map_codec,
 };
-use crate::serialization::map_codecs::simple::SimpleMapCodec;
+use crate::serialization::map_codecs::simple::{SimpleMapCodec, new_simple_map_codec};
 use std::fmt::Display;
 use std::hash::Hash;
-use std::sync::{LazyLock, OnceLock};
 
 /// A type of *codec* describing the way to **encode from and decode into** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
 ///
@@ -222,36 +220,22 @@ impl_unsigned_transformer_codec!(
 
 /// Creates a [`LazyCodec`] with a *function pointer* that returns a new [`Codec`], which will be called on first use.
 pub const fn lazy<C: Codec>(f: fn() -> C) -> LazyCodec<C> {
-    LazyCodec {
-        codec: LazyLock::new(f),
-    }
+    new_lazy_codec(f)
 }
 
-/// Creates a [`ListCodec`] of another [`Codec`]with the provided minimum and maximum size.
+/// Creates a [`ListCodec`] of another [`Codec`] with the provided minimum and maximum size.
 pub const fn list<C: Codec>(codec: &'static C, min_size: usize, max_size: usize) -> ListCodec<C> {
-    ListCodec {
-        element_codec: codec,
-        min_size,
-        max_size,
-    }
+    new_list_codec(codec, min_size, max_size)
 }
 
 /// Creates a [`ListCodec`] of another [`Codec`] with the provided maximum size.
 pub const fn limited_list<C: Codec>(codec: &'static C, max_size: usize) -> ListCodec<C> {
-    ListCodec {
-        element_codec: codec,
-        min_size: 0,
-        max_size,
-    }
+    new_list_codec(codec, 0, max_size)
 }
 
 /// Creates a [`ListCodec`] of another [`Codec`], which allows any size.
 pub const fn unbounded_list<C: Codec>(codec: &'static C) -> ListCodec<C> {
-    ListCodec {
-        element_codec: codec,
-        min_size: 0,
-        max_size: usize::MAX,
-    }
+    new_list_codec(codec, 0, usize::MAX)
 }
 
 /// Helper macro to generate the shorthand types and functions of the transformer [`Codec`] methods.
@@ -373,40 +357,27 @@ make_codec_range_function!(
 
 // Map codec functions
 
-/// Converts a [`MapCodec`] to a [`Codec`].
-pub const fn from_map<A, C: MapCodec<Value = A>>(map_codec: C) -> MapCodecCodec<C> {
-    MapCodecCodec { codec: map_codec }
-}
-
 /// Creates a [`SimpleMapCodec`] with the provided key codec, value (element) codec and the possible key values.
-pub const fn simple_map<KC: Codec, VC: Codec>(
-    key_codec: &'static KC,
-    element_codec: &'static VC,
-    keyable: Box<dyn Keyable>,
-) -> SimpleMapCodec<KC, VC>
+pub const fn simple_map<K: Codec, V: Codec, Key: Keyable>(
+    key_codec: &'static K,
+    element_codec: &'static V,
+    keyable: Key,
+) -> SimpleMapCodec<K, V, Key>
 where
-    <KC as HasValue>::Value: Display + Eq + Hash,
+    <K as HasValue>::Value: Display + Eq + Hash,
 {
-    SimpleMapCodec {
-        key_codec,
-        element_codec,
-        keyable,
-        compressor: OnceLock::new(),
-    }
+    new_simple_map_codec(key_codec, element_codec, keyable)
 }
 
 /// Creates an [`UnboundedMapCodec`] with the provided key codec, value (element) codec and the possible key values.
-pub const fn unbounded_map<KC: Codec, VC: Codec>(
-    key_codec: &'static KC,
-    element_codec: &'static VC,
-) -> UnboundedMapCodec<KC, VC>
+pub const fn unbounded_map<K: Codec, V: Codec>(
+    key_codec: &'static K,
+    element_codec: &'static V,
+) -> UnboundedMapCodec<K, V>
 where
-    <KC as HasValue>::Value: Display + Eq + Hash,
+    <K as HasValue>::Value: Display + Eq + Hash,
 {
-    UnboundedMapCodec {
-        key_codec,
-        element_codec,
-    }
+    new_unbounded_map_codec(key_codec, element_codec)
 }
 
 // Struct codec functions
