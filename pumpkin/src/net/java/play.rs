@@ -1389,6 +1389,8 @@ impl JavaClient {
                                 .broken(&world, block, player, &position, server, broken_state)
                                 .await;
                             player.apply_tool_damage_for_block_break(broken_state).await;
+                            // Exhaustion for mining a block
+                            player.add_exhaustion(crate::entity::hunger::EXHAUSTION_MINE).await;
                         } else {
                             player.mining.store(true, Ordering::Relaxed);
                             *player.mining_pos.lock().await = position;
@@ -1459,6 +1461,8 @@ impl JavaClient {
                             .broken(&world, block, player, &location, server, state)
                             .await;
                         player.apply_tool_damage_for_block_break(state).await;
+                        // Exhaustion for mining a block
+                        player.add_exhaustion(crate::entity::hunger::EXHAUSTION_MINE).await;
                     }
 
                     self.update_sequence(player, player_action.sequence.0);
