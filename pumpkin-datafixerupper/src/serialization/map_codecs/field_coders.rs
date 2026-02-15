@@ -37,15 +37,13 @@ impl<A, E: Encoder<Value = A>> CompressorHolder for FieldEncoder<A, E> {
 }
 
 impl<A, E: Encoder<Value = A>> MapEncoder for FieldEncoder<A, E> {
-    fn encode<T: Display + PartialEq + Clone>(
+    fn encode<T: Display + PartialEq + Clone, B: StructBuilder<Value = T>>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
-        mut prefix: impl StructBuilder<Value = T>,
-    ) -> impl StructBuilder<Value = T> {
-        prefix
-            .add_string_key_value_result(self.name, self.element_encoder.encode_start(input, ops));
-        prefix
+        prefix: B,
+    ) -> B {
+        prefix.add_string_key_value_result(self.name, self.element_encoder.encode_start(input, ops))
     }
 }
 

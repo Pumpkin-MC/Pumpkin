@@ -74,8 +74,8 @@ pub enum EncoderStructBuilder<T, O: DynamicOps<Value = T> + 'static> {
 macro_rules! delegate_encoder_struct_builder_method {
     ($target:ident, $name:ident $(, $args:expr)*) => {
         match $target {
-            EncoderStructBuilder::Normal(b) => b.$name($($args),*),
-            EncoderStructBuilder::Compressed(b) => b.$name($($args),*),
+            Self::Normal(b) => Self::Normal(b.$name($($args),*)),
+            Self::Compressed(b) => Self::Compressed(b.$name($($args),*)),
         }
     };
 }
@@ -83,44 +83,47 @@ macro_rules! delegate_encoder_struct_builder_method {
 impl<T: Clone, O: DynamicOps<Value = T>> StructBuilder for EncoderStructBuilder<T, O> {
     type Value = T;
 
-    fn add_key_value(&mut self, key: Self::Value, value: Self::Value) {
-        delegate_encoder_struct_builder_method!(self, add_key_value, key, value);
+    fn add_key_value(self, key: Self::Value, value: Self::Value) -> Self {
+        delegate_encoder_struct_builder_method!(self, add_key_value, key, value)
     }
 
-    fn add_key_value_result(&mut self, key: Self::Value, value: DataResult<Self::Value>) {
-        delegate_encoder_struct_builder_method!(self, add_key_value_result, key, value);
+    fn add_key_value_result(self, key: Self::Value, value: DataResult<Self::Value>) -> Self {
+        delegate_encoder_struct_builder_method!(self, add_key_value_result, key, value)
     }
 
     fn add_key_result_value_result(
-        &mut self,
+        self,
         key: DataResult<Self::Value>,
         value: DataResult<Self::Value>,
-    ) {
-        delegate_encoder_struct_builder_method!(self, add_key_result_value_result, key, value);
+    ) -> Self {
+        delegate_encoder_struct_builder_method!(self, add_key_result_value_result, key, value)
     }
 
-    fn add_errors_from(&mut self, result: DataResult<()>) {
-        delegate_encoder_struct_builder_method!(self, add_errors_from, result);
+    fn with_errors_from<U>(self, result: &DataResult<U>) -> Self {
+        delegate_encoder_struct_builder_method!(self, with_errors_from, result)
     }
 
-    fn add_string_key_value(&mut self, key: &str, value: Self::Value) {
-        delegate_encoder_struct_builder_method!(self, add_string_key_value, key, value);
+    fn add_string_key_value(self, key: &str, value: Self::Value) -> Self {
+        delegate_encoder_struct_builder_method!(self, add_string_key_value, key, value)
     }
 
-    fn add_string_key_value_result(&mut self, key: &str, value: DataResult<Self::Value>) {
-        delegate_encoder_struct_builder_method!(self, add_string_key_value_result, key, value);
+    fn add_string_key_value_result(self, key: &str, value: DataResult<Self::Value>) -> Self {
+        delegate_encoder_struct_builder_method!(self, add_string_key_value_result, key, value)
     }
 
-    fn set_lifecycle(&mut self, lifecycle: Lifecycle) {
-        delegate_encoder_struct_builder_method!(self, set_lifecycle, lifecycle);
+    fn set_lifecycle(self, lifecycle: Lifecycle) -> Self {
+        delegate_encoder_struct_builder_method!(self, set_lifecycle, lifecycle)
     }
 
-    fn map_error(&mut self, f: Box<dyn FnOnce(String) -> String>) {
-        delegate_encoder_struct_builder_method!(self, map_error, f);
+    fn map_error(self, f: Box<dyn FnOnce(String) -> String>) -> Self {
+        delegate_encoder_struct_builder_method!(self, map_error, f)
     }
 
     fn build(self, prefix: Self::Value) -> DataResult<Self::Value> {
-        delegate_encoder_struct_builder_method!(self, build, prefix)
+        match self {
+            Self::Normal(e) => e.build(prefix),
+            Self::Compressed(e) => e.build(prefix),
+        }
     }
 }
 
@@ -133,12 +136,12 @@ pub trait CompressorHolder: Keyable {
 /// A different encoder that encodes a value of type `Value` for a map.
 pub trait MapEncoder: HasValue + Keyable + CompressorHolder {
     /// Encodes an input by working on a [`StructBuilder`].
-    fn encode<T: Display + PartialEq + Clone>(
+    fn encode<T: Display + PartialEq + Clone, B: StructBuilder<Value = T>>(
         &self,
         input: &Self::Value,
         ops: &'static impl DynamicOps<Value = T>,
-        prefix: impl StructBuilder<Value = T>,
-    ) -> impl StructBuilder<Value = T>;
+        prefix: B,
+    ) -> B;
 
     /// Returns a [`StructBuilder`] of this `MapEncoder` with the provided [`DynamicOps`].
     fn builder<'a, T: Display + Clone + 'a, O: DynamicOps<Value = T> + 'static>(
@@ -234,4 +237,170 @@ macro_rules! impl_compressor {
             })
         }
     };
+}
+
+// Transformer map encoders and decoders
+
+macro_rules! impl_map_encoder_transformer {
+    ($name:ident, $function_return:ty) => {
+        pub struct $name<B, E: MapEncoder + 'static> {
+            encoder: &'static E,
+            function: fn(&B) -> $function_return,
+        }
+
+        impl<B, E: MapEncoder> HasValue for $name<B, E> {
+            type Value = B;
+        }
+
+        impl<B, E: MapEncoder> Keyable for $name<B, E> {
+            fn keys(&self) -> Vec<String> {
+                self.encoder.keys()
+            }
+        }
+
+        impl<B, E: MapEncoder> CompressorHolder for $name<B, E> {
+            fn compressor(&self) -> &KeyCompressor {
+                self.encoder.compressor()
+            }
+        }
+    };
+}
+
+impl_map_encoder_transformer!(ComappedMapEncoderImpl, E::Value);
+
+impl<B, E: MapEncoder> MapEncoder for ComappedMapEncoderImpl<B, E> {
+    fn encode<T: Display + PartialEq + Clone, S: StructBuilder<Value = T>>(
+        &self,
+        input: &Self::Value,
+        ops: &'static impl DynamicOps<Value = T>,
+        prefix: S,
+    ) -> S {
+        self.encoder.encode(&(self.function)(input), ops, prefix)
+    }
+}
+
+/// Returns a *contramapped* (*comapped*) transformation of a provided [`MapEncoder`].
+/// A *comapped* encoder transforms the input before encoding.
+pub(crate) const fn comap<B, E: MapEncoder>(
+    encoder: &'static E,
+    f: fn(&B) -> E::Value,
+) -> ComappedMapEncoderImpl<B, E> {
+    ComappedMapEncoderImpl {
+        encoder,
+        function: f,
+    }
+}
+
+impl_map_encoder_transformer!(FlatComappedMapEncoderImpl, DataResult<E::Value>);
+
+impl<B, E: MapEncoder> MapEncoder for FlatComappedMapEncoderImpl<B, E> {
+    fn encode<T: Display + PartialEq + Clone, S: StructBuilder<Value = T>>(
+        &self,
+        input: &Self::Value,
+        ops: &'static impl DynamicOps<Value = T>,
+        prefix: S,
+    ) -> S {
+        let result = (self.function)(input);
+        let builder = prefix.with_errors_from(&result);
+        // We want to encode either a complete or partial result if there is one.
+        // Otherwise, we do nothing.
+        match result {
+            DataResult::Success { result: r, .. }
+            | DataResult::Error {
+                partial_result: Some(r),
+                ..
+            } => self.encoder.encode(&r, ops, builder),
+            DataResult::Error {
+                partial_result: None,
+                ..
+            } => builder,
+        }
+    }
+}
+
+/// Returns a *flat contramapped* (*flat-comapped*) transformation of a provided [`MapEncoder`].
+/// A *flat comapped* encoder transforms the input before encoding, but the transformation can fail.
+pub(crate) const fn flat_comap<B, E: MapEncoder>(
+    encoder: &'static E,
+    f: fn(&B) -> DataResult<E::Value>,
+) -> FlatComappedMapEncoderImpl<B, E> {
+    FlatComappedMapEncoderImpl {
+        encoder,
+        function: f,
+    }
+}
+
+macro_rules! impl_map_decoder_transformer {
+    ($name:ident, $function_return:ty) => {
+        pub struct $name<B, D: MapDecoder + 'static> {
+            decoder: &'static D,
+            function: fn(&D::Value) -> $function_return,
+        }
+
+        impl<B, D: MapDecoder> HasValue for $name<B, D> {
+            type Value = B;
+        }
+
+        impl<B, D: MapDecoder> Keyable for $name<B, D> {
+            fn keys(&self) -> Vec<String> {
+                self.decoder.keys()
+            }
+        }
+
+        impl<B, D: MapDecoder> CompressorHolder for $name<B, D> {
+            fn compressor(&self) -> &KeyCompressor {
+                self.decoder.compressor()
+            }
+        }
+    };
+}
+
+impl_map_decoder_transformer!(MappedMapDecoderImpl, B);
+
+impl<B, D: MapDecoder> MapDecoder for MappedMapDecoderImpl<B, D> {
+    fn decode<T: Display + PartialEq + Clone>(
+        &self,
+        input: &impl MapLike<Value = T>,
+        ops: &'static impl DynamicOps<Value = T>,
+    ) -> DataResult<Self::Value> {
+        self.decoder.decode(input, ops).map(|a| (self.function)(&a))
+    }
+}
+
+/// Returns a *covariant mapped* transformation of a provided [`MapDecoder`].
+/// A *mapped* decoder transforms the output after decoding.
+pub(crate) const fn map<B, D: MapDecoder>(
+    decoder: &'static D,
+    f: fn(&D::Value) -> B,
+) -> MappedMapDecoderImpl<B, D> {
+    MappedMapDecoderImpl {
+        decoder,
+        function: f,
+    }
+}
+
+impl_map_decoder_transformer!(FlatMappedMapDecoderImpl, DataResult<B>);
+
+impl<B, D: MapDecoder> MapDecoder for FlatMappedMapDecoderImpl<B, D> {
+    fn decode<T: Display + PartialEq + Clone>(
+        &self,
+        input: &impl MapLike<Value = T>,
+        ops: &'static impl DynamicOps<Value = T>,
+    ) -> DataResult<Self::Value> {
+        self.decoder
+            .decode(input, ops)
+            .flat_map(|a| (self.function)(&a))
+    }
+}
+
+/// Returns a *covariant flat-mapped* transformation of a provided [`MapDecoder`].
+/// A *flat-mapped* decoder transforms the output after decoding, but the transformation can fail.
+pub(crate) const fn flat_map<B, D: MapDecoder>(
+    decoder: &'static D,
+    f: fn(&D::Value) -> DataResult<B>,
+) -> FlatMappedMapDecoderImpl<B, D> {
+    FlatMappedMapDecoderImpl {
+        decoder,
+        function: f,
+    }
 }
