@@ -295,6 +295,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 mob_entity.love_ticks.fetch_sub(1, Relaxed);
             }
 
+            // Per-mob tick (e.g. creeper fuse countdown) runs before AI, matching vanilla
             self.mob_tick(&caller).await;
 
             // AI runs before physics (vanilla order: goals → navigator → look → physics)
