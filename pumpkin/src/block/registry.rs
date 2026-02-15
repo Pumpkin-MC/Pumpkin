@@ -65,6 +65,7 @@ use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
 use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
+use crate::block::blocks::redstone::bell::BellBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
 use crate::block::blocks::redstone::comparator::ComparatorBlock;
 use crate::block::blocks::redstone::copper_bulb::CopperBulbBlock;
@@ -254,6 +255,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     // Redstone
     manager.register(ButtonBlock);
+    manager.register(BellBlock);
     manager.register(LeverBlock);
     manager.register(ObserverBlock);
     manager.register(TripwireBlock);
