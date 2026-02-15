@@ -1234,16 +1234,21 @@ impl EntityBase for LivingEntity {
             }
 
             let world = self.entity.world.load();
+            let is_fire_damage = damage_type == DamageType::IN_FIRE
+                || damage_type == DamageType::ON_FIRE
+                || damage_type == DamageType::LAVA;
 
-            // Check if fire damage is disabled
-            if !world.level_info.load().game_rules.fire_damage {
-                return false;
-            }
+            // Fire damage can be prevented by either game rules or fire resistance
+            if is_fire_damage {
+                // Check game rule for fire damage
+                if !world.level_info.load().game_rules.fire_damage {
+                    return false;
+                }
 
-            if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
-                && self.has_effect(&StatusEffect::FIRE_RESISTANCE).await
-            {
-                return false; // Fire resistance
+                // Check for fire resistance effect
+                if self.has_effect(&StatusEffect::FIRE_RESISTANCE).await {
+                    return false;
+                }
             }
 
             // These damage types bypass the hurt cooldown and death protection
