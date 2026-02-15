@@ -1342,6 +1342,14 @@ impl EntityBase for LivingEntity {
                 }
             }
 
+            // Track attacker for RevengeGoal
+            if let Some(attacker) = cause.or(source) {
+                self.last_attacker_id
+                    .store(attacker.get_entity().entity_id, Relaxed);
+                self.last_attacked_time
+                    .store(self.entity.age.load(Relaxed), Relaxed);
+            }
+
             let new_health = self.health.load() - damage_amount;
             if damage_amount > 0.0 {
                 // Track attacker for RevengeGoal (only after confirming damage)
