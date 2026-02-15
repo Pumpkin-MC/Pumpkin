@@ -481,15 +481,16 @@ impl_struct_map_codec!(
 #[cfg(test)]
 mod test {
     use crate::serialization::codec::*;
+    use crate::serialization::codecs::list::ListCodec;
     use crate::serialization::codecs::primitive::StringCodec;
     use crate::serialization::coders::{Decoder, Encoder};
     use crate::serialization::json_ops;
-    use crate::serialization::struct_codecs::StructCodec3;
+    use crate::serialization::struct_codecs::{StructCodec2, StructCodec3, StructCodec5};
     use crate::{assert_decode, struct_codec};
     use serde_json::json;
 
     #[test]
-    fn simple_struct() {
+    fn book_struct() {
         #[derive(Debug, PartialEq)]
         struct Book {
             name: String,
@@ -523,7 +524,7 @@ mod test {
         assert_eq!(
             BOOK_CODEC
                 .encode_start(&object, &json_ops::INSTANCE)
-                .unwrap(),
+                .expect("Could not encode book"),
             json![{
                 "name": "Sample Book",
                 "author": "Sample Author",
@@ -531,7 +532,7 @@ mod test {
             }]
         );
 
-        assert_eq!(BOOK_CODEC.parse(json!({"name": "The Great Gatsby", "author": "F. Scott Fitzgerald", "pages": 180}), &json_ops::INSTANCE).unwrap(),
+        assert_eq!(BOOK_CODEC.parse(json!({"name": "The Great Gatsby", "author": "F. Scott Fitzgerald", "pages": 180}), &json_ops::INSTANCE).expect("Parsing book object failed"),
                    Book {
                        name: "The Great Gatsby".to_string(),
                        author: "F. Scott Fitzgerald".to_string(),
@@ -550,6 +551,192 @@ mod test {
             json!({"name": "Untitled Book 2", "author": "Untitled Author", "pages": "98"}),
             &json_ops::INSTANCE,
             is_error
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn recipe_struct() {
+        // A struct for some arbitrary recipe.
+        #[derive(Debug, PartialEq)]
+        struct Recipe {
+            id: String,
+            // This must have at least 1 ingredient.
+            ingredients: Vec<ItemStack>,
+            result: ItemStack,
+            crafting_time: u32,
+            experience: u32,
+        }
+
+        // A struct for storing some items at 1 slot.
+        #[derive(Debug, PartialEq)]
+        struct ItemStack {
+            item: String,
+            // Optional field, defaults to 1
+            count: u8,
+        }
+
+        pub type ItemStackCodec = StructCodec2<
+            ItemStack,
+            FieldMapCodec<StringCodec>,
+            OptionalFieldWithDefaultMapCodec<UnsignedByteCodec>,
+        >;
+        pub static ITEM_STACK_CODEC: ItemStackCodec = struct_codec!(
+            for_getter(field(&STRING_CODEC, "item"), |i: &ItemStack| &i.item),
+            for_getter(
+                optional_field_with_default(&UNSIGNED_BYTE_CODEC, "count", || 1),
+                |i| &i.count
+            ),
+            |item, count| ItemStack { item, count }
+        );
+
+        pub type RecipeCodec = StructCodec5<
+            Recipe,
+            FieldMapCodec<StringCodec>,
+            FieldMapCodec<ListCodec<ItemStackCodec>>,
+            FieldMapCodec<ItemStackCodec>,
+            FieldMapCodec<UnsignedIntCodec>,
+            FieldMapCodec<UnsignedIntCodec>,
+        >;
+        pub static RECIPE_CODEC: RecipeCodec = struct_codec!(
+            for_getter(field(&STRING_CODEC, "id"), |i: &Recipe| &i.id),
+            for_getter(
+                field(&list(&ITEM_STACK_CODEC, 1, usize::MAX), "ingredients"),
+                |i: &Recipe| &i.ingredients
+            ),
+            for_getter(field(&ITEM_STACK_CODEC, "result"), |i: &Recipe| &i.result),
+            for_getter(field(&UNSIGNED_INT_CODEC, "crafting_time"), |i: &Recipe| &i
+                .crafting_time),
+            for_getter(field(&UNSIGNED_INT_CODEC, "experience"), |i: &Recipe| &i
+                .experience),
+            |id, ingredients, result, crafting_time, experience| Recipe {
+                id,
+                ingredients,
+                result,
+                crafting_time,
+                experience
+            }
+        );
+
+        // Encoding
+
+        let example = Recipe {
+            id: String::from("flint_and_steel_recipe"),
+            ingredients: vec![
+                ItemStack {
+                    item: String::from("flint"),
+                    count: 1,
+                },
+                ItemStack {
+                    item: String::from("iron_ingot"),
+                    count: 1,
+                },
+            ],
+            result: ItemStack {
+                item: String::from("flint_and_steel"),
+                count: 1,
+            },
+            crafting_time: 2,
+            experience: 5,
+        };
+
+        assert_eq!(
+            RECIPE_CODEC
+                .encode_start(&example, &json_ops::INSTANCE)
+                .expect("Encoding panicked"),
+            json!(
+                {
+                    "id": "flint_and_steel_recipe",
+                    "ingredients": [
+                        // Since the counts of each are 1, the count will be omitted.
+                        { "item": "flint" },
+                        { "item": "iron_ingot" }
+                    ],
+                    // Same thing here.
+                    "result": { "item": "flint_and_steel" },
+                    "crafting_time": 2,
+                    "experience": 5
+                }
+            )
+        );
+
+        let example = Recipe {
+            id: String::from("combine_air"),
+            ingredients: vec![],
+            result: ItemStack {
+                item: String::from("bigger_air"),
+                count: 1,
+            },
+            crafting_time: 1,
+            experience: 1,
+        };
+
+        // This should error because there are no ingredients in the recipe.
+        assert!(
+            RECIPE_CODEC
+                .encode_start(&example, &json_ops::INSTANCE)
+                .get_message()
+                .expect("This DataResult should be an error")
+                .starts_with("List is too short")
+        );
+
+        // Decoding
+
+        assert_eq!(
+            RECIPE_CODEC
+                .parse(
+                    json!({
+                        "id": "orange_dye_recipe",
+                        "ingredients": [
+                            // The codec will be able to substitute the default
+                            // count value for these items, which is 1.
+                            { "item": "red_dye" },
+                            { "item": "yellow_dye" }
+                        ],
+                        "result": { "item": "orange_dye", "count": 2 },
+                        "crafting_time": 10,
+                        "experience": 10
+                    }),
+                    &json_ops::INSTANCE
+                )
+                .expect("Decoding panicked"),
+            Recipe {
+                id: String::from("orange_dye_recipe"),
+                ingredients: vec![
+                    ItemStack {
+                        item: String::from("red_dye"),
+                        count: 1
+                    },
+                    ItemStack {
+                        item: String::from("yellow_dye"),
+                        count: 1
+                    }
+                ],
+                result: ItemStack {
+                    item: String::from("orange_dye"),
+                    count: 2
+                },
+                crafting_time: 10,
+                experience: 10,
+            }
+        );
+
+        assert!(
+            RECIPE_CODEC
+                .parse(
+                    json!({
+                        "id": "bedrock_recipe",
+                        "ingredients": [
+                            { "item": "obsidian", "count": 64 },
+                            { "item": "netherite_block", "count": 64 }
+                        ],
+                        "result": { "item": "bedrock" },
+                        "crafting_time": 10000,
+                        // Oops, omitted "experience"!
+                    }),
+                    &json_ops::INSTANCE
+                )
+                .is_error()
         );
     }
 }

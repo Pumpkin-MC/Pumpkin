@@ -217,19 +217,36 @@ impl<R> DataResult<R> {
         }
     }
 
+    /// Tries to get a complete or partial result as a reference. If no such result exists, this returns [`None`].
+    pub const fn result_or_partial_as_ref(&self) -> Option<&R> {
+        match self {
+            Self::Success { result, .. } => Some(result),
+            Self::Error { partial_result, .. } => partial_result.as_ref(),
+        }
+    }
+
     /// Tries to get a complete result from this `DataResult`. If no such result exists, this function panics.
     pub fn unwrap(self) -> R {
-        self.into_result()
-            .unwrap_or_else(|| panic!("No partial or complete result found for DataResult"))
+        self.expect("No complete result found for DataResult")
     }
 
     /// Tries to get a complete or partial result from this `DataResult`. If no such result exists, this function panics.
     pub fn unwrap_or_partial(self) -> R {
-        self.into_result_or_partial()
-            .unwrap_or_else(|| panic!("No partial or complete result found for DataResult"))
+        self.expect_or_partial("No complete or partial result found for DataResult")
     }
 
-    /// Whether this `DataResult` has a complete or partial result.
+    /// Tries to get a complete result from this `DataResult`. If no such result exists, this function panics with a custom message.
+    pub fn expect(self, message: &str) -> R {
+        self.into_result().unwrap_or_else(|| panic!("{}", message))
+    }
+
+    /// Tries to get a complete or partial result from this `DataResult`. If no such result exists, this function panics with a custom message.
+    pub fn expect_or_partial(self, message: &str) -> R {
+        self.into_result_or_partial()
+            .unwrap_or_else(|| panic!("{}", message))
+    }
+
+    /// Returns whether this `DataResult` has a complete or partial result.
     pub const fn has_result_or_partial(&self) -> bool {
         !matches!(
             self,
@@ -602,6 +619,14 @@ impl<R> DataResult<R> {
                     unreachable!()
                 }
             }
+        }
+    }
+
+    /// Returns the message of this `DataResult`, if any. Only error results have messages.
+    pub fn get_message(self) -> Option<String> {
+        match self {
+            Self::Success { .. } => None,
+            Self::Error { message, .. } => Some(message),
         }
     }
 }

@@ -10,6 +10,7 @@ use crate::serialization::dynamic_ops::DynamicOps;
 use crate::serialization::key_compressor::KeyCompressor;
 use crate::serialization::keyable::Keyable;
 use crate::serialization::lifecycle::Lifecycle;
+use crate::serialization::map_codecs::validated::{ValidatedMapCodec, new_validated_map_codec};
 use crate::serialization::map_coders::{
     ComappedMapEncoderImpl, CompressorHolder, FlatComappedMapEncoderImpl, FlatMappedMapDecoderImpl,
     MapDecoder, MapEncoder, MappedMapDecoderImpl, comap, flat_comap, flat_map, map,
@@ -169,7 +170,7 @@ macro_rules! make_map_codec_transformation_function {
         #[doc = concat!("- `S` is **", $s_equivalency, "** to `A`.")]
         #[doc = ""]
         #[doc = "A type `A` is *fully equivalent* to `B` if *A can always successfully be converted to B*."]
-        pub const fn $name<A, C: MapCodec<Value = A>, S>(map_codec: &'static C, to: fn(&A) -> $to_func_result, from: fn(&S) -> $from_func_result) -> $short_type<S, C> {
+        pub const fn $name<A, C: MapCodec<Value = A>, S>(map_codec: &'static C, to: fn(A) -> $to_func_result, from: fn(&S) -> $from_func_result) -> $short_type<S, C> {
             ComposedMapCodec {
                 encoder: $encoder_func(map_codec, from),
                 decoder: $decoder_func(map_codec, to)
@@ -204,14 +205,15 @@ make_map_codec_transformation_function!(
     "partially equivalent"
 );
 
-/// A validated map codec.
-pub type ValidatedMapCodec<C> = FlatXmapMapCodec<<C as HasValue>::Value, C>;
-
 /// Returns a transformer map codec that validates a value before encoding and after decoding by calling a function,
 /// which provides a [`DataResult`] depending on that value's validity.
+///
+/// `validator` is a function that takes the pointer of a value and returns a [`Result`].
+/// - If the returned result is an [`Ok`], the codec works as normal.
+/// - Otherwise, it always returns a non-result with the message [`String`].
 pub const fn validate<C: MapCodec>(
     codec: &'static C,
-    validator: fn(&C::Value) -> DataResult<C::Value>,
+    validator: fn(&C::Value) -> Result<(), String>,
 ) -> ValidatedMapCodec<C> {
-    flat_xmap(codec, validator, validator)
+    new_validated_map_codec(codec, validator)
 }

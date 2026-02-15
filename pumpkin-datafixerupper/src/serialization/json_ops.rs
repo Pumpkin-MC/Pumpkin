@@ -20,6 +20,7 @@ pub static INSTANCE: JsonOps = JsonOps { compressed: false };
 /// A normal instance of [`JsonOps`], which serializes/deserializes compressed JSON data.
 ///
 /// *Compressed* JSON data is a little more lenient with placing values at places that expect something else.
+/// This allows JSON to be compressed to a single string.
 pub static COMPRESSED: JsonOps = JsonOps { compressed: true };
 
 impl JsonOps {
@@ -51,10 +52,16 @@ impl JsonOps {
     }
 
     /// Whether a JSON value is considered to be a valid key.
+    ///
+    /// If this returns `true`, it is safe to say that calling [`get_as_string`] with `input` will always return a [`Some`].
     const fn is_valid_key(&self, input: &Value) -> bool {
         // Normal mode: has to be a string.
         // Compressed mode: can be any JSON primitive.
-        !matches!(input, Value::String(_)) && !self.compressed
+        if self.compressed {
+            matches!(input, Value::String(_) | Value::Number(_) | Value::Bool(_))
+        } else {
+            matches!(input, Value::String(_))
+        }
     }
 }
 
@@ -217,7 +224,7 @@ impl DynamicOps for JsonOps {
             return DataResult::partial_error(format!("Not a map: {map}"), map.clone());
         }
 
-        if self.is_valid_key(&key) {
+        if !self.is_valid_key(&key) {
             return DataResult::partial_error(format!("Key is not a string: {key}"), map);
         }
 
