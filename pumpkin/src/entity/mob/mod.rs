@@ -200,6 +200,7 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -230,6 +231,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
 
+            // Per-mob tick (e.g. creeper fuse countdown) runs before AI, matching vanilla
             self.mob_tick(&caller).await;
 
             let age = mob_entity.living_entity.entity.age.load(Relaxed);
