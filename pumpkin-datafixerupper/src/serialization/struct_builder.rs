@@ -9,33 +9,41 @@ use crate::serialization::lifecycle::Lifecycle;
 pub trait StructBuilder {
     type Value;
 
-    /// Adds a single key-value pair to this builder.
-    fn add_key_value(&mut self, key: Self::Value, value: Self::Value);
+    /// Adds a single key-value pair to this builder and returns the builder.
+    #[must_use]
+    fn add_key_value(self, key: Self::Value, value: Self::Value) -> Self;
 
-    /// Adds a single key-'value result' pair to this builder.
-    fn add_key_value_result(&mut self, key: Self::Value, value: DataResult<Self::Value>);
+    /// Adds a single key-'value result' pair to this builder and returns the builder.
+    #[must_use]
+    fn add_key_value_result(self, key: Self::Value, value: DataResult<Self::Value>) -> Self;
 
-    /// Adds a single 'key result'-'value result' pair to this builder.
+    /// Adds a single 'key result'-'value result' pair to this builder and returns the builder.
+    #[must_use]
     fn add_key_result_value_result(
-        &mut self,
+        self,
         key: DataResult<Self::Value>,
         value: DataResult<Self::Value>,
-    );
+    ) -> Self;
 
-    /// Adds the error message from a provided `DataResult` (if any) to this builder internally.
-    fn add_errors_from(&mut self, result: DataResult<()>);
+    /// Adds the error message from a provided `DataResult` (if any) to this builder and returns the builder.
+    #[must_use]
+    fn with_errors_from<T>(self, result: &DataResult<T>) -> Self;
 
-    /// Adds a string key-value pair to this builder.
-    fn add_string_key_value(&mut self, key: &str, value: Self::Value);
+    /// Adds a string key-value pair to this builder and returns the builder.
+    #[must_use]
+    fn add_string_key_value(self, key: &str, value: Self::Value) -> Self;
 
-    /// Adds a string key-'value result' pair to this builder.
-    fn add_string_key_value_result(&mut self, key: &str, value: DataResult<Self::Value>);
+    /// Adds a string key-'value result' pair to this builder and returns the builder.
+    #[must_use]
+    fn add_string_key_value_result(self, key: &str, value: DataResult<Self::Value>) -> Self;
 
-    /// Sets the lifecycle of this builder.
-    fn set_lifecycle(&mut self, lifecycle: Lifecycle);
+    /// Sets the lifecycle of this builder and returns the builder.
+    #[must_use]
+    fn set_lifecycle(self, lifecycle: Lifecycle) -> Self;
 
-    /// Maps the error from the internal builder to the function `f`.
-    fn map_error(&mut self, f: Box<dyn FnOnce(String) -> String>);
+    /// Maps the error from the internal builder to the function `f` and returns the builder.
+    #[must_use]
+    fn map_error(self, f: Box<dyn FnOnce(String) -> String>) -> Self;
 
     /// Builds the map stored in this builder along with a prefix and returns the result.
     fn build(self, prefix: Self::Value) -> DataResult<Self::Value>;
@@ -83,16 +91,19 @@ pub trait UniversalStructBuilder: ResultStructBuilder {
 #[macro_export]
 macro_rules! impl_struct_builder {
     ($builder:ident) => {
-        fn set_lifecycle(&mut self, lifecycle: Lifecycle) {
+        fn set_lifecycle(mut self, lifecycle: Lifecycle) -> Self {
             self.$builder = self.$builder.clone().with_lifecycle(lifecycle);
+            self
         }
 
-        fn map_error(&mut self, f: Box<dyn FnOnce(String) -> String>) {
+        fn map_error(mut self, f: Box<dyn FnOnce(String) -> String>) -> Self {
             self.$builder = self.$builder.clone().map_error_dyn(f);
+            self
         }
 
-        fn add_errors_from(&mut self, result: DataResult<()>) {
-            self.$builder = self.$builder.clone().flat_map(|v| result.map(|_| v));
+        fn with_errors_from<U>(mut self, result: &DataResult<U>) -> Self {
+            self.$builder = self.$builder.with_errors_from(result);
+            self
         }
 
         fn build(self, prefix: Self::Value) -> DataResult<Self::Value> {
@@ -110,12 +121,14 @@ macro_rules! impl_struct_builder {
 #[macro_export]
 macro_rules! impl_string_struct_builder {
     (@internal $builder:ident) => {
-        fn add_string_key_value(&mut self, key: &str, value: Self::Value) {
-            self.$builder = self.$builder.clone().map(|r| self.append(key, value, r))
+        fn add_string_key_value(mut self, key: &str, value: Self::Value) -> Self {
+            self.$builder = self.$builder.clone().map(|r| self.append(key, value, r));
+            self
         }
 
-        fn add_string_key_value_result(&mut self, key: &str, value: DataResult<Self::Value>) {
+        fn add_string_key_value_result(mut self, key: &str, value: DataResult<Self::Value>) -> Self {
             self.$builder = self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(key, v, r), value);
+            self
         }
     };
 
@@ -124,29 +137,29 @@ macro_rules! impl_string_struct_builder {
 
         impl_string_struct_builder!(@internal $builder);
 
-        fn add_key_value(&mut self, key: Self::Value, value: Self::Value) {
-            self.$builder = $ops.get_string(&key).flat_map(|s| {
-                self.add_string_key_value(&*s, value);
-                return self.$builder.clone();
-            })
+        fn add_key_value(mut self, key: Self::Value, value: Self::Value) -> Self {
+            self.$builder = $ops.get_string(&key).flat_map(
+                |s| self.$builder.clone().map(|r| self.append(&s, value, r))
+            );
+            self
         }
 
-        fn add_key_value_result(&mut self, key: Self::Value, value: DataResult<Self::Value>) {
-            self.$builder = $ops.get_string(&key).flat_map(|s| {
-                self.add_string_key_value_result(&*s, value);
-                return self.$builder.clone();
-            })
+        fn add_key_value_result(mut self, key: Self::Value, value: DataResult<Self::Value>) -> Self {
+            self.$builder = $ops.get_string(&key).flat_map(
+                |s| self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
+            );
+            self
         }
 
         fn add_key_result_value_result(
-            &mut self,
+            mut self,
             key: DataResult<Self::Value>,
             value: DataResult<Self::Value>,
-        ) {
+        ) -> Self {
             self.$builder = key.flat_map(|v| $ops.get_string(&v)).flat_map(|s| {
-                self.add_string_key_value_result(&*s, value);
-                return self.$builder.clone();
-            })
+                self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
+            });
+            self
         }
     };
 
@@ -155,29 +168,29 @@ macro_rules! impl_string_struct_builder {
 
         impl_string_struct_builder!(@internal $builder);
 
-        fn add_key_value(&mut self, key: Self::Value, value: Self::Value) {
-            self.$builder = self.$ops.get_string(&key).flat_map(|s| {
-                self.add_string_key_value(&*s, value);
-                return self.$builder.clone();
-            })
+        fn add_key_value(self, key: Self::Value, value: Self::Value) -> Self {
+            self.$builder = self.$ops.get_string(&key).flat_map(
+                |s| self.$builder.clone().map(|r| self.append(&s, value, r))
+            );
+            self
         }
 
-        fn add_key_value_result(&mut self, key: Self::Value, value: DataResult<Self::Value>) {
-            self.$builder = self.$ops.get_string(&key).flat_map(|s| {
-                self.add_string_key_value_result(&*s, value);
-                return self.$builder.clone();
-            })
+        fn add_key_value_result(self, key: Self::Value, value: DataResult<Self::Value>) -> Self {
+            self.$builder = self.$ops.get_string(&key).flat_map(
+                |s| self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(key, v, r), value)
+            );
+            self
         }
 
         fn add_key_result_value_result(
-            &mut self,
+            self,
             key: DataResult<Self::Value>,
             value: DataResult<Self::Value>,
-        ) {
+        ) -> Self {
             self.$builder = key.flat_map(|v| self.$ops.get_string(&v)).flat_map(|s| {
-                self.add_string_key_value_result(&*s, value);
-                return self.$builder.clone();
-            })
+                self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
+            });
+            self
         }
     };
 }
@@ -189,26 +202,27 @@ macro_rules! impl_string_struct_builder {
 #[macro_export]
 macro_rules! impl_universal_struct_builder {
     (@internal $builder:ident) => {
-        fn add_key_value(&mut self, key: Self::Value, value: Self::Value) {
-            self.$builder = self.$builder.clone().map(|b| self.append(key, value, b))
+        fn add_key_value(mut self, key: Self::Value, value: Self::Value) -> Self {
+            self.$builder = self.$builder.clone().map(|b| self.append(key, value, b));
+            self
         }
 
-        fn add_key_value_result(&mut self, key: Self::Value, value: DataResult<Self::Value>) {
-            self.$builder = self
-                .$builder
-                .clone()
+        fn add_key_value_result(mut self, key: Self::Value, value: DataResult<Self::Value>) -> Self {
+            self.$builder = self.$builder.clone()
                 .apply_2_and_make_stable(|b, v| self.append(key, v, b), value);
+            self
         }
 
         fn add_key_result_value_result(
-            &mut self,
+            mut self,
             key: DataResult<Self::Value>,
             value: DataResult<Self::Value>,
-        ) {
+        ) -> Self {
             self.$builder = self
                 .$builder
                 .clone()
                 .apply(key.apply_2_and_make_stable(|k, v| (|b| self.append(k, v, b)), value));
+            self
         }
     };
 
@@ -216,12 +230,12 @@ macro_rules! impl_universal_struct_builder {
     ($builder:ident, $ops:ident) => {
         impl_universal_struct_builder!(@internal $builder);
 
-        fn add_string_key_value(&mut self, key: &str, value: Self::Value) {
-            self.add_key_value($ops.create_string(key), value);
+        fn add_string_key_value(self, key: &str, value: Self::Value) -> Self {
+            self.add_key_value($ops.create_string(key), value)
         }
 
-        fn add_string_key_value_result(&mut self, key: &str, value: DataResult<Self::Value>) {
-            self.add_key_value_result($ops.create_string(key), value);
+        fn add_string_key_value_result(self, key: &str, value: DataResult<Self::Value>) -> Self {
+            self.add_key_value_result($ops.create_string(key), value)
         }
     };
 
@@ -229,12 +243,14 @@ macro_rules! impl_universal_struct_builder {
     ($builder:ident, self. $ops:ident) => {
         impl_universal_struct_builder!(@internal $builder);
 
-        fn add_string_key_value(&mut self, key: &str, value: Self::Value) {
-            self.add_key_value(self.$ops.create_string(key), value);
+        fn add_string_key_value(self, key: &str, value: Self::Value) -> Self {
+            let string = self.$ops.create_string(key);
+            self.add_key_value(string, value)
         }
 
-        fn add_string_key_value_result(&mut self, key: &str, value: DataResult<Self::Value>) {
-            self.add_key_value_result(self.$ops.create_string(key), value);
+        fn add_string_key_value_result(self, key: &str, value: DataResult<Self::Value>) -> Self {
+            let string = self.$ops.create_string(key);
+            self.add_key_value_result(string, value)
         }
     };
 }

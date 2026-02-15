@@ -844,7 +844,7 @@ mod test {
                 assert_eq!(compound.child_tags[0].0, "");
             }
         } else {
-            panic!("Expected an NBT list, got {:?}", result);
+            panic!("Expected an NBT list, got {result:?}");
         }
     }
 }

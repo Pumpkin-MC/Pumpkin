@@ -7,15 +7,15 @@ use crate::serialization::struct_builder::StructBuilder;
 use std::fmt::Display;
 
 /// A [`Codec`] implementation for a [`MapCodec`].
-pub struct MapCodecCodec<A, C: MapCodec<Value = A>> {
+pub struct MapCodecCodec<C: MapCodec> {
     pub(crate) codec: C,
 }
 
-impl<A, C: MapCodec<Value = A>> HasValue for MapCodecCodec<A, C> {
-    type Value = A;
+impl<C: MapCodec> HasValue for MapCodecCodec<C> {
+    type Value = C::Value;
 }
 
-impl<A, C: MapCodec<Value = A>> Encoder for MapCodecCodec<A, C> {
+impl<C: MapCodec> Encoder for MapCodecCodec<C> {
     fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
@@ -28,7 +28,7 @@ impl<A, C: MapCodec<Value = A>> Encoder for MapCodecCodec<A, C> {
     }
 }
 
-impl<A, C: MapCodec<Value = A>> Decoder for MapCodecCodec<A, C> {
+impl<C: MapCodec> Decoder for MapCodecCodec<C> {
     fn decode<T: Display + PartialEq + Clone>(
         &self,
         input: T,

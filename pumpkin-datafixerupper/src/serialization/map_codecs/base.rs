@@ -29,7 +29,7 @@ pub trait BaseMapCodec {
         mut prefix: impl StructBuilder<Value = T>,
     ) -> impl StructBuilder<Value = T> {
         for (key, element) in input {
-            prefix.add_key_result_value_result(
+            prefix = prefix.add_key_result_value_result(
                 self.key_codec().encode_start(key, ops),
                 self.element_codec().encode_start(element, ops),
             );

@@ -55,7 +55,6 @@ macro_rules! impl_apply {
         /// - If all results are at least partial, `f` is called, which should return the final item to be wrapped in the returned result.
         ///
         /// The returned result is a *success* **if and only if** all provided results are successes as well.
-        #[must_use]
         pub fn $name<$($ty,)+ T>(
             self,
             f: impl FnOnce(R $(,$ty)+) -> T
@@ -72,7 +71,6 @@ macro_rules! impl_apply {
         /// - If all results are at least partial, `f` is called, which should return the final item to be wrapped in the returned result.
         ///
         /// The returned result is a *success* **if and only if** all provided results are successes as well.
-        #[must_use]
         #[expect(clippy::too_many_arguments)]
         pub fn $name<$($ty,)+ T>(
             self,
@@ -91,6 +89,7 @@ macro_rules! impl_apply {
 ///
 /// `R` is the type of result stored.
 #[derive(Clone, Debug)]
+#[must_use]
 pub enum DataResult<R> {
     /// Contains a complete result and has no error.
     Success { result: R, lifecycle: Lifecycle },
@@ -112,7 +111,6 @@ impl<R> DataResult<R> {
     }
 
     /// Sets this `DataResult`'s lifecycle and returns a new result.
-    #[must_use]
     pub fn with_lifecycle(self, new_lifecycle: Lifecycle) -> Self {
         match self {
             Self::Success { result, .. } => Self::Success {
@@ -132,7 +130,6 @@ impl<R> DataResult<R> {
     }
 
     /// Adds another `Lifecycle` to this `DataResult`'s lifecycle and returns the new result.
-    #[must_use]
     pub fn add_lifecycle(self, added_lifecycle: Lifecycle) -> Self {
         let new_lifecycle = self.lifecycle().add(added_lifecycle);
         self.with_lifecycle(new_lifecycle)
@@ -140,35 +137,30 @@ impl<R> DataResult<R> {
 
     /// Returns a *successful* `DataResult` with an experimental lifecycle.
     #[inline]
-    #[must_use]
     pub const fn success(result: R) -> Self {
         Self::success_with_lifecycle(result, Lifecycle::Experimental)
     }
 
     /// Returns a *successful* `DataResult` with a given lifecycle.
     #[inline]
-    #[must_use]
     pub const fn success_with_lifecycle(result: R, lifecycle: Lifecycle) -> Self {
         Self::Success { result, lifecycle }
     }
 
     /// Returns an *errored* `DataResult` with no result and an experimental lifecycle.
     #[inline]
-    #[must_use]
     pub const fn error(error: String) -> Self {
         Self::error_with_lifecycle(error, Lifecycle::Experimental)
     }
 
     /// Returns an *errored* `DataResult` with a partial result and an experimental lifecycle.
     #[inline]
-    #[must_use]
     pub const fn partial_error(error: String, partial_result: R) -> Self {
         Self::partial_error_with_lifecycle(error, partial_result, Lifecycle::Experimental)
     }
 
     /// Returns an *errored* `DataResult` with no result and a given lifecycle.
     #[inline]
-    #[must_use]
     pub const fn error_with_lifecycle<T>(message: String, lifecycle: Lifecycle) -> DataResult<T> {
         DataResult::Error {
             partial_result: None,
@@ -255,10 +247,9 @@ impl<R> DataResult<R> {
         format!("{first}; {second}")
     }
 
-    /// Maps a `DataResult` of a type `R` to a `DataResult` of a type `T` by applying a function, leaving errors untouched.
+    /// Maps a `DataResult` of a type `R` to a `DataResult` of a type `T` by applying a function, leaving non-results untouched.
     ///
-    /// `f` is only applied to complete results, not partial ones.
-    #[must_use]
+    /// `f` is applied to complete results and partial ones. For partial results, `f` is applied to their partial value.
     pub fn map<T>(self, op: impl FnOnce(R) -> T) -> DataResult<T> {
         match self {
             Self::Success { result, lifecycle } => {
@@ -275,7 +266,6 @@ impl<R> DataResult<R> {
     /// Maps a `DataResult` of a type `R` to a type `T`.
     /// - If there is a complete result, `f` (the result function) is called with that result.
     /// - Otherwise, if there is an error, `default` (the error function) is called with the error as the parameter.
-    #[must_use]
     pub fn map_or_else<T>(self, default: impl FnOnce(Self) -> T, f: impl Fn(R) -> T) -> T {
         match self {
             Self::Success { result, .. } => f(result),
@@ -291,7 +281,6 @@ impl<R> DataResult<R> {
     /// In other words, `f` will process the complete or partial result of this `DataResult` (if any), appending errors if necessary.
     ///
     /// The name of this function is equivalent to `and_then`.
-    #[must_use]
     pub fn flat_map<T>(self, f: impl FnOnce(R) -> DataResult<T>) -> DataResult<T> {
         match self {
             Self::Success { result, lifecycle } => {
@@ -334,7 +323,6 @@ impl<R> DataResult<R> {
     }
 
     /// Applies a function wrapped in a `DataResult` to the value wrapped in this `DataResult`.
-    #[must_use]
     pub fn apply<T>(self, function_result: DataResult<impl FnOnce(R) -> T>) -> DataResult<T> {
         let lifecycle = self.lifecycle().add(function_result.lifecycle());
         match (self, function_result) {
@@ -387,7 +375,6 @@ impl<R> DataResult<R> {
     /// - If both results are at least partial, `f` is called, which should return the final item to be wrapped in the returned result.
     ///
     /// The returned result is a *success* **if and only if** both results are successes as well.
-    #[must_use]
     pub fn apply_2<R2, T>(
         self,
         f: impl FnOnce(R, R2) -> T,
@@ -427,7 +414,6 @@ impl<R> DataResult<R> {
     }
 
     /// Similar to [`apply_2`], but this also marks the returned `DataResult` as [`Lifecycle::Stable`].
-    #[must_use]
     pub fn apply_2_and_make_stable<R2, T>(
         self,
         f: impl FnOnce(R, R2) -> T,
@@ -458,7 +444,6 @@ impl<R> DataResult<R> {
 
     /// Applies a function to `DataResult` errors, leaving successes untouched.
     /// This can be used to provide additional context to an error.
-    #[must_use]
     pub fn map_error(self, f: impl FnOnce(String) -> String) -> Self {
         match self {
             Self::Success { .. } => self,
@@ -472,7 +457,6 @@ impl<R> DataResult<R> {
 
     /// Applies a boxed `dyn` function to `DataResult` errors, leaving successes untouched.
     /// This can be used to provide additional context to an error.
-    #[must_use]
     pub fn map_error_dyn(self, f: Box<dyn FnOnce(String) -> String>) -> Self {
         match self {
             Self::Success { .. } => self,
@@ -487,7 +471,6 @@ impl<R> DataResult<R> {
     /// Promotes a `DataResult` containing a partial result to a success `DataResult`, providing
     /// the error message to a function `f` and removing it from the new `DataResult`.
     /// `DataResult`s with no result or a complete result are left untouched.
-    #[must_use]
     pub fn promote_partial(self, f: impl FnOnce(String)) -> Self {
         match self {
             Self::Success { .. } => self,
@@ -505,8 +488,7 @@ impl<R> DataResult<R> {
         }
     }
 
-    /// Returns a `DataResult` with a new partial value, leaving `DataResult`s with no result or a complete result untouched.
-    #[must_use]
+    /// Returns a `DataResult` with a new partial value (always partial), leaving `DataResult`s with a complete result untouched.
     pub fn with_partial(self, partial_value: R) -> Self {
         match self {
             Self::Success { .. } => self,
@@ -520,7 +502,6 @@ impl<R> DataResult<R> {
     /// - For a complete result, this returns another `DataResult` whose complete result is `value`.
     /// - For a partial result, this returns another `DataResult` whose partial result is `value`.
     /// - For no result, this returns itself.
-    #[must_use]
     pub fn with_complete_or_partial<T>(self, value: T) -> DataResult<T> {
         match self {
             Self::Success { lifecycle, .. } => DataResult::success_with_lifecycle(value, lifecycle),
@@ -545,14 +526,14 @@ impl<R> DataResult<R> {
         !self.is_success()
     }
 
-    /// Convenience method to add a message of another `DataResult` (`other_result`) to this `DataResult`.
+    /// Add a message of another `DataResult` (`other_result`) to this `DataResult`.
+    ///
     /// This is useful for *unit tuple* `DataResult`s used simply for final results of complex objects.
     /// - If `other_result` is a complete result, nothing happens.
     /// - If both results are partial, the returned result is also partial. Otherwise, it is a non-result.
     /// - Messages found in any `DataResult` error are concatenated and used in the returned result.
     ///
     /// This always returns a *stable* result.
-    #[must_use]
     pub fn add_message<T>(self, other_result: &DataResult<T>) -> Self {
         match (self, other_result) {
             // Both results are successful.
@@ -588,6 +569,38 @@ impl<R> DataResult<R> {
             }
             (_, DataResult::Error { message: m2, .. }) => {
                 Self::error_with_lifecycle(m2.clone(), Lifecycle::Stable)
+            }
+        }
+    }
+
+    /// Tries to add errors from the given `result` and adds them to `self`
+    /// if `self` is not already an error result.
+    ///
+    /// The [`Lifecycle`] of the returned `DataResult` is the addition of both results.
+    pub fn with_errors_from<T>(self, result: &DataResult<T>) -> Self {
+        match (&self, result) {
+            // If both values are successes, do nothing.
+            // If `self` is already an error result, do nothing.
+            (Self::Success { .. }, DataResult::Success { .. }) | (Self::Error { .. }, _) => self,
+
+            (
+                Self::Success { .. },
+                DataResult::Error {
+                    message,
+                    lifecycle: other_lifecycle,
+                    ..
+                },
+            ) => {
+                let self_lifecycle = self.lifecycle();
+                if let Self::Success { result, .. } = self {
+                    Self::partial_error_with_lifecycle(
+                        message.clone(),
+                        result,
+                        self_lifecycle.add(*other_lifecycle),
+                    )
+                } else {
+                    unreachable!()
+                }
             }
         }
     }

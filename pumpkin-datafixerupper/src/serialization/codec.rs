@@ -1,3 +1,4 @@
+pub use super::map_codec::for_getter;
 use crate::serialization::HasValue;
 use crate::serialization::codecs::lazy::LazyCodec;
 use crate::serialization::codecs::list::ListCodec;
@@ -10,15 +11,18 @@ use crate::serialization::codecs::range::RangeCodec;
 use crate::serialization::codecs::range::new_range_codec;
 use crate::serialization::coders::{
     ComappedEncoderImpl, Decoder, Encoder, FlatComappedEncoderImpl, FlatMappedDecoderImpl,
-    MappedDecoderImpl, comap, decoder_field_of, encoder_field_of, flat_comap, flat_map, map,
+    MappedDecoderImpl, comap, decoder_field, encoder_field, flat_comap, flat_map, map,
 };
 use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
 use crate::serialization::keyable::Keyable;
 use crate::serialization::map_codec::{ComposedMapCodec, MapCodec};
 use crate::serialization::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
+use crate::serialization::map_codecs::optional_field::{
+    DefaultValueProviderMapCodec, OptionalFieldMapCodec, new_default_value_provider_map_codec,
+    new_optional_field_map_codec,
+};
 use crate::serialization::map_codecs::simple::SimpleMapCodec;
-use crate::serialization::struct_codecs::Field;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::{LazyLock, OnceLock};
@@ -27,10 +31,10 @@ use std::sync::{LazyLock, OnceLock};
 ///
 /// # Usage
 /// This trait is the main way serialization/deserialization can be handled easily.
-/// - To encode something, use [`Codec::encode_start`] *(most of the time)* or [`Codec::encode`].
+/// - To encode something, use [`Codec::encode_start`]
 /// - To decode something, use [`Codec::parse`].
 ///
-/// To use these methods, use a [`DynamicOps`] instance to tell the intermediate format to encode to/decode from.
+/// To use these methods, use a [`DynamicOps`] instance to tell the intermediate format to encode to/decode from:
 ///
 /// # Primitive Codecs
 /// This trait's module (`codec`) provides many common codecs that can be used for more complex codec types:
@@ -41,13 +45,15 @@ use std::sync::{LazyLock, OnceLock};
 /// - Java `int` and `long` stream codecs (for `Vec<i32>` and `Vec<i64`)
 ///
 /// # Creating a Codec
-/// There are a few codec types that can be created for custom types.
+/// There are a few codec types that can be created for custom types. **Keep in mind that codecs are meant
+/// to be static instances, and they should not be created at runtime.** Usually, codecs are declared
+/// using `pub static`.
 ///
 /// ## Lists
 /// Use one of the following with the required arguments:
-/// - [`list`]: Creates a list of a given codec with the provided minimum and maximum size limits.
-/// - [`limited_list`]: Creates a list of a given codec with the provided maximum size limit.
-/// - [`unbounded_list`]: Creates a list of a given codec with no size limit.
+/// - [`list`]: Creates a list codec of a given codec with the provided minimum and maximum size limits.
+/// - [`limited_list`]: Creates a list codec of a given codec with the provided maximum size limit.
+/// - [`unbounded_list`]: Creates a list codec of a given codec with no size limit.
 ///
 /// ## Ranges
 /// A codec can also only accept a range of values of some number type. You can use one of the following for that:
@@ -57,21 +63,29 @@ use std::sync::{LazyLock, OnceLock};
 ///
 /// ## Structs
 /// Use the [`struct_codec`] macro to generate a codec implementation for a struct.
-/// A struct codec can work with up to 16 key-value pairs (or [`MapCodec`]s).
+/// A struct codec can work with up to 16 [`MapCodec`]s. A `MapCodec` is simply an object that
+/// works with one or more keys of a provided map. Most of them used will be [`FieldMapCodec`]s,
+/// which only works with one singular key.
 ///
 /// A field `MapCodec` can be created with the following:
-/// - [`field_of`]: Provides a *required* field with the provided codec and name.
+/// - [`field`]: Provides a *required* field with the provided codec and name.
+/// - [`optional_field`]: Provides an *optional* field with the provided codec and name. Since this type of `MapCodec`
+///   has **no default value**, it encodes into an [`Option`].
+/// - [`optional_field_with_default`]: Provides an *optional* field with the provided codec and name, along with a default value factory
+///   for when the value does not exist while decoding.
+/// - [`lenient_optional_field`] and [`lenient_optional_field_with_default`] for lenient versions of the above two optional field methods.
 ///
-/// To create a [`Field`] object using a `MapCodec`, use [`for_getter`] to include a getter method
+/// To create a [`Field`] object using a `MapCodec`, use [`for_getter`] (in `map_codec`) to include a getter method
 /// to tell the codec how to get some value (for encoding) from a struct instance. These `Field`s can then be placed
 /// in the `struct_codec` body, one for each pair, along with a constructor function at the end
-/// to tell the codec how to create an instance (for decoding) with the provided values.
+/// to tell the codec how to create an instance (for decoding) with the provided values. See the documentation
+/// of the `struct_codec` macro for a basic example for defining a struct codec.
 ///
 /// ## Unbounded Maps
-/// Use the [`unbounded_map`] to create a codec encoding/decoding a [`HashMap`] of any arbitrary key.
+/// Use the [`unbounded_map`] function to create a codec encoding/decoding a [`HashMap`] of any arbitrary key.
 ///
 /// # Transformers
-/// A codec of a type `A` can be implemented by *transforming* another codec to work with another type `B`.
+/// A map codec of a type `B` can be implemented by *transforming* another codec of type `A` to work with type `B`.
 /// The following methods can be used depending on the equivalence relation between the two types:
 /// - [`xmap`]
 /// - [`comap_flat_map`]
@@ -79,6 +93,11 @@ use std::sync::{LazyLock, OnceLock};
 /// - [`flat_xmap`]
 ///
 /// For example, the unsigned types use `flat_xmap` to convert between the `i_` and `u_` types.
+///
+/// ## Validator Codecs
+/// The [`validate`] function is a special case of the `flat_xmap` transformer method.
+/// It validates a value before encoding and after decoding using a function
+/// that can either return a [`DataResult`] success or error.
 pub trait Codec: Encoder + Decoder {}
 
 // Any struct implementing Encoder<Value = A> and Decoder<Value = A> will also implement Codec<Value = A>.
@@ -235,13 +254,13 @@ pub const fn unbounded_list<C: Codec>(codec: &'static C) -> ListCodec<C> {
 /// Helper macro to generate the shorthand types and functions of the transformer [`Codec`] methods.
 macro_rules! make_codec_transformation_function {
     ($name:ident, $short_type:ident, $encoder_type:ident, $decoder_type:ident, $encoder_func:ident, $decoder_func:ident, $to_func_result:ty, $from_func_result:ty, $a_equivalency:literal, $s_equivalency:literal) => {
-        pub type $short_type<S, C> = ComposedCodec<$encoder_type<<C as HasValue>::Value, S, C>, $decoder_type<<C as HasValue>::Value, S, C>>;
+        pub type $short_type<S, C> = ComposedCodec<$encoder_type<S, C>, $decoder_type<S, C>>;
 
         #[doc = "Transforms a [`Codec`] of type `A` to another [`Codec`] of type `S`. Use this if:"]
         #[doc = concat!("- `A` is **", $a_equivalency, "** to `S`.")]
         #[doc = concat!("- `S` is **", $s_equivalency, "** to `A`.")]
         #[doc = ""]
-        #[doc = "A type `A` is *equivalent* to `B` if *A can always successfully be converted to B*."]
+        #[doc = "A type `A` is *fully equivalent* to `B` if *A can always successfully be converted to B*."]
         pub const fn $name<A, C: Codec<Value = A>, S>(codec: &'static C, to: fn(&A) -> $to_func_result, from: fn(&S) -> $from_func_result) -> $short_type<S, C> {
             ComposedCodec {
                 encoder: $encoder_func(codec, from),
@@ -305,6 +324,18 @@ make_codec_transformation_function!(
     "partially equivalent"
 );
 
+/// A validated codec.
+pub type ValidatedCodec<C> = FlatXmapCodec<<C as HasValue>::Value, C>;
+
+/// Returns a transformer codec that validates a value before encoding and after decoding by calling a function,
+/// which provides a [`DataResult`] depending on that value's validity.
+pub const fn validate<C: Codec>(
+    codec: &'static C,
+    validator: fn(&C::Value) -> DataResult<C::Value>,
+) -> ValidatedCodec<C> {
+    flat_xmap(codec, validator, validator)
+}
+
 // Range codec functions
 
 macro_rules! make_codec_range_function {
@@ -339,7 +370,7 @@ make_codec_range_function!(
 // Map codec functions
 
 /// Converts a [`MapCodec`] to a [`Codec`].
-pub const fn from_map<A, C: MapCodec<Value = A>>(map_codec: C) -> MapCodecCodec<A, C> {
+pub const fn from_map<A, C: MapCodec<Value = A>>(map_codec: C) -> MapCodecCodec<C> {
     MapCodecCodec { codec: map_codec }
 }
 
@@ -379,11 +410,6 @@ where
 
 // Struct codec functions
 
-/// Returns a [`Field`], which knows how to get a part of a struct to serialize.
-pub const fn for_getter<T, C: MapCodec>(map_codec: C, getter: fn(&T) -> &C::Value) -> Field<T, C> {
-    Field { map_codec, getter }
-}
-
 /// Creates a structure [`Codec`]. This macro supports up to *16* fields.
 ///
 /// Struct codec types are usually pretty large. To combat this, use `pub type ... = ...` to
@@ -392,16 +418,22 @@ pub const fn for_getter<T, C: MapCodec>(map_codec: C, getter: fn(&T) -> &C::Valu
 ///
 /// # Example
 /// ```rust
+/// // An example struct to make a codec for.
+/// pub struct Person {
+///     name: String,
+///     age: u32
+/// }
+///
+/// // Type to avoid writing this struct codec's type again.
 /// pub type PersonCodec = StructCodec2<Person, FieldMapCodec<StringCodec>, FieldMapCodec<UnsignedIntCodec>>;
+///
+/// // The actual codec.
 /// pub static PERSON_CODEC: PersonCodec = struct_codec!(
-///      for_getter(field_of(&STRING_CODEC, "name"), |person: &Person| &person.name),
-///      for_getter(field_of(&UNSIGNED_INT_CODEC, "age"), |person: &Person| &person.age),
+///      for_getter(field(&STRING_CODEC, "name"), |person: &Person| &person.name),
+///      for_getter(field(&UNSIGNED_INT_CODEC, "age"), |person: &Person| &person.age),
 ///      |name, age| Person {name, age}
 ///  );
 /// ```
-///
-///
-///
 #[macro_export]
 macro_rules! struct_codec {
     ($f1:expr, $f:expr $(,)?) => {
@@ -473,19 +505,85 @@ macro_rules! struct_codec {
 
 // Field functions
 
+/// A type of [`MapCodec`] to encode/decode for a single field of a map with the help of a [`Codec`].
 pub type FieldMapCodec<C> = ComposedMapCodec<
-    <C as HasValue>::Value,
     FieldEncoder<<C as HasValue>::Value, C>,
     FieldDecoder<<C as HasValue>::Value, C>,
 >;
 
 /// Creates a [`MapCodec`] for a field which relies on the provided [`Codec`] for serialization/deserialization.
-pub const fn field_of<C: Codec>(codec: &'static C, name: &'static str) -> FieldMapCodec<C> {
+pub const fn field<C: Codec>(codec: &'static C, name: &'static str) -> FieldMapCodec<C> {
     ComposedMapCodec {
-        encoder: encoder_field_of(name, codec),
-        decoder: decoder_field_of(name, codec),
-        compressor: OnceLock::new(),
+        encoder: encoder_field(name, codec),
+        decoder: decoder_field(name, codec),
     }
+}
+
+/// Creates a [`MapCodec`] for an optional field which relies on the provided [`Codec`] for serialization/deserialization.
+///
+/// Since this `MapCodec` has no 'default value', this is equivalent to encoding an [`Option`].
+/// The returned `MapCodec` is also *not lenient*, meaning that it will not give a complete (successful) result
+/// if the decoded field value is an error [`DataResult`] (partial or no result). Most of the time, you will
+/// want a *non-lenient* field.
+pub const fn optional_field<C: Codec>(
+    codec: &'static C,
+    name: &'static str,
+) -> OptionalFieldMapCodec<C> {
+    new_optional_field_map_codec(codec, name, false)
+}
+
+/// Creates a [`MapCodec`] for an optional field which relies on the provided [`Codec`] for serialization/deserialization.
+///
+/// Since this `MapCodec` has no 'default value', this is equivalent to encoding an [`Option`].
+/// The returned `MapCodec` is also *lenient*, meaning that it will still give a complete (successful) result
+/// if the decoded field value is an error [`DataResult`] (partial or no result). Most of the time, you will
+/// want a *non-lenient* field.
+pub const fn lenient_optional_field<C: Codec>(
+    codec: &'static C,
+    name: &'static str,
+) -> OptionalFieldMapCodec<C> {
+    new_optional_field_map_codec(codec, name, false)
+}
+
+pub type OptionalFieldWithDefaultMapCodec<C> =
+    DefaultValueProviderMapCodec<<C as HasValue>::Value, OptionalFieldMapCodec<C>>;
+
+/// Creates a [`MapCodec`] for an optional field which relies on the provided [`Codec`] for serialization/deserialization, along with a default value factory.
+///
+/// The factory provided is used for equality checks and for creating a new default value
+/// for when no value is found.
+///
+/// The returned `MapCodec` is also *not lenient*, meaning that it will not give a complete (successful) result
+/// if the decoded field value is an error [`DataResult`] (partial or no result). Most of the time, you will
+/// want a *non-lenient* field.
+pub const fn optional_field_with_default<C: Codec>(
+    codec: &'static C,
+    name: &'static str,
+    factory: fn() -> C::Value,
+) -> OptionalFieldWithDefaultMapCodec<C>
+where
+    <C as HasValue>::Value: PartialEq + Clone,
+{
+    new_default_value_provider_map_codec(new_optional_field_map_codec(codec, name, false), factory)
+}
+
+/// Creates a [`MapCodec`] for an optional field which relies on the provided [`Codec`] for serialization/deserialization, along with a default value factory.
+///
+/// The factory provided is used for equality checks and for creating a new default value
+/// for when no value is found.
+///
+/// The returned `MapCodec` is also *lenient*, meaning that it will still give a complete (successful) result
+/// if the decoded field value is an error [`DataResult`] (partial or no result). Most of the time, you will
+/// want a *non-lenient* field.
+pub const fn lenient_optional_field_with_default<C: Codec>(
+    codec: &'static C,
+    name: &'static str,
+    factory: fn() -> C::Value,
+) -> OptionalFieldWithDefaultMapCodec<C>
+where
+    <C as HasValue>::Value: PartialEq + Clone,
+{
+    new_default_value_provider_map_codec(new_optional_field_map_codec(codec, name, true), factory)
 }
 
 // Assertion functions
