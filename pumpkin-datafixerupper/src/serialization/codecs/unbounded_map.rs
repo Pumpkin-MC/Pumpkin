@@ -15,8 +15,8 @@ pub struct UnboundedMapCodec<K: Codec + 'static, V: Codec + 'static>
 where
     K::Value: Display + Eq + Hash,
 {
-    pub(crate) key_codec: &'static K,
-    pub(crate) element_codec: &'static V,
+    key_codec: &'static K,
+    element_codec: &'static V,
 }
 
 impl<K: Codec, V: Codec> BaseMapCodec for UnboundedMapCodec<K, V>
@@ -71,6 +71,20 @@ where
             .with_lifecycle(Lifecycle::Stable)
             .flat_map(|map| BaseMapCodec::decode(self, &map, ops))
             .map(|r| (r, input))
+    }
+}
+
+/// Creates a new [`UnboundedMapCodec`].
+pub(crate) const fn new_unbounded_map_codec<K: Codec, V: Codec>(
+    key_codec: &'static K,
+    element_codec: &'static V,
+) -> UnboundedMapCodec<K, V>
+where
+    <K as HasValue>::Value: Display + Eq + Hash,
+{
+    UnboundedMapCodec {
+        key_codec,
+        element_codec,
     }
 }
 
