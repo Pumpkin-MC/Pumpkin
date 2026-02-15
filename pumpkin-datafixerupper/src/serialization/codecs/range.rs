@@ -80,50 +80,54 @@ mod test {
 
     #[test]
     fn encoding() {
-        // A codec that does not allow negative numbers.
-        pub static NON_NEGATIVE_INT_CODEC: IntRangeCodec = int_range(0, i32::MAX);
+        {
+            // A codec that does not allow negative numbers.
+            pub static NON_NEGATIVE_INT_CODEC: IntRangeCodec = int_range(0, i32::MAX);
 
-        assert_success!(
-            NON_NEGATIVE_INT_CODEC.encode_start(&3, &json_ops::INSTANCE),
-            json!(3)
-        );
-        assert_success!(
-            NON_NEGATIVE_INT_CODEC.encode_start(&6745, &json_ops::INSTANCE),
-            json!(6745)
-        );
-        assert_success!(
-            NON_NEGATIVE_INT_CODEC.encode_start(&0, &json_ops::INSTANCE),
-            json!(0)
-        );
-        assert!(
-            NON_NEGATIVE_INT_CODEC
-                .encode_start(&-93, &json_ops::INSTANCE)
-                .is_error()
-        );
+            assert_success!(
+                NON_NEGATIVE_INT_CODEC.encode_start(&3, &json_ops::INSTANCE),
+                json!(3)
+            );
+            assert_success!(
+                NON_NEGATIVE_INT_CODEC.encode_start(&6745, &json_ops::INSTANCE),
+                json!(6745)
+            );
+            assert_success!(
+                NON_NEGATIVE_INT_CODEC.encode_start(&0, &json_ops::INSTANCE),
+                json!(0)
+            );
+            assert!(
+                NON_NEGATIVE_INT_CODEC
+                    .encode_start(&-93, &json_ops::INSTANCE)
+                    .is_error()
+            );
+        };
 
-        // A codec accepting a double value from 0 to 100.
-        pub static PERCENTAGE_CODEC: DoubleRangeCodec = double_range(0.0, 100.0);
+        {
+            // A codec accepting a double value from 0 to 100.
+            pub static PERCENTAGE_CODEC: DoubleRangeCodec = double_range(0.0, 100.0);
 
-        assert!(
-            PERCENTAGE_CODEC
-                .encode_start(&16.0, &json_ops::INSTANCE)
-                .is_success()
-        );
-        assert!(
-            PERCENTAGE_CODEC
-                .encode_start(&45.5, &json_ops::INSTANCE)
-                .is_success()
-        );
-        assert!(
-            PERCENTAGE_CODEC
-                .encode_start(&99.999, &json_ops::INSTANCE)
-                .is_success()
-        );
-        assert!(
-            PERCENTAGE_CODEC
-                .encode_start(&134.4, &json_ops::INSTANCE)
-                .is_error()
-        );
+            assert!(
+                PERCENTAGE_CODEC
+                    .encode_start(&16.0, &json_ops::INSTANCE)
+                    .is_success()
+            );
+            assert!(
+                PERCENTAGE_CODEC
+                    .encode_start(&45.5, &json_ops::INSTANCE)
+                    .is_success()
+            );
+            assert!(
+                PERCENTAGE_CODEC
+                    .encode_start(&99.999, &json_ops::INSTANCE)
+                    .is_success()
+            );
+            assert!(
+                PERCENTAGE_CODEC
+                    .encode_start(&134.4, &json_ops::INSTANCE)
+                    .is_error()
+            );
+        };
     }
 
     #[test]
