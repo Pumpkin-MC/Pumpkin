@@ -11,6 +11,7 @@ pub mod carved_pumpkin;
 pub mod chain;
 pub mod chests;
 pub mod chiseled_bookshelf;
+pub mod cobweb;
 pub mod command;
 pub mod composter;
 pub mod crafting_table;

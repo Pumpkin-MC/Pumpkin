@@ -135,6 +135,7 @@ use super::{
 };
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
+use crate::block::blocks::cobweb::CobwebBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::end_rod::EndRodBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
@@ -245,6 +246,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
     manager.register(LayeredSnowBlock);
+    manager.register(CobwebBlock);
 
     manager.register(FallingBlock);
 
