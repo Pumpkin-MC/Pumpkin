@@ -42,9 +42,9 @@ impl TrackTargetGoal {
         Self::new(check_visibility, false)
     }
 
-    // TODO: get from entity attribute
+    // TODO: get from entity attribute (enderman=64, zombie=35, default=16)
     pub const fn get_follow_range(_mob: &MobEntity) -> f64 {
-        32.0
+        64.0
     }
 
     fn can_navigate_to_entity(&mut self, mob: &dyn Mob, _target: &LivingEntity) -> bool {
@@ -67,10 +67,8 @@ impl TrackTargetGoal {
         let world = mob_entity.living_entity.entity.world.load_full();
         if !target_predicate.test(&world, Some(&mob_entity.living_entity), target) {
             return false;
-        } /*else if (!this.mob.isInPositionTargetRange(target.getBlockPos())) {
-        return false;
-        }*/
-        // TODO: implement this
+        }
+        // TODO: isInPositionTargetRange check
 
         if self.check_can_navigate {
             self.check_can_navigate_cooldown -= 1;
@@ -106,7 +104,6 @@ impl Goal for TrackTargetGoal {
                 return false;
             };
 
-            // Downcast to LivingEntity for vanilla checks
             let Some(target) = target_base.get_living_entity() else {
                 return false;
             };
@@ -115,7 +112,6 @@ impl Goal for TrackTargetGoal {
                 return false;
             }
 
-            // Vanilla check: Distance vs Follow Range
             let dist_sq = mob_entity
                 .living_entity
                 .entity
@@ -127,15 +123,7 @@ impl Goal for TrackTargetGoal {
                 return false;
             }
 
-            // Vanilla check: Visibility timeout
-            // if self.check_visibility {
-            //     if mob_entity.get_visibility_cache().can_see(target) {
-            //         // Reset timeout if seen
-            //         // (Note: in a real impl, this requires &mut self which should_continue usually lacks)
-            //     } else {
-            //         // Logic for incrementing time_without_visibility would occur in tick()
-            //     }
-            // }
+            // TODO: Visibility timeout (check_visibility flag)
 
             true
         })
@@ -151,9 +139,7 @@ impl Goal for TrackTargetGoal {
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
-            let mob = mob.get_mob_entity();
-            let mut mob_target = mob.target.lock().await;
-            *mob_target = None;
+            mob.set_mob_target(None).await;
         })
     }
 
