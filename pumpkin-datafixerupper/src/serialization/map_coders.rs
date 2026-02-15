@@ -334,7 +334,7 @@ macro_rules! impl_map_decoder_transformer {
     ($name:ident, $function_return:ty) => {
         pub struct $name<B, D: MapDecoder + 'static> {
             decoder: &'static D,
-            function: fn(&D::Value) -> $function_return,
+            function: fn(D::Value) -> $function_return,
         }
 
         impl<B, D: MapDecoder> HasValue for $name<B, D> {
@@ -363,7 +363,7 @@ impl<B, D: MapDecoder> MapDecoder for MappedMapDecoderImpl<B, D> {
         input: &impl MapLike<Value = T>,
         ops: &'static impl DynamicOps<Value = T>,
     ) -> DataResult<Self::Value> {
-        self.decoder.decode(input, ops).map(|a| (self.function)(&a))
+        self.decoder.decode(input, ops).map(|a| (self.function)(a))
     }
 }
 
@@ -371,7 +371,7 @@ impl<B, D: MapDecoder> MapDecoder for MappedMapDecoderImpl<B, D> {
 /// A *mapped* decoder transforms the output after decoding.
 pub(crate) const fn map<B, D: MapDecoder>(
     decoder: &'static D,
-    f: fn(&D::Value) -> B,
+    f: fn(D::Value) -> B,
 ) -> MappedMapDecoderImpl<B, D> {
     MappedMapDecoderImpl {
         decoder,
@@ -389,7 +389,7 @@ impl<B, D: MapDecoder> MapDecoder for FlatMappedMapDecoderImpl<B, D> {
     ) -> DataResult<Self::Value> {
         self.decoder
             .decode(input, ops)
-            .flat_map(|a| (self.function)(&a))
+            .flat_map(|a| (self.function)(a))
     }
 }
 
@@ -397,7 +397,7 @@ impl<B, D: MapDecoder> MapDecoder for FlatMappedMapDecoderImpl<B, D> {
 /// A *flat-mapped* decoder transforms the output after decoding, but the transformation can fail.
 pub(crate) const fn flat_map<B, D: MapDecoder>(
     decoder: &'static D,
-    f: fn(&D::Value) -> DataResult<B>,
+    f: fn(D::Value) -> DataResult<B>,
 ) -> FlatMappedMapDecoderImpl<B, D> {
     FlatMappedMapDecoderImpl {
         decoder,
