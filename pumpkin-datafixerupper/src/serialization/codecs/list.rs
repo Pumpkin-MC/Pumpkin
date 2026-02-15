@@ -18,9 +18,9 @@ pub struct ListCodec<C>
 where
     C: Codec + ?Sized + 'static,
 {
-    pub(crate) element_codec: &'static C,
-    pub(crate) min_size: usize,
-    pub(crate) max_size: usize,
+    element_codec: &'static C,
+    min_size: usize,
+    max_size: usize,
 }
 
 impl<C: Codec> ListCodec<C> {
@@ -107,6 +107,19 @@ where
             }
             result.with_complete_or_partial(pair)
         })
+    }
+}
+
+/// Creates a new [`ListCodec`].
+pub(crate) const fn new_list_codec<C: Codec>(
+    codec: &'static C,
+    min_size: usize,
+    max_size: usize,
+) -> ListCodec<C> {
+    ListCodec {
+        element_codec: codec,
+        min_size,
+        max_size,
     }
 }
 

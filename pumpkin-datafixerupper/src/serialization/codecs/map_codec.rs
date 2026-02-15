@@ -8,7 +8,7 @@ use std::fmt::Display;
 
 /// A [`Codec`] implementation for a [`MapCodec`].
 pub struct MapCodecCodec<C: MapCodec> {
-    pub(crate) codec: C,
+    codec: C,
 }
 
 impl<C: MapCodec> HasValue for MapCodecCodec<C> {
@@ -38,4 +38,9 @@ impl<C: MapCodec> Decoder for MapCodecCodec<C> {
             .compressed_decode(input.clone(), ops)
             .map(|a| (a, input))
     }
+}
+
+/// Creates a new [`MapCodecCodec`].
+pub(crate) const fn new_map_codec_codec<C: MapCodec>(codec: C) -> MapCodecCodec<C> {
+    MapCodecCodec { codec }
 }

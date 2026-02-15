@@ -1,9 +1,9 @@
-use crate::serialization::Display;
 use crate::serialization::codec::Codec;
 use crate::serialization::key_compressor::KeyCompressor;
 use crate::serialization::keyable::Keyable;
 use crate::serialization::map_codecs::base::BaseMapCodec;
 use crate::serialization::map_coders::CompressorHolder;
+use crate::serialization::{Display, HasValue};
 
 use crate::impl_compressor;
 
@@ -12,40 +12,40 @@ use std::sync::OnceLock;
 
 /// A simple [`MapCodec`] implementation of [`BaseMapCodec`].
 /// This codec has a fixed set of keys.
-pub struct SimpleMapCodec<KC: Codec + 'static, VC: Codec + 'static>
+pub struct SimpleMapCodec<K: Codec + 'static, V: Codec + 'static, Key: Keyable>
 where
-    KC::Value: Display + Eq + Hash,
+    K::Value: Display + Eq + Hash,
 {
-    pub(crate) key_codec: &'static KC,
-    pub(crate) element_codec: &'static VC,
+    key_codec: &'static K,
+    element_codec: &'static V,
 
-    pub(crate) keyable: Box<dyn Keyable>,
-    pub(crate) compressor: OnceLock<KeyCompressor>,
+    keyable: Key,
+    compressor: OnceLock<KeyCompressor>,
 }
-impl<KC: Codec, VC: Codec> Keyable for SimpleMapCodec<KC, VC>
+impl<K: Codec, V: Codec, Key: Keyable> Keyable for SimpleMapCodec<K, V, Key>
 where
-    KC::Value: Display + Eq + Hash,
+    K::Value: Display + Eq + Hash,
 {
     fn keys(&self) -> Vec<String> {
         self.keyable.keys()
     }
 }
 
-impl<KC: Codec, VC: Codec> CompressorHolder for SimpleMapCodec<KC, VC>
+impl<K: Codec, V: Codec, Key: Keyable> CompressorHolder for SimpleMapCodec<K, V, Key>
 where
-    KC::Value: Display + Eq + Hash,
+    K::Value: Display + Eq + Hash,
 {
     impl_compressor!(compressor);
 }
 
-impl<KC: Codec, VC: Codec> BaseMapCodec for SimpleMapCodec<KC, VC>
+impl<K: Codec, V: Codec, Key: Keyable> BaseMapCodec for SimpleMapCodec<K, V, Key>
 where
-    KC::Value: Display + Eq + Hash,
+    K::Value: Display + Eq + Hash,
 {
-    type Key = KC::Value;
-    type KeyCodec = KC;
-    type Element = VC::Value;
-    type ElementCodec = VC;
+    type Key = K::Value;
+    type KeyCodec = K;
+    type Element = V::Value;
+    type ElementCodec = V;
 
     fn key_codec(&self) -> &'static Self::KeyCodec {
         self.key_codec
@@ -53,5 +53,21 @@ where
 
     fn element_codec(&self) -> &'static Self::ElementCodec {
         self.element_codec
+    }
+}
+
+pub(crate) const fn new_simple_map_codec<K: Codec, V: Codec, Key: Keyable>(
+    key_codec: &'static K,
+    element_codec: &'static V,
+    keyable: Key,
+) -> SimpleMapCodec<K, V, Key>
+where
+    <K as HasValue>::Value: Display + Eq + Hash,
+{
+    SimpleMapCodec {
+        key_codec,
+        element_codec,
+        keyable,
+        compressor: OnceLock::new(),
     }
 }

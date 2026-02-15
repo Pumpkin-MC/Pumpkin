@@ -17,7 +17,7 @@ use crate::serialization::map_coders::{
 };
 use crate::serialization::map_like::MapLike;
 use crate::serialization::struct_builder::StructBuilder;
-use crate::serialization::struct_codecs::Field;
+use crate::serialization::struct_codecs::{Field, new_field};
 use std::fmt::Display;
 
 /// A type of *codec* which encodes/decodes fields of a map.
@@ -151,7 +151,7 @@ impl<C: MapCodec> MapDecoder for StableMapCodec<C> {
 
 /// Returns a [`Field`], which knows how to get a part of a struct to serialize.
 pub const fn for_getter<T, C: MapCodec>(map_codec: C, getter: fn(&T) -> &C::Value) -> Field<T, C> {
-    Field { map_codec, getter }
+    new_field(map_codec, getter)
 }
 
 /// Returns another [`MapCodec`] of a provided `MapCodec` which provides [`DataResult`]s of the wrapped `map_codec`,

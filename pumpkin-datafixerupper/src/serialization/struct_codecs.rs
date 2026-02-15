@@ -1,6 +1,7 @@
 use crate::impl_compressor;
 use crate::serialization::HasValue;
 use crate::serialization::codecs::map_codec::MapCodecCodec;
+use crate::serialization::codecs::map_codec::new_map_codec_codec;
 use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
 use crate::serialization::key_compressor::KeyCompressor;
@@ -17,8 +18,16 @@ use std::sync::OnceLock;
 /// - `T` is the composite type to get from.
 /// - `C` is the [`MapCodec`] for serializing/deserializing the field.
 pub struct Field<T, C: MapCodec> {
-    pub(crate) map_codec: C,
-    pub(crate) getter: fn(&T) -> &C::Value,
+    map_codec: C,
+    getter: fn(&T) -> &C::Value,
+}
+
+/// Creates a new [`Field`] from a [`MapCodec`].
+pub(crate) const fn new_field<T, C: MapCodec>(
+    map_codec: C,
+    getter: fn(&T) -> &C::Value,
+) -> Field<T, C> {
+    Field { map_codec, getter }
 }
 
 /// Macro to generate a `StructMapCodecN` struct (structure codec of `N` arguments).
@@ -29,11 +38,11 @@ macro_rules! impl_struct_map_codec {
         ///
         /// A [`Codec`] can then be made from this object.
         pub struct $name<T, C1: MapCodec + 'static $(, $codec_type: MapCodec + 'static)* > {
-            pub(crate) field_1: Field<T, C1>,
-            $(pub(crate) $field: Field<T, $codec_type> ,)*
-            pub(crate) apply_function: fn(C1::Value $(, $codec_type::Value)*) -> T,
+            field_1: Field<T, C1>,
+            $( $field: Field<T, $codec_type> ,)*
+            apply_function: fn(C1::Value $(, $codec_type::Value)*) -> T,
 
-            pub(crate) compressor: OnceLock<KeyCompressor>,
+            compressor: OnceLock<KeyCompressor>,
         }
 
         impl<T, C1: MapCodec $(, $codec_type: MapCodec)* > HasValue for $name<T, C1 $(, $codec_type)*> {
@@ -97,14 +106,14 @@ macro_rules! impl_struct_map_codec {
             $($field: Field<T, $codec_type>,)*
             f: fn(C1::Value $(, $codec_type::Value)*) -> T,
         ) -> $alias<T, C1 $(, $codec_type)*> {
-            MapCodecCodec {
-                codec: $name {
+            new_map_codec_codec(
+                $name {
                     field_1,
                     $( $field, )*
                     apply_function: f,
                     compressor: OnceLock::new(),
-                },
-            }
+                }
+            )
         }
     };
 
@@ -119,14 +128,14 @@ macro_rules! impl_struct_map_codec {
             $($field: Field<T, $codec_type>,)*
             f: fn(C1::Value $(, $codec_type::Value)*) -> T,
         ) -> $alias<T, C1 $(, $codec_type)*> {
-            MapCodecCodec {
-                codec: $name {
+            new_map_codec_codec(
+                $name {
                     field_1,
                     $( $field, )*
                     apply_function: f,
                     compressor: OnceLock::new(),
-                },
-            }
+                }
+            )
         }
     };
 }
