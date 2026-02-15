@@ -157,12 +157,36 @@ impl GzipRollingLogger {
 
         let log_path = PathBuf::from(LOG_DIR);
 
+        let mut oldest_log = None;
+
         for id in 1..=MAX_ATTEMPTS {
             let filename = log_path.join(format!("{date_format}-{id}.log.gz"));
 
             if !filename.exists() {
                 return Ok(filename);
             }
+
+            let Ok(modified_time) = filename.metadata().and_then(|m| m.modified()) else {
+                continue;
+            };
+
+            if let Some((_, old_time)) = oldest_log {
+                if modified_time < old_time {
+                    oldest_log = Some((filename, modified_time));
+                }
+
+                continue;
+            }
+
+            oldest_log = Some((filename, modified_time));
+        }
+
+        if let Some((path, _)) = oldest_log {
+            eprintln!(
+                "Max log ids ({MAX_ATTEMPTS}) used for {date_format}; overwriting oldest log file: {}",
+                path.display()
+            );
+            return Ok(path);
         }
 
         Err(format!(
