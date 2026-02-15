@@ -164,7 +164,7 @@ mod test {
             json!("Hello, world!")
         );
         assert_success!(
-            STRING_CODEC.encode_start(&"".to_string(), &json_ops::INSTANCE),
+            STRING_CODEC.encode_start(&String::new(), &json_ops::INSTANCE),
             json!("")
         );
 
