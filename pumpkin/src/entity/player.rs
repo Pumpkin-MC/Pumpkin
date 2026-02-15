@@ -84,6 +84,7 @@ use crate::command::dispatcher::CommandDispatcher;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
+use crate::plugin::player::inventory::inventory_click_event::PlayerInventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
@@ -2652,7 +2653,7 @@ impl Player {
         }
     }
 
-    pub async fn on_slot_click(&self, packet: SClickSlot) {
+    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot) {
         self.update_last_action_time();
         let screen_handler = self.current_screen_handler.lock().await;
         let mut screen_handler = screen_handler.lock().await;
@@ -2668,7 +2669,7 @@ impl Player {
             return;
         }
 
-        if !screen_handler.can_use(self) {
+        if !screen_handler.can_use(&**self) {
             warn!(
                 "Player {} interacted with invalid menu {:?}",
                 self.gameprofile.name,
@@ -2691,29 +2692,87 @@ impl Player {
 
         let not_in_sync = packet.revision.0 != (behaviour.revision.load(Ordering::Relaxed) as i32);
 
-        screen_handler.disable_sync();
-        screen_handler
-            .on_slot_click(
-                i32::from(slot),
-                i32::from(packet.button),
-                packet.mode.clone(),
-                self,
-            )
-            .await;
-
-        for (key, value) in packet.array_of_changed_slots {
-            screen_handler.set_received_hash(key as usize, value);
-        }
-
-        screen_handler.set_received_cursor_hash(packet.carried_item);
-        screen_handler.enable_sync();
-
-        if not_in_sync {
-            screen_handler.update_to_client().await;
+        let server = self.world().server.upgrade().unwrap();
+        let cursor_stack = screen_handler
+            .get_behaviour()
+            .cursor_stack
+            .lock()
+            .await
+            .clone();
+        let clicked_slot_stack = if i32::from(slot) >= 0
+            && (slot as usize) < screen_handler.get_behaviour().slots.len()
+        {
+            screen_handler.get_behaviour().slots[slot as usize]
+                .get_cloned_stack()
+                .await
         } else {
-            screen_handler.send_content_updates().await;
-            drop(screen_handler);
-        }
+            ItemStack::EMPTY.clone()
+        };
+
+        tracing::info!(
+            "Firing PlayerInventoryClickEvent: slot={}, button={}, mode={:?}",
+            i32::from(slot),
+            i32::from(packet.button),
+            packet.mode
+        );
+
+        let event = PlayerInventoryClickEvent::new(
+            self.clone(),
+            i32::from(slot),
+            i32::from(packet.button),
+            packet.mode.clone(),
+            cursor_stack.clone(),
+            clicked_slot_stack.clone(),
+            screen_handler.window_type(),
+            screen_handler.sync_id() as u16,
+            screen_handler.window_type().is_none(),
+        );
+
+        send_cancellable! {{
+            server;
+            event;
+            'after: {
+                tracing::info!("PlayerInventoryClickEvent not cancelled, processing click");
+                screen_handler.disable_sync();
+                screen_handler
+                    .on_slot_click(
+                        i32::from(slot),
+                        i32::from(packet.button),
+                        packet.mode.clone(),
+                        &**self,
+                    )
+                    .await;
+
+                for (key, value) in packet.array_of_changed_slots {
+                    screen_handler.set_received_hash(key as usize, value);
+                }
+
+                screen_handler.set_received_cursor_hash(packet.carried_item);
+                screen_handler.enable_sync();
+
+                if not_in_sync {
+                    screen_handler.update_to_client().await;
+                } else {
+                    screen_handler.send_content_updates().await;
+                    drop(screen_handler);
+                }
+            };
+            'cancelled: {
+                tracing::info!("PlayerInventoryClickEvent cancelled, reverting client state");
+                if i32::from(slot) >= 0 && (slot as usize) < screen_handler.get_behaviour().slots.len()
+                {
+                    screen_handler
+                        .check_slot_updates(slot as usize, clicked_slot_stack)
+                        .await;
+                }
+                screen_handler.check_cursor_stack_updates().await;
+                return;
+            }
+        }}
+        //tracing::info!(
+        //    "PlayerInventoryClickEvent fired, cancelled={}",
+        //    event.cancelled
+        //);
     }
 
     /// Check if the player has a specific permission
