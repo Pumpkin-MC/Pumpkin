@@ -501,16 +501,13 @@ impl<'de> Deserialize<'de> for NbtTag {
                         }
                         Ok(NbtTag::ByteArray(vec.into_boxed_slice()))
                     }
-                    LIST_ID => {
+                    _ => {
                         let mut vec = Vec::new();
                         while let Some(value) = seq.next_element()? {
                             vec.push(value);
                         }
                         Ok(NbtTag::List(vec))
                     }
-                    _ => Err(serde::de::Error::custom(format!(
-                        "Invalid list type id: {curr}"
-                    ))),
                 }
             }
 

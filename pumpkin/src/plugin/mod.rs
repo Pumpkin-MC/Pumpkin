@@ -9,6 +9,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::{Notify, RwLock};
+use tracing::{error, info};
 
 pub mod api;
 pub mod loader;
@@ -238,7 +239,7 @@ impl PluginManager {
 
         for name in plugin_names {
             if let Err(e) = self.unload_plugin(&name).await {
-                log::error!("Failed to unload plugin {name}: {e}");
+                error!("Failed to unload plugin {name}: {e}");
             }
         }
 
@@ -401,7 +402,7 @@ impl PluginManager {
                                 .insert(plugin_name.clone(), PluginState::Loaded);
                             state_notify.notify_waiters();
 
-                            log::info!("Loaded {} ({})", metadata.name, metadata.version);
+                            info!("Loaded {} ({})", metadata.name, metadata.version);
                         }
                         Err(e) => {
                             // Handle initialization failure
@@ -437,7 +438,7 @@ impl PluginManager {
                             );
                             state_notify.notify_waiters();
 
-                            log::error!("Failed to initialize plugin {plugin_name}: {error_msg}",);
+                            error!("Failed to initialize plugin {plugin_name}: {error_msg}",);
                         }
                     }
                 });

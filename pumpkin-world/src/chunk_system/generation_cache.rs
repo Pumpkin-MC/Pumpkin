@@ -17,6 +17,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::future::Future;
 use std::pin::Pin;
+use tracing::debug;
 
 pub struct Cache {
     pub x: i32,
@@ -155,11 +156,9 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::debug!(
+            debug!(
                 "illegal get_block_state {pos:?} cache pos ({}, {}) size {}",
-                self.x,
-                self.z,
-                self.size
+                self.x, self.z, self.size
             );
             return RawBlockState::AIR;
         }
@@ -179,11 +178,9 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::debug!(
+            debug!(
                 "illegal set_block_state {pos:?} cache pos ({}, {}) size {}",
-                self.x,
-                self.z,
-                self.size
+                self.x, self.z, self.size
             );
             return;
         }

@@ -7,6 +7,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     select,
 };
+use tracing::{debug, error, info};
 
 use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
@@ -48,7 +49,7 @@ impl RCONServer {
             let password = password.clone();
             let server = server.clone();
             tokio::spawn(async move { while !client.handle(&server, &password).await {} });
-            log::debug!("closed RCON connection");
+            debug!("closed RCON connection");
             connections -= 1;
         }
         Ok(())
@@ -83,13 +84,13 @@ impl RCONClient {
                 Ok(true) => return true,
                 Ok(false) => {}
                 Err(e) => {
-                    log::error!("Could not read packet: {e}");
+                    error!("Could not read packet: {e}");
                     return true;
                 }
             }
             // If we get a close here, we might have a reply, which we still want to write.
             let _ = self.poll(server, password).await.map_err(|e| {
-                log::error!("RCON error: {e}");
+                error!("RCON error: {e}");
                 self.closed = true;
             });
         }
@@ -107,12 +108,12 @@ impl RCONClient {
                     self.send(ClientboundPacket::AuthResponse, packet.get_id(), "")
                         .await?;
                     if config.logging.logged_successfully {
-                        log::info!("RCON ({}): Client logged in successfully", self.address);
+                        info!("RCON ({}): Client logged in successfully", self.address);
                     }
                     self.logged_in = true;
                 } else {
                     if config.logging.wrong_password {
-                        log::info!("RCON ({}): Client tried the wrong password", self.address);
+                        info!("RCON ({}): Client tried the wrong password", self.address);
                     }
                     self.send(ClientboundPacket::AuthResponse, -1, "").await?;
                     self.closed = true;
@@ -144,7 +145,7 @@ impl RCONClient {
                     let output = output.lock().await;
                     for line in output.iter() {
                         if config.logging.commands {
-                            log::info!("RCON ({}): {}", self.address, line);
+                            info!("RCON ({}): {}", self.address, line);
                         }
                         self.send(ClientboundPacket::Output, packet.get_id(), line)
                             .await?;

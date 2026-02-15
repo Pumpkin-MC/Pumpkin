@@ -11,6 +11,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::GameMode;
+use tracing::debug;
 use uuid::Uuid;
 
 use super::super::args::ArgumentConsumer;
@@ -265,7 +266,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
         let entity_selector = match s.parse::<TargetSelector>() {
             Ok(selector) => selector,
             Err(e) => {
-                log::debug!("Failed to parse target selector '{s}': {e}");
+                debug!("Failed to parse target selector '{s}': {e}");
                 return Box::pin(async move { None }); // Return a Future resolving to None
             }
         };

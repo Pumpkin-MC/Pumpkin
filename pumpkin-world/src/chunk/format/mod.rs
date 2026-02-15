@@ -14,6 +14,7 @@ use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
+use tracing::debug;
 use uuid::Uuid;
 
 use crate::{
@@ -311,11 +312,9 @@ impl ChunkEntityData {
                         | (uuid[3] as u128),
                 )
             } else {
-                log::debug!(
+                debug!(
                     "Entity in chunk {},{} is missing UUID: {:?}",
-                    position.x,
-                    position.y,
-                    entity_nbt
+                    position.x, position.y, entity_nbt
                 );
                 continue;
             };

@@ -21,6 +21,7 @@ use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_ser
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::time::Instant;
+use tracing::{debug, info, warn};
 
 // Setup some tokens to allow us to identify which event is for which socket.
 
@@ -67,7 +68,7 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-    log::info!(
+    info!(
         "{}",
         TextComponent::text(format!(
             "Starting {} {} Minecraft (Protocol {})",
@@ -84,7 +85,7 @@ async fn main() {
         .to_pretty_console(),
     );
 
-    log::debug!(
+    debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
         std::env::consts::FAMILY,
         std::env::consts::OS,
@@ -106,14 +107,14 @@ async fn main() {
     let pumpkin_server = PumpkinServer::new(basic_config, advanced_config, vanilla_data).await;
     pumpkin_server.init_plugins().await;
 
-    log::info!(
+    info!(
         "Started server; took {}",
         TextComponent::text(format!("{}ms", time.elapsed().as_millis()))
             .color_named(NamedColor::Gold)
             .to_pretty_console()
     );
     let basic_config = &pumpkin_server.server.basic_config;
-    log::info!(
+    info!(
         "Server is now running. Connect using port: {}{}{}",
         if basic_config.java_edition {
             format!(
@@ -149,7 +150,7 @@ async fn main() {
     );
 
     pumpkin_server.start().await;
-    log::info!(
+    info!(
         "{}",
         TextComponent::text("The server has stopped.")
             .color_named(NamedColor::Red)
@@ -157,19 +158,19 @@ async fn main() {
     );
 }
 fn print_support_links_and_warning() {
-    log::warn!(
+    warn!(
         "{}",
         TextComponent::text("Pumpkin is currently under heavy development!")
             .color_named(NamedColor::DarkRed)
             .to_pretty_console(),
     );
-    log::info!(
+    info!(
         "Report issues on {}",
         TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues")
             .color_named(NamedColor::DarkAqua)
             .to_pretty_console()
     );
-    log::info!(
+    info!(
         "Join our {} for community support: {}",
         TextComponent::text("Discord")
             .color_named(NamedColor::DarkBlue)
@@ -180,7 +181,7 @@ fn print_support_links_and_warning() {
     );
 }
 fn handle_interrupt() {
-    log::warn!(
+    warn!(
         "{}",
         TextComponent::text("Received interrupt signal; stopping server...")
             .color_named(NamedColor::Red)

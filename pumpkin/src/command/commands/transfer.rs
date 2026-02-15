@@ -1,6 +1,7 @@
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::CTransfer;
 use pumpkin_util::text::TextComponent;
+use tracing::info;
 
 use crate::command::CommandResult;
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
@@ -53,7 +54,7 @@ impl CommandExecutor for TargetSelfExecutor {
 
             if let CommandSender::Player(player) = sender {
                 let name = &player.gameprofile.name;
-                log::info!("[{name}: Transferring {name} to {hostname}:{port}]");
+                info!("[{name}: Transferring {name} to {hostname}:{port}]");
                 player
                     .client
                     .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
@@ -106,7 +107,7 @@ impl CommandExecutor for TargetPlayerExecutor {
                 p.client
                     .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
                     .await;
-                log::info!(
+                info!(
                     "[{sender}: Transferring {} to {hostname}:{port}]",
                     p.gameprofile.name
                 );

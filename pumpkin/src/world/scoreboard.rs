@@ -7,6 +7,7 @@ use pumpkin_protocol::{
     java::client::play::{CDisplayObjective, CUpdateObjectives, CUpdateScore, RenderType},
 };
 use pumpkin_util::text::TextComponent;
+use tracing::warn;
 
 use super::World;
 
@@ -20,7 +21,7 @@ impl Scoreboard {
     pub async fn add_objective(&mut self, world: &World, objective: ScoreboardObjective<'_>) {
         if self.objectives.contains_key(objective.name) {
             // Maybe make this an error?
-            log::warn!(
+            warn!(
                 "Tried to create an objective which already exists: {}",
                 &objective.name
             );
@@ -45,7 +46,7 @@ impl Scoreboard {
 
     pub async fn update_score(&self, world: &World, score: ScoreboardScore<'_>) {
         if self.objectives.contains_key(score.objective_name) {
-            log::warn!(
+            warn!(
                 "Tried to place a score into an objective which does not exist: {}",
                 &score.objective_name
             );

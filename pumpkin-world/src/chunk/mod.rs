@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use tokio::sync::Mutex;
+use tracing::info;
 
 pub mod format;
 pub mod io;
@@ -270,7 +271,7 @@ impl ChunkHeightmaps {
             .collect::<Vec<_>>()
             .join("\n");
 
-        log::info!("\nHeightMap:\n{header}\n{grid}");
+        info!("\nHeightMap:\n{header}\n{grid}");
     }
 }
 

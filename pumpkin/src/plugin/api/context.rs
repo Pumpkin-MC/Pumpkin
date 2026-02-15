@@ -4,18 +4,21 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use crate::{LoggerOption, command::client_suggestions};
+use crate::{LoggerOption, command::client_suggestions, plugin_log};
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
 };
 use tokio::sync::RwLock;
+use tracing::Level;
 
 use crate::{
     entity::player::Player,
     plugin::{EventHandler, HandlerMap, PluginManager, TypedEventHandler},
     server::Server,
 };
+
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 use super::{EventPriority, Payload, PluginMetadata};
 
@@ -300,15 +303,42 @@ impl Context {
         after_count > before_count
     }
 
-    /// Initializes logging via the log crate for the plugin.
+    /// Initializes logging via the tracing crate for the plugin.
     pub fn init_log(&self) {
-        let logger_arc = self.logger.clone();
+        if let Some(Some((_logger_impl, level, config))) = self.logger.get() {
+            let fmt_layer = fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_ansi(config.color)
+                .with_target(true)
+                .with_thread_names(config.threads)
+                .with_thread_ids(config.threads);
 
-        let static_logger = Box::leak(Box::new(logger_arc));
-
-        if let Some(Some((_logger_impl, level))) = static_logger.get() {
-            // TODO
-            log::set_max_level(*level);
+            if config.timestamp {
+                let fmt_layer = fmt_layer.with_timer(fmt::time::UtcTime::new(
+                    time::macros::format_description!(
+                        "[year]-[month]-[day] [hour]:[minute]:[second]"
+                    ),
+                ));
+                tracing_subscriber::registry()
+                    .with(*level)
+                    .with(fmt_layer)
+                    .init();
+            } else {
+                let fmt_layer = fmt_layer.without_time();
+                tracing_subscriber::registry()
+                    .with(*level)
+                    .with(fmt_layer)
+                    .init();
+            }
         }
+    }
+
+    pub fn log(&self, message: impl std::fmt::Display) {
+        let level = if let Some(Some((_, level, _))) = self.logger.get() {
+            level.into_level().unwrap_or(Level::INFO)
+        } else {
+            Level::INFO
+        };
+        plugin_log!(level, self.metadata.name, "{}", message);
     }
 }
