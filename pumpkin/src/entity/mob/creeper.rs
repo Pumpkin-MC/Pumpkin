@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicI32, Ordering},
 };
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
@@ -54,6 +56,11 @@ impl CreeperEntity {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.25)
     }
 
     pub fn set_fuse_speed(&self, speed: i32) {

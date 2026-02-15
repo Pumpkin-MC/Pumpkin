@@ -1,6 +1,6 @@
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::{attributes::Attributes, entity::EntityType};
 use std::sync::{Arc, Weak};
-
-use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
     Entity, NBTStorage,
@@ -34,6 +34,15 @@ impl WitherEntity {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::ARMOR, 4.0)
+            .add(Attributes::FLYING_SPEED, 0.6)
+            .add(Attributes::FOLLOW_RANGE, 40.0)
+            .add(Attributes::MOVEMENT_SPEED, 0.6)
     }
 }
 
