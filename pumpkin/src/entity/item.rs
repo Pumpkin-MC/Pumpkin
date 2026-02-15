@@ -1,5 +1,6 @@
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
+use pumpkin_data::item::Item;
 use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -9,6 +10,7 @@ use pumpkin_util::math::atomic_f32::AtomicF32;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
+
 use std::sync::{
     Arc,
     atomic::{
@@ -33,6 +35,30 @@ pub struct ItemEntity {
 }
 
 impl ItemEntity {
+    /// Checks if the item with the given ID is fire-immune
+    /// TODO: Properly add a tag or update item.rs to include `minecraft:damage_resistant` data
+    const fn is_fire_immune(item_id: u16) -> bool {
+        match item_id {
+            id if id == Item::NETHERITE_SWORD.id => true,
+            id if id == Item::NETHERITE_SPEAR.id => true,
+            id if id == Item::NETHERITE_SHOVEL.id => true,
+            id if id == Item::NETHERITE_PICKAXE.id => true,
+            id if id == Item::NETHERITE_AXE.id => true,
+            id if id == Item::NETHERITE_HOE.id => true,
+            id if id == Item::NETHERITE_HELMET.id => true,
+            id if id == Item::NETHERITE_CHESTPLATE.id => true,
+            id if id == Item::NETHERITE_LEGGINGS.id => true,
+            id if id == Item::NETHERITE_BOOTS.id => true,
+            id if id == Item::NETHERITE_INGOT.id => true,
+            id if id == Item::NETHERITE_SCRAP.id => true,
+            id if id == Item::NETHERITE_BLOCK.id => true,
+            id if id == Item::ANCIENT_DEBRIS.id => true,
+            id if id == Item::NETHERITE_HORSE_ARMOR.id => true,
+            id if id == Item::NETHERITE_NAUTILUS_ARMOR.id => true,
+            _ => false,
+        }
+    }
+
     pub async fn new(entity: Entity, item_stack: ItemStack) -> Self {
         entity
             .set_velocity(Vector3::new(
@@ -42,6 +68,12 @@ impl ItemEntity {
             ))
             .await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
+
+        // Set fire immunity for netherite items
+        if Self::is_fire_immune(item_stack.item.id) {
+            entity.fire_immune.store(true, Ordering::Relaxed);
+        }
+
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
@@ -61,6 +93,12 @@ impl ItemEntity {
     ) -> Self {
         entity.set_velocity(velocity).await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
+
+        // Set fire immunity for netherite items
+        if Self::is_fire_immune(item_stack.item.id) {
+            entity.fire_immune.store(true, Ordering::Relaxed);
+        }
+
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
@@ -343,13 +381,20 @@ impl EntityBase for ItemEntity {
         &'a self,
         _caller: &'a dyn EntityBase,
         amount: f32,
-        _damage_type: DamageType,
+        damage_type: DamageType,
         _position: Option<Vector3<f64>>,
         _source: Option<&'a dyn EntityBase>,
         _cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            // TODO: invulnerability, e.g. ancient debris
+            // Exclude fire-immune items from burn damage
+            if self.get_entity().fire_immune.load(Ordering::Relaxed)
+                && (damage_type == DamageType::IN_FIRE || damage_type == DamageType::LAVA)
+            {
+                return false;
+            }
+
+            // Thread safe damage application
             loop {
                 let current = self.health.load(Relaxed);
                 let new = current - amount;

@@ -374,6 +374,8 @@ pub struct Entity {
     pub invulnerable: AtomicBool,
     /// List of damage types this entity is immune to
     pub damage_immunities: Vec<DamageType>,
+    // Whether the entity is immune to fire (to disable visual fire and fire damage)
+    pub fire_immune: AtomicBool,
     pub fire_ticks: AtomicI32,
     pub has_visual_fire: AtomicBool,
     /// The number of ticks the entity has been frozen (in powder snow)
@@ -474,6 +476,7 @@ impl Entity {
             invulnerable: AtomicBool::new(false),
             damage_immunities: Vec::new(),
             data: AtomicI32::new(0),
+            fire_immune: AtomicBool::new(false),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
             frozen_ticks: AtomicI32::new(0),
@@ -648,6 +651,27 @@ impl Entity {
         } else {
             300
         }
+    }
+
+    /// Returns the block position of the block the entity is standing on, if any.
+    /// This is different from `supporting_block_pos`, which may return blocks the entity is not actually standing on (like walls), or None if the entity is still.
+    pub fn get_supporting_block_pos(&self) -> Option<BlockPos> {
+        // Check if the entity is on the ground
+        if !self.on_ground.load(Ordering::Relaxed) {
+            return None;
+        }
+
+        let pos = self.pos.load();
+
+        // Check 0.2 blocks below the feet.
+        // This handles carpets, soul sand, and slight floating errors.
+        let adjust_y = pos.y - 0.2;
+
+        Some(BlockPos::new(
+            pos.x.floor() as i32,
+            adjust_y.floor() as i32,
+            pos.z.floor() as i32,
+        ))
     }
 
     #[expect(clippy::float_cmp)]
@@ -1594,7 +1618,10 @@ impl Entity {
     }
 
     pub fn set_on_fire_for(&self, seconds: f32) {
-        self.set_on_fire_for_ticks((seconds * 20.0).floor() as u32);
+        // Exclude fire-immune entities (ex. certain items) from burn damage
+        if !self.fire_immune.load(Ordering::Relaxed) {
+            self.set_on_fire_for_ticks((seconds * 20.0).floor() as u32);
+        }
     }
 
     pub fn set_on_fire_for_ticks(&self, ticks: u32) {
@@ -2201,8 +2228,12 @@ impl EntityBase for Entity {
             self.update_fluid_state(&caller).await;
             self.check_out_of_world(&*caller).await;
             let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
+
+            // Check for fire immunity (or if the specific entity is)
+            let is_immune =
+                self.entity_type.fire_immune || self.fire_immune.load(Ordering::Relaxed);
             if fire_ticks > 0 {
-                if self.entity_type.fire_immune {
+                if is_immune {
                     self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
                     if self.fire_ticks.load(Ordering::Relaxed) < 0 {
                         self.extinguish();
@@ -2215,8 +2246,10 @@ impl EntityBase for Entity {
                     self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
                 }
             }
-            self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
-                .await;
+
+            // Check if visual fire should be sent
+            let should_render_fire = self.fire_ticks.load(Ordering::Relaxed) > 0 && !is_immune;
+            self.set_on_fire(should_render_fire).await;
 
             // Tick freeze state (powder snow)
             self.tick_frozen(&*caller).await;

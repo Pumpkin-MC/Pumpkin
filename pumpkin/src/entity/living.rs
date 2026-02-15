@@ -1243,13 +1243,18 @@ impl EntityBase for LivingEntity {
                 return false;
             }
 
+            let world = self.entity.world.load();
+
+            // Check if fire damage is disabled
+            if !world.level_info.load().game_rules.fire_damage {
+                return false;
+            }
+
             if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
                 && self.has_effect(&StatusEffect::FIRE_RESISTANCE).await
             {
                 return false; // Fire resistance
             }
-
-            let world = self.entity.world.load();
 
             // These damage types bypass the hurt cooldown and death protection
             let bypasses_cooldown_protection =
@@ -1365,6 +1370,21 @@ impl EntityBase for LivingEntity {
             // TODO
             if caller.get_player().is_none() {
                 self.entity.send_pos_rot().await;
+            }
+            // Notify the block under the entity each tick if the entity is supported
+            if let Some(supporting) = self.entity.get_supporting_block_pos() {
+                let world = self.entity.world.load();
+                let (block, state) = world.get_block_and_state(&supporting).await;
+                world
+                    .block_registry
+                    .on_entity_step(
+                        block,
+                        &world,
+                        caller.as_ref() as &dyn EntityBase,
+                        &supporting,
+                        state,
+                    )
+                    .await;
             }
             self.tick_effects().await;
             // Current active item
