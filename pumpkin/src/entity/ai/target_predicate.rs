@@ -1,7 +1,6 @@
-use pumpkin_util::Difficulty;
-
 use crate::entity::living::LivingEntity;
 use crate::world::World;
+use pumpkin_util::Difficulty;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -106,6 +105,12 @@ impl TargetPredicate {
             return false;
         }
 
+        // This covers both Creative and Spectator players because both are invulnerable.
+        // can_take_damage() is synchronous and uses the entity-level invulnerability flag.
+        if self.attackable && !target.can_take_damage() {
+            return false;
+        }
+
         // if let Some(ref p) = self.predicate {
         //     if !p(Arc::new(target.clone()), world.clone()).await {
         //         return false;
@@ -115,10 +120,7 @@ impl TargetPredicate {
         match tester {
             None => {
                 // 3. Logic for when there is no tester (e.g. searching for a random target)
-                if self.attackable
-                    && (!target.can_take_damage()
-                        || world.level_info.load().difficulty == Difficulty::Peaceful)
-                {
+                if self.attackable && world.level_info.load().difficulty == Difficulty::Peaceful {
                     return false;
                 }
             }
