@@ -122,8 +122,7 @@ mod test {
         );
 
         for (x, y, z, biome_id) in expected_data {
-            let calculated_biome =
-                MultiNoiseBiomeSupplier::biome(x, y, z, &mut sampler, Dimension::OVERWORLD);
+            let calculated_biome = MultiNoiseBiomeSupplier::OVERWORLD.biome(x, y, z, &mut sampler);
 
             assert_eq!(
                 biome_id,
