@@ -178,7 +178,7 @@ macro_rules! impl_boilerplate_argument_builder {
         }
 
         fn forward(mut self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier, fork: bool) -> Self {
-            assert!(self.common.arguments.is_empty(), "Cannot forward a node with children. The node must have no children to redirect somewhere else.");
+            assert!(self.common.arguments.is_empty(), "Cannot forward a node with children. The node must have no children to redirect somewhere else");
             self.common.target = Some(redirection.into());
             self.common.modifier = redirect_modifier;
             self.common.forks = fork;
@@ -319,5 +319,116 @@ impl ArgumentBuilder<ArgumentDetachedNode> for RequiredArgumentBuilder {
         );
         node.children = self.common.arguments;
         node
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::command::argument_builder::{ArgumentBuilder, CommandArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder};
+    use crate::command::argument_types::core::double::DoubleArgumentType;
+    use crate::command::argument_types::core::integer::IntegerArgumentType;
+    use crate::command::argument_types::core::string::StringArgumentType;
+    use crate::command::errors::error_types;
+    use crate::command::node::attached::AttachedNode;
+    use crate::command::node::Redirection;
+    use crate::command::node::tree::Tree;
+    use crate::command::string_reader::StringReader;
+
+    #[test]
+    fn literal_one() {
+        let builder = LiteralArgumentBuilder::new("test");
+        let node = builder.build();
+
+        assert_eq!(node.meta.literal, "test");
+    }
+
+    #[test]
+    fn required_one() {
+        let builder = RequiredArgumentBuilder::new("test", IntegerArgumentType::new(1, 10));
+        let node = builder.build();
+
+        assert_eq!(node.meta.name, "test");
+
+        let mut reader1 = StringReader::new("5");
+        let mut reader2 = StringReader::new("11");
+
+        let boxed_result = node.meta.argument_type.parse(&mut reader1).expect("The parsing should not have errored");
+        let result = boxed_result.downcast::<i32>().expect("Downcasting shouldn't have failed");
+        assert_eq!(result, Box::new(5));
+
+        let error = node.meta.argument_type.parse(&mut reader2).expect_err("The parsing should have errored as 11 is outside the range");
+        assert!(error.is(&error_types::INTEGER_TOO_HIGH));
+    }
+
+    #[test]
+    fn literal_multiple() {
+        let mut builder = CommandArgumentBuilder::new("letter", "A test command");
+        for letter in 'a'..='z' {
+            // Add a node per letter for the argument.
+            let letter_string = letter.to_string();
+            builder = builder.then(
+                LiteralArgumentBuilder::new(letter_string)
+            );
+        }
+
+        let node = builder.build();
+        assert_eq!(node.children.len(), 26);
+    }
+
+    #[test]
+    fn required_multiple() {
+        let builder =
+            CommandArgumentBuilder::new("test", "A test command")
+                .then(
+                    RequiredArgumentBuilder::new(
+                        "number",
+                        DoubleArgumentType::any()
+                    )
+                )
+                .then(
+                    RequiredArgumentBuilder::new(
+                        "word",
+                        StringArgumentType::SingleWord
+                    )
+                );
+
+        let node = builder.build();
+        assert_eq!(node.children.len(), 2);
+    }
+
+    #[test]
+    fn redirect() {
+        let builder =
+            CommandArgumentBuilder::new("test", "A test command")
+                .redirect(Redirection::Root);
+
+        let mut tree = Tree::new();
+        let node_id = tree.add_child_to_root(builder.build());
+
+        let node = &tree[node_id];
+        let redirect = node.redirect.expect("Redirection should exist as it was added before");
+
+        let target_id = tree.resolve(redirect).expect("Target should have been resolved properly");
+        let target = &tree[target_id];
+
+        assert!(matches!(target, AttachedNode::Root(_)));
+    }
+
+    #[test]
+    #[should_panic = "Cannot forward a node with children. The node must have no children to redirect somewhere else"]
+    fn redirect_after_child() {
+        let _ =
+            CommandArgumentBuilder::new("test", "A test command")
+                .then(LiteralArgumentBuilder::new("child"))
+                .redirect(Redirection::Root);
+    }
+
+    #[test]
+    #[should_panic = "Cannot add children to a redirected node"]
+    fn redirect_before_child() {
+        let _ =
+            CommandArgumentBuilder::new("test", "A test command")
+                .redirect(Redirection::Root)
+                .then(LiteralArgumentBuilder::new("child"));
     }
 }

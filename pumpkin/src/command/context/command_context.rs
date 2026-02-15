@@ -12,21 +12,21 @@ use std::any::Any;
 use std::sync::Arc;
 
 /// Represents the current stage of the chain.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Stage {
     MODIFY,
     EXECUTE,
 }
 
 /// Represents a parsed node.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct ParsedNode {
     pub node: NodeId,
     pub range: StringRange,
 }
 
 /// Represents a suggestional context involving a node.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct SuggestionContext {
     pub parent: NodeId,
     pub starting_position: usize,
@@ -415,22 +415,22 @@ impl<'a> CommandContextBuilder<'a> {
         }
     }
 
-    /// Returns itself with the new source set.
+    /// Mutates itself with the new source set.
     pub fn with_source(&mut self, source: Arc<CommandSource>) {
         self.source = source;
     }
 
-    /// Returns itself with a new argument added.
+    /// Mutates itself with a new argument added.
     pub fn with_argument(&mut self, name: String, argument: Arc<ParsedArgument>) {
         self.arguments.insert(name, argument);
     }
 
-    /// Returns itself with the new command set.
+    /// Mutates itself with the new command set.
     pub fn with_command(&mut self, command: Option<Command>) {
         self.command = command;
     }
 
-    /// Returns itself with a new node added to this builder.
+    /// Mutates itself with a new node added to this builder.
     pub fn with_node(&mut self, node: NodeId, range: StringRange) {
         self.nodes.push(ParsedNode { node, range });
         self.range = StringRange::encompass(self.range, range);
@@ -438,12 +438,12 @@ impl<'a> CommandContextBuilder<'a> {
         self.forks = self.tree[node].forks();
     }
 
-    /// Returns itself with the new child set.
+    /// Mutates itself with the new child set.
     pub fn with_child(&mut self, child: Self) {
         self.child = Some(Box::new(child));
     }
 
-    /// Returns the last child of this builder.
+    /// Mutates the last child of this builder.
     #[must_use]
     pub fn last_child(&self) -> &Self {
         let mut result = self;
@@ -496,5 +496,68 @@ impl<'a> CommandContextBuilder<'a> {
                 starting_position: self.range.start,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+    use crate::command::context::command_context::{CommandContextBuilder, ParsedArgument};
+    use crate::command::context::command_source::CommandSource;
+    use crate::command::context::string_range::StringRange;
+    use crate::command::errors::command_syntax_error::CommandSyntaxError;
+    use crate::command::node::dispatcher::CommandDispatcher;
+    use crate::command::node::tree::ROOT_NODE_ID;
+
+    // For testing purposes
+    fn builder(dispatcher: &CommandDispatcher) -> CommandContextBuilder<'_> {
+        let mut builder = CommandContextBuilder::new(
+            &dispatcher,
+            Arc::new(CommandSource::dummy()),
+            dispatcher.tree.clone(),
+            ROOT_NODE_ID,
+            0
+        );
+
+        let parsed_argument = ParsedArgument::new(
+            StringRange::between(0, 1),
+            Box::new(6789_i32)
+        );
+
+        builder.with_argument(
+            "foo".to_string(),
+            Arc::new(parsed_argument)
+        );
+
+        builder
+    }
+
+    #[test]
+    fn get_argument() -> Result<(), CommandSyntaxError> {
+        let dispatcher = CommandDispatcher::new();
+        let builder = builder(&dispatcher);
+
+        let context = builder.build("6789");
+        assert_eq!(context.get_argument::<i32>("foo")?, 6789);
+
+        Ok(())
+    }
+
+    #[test]
+    fn get_nonexistent_argument() {
+        let dispatcher = CommandDispatcher::new();
+        let builder = builder(&dispatcher);
+
+        let context = builder.build("6789");
+        assert!(context.get_argument::<i32>("bar").is_err());
+    }
+
+    #[test]
+    fn get_different_type_argument() {
+        let dispatcher = CommandDispatcher::new();
+        let builder = builder(&dispatcher);
+
+        let context = builder.build("6789");
+        assert!(context.get_argument::<f32>("foo").is_err());
     }
 }

@@ -52,8 +52,8 @@ pub static EMPTY_CONSUMER: LazyLock<Arc<EmptyResultConsumer>> =
 
 /// The core command dispatcher, used to register, parse and execute commands.
 pub struct CommandDispatcher {
-    tree: Arc<Tree>,
-    consumer: Arc<dyn ResultConsumer>,
+    pub tree: Arc<Tree>,
+    pub consumer: Arc<dyn ResultConsumer>,
 }
 
 impl Default for CommandDispatcher {
@@ -269,8 +269,7 @@ mod test {
     use crate::command::context::command_source::CommandSource;
     use crate::command::errors::error_types::DISPATCHER_UNKNOWN_COMMAND;
     use crate::command::node::dispatcher::CommandDispatcher;
-    use crate::command::node::{CommandExecutor, CommandExecutorResult, RedirectModifier};
-    use std::sync::Arc;
+    use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
     #[tokio::test]
     async fn unknown_command() {
