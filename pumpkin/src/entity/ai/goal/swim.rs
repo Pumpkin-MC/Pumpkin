@@ -18,8 +18,11 @@ impl Default for SwimGoal {
 
 impl SwimGoal {
     fn is_in_fluid(mob: &dyn Mob) -> bool {
-        let entity = &mob.get_mob_entity().living_entity.entity;
-        entity.touching_water.load(Ordering::SeqCst) || entity.touching_lava.load(Ordering::SeqCst)
+        let living = &mob.get_mob_entity().living_entity;
+        let entity = &living.entity;
+        let in_water = entity.touching_water.load(Ordering::SeqCst)
+            && entity.water_height.load() > living.get_swim_height();
+        in_water || entity.touching_lava.load(Ordering::SeqCst)
     }
 }
 

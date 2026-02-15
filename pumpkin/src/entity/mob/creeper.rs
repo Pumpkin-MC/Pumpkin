@@ -9,10 +9,11 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     tracked_data::TrackedData,
 };
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
         look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal,
@@ -22,14 +23,16 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-const FUSE_TIME: i32 = 30;
-const EXPLOSION_RADIUS: f32 = 3.0;
+const DEFAULT_FUSE_TIME: i32 = 30;
+const DEFAULT_EXPLOSION_RADIUS: i32 = 3;
 
 pub struct CreeperEntity {
     pub mob_entity: MobEntity,
     pub fuse_speed: AtomicI32,
     pub current_fuse_time: AtomicI32,
     pub last_fuse_time: AtomicI32,
+    pub fuse_time: AtomicI32,
+    pub explosion_radius: AtomicI32,
     pub ignited: AtomicBool,
     pub charged: AtomicBool,
 }
@@ -42,6 +45,8 @@ impl CreeperEntity {
             fuse_speed: AtomicI32::new(-1),
             current_fuse_time: AtomicI32::new(0),
             last_fuse_time: AtomicI32::new(0),
+            fuse_time: AtomicI32::new(DEFAULT_FUSE_TIME),
+            explosion_radius: AtomicI32::new(DEFAULT_EXPLOSION_RADIUS),
             ignited: AtomicBool::new(false),
             charged: AtomicBool::new(false),
         };
@@ -91,6 +96,7 @@ impl CreeperEntity {
 
     async fn explode(&self) {
         let entity = &self.mob_entity.living_entity.entity;
+        let radius = self.explosion_radius.load(Ordering::Relaxed) as f32;
         let multiplier = if self.charged.load(Ordering::Relaxed) {
             2.0
         } else {
@@ -102,13 +108,43 @@ impl CreeperEntity {
             .store(true, Ordering::Relaxed);
         let world = entity.world.load();
         let pos = entity.pos.load();
-        world.explode(pos, EXPLOSION_RADIUS * multiplier).await;
+        world.explode(pos, radius * multiplier).await;
         // TODO: spawn area effect cloud with potion effects
         entity.remove().await;
     }
 }
 
-impl NBTStorage for CreeperEntity {}
+impl NBTStorage for CreeperEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            nbt.put_bool("powered", self.charged.load(Ordering::Relaxed));
+            nbt.put_short("Fuse", self.fuse_time.load(Ordering::Relaxed) as i16);
+            nbt.put_byte(
+                "ExplosionRadius",
+                self.explosion_radius.load(Ordering::Relaxed) as i8,
+            );
+            nbt.put_bool("ignited", self.ignited.load(Ordering::Relaxed));
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            if let Some(powered) = nbt.get_bool("powered") {
+                self.charged.store(powered, Ordering::Relaxed);
+            }
+            if let Some(fuse) = nbt.get_short("Fuse") {
+                self.fuse_time.store(i32::from(fuse), Ordering::Relaxed);
+            }
+            if let Some(radius) = nbt.get_byte("ExplosionRadius") {
+                self.explosion_radius
+                    .store(i32::from(radius), Ordering::Relaxed);
+            }
+            if let Some(ignited) = nbt.get_bool("ignited") {
+                self.ignited.store(ignited, Ordering::Relaxed);
+            }
+        })
+    }
+}
 
 impl Mob for CreeperEntity {
     fn get_mob_entity(&self) -> &MobEntity {
@@ -145,14 +181,14 @@ impl Mob for CreeperEntity {
                         0.5,
                     )
                     .await;
-                // TODO: emit GameEvent::PRIME_FUSE
             }
 
+            let fuse_time = self.fuse_time.load(Ordering::Relaxed);
             let new_fuse = (current + fuse_speed).max(0);
             self.current_fuse_time.store(new_fuse, Ordering::Relaxed);
 
-            if new_fuse >= FUSE_TIME {
-                self.current_fuse_time.store(FUSE_TIME, Ordering::Relaxed);
+            if new_fuse >= fuse_time {
+                self.current_fuse_time.store(fuse_time, Ordering::Relaxed);
                 self.explode().await;
             }
         })
