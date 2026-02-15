@@ -18,7 +18,6 @@ pub fn get_seed() -> u64 {
         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
             Some(val.wrapping_mul(1181783497276652981u64))
         })
-        // We always return `Some``, so there will always be an `Ok` result
         .unwrap();
 
     let nanos = time::SystemTime::now()
@@ -43,7 +42,6 @@ pub enum RandomDeriver {
     Legacy(LegacySplitter),
 }
 
-// TODO: Write unit test for this
 #[macro_export]
 macro_rules! population_seed_fn {
     () => {
@@ -59,7 +57,6 @@ macro_rules! population_seed_fn {
     };
 }
 
-// TODO: Write unit test for this
 #[inline]
 #[must_use]
 pub const fn get_decorator_seed(population_seed: u64, index: u64, step: u64) -> u64 {
@@ -78,6 +75,16 @@ pub fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: u32)
         .wrapping_add(x_part)
         .wrapping_add(z_part)
         .wrapping_add(i64::from(salt) as u64)
+}
+
+/// Note: I've tried to mirror vanilla `WorldgenRandom.setLargeFeatureSeed` using `LegacyRandomSource` semantics.
+#[inline]
+#[must_use]
+pub fn get_large_feature_seed(world_seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
+    let mut random = legacy_rand::LegacyRand::from_seed(world_seed);
+    let x = random.next_i64();
+    let z = random.next_i64();
+    (chunk_x as u64).wrapping_mul(x as u64) ^ (chunk_z as u64).wrapping_mul(z as u64) ^ world_seed
 }
 #[inline]
 pub fn get_carver_seed(
