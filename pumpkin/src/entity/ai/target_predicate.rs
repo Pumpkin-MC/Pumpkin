@@ -1,4 +1,5 @@
 use crate::entity::living::LivingEntity;
+use crate::entity::EntityBase;
 use crate::world::World;
 use pumpkin_util::{Difficulty, GameMode};
 use std::future::Future;
@@ -78,50 +79,77 @@ impl TargetPredicate {
         self
     }
 
-    pub async fn test(
+    pub fn set_predicate<F, Fut>(&mut self, predicate: F)
+    where
+        F: Fn(Arc<LivingEntity>, Arc<World>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = bool> + Send + 'static,
+    {
+        self.predicate = Some(Arc::new(
+            move |living_entity: Arc<LivingEntity>, world: Arc<World>| {
+                Box::pin(predicate(living_entity, world))
+            },
+        ));
+    }
+
+    pub fn test(
         &self,
-        world: &Arc<World>,
+        world: &World,
         tester: Option<&LivingEntity>,
         target: &LivingEntity,
     ) -> bool {
-        if let Some(t) = tester {
-            if Arc::ptr_eq(&t.entity.arc, &target.entity.arc) {
+        // 1. Equality check: A mob cannot target itself
+        if let Some(t) = tester && t.entity.entity_id == target.entity.entity_id {
+            return false;
+        }
+
+        // 2. Vanilla Gamemode Check: AI ignores Creative and Spectator players
+        if let Some(player) = target.entity.get_player() {
+            let gm = player.gamemode.load();
+            if gm == GameMode::Creative || gm == GameMode::Spectator {
                 return false;
             }
         }
 
-        let gm = target.entity.gamemode.load();
-        if gm == GameMode::Creative || gm == GameMode::Spectator || !target.is_alive() {
+        // 3. Status Checks: Life, Invulnerability, and Difficulty
+        if !target.entity.is_alive() {
             return false;
         }
 
         if self.attackable {
-            let diff = world.level_info.load().difficulty;
-            if diff == Difficulty::Peaceful || !target.can_take_damage() {
+            // Mobs don't attack in Peaceful difficulty
+            if world.level_info.load().difficulty == Difficulty::Peaceful {
+                return false;
+            }
+            // Ignore targets that can't take damage (matches vanilla TargetPredicate)
+            if !target.can_take_damage() {
                 return false;
             }
         }
 
+        // 4. Distance Logic
         if let Some(t_ent) = tester {
-            let d_sq = t_ent
-                .entity
-                .pos
-                .load()
-                .distance_squared(target.entity.pos.load());
-            let mut range = self.base_max_distance;
-            if range < 0.0 {
-                range = 16.0;
+            let p1 = t_ent.entity.pos.load();
+            let p2 = target.entity.pos.load();
+            let d_sq = p1.squared_distance_to_vec(&p2);
+
+            let mut dist_limit = self.base_max_distance;
+            if dist_limit < 0.0 {
+                dist_limit = 16.0; // Vanilla default follow range
             }
-            if d_sq > (range * range).max(MIN_DISTANCE * MIN_DISTANCE) {
+
+            // TODO: Visibility Modifier Logic (Sneaking = 0.8x, Invisibility = 0.07x)
+            // Minecraft logic: max_dist *= target.get_visibility_modifier(tester);
+            
+            let final_limit = dist_limit * dist_limit;
+            let min_limit = MIN_DISTANCE * MIN_DISTANCE;
+
+            if d_sq > final_limit.max(min_limit) {
                 return false;
             }
         }
 
-        if let Some(ref p) = self.predicate {
-            if !p(Arc::new(target.clone()), world.clone()).await {
-                return false;
-            }
-        }
+        // TODO: Implement Line of Sight (Raycasting) check if self.use_line_of_sight is true
+        // Minecraft uses: if (this.useLineOfSight && !tester.getSensing().canSee(target)) return false;
 
         true
     }
