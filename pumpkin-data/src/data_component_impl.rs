@@ -3,9 +3,9 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
-    AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DeathProtection,
-    Enchantments, Equippable, Food, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize,
-    PotionContents, Tool, Unbreakable,
+    AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
+    DeathProtection, Enchantments, Equippable, Food, ItemName, JukeboxPlayable, MaxDamage,
+    MaxStackSize, PotionContents, Tool, Unbreakable,
 };
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
@@ -49,6 +49,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
+        DamageResistant => Some(DamageResistantImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -349,8 +350,232 @@ impl Hash for ConsumableImpl {
 pub struct UseRemainderImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct UseCooldownImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct DamageResistantImpl;
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum DamageResistantType {
+    /// Damage always delt to ender dragons
+    AlwaysHurtsEnderDragons,
+    /// Destroys armor stands in a single hit
+    AlwaysKillsArmorStands,
+    AlwaysMostSignificantFall,
+    /// Damage always notifies nearby hidden silverfish
+    AlwaysTriggersSilverfish,
+    AvoidsGuardianThorns,
+    BurnsArmorStands,
+    BurnFromStepping,
+    BypassesArmor,
+    BypassesCooldown,
+    BypassesEffects,
+    BypassesEnchantments,
+    BypassesInvulnerability,
+    BypassesResistance,
+    BypassesShield,
+    BypassesWolfArmor,
+    CanBreakArmorStands,
+    DamagesHelmet,
+    IgnitesArmorStands,
+    Drowning,
+    /// Damage is reduced by the blast protection enchantment
+    Explosion,
+    /// Damage is reduced by the feather falling enchantment and ignored if slow falling
+    Fall,
+    /// Damage is reduced by the fire protection enchantment or ignored by game rule
+    Fire,
+    /// Damage is reduced by wearing any piece of leather armor or ignored by game rule
+    Freezing,
+    /// So turtles drop bowls when killed by lightning
+    Lightning,
+    PlayerAttack,
+    /// Damage is reduced by the projectile protection enchantment
+    Projectile,
+    MaceSmash,
+    /// Prevents entities from becoming angry at the source of the damage
+    NoAnger,
+    /// Prevents entities from being marked hurt (preventing the server from syncing velocity)
+    NoImpact,
+    NoKnockback,
+    PanicCauses,
+    PanicEnvironmentalCauses,
+    /// Reducese damage dealt to witches by 85%
+    WitchResistantTo,
+    WitherImmuneTo,
+    /// Generic fallback
+    Generic,
+}
+
+impl DamageResistantType {
+    pub fn from_tag(s: &str) -> Self {
+        match s {
+            "#minecraft:always_hurts_ender_dragons"
+            | "minecraft:always_hurts_ender_dragons"
+            | "always_hurts_ender_dragons" => Self::AlwaysHurtsEnderDragons,
+            "#minecraft:always_kills_armor_stands"
+            | "minecraft:always_kills_armor_stands"
+            | "always_kills_armor_stands" => Self::AlwaysKillsArmorStands,
+            "#minecraft:always_most_significant_fall"
+            | "minecraft:always_most_significant_fall"
+            | "always_most_significant_fall" => Self::AlwaysMostSignificantFall,
+            "#minecraft:always_triggers_silverfish"
+            | "minecraft:always_triggers_silverfish"
+            | "always_triggers_silverfish" => Self::AlwaysTriggersSilverfish,
+            "#minecraft:avoids_guardian_thorns"
+            | "minecraft:avoids_guardian_thorns"
+            | "avoids_guardian_thorns" => Self::AvoidsGuardianThorns,
+            "#minecraft:burns_armor_stands"
+            | "minecraft:burns_armor_stands"
+            | "burns_armor_stands" => Self::BurnsArmorStands,
+            "#minecraft:burn_from_stepping"
+            | "minecraft:burn_from_stepping"
+            | "burn_from_stepping" => Self::BurnFromStepping,
+            "#minecraft:bypasses_armor" | "minecraft:bypasses_armor" | "bypasses_armor" => {
+                Self::BypassesArmor
+            }
+            "#minecraft:bypasses_cooldown"
+            | "minecraft:bypasses_cooldown"
+            | "bypasses_cooldown" => Self::BypassesCooldown,
+            "#minecraft:bypasses_effects" | "minecraft:bypasses_effects" | "bypasses_effects" => {
+                Self::BypassesEffects
+            }
+            "#minecraft:bypasses_enchantments"
+            | "minecraft:bypasses_enchantments"
+            | "bypasses_enchantments" => Self::BypassesEnchantments,
+            "#minecraft:bypasses_invulnerability"
+            | "minecraft:bypasses_invulnerability"
+            | "bypasses_invulnerability" => Self::BypassesInvulnerability,
+            "#minecraft:bypasses_resistance"
+            | "minecraft:bypasses_resistance"
+            | "bypasses_resistance" => Self::BypassesResistance,
+            "#minecraft:bypasses_shield" | "minecraft:bypasses_shield" | "bypasses_shield" => {
+                Self::BypassesShield
+            }
+            "#minecraft:bypasses_wolf_armor"
+            | "minecraft:bypasses_wolf_armor"
+            | "bypasses_wolf_armor" => Self::BypassesWolfArmor,
+            "#minecraft:can_break_armor_stand"
+            | "minecraft:can_break_armor_stand"
+            | "can_break_armor_stand" => Self::CanBreakArmorStands,
+            "#minecraft:damages_helmet" | "minecraft:damages_helmet" | "damages_helmet" => {
+                Self::DamagesHelmet
+            }
+            "#minecraft:ignites_armor_stands"
+            | "minecraft:ignites_armor_stands"
+            | "ignites_armor_stands" => Self::IgnitesArmorStands,
+            "#minecraft:is_drowning" | "minecraft:is_drowning" | "is_drowning" => Self::Drowning,
+            "#minecraft:is_explosion" | "minecraft:is_explosion" | "is_explosion" | "explosion" => {
+                Self::Explosion
+            }
+            "#minecraft:is_fall" | "minecraft:is_fall" | "is_fall" | "fall" => Self::Fall,
+            "#minecraft:is_fire" | "minecraft:is_fire" | "is_fire" | "fire" | "in_fire"
+            | "minecraft:in_fire" => Self::Fire,
+            "#minecraft:is_freezing" | "minecraft:is_freezing" | "is_freezing" => Self::Freezing,
+            "#minecraft:is_lightning" | "minecraft:is_lightning" | "is_lightning" => {
+                Self::Lightning
+            }
+            "#minecraft:is_player_attack" | "minecraft:is_player_attack" | "is_player_attack" => {
+                Self::PlayerAttack
+            }
+            "#minecraft:is_projectile" | "minecraft:is_projectile" | "is_projectile" => {
+                Self::Projectile
+            }
+            "#minecraft:mace_smash" | "minecraft:mace_smash" | "mace_smash" => Self::MaceSmash,
+            "#minecraft:no_anger" | "minecraft:no_anger" | "no_anger" => Self::NoAnger,
+            "#minecraft:no_impact" | "minecraft:no_impact" | "no_impact" => Self::NoImpact,
+            "#minecraft:no_knockback" | "minecraft:no_knockback" | "no_knockback" => {
+                Self::NoKnockback
+            }
+            "#minecraft:panic_causes" | "minecraft:panic_causes" | "panic_causes" => {
+                Self::PanicCauses
+            }
+            "#minecraft:panic_environmental_causes"
+            | "minecraft:panic_environmental_causes"
+            | "panic_environmental_causes" => Self::PanicEnvironmentalCauses,
+            "#minecraft:witch_resistant_to"
+            | "minecraft:witch_resistant_to"
+            | "witch_resistant_to" => Self::WitchResistantTo,
+            "#minecraft:wither_immune_to" | "minecraft:wither_immune_to" | "wither_immune_to" => {
+                Self::WitherImmuneTo
+            }
+            _ => Self::Generic,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AlwaysHurtsEnderDragons => "#minecraft:always_hurts_ender_dragons",
+            Self::AlwaysKillsArmorStands => "#minecraft:always_kills_armor_stands",
+            Self::AlwaysMostSignificantFall => "#minecraft:always_most_significant_fall",
+            Self::AlwaysTriggersSilverfish => "#minecraft:always_triggers_silverfish",
+            Self::AvoidsGuardianThorns => "#minecraft:avoids_guardian_thorns",
+            Self::BurnsArmorStands => "#minecraft:burns_armor_stands",
+            Self::BurnFromStepping => "#minecraft:burn_from_stepping",
+            Self::BypassesArmor => "#minecraft:bypasses_armor",
+            Self::BypassesCooldown => "#minecraft:bypasses_cooldown",
+            Self::BypassesEffects => "#minecraft:bypasses_effects",
+            Self::BypassesEnchantments => "#minecraft:bypasses_enchantments",
+            Self::BypassesInvulnerability => "#minecraft:bypasses_invulnerability",
+            Self::BypassesResistance => "#minecraft:bypasses_resistance",
+            Self::BypassesShield => "#minecraft:bypasses_shield",
+            Self::BypassesWolfArmor => "#minecraft:bypasses_wolf_armor",
+            Self::CanBreakArmorStands => "#minecraft:can_break_armor_stand",
+            Self::DamagesHelmet => "#minecraft:damages_helmet",
+            Self::IgnitesArmorStands => "#minecraft:ignites_armor_stands",
+            Self::Drowning => "#minecraft:is_drowning",
+            Self::Explosion => "#minecraft:is_explosion",
+            Self::Fall => "#minecraft:is_fall",
+            Self::Fire => "#minecraft:is_fire",
+            Self::Freezing => "#minecraft:is_freezing",
+            Self::Lightning => "#minecraft:is_lightning",
+            Self::PlayerAttack => "#minecraft:is_player_attack",
+            Self::Projectile => "#minecraft:is_projectile",
+            Self::MaceSmash => "#minecraft:mace_smash",
+            Self::NoAnger => "#minecraft:no_anger",
+            Self::NoImpact => "#minecraft:no_impact",
+            Self::NoKnockback => "#minecraft:no_knockback",
+            Self::PanicCauses => "#minecraft:panic_causes",
+            Self::PanicEnvironmentalCauses => "#minecraft:panic_environmental_causes",
+            Self::WitchResistantTo => "#minecraft:witch_resistant_to",
+            Self::WitherImmuneTo => "#minecraft:wither_immune_to",
+            Self::Generic => "minecraft:generic",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct DamageResistantImpl {
+    pub res_type: DamageResistantType,
+}
+
+impl DamageResistantImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let type_str = compound.get_string("types")?;
+
+        Some(Self {
+            res_type: DamageResistantType::from_tag(type_str),
+        })
+    }
+}
+
+impl std::str::FromStr for DamageResistantType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(DamageResistantType::from_tag(s))
+    }
+}
+
+impl DataComponentImpl for DamageResistantImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("types", self.res_type.as_str().to_string());
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.res_type.as_str()) as i32
+    }
+
+    default_impl!(DamageResistant);
+}
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum IDSet {
