@@ -1326,6 +1326,15 @@ impl Entity {
                 )
                 .await;
         }
+
+        if motion.y != final_move.y {
+            let world = self.world.load();
+            let block = self.get_block_with_y_offset(0.2).await.1;
+            world
+                .block_registry
+                .update_entity_movement_after_fall_on(block, &world, caller.as_ref())
+                .await;
+        }
     }
 
     pub async fn push_out_of_blocks(&self, center_pos: Vector3<f64>) {

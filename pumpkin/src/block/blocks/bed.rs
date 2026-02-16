@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::BedPart;
@@ -16,6 +17,7 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
 use crate::block::OnLandedUponArgs;
+use crate::block::UpdateEntityMovementAfterFallOnArgs;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
@@ -93,6 +95,32 @@ impl BlockBehaviour for BedBlock {
                 living
                     .handle_fall_damage(args.entity, args.fall_distance * 0.5, 1.0)
                     .await;
+            }
+        })
+    }
+
+    fn update_entity_movement_after_fall_on<'a>(
+        &'a self,
+        args: UpdateEntityMovementAfterFallOnArgs<'a>,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = args.entity.get_entity();
+            let mut velocity = entity.velocity.load();
+
+            if entity.sneaking.load(Ordering::Relaxed) {
+                velocity.y = 0.0;
+                entity.velocity.store(velocity);
+                return;
+            }
+
+            if velocity.y < 0.0 {
+                let entity_factor = if args.entity.get_living_entity().is_some() {
+                    1.0
+                } else {
+                    0.8
+                };
+                velocity.y = -velocity.y * 0.66 * entity_factor;
+                entity.velocity.store(velocity);
             }
         })
     }

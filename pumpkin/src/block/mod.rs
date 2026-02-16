@@ -103,6 +103,18 @@ pub trait BlockBehaviour: Send + Sync {
         })
     }
 
+    fn update_entity_movement_after_fall_on<'a>(
+        &'a self,
+        args: UpdateEntityMovementAfterFallOnArgs<'a>,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = args.entity.get_entity();
+            let mut velocity = entity.velocity.load();
+            velocity.y = 0.0;
+            entity.velocity.store(velocity);
+        })
+    }
+
     fn broken<'a>(&'a self, _args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -279,6 +291,11 @@ pub struct PlayerPlacedArgs<'a> {
 pub struct OnLandedUponArgs<'a> {
     pub world: &'a Arc<World>,
     pub fall_distance: f32,
+    pub entity: &'a dyn EntityBase,
+}
+
+pub struct UpdateEntityMovementAfterFallOnArgs<'a> {
+    pub world: &'a Arc<World>,
     pub entity: &'a dyn EntityBase,
 }
 

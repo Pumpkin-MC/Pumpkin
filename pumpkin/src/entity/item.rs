@@ -179,6 +179,159 @@ impl ItemEntity {
             source.init_data_tracker().await;
         }
     }
+
+    fn decrement_pickup_delay(&self) {
+        self.pickup_delay
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
+                Some(val.saturating_sub(1))
+            })
+            .ok();
+    }
+
+    fn apply_fluid_drag_or_gravity(&self, mut velo: Vector3<f64>) -> Vector3<f64> {
+        let entity = &self.entity;
+
+        if entity.touching_water.load(Ordering::SeqCst) && entity.water_height.load() > 0.1 {
+            velo.x *= 0.99;
+            velo.z *= 0.99;
+            if velo.y < 0.06 {
+                velo.y += 5.0e-4;
+            }
+        } else if entity.touching_lava.load(Ordering::SeqCst) && entity.lava_height.load() > 0.1 {
+            velo.x *= 0.95;
+            velo.z *= 0.95;
+            if velo.y < 0.06 {
+                velo.y += 5.0e-4;
+            }
+        } else {
+            velo.y -= <Self as EntityBase>::get_gravity(self);
+        }
+
+        velo
+    }
+
+    async fn update_no_clip_and_push_out(&self) {
+        let entity = &self.entity;
+        let pos = entity.pos.load();
+        let bounding_box = entity.bounding_box.load();
+
+        let no_clip = !entity
+            .world
+            .load()
+            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
+            .await;
+
+        entity.no_clip.store(no_clip, Ordering::Relaxed);
+
+        if no_clip {
+            entity
+                .push_out_of_blocks(Vector3::new(
+                    pos.x,
+                    f64::midpoint(bounding_box.min.y, bounding_box.max.y),
+                    pos.z,
+                ))
+                .await;
+        }
+    }
+
+    async fn should_tick_move(&self, move_velo: Vector3<f64>) -> Option<bool> {
+        let entity = &self.entity;
+
+        let mut tick_move = !entity.on_ground.load(Ordering::SeqCst)
+            || move_velo.horizontal_length_squared() > 1.0e-5;
+
+        if !tick_move {
+            let Ok(item_age) = i32::try_from(self.item_age.load(Ordering::Relaxed)) else {
+                entity.remove().await;
+                return None;
+            };
+
+            tick_move = (item_age + entity.entity_id) % 4 == 0;
+        }
+
+        Some(tick_move)
+    }
+
+    async fn move_and_apply_friction(
+        &self,
+        caller: &Arc<dyn EntityBase>,
+        server: &Server,
+        move_velo: Vector3<f64>,
+    ) {
+        let entity = &self.entity;
+
+        entity.move_entity(caller.clone(), move_velo).await;
+        entity.tick_block_collisions(caller, server).await;
+
+        let mut friction = 0.98;
+        let on_ground = entity.on_ground.load(Ordering::SeqCst);
+
+        let mut velo = entity.velocity.load();
+        if on_ground {
+            let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).await.1;
+            friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
+        }
+
+        velo = velo.multiply(friction, 0.98, friction);
+
+        if on_ground && velo.y < 0.0 {
+            velo = velo.multiply(1.0, -0.5, 1.0);
+        }
+
+        entity.velocity.store(velo);
+    }
+
+    async fn process_age_and_merge(&self) -> bool {
+        if self.never_despawn.load(Ordering::Relaxed) {
+            return true;
+        }
+
+        let entity = &self.entity;
+        let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
+
+        if age >= 6000 {
+            entity.remove().await;
+            return false;
+        }
+
+        let n = if entity
+            .last_pos
+            .load()
+            .sub(&entity.pos.load())
+            .length_squared()
+            == 0.0
+        {
+            40
+        } else {
+            2
+        };
+
+        if age.is_multiple_of(n) && self.can_merge().await {
+            self.try_merge().await;
+        }
+
+        true
+    }
+
+    async fn sync_motion_if_dirty(
+        &self,
+        caller: &Arc<dyn EntityBase>,
+        original_velo: Vector3<f64>,
+    ) {
+        let entity = &self.entity;
+
+        entity.update_fluid_state(caller).await;
+
+        let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
+            || entity.touching_water.load(Ordering::SeqCst)
+            || entity.touching_lava.load(Ordering::SeqCst)
+            || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
+
+        if velocity_dirty {
+            entity.send_pos_rot().await;
+            entity.send_velocity().await;
+        }
+    }
 }
 
 impl NBTStorage for ItemEntity {}
@@ -191,144 +344,28 @@ impl EntityBase for ItemEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.entity;
-            self.pickup_delay
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
-                    Some(val.saturating_sub(1))
-                })
-                .ok();
+            self.decrement_pickup_delay();
 
             let original_velo = entity.velocity.load();
+            entity
+                .velocity
+                .store(self.apply_fluid_drag_or_gravity(original_velo));
 
-            let mut velo = original_velo;
-
-            if entity.touching_water.load(Ordering::SeqCst) && entity.water_height.load() > 0.1 {
-                velo.x *= 0.99;
-
-                velo.z *= 0.99;
-
-                if velo.y < 0.06 {
-                    velo.y += 5.0e-4;
-                }
-            } else if entity.touching_lava.load(Ordering::SeqCst) && entity.lava_height.load() > 0.1
-            {
-                velo.x *= 0.95;
-
-                velo.z *= 0.95;
-
-                if velo.y < 0.06 {
-                    velo.y += 5.0e-4;
-                }
-            } else {
-                velo.y -= self.get_gravity();
-            }
-
-            entity.velocity.store(velo);
-
-            let pos = entity.pos.load();
-
-            let bounding_box = entity.bounding_box.load();
-
-            let no_clip = !self
-                .entity
-                .world
-                .load()
-                .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
-                .await;
-
-            entity.no_clip.store(no_clip, Ordering::Relaxed);
-
-            if no_clip {
-                entity
-                    .push_out_of_blocks(Vector3::new(
-                        pos.x,
-                        f64::midpoint(bounding_box.min.y, bounding_box.max.y),
-                        pos.z,
-                    ))
-                    .await;
-            }
+            self.update_no_clip_and_push_out().await;
 
             let move_velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
 
-            let mut tick_move = !entity.on_ground.load(Ordering::SeqCst)
-                || move_velo.horizontal_length_squared() > 1.0e-5;
-
-            if !tick_move {
-                let Ok(item_age) = i32::try_from(self.item_age.load(Ordering::Relaxed)) else {
-                    entity.remove().await;
-
-                    return;
-                };
-
-                tick_move = (item_age + entity.entity_id) % 4 == 0;
-            }
+            let Some(tick_move) = self.should_tick_move(move_velo).await else {
+                return;
+            };
 
             if tick_move {
-                entity.move_entity(caller.clone(), move_velo).await;
-
-                entity.tick_block_collisions(&caller, server).await;
-
-                let mut friction = 0.98;
-
-                let on_ground = entity.on_ground.load(Ordering::SeqCst);
-
-                // Vanilla Entity.move() runs block fall movement hooks before item friction/bounce.
-                let mut velo = entity.velocity.load();
-                if on_ground {
-                    velo.y = 0.0;
-                }
-
-                if on_ground {
-                    let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).await.1;
-
-                    friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
-                }
-
-                velo = velo.multiply(friction, 0.98, friction);
-
-                if on_ground && velo.y < 0.0 {
-                    velo = velo.multiply(1.0, -0.5, 1.0);
-                }
-
-                entity.velocity.store(velo);
+                self.move_and_apply_friction(&caller, server, move_velo)
+                    .await;
             }
 
-            if !self.never_despawn.load(Ordering::Relaxed) {
-                let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
-
-                if age >= 6000 {
-                    entity.remove().await;
-
-                    return;
-                }
-
-                let n = if entity
-                    .last_pos
-                    .load()
-                    .sub(&entity.pos.load())
-                    .length_squared()
-                    == 0.0
-                {
-                    40
-                } else {
-                    2
-                };
-
-                if age.is_multiple_of(n) && self.can_merge().await {
-                    self.try_merge().await;
-                }
-            }
-
-            entity.update_fluid_state(&caller).await;
-
-            let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
-                || entity.touching_water.load(Ordering::SeqCst)
-                || entity.touching_lava.load(Ordering::SeqCst)
-                || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
-
-            if velocity_dirty {
-                entity.send_pos_rot().await;
-
-                entity.send_velocity().await;
+            if self.process_age_and_merge().await {
+                self.sync_motion_if_dirty(&caller, original_velo).await;
             }
         })
     }

@@ -104,7 +104,7 @@ use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
 use crate::block::{
     BlockBehaviour, BlockHitResult, BlockMetadata, GetInsideCollisionShapeArgs,
-    OnEntityCollisionArgs, OnLandedUponArgs,
+    OnEntityCollisionArgs, OnLandedUponArgs, UpdateEntityMovementAfterFallOnArgs,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -676,6 +676,27 @@ impl BlockRegistry {
                     entity,
                 })
                 .await;
+        }
+    }
+
+    pub async fn update_entity_movement_after_fall_on(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        entity: &dyn EntityBase,
+    ) {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
+            pumpkin_block
+                .update_entity_movement_after_fall_on(UpdateEntityMovementAfterFallOnArgs {
+                    world,
+                    entity,
+                })
+                .await;
+        } else {
+            let entity = entity.get_entity();
+            let mut velocity = entity.velocity.load();
+            velocity.y = 0.0;
+            entity.velocity.store(velocity);
         }
     }
 
