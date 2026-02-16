@@ -1,10 +1,10 @@
 use crate::serialization::HasValue;
+use crate::serialization::base_map_codec::BaseMapCodec;
 use crate::serialization::codec::Codec;
 use crate::serialization::coders::{Decoder, Encoder};
 use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
 use crate::serialization::lifecycle::Lifecycle;
-use crate::serialization::map_codecs::base::BaseMapCodec;
 use crate::serialization::struct_builder::StructBuilder;
 use std::collections::HashMap;
 use std::fmt::Display;
