@@ -30,6 +30,8 @@ impl KeyCompressor {
             let i = self.size;
             self.compress_map.insert(key.clone(), i);
             self.decompress_map.insert(i, key);
+
+            self.size += 1;
         });
     }
 

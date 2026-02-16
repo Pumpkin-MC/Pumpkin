@@ -167,7 +167,7 @@ mod test {
             is_success
         );
         assert_decode!(
-            float_range(0.06, 0.012),
+            float_range(0.006, 0.012),
             json!(0.013),
             &json_ops::INSTANCE,
             is_error
