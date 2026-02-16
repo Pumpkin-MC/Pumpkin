@@ -3,7 +3,6 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
-use std::ops::AddAssign;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
@@ -143,12 +142,14 @@ pub struct ChunkManager {
     chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
+    last_chunk_batch_sent_at: Instant,
     /// The current world for chunk loading. Updated on dimension change.
     world: Arc<World>,
 }
 
 impl ChunkManager {
     pub const NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE: u8 = 10;
+    const ACK_STALL_FALLBACK_DELAY: Duration = Duration::from_millis(250);
 
     #[must_use]
     pub fn new(
@@ -165,6 +166,7 @@ impl ChunkManager {
             chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
+            last_chunk_batch_sent_at: Instant::now(),
             world,
         }
     }
@@ -180,6 +182,21 @@ impl ChunkManager {
             .insert(position, Arc::downgrade(chunk))
             .and_then(|old_chunk| old_chunk.upgrade())
             .is_none_or(|old_chunk| !Arc::ptr_eq(&old_chunk, chunk))
+    }
+
+    #[must_use]
+    const fn ack_window_open(&self) -> bool {
+        match self.batches_sent_since_ack {
+            BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
+            BatchState::Initial => true,
+            BatchState::Waiting => false,
+        }
+    }
+
+    #[must_use]
+    fn ack_fallback_ready(&self) -> bool {
+        !self.ack_window_open()
+            && self.last_chunk_batch_sent_at.elapsed() >= Self::ACK_STALL_FALLBACK_DELAY
     }
 
     pub fn pull_new_chunks(&mut self) {
@@ -270,6 +287,7 @@ impl ChunkManager {
         self.chunk_queue.clear();
         self.entity_chunk_queue.clear();
         self.batches_sent_since_ack = BatchState::Initial;
+        self.last_chunk_batch_sent_at = Instant::now();
     }
 
     pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
@@ -285,6 +303,7 @@ impl ChunkManager {
         self.world = new_world;
         // Reset batch state so chunks can be sent immediately in the new dimension
         self.batches_sent_since_ack = BatchState::Initial;
+        self.last_chunk_batch_sent_at = Instant::now();
     }
 
     pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
@@ -307,17 +326,13 @@ impl ChunkManager {
 
     #[must_use]
     pub fn can_send_chunk(&self) -> bool {
-        let state_available = match self.batches_sent_since_ack {
-            BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
-            BatchState::Initial => true,
-            BatchState::Waiting => false,
-        };
+        let state_available = self.ack_window_open() || self.ack_fallback_ready();
 
         state_available && !self.chunk_queue.is_empty()
     }
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
-        let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
+        let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick.max(1));
         let mut chunks = Vec::<Arc<ChunkData>>::with_capacity(chunk_size);
         while chunk_size > 0 {
             chunks.push(self.chunk_queue.pop().unwrap().2);
@@ -325,17 +340,21 @@ impl ChunkManager {
         }
         match &mut self.batches_sent_since_ack {
             BatchState::Count(count) => {
-                count.add_assign(1);
+                *count = count.saturating_add(1);
             }
             state @ BatchState::Initial => *state = BatchState::Waiting,
             BatchState::Waiting => (),
         }
+        self.last_chunk_batch_sent_at = Instant::now();
 
         chunks.into_boxed_slice()
     }
 
     pub fn next_entity(&mut self) -> Box<[SyncEntityChunk]> {
-        let chunk_size = self.entity_chunk_queue.len().min(self.chunks_per_tick);
+        let chunk_size = self
+            .entity_chunk_queue
+            .len()
+            .min(self.chunks_per_tick.max(1));
 
         let chunks: Box<[Arc<ChunkEntityData>]> = self
             .entity_chunk_queue
@@ -345,11 +364,12 @@ impl ChunkManager {
 
         match &mut self.batches_sent_since_ack {
             BatchState::Count(count) => {
-                count.add_assign(1);
+                *count = count.saturating_add(1);
             }
             state @ BatchState::Initial => *state = BatchState::Waiting,
-            BatchState::Waiting => unreachable!(),
+            BatchState::Waiting => (),
         }
+        self.last_chunk_batch_sent_at = Instant::now();
 
         chunks
     }
@@ -1580,7 +1600,7 @@ impl Player {
     }
 
     pub fn eye_position(&self) -> Vector3<f64> {
-        let eye_height = f64::from(self.living_entity.entity.entity_dimension.load().eye_height);
+        let eye_height = self.living_entity.entity.get_eye_height();
         Vector3::new(
             self.living_entity.entity.pos.load().x,
             self.living_entity.entity.pos.load().y + eye_height,
@@ -1920,10 +1940,10 @@ impl Player {
         let d = self.block_interaction_range() + additional_range;
         let box_pos = BoundingBox::from_block(position);
         let entity_pos = self.living_entity.entity.pos.load();
-        let standing_eye_height = self.living_entity.entity.entity_dimension.load().eye_height;
+        let eye_height = self.living_entity.entity.get_eye_height();
         box_pos.squared_magnitude(Vector3 {
             x: entity_pos.x,
-            y: entity_pos.y + f64::from(standing_eye_height),
+            y: entity_pos.y + eye_height,
             z: entity_pos.z,
         }) < d * d
     }
@@ -2209,7 +2229,7 @@ impl Player {
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
         let item_pos = self.living_entity.entity.pos.load()
-            + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
+            + Vector3::new(0.0, self.living_entity.entity.get_eye_height() - 0.3, 0.0);
         let entity = Entity::new(self.world(), item_pos, &EntityType::ITEM);
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();

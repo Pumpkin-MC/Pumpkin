@@ -2,10 +2,7 @@ use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 
 use enum_dispatch::enum_dispatch;
-use pumpkin_data::{
-    chunk::{Biome, BiomeTree, NETHER_BIOME_SOURCE, OVERWORLD_BIOME_SOURCE},
-    dimension::Dimension,
-};
+use pumpkin_data::chunk::{Biome, BiomeTree, NETHER_BIOME_SOURCE, OVERWORLD_BIOME_SOURCE};
 
 use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
 pub mod end;
@@ -19,33 +16,28 @@ thread_local! {
 
 #[enum_dispatch]
 pub trait BiomeSupplier {
-    fn biome(
-        x: i32,
-        y: i32,
-        z: i32,
-        noise: &mut MultiNoiseSampler<'_>,
-        dimension: Dimension,
-    ) -> &'static Biome;
+    fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome;
 }
 
-pub struct MultiNoiseBiomeSupplier;
+#[derive(Clone, Copy)]
+pub struct MultiNoiseBiomeSupplier {
+    source: &'static BiomeTree,
+}
+
+impl MultiNoiseBiomeSupplier {
+    pub const OVERWORLD: Self = Self::new(&OVERWORLD_BIOME_SOURCE);
+    pub const NETHER: Self = Self::new(&NETHER_BIOME_SOURCE);
+
+    const fn new(source: &'static BiomeTree) -> Self {
+        Self { source }
+    }
+}
 
 impl BiomeSupplier for MultiNoiseBiomeSupplier {
-    fn biome(
-        x: i32,
-        y: i32,
-        z: i32,
-        noise: &mut MultiNoiseSampler<'_>,
-        dimension: Dimension,
-    ) -> &'static Biome {
-        let source: &'static BiomeTree = if dimension == Dimension::OVERWORLD {
-            &OVERWORLD_BIOME_SOURCE
-        } else {
-            &NETHER_BIOME_SOURCE
-        };
+    fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome {
         let point = noise.sample(x, y, z);
         let point_list = point.convert_to_list();
-        LAST_RESULT_NODE.with_borrow_mut(|last_result| source.get(&point_list, last_result))
+        LAST_RESULT_NODE.with_borrow_mut(|last_result| self.source.get(&point_list, last_result))
     }
 }
 
@@ -87,7 +79,7 @@ mod test {
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
         let mut sampler =
             MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
-        let biome = MultiNoiseBiomeSupplier::biome(-24, 1, 8, &mut sampler, Dimension::OVERWORLD);
+        let biome = MultiNoiseBiomeSupplier::OVERWORLD.biome(-24, 1, 8, &mut sampler);
         assert_eq!(biome, &Biome::DESERT);
     }
 

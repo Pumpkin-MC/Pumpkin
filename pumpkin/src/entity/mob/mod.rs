@@ -132,6 +132,11 @@ impl MobEntity {
         // TODO: Use entity attributes for damage once implemented
         const ZOMBIE_ATTACK_DAMAGE: f32 = 3.0;
 
+        if self.living_entity.dead.load(Relaxed) {
+            // do not attack if dead
+            return;
+        }
+
         target
             .damage_with_context(
                 target,
