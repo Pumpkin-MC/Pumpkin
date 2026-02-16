@@ -9,11 +9,6 @@ use crate::block::{
 
 use super::FireBlockBase;
 use crate::block::OnEntityCollisionArgs;
-use crate::entity::EntityBase;
-use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::EntityType;
-use rand::RngExt;
-use std::sync::atomic::Ordering;
 
 #[pumpkin_block("minecraft:soul_fire")]
 pub struct SoulFireBlock;
@@ -27,34 +22,7 @@ impl SoulFireBlock {
 
 impl BlockBehaviour for SoulFireBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let base_entity = args.entity.get_entity();
-            if !base_entity.entity_type.fire_immune
-                && !base_entity.fire_immune.load(Ordering::Relaxed)
-            {
-                let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
-
-                // Timer logic
-                if ticks < 0 {
-                    base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
-                } else if base_entity.entity_type == &EntityType::PLAYER {
-                    let rnd_ticks = rand::rng().random_range(1..3);
-                    base_entity
-                        .fire_ticks
-                        .store(ticks + rnd_ticks, Ordering::Relaxed);
-                }
-
-                // Apply fire ticks
-                if base_entity.fire_ticks.load(Ordering::Relaxed) >= 0 {
-                    base_entity.set_on_fire_for(8.0);
-                }
-
-                // Apply extra soul fire damage (and item damage)
-                base_entity
-                    .damage(args.entity, 1.0, DamageType::IN_FIRE)
-                    .await;
-            }
-        })
+        FireBlockBase::apply_fire_collision(args, true)
     }
 
     fn get_state_for_neighbor_update<'a>(

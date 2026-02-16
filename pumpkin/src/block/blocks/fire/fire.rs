@@ -1,21 +1,16 @@
 use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalAxis};
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::world::{BlockAccessor, BlockFlags};
-use rand::RngExt;
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
-
-use crate::entity::EntityBase;
-use pumpkin_data::damage::DamageType;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use rand::RngExt;
+use std::sync::Arc;
 
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::{
@@ -221,36 +216,7 @@ impl BlockBehaviour for FireBlock {
     }
 
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let base_entity = args.entity.get_entity();
-            if !base_entity.entity_type.fire_immune
-                && !base_entity.fire_immune.load(Ordering::Relaxed)
-            {
-                let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
-
-                // Timer logic
-                if ticks < 0 {
-                    base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
-                } else if base_entity.entity_type == &EntityType::PLAYER {
-                    let rnd_ticks = rand::rng().random_range(1..3);
-                    base_entity
-                        .fire_ticks
-                        .store(ticks + rnd_ticks, Ordering::Relaxed);
-                }
-
-                // Apply fire ticks
-                if base_entity.fire_ticks.load(Ordering::Relaxed) >= 0 {
-                    base_entity.set_on_fire_for(8.0);
-                }
-
-                // Damage entities that aren't living (ex. items)
-                if args.entity.get_living_entity().is_none() {
-                    base_entity
-                        .damage(args.entity, 1.0, DamageType::IN_FIRE)
-                        .await;
-                }
-            }
-        })
+        FireBlockBase::apply_fire_collision(args, false)
     }
 
     fn get_state_for_neighbor_update<'a>(
