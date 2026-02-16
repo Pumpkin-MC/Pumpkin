@@ -193,8 +193,7 @@ impl DynamicOps for JsonOps {
     where
         I: IntoIterator<Item = Self::Value>,
     {
-        if matches!(list, Value::Array(_)) || list == self.empty()
-        {
+        if matches!(list, Value::Array(_)) || list == self.empty() {
             let mut result_vec = vec![];
             if let Value::Array(a) = list {
                 result_vec.extend(a);
@@ -244,8 +243,7 @@ impl DynamicOps for JsonOps {
         M: MapLike<Value = Self::Value>,
         Self::Value: Clone,
     {
-        if matches!(map, Value::Object(_)) || map == self.empty()
-        {
+        if matches!(map, Value::Object(_)) || map == self.empty() {
             let mut output_map = Map::new();
 
             if let Value::Object(mut m) = map {
@@ -331,7 +329,7 @@ impl DynamicOps for JsonOps {
             builder: DataResult::success_with_lifecycle(
                 Value::Object(Map::new()),
                 Lifecycle::Stable,
-            )
+            ),
         }
     }
 }
@@ -366,7 +364,7 @@ impl Display for JsonMapLike<'_> {
 
 /// An implementation of [`StructBuilder`] for JSON objects.
 pub struct JsonStructBuilder {
-    builder: DataResult<Value>
+    builder: DataResult<Value>,
 }
 
 impl ResultStructBuilder for JsonStructBuilder {
