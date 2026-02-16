@@ -29,9 +29,8 @@ impl BlockBehaviour for CampfireBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit
-                && args.entity.get_living_entity().is_some()
+                && let Some(living_entity) = args.entity.get_living_entity()
             {
-                let living_entity = args.entity.get_living_entity().unwrap();
                 let has_frost_walker_enchantment = {
                     let equipment = living_entity.entity_equipment.lock().await;
                     let boots = equipment.get(&EquipmentSlot::FEET);
@@ -48,14 +47,10 @@ impl BlockBehaviour for CampfireBlock {
                     //campfire burning doesn't work if entity's boots has frost walker enchantement or entity has fire res. source: https://minecraft.wiki/w/Campfire#Damage
                     return;
                 }
-                let damage_amount = {
-                    if args.block == &Block::SOUL_CAMPFIRE {
-                        //soul campfire deals 2 damage per half second
-                        2.0
-                    } else {
-                        //campfire deals 1 damage per half second
-                        1.0
-                    }
+                let damage_amount = if args.block == &Block::SOUL_CAMPFIRE {
+                    2.0
+                } else {
+                    1.0
                 };
                 args.entity
                     .damage(args.entity, damage_amount, DamageType::CAMPFIRE)
