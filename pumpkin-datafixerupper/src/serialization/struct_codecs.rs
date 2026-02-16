@@ -492,12 +492,12 @@ mod test {
     use crate::serialization::codec::*;
     use crate::serialization::codecs::list::ListCodec;
     use crate::serialization::codecs::primitive::StringCodec;
+    use crate::serialization::codecs::validated::ValidatedCodec;
     use crate::serialization::coders::{Decoder, Encoder};
     use crate::serialization::json_ops;
     use crate::serialization::struct_codecs::StructCodec3;
     use crate::{assert_decode, struct_codec};
     use serde_json::json;
-    use crate::serialization::codecs::validated::ValidatedCodec;
 
     #[derive(Debug, PartialEq, Eq, Clone)]
     pub struct Book {
@@ -512,16 +512,15 @@ mod test {
         FieldMapCodec<StringCodec>,
         FieldMapCodec<UintCodec>,
     > = struct_codec!(
-            for_getter(field(&STRING_CODEC, "name"), |book: &Book| &book.name),
-            for_getter(field(&STRING_CODEC, "author"), |book: &Book| &book.author),
-            for_getter(field(&UINT_CODEC, "pages"), |book: &Book| &book
-                .pages),
-            |name, author, pages| Book {
-                name,
-                author,
-                pages
-            }
-        );
+        for_getter(field(&STRING_CODEC, "name"), |book: &Book| &book.name),
+        for_getter(field(&STRING_CODEC, "author"), |book: &Book| &book.author),
+        for_getter(field(&UINT_CODEC, "pages"), |book: &Book| &book.pages),
+        |name, author, pages| Book {
+            name,
+            author,
+            pages
+        }
+    );
 
     #[test]
     fn book_struct() {
@@ -576,13 +575,34 @@ mod test {
             capacity: u32,
         }
 
-        pub type UnvalidatedBookshelfCodec = StructCodec3<Bookshelf, FieldMapCodec<UintCodec>, DefaultedFieldCodec<ListCodec<StructCodec3<Book, FieldMapCodec<StringCodec>, FieldMapCodec<StringCodec>, FieldMapCodec<UintCodec>>>>, FieldMapCodec<UintCodec>>;
+        pub type UnvalidatedBookshelfCodec = StructCodec3<
+            Bookshelf,
+            FieldMapCodec<UintCodec>,
+            DefaultedFieldCodec<
+                ListCodec<
+                    StructCodec3<
+                        Book,
+                        FieldMapCodec<StringCodec>,
+                        FieldMapCodec<StringCodec>,
+                        FieldMapCodec<UintCodec>,
+                    >,
+                >,
+            >,
+            FieldMapCodec<UintCodec>,
+        >;
 
         static UNVALIDATED_BOOKSHELF_CODEC: UnvalidatedBookshelfCodec = struct_codec!(
             for_getter(field(&UINT_CODEC, "id"), |b: &Bookshelf| &b.id),
-            for_getter(optional_field_with_default(&unbounded_list(&BOOK_CODEC), "books", Vec::new), |b: &Bookshelf| &b.books),
+            for_getter(
+                optional_field_with_default(&unbounded_list(&BOOK_CODEC), "books", Vec::new),
+                |b: &Bookshelf| &b.books
+            ),
             for_getter(field(&UINT_CODEC, "capacity"), |b: &Bookshelf| &b.capacity),
-            |id, books, capacity| Bookshelf { id, books, capacity }
+            |id, books, capacity| Bookshelf {
+                id,
+                books,
+                capacity
+            }
         );
 
         pub type BookshelfCodec = ValidatedCodec<UnvalidatedBookshelfCodec>;
@@ -591,7 +611,11 @@ mod test {
             if b.books.len() <= b.capacity as usize {
                 Ok(())
             } else {
-                Err(format!("Bookshelf cannot have {} books because its capacity is {}", b.books.len(), b.capacity))
+                Err(format!(
+                    "Bookshelf cannot have {} books because its capacity is {}",
+                    b.books.len(),
+                    b.capacity
+                ))
             }
         });
 
@@ -607,7 +631,7 @@ mod test {
                     name: "Infinibook".to_string(),
                     author: "Infiniauthor".to_string(),
                     pages: 1_000_000,
-                }
+                },
             ],
             capacity: 2,
         };
@@ -651,7 +675,7 @@ mod test {
                     name: "Empty Book".to_string(),
                     author: String::new(),
                     pages: 0,
-                }
+                },
             ],
             capacity: 2,
         };
