@@ -1,7 +1,7 @@
+use crate::serialization::base_map_codec::BaseMapCodec;
 use crate::serialization::codec::Codec;
 use crate::serialization::key_compressor::KeyCompressor;
 use crate::serialization::keyable::Keyable;
-use crate::serialization::map_codecs::base::BaseMapCodec;
 use crate::serialization::map_coders::CompressorHolder;
 use crate::serialization::{Display, HasValue};
 

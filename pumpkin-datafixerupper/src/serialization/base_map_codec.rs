@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;
 
-/// A trait to provide basic functionality for an implementation of [`MapCodec`].
+/// A trait to provide basic functionality for an implementation of a *map* [`Codec`] or of a [`MapCodec`].
 pub trait BaseMapCodec {
     /// The key type of this map codec.
     type Key: Display + Eq + Hash;

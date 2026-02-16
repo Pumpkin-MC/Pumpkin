@@ -26,6 +26,8 @@ use crate::serialization::map_codecs::optional_field::{
     new_optional_field_map_codec,
 };
 use crate::serialization::map_codecs::simple::{SimpleMapCodec, new_simple_map_codec};
+#[allow(unused_imports)] // Only used in documentation.
+use crate::serialization::struct_codecs::Field;
 use std::fmt::Display;
 use std::hash::Hash;
 
@@ -44,7 +46,7 @@ use std::hash::Hash;
 /// - [`STRING_CODEC`] for `String`s.
 /// - [`BYTE_CODEC`], [`USHORT_CODEC`], [`UINT_CODEC`] and [`ULONG_CODEC`] for unsigned versions of Java primitive number types (`u8`, `u16`, `u32` and `u64`).
 /// - [`BYTE_BUFFER_CODEC`] for byte buffers (equivalent to `Box<[u8]>`).
-/// - [`INT_STREAM_CODEC`] and [`LONG_STREAM_CODEC`] for Java's `int` and `long` stream codecs (equivalent to `Vec<i32>` and `Vec<i64`).
+/// - [`INT_STREAM_CODEC`] and [`LONG_STREAM_CODEC`] for Java's `int` and `long` stream codecs (equivalent to `Vec<i32>` and `Vec<i64>`).
 ///
 /// # Creating a Codec
 /// There are a few codec types that can be created for custom types. **Keep in mind that codecs are meant
@@ -64,12 +66,12 @@ use std::hash::Hash;
 /// - [`double_range`]: For `double`s.
 ///
 /// ## Structs
-/// Use the [`struct_codec`] macro to generate a codec implementation for a struct.
-/// A struct codec can work with up to 16 [`MapCodec`]s. A `MapCodec` is simply an object that
-/// works with one or more keys of a provided map. Most of them used will be [`FieldMapCodec`]s,
-/// which only works with one singular key.
+/// Use the [`crate::struct_codec!`] macro to generate a codec implementation for a struct.
+/// A struct codec can work with up to 16 [`Field`]s, which each take a [`MapCodec`]
+/// and a getter. A `MapCodec` is simply an object that works with one or more keys of a provided map.
+/// Most of them used will be [`FieldMapCodec`]s, which only work with one singular key.
 ///
-/// A field `MapCodec` can be created with the following:
+/// A field `FieldMapCodec` can be created with one of the following:
 /// - [`field`]: Provides a *required* field with the provided codec and name.
 /// - [`optional_field`]: Provides an *optional* field with the provided codec and name. Since this type of `MapCodec`
 ///   has **no default value**, it encodes into an [`Option`].
@@ -77,14 +79,14 @@ use std::hash::Hash;
 ///   for when the value does not exist while decoding.
 /// - [`lenient_optional_field`] and [`lenient_optional_field_with_default`] for lenient versions of the above two optional field methods.
 ///
-/// To create a [`Field`] object using a `MapCodec`, use [`for_getter`] (in `map_codec`) to include a getter method
+/// To create a `Field` object using a `MapCodec`, use [`for_getter`] (in `map_codec`) to include a getter method
 /// to tell the codec how to get some value (for encoding) from a struct instance. These `Field`s can then be placed
 /// in the `struct_codec` body, one for each pair, along with a constructor function at the end
 /// to tell the codec how to create an instance (for decoding) with the provided values. See the documentation
 /// of the `struct_codec` macro for a basic example for defining a struct codec.
 ///
 /// ## Unbounded Maps
-/// Use the [`unbounded_map`] function to create a codec encoding/decoding a [`HashMap`] of any arbitrary key.
+/// Use the [`unbounded_map`] function to create a codec encoding/decoding a `HashMap` of any arbitrary key.
 /// **Unbounded map codecs only support keys that can encode from/decode to strings.**
 ///
 /// # Transformers
@@ -97,7 +99,7 @@ use std::hash::Hash;
 ///
 /// For example, the unsigned types use `flat_xmap` to convert between the `i_` and `u_` types.
 ///
-/// ## Validator Codecs
+/// # Validator Codecs
 /// The [`validate`] function returns a codec wrapper that validates a value before encoding and after decoding.
 /// A validated codec takes a function that can either return an [`Ok`] for a success,
 /// or an [`Err`] with the provided message to place in a `DataResult`.
@@ -364,7 +366,7 @@ where
 
 // Struct codec functions
 
-/// Creates a structure [`Codec`]. This macro supports up to *16* [`MapCodec`]s.
+/// Creates a structure [`Codec`]. This macro supports up to *16* [`Field`]s.
 ///
 /// Struct codec types are usually pretty large. To combat this, use `pub type ... = ...` to
 /// only store the complicated type once and never use it again. Rust can easily infer the type
