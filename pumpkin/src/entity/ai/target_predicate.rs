@@ -85,7 +85,9 @@ impl TargetPredicate {
         target: &LivingEntity,
     ) -> bool {
         if let Some(t) = tester {
-            if Arc::ptr_eq(&t.entity.arc, &target.entity.arc) { return false; }
+            if Arc::ptr_eq(&t.entity.arc, &target.entity.arc) {
+                return false;
+            }
         }
 
         let gm = target.entity.gamemode.load();
@@ -94,16 +96,27 @@ impl TargetPredicate {
         }
 
         if self.attackable {
-            if world.level_info.load().difficulty == Difficulty::Peaceful { return false; }
-            if !target.can_take_damage() { return false; }
+            let diff = world.level_info.load().difficulty;
+            if diff == Difficulty::Peaceful || !target.can_take_damage() {
+                return false;
+            }
         }
 
         if let Some(t_ent) = tester {
-            let m_dist = if self.base_max_distance  (limit * limit) { return false; }
+            let d_sq = t_ent.entity.pos.load().distance_squared(target.entity.pos.load());
+            let mut range = self.base_max_distance;
+            if range < 0.0 {
+                range = 16.0;
+            }
+            if d_sq > (range * range).max(MIN_DISTANCE * MIN_DISTANCE) {
+                return false;
+            }
         }
 
         if let Some(ref p) = self.predicate {
-            if !p(Arc::new(target.clone()), world.clone()).await { return false; }
+            if !p(Arc::new(target.clone()), world.clone()).await {
+                return false;
+            }
         }
 
         true
