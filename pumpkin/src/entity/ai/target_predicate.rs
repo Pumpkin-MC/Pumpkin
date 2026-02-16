@@ -84,37 +84,26 @@ impl TargetPredicate {
         tester: Option<&LivingEntity>,
         target: &LivingEntity,
     ) -> bool {
-        if let Some(tester_ent) = tester {
-            if Arc::ptr_eq(&tester_ent.entity.arc, &target.entity.arc) {
-                return false;
-            }
+        if let Some(t) = tester {
+            if Arc::ptr_eq(&t.entity.arc, &target.entity.arc) { return false; }
         }
 
-        let gamemode = target.entity.gamemode.load();
-        if gamemode == GameMode::Creative || gamemode == GameMode::Spectator || !target.is_alive() {
+        let gm = target.entity.gamemode.load();
+        if gm == GameMode::Creative || gm == GameMode::Spectator || !target.is_alive() {
             return false;
         }
 
         if self.attackable {
-            if world.level_info.load().difficulty == Difficulty::Peaceful {
-                return false;
-            }
-            if !target.can_take_damage() {
-                return false;
-            }
+            if world.level_info.load().difficulty == Difficulty::Peaceful { return false; }
+            if !target.can_take_damage() { return false; }
         }
 
-        if let Some(tester_ent) = tester {
-            let mut max_dist = self.base_max_distance;
-            if max_dist  (effective_range * effective_range) {
-                return false;
-            }
+        if let Some(t_ent) = tester {
+            let m_dist = if self.base_max_distance  (limit * limit) { return false; }
         }
 
         if let Some(ref p) = self.predicate {
-            if !p(Arc::new(target.clone()), world.clone()).await {
-                return false;
-            }
+            if !p(Arc::new(target.clone()), world.clone()).await { return false; }
         }
 
         true
