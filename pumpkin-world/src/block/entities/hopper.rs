@@ -7,6 +7,7 @@ use pumpkin_data::block_properties::{BlockProperties, HopperFacing, HopperLikePr
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::any::Any;
@@ -42,7 +43,16 @@ impl BlockEntity for HopperBlockEntity {
         &'a self,
         nbt: &'a mut NbtCompound,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        self.write_inventory_nbt(nbt, true)
+        Box::pin(async move {
+            nbt.put(
+                "TransferCooldown",
+                NbtTag::Int(
+                    self.cooldown_time
+                        .load(std::sync::atomic::Ordering::Relaxed),
+                ),
+            );
+            self.write_inventory_nbt(nbt, true).await;
+        })
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
