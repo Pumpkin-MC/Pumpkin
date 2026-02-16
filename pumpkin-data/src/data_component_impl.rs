@@ -50,6 +50,8 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
         PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
+        Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
+        FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -670,11 +672,17 @@ impl PotionContentsImpl {
             for item in list {
                 let effect_tag = item.extract_compound()?;
                 let id = effect_tag.get_int("id")?;
-                let amplifier = effect_tag.get_int("amplifier").unwrap_or(0);
-                let duration = effect_tag.get_int("duration").unwrap_or(0);
-                let ambient = effect_tag.get_byte("ambient").unwrap_or(0) != 0;
-                let show_particles = effect_tag.get_byte("show_particles").unwrap_or(1) != 0;
-                let show_icon = effect_tag.get_byte("show_icon").unwrap_or(1) != 0;
+                let amplifier = effect_tag
+                    .get_int("amplifier")
+                    .or_else(|| effect_tag.get_byte("amplifier").map(i32::from))
+                    .unwrap_or(0);
+                let duration = effect_tag
+                    .get_int("duration")
+                    .or_else(|| effect_tag.get_byte("duration").map(i32::from))
+                    .unwrap_or(0);
+                let ambient = effect_tag.get_bool("ambient").unwrap_or(false);
+                let show_particles = effect_tag.get_bool("show_particles").unwrap_or(true);
+                let show_icon = effect_tag.get_bool("show_icon").unwrap_or(true);
 
                 custom_effects.push(StatusEffectInstance {
                     effect_id: id,
@@ -875,6 +883,29 @@ impl FireworkExplosionImpl {
             has_twinkle,
         }
     }
+
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let compound = tag.extract_compound()?;
+        let shape = FireworkExplosionShape::from_name(compound.get_string("shape")?)?;
+        let colors = compound
+            .get_int_array("colors")
+            .map(|v| v.to_vec())
+            .unwrap_or_default();
+        let fade_colors = compound
+            .get_int_array("fade_colors")
+            .map(|v| v.to_vec())
+            .unwrap_or_default();
+        let has_trail = compound.get_bool("has_trail").unwrap_or(false);
+        let has_twinkle = compound.get_bool("has_twinkle").unwrap_or(false);
+
+        Some(Self {
+            shape,
+            colors,
+            fade_colors,
+            has_trail,
+            has_twinkle,
+        })
+    }
 }
 
 impl DataComponentImpl for FireworkExplosionImpl {
@@ -920,6 +951,29 @@ impl FireworksImpl {
             flight_duration,
             explosions,
         }
+    }
+
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let compound = tag.extract_compound()?;
+        let flight_duration = compound
+            .get_byte("flight_duration")
+            .map(i32::from)
+            .or_else(|| compound.get_int("flight_duration"))
+            .unwrap_or(0);
+
+        let mut explosions = Vec::new();
+        if let Some(list) = compound.get_list("explosions") {
+            for item in list {
+                if let Some(explosion) = FireworkExplosionImpl::read_data(item) {
+                    explosions.push(explosion);
+                }
+            }
+        }
+
+        Some(Self {
+            flight_duration,
+            explosions,
+        })
     }
 }
 
