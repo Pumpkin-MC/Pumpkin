@@ -3,7 +3,6 @@ pub mod inventory_close_event;
 pub mod inventory_open_event;
 
 use crate::entity::player::Player;
-use pumpkin_data::screen::WindowType;
 use std::sync::Arc;
 
 pub trait PlayerInventoryEvent: Send + Sync {
@@ -13,15 +12,9 @@ pub trait PlayerInventoryEvent: Send + Sync {
     /// A reference to the `Arc<Player>` involved in the event.
     fn get_player(&self) -> &Arc<Player>;
 
-    /// Retrieves the type of window (e.g., chest, furnace) involved in the inventory interaction, if applicable.
-    ///
-    /// # Returns
-    /// An `Option<WindowType>` representing the type of window involved in the interaction, or `None` if not applicable.
-    fn get_window_type(&self) -> Option<WindowType>;
-
     /// Retrieves the synchronization ID associated with the inventory interaction.
     ///
     /// # Returns
     /// A `u16` representing the synchronization ID for the inventory interaction.
-    fn get_sync_id(&self) -> u16;
+    fn get_sync_id(&self) -> u8;
 }

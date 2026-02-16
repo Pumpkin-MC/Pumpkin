@@ -44,15 +44,7 @@ use pumpkin_protocol::java::client::play::{
     CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot, CSystemChatMessage,
     CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
 };
-use pumpkin_protocol::java::server::play::{
-    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
-    SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
-    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
-    SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
-    SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
-    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
-    SUpdateSign, SUseItem, SUseItemOn, Status,
-};
+use pumpkin_protocol::java::server::play::{Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status, SlotActionType};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
@@ -63,6 +55,7 @@ use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
+use crate::plugin::player::inventory::inventory_click_event::PlayerInventoryClickEvent;
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -1848,48 +1841,84 @@ impl JavaClient {
         let is_legal =
             item_stack.is_empty() || item_stack.item_count <= item_stack.get_max_stack_size();
 
+        let server = player.world().server.upgrade().unwrap();
+        let player_arc = server.get_player_by_uuid(player.gameprofile.id).unwrap();
+
         if valid_slot && is_legal {
             let mut player_screen_handler = player.player_screen_handler.lock().await;
 
-            let is_armor_equipped = player_screen_handler
+            let clicked_slot_stack = player_screen_handler
                 .get_slot(packet.slot as usize)
-                .get_stack()
-                .await
-                .lock()
-                .await
-                .are_equal(&item_stack);
-            if !is_armor_equipped {
-                if (5..9).contains(&packet.slot) {
-                    player
-                        .enqueue_equipment_change(
-                            &match packet.slot {
-                                5 => EquipmentSlot::HEAD,
-                                6 => EquipmentSlot::CHEST,
-                                7 => EquipmentSlot::LEGS,
-                                8 => EquipmentSlot::FEET,
-                                _ => unreachable!(),
-                            },
-                            &item_stack,
-                        )
-                        .await;
-                } else if (36..45).contains(&packet.slot) {
-                    let slot = packet.slot - 36;
-                    if player.inventory().get_selected_slot() == slot as u8 {
-                        let equipment = &[(EquipmentSlot::MAIN_HAND, item_stack.clone())];
-                        player.living_entity.send_equipment_changes(equipment).await;
-                    }
-                }
-            }
-
-            player_screen_handler
-                .get_slot(packet.slot as usize)
-                .set_stack(item_stack.clone())
+                .get_cloned_stack()
                 .await;
-            player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
-            player_screen_handler.send_content_updates().await;
-            drop(player_screen_handler);
+
+            let identifier = player_screen_handler
+                .get_behaviour()
+                .get_identifier()
+                .to_string();
+            let sync_id = player_screen_handler.sync_id();
+
+            let event = PlayerInventoryClickEvent::new(
+                player_arc,
+                identifier,
+                i32::from(packet.slot),
+                0,
+                SlotActionType::Clone,
+                item_stack.clone(),
+                clicked_slot_stack,
+                None,
+                sync_id,
+                true,
+            );
+
+            send_cancellable! {{
+                server;
+                event;
+                'after: {
+                    let is_armor_equipped = player_screen_handler
+                        .get_slot(packet.slot as usize)
+                        .get_stack()
+                        .await
+                        .lock()
+                        .await
+                        .are_equal(&item_stack);
+                    if !is_armor_equipped {
+                        if (5..9).contains(&packet.slot) {
+                            player
+                                .enqueue_equipment_change(
+                                    &match packet.slot {
+                                        5 => EquipmentSlot::HEAD,
+                                        6 => EquipmentSlot::CHEST,
+                                        7 => EquipmentSlot::LEGS,
+                                        8 => EquipmentSlot::FEET,
+                                        _ => unreachable!(),
+                                    },
+                                    &item_stack,
+                                )
+                                .await;
+                        } else if (36..45).contains(&packet.slot) {
+                            let slot = packet.slot - 36;
+                            if player.inventory().get_selected_slot() == slot as u8 {
+                                let equipment = &[(EquipmentSlot::MAIN_HAND, item_stack.clone())];
+                                player.living_entity.send_equipment_changes(equipment).await;
+                            }
+                        }
+                    }
+
+                    player_screen_handler
+                        .get_slot(packet.slot as usize)
+                        .set_stack(item_stack.clone())
+                        .await;
+                    player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
+                    player_screen_handler.send_content_updates().await;
+                    drop(player_screen_handler);
+                };
+                'cancelled: {
+                    player_screen_handler.sync_state().await;
+                    return Ok(());
+                }
+            }}
         } else if is_negative && is_legal {
-            // Item drop
             player.drop_item(item_stack).await;
         }
         Ok(())

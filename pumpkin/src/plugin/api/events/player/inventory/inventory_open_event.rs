@@ -8,12 +8,12 @@ use pumpkin_macros::{Event, cancellable};
 #[derive(Event, Clone)]
 pub struct InventoryOpenEvent {
     pub player: Arc<Player>,
-    pub window_type: Option<WindowType>, // Know if it's chest/furnace/etc
-    pub sync_id: u16,
+    pub window_type: Option<WindowType>,
+    pub sync_id: u8,
 }
 
 impl InventoryOpenEvent {
-    pub const fn new(player: Arc<Player>, window_type: Option<WindowType>, sync_id: u16) -> Self {
+    pub const fn new(player: Arc<Player>, window_type: Option<WindowType>, sync_id: u8) -> Self {
         Self {
             player,
             window_type,
@@ -21,18 +21,18 @@ impl InventoryOpenEvent {
             cancelled: false,
         }
     }
+
+    #[must_use]
+     pub const fn get_window_type(&self) -> Option<WindowType> {
+        self.window_type
+    }
 }
 
 impl PlayerInventoryEvent for InventoryOpenEvent {
     fn get_player(&self) -> &std::sync::Arc<crate::entity::player::Player> {
         &self.player
     }
-
-    fn get_window_type(&self) -> Option<pumpkin_data::screen::WindowType> {
-        self.window_type
-    }
-
-    fn get_sync_id(&self) -> u16 {
+    fn get_sync_id(&self) -> u8 {
         self.sync_id
     }
 }

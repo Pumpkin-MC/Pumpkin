@@ -28,7 +28,6 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
-
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
@@ -99,6 +98,9 @@ use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
 use pumpkin_world::chunk_system::ChunkLoading;
+use crate::plugin::player::inventory::inventory_close_event::InventoryCloseEvent;
+use crate::plugin::player::inventory::inventory_open_event::InventoryOpenEvent;
+
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
@@ -2579,6 +2581,12 @@ impl Player {
         let current_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
             self.current_screen_handler.lock().await.clone();
 
+        let guard = current_screen_handler.lock().await;
+        let identifier = guard.get_behaviour().identifier.clone();
+        let window_type = guard.window_type();
+        let sync_id = guard.sync_id();
+        drop(guard);
+
         if !Arc::ptr_eq(&player_screen_handler, &current_screen_handler) {
             player_screen_handler
                 .lock()
@@ -2589,6 +2597,16 @@ impl Player {
 
         *self.current_screen_handler.lock().await = self.player_screen_handler.clone();
         self.open_container_pos.store(None);
+
+        let server = self.world().server.upgrade().unwrap();
+        let player = server.get_player_by_uuid(self.gameprofile.id).unwrap();
+        let event = InventoryCloseEvent {
+            player,
+            identifier,
+            window_type,
+            sync_id
+        };
+        server.plugin_manager.fire(event).await;
     }
 
     pub async fn on_screen_handler_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
@@ -2608,49 +2626,74 @@ impl Player {
         screen_handler_factory: &dyn ScreenHandlerFactory,
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
-        if !self
-            .current_screen_handler
-            .lock()
-            .await
-            .lock()
-            .await
-            .as_any()
-            .is::<PlayerScreenHandler>()
-        {
-            self.close_handled_screen().await;
-        }
 
-        self.increment_screen_handler_sync_id();
+        let server = self.world().server.upgrade().unwrap();
+        let sync_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
+        let window_type = self.current_screen_handler.lock().await.lock().await.get_behaviour().window_type;
 
-        if let Some(screen_handler) = screen_handler_factory
-            .create_screen_handler(
-                self.screen_handler_sync_id.load(Ordering::Relaxed),
-                &self.inventory,
-                self,
-            )
-            .await
-        {
-            let screen_handler_temp = screen_handler.lock().await;
-            self.client
-                .enqueue_packet(&COpenScreen::new(
-                    screen_handler_temp.sync_id().into(),
-                    (screen_handler_temp
-                        .window_type()
-                        .expect("Can't open PlayerScreenHandler") as i32)
-                        .into(),
-                    &screen_handler_factory.get_display_name(),
-                ))
-                .await;
-            drop(screen_handler_temp);
-            self.on_screen_handler_opened(screen_handler.clone()).await;
-            *self.current_screen_handler.lock().await = screen_handler;
-            self.open_container_pos.store(block_pos);
-            Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
-        } else {
-            //TODO: Send message if spectator
+        // i need a Arc<Player> not Arc<&Player>
+        let player = server.get_player_by_uuid(self.gameprofile.id).unwrap();
+        let event = InventoryOpenEvent {
+            player,
+            window_type,
+            sync_id,
+            cancelled: false,
+        };
 
-            None
-        }
+        send_cancellable!{{
+            server;
+            event;
+            'after: {
+                if !self
+                    .current_screen_handler
+                    .lock()
+                    .await
+                    .lock()
+                    .await
+                    .as_any()
+                    .is::<PlayerScreenHandler>()
+                {
+                    self.close_handled_screen().await;
+                }
+
+                self.increment_screen_handler_sync_id();
+
+                if let Some(screen_handler) = screen_handler_factory
+                    .create_screen_handler(
+                        self.screen_handler_sync_id.load(Ordering::Relaxed),
+                        &self.inventory,
+                        self,
+                    )
+                    .await
+                {
+                    let screen_handler_temp = screen_handler.lock().await;
+                    self.client
+                        .enqueue_packet(&COpenScreen::new(
+                            screen_handler_temp.sync_id().into(),
+                            (screen_handler_temp
+                                .window_type()
+                                .expect("Can't open PlayerScreenHandler") as i32)
+                                .into(),
+                            &screen_handler_factory.get_display_name(),
+                        ))
+                        .await;
+                    drop(screen_handler_temp);
+                    self.on_screen_handler_opened(screen_handler.clone()).await;
+                    *self.current_screen_handler.lock().await = screen_handler;
+                    self.open_container_pos.store(block_pos);
+                    Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
+                } else {
+                    //TODO: Send message if spectator
+
+                    None
+                }
+            };
+            'cancelled: {
+                // do nothing
+                None
+            };
+        }}
+
     }
 
     pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot) {
@@ -2658,6 +2701,7 @@ impl Player {
         let screen_handler = self.current_screen_handler.lock().await;
         let mut screen_handler = screen_handler.lock().await;
         let behaviour = screen_handler.get_behaviour();
+
 
         // behaviour is dropped here
         if i32::from(behaviour.sync_id) != packet.sync_id.0 {
@@ -2709,22 +2753,17 @@ impl Player {
             ItemStack::EMPTY.clone()
         };
 
-        tracing::info!(
-            "Firing PlayerInventoryClickEvent: slot={}, button={}, mode={:?}",
-            i32::from(slot),
-            i32::from(packet.button),
-            packet.mode
-        );
 
         let event = PlayerInventoryClickEvent::new(
             self.clone(),
+            screen_handler.get_behaviour().get_identifier().to_string(),
             i32::from(slot),
             i32::from(packet.button),
             packet.mode.clone(),
             cursor_stack.clone(),
             clicked_slot_stack.clone(),
             screen_handler.window_type(),
-            screen_handler.sync_id() as u16,
+            screen_handler.sync_id(),
             screen_handler.window_type().is_none(),
         );
 
@@ -2732,7 +2771,6 @@ impl Player {
             server;
             event;
             'after: {
-                tracing::info!("PlayerInventoryClickEvent not cancelled, processing click");
                 screen_handler.disable_sync();
                 screen_handler
                     .on_slot_click(
@@ -2758,21 +2796,9 @@ impl Player {
                 }
             };
             'cancelled: {
-                tracing::info!("PlayerInventoryClickEvent cancelled, reverting client state");
-                if i32::from(slot) >= 0 && (slot as usize) < screen_handler.get_behaviour().slots.len()
-                {
-                    screen_handler
-                        .check_slot_updates(slot as usize, clicked_slot_stack)
-                        .await;
-                }
-                screen_handler.check_cursor_stack_updates().await;
-                return;
+                screen_handler.sync_state().await;
             }
         }}
-        //tracing::info!(
-        //    "PlayerInventoryClickEvent fired, cancelled={}",
-        //    event.cancelled
-        //);
     }
 
     /// Check if the player has a specific permission

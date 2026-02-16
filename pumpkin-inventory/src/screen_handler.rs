@@ -4,6 +4,7 @@ use crate::{
     slot::{NormalSlot, Slot},
     sync_handler::{SyncHandler, TrackedStack},
 };
+
 use pumpkin_data::{
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
@@ -27,6 +28,7 @@ use pumpkin_world::{
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
 use std::{cmp::max, pin::Pin};
+use std::hash::{BuildHasher, Hasher, RandomState};
 use tokio::sync::Mutex;
 use tracing::warn;
 
@@ -1060,11 +1062,27 @@ pub struct ScreenHandlerBehaviour {
     pub tracked_property_values: Vec<i32>,
     pub window_type: Option<WindowType>,
     pub drag_slots: Vec<u32>,
+
+    // Note from insilicon
+    // I plan on expanding the ease and ability of inventory use for plugin developers.
+    // A few little things need to be added for these events like the identifier.
+    // This identifier is set to a random 16 character string which can be used to identify inventories.
+    pub identifier: String,
 }
 
 impl ScreenHandlerBehaviour {
     #[must_use]
     pub fn new(sync_id: u8, window_type: Option<WindowType>) -> Self {
+
+        // Creation of the identifier, this allows plugin developers to distinguish between inventories.
+        let random_state = RandomState::new();
+        let mut hasher = random_state.build_hasher();
+        hasher.write_u64(std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64);
+        let identifier_hash = format!("{:x}", hasher.finish());
+
         Self {
             slots: Vec::new(),
             sync_id,
@@ -1080,11 +1098,16 @@ impl ScreenHandlerBehaviour {
             tracked_property_values: Vec::new(),
             window_type,
             drag_slots: Vec::new(),
+            identifier: identifier_hash,
         }
     }
 
     pub fn next_revision(&self) -> u32 {
         self.revision.fetch_add(1, Ordering::Relaxed);
         self.revision.fetch_and(32767, Ordering::Relaxed) & 32767
+    }
+
+    pub fn get_identifier(&self) -> &str {
+        &self.identifier
     }
 }

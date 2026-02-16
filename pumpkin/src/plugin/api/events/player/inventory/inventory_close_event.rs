@@ -7,17 +7,29 @@ use pumpkin_macros::Event;
 #[derive(Event, Clone)]
 pub struct InventoryCloseEvent {
     pub player: Arc<Player>,
+    pub identifier: String,
     pub window_type: Option<WindowType>, // Know if it's chest/furnace/etc
-    pub sync_id: u16,
+    pub sync_id: u8,
 }
 
 impl InventoryCloseEvent {
-    pub const fn new(player: Arc<Player>, window_type: Option<WindowType>, sync_id: u16) -> Self {
+    pub const fn new(player: Arc<Player>,identifier: String, window_type: Option<WindowType>, sync_id: u8) -> Self {
         Self {
             player,
+            identifier,
             window_type,
             sync_id,
         }
+    }
+
+    #[allow(unused)]
+    const fn get_window_type(&self) -> Option<pumpkin_data::screen::WindowType> {
+        self.window_type
+    }
+
+    #[allow(unused)]
+    fn get_identifier(&self) -> &str {
+        &self.identifier
     }
 }
 
@@ -26,11 +38,9 @@ impl PlayerInventoryEvent for InventoryCloseEvent {
         &self.player
     }
 
-    fn get_window_type(&self) -> Option<pumpkin_data::screen::WindowType> {
-        self.window_type
-    }
 
-    fn get_sync_id(&self) -> u16 {
+    fn get_sync_id(&self) -> u8 {
         self.sync_id
     }
+
 }
