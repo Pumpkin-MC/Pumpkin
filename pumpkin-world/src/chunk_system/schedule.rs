@@ -8,6 +8,7 @@ use super::{
     ChunkLevel, ChunkListener, ChunkLoading, ChunkPos, HashMapType, HashSetType, IOLock,
     LevelChannel,
 };
+use crate::chunk::io::Dirtiable;
 use crate::level::{Level, SyncChunk};
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -431,7 +432,7 @@ impl GenerationSchedule {
                 match chunk {
                     Chunk::Level(sync_chunk) => {
                         // Only save level chunks that are marked dirty
-                        if sync_chunk.dirty.load(Relaxed) {
+                        if sync_chunk.is_dirty() {
                             chunks.push((*pos, Chunk::Level(sync_chunk.clone())));
                         }
                     }

@@ -250,6 +250,7 @@ macro_rules! impl_clearable_for_cooking {
                     for slot in self.items.iter() {
                         *slot.lock().await = ItemStack::EMPTY.clone();
                     }
+                    self.mark_dirty();
                 })
             }
         }
@@ -304,6 +305,7 @@ macro_rules! impl_inventory_for_cooking {
                     let mut removed = ItemStack::EMPTY.clone();
                     let mut guard = self.items[slot].lock().await;
                     std::mem::swap(&mut removed, &mut *guard);
+                    self.mark_dirty();
                     removed
                 })
             }
@@ -313,9 +315,11 @@ macro_rules! impl_inventory_for_cooking {
                 slot: usize,
                 amount: u8,
             ) -> $crate::inventory::InventoryFuture<'_, ItemStack> {
-                Box::pin(
-                    async move { $crate::inventory::split_stack(&self.items, slot, amount).await },
-                )
+                Box::pin(async move {
+                    let res = $crate::inventory::split_stack(&self.items, slot, amount).await;
+                    self.mark_dirty();
+                    res
+                })
             }
 
             fn set_stack(
@@ -347,6 +351,8 @@ macro_rules! impl_inventory_for_cooking {
                         self.set_cooking_time_spent(0);
                         self.mark_dirty();
                     }
+                    // Always consider the inventory changed when setting a stack
+                    self.mark_dirty();
                 })
             }
 
@@ -490,7 +496,7 @@ macro_rules! impl_block_entity_for_cooking {
                     }
 
                     if is_dirty {
-                        self.is_dirty();
+                        self.mark_dirty();
                     }
                 })
             }

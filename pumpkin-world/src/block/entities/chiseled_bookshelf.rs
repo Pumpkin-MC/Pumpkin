@@ -159,17 +159,23 @@ impl Inventory for ChiseledBookshelfBlockEntity {
             let mut removed = ItemStack::EMPTY.clone();
             let mut guard = self.items[slot].lock().await;
             std::mem::swap(&mut removed, &mut *guard);
+            self.mark_dirty();
             removed
         })
     }
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move { split_stack(&self.items, slot, amount).await })
+        Box::pin(async move {
+            let res = split_stack(&self.items, slot, amount).await;
+            self.mark_dirty();
+            res
+        })
     }
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
             *self.items[slot].lock().await = stack;
+            self.mark_dirty();
         })
     }
 
@@ -188,6 +194,7 @@ impl Clearable for ChiseledBookshelfBlockEntity {
             for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
+            self.mark_dirty();
         })
     }
 }

@@ -14,8 +14,6 @@ pub type InventoryFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub trait Inventory: Send + Sync + Clearable {
     fn size(&self) -> usize;
 
-    // --- Asynchronous Methods (Using BlockFuture) ---
-
     fn is_empty(&self) -> InventoryFuture<'_, bool>;
 
     fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>>;

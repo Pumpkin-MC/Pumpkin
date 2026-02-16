@@ -61,6 +61,11 @@ macro_rules! impl_block_entity_for_chest {
                 self.dirty.load(std::sync::atomic::Ordering::Relaxed)
             }
 
+            fn clear_dirty(&self) {
+                self.dirty
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+            }
+
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }
@@ -104,6 +109,7 @@ macro_rules! impl_inventory_for_chest {
                     let mut removed = ItemStack::EMPTY.clone();
                     let mut guard = self.items[slot].lock().await;
                     std::mem::swap(&mut removed, &mut *guard);
+                    self.mark_dirty();
                     removed
                 })
             }
@@ -113,9 +119,11 @@ macro_rules! impl_inventory_for_chest {
                 slot: usize,
                 amount: u8,
             ) -> $crate::inventory::InventoryFuture<'_, ItemStack> {
-                Box::pin(
-                    async move { $crate::inventory::split_stack(&self.items, slot, amount).await },
-                )
+                Box::pin(async move {
+                    let res = $crate::inventory::split_stack(&self.items, slot, amount).await;
+                    self.mark_dirty();
+                    res
+                })
             }
 
             fn set_stack(
@@ -125,6 +133,7 @@ macro_rules! impl_inventory_for_chest {
             ) -> $crate::inventory::InventoryFuture<'_, ()> {
                 Box::pin(async move {
                     *self.items[slot].lock().await = stack;
+                    self.mark_dirty();
                 })
             }
 
@@ -163,6 +172,7 @@ macro_rules! impl_clearable_for_chest {
                     for slot in &self.items {
                         *slot.lock().await = ItemStack::EMPTY.clone();
                     }
+                    <$struct_name as $crate::inventory::Inventory>::mark_dirty(self);
                 })
             }
         }
