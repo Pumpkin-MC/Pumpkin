@@ -740,7 +740,7 @@ impl DataComponentImpl for PotionContentsImpl {
 
     fn get_hash(&self) -> i32 {
         let mut digest = Digest::new(Crc32Iscsi);
-        
+
         if let Some(id) = self.potion_id {
             digest.update(&[1u8]);
             digest.update(&get_i32_hash(id).to_le_bytes());
@@ -757,17 +757,17 @@ impl DataComponentImpl for PotionContentsImpl {
         }
 
         if !self.custom_effects.is_empty() {
-             digest.update(&[4u8]);
-             for effect in &self.custom_effects {
-                 digest.update(&get_i32_hash(effect.effect_id).to_le_bytes());
-                 digest.update(&get_i32_hash(effect.amplifier).to_le_bytes());
-                 digest.update(&get_i32_hash(effect.duration).to_le_bytes());
-                 digest.update(&[effect.ambient as u8]);
-                 digest.update(&[effect.show_particles as u8]);
-                 digest.update(&[effect.show_icon as u8]);
-             }
+            digest.update(&[4u8]);
+            for effect in &self.custom_effects {
+                digest.update(&get_i32_hash(effect.effect_id).to_le_bytes());
+                digest.update(&get_i32_hash(effect.amplifier).to_le_bytes());
+                digest.update(&get_i32_hash(effect.duration).to_le_bytes());
+                digest.update(&[effect.ambient as u8]);
+                digest.update(&[effect.show_particles as u8]);
+                digest.update(&[effect.show_icon as u8]);
+            }
         }
-        
+
         digest.finalize() as i32
     }
 
