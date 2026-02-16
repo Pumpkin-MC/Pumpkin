@@ -2654,12 +2654,7 @@ impl Player {
 
         // i need a Arc<Player> not Arc<&Player>
         let player = server.get_player_by_uuid(self.gameprofile.id).unwrap();
-        let event = InventoryOpenEvent {
-            player,
-            window_type,
-            sync_id,
-            cancelled: false,
-        };
+        let event = InventoryOpenEvent::new(player, window_type, sync_id);
 
         send_cancellable! {{
             server;
