@@ -38,9 +38,8 @@ macro_rules! impl_block_entity_for_chest {
             ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
                 use $crate::inventory::Inventory;
 
-                Box::pin(async move {
-                    self.write_data(nbt, &self.items, true).await;
-                })
+                // Write inventory data to NBT
+                self.write_inventory_nbt(nbt, true)
             }
 
             fn tick<'a>(

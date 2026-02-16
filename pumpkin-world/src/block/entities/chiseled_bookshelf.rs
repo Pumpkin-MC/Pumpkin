@@ -63,7 +63,10 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
         nbt: &'a mut NbtCompound,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            self.write_data(nbt, &self.items, true).await;
+            // Write inventory data to NBT
+            self.write_inventory_nbt(nbt, true).await;
+
+            // Save last interacted slot
             nbt.put_int(
                 LAST_INTERACTED_SLOT,
                 self.last_interacted_slot.load(Ordering::Relaxed).into(),

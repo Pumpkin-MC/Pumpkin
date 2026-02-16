@@ -557,6 +557,7 @@ macro_rules! impl_block_entity_for_cooking {
                     nbt.put_short("cooking_time_spent", self.get_cooking_time_spent() as i16);
                     nbt.put_short("lit_total_time", self.get_lit_total_time() as i16);
                     nbt.put_short("lit_time_remaining", self.get_lit_time_remaining() as i16);
+
                     // Save RecipesUsed in vanilla format (map of recipe ID -> craft count)
                     // Scope the mutex guard so it's dropped before the await
                     {
@@ -575,7 +576,8 @@ macro_rules! impl_block_entity_for_cooking {
                             );
                         }
                     }
-                    self.write_data(nbt, &self.items, true).await;
+
+                    self.write_inventory_nbt(nbt, true).await;
                 })
             }
 
