@@ -49,6 +49,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
+        PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -648,6 +649,53 @@ pub struct PotionContentsImpl {
     pub custom_name: Option<String>,
 }
 
+impl PotionContentsImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let compound = tag.extract_compound()?;
+        let potion_id = if let Some(id) = compound.get_int("potion") {
+            Some(id)
+        } else if let Some(name) = compound.get_string("potion") {
+            // Handle "minecraft:swiftness" -> "swiftness"
+            let name = name.strip_prefix("minecraft:").unwrap_or(name);
+            crate::potion::Potion::from_name(name).map(|p| p.id as i32)
+        } else {
+            None
+        };
+
+        let custom_color = compound.get_int("custom_color");
+        let custom_name = compound.get_string("custom_name").map(|s| s.to_string());
+
+        let mut custom_effects = Vec::new();
+        if let Some(list) = compound.get_list("custom_effects") {
+            for item in list {
+                let effect_tag = item.extract_compound()?;
+                let id = effect_tag.get_int("id")?;
+                let amplifier = effect_tag.get_int("amplifier").unwrap_or(0);
+                let duration = effect_tag.get_int("duration").unwrap_or(0);
+                let ambient = effect_tag.get_byte("ambient").unwrap_or(0) != 0;
+                let show_particles = effect_tag.get_byte("show_particles").unwrap_or(1) != 0;
+                let show_icon = effect_tag.get_byte("show_icon").unwrap_or(1) != 0;
+
+                custom_effects.push(StatusEffectInstance {
+                    effect_id: id,
+                    amplifier,
+                    duration,
+                    ambient,
+                    show_particles,
+                    show_icon,
+                });
+            }
+        }
+
+        Some(Self {
+            potion_id,
+            custom_color,
+            custom_effects,
+            custom_name,
+        })
+    }
+}
+
 impl DataComponentImpl for PotionContentsImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
@@ -680,6 +728,39 @@ impl DataComponentImpl for PotionContentsImpl {
         }
 
         NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        
+        if let Some(id) = self.potion_id {
+            digest.update(&[1u8]);
+            digest.update(&get_i32_hash(id).to_le_bytes());
+        }
+
+        if let Some(color) = self.custom_color {
+            digest.update(&[2u8]);
+            digest.update(&get_i32_hash(color).to_le_bytes());
+        }
+
+        if let Some(name) = &self.custom_name {
+            digest.update(&[3u8]);
+            digest.update(&get_str_hash(name).to_le_bytes());
+        }
+
+        if !self.custom_effects.is_empty() {
+             digest.update(&[4u8]);
+             for effect in &self.custom_effects {
+                 digest.update(&get_i32_hash(effect.effect_id).to_le_bytes());
+                 digest.update(&get_i32_hash(effect.amplifier).to_le_bytes());
+                 digest.update(&get_i32_hash(effect.duration).to_le_bytes());
+                 digest.update(&[effect.ambient as u8]);
+                 digest.update(&[effect.show_particles as u8]);
+                 digest.update(&[effect.show_icon as u8]);
+             }
+        }
+        
+        digest.finalize() as i32
     }
 
     default_impl!(PotionContents);
