@@ -2,6 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_COMMAND;
 use pumpkin_macros::java_packet;
+use pumpkin_util::version::MinecraftVersion;
 
 use crate::{
     ServerPacket,
@@ -46,9 +47,7 @@ impl TryFrom<i32> for Action {
 }
 
 impl ServerPacket for SPlayerCommand {
-    fn read(read: impl Read) -> Result<Self, ReadingError> {
-        let mut read = read;
-
+    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             entity_id: read.get_var_int()?,
             action: read.get_var_int()?,

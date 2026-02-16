@@ -76,7 +76,10 @@ impl ClientPacket for CPlayerPosition {
 }
 
 impl ServerPacket for CPlayerPosition {
-    fn read(mut read: impl std::io::Read) -> Result<Self, crate::ser::ReadingError> {
+    fn read(
+        mut read: impl std::io::Read,
+        _version: &MinecraftVersion,
+    ) -> Result<Self, crate::ser::ReadingError> {
         Ok(Self {
             teleport_id: read.get_var_int()?,
             // TODO
