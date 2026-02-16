@@ -667,33 +667,43 @@ impl PotionContentsImpl {
         let custom_color = compound.get_int("custom_color");
         let custom_name = compound.get_string("custom_name").map(|s| s.to_string());
 
-        let mut custom_effects = Vec::new();
-        if let Some(list) = compound.get_list("custom_effects") {
-            for item in list {
-                let effect_tag = item.extract_compound()?;
-                let id = effect_tag.get_int("id")?;
-                let amplifier = effect_tag
-                    .get_int("amplifier")
-                    .or_else(|| effect_tag.get_byte("amplifier").map(i32::from))
-                    .unwrap_or(0);
-                let duration = effect_tag
-                    .get_int("duration")
-                    .or_else(|| effect_tag.get_byte("duration").map(i32::from))
-                    .unwrap_or(0);
-                let ambient = effect_tag.get_bool("ambient").unwrap_or(false);
-                let show_particles = effect_tag.get_bool("show_particles").unwrap_or(true);
-                let show_icon = effect_tag.get_bool("show_icon").unwrap_or(true);
+        let custom_effects = compound
+            .get_list("custom_effects")
+            .map(|list| {
+                list.iter()
+                    .filter_map(|item| {
+                        // Try to get the compound for this specific effect
+                        let effect_tag = item.extract_compound()?;
 
-                custom_effects.push(StatusEffectInstance {
-                    effect_id: id,
-                    amplifier,
-                    duration,
-                    ambient,
-                    show_particles,
-                    show_icon,
-                });
-            }
-        }
+                        // Try to get the ID
+                        let id = effect_tag.get_int("id")?;
+
+                        // Fallback values for optional fields
+                        let amplifier = effect_tag
+                            .get_int("amplifier")
+                            .or_else(|| effect_tag.get_byte("amplifier").map(i32::from))
+                            .unwrap_or(0);
+                        let duration = effect_tag
+                            .get_int("duration")
+                            .or_else(|| effect_tag.get_byte("duration").map(i32::from))
+                            .unwrap_or(0);
+                        let ambient = effect_tag.get_bool("ambient").unwrap_or(false);
+                        let show_particles = effect_tag.get_bool("show_particles").unwrap_or(true);
+                        let show_icon = effect_tag.get_bool("show_icon").unwrap_or(true);
+
+                        // Create the StatusEffectInstance
+                        Some(StatusEffectInstance {
+                            effect_id: id,
+                            amplifier,
+                            duration,
+                            ambient,
+                            show_particles,
+                            show_icon,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
 
         Some(Self {
             potion_id,
