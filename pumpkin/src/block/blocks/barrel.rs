@@ -60,7 +60,7 @@ impl BlockBehaviour for BarrelBlock {
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
-                    .open_handled_screen(&BarrelScreenFactory(inventory))
+                    .open_handled_screen(&BarrelScreenFactory(inventory), Some(*args.position))
                     .await;
             }
 

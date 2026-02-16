@@ -21,6 +21,7 @@ use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_protocol::java::server::play::SUseItemOn;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -161,6 +162,13 @@ pub trait BlockBehaviour: Send + Sync {
         _args: GetComparatorOutputArgs<'a>,
     ) -> BlockFuture<'a, Option<u8>> {
         Box::pin(async move { None })
+    }
+
+    fn get_inside_collision_shape<'a>(
+        &'a self,
+        _args: GetInsideCollisionShapeArgs<'a>,
+    ) -> BlockFuture<'a, BoundingBox> {
+        Box::pin(async move { BoundingBox::full_block() })
     }
 }
 
@@ -338,6 +346,13 @@ pub struct GetRedstonePowerArgs<'a> {
 }
 
 pub struct GetComparatorOutputArgs<'a> {
+    pub world: &'a World,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+}
+
+pub struct GetInsideCollisionShapeArgs<'a> {
     pub world: &'a World,
     pub block: &'a Block,
     pub state: &'a BlockState,

@@ -11,14 +11,19 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-//pub mod skeleton;
+pub mod bogged;
+pub mod parched;
+#[allow(clippy::module_inception)]
+pub mod skeleton;
+pub mod stray;
+pub mod wither;
 
 pub struct SkeletonEntityBase {
     pub mob_entity: MobEntity,
 }
 
 impl SkeletonEntityBase {
-    pub async fn make(entity: Entity) -> Arc<Self> {
+    pub async fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let mob = Self { mob_entity };
         let mob_arc = Arc::new(mob);
