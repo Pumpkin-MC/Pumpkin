@@ -230,7 +230,7 @@ impl DynamicOps for NbtOps {
     {
         if !matches!(map, NbtTag::Compound(_) | NbtTag::End) {
             DataResult::partial_error(format!("Not a map: {map}"), map)
-        } else if !matches!(key, NbtTag::Compound(_)) {
+        } else if !matches!(key, NbtTag::String(_)) {
             DataResult::partial_error(format!("Key is not a string: {key}"), map)
         } else {
             let mut compound = if let NbtTag::Compound(c) = map {
@@ -286,7 +286,7 @@ impl DynamicOps for NbtOps {
                 compound
                     .child_tags
                     .into_iter()
-                    .filter(|s| s.0 == key)
+                    .filter(|s| s.0 != key)
                     .collect(),
             )
         } else {
