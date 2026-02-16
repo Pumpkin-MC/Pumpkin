@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockState, damage::DamageType, entity::EntityType};
+use pumpkin_util::GameMode; // Added GameMode for spectator check
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use rustc_hash::FxHashMap;
 
@@ -80,33 +81,7 @@ impl Explosion {
 
     async fn damage_entities(&self, world: &Arc<World>) {
         // Explosion is too small
-        if self.power < 1.0e-5 {
-            return;
-        }
-
-        let radius = self.power as f64 * 2.0;
-        let min_x = (self.pos.x - radius - 1.0).floor() as i32;
-        let max_x = (self.pos.x + radius + 1.0).floor() as i32;
-        let min_y = (self.pos.y - radius - 1.0).floor() as i32;
-        let max_y = (self.pos.y + radius + 1.0).floor() as i32;
-        let min_z = (self.pos.z - radius - 1.0).floor() as i32;
-        let max_z = (self.pos.z + radius + 1.0).floor() as i32;
-
-        let search_box = BoundingBox::new(
-            Vector3::new(min_x as f64, min_y as f64, min_z as f64),
-            Vector3::new(max_x as f64, max_y as f64, max_z as f64),
-        );
-
-        let entities = world.get_all_at_box(&search_box);
-
-        for entity_base in entities {
-            if entity_base.is_immune_to_explosion() {
-                continue;
-            }
-            let entity = entity_base.get_entity();
-
-            let distance = (entity.pos.load().squared_distance_to_vec(&self.pos)).sqrt() / radius;
-            if distance > 1.0 {
+        if self.power  1.0 {
                 continue;
             }
 
@@ -229,7 +204,6 @@ impl Explosion {
                     .await;
             }
         }
-        // TODO: fire
         blocks.len() as u32
     }
 }
