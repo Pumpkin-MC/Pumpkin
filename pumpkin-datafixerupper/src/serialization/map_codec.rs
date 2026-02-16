@@ -25,7 +25,7 @@ use std::fmt::Display;
 /// The number of keys a `MapCodec` can work with can be one or many keys.
 ///
 /// **This is functionally different from [`Codec`].**
-/// The main difference is that while `Codec` works on encoded/decoded values, a `MapCodec`
+/// The main difference is that while a `Codec` works on encoding/decoding values, a `MapCodec`
 /// works on a [`MapLike`].
 ///
 /// # Using Map Codecs
@@ -49,9 +49,9 @@ use std::fmt::Display;
 /// - [`flat_xmap`]
 ///
 /// ## Validator Map Codecs
-/// The [`validate`] function is a special case of the `flat_xmap` transformer method.
-/// It validates a value before encoding and after decoding using a function
-/// that can either return a [`DataResult`] success or error.
+/// The [`validate`] function returns a codec wrapper that validates a value before encoding and after decoding.
+/// A validated codec takes a function that can either return an [`Ok`] for a success,
+/// or an [`Err`] with the provided message to place in a `DataResult`.
 pub trait MapCodec: MapEncoder + MapDecoder {}
 
 // Any struct implementing MapEncoder<Value = A> and MapDecoder<Value = A> will also implement MapCodec<Value = A>.
@@ -165,7 +165,12 @@ macro_rules! make_map_codec_transformation_function {
     ($name:ident, $short_type:ident, $encoder_type:ident, $decoder_type:ident, $encoder_func:ident, $decoder_func:ident, $to_func_result:ty, $from_func_result:ty, $a_equivalency:literal, $s_equivalency:literal) => {
         pub type $short_type<S, C> = ComposedMapCodec<$encoder_type<S, C>, $decoder_type<S, C>>;
 
-        #[doc = "Transforms a [`MapCodec`] of type `A` to another [`MapCodec`] of type `S`. Use this if:"]
+        #[doc = "Transforms a [`MapCodec`] of type `A` to another [`MapCodec`] of type `S`."]
+        ///
+        /// - `to` is the function called on `A` after decoding to convert it to `S`.
+        /// - `from` is the function called on `S` before encoding to convert it to `A`.
+        ///
+        /// Use this if:
         #[doc = concat!("- `A` is **", $a_equivalency, "** to `S`.")]
         #[doc = concat!("- `S` is **", $s_equivalency, "** to `A`.")]
         #[doc = ""]

@@ -494,28 +494,27 @@ mod test {
     use crate::serialization::codecs::primitive::StringCodec;
     use crate::serialization::coders::{Decoder, Encoder};
     use crate::serialization::json_ops;
-    use crate::serialization::struct_codecs::{StructCodec2, StructCodec3, StructCodec5};
+    use crate::serialization::struct_codecs::StructCodec3;
     use crate::{assert_decode, struct_codec};
     use serde_json::json;
+    use crate::serialization::codecs::validated::ValidatedCodec;
 
-    #[test]
-    fn book_struct() {
-        #[derive(Debug, PartialEq)]
-        struct Book {
-            name: String,
-            author: String,
-            pages: u32,
-        }
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    pub struct Book {
+        name: String,
+        author: String,
+        pages: u32,
+    }
 
-        pub static BOOK_CODEC: StructCodec3<
-            Book,
-            FieldMapCodec<StringCodec>,
-            FieldMapCodec<StringCodec>,
-            FieldMapCodec<UnsignedIntCodec>,
-        > = struct_codec!(
+    pub static BOOK_CODEC: StructCodec3<
+        Book,
+        FieldMapCodec<StringCodec>,
+        FieldMapCodec<StringCodec>,
+        FieldMapCodec<UintCodec>,
+    > = struct_codec!(
             for_getter(field(&STRING_CODEC, "name"), |book: &Book| &book.name),
             for_getter(field(&STRING_CODEC, "author"), |book: &Book| &book.author),
-            for_getter(field(&UNSIGNED_INT_CODEC, "pages"), |book: &Book| &book
+            for_getter(field(&UINT_CODEC, "pages"), |book: &Book| &book
                 .pages),
             |name, author, pages| Book {
                 name,
@@ -524,6 +523,8 @@ mod test {
             }
         );
 
+    #[test]
+    fn book_struct() {
         let object = Book {
             name: "Sample Book".to_string(),
             author: "Sample Author".to_string(),
@@ -565,187 +566,154 @@ mod test {
 
     #[test]
     #[allow(clippy::too_many_lines)]
-    fn recipe_struct() {
-        // A struct for some arbitrary recipe.
+    fn bookshelf_struct() {
+        // A struct for a bookshelf.
         #[derive(Debug, PartialEq)]
-        struct Recipe {
-            id: String,
-            // This must have at least 1 ingredient.
-            ingredients: Vec<ItemStack>,
-            result: ItemStack,
-            crafting_time: u32,
-            experience: u32,
+        struct Bookshelf {
+            id: u32,
+            // Optional, defaults to no books.
+            books: Vec<Book>,
+            capacity: u32,
         }
 
-        // A struct for storing some items at 1 slot.
-        #[derive(Debug, PartialEq)]
-        struct ItemStack {
-            item: String,
-            // Optional field, defaults to 1
-            count: u8,
-        }
+        pub type UnvalidatedBookshelfCodec = StructCodec3<Bookshelf, FieldMapCodec<UintCodec>, DefaultedFieldCodec<ListCodec<StructCodec3<Book, FieldMapCodec<StringCodec>, FieldMapCodec<StringCodec>, FieldMapCodec<UintCodec>>>>, FieldMapCodec<UintCodec>>;
 
-        pub type ItemStackCodec = StructCodec2<
-            ItemStack,
-            FieldMapCodec<StringCodec>,
-            OptionalFieldWithDefaultMapCodec<UnsignedByteCodec>,
-        >;
-        pub static ITEM_STACK_CODEC: ItemStackCodec = struct_codec!(
-            for_getter(field(&STRING_CODEC, "item"), |i: &ItemStack| &i.item),
-            for_getter(
-                optional_field_with_default(&UNSIGNED_BYTE_CODEC, "count", || 1),
-                |i| &i.count
-            ),
-            |item, count| ItemStack { item, count }
+        static UNVALIDATED_BOOKSHELF_CODEC: UnvalidatedBookshelfCodec = struct_codec!(
+            for_getter(field(&UINT_CODEC, "id"), |b: &Bookshelf| &b.id),
+            for_getter(optional_field_with_default(&unbounded_list(&BOOK_CODEC), "books", Vec::new), |b: &Bookshelf| &b.books),
+            for_getter(field(&UINT_CODEC, "capacity"), |b: &Bookshelf| &b.capacity),
+            |id, books, capacity| Bookshelf { id, books, capacity }
         );
 
-        pub type RecipeCodec = StructCodec5<
-            Recipe,
-            FieldMapCodec<StringCodec>,
-            FieldMapCodec<ListCodec<ItemStackCodec>>,
-            FieldMapCodec<ItemStackCodec>,
-            FieldMapCodec<UnsignedIntCodec>,
-            FieldMapCodec<UnsignedIntCodec>,
-        >;
-        pub static RECIPE_CODEC: RecipeCodec = struct_codec!(
-            for_getter(field(&STRING_CODEC, "id"), |i: &Recipe| &i.id),
-            for_getter(
-                field(&list(&ITEM_STACK_CODEC, 1, usize::MAX), "ingredients"),
-                |i: &Recipe| &i.ingredients
-            ),
-            for_getter(field(&ITEM_STACK_CODEC, "result"), |i: &Recipe| &i.result),
-            for_getter(field(&UNSIGNED_INT_CODEC, "crafting_time"), |i: &Recipe| &i
-                .crafting_time),
-            for_getter(field(&UNSIGNED_INT_CODEC, "experience"), |i: &Recipe| &i
-                .experience),
-            |id, ingredients, result, crafting_time, experience| Recipe {
-                id,
-                ingredients,
-                result,
-                crafting_time,
-                experience
+        pub type BookshelfCodec = ValidatedCodec<UnvalidatedBookshelfCodec>;
+        pub static BOOKSHELF_CODEC: BookshelfCodec = validate(&UNVALIDATED_BOOKSHELF_CODEC, |b| {
+            // The number of books on the bookshelf must be less than or equal to its capacity.
+            if b.books.len() <= b.capacity as usize {
+                Ok(())
+            } else {
+                Err(format!("Bookshelf cannot have {} books because its capacity is {}", b.books.len(), b.capacity))
             }
-        );
+        });
 
-        // Encoding
-
-        let example = Recipe {
-            id: String::from("flint_and_steel_recipe"),
-            ingredients: vec![
-                ItemStack {
-                    item: String::from("flint"),
-                    count: 1,
+        let example = Bookshelf {
+            id: 1234,
+            books: vec![
+                Book {
+                    name: "Charlie and the Chocolate Factory".to_string(),
+                    author: "Roald Dahl".to_string(),
+                    pages: 192,
                 },
-                ItemStack {
-                    item: String::from("iron_ingot"),
-                    count: 1,
-                },
-            ],
-            result: ItemStack {
-                item: String::from("flint_and_steel"),
-                count: 1,
-            },
-            crafting_time: 2,
-            experience: 5,
-        };
-
-        assert_eq!(
-            RECIPE_CODEC
-                .encode_start(&example, &json_ops::INSTANCE)
-                .expect("Encoding panicked"),
-            json!(
-                {
-                    "id": "flint_and_steel_recipe",
-                    "ingredients": [
-                        // Since the counts of each are 1, the count will be omitted.
-                        { "item": "flint" },
-                        { "item": "iron_ingot" }
-                    ],
-                    // Same thing here.
-                    "result": { "item": "flint_and_steel" },
-                    "crafting_time": 2,
-                    "experience": 5
+                Book {
+                    name: "Infinibook".to_string(),
+                    author: "Infiniauthor".to_string(),
+                    pages: 1_000_000,
                 }
-            )
-        );
-
-        let example = Recipe {
-            id: String::from("combine_air"),
-            ingredients: vec![],
-            result: ItemStack {
-                item: String::from("bigger_air"),
-                count: 1,
-            },
-            crafting_time: 1,
-            experience: 1,
+            ],
+            capacity: 2,
         };
 
-        // This should error because there are no ingredients in the recipe.
-        assert!(
-            RECIPE_CODEC
-                .encode_start(&example, &json_ops::INSTANCE)
-                .get_message()
-                .expect("This DataResult should be an error")
-                .starts_with("List is too short")
-        );
-
-        // Decoding
-
         assert_eq!(
-            RECIPE_CODEC
-                .parse(
-                    json!({
-                        "id": "orange_dye_recipe",
-                        "ingredients": [
-                            // The codec will be able to substitute the default
-                            // count value for these items, which is 1.
-                            { "item": "red_dye" },
-                            { "item": "yellow_dye" }
-                        ],
-                        "result": { "item": "orange_dye", "count": 2 },
-                        "crafting_time": 10,
-                        "experience": 10
-                    }),
-                    &json_ops::INSTANCE
-                )
-                .expect("Decoding panicked"),
-            Recipe {
-                id: String::from("orange_dye_recipe"),
-                ingredients: vec![
-                    ItemStack {
-                        item: String::from("red_dye"),
-                        count: 1
+            BOOKSHELF_CODEC
+                .encode_start(&example, &json_ops::INSTANCE)
+                .expect("Could not encode bookshelf"),
+            json![{
+                "id": 1234,
+                "capacity": 2,
+                "books": [
+                    {
+                        "name": "Charlie and the Chocolate Factory",
+                        "author": "Roald Dahl",
+                        "pages": 192,
                     },
-                    ItemStack {
-                        item: String::from("yellow_dye"),
-                        count: 1
+                    {
+                        "name": "Infinibook",
+                        "author": "Infiniauthor",
+                        "pages": 1_000_000,
                     }
-                ],
-                result: ItemStack {
-                    item: String::from("orange_dye"),
-                    count: 2
-                },
-                crafting_time: 10,
-                experience: 10,
-            }
+                ]
+            }]
         );
 
+        let example = Bookshelf {
+            id: 5678,
+            books: vec![
+                Book {
+                    name: "The Lord of the Rings".to_string(),
+                    author: "J.R.R. Tolkien".to_string(),
+                    pages: 1150,
+                },
+                Book {
+                    name: "Sherlock Holmes".to_string(),
+                    author: "Arthur Conan Doyle".to_string(),
+                    pages: 1320,
+                },
+                Book {
+                    name: "Empty Book".to_string(),
+                    author: String::new(),
+                    pages: 0,
+                }
+            ],
+            capacity: 2,
+        };
+
         assert!(
-            RECIPE_CODEC
-                .parse(
-                    json!({
-                        "id": "bedrock_recipe",
-                        "ingredients": [
-                            { "item": "obsidian", "count": 64 },
-                            { "item": "netherite_block", "count": 64 }
-                        ],
-                        "result": { "item": "bedrock" },
-                        "crafting_time": 10000,
-                        // Oops, omitted "experience"!
-                    }),
-                    &json_ops::INSTANCE
-                )
-                .is_error()
+            BOOKSHELF_CODEC
+                .encode_start(&example, &json_ops::INSTANCE)
+                // We should get an error because the bookshelf cannot handle
+                // more than 2 books.
+                .get_message()
+                .expect("Encoding bookshelf here should be an error")
+                .starts_with("Bookshelf cannot have")
+        );
+
+        assert_decode!(
+            BOOKSHELF_CODEC,
+            json!({"id": 36, "capacity": 6, "books": [
+                {"name": "Book A", "author": "Author A", "pages": 10},
+                {"name": "Book B", "author": "Author B", "pages": 20},
+                {"name": "Book C", "author": "Author C", "pages": 30},
+                {"name": "Book D", "author": "Author D", "pages": 40},
+                {"name": "Book E", "author": "Author E", "pages": 50}
+            ]}),
+            &json_ops::INSTANCE,
+            is_success
+        );
+
+        assert_decode!(
+            BOOKSHELF_CODEC,
+            json!({"id": 93273, "capacity": 4, "books": [
+                {"name": "Book 1", "author": "Author 1", "pages": 100},
+                {"name": "Book 2", "author": "Author 2", "pages": 200},
+                {"name": "Book 3", "author": "Author 3", "pages": 300},
+                {"name": "Book 4", "author": "Author 4", "pages": 400},
+                // This should fail because 5 > 4.
+                {"name": "Book 5", "author": "Author 5", "pages": 500}
+            ]}),
+            &json_ops::INSTANCE,
+            is_error
+        );
+
+        assert_decode!(
+            BOOKSHELF_CODEC,
+            // This will work because "books" is an optional field.
+            json!({"id": 254, "capacity": 10}),
+            &json_ops::INSTANCE,
+            is_success
+        );
+
+        assert_decode!(
+            BOOKSHELF_CODEC,
+            // This will not work because "books" expects an array.
+            json!({"id": 6252, "capacity": 1, "books": {"name": "A Tale of Two Cities", "author": "Charles Dickens", "pages": 480}}),
+            &json_ops::INSTANCE,
+            is_error
+        );
+
+        assert_decode!(
+            BOOKSHELF_CODEC,
+            json!({"id": 6253, "capacity": 1, "books": [{"name": "A Tale of Two Cities", "author": "Charles Dickens"}]}),
+            &json_ops::INSTANCE,
+            is_error
         );
     }
 }
