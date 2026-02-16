@@ -1,5 +1,5 @@
-use crate::entity::living::LivingEntity;
 use crate::entity::EntityBase;
+use crate::entity::living::LivingEntity;
 use crate::world::World;
 use pumpkin_util::{Difficulty, GameMode};
 use std::future::Future;
@@ -98,7 +98,9 @@ impl TargetPredicate {
         target: &LivingEntity,
     ) -> bool {
         // 1. Equality check: A mob cannot target itself
-        if let Some(t) = tester && t.entity.entity_id == target.entity.entity_id {
+        if let Some(t) = tester
+            && t.entity.entity_id == target.entity.entity_id
+        {
             return false;
         }
 
@@ -139,7 +141,7 @@ impl TargetPredicate {
 
             // TODO: Visibility Modifier Logic (Sneaking = 0.8x, Invisibility = 0.07x)
             // Minecraft logic: max_dist *= target.get_visibility_modifier(tester);
-            
+
             let final_limit = dist_limit * dist_limit;
             let min_limit = MIN_DISTANCE * MIN_DISTANCE;
 
