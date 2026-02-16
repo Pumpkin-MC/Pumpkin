@@ -247,10 +247,10 @@ impl EntityBase for ItemEntity {
                     .await;
             }
 
-            let mut velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
+            let move_velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
 
             let mut tick_move = !entity.on_ground.load(Ordering::SeqCst)
-                || velo.horizontal_length_squared() > 1.0e-5;
+                || move_velo.horizontal_length_squared() > 1.0e-5;
 
             if !tick_move {
                 let Ok(item_age) = i32::try_from(self.item_age.load(Ordering::Relaxed)) else {
@@ -263,13 +263,19 @@ impl EntityBase for ItemEntity {
             }
 
             if tick_move {
-                entity.move_entity(caller.clone(), velo).await;
+                entity.move_entity(caller.clone(), move_velo).await;
 
                 entity.tick_block_collisions(&caller, server).await;
 
                 let mut friction = 0.98;
 
                 let on_ground = entity.on_ground.load(Ordering::SeqCst);
+
+                // Vanilla Entity.move() runs block fall movement hooks before item friction/bounce.
+                let mut velo = entity.velocity.load();
+                if on_ground {
+                    velo.y = 0.0;
+                }
 
                 if on_ground {
                     let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).await.1;
