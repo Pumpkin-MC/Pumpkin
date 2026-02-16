@@ -23,7 +23,6 @@ use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_bucket_entity::PlayerBucketEntityEvent;
-use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_command_preprocess::PlayerCommandPreprocessEvent;
 use crate::plugin::player::player_interact_at_entity::PlayerInteractAtEntityEvent;
 use crate::plugin::player::player_interact_entity::PlayerInteractEntityEvent as PlayerInteractEntitySimpleEvent;

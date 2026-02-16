@@ -1574,7 +1574,7 @@ impl World {
                     return;
                 }
 
-                log::warn!(
+                warn!(
                     "PlayerSpawnLocationEvent requested unknown world UUID {}, continuing in current world",
                     event.world_uuid
                 );
