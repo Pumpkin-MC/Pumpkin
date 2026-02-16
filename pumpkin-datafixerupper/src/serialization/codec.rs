@@ -17,6 +17,8 @@ use crate::serialization::coders::{
 use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
 use crate::serialization::keyable::Keyable;
+#[allow(unused_imports)] // Only used in documentation.
+use crate::serialization::map_codec::MapCodec;
 use crate::serialization::map_codec::ComposedMapCodec;
 use crate::serialization::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
 use crate::serialization::map_codecs::optional_field::{
@@ -96,9 +98,9 @@ use std::hash::Hash;
 /// For example, the unsigned types use `flat_xmap` to convert between the `i_` and `u_` types.
 ///
 /// ## Validator Codecs
-/// The [`validate`] function is a special case of the `flat_xmap` transformer method.
-/// It validates a value before encoding and after decoding using a function
-/// that can either return a [`DataResult`] success or error.
+/// The [`validate`] function returns a codec wrapper that validates a value before encoding and after decoding.
+/// A validated codec takes a function that can either return an [`Ok`] for a success,
+/// or an [`Err`] with the provided message to place in a `DataResult`.
 pub trait Codec: Encoder + Decoder {}
 
 // Any struct implementing Encoder<Value = A> and Decoder<Value = A> will also implement Codec<Value = A>.
@@ -173,6 +175,9 @@ macro_rules! impl_unsigned_transformer_codec {
         pub type $unsigned_codec_type = FlatXmapCodec<$unsigned_prim, $signed_codec_type>;
 
         #[doc = concat!("A [`Codec`] for `", stringify!($unsigned_prim), "`, which is a transformer codec of [`", stringify!($transformed_codec), "`].")]
+        ///
+        /// Be wary that
+        #[doc = concat!("if any encoded value exceeds [`", stringify!($signed_prim), "::MAX`], or if any decoded value is negative, this codec will return an error [`DataResult`].")]
         pub static $name: $unsigned_codec_type = flat_xmap(
             &$transformed_codec,
             |i| <$unsigned_prim>::try_from(i)
@@ -184,33 +189,33 @@ macro_rules! impl_unsigned_transformer_codec {
 }
 
 impl_unsigned_transformer_codec!(
-    UNSIGNED_BYTE_CODEC,
+    UBYTE_CODEC,
     ByteCodec,
-    UnsignedByteCodec,
+    UbyteCodec,
     u8,
     i8,
     BYTE_CODEC
 );
 impl_unsigned_transformer_codec!(
-    UNSIGNED_SHORT_CODEC,
+    USHORT_CODEC,
     ShortCodec,
-    UnsignedShortCodec,
+    UshortCodec,
     u16,
     i16,
     SHORT_CODEC
 );
 impl_unsigned_transformer_codec!(
-    UNSIGNED_INT_CODEC,
+    UINT_CODEC,
     IntCodec,
-    UnsignedIntCodec,
+    UintCodec,
     u32,
     i32,
     INT_CODEC
 );
 impl_unsigned_transformer_codec!(
-    UNSIGNED_LONG_CODEC,
+    ULONG_CODEC,
     LongCodec,
-    UnsignedLongCodec,
+    UlongCodec,
     u64,
     i64,
     LONG_CODEC
@@ -243,7 +248,12 @@ macro_rules! make_codec_transformation_function {
     ($name:ident, $short_type:ident, $encoder_type:ident, $decoder_type:ident, $encoder_func:ident, $decoder_func:ident, $to_func_result:ty, $from_func_result:ty, $a_equivalency:literal, $s_equivalency:literal) => {
         pub type $short_type<S, C> = ComposedCodec<$encoder_type<S, C>, $decoder_type<S, C>>;
 
-        #[doc = "Transforms a [`Codec`] of type `A` to another [`Codec`] of type `S`. Use this if:"]
+        #[doc = "Transforms a [`Codec`] of type `A` to another [`Codec`] of type `S`."]
+        ///
+        /// - `to` is the function called on `A` after decoding to convert it to `S`.
+        /// - `from` is the function called on `S` before encoding to convert it to `A`.
+        ///
+        /// Use this if:
         #[doc = concat!("- `A` is **", $a_equivalency, "** to `S`.")]
         #[doc = concat!("- `S` is **", $s_equivalency, "** to `A`.")]
         #[doc = ""]
@@ -369,7 +379,7 @@ where
     new_simple_map_codec(key_codec, element_codec, keyable)
 }
 
-/// Creates an [`UnboundedMapCodec`] with the provided key codec, value (element) codec and the possible key values.
+/// Creates an [`UnboundedMapCodec`] with the provided key and value (element) codec.
 pub const fn unbounded_map<K: Codec, V: Codec>(
     key_codec: &'static K,
     element_codec: &'static V,
@@ -522,7 +532,7 @@ pub const fn lenient_optional_field<C: Codec>(
     new_optional_field_map_codec(codec, name, false)
 }
 
-pub type OptionalFieldWithDefaultMapCodec<C> =
+pub type DefaultedFieldCodec<C> =
     DefaultValueProviderMapCodec<<C as HasValue>::Value, OptionalFieldMapCodec<C>>;
 
 /// Creates a [`MapCodec`] for an optional field which relies on the provided [`Codec`] for serialization/deserialization, along with a default value factory.
@@ -537,7 +547,7 @@ pub const fn optional_field_with_default<C: Codec>(
     codec: &'static C,
     name: &'static str,
     factory: fn() -> C::Value,
-) -> OptionalFieldWithDefaultMapCodec<C>
+) -> DefaultedFieldCodec<C>
 where
     <C as HasValue>::Value: PartialEq + Clone,
 {
@@ -556,7 +566,7 @@ pub const fn lenient_optional_field_with_default<C: Codec>(
     codec: &'static C,
     name: &'static str,
     factory: fn() -> C::Value,
-) -> OptionalFieldWithDefaultMapCodec<C>
+) -> DefaultedFieldCodec<C>
 where
     <C as HasValue>::Value: PartialEq + Clone,
 {
