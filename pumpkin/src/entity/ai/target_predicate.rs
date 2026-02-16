@@ -84,42 +84,33 @@ impl TargetPredicate {
         tester: Option<&LivingEntity>,
         target: &LivingEntity,
     ) -> bool {
-        // 1. Equality check: An entity cannot target itself
         if let Some(tester_ent) = tester {
             if Arc::ptr_eq(&tester_ent.entity.arc, &target.entity.arc) {
                 return false;
             }
         }
 
-        // 2. Gamemode & State Checks: Ignore Spectators, Creative players, and Dead entities
         let gamemode = target.entity.gamemode.load();
         if gamemode == GameMode::Creative || gamemode == GameMode::Spectator || !target.is_alive() {
             return false;
         }
 
-        // 3. Attackable Logic: Difficulty and Invulnerability
         if self.attackable {
-            // Mobs do not target players in Peaceful difficulty
             if world.level_info.load().difficulty == Difficulty::Peaceful {
                 return false;
             }
-            // Minecraft check: Targets that cannot take damage are ignored by hostile AI
             if !target.can_take_damage() {
                 return false;
             }
         }
 
-        // 4. Distance Logic
         if let Some(tester_ent) = tester {
             let mut max_dist = self.base_max_distance;
-            
-            // If no specific distance is set, use the default follow range (16.0)
-            if max_dist  (effective_max_dist * effective_max_dist) {
+            if max_dist  (effective_range * effective_range) {
                 return false;
             }
         }
 
-        // 5. Custom Predicate Filter
         if let Some(ref p) = self.predicate {
             if !p(Arc::new(target.clone()), world.clone()).await {
                 return false;
