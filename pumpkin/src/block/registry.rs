@@ -135,6 +135,7 @@ use super::{
 };
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
+use crate::block::blocks::cobweb::CobwebBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::end_rod::EndRodBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
@@ -245,6 +246,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
     manager.register(LayeredSnowBlock);
+    manager.register(CobwebBlock);
 
     manager.register(FallingBlock);
 
@@ -850,8 +852,15 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_fluid(&self, fluid: u16) -> Option<&Arc<dyn FluidBehaviour>> {
-        self.fluids.get(&fluid)
+    pub fn get_pumpkin_fluid(&self, fluid_id: u16) -> Option<&Arc<dyn FluidBehaviour>> {
+        self.fluids.get(&fluid_id).or_else(|| {
+            // Still fluids share behavior with their flowing counterpart
+            match fluid_id {
+                2 => self.fluids.get(&1),
+                4 => self.fluids.get(&3),
+                _ => None,
+            }
+        })
     }
 
     pub async fn emits_redstone_power(
