@@ -47,7 +47,7 @@ impl TargetPredicate {
                 return false;
             }
 
-            // check if target is invulnerable (covers Creative, Spectator, and NBT tags)
+            // Check if target is invulnerable
             if !self.include_invulnerable && !target.can_take_damage() {
                 return false;
             }
@@ -58,13 +58,12 @@ impl TargetPredicate {
             let mut max_dist = self.base_max_distance;
 
             // TODO: In Java, this pulls from GENERIC_FOLLOW_RANGE attribute.
-            // For now, we use a default of 16.0
             if max_dist  max_dist * max_dist {
                 return false;
             }
         }
 
-        // TODO: Implement Line of Sight (Raycasting) check if self.use_line_of_sight is true
+        // TODO: Implement Line of Sight (Raycasting) check
 
         // 5. Final custom filter
         if let Some(ref p) = self.predicate {
