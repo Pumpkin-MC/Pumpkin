@@ -175,20 +175,18 @@ impl DynamicOps for JsonOps {
     }
 
     fn merge_into_list(&self, list: Self::Value, value: Self::Value) -> DataResult<Self::Value> {
-        if let Value::Array(_) = list
-            && list != self.empty()
-        {
-            return DataResult::partial_error(format!("Not a list: {list}"), list);
+        if matches!(list, Value::Array(_)) || list == self.empty() {
+            let mut result_vec = vec![];
+            if let Value::Array(a) = list {
+                result_vec.extend(a);
+            }
+
+            result_vec.push(value);
+
+            DataResult::success(Value::Array(result_vec))
+        } else {
+            DataResult::partial_error(format!("Not a list: {list}"), list)
         }
-
-        let mut result_vec = vec![];
-        if let Value::Array(a) = list {
-            result_vec.extend(a);
-        }
-
-        result_vec.push(value);
-
-        DataResult::success(Value::Array(result_vec))
     }
 
     fn merge_values_into_list<I>(&self, list: Self::Value, values: I) -> DataResult<Self::Value>

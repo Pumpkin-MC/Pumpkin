@@ -99,20 +99,16 @@ pub trait DynamicOps {
     /// Gets a `Vec<i8>` from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getByteBuffer()` function in `DynamicOps`.
     fn get_byte_buffer(&self, input: Self::Value) -> DataResult<Box<[u8]>> {
-        self.get_iter(input).flat_map(|mut iter| {
-            // Check if all elements in this value are numbers.
-            let all_numbers = iter.all(|e| self.get_number(&e).is_success());
-            if all_numbers {
-                let mut buffer = vec![];
-                for e in iter {
-                    // This won't panic as we know all values are numbers.
-                    let num = self.get_number(&e).unwrap();
-                    buffer.push(num.into());
+        self.get_iter(input).flat_map(|iter| {
+            // We want all elements in the iterator to be numbers.
+            let mut buffer = vec![];
+            for e in iter {
+                match self.get_number(&e).into_result() {
+                    Some(num) => buffer.push(num.into()),
+                    None => return DataResult::error("Some elements are not bytes".to_string()),
                 }
-                DataResult::success(buffer.into_boxed_slice())
-            } else {
-                DataResult::error("Some elements are not bytes".to_string())
             }
+            DataResult::success(buffer.into_boxed_slice())
         })
     }
 
@@ -124,20 +120,16 @@ pub trait DynamicOps {
     /// Gets a [`Vec<i32>`] from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getIntStream()` function in `DynamicOps`.
     fn get_int_list(&self, input: Self::Value) -> DataResult<Vec<i32>> {
-        self.get_iter(input).flat_map(|mut iter| {
-            // Check if all elements in this value are numbers.
-            let all_numbers = iter.all(|e| self.get_number(&e).is_success());
-            if all_numbers {
-                DataResult::success(
-                    iter.map(|e| {
-                        let num = self.get_number(&e).unwrap();
-                        num.into()
-                    })
-                    .collect(),
-                )
-            } else {
-                DataResult::error("Some elements are not ints".to_string())
+        self.get_iter(input).flat_map(|iter| {
+            // We want all elements in the iterator to be numbers.
+            let mut list = vec![];
+            for e in iter {
+                match self.get_number(&e).into_result() {
+                    Some(num) => list.push(num.into()),
+                    None => return DataResult::error("Some elements are not ints".to_string()),
+                }
             }
+            DataResult::success(list)
         })
     }
 
@@ -149,20 +141,16 @@ pub trait DynamicOps {
     /// Gets a `long` (`i64` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getLongStream()` function in `DynamicOps`.
     fn get_long_list(&self, input: Self::Value) -> DataResult<Vec<i64>> {
-        self.get_iter(input).flat_map(|mut iter| {
-            // Check if all elements in this value are numbers.
-            let all_numbers = iter.all(|e| self.get_number(&e).is_success());
-            if all_numbers {
-                DataResult::success(
-                    iter.map(|e| {
-                        let num = self.get_number(&e).unwrap();
-                        num.into()
-                    })
-                    .collect(),
-                )
-            } else {
-                DataResult::error("Some elements are not longs".to_string())
+        self.get_iter(input).flat_map(|iter| {
+            // We want all elements in the iterator to be numbers.
+            let mut list = vec![];
+            for e in iter {
+                match self.get_number(&e).into_result() {
+                    Some(num) => list.push(num.into()),
+                    None => return DataResult::error("Some elements are not longs".to_string()),
+                }
             }
+            DataResult::success(list)
         })
     }
 

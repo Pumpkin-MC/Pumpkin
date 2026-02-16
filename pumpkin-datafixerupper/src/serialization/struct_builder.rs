@@ -92,12 +92,12 @@ pub trait UniversalStructBuilder: ResultStructBuilder {
 macro_rules! impl_struct_builder {
     ($builder:ident) => {
         fn set_lifecycle(mut self, lifecycle: Lifecycle) -> Self {
-            self.$builder = self.$builder.clone().with_lifecycle(lifecycle);
+            self.$builder = self.$builder.with_lifecycle(lifecycle);
             self
         }
 
         fn map_error(mut self, f: Box<dyn FnOnce(String) -> String>) -> Self {
-            self.$builder = self.$builder.clone().map_error_dyn(f);
+            self.$builder = self.$builder.map_error_dyn(f);
             self
         }
 

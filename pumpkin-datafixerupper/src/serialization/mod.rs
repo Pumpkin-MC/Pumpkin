@@ -160,7 +160,15 @@ impl TryFrom<serde_json::Number> for Number {
     type Error = FromJsonValueError;
 
     fn try_from(num: serde_json::Number) -> Result<Self, Self::Error> {
-        num.as_f64()
-            .map_or(Err(FromJsonValueError), |f| Ok(Self::Double(f)))
+        // Try converting the number to an integer first.
+        num.as_i64().map_or_else(
+            // Try the float conversion.
+            || {
+                num.as_f64()
+                    .map_or(Err(FromJsonValueError), |f| Ok(Self::Double(f)))
+            },
+            // Do the integer conversion.
+            |n| Ok(Self::Long(n)),
+        )
     }
 }
