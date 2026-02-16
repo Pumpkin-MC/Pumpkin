@@ -13,7 +13,12 @@ pub struct InventoryCloseEvent {
 }
 
 impl InventoryCloseEvent {
-    pub const fn new(player: Arc<Player>,identifier: String, window_type: Option<WindowType>, sync_id: u8) -> Self {
+    pub const fn new(
+        player: Arc<Player>,
+        identifier: String,
+        window_type: Option<WindowType>,
+        sync_id: u8,
+    ) -> Self {
         Self {
             player,
             identifier,
@@ -38,9 +43,7 @@ impl PlayerInventoryEvent for InventoryCloseEvent {
         &self.player
     }
 
-
     fn get_sync_id(&self) -> u8 {
         self.sync_id
     }
-
 }

@@ -23,7 +23,7 @@ impl InventoryOpenEvent {
     }
 
     #[must_use]
-     pub const fn get_window_type(&self) -> Option<WindowType> {
+    pub const fn get_window_type(&self) -> Option<WindowType> {
         self.window_type
     }
 }

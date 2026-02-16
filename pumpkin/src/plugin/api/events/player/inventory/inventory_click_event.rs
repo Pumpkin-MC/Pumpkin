@@ -66,8 +66,6 @@ impl PlayerInventoryEvent for PlayerInventoryClickEvent {
         &self.player
     }
 
-
-
     fn get_sync_id(&self) -> u8 {
         self.sync_id
     }

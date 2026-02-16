@@ -21,6 +21,7 @@ use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
+use crate::plugin::player::inventory::inventory_click_event::PlayerInventoryClickEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
@@ -47,7 +48,15 @@ use pumpkin_protocol::java::client::play::{
     CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot, CSystemChatMessage,
     CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
 };
-use pumpkin_protocol::java::server::play::{Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status, SlotActionType};
+use pumpkin_protocol::java::server::play::{
+    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
+    SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
+    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
+    SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
+    SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
+    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
+    SUpdateSign, SUseItem, SUseItemOn, SlotActionType, Status,
+};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
@@ -58,7 +67,6 @@ use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
-use crate::plugin::player::inventory::inventory_click_event::PlayerInventoryClickEvent;
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes

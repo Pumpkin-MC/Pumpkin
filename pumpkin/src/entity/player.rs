@@ -11,33 +11,20 @@ use std::time::{Duration, Instant};
 use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
-use pumpkin_data::dimension::Dimension;
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
-use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
-use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
-use pumpkin_protocol::bedrock::client::set_time::CSetTime;
-use pumpkin_protocol::bedrock::client::update_abilities::{
-    Ability, AbilityLayer, CUpdateAbilities,
-};
-use pumpkin_protocol::bedrock::server::text::SText;
-use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
-use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
-use pumpkin_world::inventory::Inventory;
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
-use tracing::{debug, warn};
-use uuid::Uuid;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{Block, BlockState, Enchantment, tag, translation};
+use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -49,6 +36,13 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
+use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
+use pumpkin_protocol::bedrock::client::set_time::CSetTime;
+use pumpkin_protocol::bedrock::client::update_abilities::{
+    Ability, AbilityLayer, CUpdateAbilities,
+};
+use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
@@ -72,9 +66,15 @@ use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::biome;
+use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tracing::{debug, warn};
+use uuid::Uuid;
 
 use crate::block;
 use crate::block::blocks::bed::BedBlock;
@@ -96,10 +96,10 @@ use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
-use pumpkin_data::potion::Effect;
-use pumpkin_world::chunk_system::ChunkLoading;
 use crate::plugin::player::inventory::inventory_close_event::InventoryCloseEvent;
 use crate::plugin::player::inventory::inventory_open_event::InventoryOpenEvent;
+use pumpkin_data::potion::Effect;
+use pumpkin_world::chunk_system::ChunkLoading;
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -2604,7 +2604,7 @@ impl Player {
             player,
             identifier,
             window_type,
-            sync_id
+            sync_id,
         };
         server.plugin_manager.fire(event).await;
     }
@@ -2626,10 +2626,16 @@ impl Player {
         screen_handler_factory: &dyn ScreenHandlerFactory,
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
-
         let server = self.world().server.upgrade().unwrap();
         let sync_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
-        let window_type = self.current_screen_handler.lock().await.lock().await.get_behaviour().window_type;
+        let window_type = self
+            .current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .get_behaviour()
+            .window_type;
 
         // i need a Arc<Player> not Arc<&Player>
         let player = server.get_player_by_uuid(self.gameprofile.id).unwrap();
@@ -2640,7 +2646,7 @@ impl Player {
             cancelled: false,
         };
 
-        send_cancellable!{{
+        send_cancellable! {{
             server;
             event;
             'after: {
@@ -2693,7 +2699,6 @@ impl Player {
                 None
             };
         }}
-
     }
 
     pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot) {
@@ -2701,7 +2706,6 @@ impl Player {
         let screen_handler = self.current_screen_handler.lock().await;
         let mut screen_handler = screen_handler.lock().await;
         let behaviour = screen_handler.get_behaviour();
-
 
         // behaviour is dropped here
         if i32::from(behaviour.sync_id) != packet.sync_id.0 {
@@ -2752,7 +2756,6 @@ impl Player {
         } else {
             ItemStack::EMPTY.clone()
         };
-
 
         let event = PlayerInventoryClickEvent::new(
             self.clone(),
