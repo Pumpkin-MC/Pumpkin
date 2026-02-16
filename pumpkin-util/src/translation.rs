@@ -221,10 +221,6 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
             serde_json::from_str(PUMPKIN_VI_VN_JSON).expect("Could not parse vi_vn.json.");
         let pumpkin_pt_br: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_PT_BR_JSON).expect("Could not parse pt_br.json.");
-        let pumpkin_pt_br: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_PT_BR_JSON).expect("Could not parse pt_br.json.");
-        let pumpkin_pt_br: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_PT_BR_JSON).expect("Could not parse pt_br.json.");
 
         for (key, value) in vanilla_en_us {
             array[Locale::EnUs as usize].insert(format!("minecraft:{key}"), value);
