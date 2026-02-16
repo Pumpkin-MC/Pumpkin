@@ -207,6 +207,7 @@ impl Explosion {
         self.damage_entities(world).await;
         for (pos, (block, state)) in &blocks {
             world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;
+            world.close_container_screens_at(pos).await;
 
             let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 

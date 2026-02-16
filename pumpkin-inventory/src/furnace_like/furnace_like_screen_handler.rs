@@ -14,6 +14,7 @@ use crate::{
         ScreenHandlerFuture, ScreenHandlerListener, ScreenProperty,
     },
 };
+use tracing::debug;
 
 use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType, FurnaceOutputSlot};
 
@@ -119,7 +120,7 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
             const FUEL_SLOT: i32 = 1; // Note: Slots 0, 1, 2 are Furnace slots.
             const OUTPUT_SLOT: i32 = 2;
 
-            log::debug!("FurnaceLikeScreenHandler::quick_move slot_index={slot_index}");
+            debug!("FurnaceLikeScreenHandler::quick_move slot_index={slot_index}");
 
             let mut stack_left = ItemStack::EMPTY.clone();
 
@@ -163,7 +164,7 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
 
             // Award XP when taking from output slot (slot 2)
             if slot_index == OUTPUT_SLOT {
-                log::debug!("quick_move: taking from output slot, calling on_take_item");
+                debug!("quick_move: taking from output slot, calling on_take_item");
                 slot.on_take_item(player, &stack_left).await;
             }
 

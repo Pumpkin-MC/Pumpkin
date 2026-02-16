@@ -2,6 +2,7 @@ use std::{collections::HashMap, hash::Hash};
 
 use pumpkin_data::{Block, BlockState, block_properties::is_air, chunk::Biome};
 use pumpkin_util::encompassing_bits;
+use tracing::warn;
 
 use crate::block::BlockStateCodec;
 
@@ -144,7 +145,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         minimum_bits_per_entry: u8,
     ) -> Self {
         if palette.is_empty() {
-            log::warn!("No palette data! Defaulting...");
+            warn!("No palette data! Defaulting...");
             return Self::Homogeneous(V::default());
         }
 
@@ -179,7 +180,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 .get(lookup_index as usize)
                 .copied()
                 .unwrap_or_else(|| {
-                    log::warn!("Lookup index out of bounds! Defaulting...");
+                    warn!("Lookup index out of bounds! Defaulting...");
                     V::default()
                 });
 
@@ -196,7 +197,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 counts[index] += 1;
             } else {
                 // This case should ideally not happen if the palette is complete.
-                log::warn!("Decompressed value not found in palette!");
+                warn!("Decompressed value not found in palette!");
             }
         }
 

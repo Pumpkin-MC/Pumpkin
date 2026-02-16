@@ -7,12 +7,12 @@ use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::{Buf, BufMut, Bytes};
-use log::error;
 use pumpkin_config::chunk::LinearChunkConfig;
 use pumpkin_util::math::vector2::Vector2;
 use ruzstd::decoding::StreamingDecoder;
 use ruzstd::encoding::{CompressionLevel, compress_to_vec};
 use tokio::io::{AsyncWriteExt, BufWriter};
+use tracing::{error, trace, warn};
 
 use super::anvil::CHUNK_COUNT;
 
@@ -177,7 +177,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
 
     async fn write(&self, path: &PathBuf) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        log::trace!("Writing tmp file to disk: {}", temp_path.display());
+        trace!("Writing tmp file to disk: {}", temp_path.display());
 
         let file = tokio::fs::File::create(&temp_path).await?;
         let mut write = BufWriter::new(file);
@@ -227,7 +227,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, &path).await?;
 
-        log::trace!("Wrote file to Disk: {}", path.display());
+        trace!("Wrote file to Disk: {}", path.display());
         Ok(())
     }
 
@@ -293,7 +293,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
                 let last_index = bytes_offset;
                 bytes_offset += header.size as usize;
                 if bytes_offset > buffer.len() {
-                    log::warn!(
+                    warn!(
                         "Not enough bytes are available for chunk {} ({} vs {})",
                         i,
                         header.size,

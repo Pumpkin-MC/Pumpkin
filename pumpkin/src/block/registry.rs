@@ -10,7 +10,7 @@ use crate::block::blocks::candle_cakes::CandleCakeBlock;
 use crate::block::blocks::candles::CandleBlock;
 use crate::block::blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
 use crate::block::blocks::carved_pumpkin::CarvedPumpkinBlock;
-use crate::block::blocks::chests::{ChestBlock, CopperChestBlock};
+use crate::block::blocks::chests::{ChestBlock, CopperChestBlock, TrappedChestBlock};
 use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
@@ -137,6 +137,7 @@ use super::{
 use crate::block::OnEntityStepArgs;
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
+use crate::block::blocks::cobweb::CobwebBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::end_rod::EndRodBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
@@ -166,6 +167,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
+    manager.register(TrappedChestBlock);
     manager.register(CopperChestBlock);
     manager.register(EnderChestBlock);
     manager.register(CraftingTableBlock);
@@ -246,6 +248,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
     manager.register(LayeredSnowBlock);
+    manager.register(CobwebBlock);
 
     manager.register(FallingBlock);
 

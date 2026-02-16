@@ -326,6 +326,8 @@ pub struct Entity {
     pub pos: AtomicCell<Vector3<f64>>,
     /// The last known position of the entity.
     pub last_pos: AtomicCell<Vector3<f64>>,
+    /// The last movement vector
+    pub movement: AtomicCell<Vector3<f64>>,
     /// The entity's position rounded to the nearest block coordinates
     pub block_pos: AtomicCell<BlockPos>,
     /// The block supporting the entity
@@ -445,6 +447,7 @@ impl Entity {
             horizontal_collision: AtomicBool::new(false),
             pos: AtomicCell::new(position),
             last_pos: AtomicCell::new(position),
+            movement: AtomicCell::new(Vector3::default()),
             block_pos: AtomicCell::new(BlockPos(Vector3::new(floor_x, floor_y, floor_z))),
             supporting_block_pos: AtomicCell::new(None),
             chunk_pos: AtomicCell::new(Vector2::new(
@@ -992,7 +995,7 @@ impl Entity {
     pub fn update_last_pos(&self) -> Vector3<f64> {
         let pos = self.pos.load();
         let old = self.last_pos.load();
-
+        self.movement.store(pos - old);
         self.last_pos.store(pos);
         old
     }
@@ -2101,6 +2104,31 @@ impl Entity {
         self.extinguish();
         self.set_on_fire(false).await;
     }
+
+    pub async fn slow_movement(&self, state: &BlockState, multiplier: Vector3<f64>) {
+        match self.entity_type.id {
+            v if v == EntityType::PLAYER.id => {
+                if let Some(player_entity) = self.get_player()
+                    && player_entity.is_flying().await
+                {
+                    return;
+                }
+            }
+            v if v == EntityType::SPIDER.id || v == EntityType::CAVE_SPIDER.id => {
+                if Block::from_state_id(state.id).id == Block::COBWEB.id {
+                    return;
+                }
+            }
+            v if v == EntityType::WITHER.id => {
+                return;
+            }
+            _ => {}
+        }
+        if let Some(living) = self.get_living_entity() {
+            living.fall_distance.store(0f32);
+        }
+        self.movement_multiplier.store(multiplier);
+    }
 }
 
 impl NBTStorage for Entity {
@@ -2195,6 +2223,7 @@ impl EntityBase for Entity {
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
+            self.update_last_pos();
             self.tick_portal(&caller).await;
             self.update_fluid_state(&caller).await;
             self.check_out_of_world(&*caller).await;
