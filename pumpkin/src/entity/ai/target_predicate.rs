@@ -103,7 +103,11 @@ impl TargetPredicate {
         }
 
         if let Some(t_ent) = tester {
-            let d_sq = t_ent.entity.pos.load().distance_squared(target.entity.pos.load());
+            let d_sq = t_ent
+                .entity
+                .pos
+                .load()
+                .distance_squared(target.entity.pos.load());
             let mut range = self.base_max_distance;
             if range < 0.0 {
                 range = 16.0;
