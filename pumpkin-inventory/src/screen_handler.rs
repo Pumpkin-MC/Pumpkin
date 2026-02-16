@@ -738,12 +738,10 @@ pub trait ScreenHandler: Send + Sync {
                             } else {
                                 panic!("Invalid drag button: {drag_button}");
                             };
-                            inserting_count = inserting_count
-                                .min(max(
-                                    0,
-                                    slot.get_max_item_count_for_stack(&stack).await
-                                        - stack.item_count
-                                ));
+                            inserting_count = inserting_count.min(max(
+                                0,
+                                slot.get_max_item_count_for_stack(&stack).await - stack.item_count,
+                            ));
                             if inserting_count > 0 {
                                 let mut stack_clone = stack.clone();
                                 drop(stack);
