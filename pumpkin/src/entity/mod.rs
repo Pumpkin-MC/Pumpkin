@@ -2035,8 +2035,8 @@ impl Entity {
                 self.entity_id.into(),
                 position,
                 Vector3::new(0.0, 0.0, 0.0),
-                yaw.unwrap_or(0.0),
-                pitch.unwrap_or(0.0),
+                yaw.unwrap_or(self.yaw.load()),
+                pitch.unwrap_or(self.pitch.load()),
                 self.on_ground.load(Ordering::SeqCst),
             ))
             .await;
