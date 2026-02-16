@@ -203,8 +203,8 @@ impl DynamicOps for NbtOps {
     }
 
     fn merge_into_list(&self, list: Self::Value, value: Self::Value) -> DataResult<Self::Value> {
-        ListCollector::new(list).map_or_else(
-            || DataResult::error("Not a list".to_string()),
+        ListCollector::new(list.clone()).map_or_else(
+            || DataResult::partial_error("Not a list".to_string(), list),
             |c| DataResult::success(c.accept(value).result()),
         )
     }
@@ -213,8 +213,8 @@ impl DynamicOps for NbtOps {
     where
         I: IntoIterator<Item = Self::Value>,
     {
-        ListCollector::new(list).map_or_else(
-            || DataResult::error("Not a list".to_string()),
+        ListCollector::new(list.clone()).map_or_else(
+            || DataResult::partial_error("Not a list".to_string(), list),
             |c| DataResult::success(c.accept_all(values).result()),
         )
     }
@@ -413,7 +413,7 @@ impl ResultStructBuilder for NbtStructBuilder {
                 }
                 DataResult::success(compound.into())
             }
-            _ => DataResult::error(format!("Prefix is not a map: {prefix}")),
+            _ => DataResult::partial_error(format!("Prefix is not a map: {prefix}"), prefix),
         }
     }
 }
