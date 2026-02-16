@@ -171,7 +171,7 @@ mod test {
         // Each key must only be 1 character long (to make it a letter).
         // There must be at least 1 key.
         pub static LETTER_FREQUENCY_CODEC: ValidatedCodec<
-            UnboundedMapCodec<ValidatedCodec<StringCodec>, UnsignedLongCodec>,
+            UnboundedMapCodec<ValidatedCodec<StringCodec>, UlongCodec>,
         > = validate(
             &unbounded_map(
                 &validate(&STRING_CODEC, |s| {
@@ -181,7 +181,7 @@ mod test {
                         Err("String must be exactly 1 character long".to_string())
                     }
                 }),
-                &UNSIGNED_LONG_CODEC,
+                &ULONG_CODEC,
             ),
             |m| {
                 if m.is_empty() {
