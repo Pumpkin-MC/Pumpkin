@@ -133,7 +133,7 @@ mod test {
         );
         assert!(
             PLAYER_NAME_CODEC
-                .encode_start(&String::from("XxXxVeryLongNameXxXx"), &json_ops::INSTANCE)
+                .encode_start(&String::from("XxXxVeryLongNamexXxX"), &json_ops::INSTANCE)
                 .is_error()
         );
         assert!(
