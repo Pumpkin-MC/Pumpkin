@@ -15,6 +15,6 @@ pub trait PlayerInventoryEvent: Send + Sync {
     /// Retrieves the synchronization ID associated with the inventory interaction.
     ///
     /// # Returns
-    /// A `u16` representing the synchronization ID for the inventory interaction.
+    /// A `u8` representing the synchronization ID for the inventory interaction.
     fn get_sync_id(&self) -> u8;
 }
