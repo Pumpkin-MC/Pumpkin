@@ -1,6 +1,7 @@
 use core::fmt;
 use std::fmt::{Display, Formatter};
 
+pub mod base_map_codec;
 pub mod codec;
 pub mod codecs;
 pub mod coders;
