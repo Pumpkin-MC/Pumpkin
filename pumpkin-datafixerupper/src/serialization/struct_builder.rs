@@ -168,22 +168,22 @@ macro_rules! impl_string_struct_builder {
 
         impl_string_struct_builder!(@internal $builder);
 
-        fn add_key_value(self, key: Self::Value, value: Self::Value) -> Self {
+        fn add_key_value(mut self, key: Self::Value, value: Self::Value) -> Self {
             self.$builder = self.$ops.get_string(&key).flat_map(
                 |s| self.$builder.clone().map(|r| self.append(&s, value, r))
             );
             self
         }
 
-        fn add_key_value_result(self, key: Self::Value, value: DataResult<Self::Value>) -> Self {
+        fn add_key_value_result(mut self, key: Self::Value, value: DataResult<Self::Value>) -> Self {
             self.$builder = self.$ops.get_string(&key).flat_map(
-                |s| self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(key, v, r), value)
+                |s| self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
             );
             self
         }
 
         fn add_key_result_value_result(
-            self,
+            mut self,
             key: DataResult<Self::Value>,
             value: DataResult<Self::Value>,
         ) -> Self {

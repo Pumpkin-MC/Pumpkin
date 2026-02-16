@@ -193,20 +193,19 @@ impl DynamicOps for JsonOps {
     where
         I: IntoIterator<Item = Self::Value>,
     {
-        if let Value::Array(_) = list
-            && list != self.empty()
+        if matches!(list, Value::Array(_)) || list == self.empty()
         {
-            return DataResult::partial_error(format!("Not a list: {list}"), list);
+            let mut result_vec = vec![];
+            if let Value::Array(a) = list {
+                result_vec.extend(a);
+            }
+
+            result_vec.extend(values);
+
+            DataResult::success(Value::Array(result_vec))
+        } else {
+            DataResult::partial_error(format!("Not a list: {list}"), list)
         }
-
-        let mut result_vec = vec![];
-        if let Value::Array(a) = list {
-            result_vec.extend(a);
-        }
-
-        result_vec.extend(values);
-
-        DataResult::success(Value::Array(result_vec))
     }
 
     fn merge_into_map(
@@ -219,7 +218,7 @@ impl DynamicOps for JsonOps {
         Self::Value: Clone,
     {
         if !matches!(map, Value::Object(_)) && map != self.empty() {
-            return DataResult::partial_error(format!("Not a map: {map}"), map.clone());
+            return DataResult::partial_error(format!("Not a map: {map}"), map);
         }
 
         if !self.is_valid_key(&key) {
@@ -245,41 +244,40 @@ impl DynamicOps for JsonOps {
         M: MapLike<Value = Self::Value>,
         Self::Value: Clone,
     {
-        if let Value::Object(_) = map
-            && map != self.empty()
+        if matches!(map, Value::Object(_)) || map == self.empty()
         {
-            return DataResult::partial_error(format!("Not a map: {map}"), map.clone());
-        }
+            let mut output_map = Map::new();
 
-        let mut output_map = Map::new();
-
-        if let Value::Object(mut m) = map {
-            output_map.append(&mut m);
-        }
-
-        // Store the missed entries.
-        let mut missed = vec![];
-
-        for entry in other_map_like.iter() {
-            if self.is_valid_key(&entry.0) {
-                output_map.insert(Self::get_as_string(&entry.0).unwrap(), entry.1.clone());
-            } else {
-                missed.push(entry.0);
+            if let Value::Object(mut m) = map {
+                output_map.append(&mut m);
             }
-        }
 
-        let object = Value::Object(output_map);
-        let pretty_missed = serde_json::to_string_pretty(&missed);
-        if missed.is_empty() {
-            DataResult::success(object)
+            // Store the missed entries.
+            let mut missed = vec![];
+
+            for entry in other_map_like.iter() {
+                if self.is_valid_key(&entry.0) {
+                    output_map.insert(Self::get_as_string(&entry.0).unwrap(), entry.1.clone());
+                } else {
+                    missed.push(entry.0);
+                }
+            }
+
+            let object = Value::Object(output_map);
+            let pretty_missed = serde_json::to_string_pretty(&missed);
+            if missed.is_empty() {
+                DataResult::success(object)
+            } else {
+                DataResult::partial_error(
+                    format!(
+                        "Some keys are not strings{}",
+                        pretty_missed.map_or_else(|_| String::new(), |r| format!(": {r}"))
+                    ),
+                    object,
+                )
+            }
         } else {
-            DataResult::partial_error(
-                format!(
-                    "Some keys are not strings{}",
-                    pretty_missed.map_or_else(|_| String::new(), |r| format!(": {r}"))
-                ),
-                object,
-            )
+            DataResult::partial_error(format!("Not a map: {map}"), map)
         }
     }
 
@@ -314,6 +312,7 @@ impl DynamicOps for JsonOps {
                         return out_ops.create_int(l as i32);
                     }
                     out_ops.create_long(l)
+                // If no integer is possible, check for possible floating-point values.
                 } else if let Some(f) = n.as_f64() {
                     if (f as f32) as f64 == f {
                         return out_ops.create_float(f as f32);
@@ -332,7 +331,7 @@ impl DynamicOps for JsonOps {
             builder: DataResult::success_with_lifecycle(
                 Value::Object(Map::new()),
                 Lifecycle::Stable,
-            ),
+            )
         }
     }
 }
@@ -367,7 +366,7 @@ impl Display for JsonMapLike<'_> {
 
 /// An implementation of [`StructBuilder`] for JSON objects.
 pub struct JsonStructBuilder {
-    builder: DataResult<Value>,
+    builder: DataResult<Value>
 }
 
 impl ResultStructBuilder for JsonStructBuilder {
