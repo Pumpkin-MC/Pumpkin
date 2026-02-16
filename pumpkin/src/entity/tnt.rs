@@ -60,21 +60,9 @@ impl EntityBase for TNTEntity {
                 entity.send_velocity().await;
             }
 
-            let fuse = self.fuse.fetch_sub(1, Relaxed);
-            if fuse == 0 {
-                self.entity.remove().await;
-                self.entity
-                    .world
-                    .load()
-                    .explode(self.entity.pos.load(), self.power)
-                    .await;
-            } else {
-                entity.update_fluid_state(&caller).await;
-            }
-        })
-    }
-
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+            // FIX: Safely handle the fuse to prevent underflow wrap-around
+            let current_fuse = self.fuse.load(Relaxed);
+            if current_fuse  EntityBaseFuture<'_, ()> {
         Box::pin(async {
             // TODO: Yes, this is the wrong function, but we need to send this after spawning the entity.
             let pos: f64 = rand::random::<f64>() * TAU;
