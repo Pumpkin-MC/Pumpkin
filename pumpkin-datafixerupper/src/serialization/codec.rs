@@ -42,7 +42,7 @@ use std::hash::Hash;
 /// This trait's module (`codec`) provides many common codecs that can be used for more complex codec types:
 /// - [`BYTE_CODEC`], [`SHORT_CODEC`], [`INT_CODEC`], [`LONG_CODEC`], [`BOOL_CODEC`], [`FLOAT_CODEC`] and [`DOUBLE_CODEC`] for Java primitive types.
 /// - [`STRING_CODEC`] for `String`s.
-/// - [`UNSIGNED_BYTE_CODEC`], [`UNSIGNED_SHORT_CODEC`], [`UNSIGNED_INT_CODEC`] and [`UNSIGNED_LONG_CODEC`] for unsigned versions of Java primitive number types (`u8`, `u16`, `u32` and `u64`).
+/// - [`BYTE_CODEC`], [`USHORT_CODEC`], [`UINT_CODEC`] and [`ULONG_CODEC`] for unsigned versions of Java primitive number types (`u8`, `u16`, `u32` and `u64`).
 /// - [`BYTE_BUFFER_CODEC`] for byte buffers (equivalent to `Box<[u8]>`).
 /// - [`INT_STREAM_CODEC`] and [`LONG_STREAM_CODEC`] for Java's `int` and `long` stream codecs (equivalent to `Vec<i32>` and `Vec<i64`).
 ///
