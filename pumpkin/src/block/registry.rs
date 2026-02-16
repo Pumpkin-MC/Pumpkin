@@ -852,8 +852,15 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_fluid(&self, fluid: u16) -> Option<&Arc<dyn FluidBehaviour>> {
-        self.fluids.get(&fluid)
+    pub fn get_pumpkin_fluid(&self, fluid_id: u16) -> Option<&Arc<dyn FluidBehaviour>> {
+        self.fluids.get(&fluid_id).or_else(|| {
+            // Still fluids share behavior with their flowing counterpart
+            match fluid_id {
+                2 => self.fluids.get(&1),
+                4 => self.fluids.get(&3),
+                _ => None,
+            }
+        })
     }
 
     pub async fn emits_redstone_power(

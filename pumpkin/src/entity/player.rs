@@ -1597,7 +1597,7 @@ impl Player {
     }
 
     pub fn eye_position(&self) -> Vector3<f64> {
-        let eye_height = f64::from(self.living_entity.entity.entity_dimension.load().eye_height);
+        let eye_height = self.living_entity.entity.get_eye_height();
         Vector3::new(
             self.living_entity.entity.pos.load().x,
             self.living_entity.entity.pos.load().y + eye_height,
@@ -1937,10 +1937,10 @@ impl Player {
         let d = self.block_interaction_range() + additional_range;
         let box_pos = BoundingBox::from_block(position);
         let entity_pos = self.living_entity.entity.pos.load();
-        let standing_eye_height = self.living_entity.entity.entity_dimension.load().eye_height;
+        let eye_height = self.living_entity.entity.get_eye_height();
         box_pos.squared_magnitude(Vector3 {
             x: entity_pos.x,
-            y: entity_pos.y + f64::from(standing_eye_height),
+            y: entity_pos.y + eye_height,
             z: entity_pos.z,
         }) < d * d
     }
@@ -2226,7 +2226,7 @@ impl Player {
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
         let item_pos = self.living_entity.entity.pos.load()
-            + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
+            + Vector3::new(0.0, self.living_entity.entity.get_eye_height() - 0.3, 0.0);
         let entity = Entity::new(self.world(), item_pos, &EntityType::ITEM);
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();

@@ -7,7 +7,7 @@ use pumpkin_data::{Block, fluid::Fluid, tag};
 pub fn can_be_replaced(block_state: &BlockState, block: &Block, fluid: &Fluid) -> bool {
     // Fluid Logic
     if let Some(other_fluid) = Fluid::from_state_id(block_state.id) {
-        if fluid.id != other_fluid.id {
+        if !fluid.matches_type(other_fluid) {
             return true;
         }
         // Replace current fluid if it is a falling source

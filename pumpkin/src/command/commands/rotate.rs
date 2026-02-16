@@ -42,7 +42,7 @@ fn get_anchor_position(entity: &crate::entity::Entity, anchor: EntityAnchor) -> 
     let pos = entity.pos.load();
     match anchor {
         EntityAnchor::Eyes => {
-            let eye_height = f64::from(entity.entity_type.eye_height);
+            let eye_height = entity.get_eye_height();
             Vector3::new(pos.x, pos.y + eye_height, pos.z)
         }
         EntityAnchor::Feet => pos,
@@ -134,7 +134,7 @@ impl CommandExecutor for RotateFacingLocationExecutor {
             let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
 
             let entity = target.get_entity();
-            let eye_height = f64::from(entity.entity_type.eye_height);
+            let eye_height = entity.get_eye_height();
             let pos = entity.pos.load();
             let looking_from = Vector3::new(pos.x, pos.y + eye_height, pos.z);
 
@@ -163,9 +163,8 @@ impl CommandExecutor for RotateFacingEntityExecutor {
             let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
             let facing_entity = EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?;
             let anchor = EntityAnchorArgumentConsumer::find_arg(args, ARG_FACING_ANCHOR)?;
-
             let target_entity = target.get_entity();
-            let eye_height = f64::from(target_entity.entity_type.eye_height);
+            let eye_height = target_entity.get_eye_height();
             let pos = target_entity.pos.load();
             let looking_from = Vector3::new(pos.x, pos.y + eye_height, pos.z);
 
@@ -197,7 +196,7 @@ impl CommandExecutor for RotateFacingEntityNoAnchorExecutor {
             let facing_entity = EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?;
 
             let target_entity = target.get_entity();
-            let eye_height = f64::from(target_entity.entity_type.eye_height);
+            let eye_height = target_entity.get_eye_height();
             let pos = target_entity.pos.load();
             let looking_from = Vector3::new(pos.x, pos.y + eye_height, pos.z);
 
