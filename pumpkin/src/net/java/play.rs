@@ -1536,14 +1536,29 @@ impl JavaClient {
             return;
         }
 
+        let event_slot_index = usize::try_from(event.slot).ok();
+        let slot_index = event_slot_index
+            .filter(|idx| *idx < PlayerInventory::MAIN_SIZE)
+            .unwrap_or(slot_index);
+
         let item_key = if event.is_signing {
             "written_book"
         } else {
             "writable_book"
         };
         if let Some(item) = Item::from_registry_key(item_key) {
-            let new_stack = ItemStack::new(1, item);
-            player.inventory.set_stack(slot_index, new_stack).await;
+            let stack_ref = player.inventory.get_stack(slot_index).await;
+            let mut stack = stack_ref.lock().await.clone();
+            if stack.item.id != Item::WRITABLE_BOOK.id && stack.item.id != Item::WRITTEN_BOOK.id {
+                return;
+            }
+
+            // Keep existing stack patch/components (book payload) and only update the item kind.
+            if stack.item.id == item.id {
+                return;
+            }
+            stack.item = item;
+            player.inventory.set_stack(slot_index, stack).await;
         }
     }
 

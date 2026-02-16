@@ -1438,54 +1438,17 @@ impl Entity {
                 let source_axis = source_portal.as_ref().map(|p| p.axis);
                 drop(portal_manager);
 
-                let (mut teleport_pos, new_yaw) = if let Some(dest_result) =
-                    NetherPortal::search_for_portal(&dest_world, target_pos).await
-                {
-                    let base_pos = source_portal.as_ref().map_or_else(
-                        || dest_result.get_teleport_position(),
-                        |source| {
-                            let source_result = PortalSearchResult {
-                                lower_corner: source.lower_corner,
-                                axis: source.axis,
-                                width: source.width,
-                                height: source.height,
-                            };
-                            let relative_pos = source_result.entity_pos_in_portal(pos, &dimensions);
-                            dest_result.calculate_exit_position(relative_pos, &dimensions)
-                        },
-                    );
-                    let final_pos = dest_result
-                        .find_open_position(&dest_world, base_pos, &dimensions)
-                        .await;
-                    let yaw = dest_result.calculate_teleport_yaw(current_yaw, source_axis);
-                    (final_pos, Some(yaw))
-                } else if let Some((build_pos, axis, is_fallback)) =
-                    NetherPortal::find_safe_location(
-                        &dest_world,
-                        target_pos,
-                        pumpkin_data::block_properties::HorizontalAxis::X,
-                    )
-                    .await
-                {
-                    NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback)
-                        .await;
-                    let new_portal = PortalSearchResult {
-                        lower_corner: build_pos,
-                        axis,
-                        width: 2,
-                        height: 3,
-                    };
-                    let center_pos = new_portal.get_teleport_position();
-                    let final_pos = new_portal
-                        .find_open_position(&dest_world, center_pos, &dimensions)
-                        .await;
-                    let yaw = new_portal.calculate_teleport_yaw(current_yaw, source_axis);
-                    (final_pos, Some(yaw))
-                } else {
-                    (target_pos.0.to_f64(), None)
-                };
-
                 let current_world = self.world.load();
+                let mut portal_target_pos = target_pos;
+                let mut portal_target_fallback_pos = target_pos.0.to_f64();
+                let mut search_radius = if dest_world.dimension.has_ceiling {
+                    16
+                } else {
+                    128
+                };
+                let mut can_create_portal = true;
+                let mut creation_radius = 16;
+
                 if let Some(server) = current_world.server.upgrade()
                     && let Some(player) = current_world.get_player_by_id(self.entity_id)
                 {
@@ -1506,19 +1469,28 @@ impl Entity {
                         player,
                         from_position,
                         current_world.uuid,
-                        teleport_pos,
+                        portal_target_fallback_pos,
                         dest_world.uuid,
                         cause.to_string(),
-                        128,
-                        true,
-                        16,
+                        search_radius,
+                        can_create_portal,
+                        creation_radius,
                     );
                     let event = server.plugin_manager.fire(event).await;
                     if event.cancelled {
                         return;
                     }
 
-                    teleport_pos = event.to_position;
+                    portal_target_fallback_pos = event.to_position;
+                    portal_target_pos = BlockPos::floored(
+                        event.to_position.x,
+                        event.to_position.y,
+                        event.to_position.z,
+                    );
+                    search_radius = event.search_radius.max(0);
+                    can_create_portal = event.can_create_portal;
+                    creation_radius = event.creation_radius.max(0);
+
                     if event.to_world_uuid != dest_world.uuid
                         && let Some(found) = server
                             .worlds
@@ -1529,6 +1501,55 @@ impl Entity {
                         dest_world = found.clone();
                     }
                 }
+
+                let (teleport_pos, new_yaw) = if let Some(dest_result) =
+                    NetherPortal::search_for_portal(&dest_world, portal_target_pos, search_radius)
+                        .await
+                {
+                    let base_pos = source_portal.as_ref().map_or_else(
+                        || dest_result.get_teleport_position(),
+                        |source| {
+                            let source_result = PortalSearchResult {
+                                lower_corner: source.lower_corner,
+                                axis: source.axis,
+                                width: source.width,
+                                height: source.height,
+                            };
+                            let relative_pos = source_result.entity_pos_in_portal(pos, &dimensions);
+                            dest_result.calculate_exit_position(relative_pos, &dimensions)
+                        },
+                    );
+                    let final_pos = dest_result
+                        .find_open_position(&dest_world, base_pos, &dimensions)
+                        .await;
+                    let yaw = dest_result.calculate_teleport_yaw(current_yaw, source_axis);
+                    (final_pos, Some(yaw))
+                } else if can_create_portal
+                    && let Some((build_pos, axis, is_fallback)) = NetherPortal::find_safe_location(
+                        &dest_world,
+                        portal_target_pos,
+                        pumpkin_data::block_properties::HorizontalAxis::X,
+                        creation_radius,
+                    )
+                    .await
+                {
+                    NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback)
+                        .await;
+                    let new_portal = PortalSearchResult {
+                        lower_corner: build_pos,
+                        axis,
+                        width: 2,
+                        height: 3,
+                    };
+                    let center_pos = new_portal.get_teleport_position();
+                    let final_pos = new_portal
+                        .find_open_position(&dest_world, center_pos, &dimensions)
+                        .await;
+                    let yaw = new_portal.calculate_teleport_yaw(current_yaw, source_axis);
+                    (final_pos, Some(yaw))
+                } else {
+                    (portal_target_fallback_pos, None)
+                };
 
                 // Teleport the main entity
                 caller

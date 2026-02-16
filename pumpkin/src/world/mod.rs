@@ -1520,6 +1520,67 @@ impl World {
         player: &Arc<Player>,
         server: &Server,
     ) {
+        // Resolve initial spawn transform up-front so spawn-location events can redirect worlds
+        // before any login/play packets are emitted.
+        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
+            let position = player.position();
+            let yaw = player.living_entity.entity.yaw.load();
+            let pitch = player.living_entity.entity.pitch.load();
+            (position, yaw, pitch)
+        } else {
+            let info = &self.level_info.load();
+            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
+            let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
+
+            let position = Vector3::new(
+                f64::from(info.spawn_x) + 0.5,
+                f64::from(pos_y),
+                f64::from(info.spawn_z) + 0.5,
+            );
+            (position, info.spawn_yaw, info.spawn_pitch)
+        };
+
+        let mut position = position;
+        if let Some(server_ref) = self.server.upgrade() {
+            let event = PlayerSpawnLocationEvent::new(player.clone(), position, self.uuid);
+            let event = server_ref.plugin_manager.fire(event).await;
+            position = event.spawn_position;
+
+            if event.world_uuid != self.uuid {
+                let target_world = server_ref
+                    .worlds
+                    .load()
+                    .iter()
+                    .find(|w| w.uuid == event.world_uuid)
+                    .cloned();
+
+                if let Some(target_world) = target_world {
+                    // Move player before sending login packets so client starts in the target world.
+                    self.remove_player(player, false).await;
+                    target_world.players.rcu(|current_list| {
+                        let mut new_list = (**current_list).clone();
+                        new_list.push(player.clone());
+                        new_list
+                    });
+                    player
+                        .chunk_manager
+                        .lock()
+                        .await
+                        .change_world(&self.level, target_world.clone());
+                    player.unload_watched_chunks(self).await;
+                    player.living_entity.entity.set_world(target_world.clone());
+
+                    Box::pin(target_world.spawn_java_player(base_config, player, server)).await;
+                    return;
+                }
+
+                log::warn!(
+                    "PlayerSpawnLocationEvent requested unknown world UUID {}, continuing in current world",
+                    event.world_uuid
+                );
+            }
+        }
+
         let dimensions: Vec<ResourceLocation> = server
             .dimensions
             .iter()
@@ -1583,35 +1644,6 @@ impl World {
         // Spawn in initial chunks
         // This is made before the player teleport so that the player doesn't glitch out when spawning
         chunker::update_position(player).await;
-
-        // Teleport
-        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
-            let position = player.position();
-            let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
-            let pitch = player.living_entity.entity.pitch.load();
-
-            (position, yaw, pitch)
-        } else {
-            let info = &self.level_info.load();
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
-            );
-            (position, info.spawn_yaw, info.spawn_pitch)
-        };
-
-        let mut position = position;
-        if let Some(server) = self.server.upgrade() {
-            let event = PlayerSpawnLocationEvent::new(player.clone(), position, self.uuid);
-            let event = server.plugin_manager.fire(event).await;
-            if event.world_uuid == self.uuid {
-                position = event.spawn_position;
-            }
-        }
 
         let velocity = player.living_entity.entity.velocity.load();
 

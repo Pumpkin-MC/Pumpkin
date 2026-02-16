@@ -470,16 +470,18 @@ impl NetherPortal {
     pub async fn search_for_portal(
         world: &Arc<World>,
         target_pos: BlockPos,
+        search_radius: i32,
     ) -> Option<PortalSearchResult> {
         let min_y = world.min_y;
         let max_y = min_y + world.dimension.height - 1;
         let worldborder = world.worldborder.lock().await;
 
-        let search_radius = if world.dimension.has_ceiling {
+        let default_search_radius = if world.dimension.has_ceiling {
             SEARCH_RADIUS_NETHER
         } else {
             SEARCH_RADIUS_OVERWORLD
         };
+        let search_radius = search_radius.clamp(0, default_search_radius.max(256));
 
         let search_max_y = if world.dimension.has_ceiling {
             (min_y + world.dimension.logical_height - 1).min(max_y)
@@ -548,10 +550,12 @@ impl NetherPortal {
         world: &Arc<World>,
         target_pos: BlockPos,
         axis: HorizontalAxis,
+        creation_radius: i32,
     ) -> Option<(BlockPos, HorizontalAxis, bool)> {
         let min_y = world.min_y;
         let max_y = min_y + world.dimension.height - 1;
         let worldborder = world.worldborder.lock().await;
+        let creation_radius = creation_radius.clamp(0, 256);
 
         let top_y_limit = if world.dimension.has_ceiling {
             (min_y + world.dimension.logical_height - 1).min(max_y)
@@ -568,8 +572,8 @@ impl NetherPortal {
         let mut ideal_pos: Option<(BlockPos, HorizontalAxis, f64)> = None;
         let mut acceptable_pos: Option<(BlockPos, HorizontalAxis, f64)> = None;
 
-        for offset_x in -16..=16 {
-            for offset_z in -16..=16 {
+        for offset_x in -creation_radius..=creation_radius {
+            for offset_z in -creation_radius..=creation_radius {
                 let check_x = target_pos.0.x + offset_x;
                 let check_z = target_pos.0.z + offset_z;
 
