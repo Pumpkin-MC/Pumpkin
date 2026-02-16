@@ -969,7 +969,7 @@ impl FireworksImpl {
             .get_byte("flight_duration")
             .map(i32::from)
             .or_else(|| compound.get_int("flight_duration"))
-            .unwrap_or(0);
+            .unwrap_or(1);
 
         let mut explosions = Vec::new();
         if let Some(list) = compound.get_list("explosions") {
