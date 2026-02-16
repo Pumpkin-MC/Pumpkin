@@ -2620,12 +2620,7 @@ impl Player {
 
         let server = self.world().server.upgrade().unwrap();
         let player = server.get_player_by_uuid(self.gameprofile.id).unwrap();
-        let event = InventoryCloseEvent {
-            player,
-            identifier,
-            window_type,
-            sync_id,
-        };
+        let event = InventoryCloseEvent::new(player, identifier, window_type, sync_id);
         server.plugin_manager.fire(event).await;
     }
 
@@ -2659,12 +2654,7 @@ impl Player {
 
         // i need a Arc<Player> not Arc<&Player>
         let player = server.get_player_by_uuid(self.gameprofile.id).unwrap();
-        let event = InventoryOpenEvent {
-            player,
-            window_type,
-            sync_id,
-            cancelled: false,
-        };
+        let event = InventoryOpenEvent::new(player, window_type, sync_id);
 
         send_cancellable! {{
             server;
