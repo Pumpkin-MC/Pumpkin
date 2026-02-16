@@ -17,9 +17,9 @@ use crate::serialization::coders::{
 use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
 use crate::serialization::keyable::Keyable;
+use crate::serialization::map_codec::ComposedMapCodec;
 #[allow(unused_imports)] // Only used in documentation.
 use crate::serialization::map_codec::MapCodec;
-use crate::serialization::map_codec::ComposedMapCodec;
 use crate::serialization::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
 use crate::serialization::map_codecs::optional_field::{
     DefaultValueProviderMapCodec, OptionalFieldMapCodec, new_default_value_provider_map_codec,
@@ -188,38 +188,10 @@ macro_rules! impl_unsigned_transformer_codec {
     };
 }
 
-impl_unsigned_transformer_codec!(
-    UBYTE_CODEC,
-    ByteCodec,
-    UbyteCodec,
-    u8,
-    i8,
-    BYTE_CODEC
-);
-impl_unsigned_transformer_codec!(
-    USHORT_CODEC,
-    ShortCodec,
-    UshortCodec,
-    u16,
-    i16,
-    SHORT_CODEC
-);
-impl_unsigned_transformer_codec!(
-    UINT_CODEC,
-    IntCodec,
-    UintCodec,
-    u32,
-    i32,
-    INT_CODEC
-);
-impl_unsigned_transformer_codec!(
-    ULONG_CODEC,
-    LongCodec,
-    UlongCodec,
-    u64,
-    i64,
-    LONG_CODEC
-);
+impl_unsigned_transformer_codec!(UBYTE_CODEC, ByteCodec, UbyteCodec, u8, i8, BYTE_CODEC);
+impl_unsigned_transformer_codec!(USHORT_CODEC, ShortCodec, UshortCodec, u16, i16, SHORT_CODEC);
+impl_unsigned_transformer_codec!(UINT_CODEC, IntCodec, UintCodec, u32, i32, INT_CODEC);
+impl_unsigned_transformer_codec!(ULONG_CODEC, LongCodec, UlongCodec, u64, i64, LONG_CODEC);
 
 // Modifier methods
 
