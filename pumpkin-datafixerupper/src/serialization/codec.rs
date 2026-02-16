@@ -384,12 +384,12 @@ where
 /// }
 ///
 /// // Type to avoid writing this struct codec's type again.
-/// pub type PersonCodec = StructCodec2<Person, FieldMapCodec<StringCodec>, FieldMapCodec<UnsignedIntCodec>>;
+/// pub type PersonCodec = StructCodec2<Person, FieldMapCodec<StringCodec>, FieldMapCodec<UintCodec>>;
 ///
 /// // The actual codec.
 /// pub static PERSON_CODEC: PersonCodec = struct_codec!(
 ///      for_getter(field(&STRING_CODEC, "name"), |person: &Person| &person.name),
-///      for_getter(field(&UNSIGNED_INT_CODEC, "age"), |person: &Person| &person.age),
+///      for_getter(field(&UINT_CODEC, "age"), |person: &Person| &person.age),
 ///      |name, age| Person {name, age}
 ///  );
 /// ```
