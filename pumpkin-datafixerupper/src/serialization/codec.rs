@@ -165,8 +165,8 @@ define_const_codec!(DOUBLE_CODEC, DoubleCodec, f64, double);
 define_const_codec!(STRING_CODEC, StringCodec, String, String);
 
 define_const_codec!(vec BYTE_BUFFER_CODEC, ByteBufferCodec, i8, ByteBuffer);
-define_const_codec!(vec INT_STREAM_CODEC, IntStreamCodec, i16, IntStream);
-define_const_codec!(vec LONG_STREAM_CODEC, LongStreamCodec, i32, LongStream);
+define_const_codec!(vec INT_STREAM_CODEC, IntStreamCodec, i32, IntStream);
+define_const_codec!(vec LONG_STREAM_CODEC, LongStreamCodec, i64, LongStream);
 
 // Unsigned types
 
@@ -503,7 +503,7 @@ pub const fn lenient_optional_field<C: Codec>(
     codec: &'static C,
     name: &'static str,
 ) -> OptionalFieldMapCodec<C> {
-    new_optional_field_map_codec(codec, name, false)
+    new_optional_field_map_codec(codec, name, true)
 }
 
 pub type DefaultedFieldCodec<C> =
