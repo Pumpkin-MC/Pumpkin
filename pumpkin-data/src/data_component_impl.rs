@@ -352,7 +352,7 @@ pub struct UseRemainderImpl;
 pub struct UseCooldownImpl;
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum DamageResistantType {
-    /// Damage always delt to ender dragons
+    /// Damage always dealt to ender dragons
     AlwaysHurtsEnderDragons,
     /// Destroys armor stands in a single hit
     AlwaysKillsArmorStands,
