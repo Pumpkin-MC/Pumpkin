@@ -25,12 +25,12 @@ use pumpkin_world::{
     block::entities::PropertyDelegate,
     inventory::{ComparableInventory, Inventory},
 };
-use std::hash::{BuildHasher, Hasher, RandomState};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
 use std::{cmp::max, pin::Pin};
 use tokio::sync::Mutex;
 use tracing::warn;
+use uuid::Uuid;
 
 const SLOT_INDEX_OUTSIDE: i32 = -999;
 
@@ -1073,16 +1073,7 @@ pub struct ScreenHandlerBehaviour {
 impl ScreenHandlerBehaviour {
     #[must_use]
     pub fn new(sync_id: u8, window_type: Option<WindowType>) -> Self {
-        // Creation of the identifier, this allows plugin developers to distinguish between inventories.
-        let random_state = RandomState::new();
-        let mut hasher = random_state.build_hasher();
-        hasher.write_u64(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos() as u64,
-        );
-        let identifier_hash = format!("{:x}", hasher.finish());
+        let identifier = Uuid::new_v4().to_string();
 
         Self {
             slots: Vec::new(),
@@ -1099,7 +1090,7 @@ impl ScreenHandlerBehaviour {
             tracked_property_values: Vec::new(),
             window_type,
             drag_slots: Vec::new(),
-            identifier: identifier_hash,
+            identifier,
         }
     }
 
