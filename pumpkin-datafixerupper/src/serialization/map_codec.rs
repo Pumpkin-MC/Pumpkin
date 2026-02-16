@@ -48,7 +48,7 @@ use std::fmt::Display;
 /// - [`xmap`]
 /// - [`flat_xmap`]
 ///
-/// ## Validator Map Codecs
+/// # Validator Map Codecs
 /// The [`validate`] function returns a codec wrapper that validates a value before encoding and after decoding.
 /// A validated codec takes a function that can either return an [`Ok`] for a success,
 /// or an [`Err`] with the provided message to place in a `DataResult`.
