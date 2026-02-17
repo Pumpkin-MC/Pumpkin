@@ -547,6 +547,10 @@ impl Entity {
         }
     }
 
+    pub fn get_eye_height(&self) -> f64 {
+        f64::from(Self::get_entity_dimensions(self.pose.load()).eye_height)
+    }
+
     /// Updates the entity's position, block position, and chunk position.
     ///
     /// This function calculates the new position, block position, and chunk position based on the provided coordinates. If any of these values change, the corresponding fields are updated.
@@ -909,7 +913,7 @@ impl Entity {
         let min = aabb.min_block_pos();
         let max = aabb.max_block_pos();
 
-        let eye_height = f64::from(self.entity_dimension.load().eye_height);
+        let eye_height = self.get_eye_height();
         let mut eye_level_box = aabb;
         eye_level_box.min.y += eye_height;
         eye_level_box.max.y = eye_level_box.min.y;
@@ -1348,6 +1352,15 @@ impl Entity {
                     self.on_ground.load(Ordering::SeqCst),
                     false,
                 )
+                .await;
+        }
+
+        if motion.y != final_move.y {
+            let world = self.world.load();
+            let block = self.get_block_with_y_offset(0.2).await.1;
+            world
+                .block_registry
+                .update_entity_movement_after_fall_on(block, caller.as_ref())
                 .await;
         }
     }
@@ -2048,15 +2061,22 @@ impl Entity {
         pitch: Option<f32>,
         _world: Arc<World>,
     ) {
-        // TODO: handle world change
+        // Update server-side position and bounding box
+        self.set_pos(position);
+        if let Some(yaw) = yaw {
+            self.yaw.store(yaw);
+        }
+        if let Some(pitch) = pitch {
+            self.set_pitch(pitch);
+        }
         self.world
             .load()
             .broadcast_packet_all(&CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
                 Vector3::new(0.0, 0.0, 0.0),
-                yaw.unwrap_or(0.0),
-                pitch.unwrap_or(0.0),
+                yaw.unwrap_or(self.yaw.load()),
+                pitch.unwrap_or(self.pitch.load()),
                 self.on_ground.load(Ordering::SeqCst),
             ))
             .await;
