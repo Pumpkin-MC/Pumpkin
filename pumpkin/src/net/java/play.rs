@@ -26,9 +26,9 @@ use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
+use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
 use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
-use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
@@ -1332,10 +1332,8 @@ impl JavaClient {
 
         for registered_channel in payload_str.split('\0').filter(|entry| !entry.is_empty()) {
             if is_register {
-                let event = PlayerRegisterChannelEvent::new(
-                    player.clone(),
-                    registered_channel.to_string(),
-                );
+                let event =
+                    PlayerRegisterChannelEvent::new(player.clone(), registered_channel.to_string());
                 let _ = server.plugin_manager.fire(event).await;
             } else {
                 let event = PlayerUnregisterChannelEvent::new(
