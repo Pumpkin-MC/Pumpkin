@@ -39,19 +39,11 @@ use crate::entity::{
     player::Player,
 };
 
-/// Enderman speed boost when targeting a player (vanilla: +0.15)
 const SPEED_BOOST: f64 = 0.15;
 
-/// Check if a damage type is a projectile (vanilla: `IS_PROJECTILE` tag).
 fn is_projectile_damage(dt: DamageType) -> bool {
-    dt == DamageType::ARROW
-        || dt == DamageType::TRIDENT
-        || dt == DamageType::MOB_PROJECTILE
-        || dt == DamageType::UNATTRIBUTED_FIREBALL
-        || dt == DamageType::FIREBALL
-        || dt == DamageType::WITHER_SKULL
-        || dt == DamageType::THROWN
-        || dt == DamageType::WIND_CHARGE
+    let (names, _) = pumpkin_data::tag::DamageType::MINECRAFT_IS_PROJECTILE;
+    names.contains(&dt.message_id)
 }
 
 pub struct EndermanEntity {
@@ -66,6 +58,7 @@ impl EndermanEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
         let mut mob_entity = MobEntity::new(entity);
         mob_entity.attack_damage = 7.0;
+        mob_entity.follow_range = 64.0;
         let entity = Self {
             mob_entity,
             carried_block: AtomicCell::new(None),
@@ -165,15 +158,17 @@ impl EndermanEntity {
         self.teleport_to(x, y, z).await
     }
 
-    /// Core teleport: validate position and move.
     pub async fn teleport_to(&self, x: f64, y: f64, z: f64) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let origin = entity.pos.load();
         let world = entity.world.load();
 
-        let mut target_y = y.clamp(-64.0, 320.0);
+        let min_y = f64::from(world.dimension.min_y);
+        let max_y = f64::from(world.dimension.min_y + world.dimension.height - 1);
+        let mut target_y = y.clamp(min_y, max_y);
 
-        // Scan down to find solid ground (vanilla: blocksMovement check)
+        // TODO: Use BlockView.findSupportingBlockPos instead of only scanning downward.
+        // Current approach teleports into caves if target Y is inside terrain.
         let block_x = x.floor() as i32;
         let mut block_y = target_y.floor() as i32;
         let block_z = z.floor() as i32;
@@ -185,7 +180,7 @@ impl EndermanEntity {
                 found_ground = true;
                 break;
             }
-            if block_y <= -64 {
+            if block_y <= world.dimension.min_y {
                 break;
             }
             block_y -= 1;
@@ -225,15 +220,14 @@ impl EndermanEntity {
 
         let new_pos = Vector3::new(x, target_y, z);
 
-        world
-            .spawn_particle(
-                origin,
-                Vector3::new(0.0, 0.0, 0.0),
-                0.0,
-                128,
-                Particle::Portal,
-            )
-            .await;
+        for pos in &[origin, new_pos] {
+            world
+                .spawn_particle(*pos, Vector3::new(0.0, 0.0, 0.0), 0.0, 128, Particle::Portal)
+                .await;
+            world
+                .play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos)
+                .await;
+        }
 
         entity.set_pos(new_pos);
 
@@ -248,38 +242,11 @@ impl EndermanEntity {
             ))
             .await;
 
-        world
-            .spawn_particle(
-                new_pos,
-                Vector3::new(0.0, 0.0, 0.0),
-                0.0,
-                128,
-                Particle::Portal,
-            )
-            .await;
-
-        world
-            .play_sound(
-                Sound::EntityEndermanTeleport,
-                SoundCategory::Hostile,
-                &origin,
-            )
-            .await;
-        world
-            .play_sound(
-                Sound::EntityEndermanTeleport,
-                SoundCategory::Hostile,
-                &new_pos,
-            )
-            .await;
-
-        // Stop navigator to prevent continuing old pathfinding after teleport
         self.mob_entity.navigator.lock().await.stop();
 
         true
     }
 
-    /// Set or clear the enderman's target, managing angry state and speed boost.
     pub async fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let mut mob_target = self.mob_entity.target.lock().await;
         (*mob_target).clone_from(&target);
@@ -287,6 +254,8 @@ impl EndermanEntity {
 
         if target.is_some() {
             self.set_angry(true).await;
+            // TODO: Use attribute modifiers instead of direct arithmetic on movement_speed.
+            // If base speed is modified between add/remove, the speed will drift.
             if !self.speed_boosted.swap(true, Ordering::Relaxed) {
                 let living = &self.mob_entity.living_entity;
                 let current = living.movement_speed.load();
@@ -351,9 +320,8 @@ impl EndermanEntity {
         self.carried_block.load()
     }
 
-    /// Check if a player is looking directly at the enderman's eyes.
     pub async fn is_player_staring(&self, player: &Player) -> bool {
-        // Gaze disguise: player wearing carved pumpkin on head prevents aggro
+        // Carved pumpkin on head prevents aggro
         let equipment = player.living_entity.entity_equipment.lock().await;
         let head_item = equipment.get(&EquipmentSlot::HEAD);
         let head_stack = head_item.lock().await;
@@ -382,7 +350,6 @@ impl EndermanEntity {
             (yaw.cos() * cos_pitch) as f64,
         );
 
-        // Direction from player to enderman eyes
         let dx = enderman_pos.x - player_pos.x;
         let dy = enderman_eye_y - player_eye_y;
         let dz = enderman_pos.z - player_pos.z;
@@ -468,24 +435,22 @@ impl Mob for EndermanEntity {
 
             let pos = entity.pos.load();
             let world = entity.world.load();
-            let particles: Vec<(Vector3<f64>, Vector3<f32>)> = {
+            let particles = {
                 let mut rng = rand::rng();
-                (0..2)
-                    .map(|_| {
-                        (
-                            Vector3::new(
-                                pos.x + rng.random_range(-0.5..0.5),
-                                pos.y + rng.random_range(0.0..2.9),
-                                pos.z + rng.random_range(-0.5..0.5),
-                            ),
-                            Vector3::new(
-                                (rng.random_range(0.0f32..1.0) - 0.5) * 2.0,
-                                -rng.random_range(0.0f32..1.0),
-                                (rng.random_range(0.0f32..1.0) - 0.5) * 2.0,
-                            ),
-                        )
-                    })
-                    .collect()
+                std::array::from_fn::<_, 2, _>(|_| {
+                    (
+                        Vector3::new(
+                            pos.x + rng.random_range(-0.5..0.5),
+                            pos.y + rng.random_range(0.0..2.9),
+                            pos.z + rng.random_range(-0.5..0.5),
+                        ),
+                        Vector3::new(
+                            (rng.random_range(0.0f32..1.0) - 0.5) * 2.0,
+                            -rng.random_range(0.0f32..1.0),
+                            (rng.random_range(0.0f32..1.0) - 0.5) * 2.0,
+                        ),
+                    )
+                })
             };
             for (particle_pos, offset) in particles {
                 world
@@ -516,17 +481,11 @@ impl Mob for EndermanEntity {
 
     fn on_damage<'a>(
         &'a self,
-        damage_type: DamageType,
-        source: Option<&'a dyn EntityBase>,
+        _damage_type: DamageType,
+        _source: Option<&'a dyn EntityBase>,
     ) -> GoalFuture<'a, ()> {
-        let is_projectile = is_projectile_damage(damage_type);
-        let attacker_is_living = source.is_some_and(|s| s.get_living_entity().is_some());
-        let random_check = rand::rng().random_range(0..10) != 0;
-
         Box::pin(async move {
-            if !is_projectile && !attacker_is_living && random_check {
-                self.teleport_randomly().await;
-            }
+            self.teleport_randomly().await;
         })
     }
 }
