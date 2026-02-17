@@ -80,7 +80,8 @@ pub trait DynamicOps {
     /// Tries to get a string represented by this `DynamicOps`.
     fn get_string(&self, input: &Self::Value) -> DataResult<String>;
 
-    /// Gets an [`Iterator`] from a map represented by this `DynamicOps`.
+    /// Gets an [`Iterator`] of key-value pairs from a map represented by this `DynamicOps`.
+    /// This is only applicable to map-like values.
     fn get_map_iter<'a>(
         &'a self,
         input: &'a Self::Value,
@@ -93,11 +94,11 @@ pub trait DynamicOps {
     ) -> DataResult<impl MapLike<Value = Self::Value> + 'a>;
 
     /// Gets an [`Iterator`] from a generic value represented by this `DynamicOps`.
-    /// This is the equivalent of DFU's `getStream()` function in `DynamicOps`.
+    /// This is the equivalent of DFU's `getStream()` function, and is only applicable to list-like values.
     fn get_iter(&self, input: Self::Value) -> DataResult<impl Iterator<Item = Self::Value>>;
 
-    /// Gets a `Vec<i8>` from a generic value represented by this `DynamicOps`.
-    /// This is the equivalent of DFU's `getByteBuffer()` function in `DynamicOps`.
+    /// Gets a `Box<[u8]>` (byte buffer) from a generic value represented by this `DynamicOps`.
+    /// This is the equivalent of DFU's `getByteBuffer()` function.
     fn get_byte_buffer(&self, input: Self::Value) -> DataResult<Box<[u8]>> {
         self.get_iter(input).flat_map(|iter| {
             // We want all elements in the iterator to be numbers.
@@ -112,13 +113,13 @@ pub trait DynamicOps {
         })
     }
 
-    /// Creates a byte list that can be represented by this `DynamicOps` using a byte buffer.
+    /// Creates a byte buffer that can be represented by this `DynamicOps` using a [`Vec<u8>`].
     fn create_byte_buffer(&self, buffer: Vec<u8>) -> Self::Value {
         self.create_list(buffer.iter().map(|b| self.create_byte(*b as i8)))
     }
 
-    /// Gets a [`Vec<i32>`] from a generic value represented by this `DynamicOps`.
-    /// This is the equivalent of DFU's `getIntStream()` function in `DynamicOps`.
+    /// Gets a [`Vec<i32>`] (`int` list) from a generic value represented by this `DynamicOps`.
+    /// This is the equivalent of DFU's `getIntStream()` function.
     fn get_int_list(&self, input: Self::Value) -> DataResult<Vec<i32>> {
         self.get_iter(input).flat_map(|iter| {
             // We want all elements in the iterator to be numbers.
@@ -133,13 +134,13 @@ pub trait DynamicOps {
         })
     }
 
-    /// Creates an `int` list that can be represented by this `DynamicOps` using a byte buffer.
+    /// Creates an `int` list ([`Vec<i32>`]) that can be represented by this `DynamicOps`.
     fn create_int_list(&self, vec: Vec<i32>) -> Self::Value {
         self.create_list(vec.into_iter().map(|i| self.create_int(i)))
     }
 
-    /// Gets a `long` (`i64` in Rust) [`Iterator`] from a generic value represented by this `DynamicOps`.
-    /// This is the equivalent of DFU's `getLongStream()` function in `DynamicOps`.
+    /// Gets a [`Vec<i64>`] (`long` list) from a generic value represented by this `DynamicOps`.
+    /// This is the equivalent of DFU's `getLongStream()` function.
     fn get_long_list(&self, input: Self::Value) -> DataResult<Vec<i64>> {
         self.get_iter(input).flat_map(|iter| {
             // We want all elements in the iterator to be numbers.
@@ -154,7 +155,7 @@ pub trait DynamicOps {
         })
     }
 
-    /// Creates a `long` list that can be represented by this `DynamicOps` using a byte buffer.
+    /// Creates a `long` list ([`Vec<i64>`]) that can be represented by this `DynamicOps`.
     fn create_long_list(&self, vec: Vec<i64>) -> Self::Value {
         self.create_list(vec.into_iter().map(|l| self.create_long(l)))
     }
@@ -163,7 +164,7 @@ pub trait DynamicOps {
     /// This is only valid if `list` is an actual list.
     fn merge_into_list(&self, list: Self::Value, value: Self::Value) -> DataResult<Self::Value>;
 
-    /// Merges a list of values represented by this `DynamicOps` to another such list.
+    /// Merges a list of values represented by this `DynamicOps` into another such list.
     /// This is only valid if `list` is an actual list.
     fn merge_values_into_list<I>(&self, list: Self::Value, values: I) -> DataResult<Self::Value>
     where
@@ -178,8 +179,8 @@ pub trait DynamicOps {
         result
     }
 
-    /// Merges a value represented by this `DynamicOps` to a list represented by this `DynamicOps`.
-    /// This is only valid if `map` is an actual map or is empty. This returns a new map.
+    /// Adds a key-value pair, both represented by this `DynamicOps`, to a map also represented by this `DynamicOps`,
+    /// returning the new map. This is only valid if `map` is an actual map or is empty.
     fn merge_into_map(
         &self,
         map: Self::Value,
@@ -189,8 +190,8 @@ pub trait DynamicOps {
     where
         Self::Value: Clone;
 
-    /// Merges a map represented by this `DynamicOps` to another such map.
-    /// This is only valid if `map` is an actual map or is empty. This returns a new map.
+    /// Merges a map represented by this `DynamicOps` into another such map, returning the new map.
+    /// This is only valid if `map` is an actual map or is empty.
     fn merge_entries_into_map<I>(&self, map: Self::Value, entries: I) -> DataResult<Self::Value>
     where
         I: IntoIterator<Item = (Self::Value, Self::Value)>,
@@ -205,8 +206,8 @@ pub trait DynamicOps {
         result
     }
 
-    /// Merges a map-like represented by this `DynamicOps` to another such map.
-    /// This is only valid if `map` is an actual map or is empty. This returns a new map.
+    /// Merges a [`MapLike`] represented by this `DynamicOps` into another such map, returning the new map.
+    /// This is only valid if `map` is an actual map or is empty.
     fn merge_map_like_into_map<M>(
         &self,
         map: Self::Value,
@@ -226,7 +227,7 @@ pub trait DynamicOps {
         result
     }
 
-    /// Merges a value represented by this `DynamicOps` to a primitive type.
+    /// Merges a value represented by this `DynamicOps` into a primitive type.
     fn merge_into_primitive(
         &self,
         prefix: Self::Value,
@@ -287,7 +288,7 @@ where {
     }
 
     /// Tries to update a value represented by this `DynamicOps` of a map also represented by this `DynamicOps`, with
-    /// a key and a mapper function (`f`) whose return value will be the new key's value.
+    /// a key and a mapper function (`f`) whose return value will be the new value of the specified key.
     /// - It this was successful, this returns the newly manipulated map.
     /// - Otherwise, this simply returns `input`.
     fn update_element<F>(&self, input: &Self::Value, key: &str, f: F) -> Self::Value

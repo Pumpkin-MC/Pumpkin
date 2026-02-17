@@ -1,6 +1,6 @@
 use crate::serialization::{data_result::DataResult, dynamic_ops::DynamicOps};
 
-/// A trait for building lists. If anything goes wrong while adding elements, the stored [`DataResult`] becomes an error.
+/// A trait for building lists.
 #[must_use]
 pub trait ListBuilder {
     type Value;
