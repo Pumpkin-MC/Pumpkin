@@ -17,6 +17,7 @@ pub struct PlayerUnregisterChannelEvent {
 
 impl PlayerUnregisterChannelEvent {
     /// Creates a new instance of `PlayerUnregisterChannelEvent`.
+    #[expect(clippy::missing_const_for_fn)]
     pub fn new(player: Arc<Player>, channel: String) -> Self {
         Self { player, channel }
     }

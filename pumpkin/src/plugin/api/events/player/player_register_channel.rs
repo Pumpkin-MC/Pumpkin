@@ -17,6 +17,7 @@ pub struct PlayerRegisterChannelEvent {
 
 impl PlayerRegisterChannelEvent {
     /// Creates a new instance of `PlayerRegisterChannelEvent`.
+    #[expect(clippy::missing_const_for_fn)]
     pub fn new(player: Arc<Player>, channel: String) -> Self {
         Self { player, channel }
     }
