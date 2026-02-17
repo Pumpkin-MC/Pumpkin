@@ -43,6 +43,7 @@ impl WitherEntity {
             .add(Attributes::FLYING_SPEED, 0.6)
             .add(Attributes::FOLLOW_RANGE, 40.0)
             .add(Attributes::MOVEMENT_SPEED, 0.6)
+            .add(Attributes::MAX_HEALTH, 300.0)
     }
 }
 

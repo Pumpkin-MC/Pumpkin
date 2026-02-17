@@ -4,8 +4,8 @@ use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DeathProtection,
-    Enchantments, Equippable, Food, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize,
-    PotionContents, Tool, Unbreakable,
+    Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemName, JukeboxPlayable,
+    MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable,
 };
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
@@ -49,6 +49,9 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
+        PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
+        Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
+        FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -648,6 +651,69 @@ pub struct PotionContentsImpl {
     pub custom_name: Option<String>,
 }
 
+impl PotionContentsImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let compound = tag.extract_compound()?;
+        let potion_id = if let Some(id) = compound.get_int("potion") {
+            Some(id)
+        } else if let Some(name) = compound.get_string("potion") {
+            // Handle "minecraft:swiftness" -> "swiftness"
+            let name = name.strip_prefix("minecraft:").unwrap_or(name);
+            crate::potion::Potion::from_name(name).map(|p| p.id as i32)
+        } else {
+            None
+        };
+
+        let custom_color = compound.get_int("custom_color");
+        let custom_name = compound.get_string("custom_name").map(|s| s.to_string());
+
+        let custom_effects = compound
+            .get_list("custom_effects")
+            .map(|list| {
+                list.iter()
+                    .filter_map(|item| {
+                        // Try to get the compound for this specific effect
+                        let effect_tag = item.extract_compound()?;
+
+                        // Try to get the ID
+                        let id = effect_tag.get_int("id")?;
+
+                        // Fallback values for optional fields
+                        let amplifier = effect_tag
+                            .get_int("amplifier")
+                            .or_else(|| effect_tag.get_byte("amplifier").map(i32::from))
+                            .unwrap_or(0);
+                        let duration = effect_tag
+                            .get_int("duration")
+                            .or_else(|| effect_tag.get_byte("duration").map(i32::from))
+                            .unwrap_or(0);
+                        let ambient = effect_tag.get_bool("ambient").unwrap_or(false);
+                        let show_particles = effect_tag.get_bool("show_particles").unwrap_or(true);
+                        let show_icon = effect_tag.get_bool("show_icon").unwrap_or(true);
+
+                        // Create the StatusEffectInstance
+                        Some(StatusEffectInstance {
+                            effect_id: id,
+                            amplifier,
+                            duration,
+                            ambient,
+                            show_particles,
+                            show_icon,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        Some(Self {
+            potion_id,
+            custom_color,
+            custom_effects,
+            custom_name,
+        })
+    }
+}
+
 impl DataComponentImpl for PotionContentsImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
@@ -680,6 +746,39 @@ impl DataComponentImpl for PotionContentsImpl {
         }
 
         NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+
+        if let Some(id) = self.potion_id {
+            digest.update(&[1u8]);
+            digest.update(&get_i32_hash(id).to_le_bytes());
+        }
+
+        if let Some(color) = self.custom_color {
+            digest.update(&[2u8]);
+            digest.update(&get_i32_hash(color).to_le_bytes());
+        }
+
+        if let Some(name) = &self.custom_name {
+            digest.update(&[3u8]);
+            digest.update(&get_str_hash(name).to_le_bytes());
+        }
+
+        if !self.custom_effects.is_empty() {
+            digest.update(&[4u8]);
+            for effect in &self.custom_effects {
+                digest.update(&get_i32_hash(effect.effect_id).to_le_bytes());
+                digest.update(&get_i32_hash(effect.amplifier).to_le_bytes());
+                digest.update(&get_i32_hash(effect.duration).to_le_bytes());
+                digest.update(&[effect.ambient as u8]);
+                digest.update(&[effect.show_particles as u8]);
+                digest.update(&[effect.show_icon as u8]);
+            }
+        }
+
+        digest.finalize() as i32
     }
 
     default_impl!(PotionContents);
@@ -721,10 +820,195 @@ pub struct ProvidesBannerPatternsImpl;
 pub struct RecipesImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct LodestoneTrackerImpl;
+/// Firework explosion shape types
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FireworkExplosionShape {
+    SmallBall = 0,
+    LargeBall = 1,
+    Star = 2,
+    Creeper = 3,
+    Burst = 4,
+}
+
+impl FireworkExplosionShape {
+    pub fn from_id(id: i32) -> Option<Self> {
+        match id {
+            0 => Some(Self::SmallBall),
+            1 => Some(Self::LargeBall),
+            2 => Some(Self::Star),
+            3 => Some(Self::Creeper),
+            4 => Some(Self::Burst),
+            _ => None,
+        }
+    }
+
+    pub fn to_id(&self) -> i32 {
+        *self as i32
+    }
+
+    pub fn to_name(&self) -> &str {
+        match self {
+            Self::SmallBall => "small_ball",
+            Self::LargeBall => "large_ball",
+            Self::Star => "star",
+            Self::Creeper => "creeper",
+            Self::Burst => "burst",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "small_ball" => Some(Self::SmallBall),
+            "large_ball" => Some(Self::LargeBall),
+            "star" => Some(Self::Star),
+            "creeper" => Some(Self::Creeper),
+            "burst" => Some(Self::Burst),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct FireworkExplosionImpl;
+pub struct FireworkExplosionImpl {
+    pub shape: FireworkExplosionShape,
+    pub colors: Vec<i32>,
+    pub fade_colors: Vec<i32>,
+    pub has_trail: bool,
+    pub has_twinkle: bool,
+}
+
+impl FireworkExplosionImpl {
+    pub fn new(
+        shape: FireworkExplosionShape,
+        colors: Vec<i32>,
+        fade_colors: Vec<i32>,
+        has_trail: bool,
+        has_twinkle: bool,
+    ) -> Self {
+        Self {
+            shape,
+            colors,
+            fade_colors,
+            has_trail,
+            has_twinkle,
+        }
+    }
+
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let compound = tag.extract_compound()?;
+        let shape = FireworkExplosionShape::from_name(compound.get_string("shape")?)?;
+        let colors = compound
+            .get_int_array("colors")
+            .map(|v| v.to_vec())
+            .unwrap_or_default();
+        let fade_colors = compound
+            .get_int_array("fade_colors")
+            .map(|v| v.to_vec())
+            .unwrap_or_default();
+        let has_trail = compound.get_bool("has_trail").unwrap_or(false);
+        let has_twinkle = compound.get_bool("has_twinkle").unwrap_or(false);
+
+        Some(Self {
+            shape,
+            colors,
+            fade_colors,
+            has_trail,
+            has_twinkle,
+        })
+    }
+}
+
+impl DataComponentImpl for FireworkExplosionImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("shape", self.shape.to_name().to_string());
+        compound.put("colors", NbtTag::IntArray(self.colors.clone()));
+        compound.put("fade_colors", NbtTag::IntArray(self.fade_colors.clone()));
+        compound.put_bool("has_trail", self.has_trail);
+        compound.put_bool("has_twinkle", self.has_twinkle);
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        digest.update(&[self.shape.to_id() as u8]);
+        for color in &self.colors {
+            digest.update(&get_i32_hash(*color).to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        for color in &self.fade_colors {
+            digest.update(&get_i32_hash(*color).to_le_bytes());
+        }
+        digest.update(&[4u8]);
+        digest.update(&[self.has_trail as u8]);
+        digest.update(&[self.has_twinkle as u8]);
+        digest.finalize() as i32
+    }
+
+    default_impl!(FireworkExplosion);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct FireworksImpl;
+pub struct FireworksImpl {
+    pub flight_duration: i32,
+    pub explosions: Vec<FireworkExplosionImpl>,
+}
+
+impl FireworksImpl {
+    pub fn new(flight_duration: i32, explosions: Vec<FireworkExplosionImpl>) -> Self {
+        Self {
+            flight_duration,
+            explosions,
+        }
+    }
+
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let compound = tag.extract_compound()?;
+        let flight_duration = compound
+            .get_byte("flight_duration")
+            .map(i32::from)
+            .or_else(|| compound.get_int("flight_duration"))
+            .unwrap_or(1);
+
+        let mut explosions = Vec::new();
+        if let Some(list) = compound.get_list("explosions") {
+            for item in list {
+                if let Some(explosion) = FireworkExplosionImpl::read_data(item) {
+                    explosions.push(explosion);
+                }
+            }
+        }
+
+        Some(Self {
+            flight_duration,
+            explosions,
+        })
+    }
+}
+
+impl DataComponentImpl for FireworksImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("flight_duration", self.flight_duration);
+        let explosions_list: Vec<NbtTag> = self.explosions.iter().map(|e| e.write_data()).collect();
+        compound.put_list("explosions", explosions_list);
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        digest.update(&get_i32_hash(self.flight_duration).to_le_bytes());
+        for explosion in &self.explosions {
+            digest.update(&get_i32_hash(explosion.get_hash()).to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        digest.finalize() as i32
+    }
+
+    default_impl!(Fireworks);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProfileImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

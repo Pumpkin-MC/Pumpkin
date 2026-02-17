@@ -2,6 +2,7 @@ use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::L
 use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
+use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
@@ -13,12 +14,14 @@ use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata}
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::item::ItemStack;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use tokio::sync::Mutex;
 
+pub mod bat;
 pub mod creeper;
 pub mod enderman;
 pub mod silverfish;
@@ -152,6 +155,10 @@ impl MobEntity {
             attack_damage -= 4.0 * f64::from(effect.amplifier + 1) as f32;
         }
 
+        if self.living_entity.dead.load(Relaxed) {
+            return;
+        }
+
         target
             .damage_with_context(
                 target,
@@ -192,7 +199,6 @@ impl MobEntity {
     }
 }
 
-// This trait contains all overridable functions
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
@@ -215,6 +221,35 @@ pub trait Mob: EntityBase + Send + Sync {
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
         None
     }
+
+    /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn post_tick(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn on_damage(&self, _damage_type: DamageType) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn get_mob_gravity(&self) -> f64 {
+        self.get_mob_entity().living_entity.get_gravity()
+    }
+
+    fn get_mob_y_velocity_drag(&self) -> Option<f64> {
+        None
+    }
+
+    fn mob_interact<'a>(
+        &'a self,
+        _player: &'a Player,
+        _item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async { false })
+    }
 }
 
 impl<T: Mob + Send + 'static> EntityBase for T {
@@ -226,7 +261,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
 
-            // AI runs BEFORE physics (vanilla order: goals → navigator → look → physics)
+            self.mob_tick(&caller).await;
+
+            // AI runs before physics (vanilla order: goals → navigator → look → physics)
             let age = mob_entity.living_entity.entity.age.load(Relaxed);
             if (age + mob_entity.living_entity.entity.entity_id) % 2 != 0 && age > 1 {
                 mob_entity
@@ -254,8 +291,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             look_control.tick(self).await;
             drop(look_control);
 
-            // Physics tick runs AFTER AI sets movement inputs
             mob_entity.living_entity.tick(caller, server).await;
+
+            self.post_tick().await;
 
             // Send rotation packets after look_control finalizes head_yaw and pitch
             let entity = &mob_entity.living_entity.entity;
@@ -301,11 +339,24 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            self.get_mob_entity()
+            let damaged = self
+                .get_mob_entity()
                 .living_entity
                 .damage_with_context(caller, amount, damage_type, position, source, cause)
-                .await
+                .await;
+            if damaged {
+                self.on_damage(damage_type).await;
+            }
+            damaged
         })
+    }
+
+    fn interact<'a>(
+        &'a self,
+        player: &'a Player,
+        item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move { self.mob_interact(player, item_stack).await })
     }
 
     fn get_entity(&self) -> &Entity {
@@ -321,7 +372,11 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn get_gravity(&self) -> f64 {
-        self.get_mob_entity().living_entity.get_gravity()
+        self.get_mob_gravity()
+    }
+
+    fn get_y_velocity_drag(&self) -> Option<f64> {
+        self.get_mob_y_velocity_drag()
     }
 }
 

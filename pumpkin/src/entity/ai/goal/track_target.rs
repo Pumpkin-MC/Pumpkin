@@ -18,7 +18,7 @@ pub struct TrackTargetGoal {
     can_navigate_flag: i32,
     check_can_navigate_cooldown: i32,
     time_without_visibility: i32,
-    max_time_without_visibility: i32,
+    pub max_time_without_visibility: i32,
     target_predicate: TargetPredicate,
 }
 
