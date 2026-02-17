@@ -1,7 +1,7 @@
 use std::any::Any;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::future::Future;
 use std::sync::atomic::Ordering;
 
 use crate::entity::player::Player;
@@ -11,8 +11,8 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_protocol::IdOr;
+use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::GameMode;
 
 pub struct CrossbowItem;
@@ -33,18 +33,21 @@ impl ItemBehaviour for CrossbowItem {
             // Check if player has arrows (or is in creative mode)
             let has_arrows = self.has_arrows(player).await;
             let gamemode = player.gamemode.load();
-            
+
             if !has_arrows && gamemode != GameMode::Creative {
                 return;
             }
-            
+
             // Get the held item stack
             let inventory = player.inventory();
             let held = inventory.held_item();
             let stack = held.lock().await.clone();
-            
+
             // Start the crossbow loading animation
-            player.living_entity.set_active_hand(pumpkin_util::Hand::Right, stack).await;
+            player
+                .living_entity
+                .set_active_hand(pumpkin_util::Hand::Right, stack)
+                .await;
         })
     }
 
@@ -62,29 +65,30 @@ impl CrossbowItem {
         // Get the used ticks
         let use_ticks = player.living_entity.item_use_time.load(Ordering::Relaxed);
         let use_ticks = 72000 - use_ticks;
-        
+
         // Crossbow needs to be fully charged
         if use_ticks < Self::CHARGE_DURATION {
             return;
         }
-        
+
         // Check arrows again
         let arrow_slot = player.find_arrow().await;
         let gamemode = player.gamemode.load();
-        
+
         if arrow_slot.is_none() && gamemode != GameMode::Creative {
             return;
         }
-        
-        // Fire
-        let crossbow_item = CrossbowItem;
-        crossbow_item.fire_arrow(player).await;
-        
+
+        // Fire the arrow
+        Self.fire_arrow(player).await;
+
         // Consume arrow (if not creative)
-        if let Some(slot) = arrow_slot && gamemode != GameMode::Creative {
+        if let Some(slot) = arrow_slot
+            && gamemode != GameMode::Creative
+        {
             player.consume_arrow(slot).await;
         }
-        
+
         // Damage crossbow
         player.damage_held_item(1).await;
     }
@@ -98,10 +102,10 @@ impl CrossbowItem {
     pub async fn fire_arrow(&self, player: &Player) {
         let world = player.world();
         let position = player.position();
-        
+
         // Create arrow entity
         let arrow_entity = Entity::new(world.clone(), position, &EntityType::ARROW);
-        
+
         // Determine pickup mode based on gamemode
         let gamemode = player.gamemode.load();
         let pickup = if gamemode == GameMode::Creative {
@@ -110,11 +114,7 @@ impl CrossbowItem {
             ArrowPickup::Allowed
         };
 
-        let arrow = ArrowEntity::new_shot(
-            arrow_entity,
-            &player.living_entity.entity,
-            pickup,
-        ).await;
+        let arrow = ArrowEntity::new_shot(arrow_entity, &player.living_entity.entity, pickup).await;
 
         // Set velocity based on player's look direction
         // Crossbows have consistent power (no charge levels)

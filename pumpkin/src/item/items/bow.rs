@@ -1,7 +1,7 @@
 use std::any::Any;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::future::Future;
 use std::sync::atomic::Ordering;
 
 use crate::entity::player::Player;
@@ -11,8 +11,8 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_protocol::IdOr;
+use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::GameMode;
 
 pub struct BowItem;
@@ -33,18 +33,21 @@ impl ItemBehaviour for BowItem {
             // Check if player has arrows (or is in creative mode)
             let has_arrows = self.has_arrows(player).await;
             let gamemode = player.gamemode.load();
-            
-            if !has_arrows && gamemode != GameMode::Creative && gamemode != GameMode::Spectator {
+
+            if !has_arrows && gamemode != GameMode::Creative {
                 return;
             }
-            
+
             // Get the held item stack
             let inventory = player.inventory();
             let held = inventory.held_item();
             let stack = held.lock().await.clone();
-            
+
             // Start the bow drawing animation
-            player.living_entity.set_active_hand(pumpkin_util::Hand::Right, stack).await;
+            player
+                .living_entity
+                .set_active_hand(pumpkin_util::Hand::Right, stack)
+                .await;
         })
     }
 
@@ -62,30 +65,31 @@ impl BowItem {
         // Get the used ticks
         let use_ticks = player.living_entity.item_use_time.load(Ordering::Relaxed);
         let use_ticks = 72000 - use_ticks;
-        
+
         // Check minimum draw time
         if use_ticks < 3 {
             return;
         }
-        
+
         // Check arrows again
         let arrow_slot = player.find_arrow().await;
         let gamemode = player.gamemode.load();
-        
+
         if arrow_slot.is_none() && gamemode != GameMode::Creative {
             return;
         }
-        
+
         // Calculate power and fire
         let power = Self::get_power_for_time(use_ticks);
-        let bow_item = BowItem;
-        bow_item.fire_arrow(player, power).await;
-        
+        Self.fire_arrow(player, power).await;
+
         // Consume arrow (if not creative)
-        if let Some(slot) = arrow_slot && gamemode != GameMode::Creative {
+        if let Some(slot) = arrow_slot
+            && gamemode != GameMode::Creative
+        {
             player.consume_arrow(slot).await;
         }
-        
+
         // Damage bow
         player.damage_held_item(1).await;
     }
@@ -96,6 +100,7 @@ impl BowItem {
     }
 
     /// Calculate the power/charge of the bow based on time held
+    #[must_use]
     pub fn get_power_for_time(time_held: i32) -> f32 {
         let mut power = time_held as f32 / Self::MAX_DRAW_DURATION;
         power = (power * power + power * 2.0) / 3.0;
@@ -113,10 +118,10 @@ impl BowItem {
 
         let world = player.world();
         let position = player.position();
-        
+
         // Create arrow entity
         let arrow_entity = Entity::new(world.clone(), position, &EntityType::ARROW);
-        
+
         // Determine pickup mode based on gamemode
         let gamemode = player.gamemode.load();
         let pickup = if gamemode == GameMode::Creative {
@@ -125,11 +130,7 @@ impl BowItem {
             ArrowPickup::Allowed
         };
 
-        let arrow = ArrowEntity::new_shot(
-            arrow_entity,
-            &player.living_entity.entity,
-            pickup,
-        ).await;
+        let arrow = ArrowEntity::new_shot(arrow_entity, &player.living_entity.entity, pickup).await;
 
         // Set velocity based on player's look direction and power
         let yaw = player.living_entity.entity.yaw.load();

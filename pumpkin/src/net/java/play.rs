@@ -1474,8 +1474,7 @@ impl JavaClient {
                     let item_in_use = player.living_entity.item_in_use.lock().await.clone();
                     if let Some(stack) = item_in_use {
                         let item_id = stack.item.id;
-                        use pumpkin_data::item::Item;
-                        
+
                         // Handle bow release
                         if item_id == Item::BOW.id {
                             use crate::item::items::bow::BowItem;
@@ -1487,7 +1486,7 @@ impl JavaClient {
                             CrossbowItem::release_crossbow(player).await;
                         }
                     }
-                    
+
                     player.living_entity.clear_active_hand().await;
                 }
                 Status::SwapItem => {

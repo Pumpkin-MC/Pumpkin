@@ -2779,7 +2779,8 @@ impl Player {
     /// Start using an item (e.g. drawing a bow)
     pub fn start_using_item(&self, hand: Hand) {
         self.using_item.store(true, Ordering::Relaxed);
-        self.item_use_start_time.store(self.tick_counter.load(Ordering::Relaxed), Ordering::Relaxed);
+        self.item_use_start_time
+            .store(self.tick_counter.load(Ordering::Relaxed), Ordering::Relaxed);
         self.using_hand.store(Some(hand));
     }
 
@@ -2801,7 +2802,7 @@ impl Player {
     pub async fn find_arrow(&self) -> Option<usize> {
         use pumpkin_data::item::Item;
         let inventory = self.inventory();
-        
+
         // Check offhand first
         let stack = inventory.get_stack(PlayerInventory::OFF_HAND_SLOT).await;
         let item = stack.lock().await;
@@ -2809,7 +2810,7 @@ impl Player {
             return Some(PlayerInventory::OFF_HAND_SLOT);
         }
         drop(item);
-        
+
         // Check hotbar and main inventory
         for slot in 0..PlayerInventory::MAIN_SIZE {
             let stack = inventory.get_stack(slot).await;
@@ -2818,7 +2819,7 @@ impl Player {
                 return Some(slot);
             }
         }
-        
+
         None
     }
 
@@ -2832,14 +2833,16 @@ impl Player {
         let inventory = self.inventory();
         let stack_arc = inventory.get_stack(slot).await;
         let mut stack = stack_arc.lock().await;
-        if stack.item_count > 1 {
-            stack.item_count -= 1;
-            true
-        } else if stack.item_count == 1 {
-            *stack = ItemStack::EMPTY.clone();
-            true
-        } else {
-            false
+        match stack.item_count {
+            2.. => {
+                stack.item_count -= 1;
+                true
+            }
+            1 => {
+                *stack = ItemStack::EMPTY.clone();
+                true
+            }
+            _ => false,
         }
     }
 }

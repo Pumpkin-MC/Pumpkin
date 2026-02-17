@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
@@ -8,8 +8,12 @@ use crate::{
 };
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_protocol::IdOr;
+use pumpkin_protocol::java::client::play::CEntityVelocity;
+use pumpkin_protocol::java::client::play::CSoundEffect;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 
 /// Represents the pickup rules for arrows
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,7 +24,8 @@ pub enum ArrowPickup {
 }
 
 impl ArrowPickup {
-    pub fn from_byte(byte: u8) -> Self {
+    #[must_use]
+    pub const fn from_byte(byte: u8) -> Self {
         match byte {
             1 => Self::Allowed,
             2 => Self::CreativeOnly,
@@ -28,7 +33,8 @@ impl ArrowPickup {
         }
     }
 
-    pub fn to_byte(self) -> u8 {
+    #[must_use]
+    pub const fn to_byte(self) -> u8 {
         match self {
             Self::Disallowed => 0,
             Self::Allowed => 1,
@@ -153,16 +159,20 @@ impl ArrowEntity {
         self.pierce_level.store(level, Ordering::Relaxed);
     }
 
-    pub fn set_base_damage(&self, damage: f64) {
+    pub const fn set_base_damage(&self, _damage: f64) {
         // TODO: implement this
     }
 
-    async fn apply_inertia(&self, inertia: f64) {
+    #[allow(dead_code)]
+    fn apply_inertia(&self, inertia: f64) {
         let velocity = self.entity.velocity.load();
-        self.entity.velocity.store(velocity.multiply(inertia, inertia, inertia));
+        self.entity
+            .velocity
+            .store(velocity.multiply(inertia, inertia, inertia));
     }
 
-    async fn apply_gravity(&self) {
+    #[allow(dead_code)]
+    fn apply_gravity(&self) {
         let mut velocity = self.entity.velocity.load();
         velocity.y -= Self::GRAVITY;
         self.entity.velocity.store(velocity);
@@ -228,12 +238,10 @@ impl EntityBase for ArrowEntity {
             entity.set_pos(new_pos);
 
             // Broadcast velocity update
-            use pumpkin_protocol::java::client::play::CEntityVelocity;
             let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
             world.broadcast_packet_all(&packet).await;
 
             // Check for collisions using raycasting
-            use pumpkin_util::math::boundingbox::BoundingBox;
             let search_box = BoundingBox::new(
                 Vector3::new(
                     start_pos.x.min(new_pos.x),
@@ -316,7 +324,12 @@ impl EntityBase for ArrowEntity {
             let world = entity.world.load();
 
             match hit {
-                ProjectileHit::Block { pos, face: _, hit_pos, .. } => {
+                ProjectileHit::Block {
+                    pos,
+                    face: _,
+                    hit_pos,
+                    ..
+                } => {
                     // Arrow hit a block - stick into it
                     self.in_ground.store(true, Ordering::Relaxed);
                     self.shake_time.store(7, Ordering::Relaxed);
@@ -327,8 +340,6 @@ impl EntityBase for ArrowEntity {
                     entity.set_pos(hit_pos);
 
                     // Play sound
-                    use pumpkin_protocol::java::client::play::CSoundEffect;
-                    use pumpkin_protocol::IdOr;
                     let sound_packet = CSoundEffect::new(
                         IdOr::Id(Sound::EntityArrowHit as u16),
                         SoundCategory::Neutral,
@@ -342,7 +353,11 @@ impl EntityBase for ArrowEntity {
                     // Reset critical flag
                     self.is_critical.store(false, Ordering::Relaxed);
                 }
-                ProjectileHit::Entity { entity: target, hit_pos, .. } => {
+                ProjectileHit::Entity {
+                    entity: target,
+                    hit_pos,
+                    ..
+                } => {
                     // Calculate damage
                     let velocity = entity.velocity.load();
                     let power = velocity.length();
@@ -356,12 +371,11 @@ impl EntityBase for ArrowEntity {
 
                     if let Some(living) = target.get_living_entity() {
                         // Apply damage to target
-                        living.damage(living, damage as f32, DamageType::ARROW).await;
-                        
+                        living
+                            .damage(living, damage as f32, DamageType::ARROW)
+                            .await;
+
                         // Play hit sound
-                        use pumpkin_protocol::java::client::play::CSoundEffect;
-                        use pumpkin_protocol::IdOr;
-                        
                         let sound_packet = CSoundEffect::new(
                             IdOr::Id(Sound::EntityArrowHit as u16),
                             SoundCategory::Neutral,
@@ -403,7 +417,7 @@ impl EntityBase for ArrowEntity {
 impl ArrowEntity {
     fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
         let other_ent = other.get_entity();
-        
+
         // Don't collide with self
         if other_ent.entity_id == self_ent.entity_id {
             return true;
@@ -451,7 +465,7 @@ fn calculate_ray_intersection(
 /// Get the face of the block that was hit
 fn get_hit_face(hit_pos: Vector3<f64>, block_pos: BlockPos) -> pumpkin_data::BlockDirection {
     use pumpkin_data::BlockDirection;
-    
+
     let local = hit_pos.sub(&block_pos.0.to_f64());
     let eps = 1.0e-4;
 
