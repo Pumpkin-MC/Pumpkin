@@ -27,7 +27,6 @@ impl BlockBehaviour for WitherRose {
                     player.send_effect(effect.clone()).await;
                 }
                 living_entity.add_effect(effect).await;
-                //FIXME: player should receive damage every half second. somewhy executing below code gives like 1 damage per second.
                 args.entity
                     .damage(args.entity, 1.0, DamageType::WITHER)
                     .await;
