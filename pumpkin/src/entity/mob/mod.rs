@@ -208,7 +208,7 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
-    fn on_damage<'a>(&'a self, _damage_type: DamageType) -> EntityBaseFuture<'a, ()> {
+    fn on_damage(&self, _damage_type: DamageType) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {})
     }
 }

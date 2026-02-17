@@ -101,11 +101,8 @@ impl Mob for BatEntity {
                 if above_state.is_solid_block() {
                     let rotate_head = {
                         let mut rng = rand::rng();
-                        if rng.random_range(0u32..200) == 0 {
-                            Some(rng.random_range(0i32..360) as f32)
-                        } else {
-                            None
-                        }
+                        (rng.random_range(0u32..200) == 0)
+                            .then(|| rng.random_range(0i32..360) as f32)
                     };
                     if let Some(head_yaw) = rotate_head {
                         entity.head_yaw.store(head_yaw);
@@ -126,7 +123,7 @@ impl Mob for BatEntity {
 
                 if let Some(hp) = *hanging_pos {
                     let hp_state = world.get_block_state(&hp).await;
-                    if !hp_state.is_air() || hp.0.y <= world.dimension.min_y as i32 {
+                    if !hp_state.is_air() || hp.0.y <= world.dimension.min_y {
                         *hanging_pos = None;
                     }
                 }
@@ -142,16 +139,14 @@ impl Mob for BatEntity {
                             let dz = f64::from(hp.0.z) + 0.5 - pos.z;
                             dx * dx + dy * dy + dz * dz < 4.0
                         });
-                    let new_target = if should_pick {
+                    let new_target = should_pick.then(|| {
                         let pos = entity.pos.load();
-                        Some(BlockPos::new(
+                        BlockPos::new(
                             pos.x as i32 + rng.random_range(0i32..7) - rng.random_range(0i32..7),
                             (pos.y + f64::from(rng.random_range(0i32..6)) - 2.0) as i32,
                             pos.z as i32 + rng.random_range(0i32..7) - rng.random_range(0i32..7),
-                        ))
-                    } else {
-                        None
-                    };
+                        )
+                    });
                     let try_roost = rng.random_range(0u32..100) == 0;
                     (should_pick, new_target, try_roost)
                 };
@@ -206,7 +201,7 @@ impl Mob for BatEntity {
         })
     }
 
-    fn on_damage<'a>(&'a self, _damage_type: DamageType) -> EntityBaseFuture<'a, ()> {
+    fn on_damage(&self, _damage_type: DamageType) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             if self.is_roosting() {
                 self.set_roosting(false).await;
