@@ -222,7 +222,13 @@ impl EndermanEntity {
 
         for pos in &[origin, new_pos] {
             world
-                .spawn_particle(*pos, Vector3::new(0.0, 0.0, 0.0), 0.0, 128, Particle::Portal)
+                .spawn_particle(
+                    *pos,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    0.0,
+                    128,
+                    Particle::Portal,
+                )
                 .await;
             world
                 .play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos)
