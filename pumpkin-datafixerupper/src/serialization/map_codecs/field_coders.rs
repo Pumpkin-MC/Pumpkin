@@ -11,7 +11,8 @@ use crate::serialization::struct_builder::StructBuilder;
 use std::fmt::Display;
 use std::sync::OnceLock;
 
-/// A [`MapEncoder`] that knows how to encode an entire field (key + value).
+/// A [`MapEncoder`] that knows how to encode an entire field (key + value), where the value is encoded by an [`Encoder`].
+///
 /// `A` is the type of value encoded.
 pub struct FieldEncoder<A, E: Encoder<Value = A> + 'static> {
     /// The name of the key.
@@ -58,8 +59,9 @@ impl<A, E: Encoder<Value = A>> FieldEncoder<A, E> {
     }
 }
 
-/// A [`MapDecoder`] that knows how to decode an entire field (key + value).
-/// `A` is the type of value that the decoder can decode into.
+/// A [`MapDecoder`] that knows how to decode an entire field (key + value), where the value is encoded by a [`Decoder`].
+///
+/// `A` is the type of value that the decoder can decode to.
 pub struct FieldDecoder<A, D: Decoder<Value = A> + 'static> {
     /// The name of the key.
     name: &'static str,
