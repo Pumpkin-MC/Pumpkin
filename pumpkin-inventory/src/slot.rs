@@ -72,22 +72,15 @@ pub trait Slot: Send + Sync {
         // Default implementation logic:
         Box::pin(async move {
             let stack = self.get_stack().await;
-            match timeout(Duration::from_secs(5), stack.lock()).await {
-                Ok(lock) => lock.clone(),
-                Err(_) => {
-                    log::warn!(
-                        "Timed out acquiring slot stack lock for slot {} after 5s; retrying once",
+            timeout(Duration::from_secs(5), stack.lock())
+                .await
+                .unwrap_or_else(|err| {
+                    panic!(
+                        "Timed out acquiring slot stack lock for slot {} after 5s ({err})",
                         self.get_index()
-                    );
-                    match timeout(Duration::from_secs(5), stack.lock()).await {
-                        Ok(lock) => lock.clone(),
-                        Err(_) => panic!(
-                            "Timed out acquiring slot stack lock for slot {} after 10s total",
-                            self.get_index()
-                        ),
-                    }
-                }
-            }
+                    )
+                })
+                .clone()
         })
     }
 
