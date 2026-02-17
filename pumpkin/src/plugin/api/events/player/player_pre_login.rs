@@ -25,6 +25,7 @@ pub struct PlayerPreLoginEvent {
 
 impl PlayerPreLoginEvent {
     #[must_use]
+    #[expect(clippy::missing_const_for_fn)]
     pub fn new(
         name: String,
         player_uuid: Uuid,
