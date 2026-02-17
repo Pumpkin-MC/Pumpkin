@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockState, damage::DamageType, entity::EntityType};
-use pumpkin_util::GameMode; // Added for spectator check
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use rustc_hash::FxHashMap;
 
@@ -17,11 +16,13 @@ pub struct Explosion {
     power: f32,
     pos: Vector3<f64>,
 }
+
 impl Explosion {
     #[must_use]
     pub const fn new(power: f32, pos: Vector3<f64>) -> Self {
         Self { power, pos }
     }
+
     async fn get_blocks_to_destroy(
         &self,
         world: &World,
@@ -104,11 +105,14 @@ impl Explosion {
             if entity_base.is_immune_to_explosion() {
                 continue;
             }
+
             let entity = entity_base.get_entity();
 
             // Skip spectators (no damage, no knockback)
-            if entity.game_mode.load() == GameMode::Spectator {
-                continue;
+            if let Some(player) = entity.get_player() {
+                if player.gamemode().is_spectator() {
+                    continue;
+                }
             }
 
             let distance = (entity.pos.load().squared_distance_to_vec(&self.pos)).sqrt() / radius;
