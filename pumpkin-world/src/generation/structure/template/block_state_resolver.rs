@@ -28,10 +28,7 @@ impl BlockStateResolver {
         mirror: BlockMirror,
     ) -> Option<&'static BlockState> {
         // Strip minecraft: prefix if present
-        let block_name = entry
-            .name
-            .strip_prefix("minecraft:")
-            .unwrap_or(&entry.name);
+        let block_name = entry.name.strip_prefix("minecraft:").unwrap_or(&entry.name);
 
         // Find the block
         let block = Block::from_name(&entry.name).or_else(|| Block::from_registry_key(block_name));
@@ -221,7 +218,8 @@ mod tests {
         );
 
         // Get state with rotation
-        let rotated = BlockStateResolver::resolve(&entry, BlockRotation::Clockwise90, BlockMirror::None);
+        let rotated =
+            BlockStateResolver::resolve(&entry, BlockRotation::Clockwise90, BlockMirror::None);
         assert!(rotated.is_some());
 
         // The rotated block should have facing=east after 90 degree clockwise rotation

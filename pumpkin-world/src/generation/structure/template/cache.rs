@@ -63,7 +63,10 @@ impl TemplateCache {
     /// # Errors
     ///
     /// Returns an error if the template doesn't exist or fails to parse.
-    pub fn get_or_error(&self, name: &'static str) -> Result<Arc<StructureTemplate>, TemplateError> {
+    pub fn get_or_error(
+        &self,
+        name: &'static str,
+    ) -> Result<Arc<StructureTemplate>, TemplateError> {
         // Check cache first
         if let Some(template) = self.cache.get(name) {
             return Ok(Arc::clone(&template));
@@ -117,9 +120,15 @@ impl TemplateCache {
         // Templates are stored in pumpkin-world/assets/structures/
         match path {
             // Igloo templates
-            "igloo/top" => Some(include_bytes!("../../../../assets/structures/igloo/top.nbt")),
-            "igloo/middle" => Some(include_bytes!("../../../../assets/structures/igloo/middle.nbt")),
-            "igloo/bottom" => Some(include_bytes!("../../../../assets/structures/igloo/bottom.nbt")),
+            "igloo/top" => Some(include_bytes!(
+                "../../../../assets/structures/igloo/top.nbt"
+            )),
+            "igloo/middle" => Some(include_bytes!(
+                "../../../../assets/structures/igloo/middle.nbt"
+            )),
+            "igloo/bottom" => Some(include_bytes!(
+                "../../../../assets/structures/igloo/bottom.nbt"
+            )),
 
             // Add more templates here as needed:
             // "shipwreck/with_mast" => Some(include_bytes!("../../../assets/structures/shipwreck/with_mast.nbt")),
@@ -185,7 +194,9 @@ mod tests {
     #[test]
     fn test_load_igloo_middle() {
         let cache = TemplateCache::new();
-        let template = cache.get("igloo/middle").expect("Failed to load igloo/middle");
+        let template = cache
+            .get("igloo/middle")
+            .expect("Failed to load igloo/middle");
 
         // Verify vanilla igloo/middle dimensions (3x3x3)
         assert_eq!(template.size.x, 3);
@@ -196,7 +207,9 @@ mod tests {
     #[test]
     fn test_load_igloo_bottom() {
         let cache = TemplateCache::new();
-        let template = cache.get("igloo/bottom").expect("Failed to load igloo/bottom");
+        let template = cache
+            .get("igloo/bottom")
+            .expect("Failed to load igloo/bottom");
 
         // Verify vanilla igloo/bottom dimensions (7x6x9)
         assert_eq!(template.size.x, 7);

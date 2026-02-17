@@ -229,8 +229,7 @@ impl StructureTemplate {
             // Parse state (palette index)
             let state = block_compound
                 .get_int("state")
-                .ok_or(TemplateError::MissingField("blocks.state"))?
-                as u32;
+                .ok_or(TemplateError::MissingField("blocks.state"))? as u32;
 
             if state as usize >= palette_size {
                 return Err(TemplateError::InvalidPaletteIndex(state));

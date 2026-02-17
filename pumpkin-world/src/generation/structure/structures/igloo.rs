@@ -223,7 +223,8 @@ impl StructurePieceBase for IglooPiece {
         let sample_z = origin.z + entrance_offset_z;
 
         // Get surface height at entrance position
-        let surface_y = chunk.get_top_y(&pumpkin_util::HeightMap::WorldSurfaceWg, sample_x, sample_z);
+        let surface_y =
+            chunk.get_top_y(&pumpkin_util::HeightMap::WorldSurfaceWg, sample_x, sample_z);
 
         // Place floor at surface - 1 (so the floor block is at ground level)
         let target_y = surface_y - 1;
@@ -241,13 +242,11 @@ impl StructurePieceBase for IglooPiece {
         // Place basement components if present
         if self.has_basement {
             // Extend bounding box to include basement area for block placement bounds checking
-            let basement_depth =
-                (self.ladder_segments as i32 * SHAFT_HEIGHT) + BASEMENT_HEIGHT + 1;
+            let basement_depth = (self.ladder_segments as i32 * SHAFT_HEIGHT) + BASEMENT_HEIGHT + 1;
             self.shiftable_structure_piece.piece.bounding_box.min.y -= basement_depth;
 
             // Extend for basement Z offset
-            let (_, offset_z) =
-                rotate_offset(BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z, self.rotation);
+            let (_, offset_z) = rotate_offset(BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z, self.rotation);
             if offset_z < 0 {
                 self.shiftable_structure_piece.piece.bounding_box.min.z += offset_z;
             } else {
@@ -299,8 +298,7 @@ fn place_template(
         }
 
         // Resolve block state with rotation
-        let Some(state) =
-            BlockStateResolver::resolve(palette_entry, rotation, Default::default())
+        let Some(state) = BlockStateResolver::resolve(palette_entry, rotation, Default::default())
         else {
             continue;
         };
@@ -335,7 +333,9 @@ fn place_template(
                 for (key, value) in &template_nbt.child_tags {
                     // Skip position fields as we've already set them
                     if key != "x" && key != "y" && key != "z" && key != "id" {
-                        block_entity_nbt.child_tags.push((key.clone(), value.clone()));
+                        block_entity_nbt
+                            .child_tags
+                            .push((key.clone(), value.clone()));
                     }
                 }
             }
