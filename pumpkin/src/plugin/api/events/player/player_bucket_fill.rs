@@ -1,3 +1,5 @@
+#![allow(clippy::doc_markdown, clippy::missing_const_for_fn)]
+
 use pumpkin_macros::{Event, cancellable};
 use std::sync::Arc;
 

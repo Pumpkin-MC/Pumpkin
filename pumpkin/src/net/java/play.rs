@@ -21,8 +21,8 @@ use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
-use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_bucket_entity::PlayerBucketEntityEvent;
+use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
@@ -1197,6 +1197,7 @@ impl JavaClient {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_interact(
         &self,
         player: &Arc<Player>,
@@ -1280,49 +1281,23 @@ impl JavaClient {
                                 let item_guard = held.lock().await;
                                 format!("minecraft:{}", item_guard.get_item().registry_key)
                             };
-                            if let Some(entity) = world.get_entity_by_id(entity_id.0) {
-                                if item_key.ends_with("_bucket") || item_key == "minecraft:bucket" {
-                                    let bucket_event = PlayerBucketEntityEvent::new(
-                                        player.clone(),
-                                        entity.get_entity().entity_uuid,
-                                        format!(
-                                            "minecraft:{}",
-                                            entity.get_entity().entity_type.resource_name
-                                        ),
-                                        item_key.clone(),
-                                        String::new(),
-                                        "HAND".to_string(),
-                                    );
-                                    let bucket_event =
-                                        server.plugin_manager.fire(bucket_event).await;
-                                    if bucket_event.cancelled {
-                                        return;
-                                    }
-                                }
-                            }
-
-                            if event.target.get_entity().entity_type == &EntityType::ARMOR_STAND {
-                                let hand = interact.hand.and_then(|h| Hand::try_from(h.0).ok());
-                                let (slot, item_stack) = match hand {
-                                    Some(Hand::Left) => {
-                                        ("OFF_HAND", player.inventory.off_hand_item().await)
-                                    }
-                                    _ => ("HAND", player.inventory.held_item()),
-                                };
-                                let item_key = {
-                                    let item_guard = item_stack.lock().await;
-                                    format!("minecraft:{}", item_guard.get_item().registry_key)
-                                };
-                                let armor_uuid = event.target.get_entity().entity_uuid;
-                                let armor_event = PlayerArmorStandManipulateEvent::new(
+                            if let Some(entity) = world.get_entity_by_id(entity_id.0)
+                                && (item_key.ends_with("_bucket")
+                                    || item_key == "minecraft:bucket")
+                            {
+                                let bucket_event = PlayerBucketEntityEvent::new(
                                     player.clone(),
-                                    armor_uuid,
-                                    item_key,
-                                    "minecraft:air".to_string(),
-                                    slot.to_string(),
+                                    entity.get_entity().entity_uuid,
+                                    format!(
+                                        "minecraft:{}",
+                                        entity.get_entity().entity_type.resource_name
+                                    ),
+                                    item_key.clone(),
+                                    String::new(),
+                                    "HAND".to_string(),
                                 );
-                                let armor_event = server.plugin_manager.fire(armor_event).await;
-                                if armor_event.cancelled {
+                                let bucket_event = server.plugin_manager.fire(bucket_event).await;
+                                if bucket_event.cancelled {
                                     return;
                                 }
                             }
