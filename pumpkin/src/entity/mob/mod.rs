@@ -133,27 +133,9 @@ impl MobEntity {
     }
 
     pub async fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
-        let mut attack_damage: f32 =
+        let attack_damage: f32 =
             self.living_entity
                 .get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
-
-        // Apply Strength effect (+3 damage per level)
-        if let Some(effect) = self
-            .living_entity
-            .get_effect(&pumpkin_data::effect::StatusEffect::STRENGTH)
-            .await
-        {
-            attack_damage += 3.0 * f64::from(effect.amplifier + 1) as f32;
-        }
-
-        // Apply Weakness effect (-4 damage per level or increased if negative)
-        if let Some(effect) = self
-            .living_entity
-            .get_effect(&pumpkin_data::effect::StatusEffect::WEAKNESS)
-            .await
-        {
-            attack_damage -= 4.0 * f64::from(effect.amplifier + 1) as f32;
-        }
 
         if self.living_entity.dead.load(Relaxed) {
             return;
