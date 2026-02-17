@@ -1,3 +1,4 @@
+use super::physics;
 use crate::block::fluid::flowing_trait::FlowingFluid;
 use crate::world::World;
 use pumpkin_data::{
@@ -7,8 +8,6 @@ use pumpkin_data::{
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use std::sync::Arc;
-type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
-use super::physics;
 
 /// Represents a node in the BFS pathfinding queue for fluid flow calculation.
 #[derive(Clone, Copy)]
@@ -52,11 +51,13 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
         let side_state_id = side_state.id;
         let side_block = Block::from_state_id(side_state.id);
 
-        let side_props = FlowingFluidProperties::from_state_id(side_state_id, fluid);
+        let side_fluid_props = fluid_impl.get_effective_props(fluid, side_state_id);
 
-        // Check if we can pass through (not a solid source block)
+        // Check if we can pass through (not a solid source block or waterlogged)
         if !physics::can_be_replaced(side_state, side_block, fluid)
-            || (side_props.level == Level::L8 && side_props.falling != Falling::True)
+            || side_fluid_props
+                .as_ref()
+                .is_some_and(|p| p.level == Level::L8 && p.falling != Falling::True)
         {
             continue;
         }
@@ -93,15 +94,12 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
         // Add all directions with equal minimum distance
         if slope_dist <= min_dist {
             // Check if the fluid at this position can be replaced
-            let can_replace = if fluid_impl.is_same_fluid(fluid, side_state_id) {
+            let can_replace = side_fluid_props.as_ref().is_none_or(|sp| {
                 // Can replace if new level is higher or if target is falling
-                let target_level = i32::from(side_props.level.to_index()) + 1;
+                let target_level = i32::from(sp.level.to_index()) + 1;
                 let new_level = i32::from(new_fluid_props.level.to_index()) + 1;
-                new_level > target_level || side_props.falling == Falling::True
-            } else {
-                // Can replace non-fluid blocks (already checked in can_be_replaced)
-                true
-            };
+                new_level > target_level || sp.falling == Falling::True
+            });
 
             if can_replace && result_count < 4 {
                 result[result_count] = (direction, new_state_id);
@@ -200,13 +198,13 @@ pub async fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized
                 continue;
             }
 
-            // Source blocks block horizontal pathfinding
+            // Source blocks (including waterlogged) block horizontal pathfinding
             let next_state_id = world.get_block_state_id(&next_pos).await;
-            if fluid_impl.is_same_fluid(fluid, next_state_id) {
-                let next_props = FlowingFluidProperties::from_state_id(next_state_id, fluid);
-                if next_props.level == Level::L8 && next_props.falling == Falling::False {
-                    continue;
-                }
+            if fluid_impl
+                .get_effective_props(fluid, next_state_id)
+                .is_some_and(|p| p.level == Level::L8 && p.falling == Falling::False)
+            {
+                continue;
             }
 
             if queue_end < MAX_QUEUE_SIZE {
