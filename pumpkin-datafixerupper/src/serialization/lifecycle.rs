@@ -17,8 +17,8 @@ impl Lifecycle {
     ///
     /// This function follows this order:
     /// - If at least one of the lifecycles is *experimental*, [`Lifecycle::Experimental`] is returned.
-    /// - If both lifecycles are *deprecated*, this returns the earlier-deprecated one (where the date is lower).
-    /// - If exactly one lifecycle is *deprecated*, [`Lifecycle::Deprecated`] is returned.
+    /// - If both lifecycles are *deprecated*, this returns the earlier-deprecated one (where the *date* is lower).
+    /// - If exactly one lifecycle is *deprecated*, that lifecycle is returned.
     /// - If nothing above matches, [`Lifecycle::Stable`] is returned.
     #[must_use]
     pub const fn add(self, other: Self) -> Self {

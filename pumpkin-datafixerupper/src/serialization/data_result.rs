@@ -82,8 +82,6 @@ macro_rules! impl_apply {
     };
 }
 
-// TODO: maybe use pub(crate) for certain functions? (certain functions here are not used outside the library)
-
 /// A result that can either represent a successful result, or a
 /// *partial* or non-result with an error.
 ///
@@ -430,7 +428,7 @@ impl<R> DataResult<R> {
         }
     }
 
-    /// Similar to [`apply_2`], but this also marks the returned `DataResult` as [`Lifecycle::Stable`].
+    /// Similar to [`Self::apply_2`], but this also marks the returned `DataResult` as [`Lifecycle::Stable`].
     pub fn apply_2_and_make_stable<R2, T>(
         self,
         f: impl FnOnce(R, R2) -> T,
@@ -486,7 +484,7 @@ impl<R> DataResult<R> {
     }
 
     /// Promotes a `DataResult` containing a partial result to a success `DataResult`, providing
-    /// the error message to a function `f` and removing it from the new `DataResult`.
+    /// the error message to a function `f` (consumer function) and removing it from the new `DataResult`.
     /// `DataResult`s with no result or a complete result are left untouched.
     pub fn promote_partial(self, f: impl FnOnce(String)) -> Self {
         match self {
@@ -518,7 +516,7 @@ impl<R> DataResult<R> {
     /// Returns a `DataResult` with a new result/partial result, depending on the type of `DataResult` this is.
     /// - For a complete result, this returns another `DataResult` whose complete result is `value`.
     /// - For a partial result, this returns another `DataResult` whose partial result is `value`.
-    /// - For no result, this returns itself.
+    /// - For a non-result, this returns itself.
     pub fn with_complete_or_partial<T>(self, value: T) -> DataResult<T> {
         match self {
             Self::Success { lifecycle, .. } => DataResult::success_with_lifecycle(value, lifecycle),

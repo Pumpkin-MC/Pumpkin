@@ -98,7 +98,7 @@ pub(crate) const fn encoder_field<A, E: Encoder<Value = A>>(
     FieldEncoder::new(name, encoder)
 }
 
-/// A trait describing the way to decode something of type into something of type `Value` (`? -> Value`).
+/// A trait describing the way to decode something of some type to something of type `Value` (`? -> Value`).
 pub trait Decoder: HasValue {
     /// Decodes an input of this decoder's type (`A`) into an output of type `T`,
     /// keeping the remaining undecoded data as another element of the tuple.
