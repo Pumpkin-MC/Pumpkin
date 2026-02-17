@@ -1800,13 +1800,11 @@ impl World {
                     existing_player.inventory.held_item().lock().await.clone(),
                 ));
 
-                for (slot, item_arc_mutex) in &existing_player
-                    .inventory
-                    .entity_equipment
-                    .lock()
-                    .await
-                    .equipment
-                {
+                for slot in existing_player.inventory.equipment_slots.values() {
+                    let item_arc_mutex = {
+                        let equipment = existing_player.inventory.entity_equipment.lock().await;
+                        equipment.get(slot)
+                    };
                     let item_stack = item_arc_mutex.lock().await.clone();
                     equipment_list.push((slot.discriminant(), item_stack));
                 }
@@ -1914,7 +1912,11 @@ impl World {
             from.inventory.held_item().lock().await.clone(),
         ));
 
-        for (slot, item_arc_mutex) in &from.inventory.entity_equipment.lock().await.equipment {
+        for slot in from.inventory.equipment_slots.values() {
+            let item_arc_mutex = {
+                let equipment = from.inventory.entity_equipment.lock().await;
+                equipment.get(slot)
+            };
             let item_stack = item_arc_mutex.lock().await.clone();
             equipment_list.push((slot.discriminant(), item_stack));
         }
