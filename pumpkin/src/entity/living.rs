@@ -1407,8 +1407,29 @@ impl EntityBase for LivingEntity {
                         caller.as_ref() as &dyn EntityBase,
                         &supporting,
                         state,
+                        false,
                     )
                     .await;
+
+                // Check slightly below supporting_pos for additional supporting blocks (blocks under carpets and the like)
+                if !block.is_solid() {
+                    let below_supporting = supporting.down();
+                    let (below_block, below_state) =
+                        world.get_block_and_state(&below_supporting).await;
+
+                    // If block is not air, notify it as well
+                    world
+                        .block_registry
+                        .on_entity_step(
+                            below_block,
+                            &world,
+                            caller.as_ref() as &dyn EntityBase,
+                            &below_supporting,
+                            below_state,
+                            true, // below supporting block
+                        )
+                        .await;
+                }
             }
 
             self.tick_effects().await;

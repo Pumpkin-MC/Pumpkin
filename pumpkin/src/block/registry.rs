@@ -425,6 +425,7 @@ impl BlockRegistry {
         entity: &dyn EntityBase,
         position: &BlockPos,
         state: &BlockState,
+        below_supporting_block: bool,
     ) {
         if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
             pumpkin_block
@@ -434,6 +435,7 @@ impl BlockRegistry {
                     state,
                     position,
                     entity,
+                    below_supporting_block,
                 })
                 .await;
         }

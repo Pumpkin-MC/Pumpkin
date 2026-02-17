@@ -251,6 +251,7 @@ pub struct OnEntityStepArgs<'a> {
     pub state: &'a BlockState,
     pub position: &'a BlockPos,
     pub entity: &'a dyn EntityBase,
+    pub below_supporting_block: bool,
 }
 
 pub struct ExplodeArgs<'a> {
