@@ -110,7 +110,7 @@ impl Explosion {
 
             // Skip spectators (no damage, no knockback)
             if let Some(player) = entity.get_player() {
-                if player.gamemode.is_spectator() {
+                if player.gamemode.load().is_spectator() {
                     continue;
                 }
             }
