@@ -1,3 +1,5 @@
+pub mod player_bed_enter;
+pub mod player_bed_leave;
 pub mod player_change_world;
 pub mod player_chat;
 pub mod player_command_send;
@@ -9,12 +11,6 @@ pub mod player_interact_unknown_entity_event;
 pub mod player_join;
 pub mod player_leave;
 pub mod player_login;
-pub mod player_pre_login;
-pub mod player_advancement_done;
-pub mod player_animation;
-pub mod player_armor_stand_manipulate;
-pub mod player_bed_enter;
-pub mod player_bed_leave;
 pub mod player_move;
 pub mod player_teleport;
 
