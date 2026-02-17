@@ -1246,10 +1246,6 @@ impl LivingEntity {
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
-            // Immediately clear all movement/velocity so the dead entity stops being
-            // simulated by physics and doesn't accumulate additional fall_distance.
-            self.entity.velocity.store(Vector3::default());
-            self.entity.velocity_dirty.store(true, SeqCst);
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
@@ -1785,13 +1781,26 @@ impl EntityBase for LivingEntity {
                 return false;
             }
 
-            if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
-                && self.has_effect(&StatusEffect::FIRE_RESISTANCE).await
-            {
-                return false; // Fire resistance
-            }
-
             let world = self.entity.world.load();
+            let is_fire_damage = damage_type == DamageType::IN_FIRE
+                || damage_type == DamageType::ON_FIRE
+                || damage_type == DamageType::LAVA
+                || damage_type == DamageType::HOT_FLOOR;
+
+            // Fire damage can be prevented by either game rules or fire resistance
+            if is_fire_damage {
+                // Check game rule for fire damage (only for players)
+                if self.entity.entity_type == &EntityType::PLAYER
+                    && !world.level_info.load().game_rules.fire_damage
+                {
+                    return false;
+                }
+
+                // Check for fire resistance effect
+                if self.has_effect(&StatusEffect::FIRE_RESISTANCE).await {
+                    return false;
+                }
+            }
 
             // These damage types bypass the hurt cooldown and death protection
             let bypasses_cooldown_protection =
@@ -1947,16 +1956,70 @@ impl EntityBase for LivingEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.entity.tick(caller.clone(), server).await;
+
             // Only tick movement if the entity is alive. This prevents a dead "corpse"
             // from continuing to be simulated (accumulating fall_distance/velocity).
             if !self.dead.load(Relaxed) && self.health.load() > 0.0 {
                 self.tick_movement(server, caller.clone()).await;
             }
+
             // TODO
-            if caller.get_player().is_none() {
+            let player = caller.get_player();
+            let is_player = player.is_some();
+
+            if !is_player {
                 self.entity.send_pos_rot().await;
             }
+
+            // Fetch supporting blocks for players or other entities
+            let supporting_pos = if let Some(player) = caller.get_player() {
+                // Handles player movement and detection along block edges
+                player.get_supporting_block_pos().await
+            } else {
+                // Fast physics-based supporting block detection for server entities
+                self.entity.get_supporting_block_pos()
+            };
+
+            // Notify the block under the entity each tick if a supporting block position is found
+            if let Some(supporting) = supporting_pos {
+                let world = self.entity.world.load();
+                let (block, state) = world.get_block_and_state(&supporting).await;
+
+                world
+                    .block_registry
+                    .on_entity_step(
+                        block,
+                        &world,
+                        caller.as_ref() as &dyn EntityBase,
+                        &supporting,
+                        state,
+                        false,
+                    )
+                    .await;
+
+                // Check slightly below supporting_pos for additional supporting blocks (blocks under carpets and the like)
+                if !block.is_solid() {
+                    let below_supporting = supporting.down();
+                    let (below_block, below_state) =
+                        world.get_block_and_state(&below_supporting).await;
+
+                    // If block is not air, notify it as well
+                    world
+                        .block_registry
+                        .on_entity_step(
+                            below_block,
+                            &world,
+                            caller.as_ref() as &dyn EntityBase,
+                            &below_supporting,
+                            below_state,
+                            true, // below supporting block
+                        )
+                        .await;
+                }
+            }
+
             self.tick_effects().await;
+
             // Current active item
             {
                 let item_in_use = self.item_in_use.lock().await.clone();
