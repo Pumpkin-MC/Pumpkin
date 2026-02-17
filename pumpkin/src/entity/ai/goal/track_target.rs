@@ -42,9 +42,8 @@ impl TrackTargetGoal {
         Self::new(check_visibility, false)
     }
 
-    // TODO: get from entity attribute (enderman=64, zombie=35, default=16)
-    pub const fn get_follow_range(_mob: &MobEntity) -> f64 {
-        64.0
+    pub const fn get_follow_range(mob: &MobEntity) -> f64 {
+        mob.follow_range
     }
 
     fn can_navigate_to_entity(&mut self, mob: &dyn Mob, _target: &LivingEntity) -> bool {

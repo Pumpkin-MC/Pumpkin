@@ -8,7 +8,6 @@ use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::EndermanEntity;
 use crate::entity::player::Player;
 
-/// Vanilla uses squaredDistanceTo < 16.0 (4 blocks linear distance)
 const STARE_CLOSE_DISTANCE_SQ: f64 = 16.0;
 const TELEPORT_FAR_DISTANCE_SQ: f64 = 256.0;
 
@@ -126,6 +125,10 @@ impl Goal for TeleportTowardsPlayerGoal {
                     if dist_sq > follow_range * follow_range {
                         return false;
                     }
+                    // TODO: This re-sets mob.target when cleared by another goal,
+                    // creating a clear/re-apply loop. Works due to Controls::TARGET
+                    // ownership, but should be replaced with a native "own this target"
+                    // concept in the goal system.
                     let needs_reset = mob_entity.target.lock().await.is_none();
                     if needs_reset {
                         mob.set_mob_target(Some(target.clone())).await;
