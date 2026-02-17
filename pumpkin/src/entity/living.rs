@@ -1229,6 +1229,7 @@ impl NBTStorage for LivingEntity {
 }
 
 impl EntityBase for LivingEntity {
+    #[expect(clippy::too_many_lines)]
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,
@@ -1259,8 +1260,7 @@ impl EntityBase for LivingEntity {
             }
 
             let world = self.entity.world.load();
-            let mut effective_amount = amount;
-            if let Some(server) = world.server.upgrade() {
+            let effective_amount = if let Some(server) = world.server.upgrade() {
                 let event = crate::plugin::entity::entity_damage::EntityDamageEvent::new(
                     self.entity.entity_uuid,
                     amount,
@@ -1276,8 +1276,10 @@ impl EntityBase for LivingEntity {
                 if event.damage <= 0.0 {
                     return false;
                 }
-                effective_amount = event.damage;
-            }
+                event.damage
+            } else {
+                amount
+            };
 
             // These damage types bypass the hurt cooldown and death protection
             let bypasses_cooldown_protection =

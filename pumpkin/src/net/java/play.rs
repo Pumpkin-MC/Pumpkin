@@ -840,25 +840,21 @@ impl JavaClient {
             )
             .await;
 
-        let event = if let Some((hit_pos, _hit_dir)) = hit_result {
-            let item_key = {
-                let item_guard = item.lock().await;
-                format!("minecraft:{}", item_guard.get_item().registry_key)
-            };
+        let item_key = {
+            let item_guard = item.lock().await;
+            format!("minecraft:{}", item_guard.get_item().registry_key)
+        };
+        let event = if let Some((hit_pos, hit_dir)) = hit_result {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickBlock,
                 &item,
-                item_key,
+                item_key.clone(),
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
-                Some(face),
+                Some(hit_dir),
             )
         } else {
-            let item_key = {
-                let item_guard = item.lock().await;
-                format!("minecraft:{}", item_guard.get_item().registry_key)
-            };
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickAir,
@@ -1747,6 +1743,7 @@ impl JavaClient {
         world.update_block_entity(&block_entity).await;
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_use_item(
         &self,
         player: &Arc<Player>,
@@ -1785,25 +1782,21 @@ impl JavaClient {
             )
             .await;
 
-        let event = if let Some((hit_pos, _hit_dir)) = hit_result {
-            let item_key = {
-                let item_guard = item_in_hand.lock().await;
-                format!("minecraft:{}", item_guard.get_item().registry_key)
-            };
+        let item_key = {
+            let item_guard = item_in_hand.lock().await;
+            format!("minecraft:{}", item_guard.get_item().registry_key)
+        };
+        let event = if let Some((hit_pos, hit_dir)) = hit_result {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickBlock,
                 &item_in_hand,
-                item_key,
+                item_key.clone(),
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
-                Some(face),
+                Some(hit_dir),
             )
         } else {
-            let item_key = {
-                let item_guard = item_in_hand.lock().await;
-                format!("minecraft:{}", item_guard.get_item().registry_key)
-            };
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickAir,
