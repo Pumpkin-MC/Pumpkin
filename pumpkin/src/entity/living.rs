@@ -1370,19 +1370,35 @@ impl EntityBase for LivingEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.entity.tick(caller.clone(), server).await;
+
             // Only tick movement if the entity is alive. This prevents a dead "corpse"
             // from continuing to be simulated (accumulating fall_distance/velocity).
             if !self.dead.load(Relaxed) && self.health.load() > 0.0 {
                 self.tick_movement(server, caller.clone()).await;
             }
+
             // TODO
-            if caller.get_player().is_none() {
+            let player = caller.get_player();
+            let is_player = player.is_some();
+
+            if is_player {
                 self.entity.send_pos_rot().await;
             }
-            // Notify the block under the entity each tick if the entity is supported
-            if let Some(supporting) = self.entity.get_supporting_block_pos() {
+
+            // Fetch supporting blocks for players or other entities
+            let supporting_pos = if let Some(player) = caller.get_player() {
+                // Handles player movement and detection along block edges
+                player.get_supporting_block_pos().await
+            } else {
+                // Fast physics-based supporting block detection for server entities
+                self.entity.get_supporting_block_pos()
+            };
+
+            // Notify the block under the entity each tick if a supporting block position is found
+            if let Some(supporting) = supporting_pos {
                 let world = self.entity.world.load();
                 let (block, state) = world.get_block_and_state(&supporting).await;
+
                 world
                     .block_registry
                     .on_entity_step(
@@ -1394,7 +1410,9 @@ impl EntityBase for LivingEntity {
                     )
                     .await;
             }
+
             self.tick_effects().await;
+
             // Current active item
             {
                 let item_in_use = self.item_in_use.lock().await.clone();

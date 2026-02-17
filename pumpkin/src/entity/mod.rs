@@ -657,38 +657,26 @@ impl Entity {
         }
     }
 
-    /// Returns the block position of the block the entity is standing on, if any.
-    /// This is different from `supporting_block_pos`, which may return blocks the entity is not actually standing on (like walls), or None if the entity is still.
+    /// Returns the block position of the block the (non-player) entity is standing on, if any.
     pub fn get_supporting_block_pos(&self) -> Option<BlockPos> {
         // Check if the entity is on the ground
         if !self.on_ground.load(Ordering::Relaxed) {
             return None;
         }
 
-        let pos = self.pos.load();
-
-        // Check 0.2 blocks below the feet.
-        // This handles carpets, soul sand, and slight floating errors.
-        let adjust_y = pos.y - 0.2;
-
-        Some(BlockPos::new(
-            pos.x.floor() as i32,
-            adjust_y.floor() as i32,
-            pos.z.floor() as i32,
-        ))
+        self.supporting_block_pos.load()
     }
 
     #[expect(clippy::float_cmp)]
     async fn adjust_movement_for_collisions(&self, movement: Vector3<f64>) -> Vector3<f64> {
-        self.on_ground.store(false, Ordering::SeqCst);
-
-        self.supporting_block_pos.store(None);
-
-        self.horizontal_collision.store(false, Ordering::SeqCst);
-
+        // If an entity is not moving, don't wipe its grounded state or supporting block.
         if movement.length_squared() == 0.0 {
             return movement;
         }
+
+        self.on_ground.store(false, Ordering::SeqCst);
+        self.supporting_block_pos.store(None);
+        self.horizontal_collision.store(false, Ordering::SeqCst);
 
         let bounding_box = self.bounding_box.load();
 
@@ -705,14 +693,10 @@ impl Entity {
         let mut adjusted_movement = movement;
 
         // Y-Axis adjustment
-
         if movement.get_axis(Axis::Y) != 0.0 {
             let mut max_time = 1.0;
-
             let mut positions = block_positions.into_iter();
-
             let (mut collisions_len, mut position) = positions.next().unwrap();
-
             let mut supporting_block_pos = None;
 
             for (i, inert_box) in collisions.iter().enumerate() {
@@ -728,19 +712,20 @@ impl Entity {
                 ) {
                     max_time = collision_time;
 
-                    supporting_block_pos = Some(position);
+                    // If the entity is moving downwards and collides, set the supporting block position
+                    if movement.get_axis(Axis::Y) < 0.0 {
+                        supporting_block_pos = Some(position);
+                    }
                 }
             }
 
             if max_time != 1.0 {
                 let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-
                 adjusted_movement.set_axis(Axis::Y, changed_component);
             }
 
             self.on_ground
                 .store(supporting_block_pos.is_some(), Ordering::SeqCst);
-
             self.supporting_block_pos.store(supporting_block_pos);
         }
 
@@ -766,9 +751,7 @@ impl Entity {
 
             if max_time != 1.0 {
                 let changed_component = adjusted_movement.get_axis(axis) * max_time;
-
                 adjusted_movement.set_axis(axis, changed_component);
-
                 horizontal_collision = true;
             }
         }
