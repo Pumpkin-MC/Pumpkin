@@ -81,7 +81,7 @@ macro_rules! plugin_log {
 }
 
 const LOG_DIR: &str = "logs";
-const MAX_ATTEMPTS: u32 = 100;
+const MAX_ATTEMPTS: u32 = 1000;
 
 /// A wrapper for our logger to hold the terminal input while no input is expected in order to
 /// properly flush logs to the output while they happen instead of batched
