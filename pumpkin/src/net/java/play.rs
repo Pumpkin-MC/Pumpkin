@@ -21,12 +21,10 @@ use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
+use crate::plugin::player::player_changed_main_hand::PlayerChangedMainHandEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
-use crate::plugin::player::player_animation::PlayerAnimationEvent;
-use crate::plugin::player::player_armor_stand_manipulate::PlayerArmorStandManipulateEvent;
-use crate::plugin::player::player_changed_main_hand::PlayerChangedMainHandEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
@@ -1112,8 +1110,8 @@ impl JavaClient {
 
                 // 2. Calculate if settings changed before we overwrite
                 let main_hand_changed = current_config.main_hand != main_hand;
-                let update_settings = main_hand_changed
-                    || current_config.skin_parts != client_information.skin_parts;
+                let update_settings =
+                    main_hand_changed || current_config.skin_parts != client_information.skin_parts;
 
                 let old_view_distance = current_config.view_distance;
                 let new_view_distance_raw = client_information.view_distance as u8;
@@ -1155,11 +1153,9 @@ impl JavaClient {
                 chunker::update_position(player).await;
             }
 
-            if main_hand_changed {
-                if let Some(server) = player.world().server.upgrade() {
-                    let event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
-                    let _ = server.plugin_manager.fire(event).await;
-                }
+            if main_hand_changed && let Some(server) = player.world().server.upgrade() {
+                let event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
+                let _ = server.plugin_manager.fire(event).await;
             }
 
             if update_settings {
