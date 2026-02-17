@@ -8,6 +8,7 @@ use crate::serialization::map_coders::{CompressorHolder, MapDecoder, MapEncoder}
 use crate::serialization::map_like::MapLike;
 use crate::serialization::struct_builder::StructBuilder;
 use std::fmt::Display;
+use std::sync::Arc;
 
 /// A validator [`MapCodec`] that validates any values before encoding and after decoding.
 pub struct ValidatedMapCodec<C: MapCodec + 'static> {
@@ -27,7 +28,7 @@ impl<C: MapCodec> Keyable for ValidatedMapCodec<C> {
 }
 
 impl<C: MapCodec> CompressorHolder for ValidatedMapCodec<C> {
-    fn compressor(&self) -> &KeyCompressor {
+    fn compressor(&self) -> Arc<KeyCompressor> {
         self.codec.compressor()
     }
 }

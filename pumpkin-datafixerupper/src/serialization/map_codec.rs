@@ -19,6 +19,7 @@ use crate::serialization::map_like::MapLike;
 use crate::serialization::struct_builder::StructBuilder;
 use crate::serialization::struct_codecs::{Field, new_field};
 use std::fmt::Display;
+use std::sync::Arc;
 
 /// A type of *codec* which encodes/decodes fields of a map.
 ///
@@ -30,6 +31,8 @@ use std::fmt::Display;
 ///
 /// # Using Map Codecs
 /// They can be used in struct codecs as one part of a struct.
+/// **Just like codecs, map codecs are also meant to be static instances, and they should not be created at runtime.
+/// They are also immutable, which means they cannot be modified after they are created.**
 ///
 /// # Creating Map Codecs
 /// There are a few ways to create map codecs.
@@ -76,7 +79,7 @@ impl<E: MapEncoder, D: MapDecoder<Value = E::Value>> Keyable for ComposedMapCode
 }
 
 impl<E: MapEncoder, D: MapDecoder<Value = E::Value>> CompressorHolder for ComposedMapCodec<E, D> {
-    fn compressor(&self) -> &KeyCompressor {
+    fn compressor(&self) -> Arc<KeyCompressor> {
         // This could return either the encoder or decoder's compressor, but we'll stick with the encoder's.
         self.encoder.compressor()
     }
@@ -119,7 +122,7 @@ impl<C: MapCodec> Keyable for StableMapCodec<C> {
 }
 
 impl<C: MapCodec> CompressorHolder for StableMapCodec<C> {
-    fn compressor(&self) -> &KeyCompressor {
+    fn compressor(&self) -> Arc<KeyCompressor> {
         self.map_codec.compressor()
     }
 }
