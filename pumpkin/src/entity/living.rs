@@ -1398,7 +1398,7 @@ impl EntityBase for LivingEntity {
             let player = caller.get_player();
             let is_player = player.is_some();
 
-            if is_player {
+            if !is_player {
                 self.entity.send_pos_rot().await;
             }
 
