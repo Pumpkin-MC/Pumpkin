@@ -24,7 +24,7 @@ impl BlockBehaviour for MagmaBlock {
             }
 
             // Fire immune entities don't take damage
-            if ent.fire_immune.load(Ordering::Relaxed) {
+            if ent.entity_type.fire_immune || ent.fire_immune.load(Ordering::Relaxed) {
                 return;
             }
 
