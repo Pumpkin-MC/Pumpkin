@@ -1385,24 +1385,24 @@ impl JavaClient {
                                 let item_guard = held.lock().await;
                                 format!("minecraft:{}", item_guard.get_item().registry_key)
                             };
-                            if let Some(entity) = world.get_entity_by_id(entity_id.0) {
-                                if item_key.ends_with("_bucket") || item_key == "minecraft:bucket" {
-                                    let bucket_event = PlayerBucketEntityEvent::new(
-                                        player.clone(),
-                                        entity.get_entity().entity_uuid,
-                                        format!(
-                                            "minecraft:{}",
-                                            entity.get_entity().entity_type.resource_name
-                                        ),
-                                        item_key.clone(),
-                                        String::new(),
-                                        "HAND".to_string(),
-                                    );
-                                    let bucket_event =
-                                        server.plugin_manager.fire(bucket_event).await;
-                                    if bucket_event.cancelled {
-                                        return;
-                                    }
+                            if let Some(entity) = world.get_entity_by_id(entity_id.0)
+                                && (item_key.ends_with("_bucket")
+                                    || item_key == "minecraft:bucket")
+                            {
+                                let bucket_event = PlayerBucketEntityEvent::new(
+                                    player.clone(),
+                                    entity.get_entity().entity_uuid,
+                                    format!(
+                                        "minecraft:{}",
+                                        entity.get_entity().entity_type.resource_name
+                                    ),
+                                    item_key.clone(),
+                                    String::new(),
+                                    "HAND".to_string(),
+                                );
+                                let bucket_event = server.plugin_manager.fire(bucket_event).await;
+                                if bucket_event.cancelled {
+                                    return;
                                 }
                             }
 

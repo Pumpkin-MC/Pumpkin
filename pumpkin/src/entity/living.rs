@@ -1264,6 +1264,7 @@ impl NBTStorage for LivingEntity {
 }
 
 impl EntityBase for LivingEntity {
+    #[expect(clippy::too_many_lines)]
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,
