@@ -106,14 +106,12 @@ impl Explosion {
                 continue;
             }
 
-            let entity = entity_base.get_entity();
-
             // Skip spectators (no damage, no knockback)
-            if let Some(player) = entity.get_player() {
-                if player.gamemode.load().is_spectator() {
-                    continue;
-                }
+            if entity_base.is_spectator() {
+                continue;
             }
+
+            let entity = entity_base.get_entity();
 
             let distance = (entity.pos.load().squared_distance_to_vec(&self.pos)).sqrt() / radius;
             if distance > 1.0 {
