@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+use pumpkin_util::{math::position::BlockPos, math::vector3::Vector3, random::RandomGenerator};
 use serde::Deserialize;
 
 use crate::{
@@ -22,7 +22,7 @@ use crate::{
                 StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
                 StructurePiecesCollector, StructurePosition,
             },
-            template::{BlockRotation, StructureTemplate, get_template},
+            template::{BlockRotation, StructureTemplate, get_template, place_template},
         },
     },
 };
@@ -38,7 +38,6 @@ const DOME_DEPTH: i32 = 8;
 const SHAFT_HEIGHT: i32 = 3;
 
 /// Basement room dimensions (from vanilla igloo/bottom.nbt).
-const BASEMENT_WIDTH: i32 = 7;
 const BASEMENT_HEIGHT: i32 = 6;
 const BASEMENT_DEPTH: i32 = 9;
 
@@ -138,123 +137,75 @@ pub struct IglooPiece {
     ladder_segments: u8,
 }
 
-impl IglooPiece {
-    /// Places the igloo dome using the template.
-    fn place_dome(&self, chunk: &mut ProtoChunk) {
-        let origin = self.shiftable_structure_piece.piece.bounding_box.min;
-
-        place_template(
-            chunk,
-            &self.top_template,
-            origin.x,
-            origin.y,
-            origin.z,
-            self.rotation,
-        );
-    }
-
-    /// Places a single ladder shaft segment.
-    fn place_shaft_segment(&self, chunk: &mut ProtoChunk, y: i32) {
-        let Some(template) = &self.middle_template else {
-            return;
-        };
-
-        let origin = self.shiftable_structure_piece.piece.bounding_box.min;
-
-        // Apply rotation to offset
-        let (offset_x, offset_z) = rotate_offset(SHAFT_OFFSET_X, SHAFT_OFFSET_Z, self.rotation);
-
-        place_template(
-            chunk,
-            template,
-            origin.x + offset_x,
-            y,
-            origin.z + offset_z,
-            self.rotation,
-        );
-    }
-
-    /// Places all ladder shaft segments.
-    fn place_ladder_shaft(&self, chunk: &mut ProtoChunk, dome_floor_y: i32) {
-        for segment in 0..self.ladder_segments {
-            let segment_y = dome_floor_y - 1 - (segment as i32 * SHAFT_HEIGHT);
-            self.place_shaft_segment(chunk, segment_y);
-        }
-    }
-
-    /// Places the basement room.
-    fn place_basement(&self, chunk: &mut ProtoChunk, dome_floor_y: i32) {
-        let Some(template) = &self.bottom_template else {
-            return;
-        };
-
-        let origin = self.shiftable_structure_piece.piece.bounding_box.min;
-        let total_shaft_depth = self.ladder_segments as i32 * SHAFT_HEIGHT;
-        let basement_y = dome_floor_y - total_shaft_depth - BASEMENT_HEIGHT + 1;
-
-        // Apply rotation to offset
-        let (offset_x, offset_z) =
-            rotate_offset(BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z, self.rotation);
-
-        place_template(
-            chunk,
-            template,
-            origin.x + offset_x,
-            basement_y,
-            origin.z + offset_z,
-            self.rotation,
-        );
-    }
-}
-
 impl StructurePieceBase for IglooPiece {
     fn clone_box(&self) -> Box<dyn StructurePieceBase> {
         Box::new(self.clone())
     }
 
     fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        // Vanilla samples height at the entrance position (3, 0, 5 in template space)
-        // and places the floor at surface_height - 1
         let origin = self.shiftable_structure_piece.piece.bounding_box.min;
 
-        // The entrance is at template position (3, 0, 5), apply rotation
-        let (entrance_offset_x, entrance_offset_z) = rotate_offset(3, 5, self.rotation);
-        let sample_x = origin.x + entrance_offset_x;
-        let sample_z = origin.z + entrance_offset_z;
-
-        // Get surface height at entrance position
-        let surface_y =
-            chunk.get_top_y(&pumpkin_util::HeightMap::WorldSurfaceWg, sample_x, sample_z);
+        // Vanilla samples height at the entrance position (3, 0, 5 in template space)
+        let (entrance_x, entrance_z) = self.rotation.rotate_offset(3, 5);
+        let surface_y = chunk.get_top_y(
+            &pumpkin_util::HeightMap::WorldSurfaceWg,
+            origin.x + entrance_x,
+            origin.z + entrance_z,
+        );
 
         // Place floor at surface - 1 (so the floor block is at ground level)
-        let target_y = surface_y - 1;
-        let current_y = origin.y;
-        let offset = target_y - current_y;
-
+        let offset = surface_y - 1 - origin.y;
         self.shiftable_structure_piece.piece.bounding_box.min.y += offset;
         self.shiftable_structure_piece.piece.bounding_box.max.y += offset;
 
-        let dome_floor_y = self.shiftable_structure_piece.piece.bounding_box.min.y;
+        let origin = self.shiftable_structure_piece.piece.bounding_box.min;
+        let dome_floor_y = origin.y;
 
-        // Place the dome
-        self.place_dome(chunk);
+        // Place dome at origin (no offset)
+        place_template(chunk, &self.top_template, origin, (0, 0), self.rotation);
 
         // Place basement components if present
         if self.has_basement {
-            // Extend bounding box to include basement area for block placement bounds checking
-            let basement_depth = (self.ladder_segments as i32 * SHAFT_HEIGHT) + BASEMENT_HEIGHT + 1;
+            // Extend bounding box to include basement area
+            let basement_depth =
+                (self.ladder_segments as i32 * SHAFT_HEIGHT) + BASEMENT_HEIGHT + 1;
             self.shiftable_structure_piece.piece.bounding_box.min.y -= basement_depth;
 
-            // Extend for basement Z offset
-            let (_, offset_z) = rotate_offset(BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z, self.rotation);
-            if offset_z < 0 {
-                self.shiftable_structure_piece.piece.bounding_box.min.z += offset_z;
+            let (_, bz) = self.rotation.rotate_offset(BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z);
+            if bz < 0 {
+                self.shiftable_structure_piece.piece.bounding_box.min.z += bz;
             } else {
                 self.shiftable_structure_piece.piece.bounding_box.max.z += BASEMENT_DEPTH;
             }
 
-            self.place_ladder_shaft(chunk, dome_floor_y);
-            self.place_basement(chunk, dome_floor_y);
+            // Place ladder shaft segments
+            if let Some(middle) = &self.middle_template {
+                for segment in 0..self.ladder_segments {
+                    let segment_y = dome_floor_y - 1 - (segment as i32 * SHAFT_HEIGHT);
+                    let shaft_origin = Vector3::new(origin.x, segment_y, origin.z);
+                    place_template(
+                        chunk,
+                        middle,
+                        shaft_origin,
+                        (SHAFT_OFFSET_X, SHAFT_OFFSET_Z),
+                        self.rotation,
+                    );
+                }
+            }
+
+            // Place basement
+            if let Some(bottom) = &self.bottom_template {
+                let total_shaft_depth = self.ladder_segments as i32 * SHAFT_HEIGHT;
+                let basement_y = dome_floor_y - total_shaft_depth - BASEMENT_HEIGHT + 1;
+                let basement_origin = Vector3::new(origin.x, basement_y, origin.z);
+                place_template(
+                    chunk,
+                    bottom,
+                    basement_origin,
+                    (BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z),
+                    self.rotation,
+                );
+            }
         }
     }
 
@@ -264,116 +215,6 @@ impl StructurePieceBase for IglooPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.shiftable_structure_piece.piece
-    }
-}
-
-/// Rotates an X/Z offset according to the block rotation.
-fn rotate_offset(x: i32, z: i32, rotation: BlockRotation) -> (i32, i32) {
-    match rotation {
-        BlockRotation::None => (x, z),
-        BlockRotation::Clockwise90 => (-z, x),
-        BlockRotation::Rotate180 => (-x, -z),
-        BlockRotation::CounterClockwise90 => (z, -x),
-    }
-}
-
-/// Places a template at the given world position.
-fn place_template(
-    chunk: &mut ProtoChunk,
-    template: &StructureTemplate,
-    world_x: i32,
-    world_y: i32,
-    world_z: i32,
-    rotation: BlockRotation,
-) {
-    use crate::generation::structure::template::BlockStateResolver;
-    use pumpkin_nbt::compound::NbtCompound;
-
-    for block in &template.blocks {
-        let palette_entry = &template.palette[block.state as usize];
-
-        // Skip structure void blocks
-        if palette_entry.name == "minecraft:structure_void" {
-            continue;
-        }
-
-        // Resolve block state with rotation
-        let Some(state) = BlockStateResolver::resolve(palette_entry, rotation, Default::default())
-        else {
-            continue;
-        };
-
-        // Transform position
-        let local_pos = rotation.transform_pos(block.pos, template.size);
-
-        // Calculate world position
-        let wx = world_x + local_pos.x;
-        let wy = world_y + local_pos.y;
-        let wz = world_z + local_pos.z;
-
-        // Place the block
-        chunk.set_block_state(wx, wy, wz, state);
-
-        // Handle block entities (furnaces, chests, etc.)
-        let block_entity_id = get_block_entity_id(&palette_entry.name);
-        if block.nbt.is_some() || block_entity_id.is_some() {
-            let block_entity_id = block_entity_id.unwrap_or(&palette_entry.name);
-            let mut block_entity_nbt = NbtCompound::new();
-
-            // Set position
-            block_entity_nbt.put_int("x", wx);
-            block_entity_nbt.put_int("y", wy);
-            block_entity_nbt.put_int("z", wz);
-
-            // Set block entity ID
-            block_entity_nbt.put_string("id", block_entity_id.to_string());
-
-            // Copy over template NBT data if present
-            if let Some(template_nbt) = &block.nbt {
-                for (key, value) in &template_nbt.child_tags {
-                    // Skip position fields as we've already set them
-                    if key != "x" && key != "y" && key != "z" && key != "id" {
-                        block_entity_nbt
-                            .child_tags
-                            .push((key.clone(), value.clone()));
-                    }
-                }
-            }
-
-            chunk.add_pending_block_entity(block_entity_nbt);
-        }
-    }
-}
-
-/// Returns the block entity ID for blocks that require one, or None if not needed.
-fn get_block_entity_id(block_name: &str) -> Option<&'static str> {
-    match block_name {
-        "minecraft:furnace" => Some("minecraft:furnace"),
-        "minecraft:chest" => Some("minecraft:chest"),
-        "minecraft:trapped_chest" => Some("minecraft:trapped_chest"),
-        "minecraft:barrel" => Some("minecraft:barrel"),
-        "minecraft:hopper" => Some("minecraft:hopper"),
-        "minecraft:dropper" => Some("minecraft:dropper"),
-        "minecraft:dispenser" => Some("minecraft:dispenser"),
-        "minecraft:brewing_stand" => Some("minecraft:brewing_stand"),
-        "minecraft:blast_furnace" => Some("minecraft:blast_furnace"),
-        "minecraft:smoker" => Some("minecraft:smoker"),
-        "minecraft:shulker_box" => Some("minecraft:shulker_box"),
-        "minecraft:bed" => Some("minecraft:bed"),
-        "minecraft:sign"
-        | "minecraft:oak_sign"
-        | "minecraft:spruce_sign"
-        | "minecraft:birch_sign"
-        | "minecraft:jungle_sign"
-        | "minecraft:acacia_sign"
-        | "minecraft:dark_oak_sign"
-        | "minecraft:mangrove_sign"
-        | "minecraft:cherry_sign"
-        | "minecraft:bamboo_sign"
-        | "minecraft:crimson_sign"
-        | "minecraft:warped_sign" => Some("minecraft:sign"),
-        "minecraft:hanging_sign" => Some("minecraft:hanging_sign"),
-        _ => None,
     }
 }
 

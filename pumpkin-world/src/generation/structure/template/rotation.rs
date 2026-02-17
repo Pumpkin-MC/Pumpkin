@@ -56,6 +56,20 @@ impl BlockRotation {
         }
     }
 
+    /// Rotates an X/Z offset around the origin.
+    ///
+    /// Unlike `transform_pos` which rotates within template bounds,
+    /// this rotates a simple offset (e.g. sub-template positioning).
+    #[must_use]
+    pub fn rotate_offset(self, x: i32, z: i32) -> (i32, i32) {
+        match self {
+            Self::None => (x, z),
+            Self::Clockwise90 => (-z, x),
+            Self::Rotate180 => (-x, -z),
+            Self::CounterClockwise90 => (z, -x),
+        }
+    }
+
     /// Rotates the template size dimensions according to this rotation.
     ///
     /// For 90 and 270 degree rotations, X and Z dimensions are swapped.
