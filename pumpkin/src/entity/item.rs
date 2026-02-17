@@ -275,7 +275,7 @@ impl ItemEntity {
         velo = velo.multiply(friction, 0.98, friction);
 
         if on_ground && velo.y < 0.0 {
-            velo = velo.multiply(1.0, -0.5, 1.0);
+            velo.y = 0.0;
         }
 
         entity.velocity.store(velo);
