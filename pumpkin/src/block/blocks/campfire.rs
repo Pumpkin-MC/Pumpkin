@@ -44,7 +44,7 @@ impl BlockBehaviour for CampfireBlock {
                     .await
                     .is_some();
                 if has_frost_walker_enchantment || has_fire_res {
-                    //campfire burning doesn't work if entity's boots has frost walker enchantement or entity has fire res. source: https://minecraft.wiki/w/Campfire#Damage
+                    //campfire burning doesn't work if entity's boots has frost walker enchantment or entity has fire resistance. source: https://minecraft.wiki/w/Campfire#Damage
                     return;
                 }
                 let damage_amount = if args.block == &Block::SOUL_CAMPFIRE {
