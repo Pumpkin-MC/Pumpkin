@@ -8,7 +8,7 @@ use std::fmt::Display;
 /// A trait describing the way to encode something of a type `Value` into something else  (`Value -> ?`).
 pub trait Encoder: HasValue {
     /// Encodes an input of this encoder's type (`A`) into an output of type `T`,
-    /// along with a prefix (already encoded data).
+    /// along with the `prefix` (already encoded data).
     fn encode<T: Display + PartialEq + Clone>(
         &self,
         input: &Self::Value,
@@ -108,7 +108,8 @@ pub trait Decoder: HasValue {
         ops: &'static impl DynamicOps<Value = T>,
     ) -> DataResult<(Self::Value, T)>;
 
-    /// Decodes an input of this decoder's type (`A`) into an output of type `T`.
+    /// Decodes an input of this decoder's type (`A`) into an output of type `T`,
+    /// discarding any remaining undecoded data.
     fn parse<T: Display + PartialEq + Clone>(
         &self,
         input: T,

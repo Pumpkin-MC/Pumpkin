@@ -11,7 +11,6 @@ use crate::serialization::map_coders::{CompressorHolder, MapDecoder, MapEncoder}
 use crate::serialization::map_like::MapLike;
 use crate::serialization::struct_builder::StructBuilder;
 use std::fmt::Display;
-use std::sync::OnceLock;
 
 /// A single field object to build a struct codec, which takes a [`MapCodec`] and a getter.
 ///
@@ -40,9 +39,7 @@ macro_rules! impl_struct_map_codec {
         pub struct $name<T, C1: MapCodec + 'static $(, $codec_type: MapCodec + 'static)* > {
             field_1: Field<T, C1>,
             $( $field: Field<T, $codec_type> ,)*
-            apply_function: fn(C1::Value $(, $codec_type::Value)*) -> T,
-
-            compressor: OnceLock<KeyCompressor>,
+            apply_function: fn(C1::Value $(, $codec_type::Value)*) -> T
         }
 
         impl<T, C1: MapCodec $(, $codec_type: MapCodec)* > HasValue for $name<T, C1 $(, $codec_type)*> {
@@ -59,7 +56,7 @@ macro_rules! impl_struct_map_codec {
         }
 
         impl<T, C1: MapCodec $(, $codec_type: MapCodec)* > CompressorHolder for $name<T, C1 $(, $codec_type)*> {
-            impl_compressor!(compressor);
+            impl_compressor!();
         }
 
         impl<T, C1: MapCodec $(, $codec_type: MapCodec)* > MapEncoder for $name<T, C1 $(, $codec_type)*> {
@@ -110,8 +107,7 @@ macro_rules! impl_struct_map_codec {
                 $name {
                     field_1,
                     $( $field, )*
-                    apply_function: f,
-                    compressor: OnceLock::new(),
+                    apply_function: f
                 }
             )
         }
@@ -132,8 +128,7 @@ macro_rules! impl_struct_map_codec {
                 $name {
                     field_1,
                     $( $field, )*
-                    apply_function: f,
-                    compressor: OnceLock::new(),
+                    apply_function: f
                 }
             )
         }
@@ -577,40 +572,41 @@ mod test {
             capacity: u32,
         }
 
-        pub type UnvalidatedBookshelfCodec = StructCodec3<
-            Bookshelf,
-            FieldMapCodec<UintCodec>,
-            DefaultedFieldCodec<ListCodec<BookCodec>>,
-            FieldMapCodec<UintCodec>,
+        pub type BookshelfCodec = ValidatedCodec<
+            StructCodec3<
+                Bookshelf,
+                FieldMapCodec<UintCodec>,
+                DefaultedFieldCodec<ListCodec<BookCodec>>,
+                FieldMapCodec<UintCodec>,
+            >,
         >;
-
-        static UNVALIDATED_BOOKSHELF_CODEC: UnvalidatedBookshelfCodec = struct_codec!(
-            for_getter(field(&UINT_CODEC, "id"), |b: &Bookshelf| &b.id),
-            for_getter(
-                optional_field_with_default(&unbounded_list(&BOOK_CODEC), "books", Vec::new),
-                |b: &Bookshelf| &b.books
+        pub static BOOKSHELF_CODEC: BookshelfCodec = validate(
+            &struct_codec!(
+                for_getter(field(&UINT_CODEC, "id"), |b: &Bookshelf| &b.id),
+                for_getter(
+                    optional_field_with_default(&unbounded_list(&BOOK_CODEC), "books", Vec::new),
+                    |b: &Bookshelf| &b.books
+                ),
+                for_getter(field(&UINT_CODEC, "capacity"), |b: &Bookshelf| &b.capacity),
+                |id, books, capacity| Bookshelf {
+                    id,
+                    books,
+                    capacity
+                }
             ),
-            for_getter(field(&UINT_CODEC, "capacity"), |b: &Bookshelf| &b.capacity),
-            |id, books, capacity| Bookshelf {
-                id,
-                books,
-                capacity
-            }
+            |b| {
+                // The number of books on the bookshelf must be less than or equal to its capacity.
+                if b.books.len() <= b.capacity as usize {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "Bookshelf cannot have {} books because its capacity is {}",
+                        b.books.len(),
+                        b.capacity
+                    ))
+                }
+            },
         );
-
-        pub type BookshelfCodec = ValidatedCodec<UnvalidatedBookshelfCodec>;
-        pub static BOOKSHELF_CODEC: BookshelfCodec = validate(&UNVALIDATED_BOOKSHELF_CODEC, |b| {
-            // The number of books on the bookshelf must be less than or equal to its capacity.
-            if b.books.len() <= b.capacity as usize {
-                Ok(())
-            } else {
-                Err(format!(
-                    "Bookshelf cannot have {} books because its capacity is {}",
-                    b.books.len(),
-                    b.capacity
-                ))
-            }
-        });
 
         let example = Bookshelf {
             id: 1234,
