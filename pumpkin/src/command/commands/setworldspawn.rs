@@ -11,8 +11,8 @@ use crate::command::{
     dispatcher::CommandError,
     tree::{CommandTree, builder::argument},
 };
-use crate::server::Server;
 use crate::plugin::world::spawn_change::SpawnChangeEvent;
+use crate::server::Server;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::translation;
 use pumpkin_util::{math::position::BlockPos, text::TextComponent};
