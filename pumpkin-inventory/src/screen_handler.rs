@@ -735,7 +735,8 @@ pub trait ScreenHandler: Send + Sync {
                             } else if drag_button == 1 {
                                 1
                             } else if drag_button == 2 {
-                                cursor_stack.get_max_stack_size()
+                                cursor_stack.item_count = cursor_stack.get_max_stack_size();
+                                cursor_stack.item_count
                             } else {
                                 panic!("Invalid drag button: {drag_button}");
                             };
@@ -764,6 +765,9 @@ pub trait ScreenHandler: Send + Sync {
                         }
                     }
 
+                    if drag_button == 2 {
+                        *cursor_stack = ItemStack::EMPTY.clone();
+                    }
                     behaviour.drag_slots.clear();
                 }
             } else if action_type == SlotActionType::Throw {
@@ -795,10 +799,13 @@ pub trait ScreenHandler: Send + Sync {
             } else if action_type == SlotActionType::Clone {
                 if player.has_infinite_materials() && slot_index >= 0 {
                     let behaviour = self.get_behaviour_mut();
+                    let mut cursor_stack = behaviour.cursor_stack.lock().await;
+                    if !cursor_stack.is_empty() {
+                        return;
+                    }
                     let slot = behaviour.slots[slot_index as usize].clone();
                     let stack_lock = slot.get_stack().await;
                     let stack = stack_lock.lock().await;
-                    let mut cursor_stack = behaviour.cursor_stack.lock().await;
                     *cursor_stack = stack.copy_with_count(stack.get_max_stack_size());
                 }
             } else if (action_type == SlotActionType::Pickup
