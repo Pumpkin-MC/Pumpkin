@@ -276,7 +276,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
-    fn set_mob_target<'a>(&'a self, target: Option<Arc<dyn EntityBase>>) -> EntityBaseFuture<'a, ()> {
+    fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let mut mob_target = self.get_mob_entity().target.lock().await;
             *mob_target = target;

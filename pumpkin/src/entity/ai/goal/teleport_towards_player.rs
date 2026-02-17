@@ -18,7 +18,7 @@ pub struct TeleportTowardsPlayerGoal {
     /// During warmup: holds the player we're staring at. After warmup: None (transferred to mob.target).
     target_player: Option<Arc<dyn EntityBase>>,
     /// Post-warmup: committed target reference (mirrors vanilla's `ActiveTargetGoal.targetEntity`).
-    /// Survives `mob.target` being cleared by other goals (e.g., MeleeAttackGoal.stop()).
+    /// Survives `mob.target` being cleared by other goals (e.g., `MeleeAttackGoal.stop()`).
     committed_target: Option<Arc<dyn EntityBase>>,
     target_predicate: TargetPredicate,
     warmup: i32,
