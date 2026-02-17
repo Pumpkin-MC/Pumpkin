@@ -64,7 +64,7 @@ impl CreeperEntity {
         //     .entity
         //     .send_meta_data(&[Metadata::new(
         //         TrackedData::DATA_FUSE_SPEED,
-        //         MetaDataType::Integer,
+        //         MetaDataType::INTEGER,
         //         speed,
         //     )])
         //     .await;

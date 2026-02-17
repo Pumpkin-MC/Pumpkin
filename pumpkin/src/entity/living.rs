@@ -191,7 +191,7 @@ impl LivingEntity {
         self.entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_LIVING_FLAGS,
-                MetaDataType::Byte,
+                MetaDataType::BYTE,
                 b,
             )])
             .await;
@@ -216,7 +216,7 @@ impl LivingEntity {
         self.entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_HEALTH,
-                MetaDataType::Float,
+                MetaDataType::FLOAT,
                 health,
             )])
             .await;
