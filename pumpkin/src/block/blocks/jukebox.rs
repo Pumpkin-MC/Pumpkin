@@ -23,6 +23,8 @@ use pumpkin_world::block::entities::jukebox::JukeboxBlockEntity;
 use pumpkin_world::world::BlockFlags;
 use rand::{RngExt, rng};
 
+use tracing::error;
+
 #[pumpkin_block("minecraft:jukebox")]
 pub struct JukeboxBlock;
 
@@ -147,7 +149,7 @@ impl BlockBehaviour for JukeboxBlock {
             };
 
             let Some(jukebox_song) = JukeboxSong::from_name(song_name) else {
-                log::error!("Jukebox playable song not registered: {song_name}");
+                error!("Jukebox playable song not registered: {song_name}");
                 return BlockActionResult::PassToDefaultBlockAction;
             };
 

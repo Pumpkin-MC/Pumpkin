@@ -14,6 +14,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use tokio::sync::Mutex;
+use tracing::warn;
 
 pub struct PlayerInventory {
     pub main_inventory: [Arc<Mutex<ItemStack>>; Self::MAIN_SIZE],
@@ -401,13 +402,10 @@ impl Inventory for PlayerInventory {
         Box::pin(async move {
             if slot < self.main_inventory.len() {
                 *self.main_inventory[slot].lock().await = stack;
+            } else if let Some(slot) = self.equipment_slots.get(&slot) {
+                self.entity_equipment.lock().await.put(slot, stack).await;
             } else {
-                match self.equipment_slots.get(&slot) {
-                    Some(slot) => {
-                        self.entity_equipment.lock().await.put(slot, stack).await;
-                    }
-                    None => log::warn!("Failed to get Equipment Slot at {slot}"),
-                }
+                warn!("Failed to get Equipment Slot at {slot}");
             }
         })
     }

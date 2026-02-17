@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use tokio::sync::Mutex;
 
 pub mod creeper;
-pub mod drowned;
+pub mod enderman;
 pub mod silverfish;
 pub mod skeleton;
 pub mod zombie;
@@ -131,6 +131,11 @@ impl MobEntity {
     pub async fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
         // TODO: Use entity attributes for damage once implemented
         const ZOMBIE_ATTACK_DAMAGE: f32 = 3.0;
+
+        if self.living_entity.dead.load(Relaxed) {
+            // do not attack if dead
+            return;
+        }
 
         target
             .damage_with_context(

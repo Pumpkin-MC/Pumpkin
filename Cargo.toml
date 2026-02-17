@@ -44,7 +44,7 @@ significant_drop_in_scrutinee = "deny"
 print_stdout = "deny"
 print_stderr = "deny"
 
-# Expected/Allowed 
+# Expected/Allowed
 cargo_common_metadata = "allow"
 cast_precision_loss = "allow"
 multiple_crate_versions = "allow"
@@ -87,9 +87,8 @@ debug = true
 strip = false
 
 [workspace.dependencies]
-log = "0.4"
 tokio = { version = "1.49", default-features = false }
-syn = { version = "2.0", default-features = false, features=["printing"] }
+syn = { version = "2.0", default-features = false, features = ["printing"] }
 
 
 thiserror = "2.0"
@@ -118,7 +117,7 @@ console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = "1.10.0"
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = "0.8.21"
-crossfire = { version= "3.0.4", features = ["compat"]}
+crossfire = { version = "3.0.4", features = ["compat"] }
 dashmap = "6.1"
 ecdsa = "0.16.9"
 enum_dispatch = "0.3.13"
@@ -148,7 +147,7 @@ pumpkin-protocol = { path = "pumpkin-protocol" }
 pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
-rand = { git = "https://github.com/rust-random/rand"}
+rand = { git = "https://github.com/rust-random/rand" }
 rsa = "=0.10.0-rc.15"
 rustc-hash = "2.1.1"
 rustyline = "17.0.2"
@@ -158,7 +157,11 @@ sha1 = "=0.11.0-rc.5"
 sha2 = "=0.11.0-rc.5"
 signature = "2.2.0"
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
+tracing-subscriber = { version = "=0.3.19", features = [
+    "env-filter",
+    "fmt",
+    "time",
+] }
 slotmap = "1.1"
 take_mut = "0.2.2"
 temp-dir = "0.1.16"

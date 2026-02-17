@@ -8,7 +8,6 @@ use crate::net::java::{JavaClient, PacketHandlerResult};
 use crate::net::{ClientPlatform, DisconnectReason};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
-use log::LevelFilter;
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_macros::send_cancellable;
@@ -29,6 +28,8 @@ use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tracing::{debug, error, info, warn};
+use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -44,7 +45,13 @@ pub mod plugin;
 pub mod server;
 pub mod world;
 
-pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter)>;
+pub struct LoggingConfig {
+    pub color: bool,
+    pub threads: bool,
+    pub timestamp: bool,
+}
+
+pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter, LoggingConfig)>;
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
@@ -59,16 +66,16 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             .as_deref()
             .map(LevelFilter::from_str)
             .and_then(Result::ok)
-            .unwrap_or(LevelFilter::Info);
+            .unwrap_or(LevelFilter::INFO);
 
         let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
             let level_str = match level {
-                LevelFilter::Off => "off",
-                LevelFilter::Error => "error",
-                LevelFilter::Warn => "warn",
-                LevelFilter::Info => "info",
-                LevelFilter::Debug => "debug",
-                LevelFilter::Trace => "trace",
+                LevelFilter::OFF => "off",
+                LevelFilter::ERROR => "error",
+                LevelFilter::WARN => "warn",
+                LevelFilter::INFO => "info",
+                LevelFilter::DEBUG => "debug",
+                LevelFilter::TRACE => "trace",
             };
             EnvFilter::new(level_str)
         });
@@ -112,7 +119,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let fmt_layer = fmt::layer()
             .with_writer(std::sync::Mutex::new(logger))
             .with_ansi(advanced_config.logging.color)
-            .with_target(false)
+            .with_target(true)
             .with_thread_names(advanced_config.logging.threads)
             .with_thread_ids(advanced_config.logging.threads);
 
@@ -140,7 +147,13 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             }
         }
 
-        (ReadlineLogWrapper::new(rl), level)
+        let logging_config = LoggingConfig {
+            color: advanced_config.logging.color,
+            threads: advanced_config.logging.threads,
+            timestamp: advanced_config.logging.timestamp,
+        };
+
+        (ReadlineLogWrapper::new(rl), level, logging_config)
     });
 
     assert!(
@@ -175,6 +188,9 @@ pub struct PumpkinServer {
 }
 
 impl PumpkinServer {
+    pub fn log_info(&self, message: &str) {
+        tracing::info!(target: "plugin", "{}", message);
+    }
     #[expect(clippy::if_then_some_else_none)]
     pub async fn new(
         basic_config: BasicConfiguration,
@@ -186,13 +202,13 @@ impl PumpkinServer {
         let rcon = server.advanced_config.networking.rcon.clone();
 
         if server.advanced_config.commands.use_console
-            && let Some((wrapper, _)) = LOGGER_IMPL.wait()
+            && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
         {
             if let Some(rl) = wrapper.take_readline() {
                 setup_console(rl, server.clone());
             } else {
                 if server.advanced_config.commands.use_tty {
-                    log::warn!(
+                    warn!(
                         "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
                     );
                 }
@@ -201,7 +217,7 @@ impl PumpkinServer {
         }
 
         if rcon.enabled {
-            log::warn!(
+            warn!(
                 "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
             );
             let rcon_server = server.clone();
@@ -217,25 +233,21 @@ impl PumpkinServer {
                 Ok(l) => l,
                 Err(e) => match e.kind() {
                     ErrorKind::AddrInUse => {
-                        log::error!("Error: Address {address} is already in use.");
-                        log::error!(
-                            "Make sure another instance of the server isn't already running"
-                        );
+                        error!("Error: Address {address} is already in use.");
+                        error!("Make sure another instance of the server isn't already running");
                         std::process::exit(1);
                     }
                     ErrorKind::PermissionDenied => {
-                        log::error!("Error: Permission denied when binding to {address}.");
-                        log::error!("You might need sudo/admin privileges to use ports below 1024");
+                        error!("Error: Permission denied when binding to {address}.");
+                        error!("You might need sudo/admin privileges to use ports below 1024");
                         std::process::exit(1);
                     }
                     ErrorKind::AddrNotAvailable => {
-                        log::error!(
-                            "Error: The address {address} is not available on this machine"
-                        );
+                        error!("Error: The address {address} is not available on this machine");
                         std::process::exit(1);
                     }
                     _ => {
-                        log::error!("Failed to start TcpListener on {address}: {e}");
+                        error!("Failed to start TcpListener on {address}: {e}");
                         std::process::exit(1);
                     }
                 },
@@ -246,7 +258,7 @@ impl PumpkinServer {
                 .expect("Unable to get the address of the server!");
 
             if server.advanced_config.networking.query.enabled {
-                log::info!("Query protocol is enabled. Starting...");
+                info!("Query protocol is enabled. Starting...");
                 server.spawn_task(query::start_query_handler(
                     server.clone(),
                     server.advanced_config.networking.query.address,
@@ -254,7 +266,7 @@ impl PumpkinServer {
             }
 
             if server.advanced_config.networking.lan_broadcast.enabled {
-                log::info!("LAN broadcast is enabled. Starting...");
+                info!("LAN broadcast is enabled. Starting...");
 
                 let lan_broadcast = LANBroadcast::new(
                     &server.advanced_config.networking.lan_broadcast,
@@ -303,15 +315,15 @@ impl PumpkinServer {
             .set_server(self.server.clone())
             .await;
         if let Err(err) = self.server.plugin_manager.load_plugins().await {
-            log::error!("{err}");
+            error!("{err}");
         }
     }
 
     pub async fn unload_plugins(&self) {
         if let Err(err) = self.server.plugin_manager.unload_all_plugins().await {
-            log::error!("Error unloading plugins: {err}");
+            error!("Error unloading plugins: {err}");
         } else {
-            log::info!("All plugins unloaded successfully");
+            info!("All plugins unloaded successfully");
         }
     }
 
@@ -329,7 +341,7 @@ impl PumpkinServer {
             }
         }
 
-        log::info!("Stopped accepting incoming connections");
+        info!("Stopped accepting incoming connections");
 
         if let Err(e) = self
             .server
@@ -337,7 +349,7 @@ impl PumpkinServer {
             .save_all_players(&self.server)
             .await
         {
-            log::error!("Error saving all players during shutdown: {e}");
+            error!("Error saving all players during shutdown: {e}");
         }
 
         let kick_message = TextComponent::text("Server stopped");
@@ -347,20 +359,20 @@ impl PumpkinServer {
                 .await;
         }
 
-        log::info!("Ending player tasks");
+        info!("Ending player tasks");
 
         tasks.close();
         tasks.wait().await;
 
         self.unload_plugins().await;
 
-        log::info!("Starting save.");
+        info!("Starting save.");
 
         self.server.shutdown().await;
 
-        log::info!("Completed save!");
+        info!("Completed save!");
 
-        if let Some((wrapper, _)) = LOGGER_IMPL.wait()
+        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
             && let Some(rl) = wrapper.take_readline()
         {
             let _ = rl;
@@ -382,7 +394,7 @@ impl PumpkinServer {
                 match tcp_result {
                     Ok((connection, client_addr)) => {
                         if let Err(e) = connection.set_nodelay(true) {
-                            log::warn!("Failed to set TCP_NODELAY: {e}");
+                            warn!("Failed to set TCP_NODELAY: {e}");
                         }
 
                         let client_id = *master_client_id_counter;
@@ -393,7 +405,7 @@ impl PumpkinServer {
                         } else {
                             format!("{client_addr}")
                         };
-                        log::debug!("Accepted connection from Java Edition: {formatted_address} (id {client_id})");
+                        debug!("Accepted connection from Java Edition: {formatted_address} (id {client_id})");
                         let server_clone = self.server.clone();
 
                         tasks.spawn(async move {
@@ -425,7 +437,7 @@ impl PumpkinServer {
                                     if let Err(e) = server_clone.player_data_storage
                                         .handle_player_leave(&player)
                                         .await {
-                                            log::error!("Failed to save player data on disconnect: {e}");
+                                            error!("Failed to save player data on disconnect: {e}");
                                         }
                                     }
                                 },
@@ -433,7 +445,7 @@ impl PumpkinServer {
                         });
                     }
                     Err(e) => {
-                        log::error!("Failed to accept Java client connection: {e}");
+                        error!("Failed to accept Java client connection: {e}");
                         sleep(Duration::from_millis(50)).await;
                     }
                 }
@@ -444,7 +456,7 @@ impl PumpkinServer {
                 match udp_result {
                     Ok((len, client_addr)) => {
                         if len == 0 {
-                            log::warn!("Received empty UDP packet from {client_addr}");
+                            warn!("Received empty UDP packet from {client_addr}");
                         } else {
                             let id = udp_buf[0];
                             let is_online = id & 128 != 0;
@@ -484,7 +496,7 @@ impl PumpkinServer {
                     }
                     // Since all packets go over this match statement, there should be not waiting
                     Err(e) => {
-                        log::error!("{e}");
+                        error!("{e}");
                     }
                 }
             },
@@ -513,7 +525,7 @@ fn setup_stdin_console(server: Arc<Server>) {
                 break;
             }
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
-                log::warn!("Console command was not terminated with a newline");
+                warn!("Console command was not terminated with a newline");
             }
             rt.block_on(tx.send(line.trim().to_string()))
                 .expect("Failed to send command to server");
@@ -558,22 +570,22 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     }
                 }
                 Err(ReadlineError::Interrupted) => {
-                    log::info!("CTRL-C");
+                    info!("CTRL-C");
                     stop_server();
                     break;
                 }
                 Err(ReadlineError::Eof) => {
-                    log::info!("CTRL-D");
+                    info!("CTRL-D");
                     stop_server();
                     break;
                 }
                 Err(err) => {
-                    log::error!("Error reading console input: {err}");
+                    error!("Error reading console input: {err}");
                     break;
                 }
             }
         }
-        if let Some((wrapper, _)) = LOGGER_IMPL.wait() {
+        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait() {
             wrapper.return_readline(rl);
         }
     });
@@ -603,7 +615,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 break;
             }
         }
-        log::debug!("Stopped console commands task");
+        debug!("Stopped console commands task");
     });
 }
 

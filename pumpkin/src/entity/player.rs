@@ -1,17 +1,15 @@
 use core::f32;
-use std::collections::{BinaryHeap, HashSet, VecDeque};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
-use std::ops::AddAssign;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
-use log::warn;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
@@ -27,6 +25,7 @@ use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
@@ -53,13 +52,14 @@ use pumpkin_protocol::IdOr;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
-    CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
-    CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
-    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetEquipment,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
-    CUpdateTime, GameEvent, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CCustomPayload,
+    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive,
+    COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+    CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
+    CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory,
+    CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTitleAnimation,
+    CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata, PlayerAction,
+    PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_util::math::{
@@ -135,16 +135,18 @@ pub struct ChunkManager {
     center: Vector2<i32>,
     view_distance: u8,
     chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
-    chunk_sent: HashSet<Vector2<i32>>,
+    chunk_sent: HashMap<Vector2<i32>, Weak<ChunkData>>,
     chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
+    last_chunk_batch_sent_at: Instant,
     /// The current world for chunk loading. Updated on dimension change.
     world: Arc<World>,
 }
 
 impl ChunkManager {
     pub const NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE: u8 = 10;
+    const ACK_STALL_FALLBACK_DELAY: Duration = Duration::from_millis(250);
 
     #[must_use]
     pub fn new(
@@ -157,10 +159,11 @@ impl ChunkManager {
             center: Vector2::<i32>::new(0, 0),
             view_distance: 0,
             chunk_listener,
-            chunk_sent: HashSet::new(),
+            chunk_sent: HashMap::new(),
             chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
+            last_chunk_batch_sent_at: Instant::now(),
             world,
         }
     }
@@ -169,6 +172,28 @@ impl ChunkManager {
     #[must_use]
     pub const fn world(&self) -> &Arc<World> {
         &self.world
+    }
+
+    fn should_enqueue_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) -> bool {
+        self.chunk_sent
+            .insert(position, Arc::downgrade(chunk))
+            .and_then(|old_chunk| old_chunk.upgrade())
+            .is_none_or(|old_chunk| !Arc::ptr_eq(&old_chunk, chunk))
+    }
+
+    #[must_use]
+    const fn ack_window_open(&self) -> bool {
+        match self.batches_sent_since_ack {
+            BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
+            BatchState::Initial => true,
+            BatchState::Waiting => false,
+        }
+    }
+
+    #[must_use]
+    fn ack_fallback_ready(&self) -> bool {
+        !self.ack_window_open()
+            && self.last_chunk_batch_sent_at.elapsed() >= Self::ACK_STALL_FALLBACK_DELAY
     }
 
     pub fn pull_new_chunks(&mut self) {
@@ -180,7 +205,7 @@ impl ChunkManager {
             if dst > i32::from(self.view_distance) {
                 continue;
             }
-            if self.chunk_sent.insert(pos) {
+            if self.should_enqueue_chunk(pos, &chunk) {
                 // log::debug!("receive new chunk {pos:?}");
                 self.chunk_queue.push(HeapNode(dst, pos, chunk));
             }
@@ -219,21 +244,24 @@ impl ChunkManager {
         self.center = center;
         self.view_distance = view_distance;
         let view_distance_i32 = i32::from(view_distance);
+        let unloading_chunks: HashSet<Vector2<i32>> = unloading_chunks.iter().copied().collect();
 
-        self.chunk_sent
-            .retain(|pos| !unloading_chunks.contains(pos));
+        self.chunk_sent.retain(|pos, _| {
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
+                && !unloading_chunks.contains(pos)
+        });
 
         let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
         for node in self.chunk_queue.drain() {
             let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
-            if dst <= view_distance_i32 {
+            if dst <= view_distance_i32 && !unloading_chunks.contains(&node.1) {
                 new_queue.push(HeapNode(dst, node.1, node.2));
             }
         }
         self.chunk_queue = new_queue;
 
         for pos in loading_chunks {
-            if !self.chunk_sent.contains(pos)
+            if !self.chunk_sent.contains_key(pos)
                 && let Some(chunk) = level.loaded_chunks.get(pos)
             {
                 self.push_chunk(*pos, chunk.value().clone());
@@ -247,6 +275,7 @@ impl ChunkManager {
             self.center,
             ChunkLoading::get_level_from_view_distance(self.view_distance),
         );
+        lock.send_change();
         let (_rx, tx) = crossbeam::channel::unbounded();
         // drop old channel
         self.chunk_listener = tx;
@@ -256,6 +285,7 @@ impl ChunkManager {
         self.chunk_queue.clear();
         self.entity_chunk_queue.clear();
         self.batches_sent_since_ack = BatchState::Initial;
+        self.last_chunk_batch_sent_at = Instant::now();
     }
 
     pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
@@ -264,6 +294,7 @@ impl ChunkManager {
             self.center,
             ChunkLoading::get_level_from_view_distance(self.view_distance),
         );
+        lock.send_change();
         drop(lock);
         self.chunk_listener = new_world.level.chunk_listener.add_global_chunk_listener();
         self.chunk_sent.clear();
@@ -271,6 +302,7 @@ impl ChunkManager {
         self.world = new_world;
         // Reset batch state so chunks can be sent immediately in the new dimension
         self.batches_sent_since_ack = BatchState::Initial;
+        self.last_chunk_batch_sent_at = Instant::now();
     }
 
     pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
@@ -279,11 +311,12 @@ impl ChunkManager {
     }
 
     pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
-        self.chunk_sent.insert(position);
-        let dst = (position.x - self.center.x)
-            .abs()
-            .max((position.y - self.center.y).abs());
-        self.chunk_queue.push(HeapNode(dst, position, chunk));
+        if self.should_enqueue_chunk(position, &chunk) {
+            let dst = (position.x - self.center.x)
+                .abs()
+                .max((position.y - self.center.y).abs());
+            self.chunk_queue.push(HeapNode(dst, position, chunk));
+        }
     }
 
     pub fn push_entity(&mut self, position: Vector2<i32>, chunk: SyncEntityChunk) {
@@ -292,17 +325,13 @@ impl ChunkManager {
 
     #[must_use]
     pub fn can_send_chunk(&self) -> bool {
-        let state_available = match self.batches_sent_since_ack {
-            BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
-            BatchState::Initial => true,
-            BatchState::Waiting => false,
-        };
+        let state_available = self.ack_window_open() || self.ack_fallback_ready();
 
         state_available && !self.chunk_queue.is_empty()
     }
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
-        let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
+        let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick.max(1));
         let mut chunks = Vec::<Arc<ChunkData>>::with_capacity(chunk_size);
         while chunk_size > 0 {
             chunks.push(self.chunk_queue.pop().unwrap().2);
@@ -310,17 +339,21 @@ impl ChunkManager {
         }
         match &mut self.batches_sent_since_ack {
             BatchState::Count(count) => {
-                count.add_assign(1);
+                *count = count.saturating_add(1);
             }
             state @ BatchState::Initial => *state = BatchState::Waiting,
             BatchState::Waiting => (),
         }
+        self.last_chunk_batch_sent_at = Instant::now();
 
         chunks.into_boxed_slice()
     }
 
     pub fn next_entity(&mut self) -> Box<[SyncEntityChunk]> {
-        let chunk_size = self.entity_chunk_queue.len().min(self.chunks_per_tick);
+        let chunk_size = self
+            .entity_chunk_queue
+            .len()
+            .min(self.chunks_per_tick.max(1));
 
         let chunks: Box<[Arc<ChunkEntityData>]> = self
             .entity_chunk_queue
@@ -330,11 +363,12 @@ impl ChunkManager {
 
         match &mut self.batches_sent_since_ack {
             BatchState::Count(count) => {
-                count.add_assign(1);
+                *count = count.saturating_add(1);
             }
             state @ BatchState::Initial => *state = BatchState::Waiting,
-            BatchState::Waiting => unreachable!(),
+            BatchState::Waiting => (),
         }
+        self.last_chunk_batch_sent_at = Instant::now();
 
         chunks
     }
@@ -370,6 +404,8 @@ pub struct Player {
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
+    /// The block position of the currently open container screen (if any).
+    pub open_container_pos: AtomicCell<Option<BlockPos>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
     /// The player's abilities and special powers.
@@ -486,6 +522,7 @@ impl Player {
             hunger_manager: HungerManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
             open_container: AtomicCell::new(None),
+            open_container_pos: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
             packet_sequence: AtomicI32::new(-1),
             start_mining_time: AtomicI32::new(0),
@@ -587,7 +624,7 @@ impl Player {
         // Given enough time, all of these chunks will be in memory.
         let radial_chunks = cylindrical.all_chunks_within();
 
-        log::debug!(
+        debug!(
             "Removing player {}, unwatching {} chunks",
             self.gameprofile.name,
             radial_chunks.len()
@@ -602,10 +639,10 @@ impl Player {
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
-        log::debug!(
+        debug!(
             "Removed player id {} from world {} ({} chunks remain cached)",
             self.gameprofile.name,
-            "world", // TODO: Add world names
+            self.world().get_world_name(),
             level.loaded_chunk_count(),
         );
 
@@ -879,10 +916,9 @@ impl Player {
                     f64::from(pos.0.y) + 0.1,
                     f64::from(pos.0.z) + 0.5,
                 );
-                log::debug!(
+                debug!(
                     "Returning forced spawn point at {:?}, dimension: {:?}",
-                    position,
-                    respawn_point.dimension
+                    position, respawn_point.dimension
                 );
                 return Some(CalculatedRespawnPoint {
                     position,
@@ -1155,6 +1191,79 @@ impl Player {
         abilities.flying
     }
 
+    fn is_sleeping(&self) -> bool {
+        // TODO: Track sleeping position state explicitly (vanilla checks sleepingPosition.isPresent()).
+        self.sleeping_since.load().is_some()
+    }
+
+    async fn is_swimming(&self, flying: bool) -> bool {
+        let entity = self.get_entity();
+        let swim_height = self.living_entity.get_swim_height();
+
+        // TODO: Replace this inferred check with vanilla-equivalent swimming state tracking
+        // (LivingEntity#updateSwimming + entity swimming flag).
+        entity.touching_water.load(Ordering::Relaxed)
+            && entity.water_height.load() > swim_height
+            && entity.sprinting.load(Ordering::Relaxed)
+            && !entity.on_ground.load(Ordering::Relaxed)
+            && !flying
+            && !entity.has_vehicle().await
+    }
+
+    const fn is_auto_spin_attack() -> bool {
+        // TODO: Track active auto-spin/riptide state and return true while it is active.
+        false
+    }
+
+    async fn can_fit_pose(&self, pose: EntityPose) -> bool {
+        let entity = self.get_entity();
+        let dimensions = Entity::get_entity_dimensions(pose);
+        let position = entity.pos.load();
+        let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimensions);
+        entity
+            .world
+            .load()
+            .is_space_empty(aabb.contract_all(1.0E-7))
+            .await
+    }
+
+    pub async fn update_player_pose(&self) {
+        let entity = self.get_entity();
+        if !self.can_fit_pose(EntityPose::Swimming).await {
+            return;
+        }
+
+        let flying = self.is_flying().await;
+        let desired_pose = if self.is_sleeping() {
+            EntityPose::Sleeping
+        } else if self.is_swimming(flying).await {
+            EntityPose::Swimming
+        } else if entity.fall_flying.load(Ordering::Relaxed) {
+            EntityPose::FallFlying
+        } else if Self::is_auto_spin_attack() {
+            EntityPose::SpinAttack
+        } else if entity.sneaking.load(Ordering::Relaxed) && !flying {
+            EntityPose::Crouching
+        } else {
+            EntityPose::Standing
+        };
+
+        let new_pose = if self.gamemode.load() == GameMode::Spectator
+            || entity.has_vehicle().await
+            || self.can_fit_pose(desired_pose).await
+        {
+            desired_pose
+        } else if self.can_fit_pose(EntityPose::Crouching).await {
+            EntityPose::Crouching
+        } else {
+            EntityPose::Swimming
+        };
+
+        if entity.pose.load() != new_pose {
+            entity.set_pose(new_pose).await;
+        }
+    }
+
     pub async fn wake_up(&self) {
         let world = self.world();
         let respawn_point = self
@@ -1366,6 +1475,8 @@ impl Player {
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
         self.living_entity.tick(self.clone(), server).await;
+        // Vanilla updates pose in PlayerEntity#tick after super.tick().
+        self.update_player_pose().await;
         self.breath_manager.tick(self).await;
         self.hunger_manager.tick(self).await;
 
@@ -1488,7 +1599,7 @@ impl Player {
     }
 
     pub fn eye_position(&self) -> Vector3<f64> {
-        let eye_height = f64::from(self.living_entity.entity.entity_dimension.load().eye_height);
+        let eye_height = self.living_entity.entity.get_eye_height();
         Vector3::new(
             self.living_entity.entity.pos.load().x,
             self.living_entity.entity.pos.load().y + eye_height,
@@ -1828,10 +1939,10 @@ impl Player {
         let d = self.block_interaction_range() + additional_range;
         let box_pos = BoundingBox::from_block(position);
         let entity_pos = self.living_entity.entity.pos.load();
-        let standing_eye_height = self.living_entity.entity.entity_dimension.load().eye_height;
+        let eye_height = self.living_entity.entity.get_eye_height();
         box_pos.squared_magnitude(Vector3 {
             x: entity_pos.x,
-            y: entity_pos.y + f64::from(standing_eye_height),
+            y: entity_pos.y + eye_height,
             z: entity_pos.z,
         }) < d * d
     }
@@ -2107,9 +2218,17 @@ impl Player {
             .await;
     }
 
+    /// Sends a custom payload packet to this player (Java edition only).
+    pub async fn send_custom_payload(&self, channel: &str, data: &[u8]) {
+        if let ClientPlatform::Java(java) = &self.client {
+            java.enqueue_packet(&CCustomPayload::new(channel, data))
+                .await;
+        }
+    }
+
     pub async fn drop_item(&self, item_stack: ItemStack) {
         let item_pos = self.living_entity.entity.pos.load()
-            + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
+            + Vector3::new(0.0, self.living_entity.entity.get_eye_height() - 0.3, 0.0);
         let entity = Entity::new(self.world(), item_pos, &EntityType::ITEM);
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
@@ -2490,6 +2609,7 @@ impl Player {
         }
 
         *self.current_screen_handler.lock().await = self.player_screen_handler.clone();
+        self.open_container_pos.store(None);
     }
 
     pub async fn on_screen_handler_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
@@ -2507,6 +2627,7 @@ impl Player {
     pub async fn open_handled_screen(
         &self,
         screen_handler_factory: &dyn ScreenHandlerFactory,
+        block_pos: Option<BlockPos>,
     ) -> Option<u8> {
         if !self
             .current_screen_handler
@@ -2544,6 +2665,7 @@ impl Player {
             drop(screen_handler_temp);
             self.on_screen_handler_opened(screen_handler.clone()).await;
             *self.current_screen_handler.lock().await = screen_handler;
+            self.open_container_pos.store(block_pos);
             Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
         } else {
             //TODO: Send message if spectator
@@ -3397,9 +3519,9 @@ impl InventoryPlayer for Player {
 
     fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()> {
         Box::pin(async move {
-            log::debug!("Player::award_experience called with amount={amount}");
+            debug!("Player::award_experience called with amount={amount}");
             if amount > 0 {
-                log::debug!("Player: adding {amount} experience points");
+                debug!("Player: adding {amount} experience points");
                 self.add_experience_points(amount).await;
             }
         })

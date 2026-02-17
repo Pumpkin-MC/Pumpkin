@@ -19,6 +19,9 @@ use rand::{RngExt, rng};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
+pub mod drowned;
+pub mod husk;
+
 pub struct ZombieEntity {
     pub mob_entity: MobEntity,
 }

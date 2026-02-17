@@ -11,7 +11,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
+use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -326,6 +326,8 @@ pub struct Entity {
     pub pos: AtomicCell<Vector3<f64>>,
     /// The last known position of the entity.
     pub last_pos: AtomicCell<Vector3<f64>>,
+    /// The last movement vector
+    pub movement: AtomicCell<Vector3<f64>>,
     /// The entity's position rounded to the nearest block coordinates
     pub block_pos: AtomicCell<BlockPos>,
     /// The block supporting the entity
@@ -443,6 +445,7 @@ impl Entity {
             horizontal_collision: AtomicBool::new(false),
             pos: AtomicCell::new(position),
             last_pos: AtomicCell::new(position),
+            movement: AtomicCell::new(Vector3::default()),
             block_pos: AtomicCell::new(BlockPos(Vector3::new(floor_x, floor_y, floor_z))),
             supporting_block_pos: AtomicCell::new(None),
             chunk_pos: AtomicCell::new(Vector2::new(
@@ -539,6 +542,10 @@ impl Entity {
             EntityPose::Dying => EntityDimensions::new(0.2, 0.2, 1.62),
             _ => EntityDimensions::new(0.6, 1.8, 1.62),
         }
+    }
+
+    pub fn get_eye_height(&self) -> f64 {
+        f64::from(Self::get_entity_dimensions(self.pose.load()).eye_height)
     }
 
     /// Updates the entity's position, block position, and chunk position.
@@ -877,29 +884,31 @@ impl Entity {
 
     async fn tick_block_collisions(&self, caller: &Arc<dyn EntityBase>, server: &Server) -> bool {
         let bounding_box = self.bounding_box.load();
-        let aabb = bounding_box.expand(-0.001, -0.001, -0.001);
+        let aabb = bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7);
 
         let min = aabb.min_block_pos();
         let max = aabb.max_block_pos();
 
-        let eye_height = f64::from(self.entity_dimension.load().eye_height);
+        let eye_height = self.get_eye_height();
         let mut eye_level_box = aabb;
         eye_level_box.min.y += eye_height;
         eye_level_box.max.y = eye_level_box.min.y;
 
         let mut suffocating = false;
-        let pos_iter = BlockPos::iterate(min, max);
         let world = self.world.load();
 
-        for pos in pos_iter {
+        for pos in BlockPos::iterate(min, max) {
             let (block, state) = world.get_block_and_state(&pos).await;
             if state.is_air() {
                 continue;
             }
 
-            let check_suffocation = !suffocating && state.is_solid();
+            // TODO: this is default predicate, vanilla overwrites it for some blocks,
+            // see .suffocates(...) in Blocks.java
+            let check_suffocation =
+                !suffocating && blocks_movement(state, block.id) && state.is_full_cube();
 
-            let collided = World::check_outline(
+            World::check_collision(
                 &bounding_box,
                 pos,
                 state,
@@ -911,7 +920,12 @@ impl Entity {
                 },
             );
 
-            if collided {
+            let collision_shape = world
+                .block_registry
+                .get_inside_collision_shape(block, &world, state, &pos)
+                .await;
+
+            if bounding_box.intersects(&collision_shape.at_pos(pos)) {
                 world
                     .block_registry
                     .on_entity_collision(block, &world, caller.as_ref(), &pos, state, server)
@@ -961,7 +975,7 @@ impl Entity {
     pub fn update_last_pos(&self) -> Vector3<f64> {
         let pos = self.pos.load();
         let old = self.last_pos.load();
-
+        self.movement.store(pos - old);
         self.last_pos.store(pos);
         old
     }
@@ -1314,6 +1328,15 @@ impl Entity {
                     self.on_ground.load(Ordering::SeqCst),
                     false,
                 )
+                .await;
+        }
+
+        if motion.y != final_move.y {
+            let world = self.world.load();
+            let block = self.get_block_with_y_offset(0.2).await.1;
+            world
+                .block_registry
+                .update_entity_movement_after_fall_on(block, caller.as_ref())
                 .await;
         }
     }
@@ -1720,11 +1743,6 @@ impl Entity {
         //assert!(self.sneaking.load(Relaxed) != sneaking);
         self.sneaking.store(sneaking, Relaxed);
         self.set_flag(Flag::Sneaking, sneaking).await;
-        if sneaking {
-            self.set_pose(EntityPose::Crouching).await;
-        } else {
-            self.set_pose(EntityPose::Standing).await;
-        }
     }
 
     pub async fn set_invisible(&self, invisible: bool) {
@@ -2016,15 +2034,22 @@ impl Entity {
         pitch: Option<f32>,
         _world: Arc<World>,
     ) {
-        // TODO: handle world change
+        // Update server-side position and bounding box
+        self.set_pos(position);
+        if let Some(yaw) = yaw {
+            self.yaw.store(yaw);
+        }
+        if let Some(pitch) = pitch {
+            self.set_pitch(pitch);
+        }
         self.world
             .load()
             .broadcast_packet_all(&CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
                 Vector3::new(0.0, 0.0, 0.0),
-                yaw.unwrap_or(0.0),
-                pitch.unwrap_or(0.0),
+                yaw.unwrap_or(self.yaw.load()),
+                pitch.unwrap_or(self.pitch.load()),
                 self.on_ground.load(Ordering::SeqCst),
             ))
             .await;
@@ -2071,6 +2096,31 @@ impl Entity {
         self.fall_flying.store(false, Relaxed);
         self.extinguish();
         self.set_on_fire(false).await;
+    }
+
+    pub async fn slow_movement(&self, state: &BlockState, multiplier: Vector3<f64>) {
+        match self.entity_type.id {
+            v if v == EntityType::PLAYER.id => {
+                if let Some(player_entity) = self.get_player()
+                    && player_entity.is_flying().await
+                {
+                    return;
+                }
+            }
+            v if v == EntityType::SPIDER.id || v == EntityType::CAVE_SPIDER.id => {
+                if Block::from_state_id(state.id).id == Block::COBWEB.id {
+                    return;
+                }
+            }
+            v if v == EntityType::WITHER.id => {
+                return;
+            }
+            _ => {}
+        }
+        if let Some(living) = self.get_living_entity() {
+            living.fall_distance.store(0f32);
+        }
+        self.movement_multiplier.store(multiplier);
     }
 }
 
@@ -2166,6 +2216,7 @@ impl EntityBase for Entity {
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
+            self.update_last_pos();
             self.tick_portal(&caller).await;
             self.update_fluid_state(&caller).await;
             self.check_out_of_world(&*caller).await;

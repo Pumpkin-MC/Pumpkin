@@ -11,6 +11,7 @@ use crate::world::World;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 pub mod blocks;
 pub mod fluid;
@@ -21,6 +22,7 @@ use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_protocol::java::server::play::SUseItemOn;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -31,6 +33,31 @@ pub trait BlockMetadata {
 }
 
 pub type BlockFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+pub(crate) fn stop_vertical_movement_after_fall(entity: &dyn EntityBase) {
+    let entity = entity.get_entity();
+    let mut velocity = entity.velocity.load();
+    velocity.y = 0.0;
+    entity.velocity.store(velocity);
+}
+
+pub(crate) fn bounce_entity_after_fall(entity: &dyn EntityBase, bounce_multiplier: f64) {
+    let base_entity = entity.get_entity();
+    let mut velocity = base_entity.velocity.load();
+
+    if base_entity.sneaking.load(Ordering::Relaxed) {
+        velocity.y = 0.0;
+    } else if velocity.y < 0.0 {
+        let entity_factor = if entity.get_living_entity().is_some() {
+            1.0
+        } else {
+            0.8
+        };
+        velocity.y = -velocity.y * bounce_multiplier * entity_factor;
+    }
+
+    base_entity.velocity.store(velocity);
+}
 
 pub trait BlockBehaviour: Send + Sync {
     fn normal_use<'a>(&'a self, _args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
@@ -102,6 +129,15 @@ pub trait BlockBehaviour: Send + Sync {
         })
     }
 
+    fn update_entity_movement_after_fall_on<'a>(
+        &'a self,
+        args: UpdateEntityMovementAfterFallOnArgs<'a>,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            stop_vertical_movement_after_fall(args.entity);
+        })
+    }
+
     fn broken<'a>(&'a self, _args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -161,6 +197,13 @@ pub trait BlockBehaviour: Send + Sync {
         _args: GetComparatorOutputArgs<'a>,
     ) -> BlockFuture<'a, Option<u8>> {
         Box::pin(async move { None })
+    }
+
+    fn get_inside_collision_shape<'a>(
+        &'a self,
+        _args: GetInsideCollisionShapeArgs<'a>,
+    ) -> BlockFuture<'a, BoundingBox> {
+        Box::pin(async move { BoundingBox::full_block() })
     }
 }
 
@@ -274,6 +317,10 @@ pub struct OnLandedUponArgs<'a> {
     pub entity: &'a dyn EntityBase,
 }
 
+pub struct UpdateEntityMovementAfterFallOnArgs<'a> {
+    pub entity: &'a dyn EntityBase,
+}
+
 pub struct BrokenArgs<'a> {
     pub block: &'a Block,
     pub player: &'a Arc<Player>,
@@ -338,6 +385,13 @@ pub struct GetRedstonePowerArgs<'a> {
 }
 
 pub struct GetComparatorOutputArgs<'a> {
+    pub world: &'a World,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+}
+
+pub struct GetInsideCollisionShapeArgs<'a> {
     pub world: &'a World,
     pub block: &'a Block,
     pub state: &'a BlockState,

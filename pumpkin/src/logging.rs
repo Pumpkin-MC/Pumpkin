@@ -2,7 +2,6 @@
 #![allow(clippy::print_stdout)]
 
 use flate2::write::GzEncoder;
-use log::LevelFilter;
 use rustyline::completion::Completer;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
@@ -18,13 +17,71 @@ use std::sync::Arc;
 use time::{Duration, OffsetDateTime};
 use tracing::Subscriber;
 use tracing_subscriber::Layer;
+use tracing_subscriber::filter::LevelFilter;
 
 use crate::command::CommandSender;
 use crate::command::tree::NodeType;
 use crate::server::Server;
 
+#[macro_export]
+macro_rules! log_at_level {
+    ($level:expr, $($arg:tt)*) => {
+        match $level {
+            tracing::Level::TRACE => tracing::trace!($($arg)*),
+            tracing::Level::DEBUG => tracing::debug!($($arg)*),
+            tracing::Level::INFO => tracing::info!($($arg)*),
+            tracing::Level::WARN => tracing::warn!($($arg)*),
+            tracing::Level::ERROR => tracing::error!($($arg)*),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! plugin_log {
+    ($level:expr, $plugin_name:expr, $($arg:tt)*) => {{
+        let plugin_name = $plugin_name;
+        match $level {
+            tracing::Level::TRACE => {
+                tracing::trace!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::DEBUG => {
+                tracing::debug!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::INFO => {
+                tracing::info!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::WARN => {
+                tracing::warn!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::ERROR => {
+                tracing::error!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+        }
+    }};
+}
+
 const LOG_DIR: &str = "logs";
-const MAX_ATTEMPTS: u32 = 100;
+const MAX_ATTEMPTS: u32 = 1000;
 
 /// A wrapper for our logger to hold the terminal input while no input is expected in order to
 /// properly flush logs to the output while they happen instead of batched
@@ -100,12 +157,36 @@ impl GzipRollingLogger {
 
         let log_path = PathBuf::from(LOG_DIR);
 
+        let mut oldest_log = None;
+
         for id in 1..=MAX_ATTEMPTS {
             let filename = log_path.join(format!("{date_format}-{id}.log.gz"));
 
             if !filename.exists() {
                 return Ok(filename);
             }
+
+            let Ok(modified_time) = filename.metadata().and_then(|m| m.modified()) else {
+                continue;
+            };
+
+            if let Some((_, old_time)) = oldest_log {
+                if modified_time < old_time {
+                    oldest_log = Some((filename, modified_time));
+                }
+
+                continue;
+            }
+
+            oldest_log = Some((filename, modified_time));
+        }
+
+        if let Some((path, _)) = oldest_log {
+            eprintln!(
+                "Max log ids ({MAX_ATTEMPTS}) used for {date_format}; overwriting oldest log file: {}",
+                path.display()
+            );
+            return Ok(path);
         }
 
         Err(format!(
@@ -175,11 +256,11 @@ where
 
         // Check if we should log this event based on level
         let should_log = match *level {
-            tracing::Level::ERROR => self.log_level >= LevelFilter::Error,
-            tracing::Level::WARN => self.log_level >= LevelFilter::Warn,
-            tracing::Level::INFO => self.log_level >= LevelFilter::Info,
-            tracing::Level::DEBUG => self.log_level >= LevelFilter::Debug,
-            tracing::Level::TRACE => self.log_level >= LevelFilter::Trace,
+            tracing::Level::ERROR => self.log_level >= LevelFilter::ERROR,
+            tracing::Level::WARN => self.log_level >= LevelFilter::WARN,
+            tracing::Level::INFO => self.log_level >= LevelFilter::INFO,
+            tracing::Level::DEBUG => self.log_level >= LevelFilter::DEBUG,
+            tracing::Level::TRACE => self.log_level >= LevelFilter::TRACE,
         };
 
         if !should_log {
@@ -240,6 +321,8 @@ impl ReadlineLogWrapper {
             .map_or_else(|_| None, |mut result| result.take())
     }
 
+    // This isn't really dead code. It is just only used by the lib and not the bin for this
+    // crate, and as such creates a compiler warning.
     #[allow(dead_code)]
     pub(crate) fn return_readline(&self, rl: Editor<PumpkinCommandCompleter, FileHistory>) {
         if let Ok(mut result) = self.readline.lock() {
