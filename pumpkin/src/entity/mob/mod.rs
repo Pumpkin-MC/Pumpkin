@@ -18,6 +18,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use tokio::sync::Mutex;
 
+pub mod bat;
 pub mod creeper;
 pub mod enderman;
 pub mod silverfish;
@@ -133,7 +134,6 @@ impl MobEntity {
         const ZOMBIE_ATTACK_DAMAGE: f32 = 3.0;
 
         if self.living_entity.dead.load(Relaxed) {
-            // do not attack if dead
             return;
         }
 
@@ -177,7 +177,6 @@ impl MobEntity {
     }
 }
 
-// This trait contains all overridable functions
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
@@ -200,6 +199,26 @@ pub trait Mob: EntityBase + Send + Sync {
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
         None
     }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn post_tick(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn on_damage(&self, _damage_type: DamageType) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn get_mob_gravity(&self) -> f64 {
+        self.get_mob_entity().living_entity.get_gravity()
+    }
+
+    fn get_mob_y_velocity_drag(&self) -> Option<f64> {
+        None
+    }
 }
 
 impl<T: Mob + Send + 'static> EntityBase for T {
@@ -211,7 +230,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
 
-            // AI runs BEFORE physics (vanilla order: goals → navigator → look → physics)
+            self.mob_tick(&caller).await;
+
             let age = mob_entity.living_entity.entity.age.load(Relaxed);
             if (age + mob_entity.living_entity.entity.entity_id) % 2 != 0 && age > 1 {
                 mob_entity
@@ -239,8 +259,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             look_control.tick(self).await;
             drop(look_control);
 
-            // Physics tick runs AFTER AI sets movement inputs
             mob_entity.living_entity.tick(caller, server).await;
+
+            self.post_tick().await;
 
             // Send rotation packets after look_control finalizes head_yaw and pitch
             let entity = &mob_entity.living_entity.entity;
@@ -286,10 +307,15 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            self.get_mob_entity()
+            let damaged = self
+                .get_mob_entity()
                 .living_entity
                 .damage_with_context(caller, amount, damage_type, position, source, cause)
-                .await
+                .await;
+            if damaged {
+                self.on_damage(damage_type).await;
+            }
+            damaged
         })
     }
 
@@ -306,7 +332,11 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn get_gravity(&self) -> f64 {
-        self.get_mob_entity().living_entity.get_gravity()
+        self.get_mob_gravity()
+    }
+
+    fn get_y_velocity_drag(&self) -> Option<f64> {
+        self.get_mob_y_velocity_drag()
     }
 }
 

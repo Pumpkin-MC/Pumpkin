@@ -1,7 +1,9 @@
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, Enchantment,
     block_properties::{BlockProperties, CampfireLikeProperties},
     damage::DamageType,
+    data_component_impl::EquipmentSlot,
+    effect::StatusEffect,
     fluid::Fluid,
 };
 use pumpkin_world::{BlockStateId, tick::TickPriority};
@@ -27,11 +29,31 @@ impl BlockBehaviour for CampfireBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit
-                && args.entity.get_living_entity().is_some()
+                && let Some(living_entity) = args.entity.get_living_entity()
             {
-                // FIXME: entity collision code is wrong
+                let has_frost_walker_enchantment = {
+                    let equipment = living_entity.entity_equipment.lock().await;
+                    let boots = equipment.get(&EquipmentSlot::FEET);
+
+                    let boots_stack = boots.lock().await;
+
+                    boots_stack.get_enchantment_level(&Enchantment::FROST_WALKER) != 0
+                };
+                let has_fire_res = living_entity
+                    .get_effect(&StatusEffect::FIRE_RESISTANCE)
+                    .await
+                    .is_some();
+                if has_frost_walker_enchantment || has_fire_res {
+                    //campfire burning doesn't work if entity's boots has frost walker enchantment or entity has fire resistance. source: https://minecraft.wiki/w/Campfire#Damage
+                    return;
+                }
+                let damage_amount = if args.block == &Block::SOUL_CAMPFIRE {
+                    2.0
+                } else {
+                    1.0
+                };
                 args.entity
-                    .damage(args.entity, 1.0, DamageType::CAMPFIRE)
+                    .damage(args.entity, damage_amount, DamageType::CAMPFIRE)
                     .await;
             }
         })

@@ -117,6 +117,11 @@ pub trait BlockEntity: Send + Sync {
         false
     }
 
+    fn clear_dirty(&self) {
+        // Default implementation does nothing
+        // Override in implementations that have a dirty flag
+    }
+
     fn as_any(&self) -> &dyn Any;
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
         None

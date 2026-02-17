@@ -189,6 +189,12 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         false
     }
 
+    /// Custom Y-axis velocity drag multiplier applied during `travel_in_air`.
+    /// Bats return `Some(0.6)` to match vanilla's `travel()` override.
+    fn get_y_velocity_drag(&self) -> Option<f64> {
+        None
+    }
+
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,
@@ -1328,6 +1334,15 @@ impl Entity {
                     self.on_ground.load(Ordering::SeqCst),
                     false,
                 )
+                .await;
+        }
+
+        if motion.y != final_move.y {
+            let world = self.world.load();
+            let block = self.get_block_with_y_offset(0.2).await.1;
+            world
+                .block_registry
+                .update_entity_movement_after_fall_on(block, caller.as_ref())
                 .await;
         }
     }

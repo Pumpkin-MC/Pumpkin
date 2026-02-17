@@ -527,11 +527,13 @@ impl LivingEntity {
 
         velo.z *= friction;
 
-        velo.y *= if caller.is_flutterer() {
-            friction
-        } else {
-            0.98
-        };
+        velo.y *= caller.get_y_velocity_drag().unwrap_or_else(|| {
+            if caller.is_flutterer() {
+                friction
+            } else {
+                0.98
+            }
+        });
 
         self.entity.velocity.store(velo);
     }

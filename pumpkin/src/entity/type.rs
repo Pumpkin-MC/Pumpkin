@@ -13,6 +13,7 @@ use crate::{
         },
         living::LivingEntity,
         mob::{
+            bat::BatEntity,
             creeper::CreeperEntity,
             enderman::EndermanEntity,
             silverfish::SilverfishEntity,
@@ -50,6 +51,7 @@ pub async fn from_type(
         id if id == EntityType::WITHER_SKELETON.id => WitherSkeletonEntity::new(entity).await,
         id if id == EntityType::STRAY.id => StraySkeletonEntity::new(entity).await,
 
+        id if id == EntityType::BAT.id => BatEntity::new(entity).await,
         id if id == EntityType::CREEPER.id => CreeperEntity::new(entity).await,
         id if id == EntityType::ENDERMAN.id => EndermanEntity::new(entity).await,
 

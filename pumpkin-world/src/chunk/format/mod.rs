@@ -70,11 +70,36 @@ impl Dirtiable for ChunkData {
     #[inline]
     fn mark_dirty(&self, flag: bool) {
         self.dirty.store(flag, Ordering::Relaxed);
+
+        if flag {
+            return;
+        }
+
+        // When marking chunk as clean, also clear all block entity dirty flags
+        if let Ok(block_entities) = self.block_entities.lock() {
+            for block_entity in block_entities.values() {
+                block_entity.clear_dirty();
+            }
+        }
     }
 
     #[inline]
     fn is_dirty(&self) -> bool {
-        self.dirty.load(Ordering::Relaxed)
+        // Check if chunk itself is dirty
+        if self.dirty.load(Ordering::Relaxed) {
+            return true;
+        }
+
+        // Also check if any block entities are dirty (e.g., inventory changes)
+        if let Ok(block_entities) = self.block_entities.lock() {
+            for block_entity in block_entities.values() {
+                if block_entity.is_dirty() {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 }
 
