@@ -5,7 +5,6 @@ use std::sync::{
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
-    Block,
     damage::DamageType,
     data_component_impl::EquipmentSlot,
     entity::EntityType,
@@ -13,6 +12,8 @@ use pumpkin_data::{
     meta_data_type::MetaDataType,
     particle::Particle,
     sound::{Sound, SoundCategory},
+    tag,
+    tag::Taggable,
     tracked_data::TrackedData,
 };
 use pumpkin_nbt::compound::NbtCompound;
@@ -193,8 +194,8 @@ impl EndermanEntity {
 
         // Vanilla: check if fluid is water (endermen CAN teleport to lava)
         let dest_pos = BlockPos::new(block_x, block_y, block_z);
-        let dest_block = world.get_block(&dest_pos).await;
-        if dest_block == &Block::WATER {
+        let dest_fluid = world.get_fluid(&dest_pos).await;
+        if dest_fluid.has_tag(&tag::Fluid::MINECRAFT_WATER) {
             return false;
         }
 
