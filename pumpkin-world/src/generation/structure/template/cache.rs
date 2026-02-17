@@ -130,6 +130,50 @@ impl TemplateCache {
                 "../../../../assets/structures/igloo/bottom.nbt"
             )),
 
+            // Nether fossil templates
+            "nether_fossils/fossil_1" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_1.nbt"
+            )),
+            "nether_fossils/fossil_2" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_2.nbt"
+            )),
+            "nether_fossils/fossil_3" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_3.nbt"
+            )),
+            "nether_fossils/fossil_4" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_4.nbt"
+            )),
+            "nether_fossils/fossil_5" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_5.nbt"
+            )),
+            "nether_fossils/fossil_6" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_6.nbt"
+            )),
+            "nether_fossils/fossil_7" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_7.nbt"
+            )),
+            "nether_fossils/fossil_8" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_8.nbt"
+            )),
+            "nether_fossils/fossil_9" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_9.nbt"
+            )),
+            "nether_fossils/fossil_10" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_10.nbt"
+            )),
+            "nether_fossils/fossil_11" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_11.nbt"
+            )),
+            "nether_fossils/fossil_12" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_12.nbt"
+            )),
+            "nether_fossils/fossil_13" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_13.nbt"
+            )),
+            "nether_fossils/fossil_14" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_14.nbt"
+            )),
+
             // Add more templates here as needed:
             // "shipwreck/with_mast" => Some(include_bytes!("../../../assets/structures/shipwreck/with_mast.nbt")),
             // "village/plains/houses/small_house_1" => Some(include_bytes!("../../../assets/structures/village/plains/houses/small_house_1.nbt")),

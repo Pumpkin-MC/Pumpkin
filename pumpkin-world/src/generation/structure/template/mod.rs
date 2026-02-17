@@ -56,6 +56,7 @@ pub fn place_template(
     origin: Vector3<i32>,
     offset: (i32, i32),
     rotation: BlockRotation,
+    skip_air: bool,
 ) {
     let (rotated_ox, rotated_oz) = rotation.rotate_offset(offset.0, offset.1);
     let world_x = origin.x + rotated_ox;
@@ -66,6 +67,11 @@ pub fn place_template(
 
         // Skip structure void blocks
         if palette_entry.name == "minecraft:structure_void" {
+            continue;
+        }
+
+        // Skip air blocks when using IGNORE_AIR processor (e.g. nether fossils)
+        if skip_air && palette_entry.name == "minecraft:air" {
             continue;
         }
 

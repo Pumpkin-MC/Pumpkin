@@ -162,16 +162,24 @@ impl StructurePieceBase for IglooPiece {
         let dome_floor_y = origin.y;
 
         // Place dome at origin (no offset)
-        place_template(chunk, &self.top_template, origin, (0, 0), self.rotation);
+        place_template(
+            chunk,
+            &self.top_template,
+            origin,
+            (0, 0),
+            self.rotation,
+            false,
+        );
 
         // Place basement components if present
         if self.has_basement {
             // Extend bounding box to include basement area
-            let basement_depth =
-                (self.ladder_segments as i32 * SHAFT_HEIGHT) + BASEMENT_HEIGHT + 1;
+            let basement_depth = (self.ladder_segments as i32 * SHAFT_HEIGHT) + BASEMENT_HEIGHT + 1;
             self.shiftable_structure_piece.piece.bounding_box.min.y -= basement_depth;
 
-            let (_, bz) = self.rotation.rotate_offset(BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z);
+            let (_, bz) = self
+                .rotation
+                .rotate_offset(BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z);
             if bz < 0 {
                 self.shiftable_structure_piece.piece.bounding_box.min.z += bz;
             } else {
@@ -189,6 +197,7 @@ impl StructurePieceBase for IglooPiece {
                         shaft_origin,
                         (SHAFT_OFFSET_X, SHAFT_OFFSET_Z),
                         self.rotation,
+                        false,
                     );
                 }
             }
@@ -204,6 +213,7 @@ impl StructurePieceBase for IglooPiece {
                     basement_origin,
                     (BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z),
                     self.rotation,
+                    false,
                 );
             }
         }
@@ -215,15 +225,5 @@ impl StructurePieceBase for IglooPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.shiftable_structure_piece.piece
-    }
-}
-
-impl BlockRotation {
-    /// Converts rotation to axis for ShiftableStructurePiece.
-    fn to_axis(self) -> pumpkin_util::math::vector3::Axis {
-        match self {
-            Self::None | Self::Rotate180 => pumpkin_util::math::vector3::Axis::Z,
-            Self::Clockwise90 | Self::CounterClockwise90 => pumpkin_util::math::vector3::Axis::X,
-        }
     }
 }

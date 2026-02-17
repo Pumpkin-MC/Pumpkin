@@ -166,6 +166,15 @@ impl BlockRotation {
             Self::CounterClockwise90 => Self::Clockwise90,
         }
     }
+
+    /// Converts rotation to a primary axis for bounding box creation.
+    #[must_use]
+    pub fn to_axis(self) -> pumpkin_util::math::vector3::Axis {
+        match self {
+            Self::None | Self::Rotate180 => pumpkin_util::math::vector3::Axis::Z,
+            Self::Clockwise90 | Self::CounterClockwise90 => pumpkin_util::math::vector3::Axis::X,
+        }
+    }
 }
 
 /// Mirror transformation for structure templates.
