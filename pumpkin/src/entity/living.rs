@@ -945,10 +945,6 @@ impl LivingEntity {
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
-            // Immediately clear all movement/velocity so the dead entity stops being
-            // simulated by physics and doesn't accumulate additional fall_distance.
-            self.entity.velocity.store(Vector3::default());
-            self.entity.velocity_dirty.store(true, SeqCst);
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
             // Plays the death sound
