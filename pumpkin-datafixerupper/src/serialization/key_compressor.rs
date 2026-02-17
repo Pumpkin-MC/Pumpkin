@@ -1,5 +1,16 @@
 use crate::serialization::dynamic_ops::DynamicOps;
+use dashmap::DashMap;
 use std::collections::HashMap;
+use std::sync::{Arc, LazyLock};
+
+/// A cache for all [`crate::serialization::map_coders::CompressorHolder`] structs.
+///
+/// This `HashMap` stores a `KeyCompressor` for each `MapCodec` instance.
+/// This way, we don't have to use `OnceLock` in every `MapCodec`, so we can easily
+/// capture their pointers while calling other functions without any destructor
+/// compile-time errors.
+pub(crate) static KEY_COMPRESSOR_CACHE: LazyLock<DashMap<usize, Arc<KeyCompressor>>> =
+    LazyLock::new(DashMap::new);
 
 /// A struct to compress keys of a map by converting them to numbers (making a kind of list) and back.
 pub struct KeyCompressor {
