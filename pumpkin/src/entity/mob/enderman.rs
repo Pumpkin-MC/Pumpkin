@@ -439,7 +439,7 @@ impl Mob for EndermanEntity {
         &self.mob_entity
     }
 
-    fn set_mob_target<'a>(&'a self, target: Option<Arc<dyn EntityBase>>) -> GoalFuture<'a, ()> {
+    fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) -> GoalFuture<'_, ()> {
         Box::pin(async move {
             self.set_target(target).await;
         })

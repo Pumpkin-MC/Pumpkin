@@ -118,12 +118,12 @@ impl Navigator {
         self.path_type_overrides.insert(path_type, malus);
     }
 
-    pub fn set_mob_dimensions(&mut self, width: f32, height: f32) {
+    pub const fn set_mob_dimensions(&mut self, width: f32, height: f32) {
         self.mob_width = width;
         self.mob_height = height;
     }
 
-    pub fn set_follow_range(&mut self, range: f32) {
+    pub const fn set_follow_range(&mut self, range: f32) {
         self.follow_range = range;
     }
 
