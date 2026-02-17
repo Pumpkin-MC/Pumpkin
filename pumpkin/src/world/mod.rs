@@ -969,12 +969,12 @@ impl World {
 
                     let (down_fluid, down_state) = self.get_fluid_and_fluid_state(&down_pos).await;
 
-                    if down_fluid.id == fluid0.id {
+                    if down_fluid.matches_type(fluid0) {
                         amplitude = f64::from(state0.height - down_state.height) + 0.888_888_9;
                     }
                 }
             } else {
-                if fluid.id != fluid0.id {
+                if !fluid.matches_type(fluid0) {
                     continue;
                 }
 
@@ -1030,7 +1030,7 @@ impl World {
 
         let fluid = Fluid::from_state_id(id).unwrap_or(&Fluid::EMPTY);
 
-        if fluid.id == fluid0_id {
+        if Fluid::same_fluid_type(fluid.id, fluid0_id) {
             return false;
         }
 
@@ -1168,6 +1168,32 @@ impl World {
             }
         }
         true
+    }
+
+    /// Vanilla's `BlockView.getDismountHeight()`.
+    /// Returns the Y surface height for dismounting at the given block position,
+    /// or `f64::NEG_INFINITY` if no valid surface exists.
+    pub async fn get_dismount_height(&self, pos: &BlockPos) -> f64 {
+        let state = self.get_block_state(pos).await;
+        let max_y = state
+            .get_block_collision_shapes()
+            .map(|s| s.max.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        if max_y != f64::NEG_INFINITY {
+            return max_y;
+        }
+        // No collision at pos — check block below
+        let below = BlockPos(Vector3::new(pos.0.x, pos.0.y - 1, pos.0.z));
+        let below_state = self.get_block_state(&below).await;
+        let below_max_y = below_state
+            .get_block_collision_shapes()
+            .map(|s| s.max.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        if below_max_y >= 1.0 {
+            below_max_y - 1.0
+        } else {
+            f64::NEG_INFINITY
+        }
     }
 
     pub async fn tick_spawning_chunk(
@@ -3077,7 +3103,7 @@ impl World {
         let id = self.get_block_state_id(position).await;
         let fluid = Fluid::from_state_id(id).ok_or(&Fluid::EMPTY);
         if let Ok(fluid) = fluid {
-            return fluid;
+            return fluid.to_flowing();
         }
         let block = Block::from_state_id(id);
         block
@@ -3109,6 +3135,7 @@ impl World {
         let block = Block::from_state_id(id);
 
         let fluid = Fluid::from_state_id(id)
+            .map(Fluid::to_flowing)
             .ok_or(&Fluid::EMPTY)
             .unwrap_or_else(|_| {
                 block
@@ -3137,7 +3164,7 @@ impl World {
     ) -> (&'static Fluid, &'static FluidState) {
         let id = self.get_block_state_id(position).await;
 
-        let Some(fluid) = Fluid::from_state_id(id) else {
+        let Some(raw_fluid) = Fluid::from_state_id(id) else {
             let block = Block::from_state_id(id);
             if let Some(properties) = block.properties(id) {
                 for (name, value) in properties.to_props() {
@@ -3156,7 +3183,7 @@ impl World {
             return (&Fluid::EMPTY, state);
         };
 
-        //let state = fluid.get_state(id);
+        let fluid = raw_fluid.to_flowing();
         let state = &fluid.states[0];
 
         (fluid, state)

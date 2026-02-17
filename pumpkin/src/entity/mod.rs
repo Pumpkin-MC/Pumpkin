@@ -27,10 +27,11 @@ use pumpkin_data::{
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
+    PositionFlag,
     codec::var_int::VarInt,
     java::client::play::{
-        CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
-        CUpdateEntityRot, Metadata,
+        CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
+        CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata,
     },
 };
 use pumpkin_util::math::vector3::Axis;
@@ -45,6 +46,7 @@ use pumpkin_util::math::{
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::version::MinecraftVersion;
+use pumpkin_world::item::ItemStack;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::pin::Pin;
@@ -75,6 +77,7 @@ pub mod projectile;
 pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
+pub mod vehicle;
 
 mod combat;
 pub mod predicate;
@@ -189,6 +192,12 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         false
     }
 
+    /// Custom Y-axis velocity drag multiplier applied during `travel_in_air`.
+    /// Bats return `Some(0.6)` to match vanilla's `travel()` override.
+    fn get_y_velocity_drag(&self) -> Option<f64> {
+        None
+    }
+
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,
@@ -208,12 +217,26 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         })
     }
 
+    /// Called when a player right-clicks this entity with an item.
+    /// Returns true if the interaction was handled.
+    fn interact<'a>(
+        &'a self,
+        _player: &'a Player,
+        _item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async { false })
+    }
+
     /// Called when a player collides with a entity
     fn on_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
     }
 
     fn on_hit(&self, _hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn set_paddle_state(&self, _left: bool, _right: bool) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {})
     }
 
@@ -384,6 +407,8 @@ pub struct Entity {
     pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
     /// The vehicle that entity is in
     pub vehicle: Mutex<Option<Arc<dyn EntityBase>>>,
+    /// Cooldown before entity can mount again after dismounting
+    pub riding_cooldown: AtomicI32,
     /// The age of the entity in ticks. Negative values indicate a baby.
     pub age: AtomicI32,
 
@@ -480,6 +505,7 @@ impl Entity {
             removal_reason: AtomicCell::new(None),
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
+            riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
@@ -542,6 +568,10 @@ impl Entity {
             EntityPose::Dying => EntityDimensions::new(0.2, 0.2, 1.62),
             _ => EntityDimensions::new(0.6, 1.8, 1.62),
         }
+    }
+
+    pub fn get_eye_height(&self) -> f64 {
+        f64::from(Self::get_entity_dimensions(self.pose.load()).eye_height)
     }
 
     /// Updates the entity's position, block position, and chunk position.
@@ -885,7 +915,7 @@ impl Entity {
         let min = aabb.min_block_pos();
         let max = aabb.max_block_pos();
 
-        let eye_height = f64::from(self.entity_dimension.load().eye_height);
+        let eye_height = self.get_eye_height();
         let mut eye_level_box = aabb;
         eye_level_box.min.y += eye_height;
         eye_level_box.max.y = eye_level_box.min.y;
@@ -1324,6 +1354,15 @@ impl Entity {
                     self.on_ground.load(Ordering::SeqCst),
                     false,
                 )
+                .await;
+        }
+
+        if motion.y != final_move.y {
+            let world = self.world.load();
+            let block = self.get_block_with_y_offset(0.2).await.1;
+            world
+                .block_registry
+                .update_entity_movement_after_fall_on(block, caller.as_ref())
                 .await;
         }
     }
@@ -2021,15 +2060,22 @@ impl Entity {
         pitch: Option<f32>,
         _world: Arc<World>,
     ) {
-        // TODO: handle world change
+        // Update server-side position and bounding box
+        self.set_pos(position);
+        if let Some(yaw) = yaw {
+            self.yaw.store(yaw);
+        }
+        if let Some(pitch) = pitch {
+            self.set_pitch(pitch);
+        }
         self.world
             .load()
             .broadcast_packet_all(&CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
                 Vector3::new(0.0, 0.0, 0.0),
-                yaw.unwrap_or(0.0),
-                pitch.unwrap_or(0.0),
+                yaw.unwrap_or(self.yaw.load()),
+                pitch.unwrap_or(self.pitch.load()),
                 self.on_ground.load(Ordering::SeqCst),
             ))
             .await;
@@ -2063,6 +2109,211 @@ impl Entity {
     pub async fn has_vehicle(&self) -> bool {
         let vehicle = self.vehicle.lock().await;
         vehicle.is_some()
+    }
+
+    pub async fn add_passenger(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+    ) {
+        let passenger_entity = passenger.get_entity();
+        *passenger_entity.vehicle.lock().await = Some(vehicle);
+
+        let mut passengers = self.passengers.lock().await;
+        passengers.push(passenger);
+
+        let passenger_ids: Vec<VarInt> = passengers
+            .iter()
+            .map(|p| VarInt(p.get_entity().entity_id))
+            .collect();
+
+        let world = self.world.load();
+        world
+            .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
+            .await;
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub async fn remove_passenger(&self, passenger_id: i32) {
+        let mut passengers = self.passengers.lock().await;
+        let removed_passenger = if let Some(idx) = passengers
+            .iter()
+            .position(|p| p.get_entity().entity_id == passenger_id)
+        {
+            let passenger = passengers.remove(idx);
+            *passenger.get_entity().vehicle.lock().await = None;
+            Some(passenger)
+        } else {
+            None
+        };
+
+        let passenger_ids: Vec<VarInt> = passengers
+            .iter()
+            .map(|p| VarInt(p.get_entity().entity_id))
+            .collect();
+        drop(passengers);
+
+        if let Some(passenger) = removed_passenger {
+            let vehicle_box = self.bounding_box.load();
+            let passenger_entity = passenger.get_entity();
+            let passenger_yaw = passenger_entity.yaw.load();
+            let passenger_width = passenger_entity.entity_dimension.load().width as f64;
+            let vehicle_width = self.entity_dimension.load().width as f64;
+
+            // Pre-allocate teleport ID and block movement packets BEFORE sending
+            // CSetPassengers. This prevents a race condition where the client receives
+            // the dismount packet, sends stale position packets from the old riding
+            // position, and the server processes them before the teleport arrives.
+            let teleport_id = if let Some(player) = passenger.get_player() {
+                let id = player
+                    .teleport_id_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1;
+                // Use fallback position as placeholder — updated below with real position
+                let placeholder =
+                    Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
+                *player.awaiting_teleport.lock().await = Some((id.into(), placeholder));
+                Some(id)
+            } else {
+                None
+            };
+
+            // Vanilla: ridingCooldown = 60 (prevents immediate re-mount)
+            passenger_entity.riding_cooldown.store(60, Relaxed);
+            // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
+
+            // Now send CSetPassengers — client movement is already blocked.
+            // Vanilla sends this directly to the dismounting player's connection,
+            // then broadcasts to other players separately.
+            let world = self.world.load();
+            let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
+            if let Some(player) = passenger.get_player() {
+                player.client.enqueue_packet(&passengers_packet).await;
+                world
+                    .broadcast_packet_except(&[player.gameprofile.id], &passengers_packet)
+                    .await;
+            } else {
+                world.broadcast_packet_all(&passengers_packet).await;
+            }
+
+            // Calculate dismount offset (vanilla getPassengerDismountOffset)
+            let offset_dist =
+                (vehicle_width * std::f64::consts::SQRT_2 + passenger_width + 0.00001) / 2.0;
+            let yaw_rad = (-passenger_yaw).to_radians();
+            let sin_yaw = f64::from(yaw_rad.sin());
+            let cos_yaw = f64::from(yaw_rad.cos());
+            let max_component = sin_yaw.abs().max(cos_yaw.abs());
+            let offset_x = sin_yaw * offset_dist / max_component;
+            let offset_z = cos_yaw * offset_dist / max_component;
+
+            let target_x = self.pos.load().x + offset_x;
+            let target_z = self.pos.load().z + offset_z;
+            let target_block_y = vehicle_box.max.y.floor() as i32;
+            let block_pos = BlockPos(Vector3::new(
+                target_x.floor() as i32,
+                target_block_y,
+                target_z.floor() as i32,
+            ));
+            let below_pos = BlockPos(Vector3::new(
+                target_x.floor() as i32,
+                target_block_y - 1,
+                target_z.floor() as i32,
+            ));
+
+            let below_state_id = world.get_block_state_id(&below_pos).await;
+            // Vanilla: isWater checks specifically for water fluid, not any fluid
+            let is_water = Fluid::from_state_id(below_state_id)
+                .is_some_and(|f| f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id);
+
+            let fallback_pos =
+                Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
+
+            let dismount_pos = if is_water {
+                fallback_pos
+            } else {
+                // Vanilla tries two Y levels: at vehicle top and one block below
+                let mut candidates = Vec::new();
+                for pos in [&block_pos, &below_pos] {
+                    let height = world.get_dismount_height(pos).await;
+                    // Vanilla: canDismountInBlock = !height.is_infinite() && height < 1.0
+                    if height.is_finite() && height < 1.0 {
+                        candidates.push(Vector3::new(
+                            target_x,
+                            f64::from(pos.0.y) + height,
+                            target_z,
+                        ));
+                    }
+                }
+
+                // Try poses: Standing, Crouching, Swimming (vanilla order)
+                let poses = [
+                    EntityPose::Standing,
+                    EntityPose::Crouching,
+                    EntityPose::Swimming,
+                ];
+                let mut found = None;
+                'outer: for pose in poses {
+                    let dims = Self::get_entity_dimensions(pose);
+                    for candidate in &candidates {
+                        let bbox =
+                            BoundingBox::new_from_pos(candidate.x, candidate.y, candidate.z, &dims);
+                        if world.is_space_empty(bbox).await {
+                            found = Some((*candidate, pose));
+                            break 'outer;
+                        }
+                    }
+                }
+
+                if let Some((pos, pose)) = found {
+                    if pose != EntityPose::Standing {
+                        passenger_entity.set_pose(pose).await;
+                    }
+                    pos
+                } else {
+                    fallback_pos
+                }
+            };
+
+            if let Some(player) = passenger.get_player() {
+                let id = teleport_id.unwrap();
+                player.living_entity.entity.set_pos(dismount_pos);
+                // Update awaiting_teleport with the real dismount position
+                *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
+                // Use enqueue_packet (not send_packet_now) so the teleport goes through
+                // the same packet queue as CSetPassengers, preserving send order.
+                // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
+                // With rotation relative and yaw/pitch=0, the client preserves its current look.
+                player
+                    .client
+                    .enqueue_packet(&CPlayerPosition::new(
+                        id.into(),
+                        dismount_pos,
+                        Vector3::new(0.0, 0.0, 0.0),
+                        0.0,
+                        0.0,
+                        vec![
+                            PositionFlag::DeltaX,
+                            PositionFlag::DeltaY,
+                            PositionFlag::DeltaZ,
+                            PositionFlag::YRot,
+                            PositionFlag::XRot,
+                        ],
+                    ))
+                    .await;
+                // Vanilla: setSneaking(false) after dismount via sneak input
+                if passenger_entity.sneaking.load(Relaxed) {
+                    passenger_entity.set_sneaking(false).await;
+                }
+            } else {
+                passenger_entity.set_pos(dismount_pos);
+            }
+        } else {
+            // No passenger was removed, still need to broadcast the passenger list
+            let world = self.world.load();
+            world
+                .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
+                .await;
+        }
     }
 
     pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
@@ -2220,6 +2471,12 @@ impl EntityBase for Entity {
 
             // Tick freeze state (powder snow)
             self.tick_frozen(&*caller).await;
+
+            let riding_cooldown = self.riding_cooldown.load(Ordering::Relaxed);
+            if riding_cooldown > 0 {
+                self.riding_cooldown
+                    .store(riding_cooldown - 1, Ordering::Relaxed);
+            }
         })
     }
 

@@ -5,9 +5,14 @@ use pumpkin_data::{Block, fluid::Fluid, tag};
 /// Check if a specific block can be replaced by fluid (based on block properties)
 #[must_use]
 pub fn can_be_replaced(block_state: &BlockState, block: &Block, fluid: &Fluid) -> bool {
+    // Waterlogged blocks should not be replaced by water
+    if block.is_waterlogged(block_state.id) {
+        return false;
+    }
+
     // Fluid Logic
     if let Some(other_fluid) = Fluid::from_state_id(block_state.id) {
-        if fluid.id != other_fluid.id {
+        if !fluid.matches_type(other_fluid) {
             return true;
         }
         // Replace current fluid if it is a falling source

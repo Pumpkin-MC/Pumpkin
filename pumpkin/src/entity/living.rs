@@ -82,6 +82,11 @@ pub struct LivingEntity {
     /// The position where the entity was last climbing, used for death messages
     pub climbing_pos: AtomicCell<Option<BlockPos>>,
 
+    /// The entity ID of the entity that last attacked this living entity.
+    pub last_attacker_id: AtomicI32,
+    /// The tick at which this entity was last attacked (entity age).
+    pub last_attacked_time: AtomicI32,
+
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
 }
@@ -129,6 +134,8 @@ impl LivingEntity {
             jumping_cooldown: AtomicU8::new(0),
             climbing: AtomicBool::new(false),
             climbing_pos: AtomicCell::new(None),
+            last_attacker_id: AtomicI32::new(0),
+            last_attacked_time: AtomicI32::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
             movement_speed: AtomicCell::new(default_movement_speed),
             water_movement_speed_multiplier,
@@ -527,11 +534,13 @@ impl LivingEntity {
 
         velo.z *= friction;
 
-        velo.y *= if caller.is_flutterer() {
-            friction
-        } else {
-            0.98
-        };
+        velo.y *= caller.get_y_velocity_drag().unwrap_or_else(|| {
+            if caller.is_flutterer() {
+                friction
+            } else {
+                0.98
+            }
+        });
 
         self.entity.velocity.store(velo);
     }
@@ -754,10 +763,10 @@ impl LivingEntity {
     }
 
     pub fn get_swim_height(&self) -> f64 {
-        let eye_height = self.entity.entity_dimension.load().eye_height;
+        let eye_height = self.entity.get_eye_height();
 
         if self.entity.entity_type == &EntityType::BREEZE {
-            f64::from(eye_height)
+            eye_height
         } else if eye_height < 0.4 {
             0.0
         } else {
@@ -1318,6 +1327,13 @@ impl EntityBase for LivingEntity {
 
             let new_health = self.health.load() - damage_amount;
             if damage_amount > 0.0 {
+                // Track attacker for RevengeGoal (only after confirming damage)
+                if let Some(attacker) = cause.or(source) {
+                    self.last_attacker_id
+                        .store(attacker.get_entity().entity_id, Relaxed);
+                    self.last_attacked_time
+                        .store(self.entity.age.load(Relaxed), Relaxed);
+                }
                 //self.on_actually_hurt(damage_amount, damage_type).await;
                 self.set_health(new_health).await;
             }
