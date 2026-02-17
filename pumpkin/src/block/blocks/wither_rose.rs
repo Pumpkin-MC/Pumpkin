@@ -1,15 +1,10 @@
 use pumpkin_data::{effect::StatusEffect, entity::EntityType};
+use pumpkin_macros::pumpkin_block;
 use pumpkin_util::Difficulty;
 
-use crate::block::{Block, BlockBehaviour, BlockFuture, BlockMetadata, OnEntityCollisionArgs};
-
+use crate::block::{BlockBehaviour, BlockFuture, OnEntityCollisionArgs};
+#[pumpkin_block("minecraft:wither_rose")]
 pub struct WitherRose;
-
-impl BlockMetadata for WitherRose {
-    fn ids() -> Box<[u16]> {
-        [Block::WITHER_ROSE.id].into()
-    }
-}
 
 impl BlockBehaviour for WitherRose {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
