@@ -9,7 +9,6 @@ use crate::serialization::map_coders::{CompressorHolder, MapDecoder, MapEncoder}
 use crate::serialization::map_like::MapLike;
 use crate::serialization::struct_builder::StructBuilder;
 use std::fmt::Display;
-use std::sync::OnceLock;
 
 /// A [`MapEncoder`] that knows how to encode an entire field (key + value), where the value is encoded by an [`Encoder`].
 ///
@@ -19,8 +18,6 @@ pub struct FieldEncoder<A, E: Encoder<Value = A> + 'static> {
     name: &'static str,
     /// The [`Encoder`] for encoding the value.
     element_encoder: &'static E,
-    /// The [`KeyCompressor`] for this encoder.
-    compressor: OnceLock<KeyCompressor>,
 }
 
 impl<A, E: Encoder<Value = A>> HasValue for FieldEncoder<A, E> {
@@ -34,7 +31,7 @@ impl<A, E: Encoder<Value = A>> Keyable for FieldEncoder<A, E> {
 }
 
 impl<A, E: Encoder<Value = A>> CompressorHolder for FieldEncoder<A, E> {
-    impl_compressor!(compressor);
+    impl_compressor!();
 }
 
 impl<A, E: Encoder<Value = A>> MapEncoder for FieldEncoder<A, E> {
@@ -54,7 +51,6 @@ impl<A, E: Encoder<Value = A>> FieldEncoder<A, E> {
         Self {
             name,
             element_encoder,
-            compressor: OnceLock::new(),
         }
     }
 }
@@ -67,8 +63,6 @@ pub struct FieldDecoder<A, D: Decoder<Value = A> + 'static> {
     name: &'static str,
     /// The [`Decoder`] for encoding the value.
     element_decoder: &'static D,
-    /// The [`KeyCompressor`] for this encoder.
-    compressor: OnceLock<KeyCompressor>,
 }
 
 impl<A, D: Decoder<Value = A>> HasValue for FieldDecoder<A, D> {
@@ -82,7 +76,7 @@ impl<A, D: Decoder<Value = A>> Keyable for FieldDecoder<A, D> {
 }
 
 impl<A, D: Decoder<Value = A>> CompressorHolder for FieldDecoder<A, D> {
-    impl_compressor!(compressor);
+    impl_compressor!();
 }
 
 impl<A, D: Decoder<Value = A>> MapDecoder for FieldDecoder<A, D> {
@@ -104,7 +98,6 @@ impl<A, D: Decoder<Value = A>> FieldDecoder<A, D> {
         Self {
             name,
             element_decoder,
-            compressor: OnceLock::new(),
         }
     }
 }

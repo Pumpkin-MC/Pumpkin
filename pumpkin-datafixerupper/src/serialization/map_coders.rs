@@ -10,6 +10,7 @@ use crate::serialization::struct_builder::{
 };
 use crate::{impl_struct_builder, impl_universal_struct_builder};
 use std::fmt::Display;
+use std::sync::Arc;
 
 /// A [`StructBuilder`] for compressed map data.
 pub struct CompressedStructBuilder<'a, T, O: DynamicOps<Value = T> + 'static> {
@@ -130,7 +131,7 @@ impl<T: Clone, O: DynamicOps<Value = T>> StructBuilder for EncoderStructBuilder<
 /// A trait specifying that an object holds a [`KeyCompressor`].
 pub trait CompressorHolder: Keyable {
     /// Returns the [`KeyCompressor`] of this object with the provided [`DynamicOps`].
-    fn compressor(&self) -> &KeyCompressor;
+    fn compressor(&self) -> Arc<KeyCompressor>;
 }
 
 /// A different encoder that encodes a value of type `Value` for a map.
@@ -176,13 +177,13 @@ pub trait MapDecoder: HasValue + Keyable + CompressorHolder {
                 || DataResult::error("Input is not a list".to_string()),
                 |iter| {
                     /// A [`MapLike`] for handling [`KeyCompressor`] methods.
-                    struct CompressorMapLikeImpl<'a, T, O: DynamicOps<Value = T> + 'static> {
+                    struct CompressorMapLikeImpl<T, O: DynamicOps<Value = T> + 'static> {
                         list: Vec<T>,
-                        compressor: &'a KeyCompressor,
+                        compressor: Arc<KeyCompressor>,
                         ops: &'static O,
                     }
 
-                    impl<T, O: DynamicOps<Value = T>> MapLike for CompressorMapLikeImpl<'_, T, O> {
+                    impl<T, O: DynamicOps<Value = T>> MapLike for CompressorMapLikeImpl<T, O> {
                         type Value = T;
 
                         fn get(&self, key: &Self::Value) -> Option<&Self::Value> {
@@ -222,19 +223,28 @@ pub trait MapDecoder: HasValue + Keyable + CompressorHolder {
 }
 
 /// A helper macro for generating the [`CompressorHolder::compressor`] method
-/// for structs implementing one or both of them.
+/// for structs implementing `CompressorHolder`.
 ///
-/// `$compressor` is where the [`OnceLock<KeyCompressor>`] will be stored.
-/// Implement this in an `impl` block for [`CompressorHolder`].
+/// This macro caches the [`KeyCompressor`] of this [`CompressorHolder`]
+/// in a global map.
+///
+/// Implement this in an `impl` block for `CompressorHolder`.
 #[macro_export]
 macro_rules! impl_compressor {
-    ($compressor:ident) => {
-        fn compressor(&self) -> &KeyCompressor {
-            &self.$compressor.get_or_init(|| {
-                let mut c = KeyCompressor::new();
-                c.populate(self.keys());
-                c
-            })
+    () => {
+        fn compressor(&self) -> std::sync::Arc<KeyCompressor> {
+            // We get the unique pointer of this holder.
+            let key = std::ptr::from_ref::<Self>(self) as usize;
+            // Then, we get the cache or store it.
+            $crate::serialization::key_compressor::KEY_COMPRESSOR_CACHE
+                .entry(key)
+                .or_insert_with(|| {
+                    let mut c = KeyCompressor::new();
+                    c.populate(self.keys());
+                    std::sync::Arc::new(c)
+                })
+                .value()
+                .clone()
         }
     };
 }
@@ -259,7 +269,7 @@ macro_rules! impl_map_encoder_transformer {
         }
 
         impl<B, E: MapEncoder> CompressorHolder for $name<B, E> {
-            fn compressor(&self) -> &KeyCompressor {
+            fn compressor(&self) -> Arc<KeyCompressor> {
                 self.encoder.compressor()
             }
         }
@@ -348,7 +358,7 @@ macro_rules! impl_map_decoder_transformer {
         }
 
         impl<B, D: MapDecoder> CompressorHolder for $name<B, D> {
-            fn compressor(&self) -> &KeyCompressor {
+            fn compressor(&self) -> Arc<KeyCompressor> {
                 self.decoder.compressor()
             }
         }

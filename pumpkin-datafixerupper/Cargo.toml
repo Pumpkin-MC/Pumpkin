@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 serde_json.workspace = true
+dashmap.workspace = true
 
 [lints]
 workspace = true

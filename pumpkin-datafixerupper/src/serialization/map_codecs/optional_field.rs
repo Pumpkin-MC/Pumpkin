@@ -10,7 +10,7 @@ use crate::serialization::map_coders::{CompressorHolder, MapDecoder, MapEncoder}
 use crate::serialization::map_like::MapLike;
 use crate::serialization::struct_builder::StructBuilder;
 use std::fmt::Display;
-use std::sync::{LazyLock, OnceLock};
+use std::sync::Arc;
 
 /// A [`MapCodec`] that describes an optional field.
 pub struct OptionalFieldMapCodec<C: Codec + 'static> {
@@ -19,7 +19,6 @@ pub struct OptionalFieldMapCodec<C: Codec + 'static> {
     /// Whether this field should give a complete result for an
     /// error result (partial or no result) of the underlying codec.
     lenient: bool,
-    compressor: OnceLock<KeyCompressor>,
 }
 
 impl<C: Codec> HasValue for OptionalFieldMapCodec<C> {
@@ -34,7 +33,7 @@ impl<C: Codec> Keyable for OptionalFieldMapCodec<C> {
 }
 
 impl<C: Codec> CompressorHolder for OptionalFieldMapCodec<C> {
-    impl_compressor!(compressor);
+    impl_compressor!();
 }
 
 impl<C: Codec> MapEncoder for OptionalFieldMapCodec<C> {
@@ -81,9 +80,6 @@ pub struct DefaultValueProviderMapCodec<
 > {
     codec: C,
     default: fn() -> T,
-    /// A cached value for the default value
-    /// whose reference can be used for checking equality.
-    default_value: LazyLock<T>,
 }
 
 impl<T: PartialEq + Clone, C: MapCodec<Value = Option<T>>> HasValue
@@ -103,7 +99,7 @@ impl<T: PartialEq + Clone, C: MapCodec<Value = Option<T>>> Keyable
 impl<T: PartialEq + Clone, C: MapCodec<Value = Option<T>>> CompressorHolder
     for DefaultValueProviderMapCodec<T, C>
 {
-    fn compressor(&self) -> &KeyCompressor {
+    fn compressor(&self) -> Arc<KeyCompressor> {
         self.codec.compressor()
     }
 }
@@ -119,7 +115,7 @@ impl<T: PartialEq + Clone, C: MapCodec<Value = Option<T>>> MapEncoder
     ) -> B {
         let clone = Some(input.clone());
         self.codec.encode(
-            if *input == *self.default_value {
+            if *input == (self.default)() {
                 &None
             } else {
                 &clone
@@ -155,7 +151,6 @@ pub(crate) const fn new_default_value_provider_map_codec<
     DefaultValueProviderMapCodec {
         codec: map_codec,
         default,
-        default_value: LazyLock::new(default),
     }
 }
 
@@ -169,6 +164,5 @@ pub(crate) const fn new_optional_field_map_codec<C: Codec>(
         element_codec,
         name,
         lenient,
-        compressor: OnceLock::new(),
     }
 }
