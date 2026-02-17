@@ -1433,10 +1433,12 @@ impl JavaClient {
                             }
 
                             let mut stack = held.lock().await;
-                            server
-                                .item_registry
-                                .use_on_entity(&mut stack, player, event.target)
-                                .await;
+                            if !event.target.interact(player, &mut stack).await {
+                                server
+                                    .item_registry
+                                    .use_on_entity(&mut stack, player, event.target)
+                                    .await;
+                            }
                         }
                     }
                 }
