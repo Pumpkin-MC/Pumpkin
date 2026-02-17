@@ -1246,7 +1246,8 @@ impl EntityBase for LivingEntity {
             let world = self.entity.world.load();
             let is_fire_damage = damage_type == DamageType::IN_FIRE
                 || damage_type == DamageType::ON_FIRE
-                || damage_type == DamageType::LAVA;
+                || damage_type == DamageType::LAVA
+                || damage_type == DamageType::HOT_FLOOR;
 
             // Fire damage can be prevented by either game rules or fire resistance
             if is_fire_damage {
