@@ -326,7 +326,6 @@ pub trait FlowingFluid: Send + Sync {
         async move {
             let current_state_id = world.get_block_state_id(pos).await;
             if let Some(current_props) = self.get_effective_props(fluid, current_state_id) {
-
                 let current_level = i32::from(current_props.level.to_index()) + 1;
                 let new_level = i32::from(new_props.level.to_index()) + 1;
                 let current_is_source =
