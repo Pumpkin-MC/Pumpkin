@@ -256,6 +256,21 @@ impl LivingEntity {
         succeeded
     }
 
+    pub async fn clear_effects(&self) {
+        // Loop over all effects and remove them
+        let effect_types: Vec<&'static StatusEffect> = self
+            .active_effects
+            .lock()
+            .await
+            .keys()
+            .cloned()
+            .collect();
+        
+        for effect_type in effect_types {
+            self.remove_effect(effect_type).await;
+        }
+    }
+
     pub async fn has_effect(&self, effect: &'static StatusEffect) -> bool {
         let effects = self.active_effects.lock().await;
         effects.contains_key(&effect)
@@ -1393,18 +1408,27 @@ impl EntityBase for LivingEntity {
                     if let Some(food) = item.get_data_component::<FoodImpl>()
                         && let Some(player) = caller.get_player()
                     {
-                        player
-                            .hunger_manager
-                            .eat(player, food.nutrition as u8, food.saturation)
-                            .await;
-                    }
-                    if let Some(player) = caller.get_player() {
-                        player
-                            .inventory
-                            .held_item()
-                            .lock()
-                            .await
-                            .decrement_unless_creative(player.gamemode.load(), 1);
+                        // Respect "always edible" and only consume food when player can eat.
+                        // If the food is not always edible and the player's food level is full,
+                        // do not apply effects or decrement the item.
+                        let food_level = player.hunger_manager.level.load();
+                        if food.can_always_eat || food_level < crate::entity::hunger::MAX_FOOD {
+                            player
+                                .hunger_manager
+                                .eat(player, food.nutrition as u8, food.saturation)
+                                .await;
+
+                            // Apply any special effects from consuming this food to the player
+                            player.consume_food_effects(item.item).await; 
+
+                            // Decrement item only when actual consumption happens
+                            player
+                                .inventory
+                                .held_item()
+                                .lock()
+                                .await
+                                .decrement_unless_creative(player.gamemode.load(), 1);
+                        }
                     }
 
                     self.clear_active_hand().await;

@@ -7,9 +7,18 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 
-const MAX_FOOD: u8 = 20;
-const EXHAUSTION_COST: f32 = 4.0;
-const MAX_EXHAUSTION: f32 = 40.0;
+// Exhaustion and food constants
+pub(crate) const MAX_FOOD: u8 = 20;
+pub(crate) const EXHAUSTION_COST: f32 = 4.0;
+pub(crate) const MAX_EXHAUSTION: f32 = 40.0;
+pub(crate) const EXHAUSTION_HEAL: f32 = 6.0;
+pub(crate) const EXHAUSTION_JUMP: f32 = 0.05;
+pub(crate) const EXHAUSTION_SPRINT_JUMP: f32 = 0.2;
+pub(crate) const EXHAUSTION_MINE: f32 = 0.005;
+pub(crate) const EXHAUSTION_ATTACK: f32 = 0.1;
+pub(crate) const EXHAUSTION_SPRINT: f32 = 0.1;
+pub(crate) const EXHAUSTION_SWIM: f32 = 0.01;
+pub(crate) const START_SATURATION: f32 = 5.0;
 
 pub struct HungerManager {
     pub level: AtomicCell<u8>,
@@ -22,7 +31,7 @@ impl Default for HungerManager {
     fn default() -> Self {
         Self {
             level: AtomicCell::new(MAX_FOOD),
-            saturation: AtomicCell::new(5.0),
+            saturation: AtomicCell::new(START_SATURATION),
             exhaustion: AtomicCell::new(0.0),
             tick_timer: AtomicCell::new(0),
         }
@@ -56,25 +65,50 @@ impl HungerManager {
 
         let natural_regen = true; // TODO: GameRule check
 
-        if natural_regen && saturation > 0.0 && can_heal && level >= 20 {
+        // In Peaceful difficulty hunger never depletes. If it's below max, slowly restore it.
+        if difficulty == Difficulty::Peaceful {
+            if level < MAX_FOOD || can_heal {
+                timer += 1;
+                if timer >= 20 {
+                    // Restore Food
+                    if level < MAX_FOOD {
+                        level = (level + 1).min(MAX_FOOD);
+                        saturation = START_SATURATION; // Full saturation
+                    }
+
+                    // Restore Health
+                    if can_heal {
+                        heal_amount = 1.0;
+                    }
+
+                    timer = 0;
+                    needs_sync = true;
+                }
+            } else {
+                timer = 0;
+            }
+        } else if natural_regen && saturation > 0.0 && can_heal && level >= 20 {
+            // Saturation healing
             timer += 1;
             if timer >= 10 {
-                let cost = saturation.min(6.0);
+                let cost = saturation.min(EXHAUSTION_HEAL);
                 saturation -= cost;
                 exhaustion += cost;
-                heal_amount = cost / 6.0;
+                heal_amount = cost / EXHAUSTION_HEAL;
                 timer = 0;
                 needs_sync = true;
             }
         } else if natural_regen && level >= 18 && can_heal {
+            // Standard healing
             timer += 1;
             if timer >= 80 {
                 heal_amount = 1.0;
-                exhaustion += 6.0;
+                exhaustion += EXHAUSTION_HEAL;
                 timer = 0;
                 needs_sync = true;
             }
         } else if level == 0 {
+            // Starvation damage
             timer += 1;
             if timer >= 80 {
                 timer = 0;
@@ -88,12 +122,13 @@ impl HungerManager {
                 if should_starve {
                     damage_amount = 1.0;
                 }
-                self.tick_timer.store(0);
+                //self.tick_timer.store(0);
             }
         } else {
             timer = 0;
         }
 
+        // Write back changes
         if needs_sync || timer != self.tick_timer.load() {
             self.level.store(level);
             self.saturation.store(saturation);
@@ -114,6 +149,7 @@ impl HungerManager {
         }
     }
 
+    /// Apply eating effects.
     pub async fn eat(&self, player: &Player, food: u8, saturation_modifier: f32) {
         let added_saturation = f32::from(food) * saturation_modifier * 2.0;
 
@@ -122,6 +158,7 @@ impl HungerManager {
 
         let new_level = (current_level + food).min(MAX_FOOD);
 
+        // Saturation is clamped to the new food level
         let new_sat = (current_sat + added_saturation).min(f32::from(new_level));
 
         self.level.store(new_level);
