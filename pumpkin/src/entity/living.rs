@@ -1251,8 +1251,10 @@ impl EntityBase for LivingEntity {
 
             // Fire damage can be prevented by either game rules or fire resistance
             if is_fire_damage {
-                // Check game rule for fire damage
-                if !world.level_info.load().game_rules.fire_damage {
+                // Check game rule for fire damage (only for players)
+                if self.entity.entity_type == &EntityType::PLAYER
+                    && !world.level_info.load().game_rules.fire_damage
+                {
                     return false;
                 }
 
