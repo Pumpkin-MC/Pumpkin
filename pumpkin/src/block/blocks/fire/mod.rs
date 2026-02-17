@@ -153,7 +153,7 @@ impl FireBlockBase {
                     base_entity
                         .damage(args.entity, 2.0, DamageType::IN_FIRE)
                         .await;
-                } else if args.entity.get_living_entity().is_none() {
+                } else {
                     base_entity
                         .damage(args.entity, 1.0, DamageType::IN_FIRE)
                         .await;

@@ -11,6 +11,7 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 use std::sync::Arc;
+use pumpkin_data::tag::{self, Taggable};
 
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::{
@@ -307,12 +308,19 @@ impl BlockBehaviour for FireBlock {
             let block_state = world.get_block_state(pos).await;
             let block_below = world.get_block(&pos.down()).await;
 
-            // Check for infiniburn blocks (soul sand, soul soil, netherrack in certain dimensions)
-            // TODO: Add proper dimension infiniburn tag checking when available
-            let infiniburn = block_below == &Block::NETHERRACK
-                || block_below == &Block::MAGMA_BLOCK
-                || block_below == &Block::SOUL_SAND
-                || block_below == &Block::SOUL_SOIL;
+            // Check for infiniburn blocks (depending on dimension)
+            let infiniburn = match world.dimension.id {
+                id if id == Dimension::OVERWORLD.id => {
+                    block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_OVERWORLD)
+                },
+                id if id == Dimension::THE_NETHER.id => {
+                    block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_NETHER)
+                },
+                id if id == Dimension::THE_END.id => {
+                    block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_END)
+                },
+                _ => false,
+            };
 
             let mut fire_props = FireProperties::from_state_id(block_state.id, &Block::FIRE);
             let age = fire_props.age.to_index();
