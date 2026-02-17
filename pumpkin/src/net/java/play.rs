@@ -1355,15 +1355,15 @@ impl JavaClient {
                     // TODO: do validation
                     // TODO: Config
                     if player.gamemode.load() == GameMode::Creative {
-                        let block_break_event = crate::plugin::block::block_break::BlockBreakEvent::new(
-                            Some(player.clone()),
-                            block,
-                            position,
-                            0,
-                            false,
-                        );
                         let block_break_event =
-                            server.plugin_manager.fire(block_break_event).await;
+                            crate::plugin::block::block_break::BlockBreakEvent::new(
+                                Some(player.clone()),
+                                block,
+                                position,
+                                0,
+                                false,
+                            );
+                        let block_break_event = server.plugin_manager.fire(block_break_event).await;
                         if block_break_event.cancelled {
                             self.update_sequence(player, player_action.sequence.0);
                             return;
