@@ -1,6 +1,6 @@
 use super::{pathfinder, physics};
-use crate::{block::BlockFuture, world::World};
 use crate::plugin::block::fluid_level_change::FluidLevelChangeEvent;
+use crate::{block::BlockFuture, world::World};
 use pumpkin_data::{
     Block, BlockDirection,
     fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
@@ -130,19 +130,12 @@ pub trait FlowingFluid: Send + Sync {
                     state_for_spreading = new_state;
                 } else {
                     if !waterlogged {
-                        if let Some(target_state_id) = fire_fluid_level_change(
-                            world,
-                            block_pos,
-                            Block::AIR.default_state.id,
-                        )
-                        .await
+                        if let Some(target_state_id) =
+                            fire_fluid_level_change(world, block_pos, Block::AIR.default_state.id)
+                                .await
                         {
                             world
-                                .set_block_state(
-                                    block_pos,
-                                    target_state_id,
-                                    BlockFlags::NOTIFY_ALL,
-                                )
+                                .set_block_state(block_pos, target_state_id, BlockFlags::NOTIFY_ALL)
                                 .await;
                         }
                     }

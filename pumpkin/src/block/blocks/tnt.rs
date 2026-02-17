@@ -31,13 +31,8 @@ impl TNTBlock {
         player: Option<Arc<Player>>,
     ) -> bool {
         if let Some(server) = world.server.upgrade() {
-            let event = TNTPrimeEvent::new(
-                player.clone(),
-                &Block::TNT,
-                *location,
-                world.uuid,
-                cause,
-            );
+            let event =
+                TNTPrimeEvent::new(player.clone(), &Block::TNT, *location, world.uuid, cause);
             let event = server.plugin_manager.fire(event).await;
             if event.cancelled {
                 return false;
@@ -80,8 +75,13 @@ impl BlockBehaviour for TNTBlock {
             } else {
                 "FLINT_AND_STEEL"
             };
-            let _ = Self::prime(&world, args.position, cause.to_string(), Some(args.player.clone()))
-                .await;
+            let _ = Self::prime(
+                &world,
+                args.position,
+                cause.to_string(),
+                Some(args.player.clone()),
+            )
+            .await;
 
             BlockActionResult::Consume
         })
@@ -90,13 +90,7 @@ impl BlockBehaviour for TNTBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if block_receives_redstone_power(args.world, args.position).await {
-                let _ = Self::prime(
-                    args.world,
-                    args.position,
-                    "REDSTONE".to_string(),
-                    None,
-                )
-                .await;
+                let _ = Self::prime(args.world, args.position, "REDSTONE".to_string(), None).await;
             }
         })
     }
@@ -104,13 +98,7 @@ impl BlockBehaviour for TNTBlock {
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if block_receives_redstone_power(args.world, args.position).await {
-                let _ = Self::prime(
-                    args.world,
-                    args.position,
-                    "REDSTONE".to_string(),
-                    None,
-                )
-                .await;
+                let _ = Self::prime(args.world, args.position, "REDSTONE".to_string(), None).await;
             }
         })
     }

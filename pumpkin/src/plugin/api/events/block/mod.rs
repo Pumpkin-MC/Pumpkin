@@ -2,12 +2,12 @@ pub mod block_break;
 pub mod block_burn;
 pub mod block_can_build;
 pub mod block_place;
+pub mod fluid_level_change;
+pub mod moisture_change;
 pub mod note_play;
 pub mod sign_change;
-pub mod tnt_prime;
-pub mod moisture_change;
 pub mod sponge_absorb;
-pub mod fluid_level_change;
+pub mod tnt_prime;
 
 use pumpkin_data::Block;
 
