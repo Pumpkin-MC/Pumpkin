@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use crate::plugin::player::player_egg_throw::PlayerEggThrowEvent;
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity,
@@ -8,7 +9,6 @@ use crate::{
     },
     server::Server,
 };
-use crate::plugin::player::player_egg_throw::PlayerEggThrowEvent;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -164,13 +164,9 @@ impl EntityBase for EggEntity {
 
                 tokio::spawn(async move {
                     for _ in 0..to_spawn {
-                        let mob = from_type(
-                            hatching_type,
-                            spawn_pos_clone,
-                            &world_clone,
-                            Uuid::new_v4(),
-                        )
-                        .await;
+                        let mob =
+                            from_type(hatching_type, spawn_pos_clone, &world_clone, Uuid::new_v4())
+                                .await;
 
                         let yaw = rand::random::<f32>() * 360.0;
                         let new_entity = mob.get_entity();

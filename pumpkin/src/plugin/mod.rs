@@ -14,10 +14,10 @@ use tracing::{error, info};
 pub mod api;
 pub mod loader;
 
-use crate::{LOGGER_IMPL, server::Server};
-pub use api::*;
 use crate::plugin::server::plugin_disable::PluginDisableEvent;
 use crate::plugin::server::plugin_enable::PluginEnableEvent;
+use crate::{LOGGER_IMPL, server::Server};
+pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 

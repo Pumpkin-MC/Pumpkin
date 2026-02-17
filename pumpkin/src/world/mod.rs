@@ -2156,7 +2156,10 @@ impl World {
 
             if respawn_world_uuid != respawn_world.uuid {
                 let worlds = server.worlds.load();
-                if let Some(found) = worlds.iter().find(|w| w.uuid == respawn_world_uuid).cloned()
+                if let Some(found) = worlds
+                    .iter()
+                    .find(|w| w.uuid == respawn_world_uuid)
+                    .cloned()
                 {
                     if found.uuid != respawn_world.uuid {
                         // Move player to the new respawn world chosen by the event.
@@ -2225,7 +2228,12 @@ impl World {
             player.inventory.clear().await;
         }
 
-        let _ = (is_bed_spawn, is_anchor_spawn, is_missing_respawn_block, respawn_reason);
+        let _ = (
+            is_bed_spawn,
+            is_anchor_spawn,
+            is_missing_respawn_block,
+            respawn_reason,
+        );
 
         // Set entity position BEFORE loading chunks, so chunks load at the right location
         // This mirrors the initial spawn flow where update_position is called before teleport

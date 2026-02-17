@@ -1,6 +1,6 @@
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 use crate::{
-    entity::EntityBaseFuture,
-    plugin::player::player_pickup_arrow::PlayerPickupArrowEvent,
+    entity::EntityBaseFuture, plugin::player::player_pickup_arrow::PlayerPickupArrowEvent,
     server::Server,
 };
 use core::f32;
@@ -23,7 +23,6 @@ use std::sync::{
     },
 };
 use tokio::sync::Mutex;
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
     entity: Entity,

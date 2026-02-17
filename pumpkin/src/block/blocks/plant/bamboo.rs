@@ -253,7 +253,11 @@ async fn count_bamboo_above(world: Arc<World>, pos: &BlockPos) -> usize {
     bamboo_count
 }
 
-async fn bone_meal(world: Arc<World>, position: &BlockPos, player: Arc<crate::entity::player::Player>) {
+async fn bone_meal(
+    world: Arc<World>,
+    position: &BlockPos,
+    player: Arc<crate::entity::player::Player>,
+) {
     let mut bamboo_above = count_bamboo_above(Arc::clone(&world), position).await;
     let bamboo_below = count_bamboo_below(Arc::clone(&world), position).await;
     let mut new_height = bamboo_above + bamboo_below + 1;

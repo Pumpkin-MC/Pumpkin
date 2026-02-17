@@ -1,6 +1,6 @@
 use pumpkin_macros::{Event, cancellable};
-use pumpkin_world::item::ItemStack;
 use pumpkin_util::Hand;
+use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
 use crate::entity::player::Player;

@@ -14,8 +14,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_util::{
-    GameMode,
-    Hand,
+    GameMode, Hand,
     math::{position::BlockPos, vector3::Vector3},
 };
 use pumpkin_world::{inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags};
@@ -110,7 +109,11 @@ impl ItemBehaviour for EmptyBucketItem {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
-            let hand_name = if hand == Hand::Left { "OFF_HAND" } else { "HAND" };
+            let hand_name = if hand == Hand::Left {
+                "OFF_HAND"
+            } else {
+                "HAND"
+            };
             let (start_pos, end_pos) = get_start_and_end_pos(player);
 
             let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
@@ -140,12 +143,15 @@ impl ItemBehaviour for EmptyBucketItem {
 
             if waterlogged_check(block, state) == Some(true) {
                 // Take water from the waterlogged clicked block.
-            } else if state == Block::LAVA.default_state.id || state == Block::WATER.default_state.id {
+            } else if state == Block::LAVA.default_state.id
+                || state == Block::WATER.default_state.id
+            {
                 // Take the source fluid directly from the clicked block.
                 take_source_fluid = true;
             } else {
                 let adjacent_pos = block_pos.offset(direction.to_offset());
-                let (adjacent_block, adjacent_state) = world.get_block_and_state_id(&adjacent_pos).await;
+                let (adjacent_block, adjacent_state) =
+                    world.get_block_and_state_id(&adjacent_pos).await;
                 if waterlogged_check(adjacent_block, adjacent_state) == Some(true) {
                     target_pos = adjacent_pos;
                     target_block = adjacent_block;
@@ -237,7 +243,11 @@ impl ItemBehaviour for FilledBucketItem {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
-            let hand_name = if hand == Hand::Left { "OFF_HAND" } else { "HAND" };
+            let hand_name = if hand == Hand::Left {
+                "OFF_HAND"
+            } else {
+                "HAND"
+            };
             let (start_pos, end_pos) = get_start_and_end_pos(player);
             let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
                 let state_id = world_inner.get_block_state_id(pos).await;

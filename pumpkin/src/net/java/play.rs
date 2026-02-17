@@ -20,25 +20,25 @@ use crate::error::PumpkinError;
 use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
+use crate::plugin::block::block_can_build::BlockCanBuildEvent;
 use crate::plugin::block::block_place::BlockPlaceEvent;
-use crate::plugin::player::player_chat::PlayerChatEvent;
+use crate::plugin::block::sign_change::SignChangeEvent;
+use crate::plugin::player::player_animation::PlayerAnimationEvent;
+use crate::plugin::player::player_armor_stand_manipulate::PlayerArmorStandManipulateEvent;
 use crate::plugin::player::player_bucket_entity::PlayerBucketEntityEvent;
+use crate::plugin::player::player_changed_main_hand::PlayerChangedMainHandEvent;
+use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_preprocess::PlayerCommandPreprocessEvent;
+use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
 use crate::plugin::player::player_interact_at_entity::PlayerInteractAtEntityEvent;
 use crate::plugin::player::player_interact_entity::PlayerInteractEntityEvent as PlayerInteractEntitySimpleEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent as PlayerInteractEntityCoreEvent;
-use crate::plugin::player::player_animation::PlayerAnimationEvent;
-use crate::plugin::player::player_armor_stand_manipulate::PlayerArmorStandManipulateEvent;
-use crate::plugin::player::player_changed_main_hand::PlayerChangedMainHandEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
+use crate::plugin::player::player_item_held::PlayerItemHeldEvent;
+use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
 use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
-use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
-use crate::plugin::player::player_item_held::PlayerItemHeldEvent;
-use crate::plugin::block::block_can_build::BlockCanBuildEvent;
-use crate::plugin::block::sign_change::SignChangeEvent;
-use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
@@ -58,8 +58,9 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
-    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetPlayerInventory, CSetSelectedSlot, CSystemChatMessage,
-    CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
+    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetPlayerInventory, CSetSelectedSlot,
+    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
+    PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
@@ -1167,8 +1168,8 @@ impl JavaClient {
 
                 // 2. Calculate if settings changed before we overwrite
                 let main_hand_changed = current_config.main_hand != main_hand;
-                let update_settings = main_hand_changed
-                    || current_config.skin_parts != client_information.skin_parts;
+                let update_settings =
+                    main_hand_changed || current_config.skin_parts != client_information.skin_parts;
 
                 let old_view_distance = current_config.view_distance;
                 let new_view_distance_raw = client_information.view_distance as u8;
@@ -1484,10 +1485,8 @@ impl JavaClient {
 
         for registered_channel in payload_str.split('\0').filter(|entry| !entry.is_empty()) {
             if is_register {
-                let event = PlayerRegisterChannelEvent::new(
-                    player.clone(),
-                    registered_channel.to_string(),
-                );
+                let event =
+                    PlayerRegisterChannelEvent::new(player.clone(), registered_channel.to_string());
                 let _ = server.plugin_manager.fire(event).await;
             } else {
                 let event = PlayerUnregisterChannelEvent::new(
@@ -1628,13 +1627,14 @@ impl JavaClient {
                     if !state.is_air() {
                         let speed = block::calc_block_breaking(player, state, block).await;
                         let item_stack = player.inventory.held_item().lock().await.clone();
-                        let block_damage_event = crate::plugin::block::block_damage::BlockDamageEvent::new(
-                            player.clone(),
-                            block,
-                            position,
-                            item_stack,
-                            speed >= 1.0,
-                        );
+                        let block_damage_event =
+                            crate::plugin::block::block_damage::BlockDamageEvent::new(
+                                player.clone(),
+                                block,
+                                position,
+                                item_stack,
+                                speed >= 1.0,
+                            );
                         let block_damage_event =
                             server.plugin_manager.fire(block_damage_event).await;
                         if block_damage_event.cancelled {
@@ -2604,14 +2604,16 @@ impl JavaClient {
             } else if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
                 let facing = player.living_entity.entity.get_horizontal_facing();
                 multi_positions.push(final_block_pos);
-                multi_positions.push(final_block_pos.offset(facing.to_block_direction().to_offset()));
+                multi_positions
+                    .push(final_block_pos.offset(facing.to_block_direction().to_offset()));
             }
             if multi_positions.len() > 1 {
-                let multi_event = crate::plugin::block::block_multi_place::BlockMultiPlaceEvent::new(
-                    player_arc,
-                    block,
-                    multi_positions,
-                );
+                let multi_event =
+                    crate::plugin::block::block_multi_place::BlockMultiPlaceEvent::new(
+                        player_arc,
+                        block,
+                        multi_positions,
+                    );
                 let multi_event = server.plugin_manager.fire(multi_event).await;
                 if multi_event.cancelled {
                     return Ok(false);

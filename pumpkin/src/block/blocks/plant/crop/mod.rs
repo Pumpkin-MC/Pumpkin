@@ -58,10 +58,7 @@ trait CropBlockBase: PlantBlockBase {
                 let new_state_id = self.state_with_age(block, state, age + 1);
                 if let Some(server) = world.server.upgrade() {
                     let event = crate::plugin::block::block_grow::BlockGrowEvent::new(
-                        block,
-                        block,
-                        *pos,
-                        world.uuid,
+                        block, block, *pos, world.uuid,
                     );
                     let event = server.plugin_manager.fire(event).await;
                     if event.cancelled {

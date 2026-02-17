@@ -429,12 +429,7 @@ pub fn collect_loot(block: &Block, params: LootContextParameters) -> Vec<ItemSta
     stacks
 }
 
-pub async fn drop_experience(
-    world: &Arc<World>,
-    block: &Block,
-    pos: &BlockPos,
-    experience: bool,
-) {
+pub async fn drop_experience(world: &Arc<World>, block: &Block, pos: &BlockPos, experience: bool) {
     if experience && let Some(experience) = &block.experience {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         let amount = experience.experience.get(&mut random);

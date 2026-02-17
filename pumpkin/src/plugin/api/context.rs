@@ -12,13 +12,13 @@ use pumpkin_util::{
 use tokio::sync::RwLock;
 use tracing::Level;
 
+use crate::plugin::server::service_register::ServiceRegisterEvent;
+use crate::plugin::server::service_unregister::ServiceUnregisterEvent;
 use crate::{
     entity::player::Player,
     plugin::{EventHandler, HandlerMap, PluginManager, TypedEventHandler},
     server::Server,
 };
-use crate::plugin::server::service_register::ServiceRegisterEvent;
-use crate::plugin::server::service_unregister::ServiceUnregisterEvent;
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 

@@ -237,9 +237,7 @@ impl Explosion {
             let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
             if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
-                if yield_rate <= 0.0
-                    || (yield_rate < 1.0 && rand::random::<f32>() > yield_rate)
-                {
+                if yield_rate <= 0.0 || (yield_rate < 1.0 && rand::random::<f32>() > yield_rate) {
                     continue;
                 }
                 let params = LootContextParameters {

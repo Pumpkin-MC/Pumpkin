@@ -1,7 +1,7 @@
 use crate::entity::item::ItemEntity;
+use crate::net::ClientPlatform;
 use crate::plugin::player::player_portal::PlayerPortalEvent;
 use crate::plugin::player::player_velocity::PlayerVelocityEvent;
-use crate::net::ClientPlatform;
 use crate::world::World;
 use crate::{
     server::Server,

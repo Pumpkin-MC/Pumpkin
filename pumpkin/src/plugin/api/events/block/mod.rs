@@ -13,18 +13,18 @@ pub mod block_from_to;
 pub mod block_grow;
 pub mod block_ignite;
 pub mod block_multi_place;
+pub mod block_physics;
 pub mod block_piston_extend;
 pub mod block_piston_retract;
-pub mod block_redstone;
-pub mod block_physics;
-pub mod block_spread;
 pub mod block_place;
+pub mod block_redstone;
+pub mod block_spread;
+pub mod fluid_level_change;
+pub mod moisture_change;
 pub mod note_play;
 pub mod sign_change;
-pub mod tnt_prime;
-pub mod moisture_change;
 pub mod sponge_absorb;
-pub mod fluid_level_change;
+pub mod tnt_prime;
 
 use pumpkin_data::Block;
 

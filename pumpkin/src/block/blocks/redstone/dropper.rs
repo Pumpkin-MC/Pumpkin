@@ -206,8 +206,7 @@ impl BlockBehaviour for DropperBlock {
                         triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
                         triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
                     );
-                    let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade()
-                    {
+                    let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade() {
                         let event_block = Block::from_id(args.block.id);
                         let event = crate::plugin::block::block_dispense::BlockDispenseEvent::new(
                             event_block,
@@ -225,8 +224,9 @@ impl BlockBehaviour for DropperBlock {
                     } else {
                         (drop_item, velocity)
                     };
-                    let item_entity =
-                        Arc::new(ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await);
+                    let item_entity = Arc::new(
+                        ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await,
+                    );
                     args.world.spawn_entity(item_entity).await;
                     args.world
                         .sync_world_event(WorldEvent::DispenserDispenses, *args.position, 0)
