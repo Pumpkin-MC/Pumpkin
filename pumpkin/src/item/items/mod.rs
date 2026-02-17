@@ -1,8 +1,8 @@
 pub mod armor_stand;
 pub mod arrow;
 pub mod axe;
-pub mod bow;
 pub mod boat;
+pub mod bow;
 pub mod bucket;
 pub mod crossbow;
 pub mod dye;
