@@ -45,8 +45,9 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
-    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetPlayerInventory, CSetSelectedSlot, CSystemChatMessage,
-    CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
+    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetPlayerInventory, CSetSelectedSlot,
+    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
+    PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
@@ -1596,10 +1597,11 @@ impl JavaClient {
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
         if abilities.flying != flying {
             if let Some(server) = player.world().server.upgrade() {
-                let event = crate::plugin::player::player_toggle_flight::PlayerToggleFlightEvent::new(
-                    player.clone(),
-                    flying,
-                );
+                let event =
+                    crate::plugin::player::player_toggle_flight::PlayerToggleFlightEvent::new(
+                        player.clone(),
+                        flying,
+                    );
                 let event = server.plugin_manager.fire(event).await;
                 if event.cancelled {
                     return;
