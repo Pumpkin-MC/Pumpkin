@@ -120,6 +120,7 @@ impl CreeperEntity {
 impl NBTStorage for CreeperEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
+            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
             nbt.put_bool("powered", self.charged.load(Ordering::Relaxed));
             nbt.put_short("Fuse", self.fuse_time.load(Ordering::Relaxed) as i16);
             nbt.put_byte(
@@ -132,6 +133,11 @@ impl NBTStorage for CreeperEntity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
+            self.mob_entity
+                .living_entity
+                .entity
+                .read_nbt_non_mut(nbt)
+                .await;
             if let Some(powered) = nbt.get_bool("powered") {
                 self.charged.store(powered, Ordering::Relaxed);
             }
