@@ -4,7 +4,9 @@ use pumpkin_protocol::{
     java::server::status::SStatusPingRequest,
 };
 
-use crate::{net::java::JavaClient, plugin::server::server_list_ping::ServerListPingEvent, server::Server};
+use crate::{
+    net::java::JavaClient, plugin::server::server_list_ping::ServerListPingEvent, server::Server,
+};
 use tracing::debug;
 
 impl JavaClient {
@@ -44,9 +46,10 @@ impl JavaClient {
             });
         }
 
-        let status_json = serde_json::to_string(&status_response)
-            .unwrap_or_else(|_| "{}".to_string());
-        self.send_packet_now(&CStatusResponse::new(status_json)).await;
+        let status_json =
+            serde_json::to_string(&status_response).unwrap_or_else(|_| "{}".to_string());
+        self.send_packet_now(&CStatusResponse::new(status_json))
+            .await;
     }
 
     pub async fn handle_ping_request(&self, ping_request: SStatusPingRequest) {
