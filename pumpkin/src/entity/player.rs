@@ -1958,12 +1958,7 @@ impl Player {
         let cause = "UNKNOWN".to_string();
 
         if let Some(server) = self.world().server.upgrade() {
-            let event = PlayerKickEvent::new(
-                self.clone(),
-                kick_message,
-                leave_message,
-                cause,
-            );
+            let event = PlayerKickEvent::new(self.clone(), kick_message, leave_message, cause);
             let event = server.plugin_manager.fire(event).await;
             if event.cancelled {
                 return;
