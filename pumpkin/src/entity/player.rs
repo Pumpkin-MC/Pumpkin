@@ -666,14 +666,16 @@ impl Player {
         let inventory = self.inventory();
         let item_stack = inventory.held_item();
 
-        let base_damage = 1.0;
+        let base_damage = self
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_DAMAGE);
         let base_attack_speed = 4.0;
 
         let mut damage_multiplier = 1.0;
         let mut add_damage = 0.0;
         let mut add_speed = 0.0;
 
-        // Get the attack damage
+        // Get the attack damage from the held item
         // TODO: this should be cached in memory, we shouldn't just use default here either
         if let Some(modifiers) = item_stack
             .lock()
@@ -705,29 +707,10 @@ impl Player {
         if attack_cooldown_progress < 1.0 {
             damage_multiplier = attack_cooldown_progress.powi(2).mul_add(0.8, 0.2);
         }
+
         // Modify the added damage based on the multiplier.
         let mut damage = base_damage + add_damage * damage_multiplier;
-
-        // Apply Strength effect (+3 damage per level)
-        if let Some(effect) = self
-            .living_entity
-            .get_effect(&pumpkin_data::effect::StatusEffect::STRENGTH)
-            .await
-        {
-            damage += 3.0 * f64::from(effect.amplifier + 1);
-        }
-
-        // Apply Weakness effect (-4 damage per level or increased if negative)
-        if let Some(effect) = self
-            .living_entity
-            .get_effect(&pumpkin_data::effect::StatusEffect::WEAKNESS)
-            .await
-        {
-            damage -= 4.0 * f64::from(effect.amplifier + 1);
-        }
-
         let pos = victim_entity.pos.load();
-
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
 
         if matches!(attack_type, AttackType::Critical) {
