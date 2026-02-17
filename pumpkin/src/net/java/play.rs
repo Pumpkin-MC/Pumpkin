@@ -57,7 +57,6 @@ use pumpkin_protocol::java::server::play::{
     SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
     SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, SlotActionType, Status,
 };
-};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
