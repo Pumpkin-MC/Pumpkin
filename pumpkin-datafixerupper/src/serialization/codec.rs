@@ -50,7 +50,8 @@ use std::hash::Hash;
 ///
 /// # Creating a Codec
 /// There are a few codec types that can be created for custom types. **Keep in mind that codecs are meant
-/// to be static instances, and they should not be created at runtime.** Usually, codecs are declared
+/// to be static instances, and they should not be created at runtime. Codecs are also immutable,
+/// which means they cannot be modified after they are created.** Usually, codecs are declared
 /// using `pub static`.
 ///
 /// ## Lists

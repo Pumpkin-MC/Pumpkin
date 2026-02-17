@@ -8,7 +8,6 @@ use crate::serialization::{Display, HasValue};
 use crate::impl_compressor;
 
 use std::hash::Hash;
-use std::sync::OnceLock;
 
 /// A simple [`MapCodec`] implementation of [`BaseMapCodec`].
 /// This codec has a fixed set of keys.
@@ -20,7 +19,6 @@ where
     element_codec: &'static V,
 
     keyable: Key,
-    compressor: OnceLock<KeyCompressor>,
 }
 impl<K: Codec, V: Codec, Key: Keyable> Keyable for SimpleMapCodec<K, V, Key>
 where
@@ -35,7 +33,7 @@ impl<K: Codec, V: Codec, Key: Keyable> CompressorHolder for SimpleMapCodec<K, V,
 where
     K::Value: Display + Eq + Hash,
 {
-    impl_compressor!(compressor);
+    impl_compressor!();
 }
 
 impl<K: Codec, V: Codec, Key: Keyable> BaseMapCodec for SimpleMapCodec<K, V, Key>
@@ -68,6 +66,5 @@ where
         key_codec,
         element_codec,
         keyable,
-        compressor: OnceLock::new(),
     }
 }
