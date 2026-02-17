@@ -349,8 +349,8 @@ macro_rules! impl_inventory_for_cooking {
                             self.set_cooking_total_time(0);
                         }
                         self.set_cooking_time_spent(0);
-                        self.mark_dirty();
                     }
+
                     // Always consider the inventory changed when setting a stack
                     self.mark_dirty();
                 })

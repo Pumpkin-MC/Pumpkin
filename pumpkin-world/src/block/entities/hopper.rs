@@ -14,6 +14,7 @@ use std::any::Any;
 use std::array::from_fn;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64};
 use tokio::sync::Mutex;
 
@@ -46,10 +47,7 @@ impl BlockEntity for HopperBlockEntity {
         Box::pin(async move {
             nbt.put(
                 "TransferCooldown",
-                NbtTag::Int(
-                    self.cooldown_time
-                        .load(std::sync::atomic::Ordering::Relaxed),
-                ),
+                NbtTag::Int(self.cooldown_time.load(Ordering::Relaxed)),
             );
             self.write_inventory_nbt(nbt, true).await;
         })
@@ -78,17 +76,10 @@ impl BlockEntity for HopperBlockEntity {
         world: &'a Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            self.ticked_game_time.store(
-                world.get_world_age().await,
-                std::sync::atomic::Ordering::Relaxed,
-            );
-            if self
-                .cooldown_time
-                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed)
-                <= 0
-            {
-                self.cooldown_time
-                    .store(0, std::sync::atomic::Ordering::Relaxed);
+            self.ticked_game_time
+                .store(world.get_world_age().await, Ordering::Relaxed);
+            if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
+                self.cooldown_time.store(0, Ordering::Relaxed);
                 let state = HopperLikeProperties::from_state_id(
                     world.get_block_state(&self.position).await.id,
                     &Block::HOPPER,
@@ -116,12 +107,11 @@ impl BlockEntity for HopperBlockEntity {
     }
 
     fn is_dirty(&self) -> bool {
-        self.dirty.load(std::sync::atomic::Ordering::Relaxed)
+        self.dirty.load(Ordering::Relaxed)
     }
 
     fn clear_dirty(&self) {
-        self.dirty
-            .store(false, std::sync::atomic::Ordering::Relaxed);
+        self.dirty.store(false, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -145,12 +135,7 @@ impl HopperBlockEntity {
         }
     }
     async fn try_move_items(&self, state: &HopperLikeProperties, world: &Arc<dyn SimpleWorld>) {
-        if self
-            .cooldown_time
-            .load(std::sync::atomic::Ordering::Relaxed)
-            <= 0
-            && state.enabled
-        {
+        if self.cooldown_time.load(Ordering::Relaxed) <= 0 && state.enabled {
             let mut success = false;
             if !self.is_empty().await {
                 success = self.eject_items(world).await;
@@ -159,8 +144,7 @@ impl HopperBlockEntity {
                 success |= self.suck_in_items(world).await;
             }
             if success {
-                self.cooldown_time
-                    .store(8, std::sync::atomic::Ordering::Relaxed);
+                self.cooldown_time.store(8, Ordering::Relaxed);
                 self.mark_dirty();
             }
         }
@@ -272,31 +256,18 @@ impl HopperBlockEntity {
                 if success {
                     if to_empty
                         && let Some(hopper) = to.as_any().downcast_ref::<Self>()
-                        && hopper
-                            .cooldown_time
-                            .load(std::sync::atomic::Ordering::Relaxed)
-                            <= 8
+                        && hopper.cooldown_time.load(Ordering::Relaxed) <= 8
                     {
                         if let Some(from_hopper) = from.as_any().downcast_ref::<Self>() {
-                            if from_hopper
-                                .cooldown_time
-                                .load(std::sync::atomic::Ordering::Relaxed)
-                                >= hopper
-                                    .cooldown_time
-                                    .load(std::sync::atomic::Ordering::Relaxed)
+                            if from_hopper.cooldown_time.load(Ordering::Relaxed)
+                                >= hopper.cooldown_time.load(Ordering::Relaxed)
                             {
-                                hopper
-                                    .cooldown_time
-                                    .store(7, std::sync::atomic::Ordering::Relaxed);
+                                hopper.cooldown_time.store(7, Ordering::Relaxed);
                             } else {
-                                hopper
-                                    .cooldown_time
-                                    .store(8, std::sync::atomic::Ordering::Relaxed);
+                                hopper.cooldown_time.store(8, Ordering::Relaxed);
                             }
                         } else {
-                            hopper
-                                .cooldown_time
-                                .store(8, std::sync::atomic::Ordering::Relaxed);
+                            hopper.cooldown_time.store(8, Ordering::Relaxed);
                         }
                     }
                     to.mark_dirty();
@@ -355,7 +326,7 @@ impl Inventory for HopperBlockEntity {
     }
 
     fn mark_dirty(&self) {
-        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -82,6 +82,10 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
         self.dirty.load(Ordering::Relaxed)
     }
 
+    fn clear_dirty(&self) {
+        self.dirty.store(false, Ordering::Relaxed);
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
