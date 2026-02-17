@@ -31,7 +31,7 @@ use crate::serialization::struct_codecs::Field;
 use std::fmt::Display;
 use std::hash::Hash;
 
-/// A type of *codec* describing the way to **encode from and decode into** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
+/// A type of *codec* describing the way to **encode from and decode to** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
 ///
 /// # Usage
 /// This trait is the main way serialization/deserialization can be handled easily.

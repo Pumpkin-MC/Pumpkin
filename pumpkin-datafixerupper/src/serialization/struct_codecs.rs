@@ -506,12 +506,14 @@ mod test {
         pages: u32,
     }
 
-    pub static BOOK_CODEC: StructCodec3<
+    pub type BookCodec = StructCodec3<
         Book,
         FieldMapCodec<StringCodec>,
         FieldMapCodec<StringCodec>,
         FieldMapCodec<UintCodec>,
-    > = struct_codec!(
+    >;
+
+    pub static BOOK_CODEC: BookCodec = struct_codec!(
         for_getter(field(&STRING_CODEC, "name"), |book: &Book| &book.name),
         for_getter(field(&STRING_CODEC, "author"), |book: &Book| &book.author),
         for_getter(field(&UINT_CODEC, "pages"), |book: &Book| &book.pages),
@@ -578,16 +580,7 @@ mod test {
         pub type UnvalidatedBookshelfCodec = StructCodec3<
             Bookshelf,
             FieldMapCodec<UintCodec>,
-            DefaultedFieldCodec<
-                ListCodec<
-                    StructCodec3<
-                        Book,
-                        FieldMapCodec<StringCodec>,
-                        FieldMapCodec<StringCodec>,
-                        FieldMapCodec<UintCodec>,
-                    >,
-                >,
-            >,
+            DefaultedFieldCodec<ListCodec<BookCodec>>,
             FieldMapCodec<UintCodec>,
         >;
 
