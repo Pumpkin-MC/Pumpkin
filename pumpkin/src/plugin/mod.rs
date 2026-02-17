@@ -14,10 +14,10 @@ use tracing::{error, info};
 pub mod api;
 pub mod loader;
 
-use crate::{LOGGER_IMPL, server::Server};
-pub use api::*;
 use crate::plugin::server::plugin_disable::PluginDisableEvent;
 use crate::plugin::server::plugin_enable::PluginEnableEvent;
+use crate::{LOGGER_IMPL, server::Server};
+pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -546,7 +546,8 @@ impl PluginManager {
         };
 
         let disable_event = PluginDisableEvent::new(name.to_string());
-        if let Some(server) = self.server.read().await.clone() {
+        let maybe_server = self.server.read().await.clone();
+        if let Some(server) = maybe_server {
             let _ = server
                 .plugin_manager
                 .fire::<PluginDisableEvent>(disable_event)

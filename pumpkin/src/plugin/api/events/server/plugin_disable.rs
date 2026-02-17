@@ -9,6 +9,7 @@ pub struct PluginDisableEvent {
 
 impl PluginDisableEvent {
     #[must_use]
+    #[expect(clippy::missing_const_for_fn)]
     pub fn new(plugin_name: String) -> Self {
         Self { plugin_name }
     }

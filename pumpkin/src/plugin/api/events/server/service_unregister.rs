@@ -12,6 +12,7 @@ pub struct ServiceUnregisterEvent {
 
 impl ServiceUnregisterEvent {
     #[must_use]
+    #[expect(clippy::missing_const_for_fn)]
     pub fn new(plugin_name: String, service_name: String) -> Self {
         Self {
             plugin_name,
