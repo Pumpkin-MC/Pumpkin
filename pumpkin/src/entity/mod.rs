@@ -686,14 +686,13 @@ impl Entity {
 
     #[expect(clippy::float_cmp)]
     async fn adjust_movement_for_collisions(&self, movement: Vector3<f64>) -> Vector3<f64> {
-        // If an entity is not moving, don't wipe its grounded state or supporting block.
-        if movement.length_squared() == 0.0 {
-            return movement;
-        }
-
         self.on_ground.store(false, Ordering::SeqCst);
         self.supporting_block_pos.store(None);
         self.horizontal_collision.store(false, Ordering::SeqCst);
+
+        if movement.length_squared() == 0.0 {
+            return movement;
+        }
 
         let bounding_box = self.bounding_box.load();
 

@@ -2,6 +2,7 @@ use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalAxis};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -11,7 +12,6 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 use std::sync::Arc;
-use pumpkin_data::tag::{self, Taggable};
 
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::{
@@ -312,13 +312,13 @@ impl BlockBehaviour for FireBlock {
             let infiniburn = match world.dimension.id {
                 id if id == Dimension::OVERWORLD.id => {
                     block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_OVERWORLD)
-                },
+                }
                 id if id == Dimension::THE_NETHER.id => {
                     block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_NETHER)
-                },
+                }
                 id if id == Dimension::THE_END.id => {
                     block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_END)
-                },
+                }
                 _ => false,
             };
 
