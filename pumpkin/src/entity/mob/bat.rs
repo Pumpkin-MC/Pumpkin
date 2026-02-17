@@ -1,8 +1,9 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -16,11 +17,14 @@ use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture}
 
 const ROOSTING_FLAG: u8 = 1;
 const CLOSE_PLAYER_DISTANCE: f64 = 4.0;
+/// Vanilla: `getMinAmbientSoundDelay()` returns 80 for most mobs
+const MIN_AMBIENT_SOUND_DELAY: i32 = 80;
 
 pub struct BatEntity {
     pub mob_entity: MobEntity,
     hanging_position: Mutex<Option<BlockPos>>,
     roosting: AtomicBool,
+    ambient_sound_chance: AtomicI32,
 }
 
 impl BatEntity {
@@ -30,6 +34,7 @@ impl BatEntity {
             mob_entity,
             hanging_position: Mutex::new(None),
             roosting: AtomicBool::new(true),
+            ambient_sound_chance: AtomicI32::new(MIN_AMBIENT_SOUND_DELAY),
         };
         let mob_arc = Arc::new(bat);
 
@@ -96,6 +101,14 @@ impl Mob for BatEntity {
             let above_pos = BlockPos::new(block_pos.0.x, block_pos.0.y + 1, block_pos.0.z);
             let world = entity.world.load();
 
+            // Ambient idle sound (vanilla: MobEntity.mobTick → playAmbientSound)
+            let chance = self.ambient_sound_chance.fetch_sub(1, Relaxed);
+            if chance <= 0 {
+                self.ambient_sound_chance
+                    .store(MIN_AMBIENT_SOUND_DELAY, Relaxed);
+                entity.play_sound(Sound::EntityBatAmbient).await;
+            }
+
             if self.is_roosting() {
                 let above_state = world.get_block_state(&above_pos).await;
                 if above_state.is_solid_block() {
@@ -152,7 +165,17 @@ impl Mob for BatEntity {
                 };
 
                 if should_pick_new {
-                    *hanging_pos = new_target;
+                    // Pre-validate: only accept targets in air (avoids water, lava, hazards)
+                    if let Some(target) = new_target {
+                        let target_state = world.get_block_state(&target).await;
+                        if target_state.is_air() && target.0.y > world.dimension.min_y {
+                            *hanging_pos = Some(target);
+                        } else {
+                            *hanging_pos = None;
+                        }
+                    } else {
+                        *hanging_pos = None;
+                    }
                 }
 
                 if let Some(target) = *hanging_pos {
@@ -185,20 +208,24 @@ impl Mob for BatEntity {
         })
     }
 
-    fn post_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+    fn post_tick(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
-            let entity = &self.mob_entity.living_entity.entity;
             if self.is_roosting() {
+                let entity = &self.mob_entity.living_entity.entity;
                 entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
                 let pos = entity.pos.load();
                 let snapped_y = (pos.y.floor()) + 1.0 - f64::from(entity.height());
                 entity.set_pos(Vector3::new(pos.x, snapped_y, pos.z));
-            } else {
-                let mut velo = entity.velocity.load();
-                velo.y *= 0.6;
-                entity.velocity.store(velo);
             }
         })
+    }
+
+    fn get_mob_gravity(&self) -> f64 {
+        0.0
+    }
+
+    fn get_mob_y_velocity_drag(&self) -> Option<f64> {
+        Some(0.6)
     }
 
     fn on_damage(&self, _damage_type: DamageType) -> EntityBaseFuture<'_, ()> {

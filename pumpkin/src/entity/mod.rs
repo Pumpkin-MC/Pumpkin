@@ -189,6 +189,12 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         false
     }
 
+    /// Custom Y-axis velocity drag multiplier applied during `travel_in_air`.
+    /// Bats return `Some(0.6)` to match vanilla's `travel()` override.
+    fn get_y_velocity_drag(&self) -> Option<f64> {
+        None
+    }
+
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,

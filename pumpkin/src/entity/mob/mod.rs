@@ -204,12 +204,20 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
-    fn post_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+    fn post_tick(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {})
     }
 
     fn on_damage(&self, _damage_type: DamageType) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {})
+    }
+
+    fn get_mob_gravity(&self) -> f64 {
+        self.get_mob_entity().living_entity.get_gravity()
+    }
+
+    fn get_mob_y_velocity_drag(&self) -> Option<f64> {
+        None
     }
 }
 
@@ -251,9 +259,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             look_control.tick(self).await;
             drop(look_control);
 
-            mob_entity.living_entity.tick(caller.clone(), server).await;
+            mob_entity.living_entity.tick(caller, server).await;
 
-            self.post_tick(&caller).await;
+            self.post_tick().await;
 
             // Send rotation packets after look_control finalizes head_yaw and pitch
             let entity = &mob_entity.living_entity.entity;
@@ -299,11 +307,15 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            self.on_damage(damage_type).await;
-            self.get_mob_entity()
+            let damaged = self
+                .get_mob_entity()
                 .living_entity
                 .damage_with_context(caller, amount, damage_type, position, source, cause)
-                .await
+                .await;
+            if damaged {
+                self.on_damage(damage_type).await;
+            }
+            damaged
         })
     }
 
@@ -320,7 +332,11 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn get_gravity(&self) -> f64 {
-        self.get_mob_entity().living_entity.get_gravity()
+        self.get_mob_gravity()
+    }
+
+    fn get_y_velocity_drag(&self) -> Option<f64> {
+        self.get_mob_y_velocity_drag()
     }
 }
 
