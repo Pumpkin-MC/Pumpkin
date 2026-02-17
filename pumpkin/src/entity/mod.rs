@@ -236,7 +236,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         Box::pin(async {})
     }
 
-    fn set_paddle_state<'a>(&'a self, _left: bool, _right: bool) -> EntityBaseFuture<'a, ()> {
+    fn set_paddle_state(&self, _left: bool, _right: bool) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {})
     }
 
