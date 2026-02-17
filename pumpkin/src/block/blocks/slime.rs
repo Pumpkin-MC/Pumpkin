@@ -1,9 +1,8 @@
-use std::sync::atomic::Ordering;
-
 use pumpkin_macros::pumpkin_block;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, OnLandedUponArgs, UpdateEntityMovementAfterFallOnArgs,
+    bounce_entity_after_fall,
 };
 
 #[pumpkin_block("minecraft:slime_block")]
@@ -24,25 +23,6 @@ impl BlockBehaviour for SlimeBlock {
         &'a self,
         args: UpdateEntityMovementAfterFallOnArgs<'a>,
     ) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = args.entity.get_entity();
-            let mut velocity = entity.velocity.load();
-
-            if entity.sneaking.load(Ordering::Relaxed) {
-                velocity.y = 0.0;
-                entity.velocity.store(velocity);
-                return;
-            }
-
-            if velocity.y < 0.0 {
-                let factor = if args.entity.get_living_entity().is_some() {
-                    1.0
-                } else {
-                    0.8
-                };
-                velocity.y = -velocity.y * factor;
-                entity.velocity.store(velocity);
-            }
-        })
+        Box::pin(async move { bounce_entity_after_fall(args.entity, 1.0) })
     }
 }

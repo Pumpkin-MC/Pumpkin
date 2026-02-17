@@ -1332,7 +1332,7 @@ impl Entity {
             let block = self.get_block_with_y_offset(0.2).await.1;
             world
                 .block_registry
-                .update_entity_movement_after_fall_on(block, &world, caller.as_ref())
+                .update_entity_movement_after_fall_on(block, caller.as_ref())
                 .await;
         }
     }
