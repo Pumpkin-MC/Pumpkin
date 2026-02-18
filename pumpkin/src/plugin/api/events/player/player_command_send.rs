@@ -17,7 +17,7 @@ pub struct PlayerCommandSendEvent {
 
 impl PlayerCommandSendEvent {
     /// Creates a new instance of `PlayerCommandSendEvent`.
-    pub fn new(player: Arc<Player>, commands: Vec<String>) -> Self {
+    pub const fn new(player: Arc<Player>, commands: Vec<String>) -> Self {
         Self { player, commands }
     }
 }

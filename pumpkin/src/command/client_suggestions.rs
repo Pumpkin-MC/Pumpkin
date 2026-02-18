@@ -33,11 +33,7 @@ pub async fn send_c_commands_packet(
 
     let event = PlayerCommandSendEvent::new(player.clone(), allowed_commands);
     let event = server.plugin_manager.fire(event).await;
-    let allowed_set: HashSet<&str> = event
-        .commands
-        .iter()
-        .map(|command| command.as_str())
-        .collect();
+    let allowed_set: HashSet<&str> = event.commands.iter().map(String::as_str).collect();
 
     let mut first_level = Vec::new();
 
