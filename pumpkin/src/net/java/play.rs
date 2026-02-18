@@ -65,6 +65,7 @@ use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
@@ -1632,17 +1633,16 @@ impl JavaClient {
 
         // Set the flying ability
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
-        if abilities.flying != flying {
-            if let Some(server) = player.world().server.upgrade() {
-                let event =
-                    crate::plugin::player::player_toggle_flight::PlayerToggleFlightEvent::new(
-                        player.clone(),
-                        flying,
-                    );
-                let event = server.plugin_manager.fire(event).await;
-                if event.cancelled {
-                    return;
-                }
+        if abilities.flying != flying
+            && let Some(server) = player.world().server.upgrade()
+            && let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+        {
+            let event = crate::plugin::player::player_toggle_flight::PlayerToggleFlightEvent::new(
+                player_arc, flying,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
             }
         }
         if flying {
