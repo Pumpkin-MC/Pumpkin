@@ -1,9 +1,14 @@
-use std::sync::{Arc, Weak};
+use std::sync::{
+    Arc, Weak,
+    atomic::{AtomicI32, Ordering},
+};
 
 use pumpkin_data::{entity::EntityType, item::Item};
+use pumpkin_world::item::ItemStack;
+use rand::RngExt;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
         escape_danger::EscapeDangerGoal, look_around::LookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
@@ -23,12 +28,17 @@ const TEMPT_ITEMS: &[&Item] = &[
 
 pub struct ChickenEntity {
     pub mob_entity: MobEntity,
+    egg_lay_time: AtomicI32,
 }
 
 impl ChickenEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let chicken = Self { mob_entity };
+        let egg_lay_time = rand::rng().random_range(6000..12000);
+        let chicken = Self {
+            mob_entity,
+            egg_lay_time: AtomicI32::new(egg_lay_time),
+        };
         let mob_arc = Arc::new(chicken);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -60,5 +70,18 @@ impl NBTStorage for ChickenEntity {}
 impl Mob for ChickenEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async {
+            if self.egg_lay_time.fetch_sub(1, Ordering::Relaxed) <= 1 {
+                let next_time = rand::rng().random_range(6000..12000);
+                let entity = &self.mob_entity.living_entity.entity;
+                let world = entity.world.load_full();
+                let pos = entity.block_pos.load();
+                world.drop_stack(&pos, ItemStack::new(1, &Item::EGG)).await;
+                self.egg_lay_time.store(next_time, Ordering::Relaxed);
+            }
+        })
     }
 }
