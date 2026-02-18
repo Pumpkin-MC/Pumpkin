@@ -122,8 +122,8 @@ impl CrossbowItem {
         let pitch = player.living_entity.entity.pitch.load();
         arrow.set_velocity_from_rotation(pitch, yaw, 0.0, Self::ARROW_SPEED, 1.0);
 
-        // Crossbow arrows are not critical
-        arrow.set_critical(false);
+        // Crossbow arrows are critical
+        arrow.set_critical(true);
 
         // Spawn the arrow entity in the world
         let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);

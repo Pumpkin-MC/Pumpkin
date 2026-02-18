@@ -19,6 +19,7 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
+use pumpkin_data::particle::Particle;
 
 /// Represents the pickup rules for arrows
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -241,6 +242,19 @@ impl EntityBase for ArrowEntity {
             // Move arrow
             let new_pos = start_pos.add(&velocity);
             entity.set_pos(new_pos);
+
+            // Spawn critical particle trail while arrow is flying and critical
+            if self.is_critical.load(Ordering::Relaxed) {
+                world
+                    .spawn_particle(
+                        entity.pos.load(),
+                        Vector3::new(0.0f32, 0.0f32, 0.0f32),
+                        0.0,
+                        1,
+                        Particle::Crit,
+                    )
+                    .await;
+            }
 
             // Broadcast velocity update
             let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
