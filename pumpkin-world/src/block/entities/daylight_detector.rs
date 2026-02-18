@@ -48,7 +48,7 @@ impl BlockEntity for DaylightDetectorBlockEntity {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {
             if world.get_world_age().await % 20 == 0 {
-                self.update_power(world, &self.position).await;
+                Self::update_power(world, &self.position).await;
             }
         })
     }
@@ -62,7 +62,7 @@ impl DaylightDetectorBlockEntity {
         Self { position }
     }
 
-    async fn update_power(&self, world: &Arc<dyn SimpleWorld>, block_pos: &BlockPos) {
+    pub async fn update_power<W: SimpleWorld + ?Sized>(world: &Arc<W>, block_pos: &BlockPos) {
         use std::f32::consts::PI;
 
         let (block, state) = world.get_block_and_state(block_pos).await;

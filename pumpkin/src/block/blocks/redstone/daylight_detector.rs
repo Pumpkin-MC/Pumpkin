@@ -43,6 +43,8 @@ impl BlockBehaviour for DaylightDetectorBlock {
             self.update_inverted(props, args.world, args.position, args.block)
                 .await;
 
+            DaylightDetectorBlockEntity::update_power(args.world, args.position).await;
+
             BlockActionResult::Success
         })
     }
