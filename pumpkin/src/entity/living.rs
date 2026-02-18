@@ -562,7 +562,6 @@ impl LivingEntity {
         }
 
         // If glowing effect removed, disable glowing
-        // Apply glowing effect
         if effect_type == &StatusEffect::GLOWING {
             self.entity.set_glowing(false).await;
         }
