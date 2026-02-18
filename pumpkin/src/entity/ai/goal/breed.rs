@@ -14,6 +14,7 @@ pub struct BreedGoal {
 }
 
 impl BreedGoal {
+    #[must_use]
     pub fn new(speed: f64) -> Box<Self> {
         Box::new(Self {
             speed,
@@ -37,7 +38,7 @@ impl BreedGoal {
         let nearby = world.get_nearby_entities(pos, 8.0);
         let mut closest: Option<(f64, Arc<dyn EntityBase>)> = None;
 
-        for (_, candidate) in &nearby {
+        for candidate in nearby.values() {
             let c_entity = candidate.get_entity();
             if c_entity.entity_uuid == my_uuid {
                 continue;
@@ -77,9 +78,9 @@ impl BreedGoal {
         let parent_pos = entity.pos.load();
         let mate_pos = mate.get_entity().pos.load();
         let baby_pos = Vector3::new(
-            (parent_pos.x + mate_pos.x) / 2.0,
+            f64::midpoint(parent_pos.x, mate_pos.x),
             parent_pos.y.max(mate_pos.y),
-            (parent_pos.z + mate_pos.z) / 2.0,
+            f64::midpoint(parent_pos.z, mate_pos.z),
         );
 
         let baby = from_type(entity.entity_type, baby_pos, &world, Uuid::new_v4()).await;
