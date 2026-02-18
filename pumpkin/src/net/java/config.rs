@@ -136,16 +136,17 @@ impl JavaClient {
                     }
                 };
 
-                if let Some(profile) = self.gameprofile.lock().await.clone() {
-                    if let Some(player) = server.get_player_by_uuid(profile.id) {
-                        let event = PlayerResourcePackStatusEvent::new(
-                            player,
-                            packet.uuid,
-                            resource_config.sha1.clone(),
-                            status.to_string(),
-                        );
-                        server.plugin_manager.fire(event).await;
-                    }
+                let profile = self.gameprofile.lock().await.clone();
+                if let Some(profile) = profile
+                    && let Some(player) = server.get_player_by_uuid(profile.id)
+                {
+                    let event = PlayerResourcePackStatusEvent::new(
+                        player,
+                        packet.uuid,
+                        resource_config.sha1.clone(),
+                        status.to_string(),
+                    );
+                    server.plugin_manager.fire(event).await;
                 }
             } else {
                 warn!(

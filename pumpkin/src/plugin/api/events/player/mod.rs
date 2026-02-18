@@ -12,7 +12,6 @@ pub mod player_login;
 pub mod player_move;
 pub mod player_resource_pack_status;
 pub mod player_respawn;
-pub mod player_swap_hand_items;
 pub mod player_teleport;
 
 use std::sync::Arc;

@@ -30,7 +30,10 @@ use crate::{
     net::{ClientPlatform, java::JavaClient},
     plugin::{
         block::block_break::BlockBreakEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent},
+        player::{
+            player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
+            player_respawn::PlayerRespawnEvent,
+        },
     },
     server::Server,
 };
@@ -2208,7 +2211,12 @@ impl World {
             player.inventory.clear().await;
         }
 
-        let _ = (is_bed_spawn, is_anchor_spawn, is_missing_respawn_block, respawn_reason);
+        let _ = (
+            is_bed_spawn,
+            is_anchor_spawn,
+            is_missing_respawn_block,
+            respawn_reason,
+        );
 
         // Set entity position BEFORE loading chunks, so chunks load at the right location
         // This mirrors the initial spawn flow where update_position is called before teleport
