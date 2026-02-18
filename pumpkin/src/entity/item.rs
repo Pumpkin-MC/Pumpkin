@@ -1,5 +1,7 @@
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
+use pumpkin_data::data_component_impl::DamageResistantImpl;
+use pumpkin_data::data_component_impl::DamageResistantType;
 use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -9,6 +11,7 @@ use pumpkin_util::math::atomic_f32::AtomicF32;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
+
 use std::sync::{
     Arc,
     atomic::{
@@ -42,6 +45,14 @@ impl ItemEntity {
             ))
             .await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
+
+        // Set fire immunity for certain items
+        if let Some(res) = item_stack.get_data_component::<DamageResistantImpl>()
+            && res.res_type == DamageResistantType::Fire
+        {
+            entity.fire_immune.store(true, Ordering::Relaxed);
+        }
+
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
@@ -61,6 +72,14 @@ impl ItemEntity {
     ) -> Self {
         entity.set_velocity(velocity).await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
+
+        // Set fire immunity for certain items
+        if let Some(res) = item_stack.get_data_component::<DamageResistantImpl>()
+            && res.res_type == DamageResistantType::Fire
+        {
+            entity.fire_immune.store(true, Ordering::Relaxed);
+        }
+
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
@@ -386,13 +405,21 @@ impl EntityBase for ItemEntity {
         &'a self,
         _caller: &'a dyn EntityBase,
         amount: f32,
-        _damage_type: DamageType,
+        damage_type: DamageType,
         _position: Option<Vector3<f64>>,
         _source: Option<&'a dyn EntityBase>,
         _cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            // TODO: invulnerability, e.g. ancient debris
+            // Check if entity is fire_immune
+            let is_fire_damage = damage_type == DamageType::IN_FIRE
+                || damage_type == DamageType::ON_FIRE
+                || damage_type == DamageType::LAVA;
+            if is_fire_damage && self.entity.fire_immune.load(Ordering::Relaxed) {
+                return false;
+            }
+
+            // Thread safe damage application
             loop {
                 let current = self.health.load(Relaxed);
                 let new = current - amount;
