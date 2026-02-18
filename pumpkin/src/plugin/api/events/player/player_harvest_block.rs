@@ -1,4 +1,4 @@
-use pumpkin_macros::{cancellable, Event};
+use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ pub struct PlayerHarvestBlockEvent {
 
 impl PlayerHarvestBlockEvent {
     /// Creates a new instance of `PlayerHarvestBlockEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         block_pos: BlockPos,
         block_key: String,

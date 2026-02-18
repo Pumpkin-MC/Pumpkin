@@ -1501,22 +1501,20 @@ impl JavaClient {
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
 
-                    if block_drop {
-                        if let Some(server) = world.server.upgrade() {
-                            let tool = player.inventory.held_item().lock().await.clone();
-                            let block_key = format!("minecraft:{}", block.name);
-                            let event = crate::plugin::player::player_harvest_block::PlayerHarvestBlockEvent::new(
-                                player.clone(),
-                                location,
-                                block_key,
-                                tool,
-                            );
-                            let event = server.plugin_manager.fire(event).await;
-                            if event.cancelled {
-                                world.set_block_breaking(entity, location, -1).await;
-                                self.update_sequence(player, player_action.sequence.0);
-                                return;
-                            }
+                    if block_drop && let Some(server) = world.server.upgrade() {
+                        let tool = player.inventory.held_item().lock().await.clone();
+                        let block_key = format!("minecraft:{}", block.name);
+                        let event = crate::plugin::player::player_harvest_block::PlayerHarvestBlockEvent::new(
+                            player.clone(),
+                            location,
+                            block_key,
+                            tool,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled {
+                            world.set_block_breaking(entity, location, -1).await;
+                            self.update_sequence(player, player_action.sequence.0);
+                            return;
                         }
                     }
 
