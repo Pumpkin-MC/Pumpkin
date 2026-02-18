@@ -1315,23 +1315,65 @@ impl JavaClient {
                         ActionType::Interact | ActionType::InteractAt => {
                             if event.target.get_entity().entity_type == &EntityType::ARMOR_STAND {
                                 let hand = interact.hand.and_then(|h| Hand::try_from(h.0).ok());
-                                let (slot, item_stack) = match hand {
+                                let (player_slot, item_stack) = match hand {
                                     Some(Hand::Left) => {
-                                        ("OFF_HAND", player.inventory.off_hand_item().await)
+                                        (EquipmentSlot::OFF_HAND, player.inventory.off_hand_item().await)
                                     }
-                                    _ => ("HAND", player.inventory.held_item()),
+                                    _ => (EquipmentSlot::MAIN_HAND, player.inventory.held_item()),
                                 };
-                                let item_key = {
+
+                                let (item_key, preferred_slot) = {
                                     let item_guard = item_stack.lock().await;
-                                    format!("minecraft:{}", item_guard.get_item().registry_key)
+                                    let item_key =
+                                        format!("minecraft:{}", item_guard.get_item().registry_key);
+                                    let preferred_slot = item_guard
+                                        .get_data_component::<EquippableImpl>()
+                                        .map(|equippable| equippable.slot.clone());
+                                    (item_key, preferred_slot)
                                 };
+
+                                let armor_stand_slot = preferred_slot.unwrap_or_else(|| {
+                                    let hit_y = interact
+                                        .target_position
+                                        .as_ref()
+                                        .map_or(0.0, |position| f64::from(position.y));
+                                    if hit_y >= 1.6 {
+                                        EquipmentSlot::HEAD
+                                    } else if hit_y >= 1.2 {
+                                        EquipmentSlot::CHEST
+                                    } else if hit_y >= 0.9 {
+                                        EquipmentSlot::LEGS
+                                    } else if hit_y >= 0.1 {
+                                        EquipmentSlot::FEET
+                                    } else {
+                                        EquipmentSlot::MAIN_HAND
+                                    }
+                                });
+
+                                let armor_stand_item_key =
+                                    if let Some(living_entity) = event.target.get_living_entity() {
+                                        let armor_slot_stack = {
+                                            let equipment =
+                                                living_entity.entity_equipment.lock().await;
+                                            equipment.get(&armor_stand_slot)
+                                        };
+                                        let armor_slot_item = armor_slot_stack.lock().await;
+                                        format!(
+                                            "minecraft:{}",
+                                            armor_slot_item.get_item().registry_key
+                                        )
+                                    } else {
+                                        "minecraft:air".to_string()
+                                    };
+
                                 let armor_uuid = event.target.get_entity().entity_uuid;
                                 let armor_event = PlayerArmorStandManipulateEvent::new(
                                     player.clone(),
                                     armor_uuid,
                                     item_key,
-                                    "minecraft:air".to_string(),
-                                    slot.to_string(),
+                                    armor_stand_item_key,
+                                    player_slot,
+                                    armor_stand_slot,
                                 );
                                 let armor_event = server.plugin_manager.fire(armor_event).await;
                                 if armor_event.cancelled {
