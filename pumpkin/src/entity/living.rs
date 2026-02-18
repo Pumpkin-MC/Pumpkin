@@ -319,20 +319,6 @@ impl LivingEntity {
         })
     }
 
-    /// Update or insert the base value for an attribute on this entity.
-    /// If the attribute doesn't exist locally yet, it will be inserted.
-    pub fn set_attribute_base(&self, attribute: &Attributes, new_base: f64) {
-        let mut map = self.attributes.write().unwrap();
-        if let Some(inst) = map.get_mut(&attribute.id) {
-            inst.base_value = new_base;
-            inst.dirty.store(true, Ordering::Relaxed);
-        } else {
-            let ai = AttributeInstance::new(new_base);
-            ai.dirty.store(true, Ordering::Relaxed);
-            map.insert(attribute.id, ai);
-        }
-    }
-
     /// Convenience helper to mutate an attribute instance. Automatically inserts
     /// a new instance populated from the registry base if needed.
     pub fn update_attribute<F: FnOnce(&mut AttributeInstance)>(
@@ -361,10 +347,30 @@ impl LivingEntity {
     }
 
     /// Returns the base attribute value for `attribute` for this entity's type.
-    /// This performs a fast registry lookup and does not touch per-entity modifiers.
     pub fn get_attribute_base(&self, attribute: &Attributes) -> f64 {
+        // Check the local base value first (could be modified)
+        let map = self.attributes.read().unwrap();
+        if let Some(instance) = map.get(&attribute.id) {
+            return instance.base_value;
+        }
+
+        // Fall back to registry base value if no local instance exists
         let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
         reg.get_base_value(self.entity.entity_type.id, attribute)
+    }
+
+    /// Update or insert the base value for an attribute on this entity.
+    /// If the attribute doesn't exist locally yet, it will be inserted.
+    pub fn set_attribute_base(&self, attribute: &Attributes, new_base: f64) {
+        let mut map = self.attributes.write().unwrap();
+        if let Some(inst) = map.get_mut(&attribute.id) {
+            inst.base_value = new_base;
+            inst.dirty.store(true, Ordering::Relaxed);
+        } else {
+            let ai = AttributeInstance::new(new_base);
+            ai.dirty.store(true, Ordering::Relaxed);
+            map.insert(attribute.id, ai);
+        }
     }
 
     pub async fn reset_effects_and_attributes(&self) {
