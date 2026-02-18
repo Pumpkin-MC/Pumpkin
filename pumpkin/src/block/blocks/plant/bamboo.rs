@@ -71,7 +71,9 @@ impl BlockBehaviour for BambooBlock {
         Box::pin(async move {
             let lock = args.item_stack.lock().await;
             if lock.get_item() == &Item::BONE_MEAL {
-                bone_meal(Arc::clone(args.world), args.position, args.player.clone()).await;
+                if let Some(player) = args.world.get_player_by_uuid(args.player.gameprofile.id) {
+                    bone_meal(Arc::clone(args.world), args.position, player).await;
+                }
                 return BlockActionResult::Success;
             }
             BlockActionResult::Pass
@@ -248,7 +250,11 @@ async fn count_bamboo_above(world: Arc<World>, pos: &BlockPos) -> usize {
     bamboo_count
 }
 
-async fn bone_meal(world: Arc<World>, position: &BlockPos, player: Arc<crate::entity::player::Player>) {
+async fn bone_meal(
+    world: Arc<World>,
+    position: &BlockPos,
+    player: Arc<crate::entity::player::Player>,
+) {
     let mut bamboo_above = count_bamboo_above(Arc::clone(&world), position).await;
     let bamboo_below = count_bamboo_below(Arc::clone(&world), position).await;
     let mut new_height = bamboo_above + bamboo_below + 1;
@@ -272,40 +278,37 @@ async fn bone_meal(world: Arc<World>, position: &BlockPos, player: Arc<crate::en
             temp_above += 1;
         }
     }
-    if !potential.is_empty() {
-        if let Some(server) = world.server.upgrade() {
-            let block = world.get_block(position).await;
-            let event = crate::plugin::block::block_fertilize::BlockFertilizeEvent::new(
-                player,
-                block,
-                *position,
-                potential,
-            );
-            let event = server.plugin_manager.fire(event).await;
-            if event.cancelled || event.blocks.is_empty() {
-                return;
-            }
-            let allowed: std::collections::HashSet<_> = event.blocks.into_iter().collect();
-            for _ in 0..l {
-                let next_pos = position.up_height(bamboo_above as i32);
-                let next_state = world.get_block_state(&next_pos).await;
-                if !next_state.is_air() || new_height >= 16 {
-                    return;
-                }
-                let next_props = BambooLikeProperties::from_state_id(next_state.id, &Block::BAMBOO);
-
-                if next_props.stage == Integer0To1::L1 {
-                    return;
-                }
-                if !allowed.contains(&next_pos) {
-                    return;
-                }
-                update_leaves_and_grow(Arc::clone(&world), position).await;
-                new_height += 1;
-                bamboo_above += 1;
-            }
+    if !potential.is_empty()
+        && let Some(server) = world.server.upgrade()
+    {
+        let block = world.get_block(position).await;
+        let event = crate::plugin::block::block_fertilize::BlockFertilizeEvent::new(
+            player, block, *position, potential,
+        );
+        let event = server.plugin_manager.fire(event).await;
+        if event.cancelled || event.blocks.is_empty() {
             return;
         }
+        let allowed: std::collections::HashSet<_> = event.blocks.into_iter().collect();
+        for _ in 0..l {
+            let next_pos = position.up_height(bamboo_above as i32);
+            let next_state = world.get_block_state(&next_pos).await;
+            if !next_state.is_air() || new_height >= 16 {
+                return;
+            }
+            let next_props = BambooLikeProperties::from_state_id(next_state.id, &Block::BAMBOO);
+
+            if next_props.stage == Integer0To1::L1 {
+                return;
+            }
+            if !allowed.contains(&next_pos) {
+                return;
+            }
+            update_leaves_and_grow(Arc::clone(&world), position).await;
+            new_height += 1;
+            bamboo_above += 1;
+        }
+        return;
     }
     for _ in 0..l {
         let next_pos = position.up_height(bamboo_above as i32);
