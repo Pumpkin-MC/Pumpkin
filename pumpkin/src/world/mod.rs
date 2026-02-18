@@ -3663,7 +3663,7 @@ impl pumpkin_world::world::SimpleWorld for World {
     }
 
     fn get_level(&self) -> WorldFuture<'_, &Arc<Level>> {
-        Box::pin(async move {&self.level})
+        Box::pin(async move { &self.level })
     }
 
     fn play_sound<'a>(
