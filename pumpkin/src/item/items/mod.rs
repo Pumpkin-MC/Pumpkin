@@ -1,5 +1,6 @@
 pub mod armor_stand;
 pub mod axe;
+pub mod boat;
 pub mod bucket;
 pub mod dye;
 pub mod egg;
@@ -22,6 +23,7 @@ pub mod trident;
 pub mod wind_charge;
 
 use crate::item::items::armor_stand::ArmorStandItem;
+use crate::item::items::boat::BoatItem;
 use crate::item::items::end_crystal::EndCrystalItem;
 use crate::item::items::firework_rocket::FireworkRocketItem;
 use crate::item::items::minecart::MinecartItem;
@@ -76,6 +78,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(GlowingInkSacItem);
     manager.register(ArmorStandItem);
     manager.register(WindChargeItem);
+    manager.register(BoatItem);
 
     Arc::new(manager)
 }
