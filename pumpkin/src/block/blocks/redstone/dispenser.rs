@@ -166,20 +166,17 @@ impl BlockBehaviour for DispenserBlock {
                     .as_any()
                     .downcast_ref::<DispenserBlockEntity>()
                     .unwrap();
-                
+
                 if let Some(mut item) = dispenser.get_random_slot().await {
                     let props = DispenserLikeProperties::from_state_id(
                         args.world.get_block_state(args.position).await.id,
                         args.block,
                     );
-                    
-                    let success = Self::dispense_item(
-                        args.world,
-                        args.position,
-                        &mut item,
-                        props.facing,
-                    ).await;
-                    
+
+                    let success =
+                        Self::dispense_item(args.world, args.position, &mut item, props.facing)
+                            .await;
+
                     if success {
                         args.world
                             .sync_world_event(WorldEvent::DispenserDispenses, *args.position, 0)
@@ -214,13 +211,11 @@ impl DispenserBlock {
         facing: Facing,
     ) -> bool {
         let item_id = item.item.id;
-        
+
         // Check for special dispenser behaviors
         match item_id {
             // TNT
-            id if id == Item::TNT.id => {
-                Self::dispense_tnt(world, position, item, facing).await
-            }
+            id if id == Item::TNT.id => Self::dispense_tnt(world, position, item, facing).await,
             // Fire Charge
             id if id == Item::FIRE_CHARGE.id => {
                 Self::dispense_fire_charge(world, position, item, facing).await
@@ -235,30 +230,41 @@ impl DispenserBlock {
             }
             // Water Bucket
             id if id == Item::WATER_BUCKET.id => {
-                Self::dispense_bucket(world, position, item, facing, &Block::WATER, &Item::BUCKET).await
+                Self::dispense_bucket(world, position, item, facing, &Block::WATER, &Item::BUCKET)
+                    .await
             }
             // Lava Bucket
             id if id == Item::LAVA_BUCKET.id => {
-                Self::dispense_bucket(world, position, item, facing, &Block::LAVA, &Item::BUCKET).await
+                Self::dispense_bucket(world, position, item, facing, &Block::LAVA, &Item::BUCKET)
+                    .await
             }
             // Powder Snow Bucket
             id if id == Item::POWDER_SNOW_BUCKET.id => {
-                Self::dispense_bucket(world, position, item, facing, &Block::POWDER_SNOW, &Item::BUCKET).await
+                Self::dispense_bucket(
+                    world,
+                    position,
+                    item,
+                    facing,
+                    &Block::POWDER_SNOW,
+                    &Item::BUCKET,
+                )
+                .await
             }
             // Snowball
             id if id == Item::SNOWBALL.id => {
                 Self::dispense_snowball(world, position, item, facing).await
             }
             // Egg
-            id if id == Item::EGG.id => {
-                Self::dispense_egg(world, position, item, facing).await
-            }
+            id if id == Item::EGG.id => Self::dispense_egg(world, position, item, facing).await,
             // Boats - all variants
             id if Self::is_boat_item(id) => {
                 Self::dispense_boat(world, position, item, facing).await
             }
             // Arrows - TODO: implement arrow entity and shooting
-            id if id == Item::ARROW.id || id == Item::SPECTRAL_ARROW.id || id == Item::TIPPED_ARROW.id => {
+            id if id == Item::ARROW.id
+                || id == Item::SPECTRAL_ARROW.id
+                || id == Item::TIPPED_ARROW.id =>
+            {
                 // For now, just drop like dropper until arrow entity is implemented
                 Self::dispense_as_dropper(world, position, item, facing).await
             }
@@ -267,12 +273,10 @@ impl DispenserBlock {
                 Self::dispense_as_dropper(world, position, item, facing).await
             }
             // Default: drop item like dropper
-            _ => {
-                Self::dispense_as_dropper(world, position, item, facing).await
-            }
+            _ => Self::dispense_as_dropper(world, position, item, facing).await,
         }
     }
-    
+
     const fn is_boat_item(item_id: u16) -> bool {
         matches!(item_id,
             id if id == Item::OAK_BOAT.id ||
@@ -297,7 +301,7 @@ impl DispenserBlock {
             id == Item::BAMBOO_CHEST_RAFT.id
         )
     }
-    
+
     fn get_boat_entity_type(item_id: u16) -> &'static EntityType {
         match item_id {
             id if id == Item::OAK_BOAT.id => &EntityType::OAK_BOAT,
@@ -323,7 +327,7 @@ impl DispenserBlock {
             _ => unreachable!(),
         }
     }
-    
+
     async fn dispense_tnt(
         world: &Arc<crate::world::World>,
         position: &pumpkin_util::math::position::BlockPos,
@@ -332,15 +336,15 @@ impl DispenserBlock {
     ) -> bool {
         let facing_vec = to_normal(facing);
         let spawn_pos = position.to_f64() + facing_vec * 0.5 + Vector3::new(0.5, 0.0, 0.5);
-        
+
         let entity = Entity::new(world.clone(), spawn_pos, &EntityType::TNT);
         let tnt = Arc::new(TNTEntity::new(entity, TNT_POWER, TNT_FUSE));
-        
+
         world.spawn_entity(tnt).await;
         item.decrement(1);
         true
     }
-    
+
     async fn dispense_fire_charge(
         world: &Arc<crate::world::World>,
         position: &pumpkin_util::math::position::BlockPos,
@@ -351,16 +355,22 @@ impl DispenserBlock {
         // For now, just place fire
         let target_pos = position.offset(facing.to_block_direction().to_offset());
         let target_state = world.get_block_state(&target_pos).await;
-        
+
         if target_state.is_air() {
-            world.set_block_state(&target_pos, Block::FIRE.default_state.id, BlockFlags::NOTIFY_ALL).await;
+            world
+                .set_block_state(
+                    &target_pos,
+                    Block::FIRE.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
             item.decrement(1);
             return true;
         }
-        
+
         false
     }
-    
+
     async fn dispense_flint_and_steel(
         world: &Arc<crate::world::World>,
         position: &pumpkin_util::math::position::BlockPos,
@@ -369,11 +379,17 @@ impl DispenserBlock {
     ) -> bool {
         let target_pos = position.offset(facing.to_block_direction().to_offset());
         let target_state = world.get_block_state(&target_pos).await;
-        
+
         // Try to ignite fire
         if target_state.is_air() {
-            world.set_block_state(&target_pos, Block::FIRE.default_state.id, BlockFlags::NOTIFY_ALL).await;
-            
+            world
+                .set_block_state(
+                    &target_pos,
+                    Block::FIRE.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
+
             // Apply durability damage
             if item.damage_item(1) {
                 // Item broke
@@ -381,12 +397,12 @@ impl DispenserBlock {
             }
             return true;
         }
-        
+
         // TODO: Light campfire, candles, TNT, nether portal, etc.
-        
+
         false
     }
-    
+
     fn dispense_bone_meal(
         _world: &Arc<crate::world::World>,
         _position: &pumpkin_util::math::position::BlockPos,
@@ -398,7 +414,7 @@ impl DispenserBlock {
         item.decrement(1);
         true
     }
-    
+
     async fn dispense_bucket(
         world: &Arc<crate::world::World>,
         position: &pumpkin_util::math::position::BlockPos,
@@ -409,20 +425,26 @@ impl DispenserBlock {
     ) -> bool {
         let target_pos = position.offset(facing.to_block_direction().to_offset());
         let target_state = world.get_block_state(&target_pos).await;
-        
+
         // Try to place fluid
         if target_state.is_air() || target_state.replaceable() {
-            world.set_block_state(&target_pos, fluid_block.default_state.id, BlockFlags::NOTIFY_ALL).await;
-            
+            world
+                .set_block_state(
+                    &target_pos,
+                    fluid_block.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
+
             // Replace with empty bucket
             item.item = empty_bucket;
-            
+
             return true;
         }
-        
+
         false
     }
-    
+
     async fn dispense_snowball(
         world: &Arc<crate::world::World>,
         position: &pumpkin_util::math::position::BlockPos,
@@ -431,13 +453,13 @@ impl DispenserBlock {
     ) -> bool {
         let facing_vec = to_normal(facing);
         let spawn_pos = position.to_f64() + facing_vec * 1.2 + Vector3::new(0.5, 0.5, 0.5);
-        
+
         let entity = Entity::new(world.clone(), spawn_pos, &EntityType::SNOWBALL);
         let snowball = Arc::new(SnowballEntity::new(entity).await);
-        
+
         // Calculate pitch and yaw from facing
         let (pitch, yaw) = Self::facing_to_rotation(facing);
-        
+
         // Set velocity
         snowball.thrown.set_velocity_from(
             &snowball.thrown.entity,
@@ -447,12 +469,12 @@ impl DispenserBlock {
             PROJECTILE_POWER,
             PROJECTILE_UNCERTAINTY,
         );
-        
+
         world.spawn_entity(snowball).await;
         item.decrement(1);
         true
     }
-    
+
     async fn dispense_egg(
         world: &Arc<crate::world::World>,
         position: &pumpkin_util::math::position::BlockPos,
@@ -461,13 +483,13 @@ impl DispenserBlock {
     ) -> bool {
         let facing_vec = to_normal(facing);
         let spawn_pos = position.to_f64() + facing_vec * 1.2 + Vector3::new(0.5, 0.5, 0.5);
-        
+
         let entity = Entity::new(world.clone(), spawn_pos, &EntityType::EGG);
         let egg = Arc::new(EggEntity::new(entity).await);
-        
+
         // Calculate pitch and yaw from facing
         let (pitch, yaw) = Self::facing_to_rotation(facing);
-        
+
         // Set velocity
         egg.thrown.set_velocity_from(
             &egg.thrown.entity,
@@ -477,12 +499,12 @@ impl DispenserBlock {
             PROJECTILE_POWER,
             PROJECTILE_UNCERTAINTY,
         );
-        
+
         world.spawn_entity(egg).await;
         item.decrement(1);
         true
     }
-    
+
     const fn facing_to_rotation(facing: Facing) -> (f32, f32) {
         let (pitch, yaw) = match facing {
             Facing::North => (0.0, 180.0),
@@ -494,7 +516,7 @@ impl DispenserBlock {
         };
         (pitch, yaw)
     }
-    
+
     async fn dispense_boat(
         world: &Arc<crate::world::World>,
         position: &pumpkin_util::math::position::BlockPos,
@@ -503,16 +525,16 @@ impl DispenserBlock {
     ) -> bool {
         let facing_vec = to_normal(facing);
         let spawn_pos = position.to_f64() + facing_vec * 1.5 + Vector3::new(0.5, 0.0, 0.5);
-        
+
         let entity_type = Self::get_boat_entity_type(item.item.id);
         let entity = Entity::new(world.clone(), spawn_pos, entity_type);
         let boat = Arc::new(BoatEntity::new(entity));
-        
+
         world.spawn_entity(boat).await;
         item.decrement(1);
         true
     }
-    
+
     async fn dispense_as_dropper(
         world: &Arc<crate::world::World>,
         position: &pumpkin_util::math::position::BlockPos,
@@ -526,7 +548,7 @@ impl DispenserBlock {
             Facing::Up | Facing::Down => 0.125,
             _ => 0.15625,
         };
-        
+
         let entity = Entity::new(world.clone(), spawn_pos, &EntityType::ITEM);
         let rd = rng().random::<f64>().mul_add(0.1, 0.2);
         let velocity = Vector3::new(
@@ -534,11 +556,10 @@ impl DispenserBlock {
             triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
             triangle(&mut rng(), facing_vec.z * rd, 0.017_227_5 * 6.),
         );
-        let item_entity = Arc::new(
-            ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await,
-        );
+        let item_entity =
+            Arc::new(ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await);
         world.spawn_entity(item_entity).await;
-        
+
         true
     }
 }
