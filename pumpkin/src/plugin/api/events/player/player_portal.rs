@@ -1,4 +1,4 @@
-use pumpkin_macros::{cancellable, Event};
+use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
 
@@ -41,7 +41,7 @@ pub struct PlayerPortalEvent {
 impl PlayerPortalEvent {
     /// Creates a new instance of `PlayerPortalEvent`.
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         from_position: Vector3<f64>,
         from_world_uuid: uuid::Uuid,

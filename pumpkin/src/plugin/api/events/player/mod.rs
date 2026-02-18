@@ -10,8 +10,6 @@ pub mod player_join;
 pub mod player_leave;
 pub mod player_login;
 pub mod player_move;
-pub mod player_resource_pack_status;
-pub mod player_respawn;
 pub mod player_pickup_arrow;
 pub mod player_portal;
 pub mod player_recipe_discover;
@@ -19,9 +17,8 @@ pub mod player_riptide;
 pub mod player_shear_entity;
 pub mod player_spawn_location;
 pub mod player_statistic_increment;
-pub mod player_velocity;
-pub mod player_swap_hand_items;
 pub mod player_teleport;
+pub mod player_velocity;
 
 use std::sync::Arc;
 

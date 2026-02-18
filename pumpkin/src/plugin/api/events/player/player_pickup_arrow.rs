@@ -1,4 +1,4 @@
-use pumpkin_macros::{cancellable, Event};
+use pumpkin_macros::{Event, cancellable};
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 
@@ -28,7 +28,7 @@ pub struct PlayerPickupArrowEvent {
 
 impl PlayerPickupArrowEvent {
     /// Creates a new instance of `PlayerPickupArrowEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         arrow_uuid: uuid::Uuid,
         item_uuid: uuid::Uuid,

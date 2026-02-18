@@ -1,12 +1,11 @@
 use crate::{
-    entity::EntityBaseFuture,
-    plugin::player::player_pickup_arrow::PlayerPickupArrowEvent,
+    entity::EntityBaseFuture, plugin::player::player_pickup_arrow::PlayerPickupArrowEvent,
     server::Server,
 };
 use core::f32;
-use pumpkin_data::{
-    Item, damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData,
-};
+use pumpkin_data::data_component_impl::{DamageResistantImpl, DamageResistantType};
+use pumpkin_data::item::Item;
+use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{CTakeItemEntity, Metadata},
@@ -15,6 +14,8 @@ use pumpkin_util::math::atomic_f32::AtomicF32;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
+
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 use std::sync::{
     Arc,
     atomic::{
@@ -23,7 +24,6 @@ use std::sync::{
     },
 };
 use tokio::sync::Mutex;
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
     entity: Entity,
@@ -47,6 +47,14 @@ impl ItemEntity {
             ))
             .await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
+
+        // Set fire immunity for certain items
+        if let Some(res) = item_stack.get_data_component::<DamageResistantImpl>()
+            && res.res_type == DamageResistantType::Fire
+        {
+            entity.fire_immune.store(true, Ordering::Relaxed);
+        }
+
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
@@ -66,6 +74,14 @@ impl ItemEntity {
     ) -> Self {
         entity.set_velocity(velocity).await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
+
+        // Set fire immunity for certain items
+        if let Some(res) = item_stack.get_data_component::<DamageResistantImpl>()
+            && res.res_type == DamageResistantType::Fire
+        {
+            entity.fire_immune.store(true, Ordering::Relaxed);
+        }
+
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
@@ -391,13 +407,21 @@ impl EntityBase for ItemEntity {
         &'a self,
         _caller: &'a dyn EntityBase,
         amount: f32,
-        _damage_type: DamageType,
+        damage_type: DamageType,
         _position: Option<Vector3<f64>>,
         _source: Option<&'a dyn EntityBase>,
         _cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            // TODO: invulnerability, e.g. ancient debris
+            // Check if entity is fire_immune
+            let is_fire_damage = damage_type == DamageType::IN_FIRE
+                || damage_type == DamageType::ON_FIRE
+                || damage_type == DamageType::LAVA;
+            if is_fire_damage && self.entity.fire_immune.load(Ordering::Relaxed) {
+                return false;
+            }
+
+            // Thread safe damage application
             loop {
                 let current = self.health.load(Relaxed);
                 let new = current - amount;
@@ -428,22 +452,21 @@ impl EntityBase for ItemEntity {
                 (stack.clone(), stack.item.id, stack.item_count)
             };
 
-            if item_id == Item::ARROW.id
+            if (item_id == Item::ARROW.id
                 || item_id == Item::SPECTRAL_ARROW.id
-                || item_id == Item::TIPPED_ARROW.id
+                || item_id == Item::TIPPED_ARROW.id)
+                && let Some(server) = player.world().server.upgrade()
             {
-                if let Some(server) = player.world().server.upgrade() {
-                    let event = PlayerPickupArrowEvent::new(
-                        player.clone(),
-                        self.entity.entity_uuid,
-                        self.entity.entity_uuid,
-                        item_stack_snapshot.clone(),
-                        item_count as i32,
-                    );
-                    let event = server.plugin_manager.fire(event).await;
-                    if event.cancelled {
-                        return;
-                    }
+                let event = PlayerPickupArrowEvent::new(
+                    player.clone(),
+                    self.entity.entity_uuid,
+                    self.entity.entity_uuid,
+                    item_stack_snapshot.clone(),
+                    item_count as i32,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
                 }
             }
 

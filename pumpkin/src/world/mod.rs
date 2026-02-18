@@ -32,7 +32,7 @@ use crate::{
         block::block_break::BlockBreakEvent,
         player::{
             player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
-            player_respawn::PlayerRespawnEvent, player_spawn_location::PlayerSpawnLocationEvent,
+            player_spawn_location::PlayerSpawnLocationEvent,
         },
     },
     server::Server,
@@ -1173,6 +1173,32 @@ impl World {
         true
     }
 
+    /// Vanilla's `BlockView.getDismountHeight()`.
+    /// Returns the Y surface height for dismounting at the given block position,
+    /// or `f64::NEG_INFINITY` if no valid surface exists.
+    pub async fn get_dismount_height(&self, pos: &BlockPos) -> f64 {
+        let state = self.get_block_state(pos).await;
+        let max_y = state
+            .get_block_collision_shapes()
+            .map(|s| s.max.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        if max_y != f64::NEG_INFINITY {
+            return max_y;
+        }
+        // No collision at pos — check block below
+        let below = BlockPos(Vector3::new(pos.0.x, pos.0.y - 1, pos.0.z));
+        let below_state = self.get_block_state(&below).await;
+        let below_max_y = below_state
+            .get_block_collision_shapes()
+            .map(|s| s.max.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        if below_max_y >= 1.0 {
+            below_max_y - 1.0
+        } else {
+            f64::NEG_INFINITY
+        }
+    }
+
     pub async fn tick_spawning_chunk(
         self: &Arc<Self>,
         chunk_pos: Vector2<i32>,
@@ -1613,7 +1639,7 @@ impl World {
             }
         }
 
-        let _velocity = player.living_entity.entity.velocity.load();
+        let velocity = player.living_entity.entity.velocity.load();
 
         debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
