@@ -9,7 +9,7 @@ use pumpkin_datafixerupper::serialization::map_like::MapLike;
 use pumpkin_datafixerupper::serialization::struct_builder::{
     ResultStructBuilder, StringStructBuilder, StructBuilder,
 };
-use pumpkin_datafixerupper::{impl_string_struct_builder, impl_struct_builder};
+use pumpkin_datafixerupper::{impl_get_list, impl_string_struct_builder, impl_struct_builder};
 use std::iter::Map;
 use std::vec::IntoIter;
 
@@ -170,7 +170,7 @@ impl DynamicOps for NbtOps {
         if let NbtTag::ByteArray(b) = input {
             DataResult::success(b)
         } else {
-            DynamicOps::get_byte_buffer(self, input)
+            impl_get_list!(box self, input, "bytes")
         }
     }
 
@@ -182,7 +182,7 @@ impl DynamicOps for NbtOps {
         if let NbtTag::IntArray(i) = input {
             DataResult::success(i)
         } else {
-            DynamicOps::get_int_list(self, input)
+            impl_get_list!(self, input, "ints")
         }
     }
 
@@ -194,7 +194,7 @@ impl DynamicOps for NbtOps {
         if let NbtTag::LongArray(i) = input {
             DataResult::success(i)
         } else {
-            DynamicOps::get_long_list(self, input)
+            impl_get_list!(self, input, "longs")
         }
     }
 
@@ -773,8 +773,167 @@ impl InnerListCollector for InnerInitialListCollector {
 
 #[cfg(test)]
 mod test {
-    use crate::nbt_ops::ListCollector;
+    use crate::compound::NbtCompound;
+    use crate::nbt_ops::{INSTANCE, ListCollector};
     use crate::tag::NbtTag;
+    use pumpkin_datafixerupper::serialization::codec::{
+        BOOL_CODEC, BYTE_BUFFER_CODEC, BYTE_CODEC, ComapFlatMapCodec, DOUBLE_CODEC,
+        DefaultedFieldCodec, FieldMapCodec, INT_CODEC, INT_STREAM_CODEC, LONG_CODEC,
+        LONG_STREAM_CODEC, SHORT_CODEC, STRING_CODEC, UBYTE_CODEC, UINT_CODEC, UbyteCodec,
+        UintCodec, comap_flat_map, field, optional_field_with_default, unbounded_list,
+        unbounded_map, validate,
+    };
+    use pumpkin_datafixerupper::serialization::codecs::list::ListCodec;
+    use pumpkin_datafixerupper::serialization::codecs::primitive::StringCodec;
+    use pumpkin_datafixerupper::serialization::codecs::unbounded_map::UnboundedMapCodec;
+    use pumpkin_datafixerupper::serialization::codecs::validated::ValidatedCodec;
+    use pumpkin_datafixerupper::serialization::coders::{Decoder, Encoder};
+    use pumpkin_datafixerupper::serialization::data_result::DataResult;
+    use pumpkin_datafixerupper::serialization::map_codec::for_getter;
+    use pumpkin_datafixerupper::serialization::struct_codecs::{StructCodec2, StructCodec3};
+    use pumpkin_datafixerupper::struct_codec;
+    use std::collections::HashMap;
+
+    /// Convenience function to easily create an [`NbtTag::Compound`].
+    macro_rules! nbt_compound_tag {
+        ( { $($key:literal : $tag:expr),+ $(,)* } ) => {
+            {
+                let mut compound = NbtCompound::new();
+                $( compound.put($key, $tag); )+
+                NbtTag::Compound(compound)
+            }
+        };
+        // For empty compounds
+        ( {} ) => {
+            NbtTag::Compound(NbtCompound::new())
+        };
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn primitives() {
+        // Simple types
+        assert_eq!(
+            INT_CODEC
+                .encode_start(&45, &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::Int(45)
+        );
+        assert_eq!(
+            BOOL_CODEC
+                .encode_start(&true, &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::Byte(1)
+        );
+        assert_eq!(
+            BYTE_CODEC
+                .encode_start(&-89, &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::Byte(-89)
+        );
+        assert_eq!(
+            DOUBLE_CODEC
+                .encode_start(&1.0, &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::Double(1.0)
+        );
+
+        assert_eq!(
+            STRING_CODEC
+                .encode_start(&"Sample Text".to_string(), &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::String("Sample Text".to_string())
+        );
+
+        assert_eq!(
+            INT_CODEC
+                .parse(NbtTag::Int(50), &INSTANCE)
+                .expect("Decoding should succeed"),
+            50
+        );
+        assert_eq!(
+            SHORT_CODEC
+                .parse(NbtTag::Short(-1235), &INSTANCE)
+                .expect("Decoding should succeed"),
+            -1235
+        );
+        assert_eq!(
+            LONG_CODEC
+                .parse(NbtTag::Long(53234), &INSTANCE)
+                .expect("Decoding should succeed"),
+            53234
+        );
+
+        // Packed array types
+        let byte_vec = vec![
+            1u8, 45u8, 100u8, 170u8, 203u8, 98u8, 245u8, 255u8, 0u8, 13u8,
+        ];
+
+        assert_eq!(
+            BYTE_BUFFER_CODEC
+                .encode_start(&Box::from(&byte_vec[0..3]), &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::ByteArray(Box::from(vec![1, 45, 100]))
+        );
+        assert_eq!(
+            BYTE_BUFFER_CODEC
+                .encode_start(&Box::from(&byte_vec[2..7]), &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::ByteArray(Box::from(vec![100, 170, 203, 98, 245]))
+        );
+
+        assert_eq!(
+            INT_STREAM_CODEC
+                .encode_start(&vec![-100, 1234, 23948], &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::IntArray(vec![-100, 1234, 23948])
+        );
+        assert_eq!(
+            INT_STREAM_CODEC
+                .encode_start(&vec![1, 120938, 1231909999], &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::IntArray(vec![1, 120938, 1231909999])
+        );
+
+        assert_eq!(
+            LONG_STREAM_CODEC
+                .encode_start(&vec![10_000_000_000, -99_999_999_999], &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::LongArray(vec![10_000_000_000, -99_999_999_999])
+        );
+        assert_eq!(
+            LONG_STREAM_CODEC
+                .encode_start(&vec![123_456_789_012_345, 66], &INSTANCE)
+                .expect("Encoding should succeed"),
+            NbtTag::LongArray(vec![123_456_789_012_345, 66])
+        );
+
+        assert_eq!(
+            BYTE_BUFFER_CODEC
+                .parse(NbtTag::ByteArray(vec![1, 4].into_boxed_slice()), &INSTANCE)
+                .expect("Decoding should succeed"),
+            vec![1, 4].into_boxed_slice()
+        );
+        // All `get_...` packed array functions allow any arbitrary number array.
+        assert_eq!(
+            BYTE_BUFFER_CODEC
+                .parse(NbtTag::IntArray(vec![120]), &INSTANCE)
+                .expect("Decoding should succeed"),
+            vec![120].into_boxed_slice()
+        );
+        assert_eq!(
+            INT_STREAM_CODEC
+                .parse(NbtTag::LongArray(vec![1, 2, 3]), &INSTANCE)
+                .expect("Decoding should succeed"),
+            vec![1, 2, 3]
+        );
+        assert_eq!(
+            LONG_STREAM_CODEC
+                .parse(NbtTag::IntArray(vec![0, 0]), &INSTANCE)
+                .expect("Decoding should succeed"),
+            vec![0, 0]
+        );
+    }
 
     #[test]
     fn list_collecting() {
@@ -846,5 +1005,467 @@ mod test {
         } else {
             panic!("Expected an NBT list, got {result:?}");
         }
+    }
+
+    // Specific codec tests
+
+    #[test]
+    fn employee() {
+        /// A struct to store a single employee.
+        /// The `name` and `department` of the employee should not be empty.
+        #[derive(Debug, PartialEq)]
+        struct Employee {
+            name: String,
+            department: String,
+            salary: u32,
+        }
+
+        pub type NonEmptyStringCodec = ValidatedCodec<StringCodec>;
+        /// Convenience codec for only encoding/decoding non-empty strings.
+        pub static NON_EMPTY_STRING_CODEC: NonEmptyStringCodec = validate(&STRING_CODEC, |s| {
+            if s.is_empty() {
+                Err("String should not be empty".to_string())
+            } else {
+                Ok(())
+            }
+        });
+
+        pub type EmployeeCodec = StructCodec3<
+            Employee,
+            FieldMapCodec<NonEmptyStringCodec>,
+            FieldMapCodec<NonEmptyStringCodec>,
+            FieldMapCodec<UintCodec>,
+        >;
+        pub static EMPLOYEE_CODEC: EmployeeCodec = struct_codec!(
+            for_getter(field(&NON_EMPTY_STRING_CODEC, "name"), |s: &Employee| &s
+                .name),
+            for_getter(
+                field(&NON_EMPTY_STRING_CODEC, "department"),
+                |s: &Employee| &s.department
+            ),
+            for_getter(field(&UINT_CODEC, "salary"), |s: &Employee| &s.salary),
+            |name, department, salary| Employee {
+                name,
+                department,
+                salary
+            }
+        );
+
+        // Encoding
+
+        assert_eq!(
+            EMPLOYEE_CODEC
+                .encode_start(
+                    &Employee {
+                        name: "John Doe".to_string(),
+                        department: "Marketing".to_string(),
+                        salary: 82_000
+                    },
+                    &INSTANCE
+                )
+                .expect("Encoding should succeed"),
+            nbt_compound_tag!({
+                "name": NbtTag::String("John Doe".to_string()),
+                "department": NbtTag::String("Marketing".to_string()),
+                "salary": NbtTag::Int(82_000)
+            })
+        );
+
+        assert_eq!(
+            EMPLOYEE_CODEC
+                .encode_start(
+                    &Employee {
+                        name: "Linna Hall".to_string(),
+                        // Department is empty.
+                        department: String::new(),
+                        salary: 90_000
+                    },
+                    &INSTANCE
+                )
+                .get_message()
+                .expect("Encoding should fail"),
+            "String should not be empty"
+        );
+
+        // Decoding
+
+        assert_eq!(
+            EMPLOYEE_CODEC
+                .parse(
+                    nbt_compound_tag!({
+                        "name": NbtTag::String("Kelly Peak".to_string()),
+                        "department": NbtTag::String("Sales".to_string()),
+                        "salary": NbtTag::Int(72_000)
+                    }),
+                    &INSTANCE
+                )
+                .expect("Decoding should succeed"),
+            Employee {
+                name: "Kelly Peak".to_string(),
+                department: "Sales".to_string(),
+                salary: 72_000
+            }
+        );
+
+        assert_eq!(
+            EMPLOYEE_CODEC
+                .parse(
+                    nbt_compound_tag!({
+                        "name": NbtTag::String(String::new()),
+                        "department": NbtTag::String("Information Technology".to_string()),
+                        "salary": NbtTag::Int(100_000)
+                    }),
+                    &INSTANCE
+                )
+                .get_message()
+                .expect("Decoding should fail"),
+            "String should not be empty"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn text() {
+        /// Alignments of a line of text.
+        #[derive(Debug, PartialEq, Clone)]
+        enum TextAlignment {
+            Left,
+            Center,
+            Right,
+        }
+
+        impl From<&TextAlignment> for String {
+            fn from(value: &TextAlignment) -> Self {
+                match value {
+                    TextAlignment::Left => "left",
+                    TextAlignment::Center => "center",
+                    TextAlignment::Right => "right",
+                }
+                .to_string()
+            }
+        }
+
+        struct InvalidTextAlignmentError;
+
+        impl TryFrom<String> for TextAlignment {
+            type Error = InvalidTextAlignmentError;
+
+            fn try_from(value: String) -> Result<Self, Self::Error> {
+                match value.as_str() {
+                    "left" => Ok(Self::Left),
+                    "center" => Ok(Self::Center),
+                    "right" => Ok(Self::Right),
+
+                    _ => Err(InvalidTextAlignmentError),
+                }
+            }
+        }
+
+        pub type TextAlignmentCodec = ComapFlatMapCodec<TextAlignment, StringCodec>;
+
+        // The transformer codec:
+        // - always converts   `TextAlignment` -> `String`
+        // - but only converts `String` -> `TextAlignment` if the string is valid.
+        pub static TEXT_ALIGNMENT_CODEC: TextAlignmentCodec = comap_flat_map(
+            &STRING_CODEC,
+            |string| {
+                string.clone().try_into().map_or_else(
+                    |_| DataResult::error(format!("Invalid alignment: {string}")),
+                    DataResult::success,
+                )
+            },
+            |modifier: &TextAlignment| modifier.into(),
+        );
+
+        /// A single piece of text.
+        #[derive(Debug, PartialEq, Clone)]
+        struct Text {
+            content: String,
+            /// Optional field, defaults to `Left` alignment.
+            alignment: TextAlignment,
+        }
+
+        pub type TextCodec =
+            StructCodec2<Text, FieldMapCodec<StringCodec>, DefaultedFieldCodec<TextAlignmentCodec>>;
+        pub static TEXT_CODEC: TextCodec = struct_codec!(
+            for_getter(field(&STRING_CODEC, "content"), |t: &Text| &t.content),
+            for_getter(
+                optional_field_with_default(&TEXT_ALIGNMENT_CODEC, "alignment", || {
+                    TextAlignment::Left
+                }),
+                |t| &t.alignment
+            ),
+            |content, alignment| Text { content, alignment }
+        );
+
+        // Encoding
+
+        assert_eq!(
+            TEXT_CODEC
+                .encode_start(
+                    &Text {
+                        content: "Lorem ipsum".to_string(),
+                        alignment: TextAlignment::Left
+                    },
+                    &INSTANCE
+                )
+                .expect("Encoding should succeed"),
+            nbt_compound_tag!({
+                "content": NbtTag::String("Lorem ipsum".to_string()),
+                // Since "left" is the default, it will not be included.
+            })
+        );
+
+        assert_eq!(
+            TEXT_CODEC
+                .encode_start(
+                    &Text {
+                        content: "An apple a day keeps the doctor away".to_string(),
+                        alignment: TextAlignment::Center
+                    },
+                    &INSTANCE
+                )
+                .expect("Encoding should succeed"),
+            nbt_compound_tag!({
+                "content": NbtTag::String("An apple a day keeps the doctor away".to_string()),
+                "alignment": NbtTag::String("center".to_string())
+            })
+        );
+
+        // Decoding
+
+        assert_eq!(
+            TEXT_CODEC
+                .parse(
+                    nbt_compound_tag!({
+                        "content": NbtTag::String("Surprise Sample Text".to_string()),
+                        "alignment": NbtTag::String("right".to_string())
+                    }),
+                    &INSTANCE
+                )
+                .expect("Decoding should succeed"),
+            Text {
+                content: "Surprise Sample Text".to_string(),
+                alignment: TextAlignment::Right
+            }
+        );
+
+        assert_eq!(
+            TEXT_CODEC
+                .parse(
+                    nbt_compound_tag!({
+                        "content": NbtTag::String("Will the test succeed?".to_string()),
+                        // Alignment omitted; it will default to `Left`.
+                    }),
+                    &INSTANCE
+                )
+                .expect("Decoding should succeed"),
+            Text {
+                content: "Will the test succeed?".to_string(),
+                alignment: TextAlignment::Left
+            }
+        );
+
+        assert!(
+            TEXT_CODEC
+                .parse(
+                    nbt_compound_tag!({
+                        "content": NbtTag::String("Some random document".to_string()),
+                        // Unfortunately, we don't have *justify* in our possible alignments.
+                        "alignment": NbtTag::String("justify".to_string())
+                    }),
+                    &INSTANCE
+                )
+                .get_message()
+                .expect("Decoding should fail")
+                .starts_with("Invalid alignment")
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn dog_park() {
+        /// Represents an arbitrary dog.
+        #[derive(Debug, PartialEq, Clone)]
+        struct Dog {
+            breed: String,
+            age: u8,
+            // Optional, defaults to an empty `Vec`.
+            tricks: Vec<String>,
+        }
+
+        /// A dog park representation.
+        #[derive(Debug, PartialEq)]
+        struct DogPark {
+            name: String,
+            /// Each key of this map is the dog's name.
+            dogs: HashMap<String, Dog>,
+        }
+
+        pub type DogCodec = StructCodec3<
+            Dog,
+            FieldMapCodec<StringCodec>,
+            FieldMapCodec<UbyteCodec>,
+            DefaultedFieldCodec<ListCodec<StringCodec>>,
+        >;
+        pub static DOG_CODEC: DogCodec = struct_codec!(
+            for_getter(field(&STRING_CODEC, "breed"), |t: &Dog| &t.breed),
+            for_getter(field(&UBYTE_CODEC, "age"), |t: &Dog| &t.age),
+            for_getter(
+                optional_field_with_default(&unbounded_list(&STRING_CODEC), "tricks", Vec::new),
+                |t: &Dog| &t.tricks
+            ),
+            |breed, age, tricks| Dog { breed, age, tricks }
+        );
+
+        pub type DogParkCodec = StructCodec2<
+            DogPark,
+            FieldMapCodec<StringCodec>,
+            FieldMapCodec<UnboundedMapCodec<StringCodec, DogCodec>>,
+        >;
+        pub static DOG_PARK_CODEC: DogParkCodec = struct_codec!(
+            for_getter(field(&STRING_CODEC, "name"), |p: &DogPark| &p.name),
+            for_getter(
+                field(&unbounded_map(&STRING_CODEC, &DOG_CODEC), "dogs"),
+                |p| &p.dogs
+            ),
+            |name, dogs| DogPark { name, dogs }
+        );
+
+        // Encoding
+
+        let mut dogs = HashMap::new();
+        dogs.insert(
+            "Rodrick".to_string(),
+            Dog {
+                breed: "German Shepherd".to_string(),
+                age: 4,
+                tricks: vec!["spin".to_string()],
+            },
+        );
+        dogs.insert(
+            "Lucy".to_string(),
+            Dog {
+                breed: "Beagle".to_string(),
+                age: 6,
+                tricks: vec!["fetch".to_string(), "sit".to_string()],
+            },
+        );
+        dogs.insert(
+            "Dan".to_string(),
+            Dog {
+                breed: "Chihuahua".to_string(),
+                age: 3,
+                tricks: vec![],
+            },
+        );
+
+        let serialized_park = DOG_PARK_CODEC
+            .encode_start(
+                &DogPark {
+                    name: "Sunny Side Park".to_string(),
+                    dogs,
+                },
+                &INSTANCE,
+            )
+            .expect("Encoding should succeed");
+
+        let compound = serialized_park
+            .extract_compound()
+            .expect("Tag should be a compound");
+
+        assert_eq!(
+            compound
+                .clone()
+                .get_string("name")
+                .expect("Compound tag should have a 'name' key"),
+            "Sunny Side Park"
+        );
+
+        for (k, v) in compound
+            .get_compound("dogs")
+            .expect("Compound tag should have a 'dogs' key")
+            .clone()
+        {
+            match k.as_str() {
+                "Rodrick" => assert_eq!(
+                    v,
+                    nbt_compound_tag!({
+                        "breed": NbtTag::String("German Shepherd".to_string()),
+                        "age": NbtTag::Byte(4),
+                        "tricks": NbtTag::List(vec![NbtTag::String("spin".to_string())])
+                    })
+                ),
+                "Lucy" => assert_eq!(
+                    v,
+                    nbt_compound_tag!({
+                        "breed": NbtTag::String("Beagle".to_string()),
+                        "age": NbtTag::Byte(6),
+                        "tricks": NbtTag::List(vec![NbtTag::String("fetch".to_string()), NbtTag::String("sit".to_string())])
+                    })
+                ),
+                "Dan" => assert_eq!(
+                    v,
+                    nbt_compound_tag!({
+                        "breed": NbtTag::String("Chihuahua".to_string()),
+                        "age": NbtTag::Byte(3),
+                        // 'tricks' will be omitted for an empty list.
+                    })
+                ),
+                _ => panic!("Unexpected dog {k} found"),
+            }
+        }
+
+        // Decoding
+
+        let deserialized_park = DOG_PARK_CODEC
+            .parse(
+                nbt_compound_tag!({
+                    "name": NbtTag::String("Lighthouse Meadow Park".to_string()),
+                    "dogs": nbt_compound_tag!({
+                        "Adam": nbt_compound_tag!({
+                            "breed": NbtTag::String("Bulldog".to_string()),
+                            "age": NbtTag::Byte(8),
+                            "tricks": NbtTag::List(vec![NbtTag::String("catch".to_string())])
+                        })
+                    })
+                }),
+                &INSTANCE,
+            )
+            .expect("Decoding should succeed");
+
+        assert_eq!(deserialized_park.name, "Lighthouse Meadow Park");
+        assert_eq!(deserialized_park.dogs.len(), 1);
+        assert_eq!(
+            deserialized_park
+                .dogs
+                .get("Adam")
+                .expect("No dog 'Adam' in dogs"),
+            &Dog {
+                breed: "Bulldog".to_string(),
+                age: 8,
+                tricks: vec!["catch".to_string()]
+            }
+        );
+
+        assert!(
+            DOG_PARK_CODEC
+                .parse(
+                    nbt_compound_tag!({
+                        "name": NbtTag::String("Dark Park".to_string()),
+                        "dogs": nbt_compound_tag!({
+                            "Adam": nbt_compound_tag!({
+                                "breed": NbtTag::String("Poodle".to_string()),
+                                // Negative ages are not allowed.
+                                "age": NbtTag::Byte(-2)
+                            })
+                        })
+                    }),
+                    &INSTANCE
+                )
+                .get_message()
+                .expect("Decoding should fail")
+                .starts_with("Could not fit i8")
+        );
     }
 }
