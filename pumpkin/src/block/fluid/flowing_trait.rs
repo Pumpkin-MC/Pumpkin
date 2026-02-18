@@ -566,7 +566,8 @@ pub trait FlowingFluid: Send + Sync {
                 let final_state_id = if target_pos == side_pos {
                     state_id
                 } else {
-                    let Some(new_props) = self.get_new_liquid(world, fluid, &target_pos).await else {
+                    let Some(new_props) = self.get_new_liquid(world, fluid, &target_pos).await
+                    else {
                         continue;
                     };
                     new_props.to_state_id(fluid)
