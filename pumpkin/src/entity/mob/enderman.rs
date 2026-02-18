@@ -201,19 +201,9 @@ impl EndermanEntity {
 
         let half_width = 0.3;
         let height = 2.9;
-        let dest_center_x = block_x as f64 + 0.5;
-        let dest_center_z = block_z as f64 + 0.5;
         let bb = BoundingBox::new(
-            Vector3::new(
-                dest_center_x - half_width,
-                target_y,
-                dest_center_z - half_width,
-            ),
-            Vector3::new(
-                dest_center_x + half_width,
-                target_y + height,
-                dest_center_z + half_width,
-            ),
+            Vector3::new(x - half_width, target_y, z - half_width),
+            Vector3::new(x + half_width, target_y + height, z + half_width),
         );
         if !world.is_space_empty(bb).await {
             return false;
