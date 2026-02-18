@@ -206,10 +206,13 @@ impl BlockBehaviour for DropperBlock {
                         triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
                         triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
                     );
-                    let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade()
-                    {
+                    let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade() {
+                        // SAFETY: `args.block` points to block registry data with process-long
+                        // lifetime; this cast preserves identity for event payload compatibility.
+                        let block_static: &'static pumpkin_data::Block =
+                            unsafe { &*std::ptr::from_ref::<pumpkin_data::Block>(args.block) };
                         let event = crate::plugin::block::block_dispense::BlockDispenseEvent::new(
-                            args.block,
+                            block_static,
                             *args.position,
                             drop_item,
                             velocity,
@@ -223,8 +226,9 @@ impl BlockBehaviour for DropperBlock {
                     } else {
                         (drop_item, velocity)
                     };
-                    let item_entity =
-                        Arc::new(ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await);
+                    let item_entity = Arc::new(
+                        ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await,
+                    );
                     args.world.spawn_entity(item_entity).await;
                     args.world
                         .sync_world_event(WorldEvent::DispenserDispenses, *args.position, 0)
