@@ -3655,6 +3655,17 @@ impl pumpkin_world::world::SimpleWorld for World {
         })
     }
 
+    fn get_time_of_day(&self) -> WorldFuture<'_, i64> {
+        Box::pin(async move {
+            let level_time_guard = self.level_time.lock().await;
+            level_time_guard.query_daytime()
+        })
+    }
+
+    fn get_level(&self) -> WorldFuture<'_, &Arc<Level>> {
+        Box::pin(async move {&self.level})
+    }
+
     fn play_sound<'a>(
         &'a self,
         sound: Sound,
