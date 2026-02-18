@@ -1,5 +1,5 @@
 use pumpkin_data::Block;
-use pumpkin_macros::{cancellable, Event};
+use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
@@ -24,6 +24,7 @@ pub struct BlockMultiPlaceEvent {
 impl BlockMultiPlaceEvent {
     /// Creates a new `BlockMultiPlaceEvent`.
     #[must_use]
+    #[expect(clippy::missing_const_for_fn)]
     pub fn new(
         player: Arc<Player>,
         block_placed: &'static Block,
