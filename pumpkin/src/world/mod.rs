@@ -2940,7 +2940,7 @@ impl World {
                     false,
                 );
                 match cause {
-                    Some(player) => {
+                    Some(ref player) => {
                         self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
                             .await;
                     }

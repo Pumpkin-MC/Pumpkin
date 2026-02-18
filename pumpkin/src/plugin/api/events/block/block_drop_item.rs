@@ -1,5 +1,5 @@
 use pumpkin_data::Block;
-use pumpkin_macros::{cancellable, Event};
+use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
@@ -28,6 +28,7 @@ pub struct BlockDropItemEvent {
 impl BlockDropItemEvent {
     /// Creates a new `BlockDropItemEvent`.
     #[must_use]
+    #[expect(clippy::missing_const_for_fn)]
     pub fn new(
         player: Arc<Player>,
         block: &'static Block,
