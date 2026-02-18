@@ -1,5 +1,5 @@
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_macros::{cancellable, Event};
+use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
 
 use super::BlockEvent;
