@@ -26,6 +26,9 @@ pub struct BlockPlaceEvent {
     /// The position where the block is being placed.
     pub block_position: BlockPos,
 
+    /// Alias of `block_position` for newer call-sites.
+    pub position: BlockPos,
+
     /// A boolean indicating whether the player can build.
     pub can_build: bool,
 }
@@ -44,6 +47,7 @@ impl BlockPlaceEvent {
             block_placed,
             block_placed_against,
             block_position,
+            position: block_position,
             can_build,
             cancelled: false,
         }

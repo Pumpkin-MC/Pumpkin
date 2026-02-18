@@ -1377,13 +1377,14 @@ impl JavaClient {
                     if !state.is_air() {
                         let speed = block::calc_block_breaking(player, state, block).await;
                         let item_stack = player.inventory.held_item().lock().await.clone();
-                        let block_damage_event = crate::plugin::block::block_damage::BlockDamageEvent::new(
-                            player.clone(),
-                            block,
-                            position,
-                            item_stack,
-                            speed >= 1.0,
-                        );
+                        let block_damage_event =
+                            crate::plugin::block::block_damage::BlockDamageEvent::new(
+                                player.clone(),
+                                block,
+                                position,
+                                item_stack,
+                                speed >= 1.0,
+                            );
                         let block_damage_event =
                             server.plugin_manager.fire(block_damage_event).await;
                         if block_damage_event.cancelled {
