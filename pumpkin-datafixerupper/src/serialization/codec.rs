@@ -1,4 +1,3 @@
-pub use super::map_codec::for_getter;
 use crate::serialization::HasValue;
 use crate::serialization::codecs::lazy::{LazyCodec, new_lazy_codec};
 use crate::serialization::codecs::list::{ListCodec, new_list_codec};
@@ -80,7 +79,7 @@ use std::hash::Hash;
 ///   for when the value does not exist while decoding.
 /// - [`lenient_optional_field`] and [`lenient_optional_field_with_default`] for lenient versions of the above two optional field methods.
 ///
-/// To create a `Field` object using a `MapCodec`, use [`for_getter`] (in `map_codec`) to include a getter method
+/// To create a `Field` object using a `MapCodec`, use [`super::map_codec::for_getter`] to include a getter method
 /// to tell the codec how to get some value (for encoding) from a struct instance. These `Field`s can then be placed
 /// in the `struct_codec` body, one for each pair, along with a constructor function at the end
 /// to tell the codec how to create an instance (for decoding) with the provided values. See the documentation
@@ -147,9 +146,18 @@ macro_rules! define_const_codec {
         #[doc = concat!("A primitive codec for Java's `", stringify!($java_ty), "` (`", stringify!($ty), "` in Rust).")]
         pub const $name: $codec_ty = $codec_ty;
     };
+    (box $name:ident, $codec_ty:ident, $vec_ty:ident, $java_ty:ident) => {
+        #[doc = concat!("A primitive codec for Java's `", stringify!($java_ty), "`.")]
+        ///
+        #[doc = concat!("This actually stores a [`Box<[", stringify!($vec_ty), "]>`].")]
+        #[doc = concat!("This is useful for *packed* `", stringify!($vec_ty), "`s in a single array.")]
+        pub const $name: $codec_ty = $codec_ty;
+    };
     (vec $name:ident, $codec_ty:ident, $vec_ty:ident, $java_ty:ident) => {
         #[doc = concat!("A primitive codec for Java's `", stringify!($java_ty), "`.")]
-        #[doc = concat!("Here, this actually stores a [`Vec<", stringify!($vec_ty), ">`].")]
+        ///
+        #[doc = concat!("This actually stores a [`Vec<", stringify!($vec_ty), ">`].")]
+        #[doc = concat!("This is useful for *packed* `", stringify!($vec_ty), "`s in a single array.")]
         pub const $name: $codec_ty = $codec_ty;
     };
 }
@@ -165,7 +173,8 @@ define_const_codec!(DOUBLE_CODEC, DoubleCodec, f64, double);
 
 define_const_codec!(STRING_CODEC, StringCodec, String, String);
 
-define_const_codec!(vec BYTE_BUFFER_CODEC, ByteBufferCodec, i8, ByteBuffer);
+define_const_codec!(box BYTE_BUFFER_CODEC, ByteBufferCodec, i8, ByteBuffer);
+
 define_const_codec!(vec INT_STREAM_CODEC, IntStreamCodec, i32, IntStream);
 define_const_codec!(vec LONG_STREAM_CODEC, LongStreamCodec, i64, LongStream);
 
@@ -266,8 +275,8 @@ make_codec_transformation_function!(
     flat_map,
     DataResult<S>,
     A,
-    "equivalent",
-    "partially equivalent"
+    "partially equivalent",
+    "equivalent"
 );
 
 make_codec_transformation_function!(
@@ -279,8 +288,8 @@ make_codec_transformation_function!(
     map,
     S,
     DataResult<A>,
-    "partially equivalent",
-    "equivalent"
+    "equivalent",
+    "partially equivalent"
 );
 
 make_codec_transformation_function!(
