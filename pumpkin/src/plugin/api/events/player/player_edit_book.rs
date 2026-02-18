@@ -27,7 +27,7 @@ pub struct PlayerEditBookEvent {
 
 impl PlayerEditBookEvent {
     /// Creates a new instance of `PlayerEditBookEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         slot: i32,
         pages: Vec<String>,

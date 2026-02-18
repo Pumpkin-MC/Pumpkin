@@ -9,10 +9,10 @@ use pumpkin_protocol::java::server::play::{
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SCustomPayload, SEditBook, SInteract, SKeepAlive,
-    SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand,
-    SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
-    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-    SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities,
+    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
+    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot,
+    SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -686,6 +686,14 @@ impl JavaClient {
             }
             id if id == SPlayerInput::PACKET_ID => {
                 self.handle_player_input(player, SPlayerInput::read(payload)?)
+                    .await;
+            }
+            id if id == SMoveVehicle::PACKET_ID => {
+                self.handle_move_vehicle(player, SMoveVehicle::read(payload)?)
+                    .await;
+            }
+            id if id == SPaddleBoat::PACKET_ID => {
+                self.handle_paddle_boat(player, SPaddleBoat::read(payload)?)
                     .await;
             }
             id if id == SInteract::PACKET_ID => {

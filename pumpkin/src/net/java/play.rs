@@ -23,12 +23,10 @@ use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
+use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
-use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
-use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
-use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -53,11 +51,11 @@ use pumpkin_protocol::java::client::play::{
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
     SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
-    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SCustomPayload,
-    SEditBook, SInteract, SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities,
-    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
-    SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
-    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
+    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SEditBook,
+    SInteract, SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlayPingRequest,
+    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
+    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot,
+    SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -298,6 +296,10 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
+        if player.awaiting_teleport.lock().await.is_some() {
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
@@ -404,6 +406,10 @@ impl JavaClient {
         packet: SPlayerPositionRotation,
     ) {
         if !player.has_client_loaded() {
+            return;
+        }
+        // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
+        if player.awaiting_teleport.lock().await.is_some() {
             return;
         }
         // y = feet Y
@@ -816,6 +822,35 @@ impl JavaClient {
         let sneak = input.input & SPlayerInput::SNEAK != 0;
         if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
             player.get_entity().set_sneaking(sneak).await;
+        }
+
+        if sneak {
+            let vehicle = player.get_entity().vehicle.lock().await.clone();
+            if let Some(vehicle) = vehicle {
+                vehicle
+                    .get_entity()
+                    .remove_passenger(player.entity_id())
+                    .await;
+            }
+        }
+    }
+
+    pub async fn handle_move_vehicle(&self, player: &Arc<Player>, packet: SMoveVehicle) {
+        let entity = player.get_entity();
+        let vehicle = entity.vehicle.lock().await;
+        if let Some(vehicle) = vehicle.as_ref() {
+            let vehicle_entity = vehicle.get_entity();
+            vehicle_entity.set_pos(Vector3::new(packet.x, packet.y, packet.z));
+            vehicle_entity.set_rotation(packet.yaw, packet.pitch);
+        }
+    }
+
+    pub async fn handle_paddle_boat(&self, player: &Arc<Player>, packet: SPaddleBoat) {
+        let vehicle = player.get_entity().vehicle.lock().await.clone();
+        if let Some(vehicle) = vehicle {
+            vehicle
+                .set_paddle_state(packet.left_paddle, packet.right_paddle)
+                .await;
         }
     }
 
@@ -1311,41 +1346,6 @@ impl JavaClient {
                     }
                 }
             }}
-        }
-    }
-
-    pub async fn handle_custom_payload(
-        &self,
-        player: &Arc<Player>,
-        server: &Arc<Server>,
-        custom_payload: SCustomPayload,
-    ) {
-        let channel = custom_payload.channel.as_str();
-        let is_register = matches!(channel, "minecraft:register" | "REGISTER");
-        let is_unregister = matches!(channel, "minecraft:unregister" | "UNREGISTER");
-
-        if !is_register && !is_unregister {
-            return;
-        }
-
-        let Ok(payload_str) = std::str::from_utf8(&custom_payload.data) else {
-            return;
-        };
-
-        for registered_channel in payload_str.split('\0').filter(|entry| !entry.is_empty()) {
-            if is_register {
-                let event = PlayerRegisterChannelEvent::new(
-                    player.clone(),
-                    registered_channel.to_string(),
-                );
-                let _ = server.plugin_manager.fire(event).await;
-            } else {
-                let event = PlayerUnregisterChannelEvent::new(
-                    player.clone(),
-                    registered_channel.to_string(),
-                );
-                let _ = server.plugin_manager.fire(event).await;
-            }
         }
     }
 
