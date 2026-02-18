@@ -27,10 +27,17 @@ impl TemptGoal {
         }
     }
 
+    fn is_tempt_item(&self, stack: &pumpkin_world::item::ItemStack) -> bool {
+        stack.item_count > 0 && self.tempt_items.iter().any(|i| i.id == stack.item.id)
+    }
+
     async fn is_holding_tempt_item(&self, player: &Player) -> bool {
-        let held = player.inventory.held_item();
-        let held_lock = held.lock().await;
-        held_lock.item_count > 0 && self.tempt_items.iter().any(|i| i.id == held_lock.item.id)
+        let main = player.inventory.held_item();
+        if self.is_tempt_item(&*main.lock().await) {
+            return true;
+        }
+        let off = player.inventory.off_hand_item().await;
+        self.is_tempt_item(&*off.lock().await)
     }
 
     async fn find_tempting_player(&self, mob: &dyn Mob) -> Option<Arc<Player>> {
