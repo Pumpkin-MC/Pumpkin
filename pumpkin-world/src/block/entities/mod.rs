@@ -25,7 +25,7 @@ use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::block::entities::smoker::SmokerBlockEntity;
 use crate::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
-    block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
+    block::entities::dropper::DropperBlockEntity, block::entities::dispenser::DispenserBlockEntity, inventory::Inventory, world::SimpleWorld,
 };
 
 pub mod barrel;
@@ -37,6 +37,7 @@ pub mod chiseled_bookshelf;
 pub mod command_block;
 pub mod comparator;
 pub mod dropper;
+pub mod dispenser;
 pub mod end_portal;
 pub mod ender_chest;
 pub mod furnace;
@@ -161,6 +162,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             Arc::new(block_entity_from_generic::<MobSpawnerBlockEntity>(nbt))
         }
         DropperBlockEntity::ID => Arc::new(block_entity_from_generic::<DropperBlockEntity>(nbt)),
+        DispenserBlockEntity::ID => Arc::new(block_entity_from_generic::<DispenserBlockEntity>(nbt)),
         ShulkerBoxBlockEntity::ID => {
             Arc::new(block_entity_from_generic::<ShulkerBoxBlockEntity>(nbt))
         }
