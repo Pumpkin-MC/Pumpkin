@@ -20,19 +20,14 @@ use crate::error::PumpkinError;
 use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
-use crate::plugin::block::block_can_build::BlockCanBuildEvent;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::block::sign_change::SignChangeEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
-use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
-use crate::plugin::player::player_item_held::PlayerItemHeldEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
-use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
-use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
@@ -1713,7 +1708,7 @@ impl JavaClient {
         BlockActionResult::Pass
     }
 
-    pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
+    pub async fn handle_sign_update(&self, player: &Arc<Player>, sign_data: SUpdateSign) {
         let world = player.living_entity.entity.world.load_full();
         let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
             return;

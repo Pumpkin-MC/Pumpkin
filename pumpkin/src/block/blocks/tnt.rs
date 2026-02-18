@@ -1,3 +1,4 @@
+use pumpkin_data::Block;
 use pumpkin_data::item::Item;
 use std::sync::Arc;
 
@@ -66,7 +67,7 @@ impl BlockBehaviour for TNTBlock {
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let item = args.item_stack.lock().await.item;
-            if item != &Item::FLINT_AND_STEEL || item == &Item::FIRE_CHARGE {
+            if item != &Item::FLINT_AND_STEEL && item != &Item::FIRE_CHARGE {
                 return BlockActionResult::Pass;
             }
             let world = args.player.world();
@@ -75,13 +76,8 @@ impl BlockBehaviour for TNTBlock {
             } else {
                 "FLINT_AND_STEEL"
             };
-            let _ = Self::prime(
-                &world,
-                args.position,
-                cause.to_string(),
-                Some(args.player.clone()),
-            )
-            .await;
+            let player = args.world.get_player_by_uuid(args.player.gameprofile.id);
+            let _ = Self::prime(&world, args.position, cause.to_string(), player).await;
 
             BlockActionResult::Consume
         })

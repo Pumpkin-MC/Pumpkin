@@ -84,7 +84,7 @@ impl BlockBehaviour for FarmlandBlock {
                     let mut new_state_id = props.to_state_id(args.block);
                     if let Some(server) = args.world.server.upgrade() {
                         let event = MoistureChangeEvent::new(
-                            args.block,
+                            &Block::FARMLAND,
                             *args.position,
                             args.world.uuid,
                             new_state_id,
@@ -123,7 +123,7 @@ impl BlockBehaviour for FarmlandBlock {
                     let mut new_state_id = props.to_state_id(args.block);
                     if let Some(server) = args.world.server.upgrade() {
                         let event = MoistureChangeEvent::new(
-                            args.block,
+                            &Block::FARMLAND,
                             *args.position,
                             args.world.uuid,
                             new_state_id,

@@ -24,7 +24,7 @@ pub struct SpongeAbsorbEvent {
 impl SpongeAbsorbEvent {
     /// Creates a new `SpongeAbsorbEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         block: &'static Block,
         block_pos: BlockPos,
         world_uuid: uuid::Uuid,

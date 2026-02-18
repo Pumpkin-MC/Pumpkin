@@ -129,7 +129,7 @@ impl BlockBehaviour for NoteBlock {
             let mut note = note_props.note.to_index() as u8;
             if let Some(server) = args.world.server.upgrade() {
                 let event = NotePlayEvent::new(
-                    args.block,
+                    &Block::NOTE_BLOCK,
                     *args.position,
                     args.world.uuid,
                     instrument,
