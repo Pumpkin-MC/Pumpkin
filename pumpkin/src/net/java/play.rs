@@ -24,14 +24,10 @@ use crate::plugin::block::block_can_build::BlockCanBuildEvent;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
-use crate::plugin::player::player_edit_book::PlayerEditBookEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
-use crate::plugin::player::player_item_held::PlayerItemHeldEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
-use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
-use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
@@ -2191,6 +2187,7 @@ impl JavaClient {
                 player: player.clone(),
                 block_placed: block,
                 block_placed_against: clicked_block,
+                block_position: final_block_pos,
                 position: final_block_pos,
                 can_build: true,
                 cancelled: false,
