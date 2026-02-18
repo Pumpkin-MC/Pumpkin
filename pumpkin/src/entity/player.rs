@@ -85,9 +85,6 @@ use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
-use crate::plugin::player::player_item_break::PlayerItemBreakEvent;
-use crate::plugin::player::player_item_damage::PlayerItemDamageEvent;
-use crate::plugin::player::player_item_mend::PlayerItemMendEvent;
 use crate::plugin::player::player_kick::PlayerKickEvent;
 use crate::plugin::player::player_level_change::PlayerLevelChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
@@ -1958,8 +1955,10 @@ impl Player {
         let mut leave_message = message.clone();
         let cause = "UNKNOWN".to_string();
 
-        if let Some(server) = self.world().server.upgrade() {
-            let event = PlayerKickEvent::new(self.clone(), kick_message, leave_message, cause);
+        if let Some(server) = self.world().server.upgrade()
+            && let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id)
+        {
+            let event = PlayerKickEvent::new(player, kick_message, leave_message, cause);
             let event = server.plugin_manager.fire(event).await;
             if event.cancelled {
                 return;
@@ -2371,14 +2370,15 @@ impl Player {
             ))
             .await;
 
-        if old_level != level {
-            if let Some(server) = self.world().server.upgrade() {
-                let event = PlayerLevelChangeEvent::new(self.clone(), old_level, level);
-                server
-                    .plugin_manager
-                    .fire::<PlayerLevelChangeEvent>(event)
-                    .await;
-            }
+        if old_level != level
+            && let Some(server) = self.world().server.upgrade()
+            && let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id)
+        {
+            let event = PlayerLevelChangeEvent::new(player, old_level, level);
+            server
+                .plugin_manager
+                .fire::<PlayerLevelChangeEvent>(event)
+                .await;
         }
     }
 
