@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 pub mod bat;
 pub mod creeper;
@@ -233,6 +234,14 @@ pub trait Mob: EntityBase + Send + Sync {
         _item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async { false })
+    }
+
+    fn get_owner_uuid(&self) -> Option<Uuid> {
+        None
+    }
+
+    fn is_sitting(&self) -> bool {
+        false
     }
 }
 
