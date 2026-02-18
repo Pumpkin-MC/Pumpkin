@@ -796,8 +796,10 @@ impl Player {
         };
 
         let mut damage = amount;
-        if let Some(server) = &server {
-            let event = PlayerItemDamageEvent::new(self.clone(), current_stack, damage);
+        if let Some(server) = &server
+            && let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id)
+        {
+            let event = PlayerItemDamageEvent::new(player, current_stack, damage);
             let event = server.plugin_manager.fire(event).await;
             if event.cancelled {
                 return false;
@@ -827,8 +829,10 @@ impl Player {
 
         if let Some(updated_stack) = updated_stack {
             self.sync_hand_slot(slot_index, updated_stack).await;
-            if let (Some(server), Some(broken_item)) = (server, broken_item) {
-                let event = PlayerItemBreakEvent::new(self.clone(), broken_item);
+            if let (Some(server), Some(broken_item)) = (server, broken_item)
+                && let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id)
+            {
+                let event = PlayerItemBreakEvent::new(player, broken_item);
                 server
                     .plugin_manager
                     .fire::<PlayerItemBreakEvent>(event)
@@ -2538,11 +2542,7 @@ impl Player {
         self.set_experience(new_level, progress, new_points).await;
     }
 
-    pub async fn apply_mending_from_xp(
-        &self,
-        mut xp: i32,
-        orb_uuid: Option<uuid::Uuid>,
-    ) -> i32 {
+    pub async fn apply_mending_from_xp(&self, mut xp: i32, orb_uuid: Option<uuid::Uuid>) -> i32 {
         if xp <= 0 {
             return xp;
         }
@@ -2605,18 +2605,20 @@ impl Player {
                 let stack = stack.lock().await;
                 stack.clone()
             };
-            let event = PlayerItemMendEvent::new(
-                self.clone(),
-                item_stack,
-                equipment_slot.clone(),
-                repair_amount,
-                orb_uuid,
-            );
-            let event = server.plugin_manager.fire(event).await;
-            if event.cancelled {
-                return xp;
+            if let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) {
+                let event = PlayerItemMendEvent::new(
+                    player,
+                    item_stack,
+                    equipment_slot.clone(),
+                    repair_amount,
+                    orb_uuid,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return xp;
+                }
+                repair_amount = event.repair_amount;
             }
-            repair_amount = event.repair_amount;
         }
 
         if repair_amount <= 0 {
