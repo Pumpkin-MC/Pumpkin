@@ -2240,7 +2240,10 @@ impl Player {
         };
 
         let item_uuid = Uuid::new_v4();
-        let event = PlayerDropItemEvent::new(self.clone(), item_uuid, item_stack);
+        let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) else {
+            return false;
+        };
+        let event = PlayerDropItemEvent::new(player, item_uuid, item_stack);
         let event = server.plugin_manager.fire(event).await;
         if event.cancelled || event.item_stack.is_empty() {
             return false;
