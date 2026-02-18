@@ -469,6 +469,14 @@ impl ArrowEntity {
             return true;
         }
 
+        // Skip other arrows, item entities, and falling block entities
+        if other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::FALLING_BLOCK
+        {
+            return true;
+        }
+
         false
     }
 }
