@@ -215,6 +215,10 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    fn on_eating_grass(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
     fn get_mob_gravity(&self) -> f64 {
         self.get_mob_entity().living_entity.get_gravity()
     }

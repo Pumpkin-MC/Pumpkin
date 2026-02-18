@@ -4,6 +4,9 @@ use std::{any::TypeId, ops::BitOr, pin::Pin, ptr};
 pub mod active_target;
 pub mod ambient_stand;
 pub mod creeper_ignite;
+pub mod eat_grass;
+pub mod escape_danger;
+
 pub mod goal_selector;
 pub mod look_around;
 pub mod look_at_entity;
@@ -12,6 +15,7 @@ pub mod move_to_target_pos;
 pub mod revenge;
 pub mod step_and_destroy_block;
 pub mod swim;
+pub mod tempt;
 mod track_target;
 pub mod wander_around;
 pub mod zombie_attack;
