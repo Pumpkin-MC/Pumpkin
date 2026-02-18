@@ -3,17 +3,22 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity},
+    entity::{
+        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
+    },
     server::Server,
 };
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
 use pumpkin_protocol::java::client::play::CSoundEffect;
+use pumpkin_protocol::java::client::play::CTakeItemEntity;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::item::ItemStack;
 
 /// Represents the pickup rules for arrows
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -411,6 +416,42 @@ impl EntityBase for ArrowEntity {
     #[allow(dead_code, clippy::unused_self)]
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            // Only allow picking up grounded arrows
+            if !self.in_ground.load(Ordering::Relaxed) {
+                return;
+            }
+
+            if player.living_entity.health.load() <= 0.0 {
+                return;
+            }
+
+            // Check pickup rules
+            match self.pickup {
+                ArrowPickup::Disallowed => return,
+                ArrowPickup::CreativeOnly if !player.is_creative() => return,
+                _ => {}
+            }
+
+            // Try to insert an arrow into the player's inventory
+            let mut stack = ItemStack::new(1, &Item::ARROW);
+            if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack).await {
+                player
+                    .client
+                    .enqueue_packet(&CTakeItemEntity::new(
+                        self.entity.entity_id.into(),
+                        player.entity_id().into(),
+                        1u8.into(),
+                    ))
+                    .await;
+
+                // Remove arrow entity after pickup
+                self.get_entity().remove().await;
+            }
+        })
     }
 }
 
