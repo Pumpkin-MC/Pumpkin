@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use crate::plugin::player::player_egg_throw::PlayerEggThrowEvent;
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity,
@@ -8,7 +9,6 @@ use crate::{
     },
     server::Server,
 };
-use crate::plugin::player::player_egg_throw::PlayerEggThrowEvent;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -128,23 +128,22 @@ impl EntityBase for EggEntity {
             let mut hatching = to_spawn > 0;
             let mut hatching_type: &'static EntityType = &EntityType::CHICKEN;
 
-            if let Some(owner_id) = self.thrown.owner_id {
-                if let Some(player) = world.get_player_by_id(owner_id) {
-                    if let Some(server) = world.server.upgrade() {
-                        let event = PlayerEggThrowEvent::new(
-                            player,
-                            self.get_entity().entity_uuid,
-                            hatching,
-                            to_spawn.min(u8::MAX as usize) as u8,
-                            format!("minecraft:{}", hatching_type.resource_name),
-                        );
-                        let event = server.plugin_manager.fire(event).await;
-                        hatching = event.hatching;
-                        to_spawn = event.num_hatches as usize;
-                        if let Some(new_type) = EntityType::from_name(&event.hatching_type) {
-                            hatching_type = new_type;
-                        }
-                    }
+            if let Some(owner_id) = self.thrown.owner_id
+                && let Some(player) = world.get_player_by_id(owner_id)
+                && let Some(server) = world.server.upgrade()
+            {
+                let event = PlayerEggThrowEvent::new(
+                    player,
+                    self.get_entity().entity_uuid,
+                    hatching,
+                    to_spawn.min(u8::MAX as usize) as u8,
+                    format!("minecraft:{}", hatching_type.resource_name),
+                );
+                let event = server.plugin_manager.fire(event).await;
+                hatching = event.hatching;
+                to_spawn = event.num_hatches as usize;
+                if let Some(new_type) = EntityType::from_name(&event.hatching_type) {
+                    hatching_type = new_type;
                 }
             }
 
@@ -165,13 +164,9 @@ impl EntityBase for EggEntity {
 
                 tokio::spawn(async move {
                     for _ in 0..to_spawn {
-                        let mob = from_type(
-                            hatching_type,
-                            spawn_pos_clone,
-                            &world_clone,
-                            Uuid::new_v4(),
-                        )
-                        .await;
+                        let mob =
+                            from_type(hatching_type, spawn_pos_clone, &world_clone, Uuid::new_v4())
+                                .await;
 
                         let yaw = rand::random::<f32>() * 360.0;
                         let new_entity = mob.get_entity();
