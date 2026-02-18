@@ -37,6 +37,8 @@ pub struct MobEntity {
     pub look_control: Mutex<LookControl>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
+    pub love_ticks: AtomicI32,
+    pub breeding_cooldown: AtomicI32,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
     last_sent_pitch: AtomicU8,
@@ -61,6 +63,8 @@ impl MobEntity {
             look_control: Mutex::new(LookControl::default()),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
+            love_ticks: AtomicI32::new(0),
+            breeding_cooldown: AtomicI32::new(0),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -102,6 +106,23 @@ impl MobEntity {
                 )])
                 .await;
         }
+    }
+
+    pub fn is_in_love(&self) -> bool {
+        self.love_ticks.load(Relaxed) > 0
+    }
+
+    pub fn set_love_ticks(&self, ticks: i32) {
+        self.love_ticks.store(ticks, Relaxed);
+    }
+
+    pub fn reset_love_ticks(&self) {
+        self.love_ticks.store(0, Relaxed);
+    }
+
+    pub fn is_breeding_ready(&self) -> bool {
+        self.living_entity.entity.age.load(Relaxed) >= 0
+            && self.breeding_cooldown.load(Relaxed) <= 0
     }
 
     pub async fn is_in_attack_range(&self, target: &dyn EntityBase) -> bool {
@@ -349,6 +370,24 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.get_mob_entity().living_entity)
+    }
+
+    fn is_in_love(&self) -> bool {
+        self.get_mob_entity().is_in_love()
+    }
+
+    fn is_breeding_ready(&self) -> bool {
+        self.get_mob_entity().is_breeding_ready()
+    }
+
+    fn reset_love(&self) {
+        self.get_mob_entity().reset_love_ticks();
+    }
+
+    fn set_breeding_cooldown(&self, ticks: i32) {
+        self.get_mob_entity()
+            .breeding_cooldown
+            .store(ticks, Relaxed);
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {

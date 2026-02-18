@@ -4,6 +4,7 @@ use std::{any::TypeId, ops::BitOr, pin::Pin, ptr};
 pub mod active_target;
 pub mod ambient_stand;
 pub mod beg;
+pub mod breed;
 pub mod creeper_ignite;
 pub mod eat_grass;
 pub mod escape_danger;
