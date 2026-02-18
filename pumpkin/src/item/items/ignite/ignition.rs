@@ -34,10 +34,16 @@ impl Ignition {
 
         if let Some(new_state_id) = can_be_lit(block, state_id) {
             if let Some(server) = world.server.upgrade() {
+                let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) else {
+                    return false;
+                };
+                // SAFETY: block references come from global block registry tables.
+                let igniting_block: &'static Block =
+                    unsafe { &*std::ptr::from_ref::<Block>(block) };
                 let event = crate::plugin::block::block_ignite::BlockIgniteEvent {
-                    player: player.clone(),
-                    block,
-                    igniting_block: block,
+                    player: player_arc,
+                    block: igniting_block,
+                    igniting_block,
                     block_pos: location,
                     world_uuid: world.uuid,
                     cause: cause.to_string(),
@@ -60,10 +66,19 @@ impl Ignition {
             .await;
         if FireBlockBase::can_place_at(&world, &pos).await {
             if let Some(server) = world.server.upgrade() {
+                let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) else {
+                    return false;
+                };
+                // SAFETY: block references come from global block registry tables.
+                let igniting_block: &'static Block =
+                    unsafe { &*std::ptr::from_ref::<Block>(block) };
+                // SAFETY: block references come from global block registry tables.
+                let fire_block_ref: &'static Block =
+                    unsafe { &*std::ptr::from_ref::<Block>(&fire_block) };
                 let event = crate::plugin::block::block_ignite::BlockIgniteEvent {
-                    player: player.clone(),
-                    block: &fire_block,
-                    igniting_block: block,
+                    player: player_arc,
+                    block: fire_block_ref,
+                    igniting_block,
                     block_pos: pos,
                     world_uuid: world.uuid,
                     cause: cause.to_string(),
