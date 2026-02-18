@@ -22,6 +22,38 @@ macro_rules! create_number_impl {
     };
 }
 
+/// A macro providing a default implementation of a get_... function in `DynamicOps`.
+///
+/// Those functions include:
+/// - [`DynamicOps::get_byte_buffer`] (put `box` before the target expression (usually self))
+/// - [`DynamicOps::get_int_list`]
+/// - [`DynamicOps::get_long_list`]
+#[macro_export]
+macro_rules! impl_get_list {
+    (box $target:expr, $input:expr, $ty:literal) => {
+        $target.get_iter($input).flat_map(|iter| {
+            // We want all elements in the iterator to be numbers.
+            iter.map(|e| $target.get_number(&e).into_result().map(Into::into))
+                .collect::<Option<Vec<_>>>()
+                .map_or_else(
+                    || DataResult::error(concat!("Some elements are not ", $ty).to_string()),
+                    |v| DataResult::success(v.into_boxed_slice()),
+                )
+        })
+    };
+    ($target:expr, $input:expr, $ty:literal) => {
+        $target.get_iter($input).flat_map(|iter| {
+            // We want all elements in the iterator to be numbers.
+            iter.map(|e| $target.get_number(&e).into_result().map(Into::into))
+                .collect::<Option<Vec<_>>>()
+                .map_or_else(
+                    || DataResult::error(concat!("Some elements are not ", $ty).to_string()),
+                    DataResult::success,
+                )
+        })
+    };
+}
+
 /// A trait describing methods to read and write a specific format (like NBT or JSON).
 /// The `Value` of this trait is the type that can be used to represent anything in this format.
 pub trait DynamicOps {
@@ -100,17 +132,7 @@ pub trait DynamicOps {
     /// Gets a `Box<[u8]>` (byte buffer) from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getByteBuffer()` function.
     fn get_byte_buffer(&self, input: Self::Value) -> DataResult<Box<[u8]>> {
-        self.get_iter(input).flat_map(|iter| {
-            // We want all elements in the iterator to be numbers.
-            let mut buffer = vec![];
-            for e in iter {
-                match self.get_number(&e).into_result() {
-                    Some(num) => buffer.push(num.into()),
-                    None => return DataResult::error("Some elements are not bytes".to_string()),
-                }
-            }
-            DataResult::success(buffer.into_boxed_slice())
-        })
+        impl_get_list!(box self, input, "bytes")
     }
 
     /// Creates a byte buffer that can be represented by this `DynamicOps` using a [`Vec<u8>`].
@@ -121,17 +143,7 @@ pub trait DynamicOps {
     /// Gets a [`Vec<i32>`] (`int` list) from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getIntStream()` function.
     fn get_int_list(&self, input: Self::Value) -> DataResult<Vec<i32>> {
-        self.get_iter(input).flat_map(|iter| {
-            // We want all elements in the iterator to be numbers.
-            let mut list = vec![];
-            for e in iter {
-                match self.get_number(&e).into_result() {
-                    Some(num) => list.push(num.into()),
-                    None => return DataResult::error("Some elements are not ints".to_string()),
-                }
-            }
-            DataResult::success(list)
-        })
+        impl_get_list!(self, input, "ints")
     }
 
     /// Creates an `int` list ([`Vec<i32>`]) that can be represented by this `DynamicOps`.
@@ -142,17 +154,7 @@ pub trait DynamicOps {
     /// Gets a [`Vec<i64>`] (`long` list) from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getLongStream()` function.
     fn get_long_list(&self, input: Self::Value) -> DataResult<Vec<i64>> {
-        self.get_iter(input).flat_map(|iter| {
-            // We want all elements in the iterator to be numbers.
-            let mut list = vec![];
-            for e in iter {
-                match self.get_number(&e).into_result() {
-                    Some(num) => list.push(num.into()),
-                    None => return DataResult::error("Some elements are not longs".to_string()),
-                }
-            }
-            DataResult::success(list)
-        })
+        impl_get_list!(self, input, "longs")
     }
 
     /// Creates a `long` list ([`Vec<i64>`]) that can be represented by this `DynamicOps`.
