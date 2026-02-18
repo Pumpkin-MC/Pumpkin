@@ -24,7 +24,7 @@ pub struct PlayerInteractEntityEvent {
 
 impl PlayerInteractEntityEvent {
     /// Creates a new instance of `PlayerInteractEntityEvent`.
-    pub fn new(
+    pub const fn new(
         player: Arc<Player>,
         entity_uuid: uuid::Uuid,
         entity_type: String,
