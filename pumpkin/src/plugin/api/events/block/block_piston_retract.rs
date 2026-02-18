@@ -1,5 +1,5 @@
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_macros::{cancellable, Event};
+use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
 
 use super::BlockEvent;
@@ -30,7 +30,7 @@ pub struct BlockPistonRetractEvent {
 impl BlockPistonRetractEvent {
     /// Creates a new `BlockPistonRetractEvent`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         block: &'static Block,
         block_pos: BlockPos,
         direction: BlockDirection,
