@@ -1,5 +1,5 @@
 use pumpkin_data::Block;
-use pumpkin_macros::{cancellable, Event};
+use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
 
 use super::BlockEvent;
@@ -27,6 +27,7 @@ pub struct BlockExplodeEvent {
 impl BlockExplodeEvent {
     /// Creates a new `BlockExplodeEvent`.
     #[must_use]
+    #[expect(clippy::missing_const_for_fn)]
     pub fn new(
         block: &'static Block,
         block_position: BlockPos,
