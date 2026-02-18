@@ -490,6 +490,7 @@ mod test {
     use crate::serialization::codecs::validated::ValidatedCodec;
     use crate::serialization::coders::{Decoder, Encoder};
     use crate::serialization::json_ops;
+    use crate::serialization::map_codec::for_getter;
     use crate::serialization::struct_codecs::StructCodec3;
     use crate::{assert_decode, struct_codec};
     use serde_json::json;
