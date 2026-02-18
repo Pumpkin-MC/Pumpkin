@@ -732,6 +732,18 @@ impl Player {
 
         player_attack_sound(&pos, &world, attack_type).await;
 
+        self.living_entity.last_attacking_id.store(
+            victim_entity.entity_id,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        self.living_entity.last_attack_time.store(
+            self.living_entity
+                .entity
+                .age
+                .load(std::sync::atomic::Ordering::Relaxed),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
         if victim.get_living_entity().is_some() {
             let mut knockback_strength = 1.0;
             match attack_type {

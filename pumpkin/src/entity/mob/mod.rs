@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 pub mod bat;
 pub mod creeper;
@@ -139,7 +140,7 @@ impl MobEntity {
             return;
         }
 
-        target
+        let damaged = target
             .damage_with_context(
                 target,
                 ZOMBIE_ATTACK_DAMAGE,
@@ -149,6 +150,15 @@ impl MobEntity {
                 Some(caller),
             )
             .await;
+
+        if damaged {
+            self.living_entity
+                .last_attacking_id
+                .store(target.get_entity().entity_id, Relaxed);
+            self.living_entity
+                .last_attack_time
+                .store(self.living_entity.entity.age.load(Relaxed), Relaxed);
+        }
     }
 
     async fn get_attack_box(&self, attack_range: f64) -> BoundingBox {
@@ -233,6 +243,14 @@ pub trait Mob: EntityBase + Send + Sync {
         _item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async { false })
+    }
+
+    fn get_owner_uuid(&self) -> Option<Uuid> {
+        None
+    }
+
+    fn is_sitting(&self) -> bool {
+        false
     }
 }
 
