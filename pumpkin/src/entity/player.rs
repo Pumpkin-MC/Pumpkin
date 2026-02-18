@@ -730,9 +730,10 @@ impl Player {
             return;
         }
 
+        player_attack_sound(&pos, &world, attack_type).await;
+
         if victim.get_living_entity().is_some() {
             let mut knockback_strength = 1.0;
-            player_attack_sound(&pos, &world, attack_type).await;
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
@@ -2768,6 +2769,80 @@ impl Player {
                 .broadcast_packet_except(&[self.gameprofile.id], &packet)
                 .await;
         }
+    }
+
+    /// Returns the main non-air `BlockPos` underneath the player.
+    pub async fn get_supporting_block_pos(&self) -> Option<BlockPos> {
+        let entity = self.get_entity();
+        let entity_pos = entity.pos.load();
+        let aabb = entity.bounding_box.load();
+        let world = self.world();
+
+        // Create the thin bounding box directly underneath the entity's feet
+        let footprint = BoundingBox::new(
+            Vector3::new(aabb.min.x, aabb.min.y - 1.0e-6, aabb.min.z),
+            Vector3::new(aabb.max.x, aabb.min.y, aabb.max.z),
+        );
+
+        let min_pos = footprint.min_block_pos();
+        let max_pos = footprint.max_block_pos();
+
+        let mut closest_candidate = None;
+        let mut min_dist_sq = f64::MAX;
+
+        // Iterate through candidates
+        for pos in BlockPos::iterate(min_pos, max_pos) {
+            let (_, state) = world.get_block_and_state(&pos).await;
+
+            // Only consider physical blocks
+            if state.is_air() {
+                continue;
+            }
+
+            // Calculate distance squared from the block's center to the entity's position
+            let block_center_x = f64::from(pos.0.x) + 0.5;
+            let block_center_y = f64::from(pos.0.y) + 0.5;
+            let block_center_z = f64::from(pos.0.z) + 0.5;
+
+            let dx = block_center_x - entity_pos.x;
+            let dy = block_center_y - entity_pos.y;
+            let dz = block_center_z - entity_pos.z;
+            let dist_sq = dx * dx + dy * dy + dz * dz;
+
+            // Pick the block with the smallest distance
+            if dist_sq < min_dist_sq {
+                min_dist_sq = dist_sq;
+                closest_candidate = Some(pos);
+            } else if (dist_sq - min_dist_sq).abs() < f64::EPSILON {
+                // If the distance is the same, pick the block with the smallest y, then z, then x
+                if let Some(best_pos) = closest_candidate {
+                    let is_smaller = pos.0.y < best_pos.0.y
+                        || (pos.0.y == best_pos.0.y && pos.0.z < best_pos.0.z)
+                        || (pos.0.y == best_pos.0.y
+                            && pos.0.z == best_pos.0.z
+                            && pos.0.x < best_pos.0.x);
+
+                    if is_smaller {
+                        closest_candidate = Some(pos);
+                    }
+                }
+            }
+        }
+
+        // Return the closest block if we found one
+        if closest_candidate.is_some() {
+            return closest_candidate;
+        }
+
+        // Fallback to the block directly underneath the player's position if no candidates were found
+        let fallback_pos = BlockPos::new(
+            entity_pos.x.floor() as i32,
+            (entity_pos.y - 0.2).floor() as i32,
+            entity_pos.z.floor() as i32,
+        );
+
+        let (_, state) = world.get_block_and_state(&fallback_pos).await;
+        (!state.is_air()).then_some(fallback_pos)
     }
 }
 

@@ -55,10 +55,10 @@ use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
     SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
     SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
-    SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
-    SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
-    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
-    SUpdateSign, SUseItem, SUseItemOn, Status,
+    SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities,
+    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
+    SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -298,6 +298,10 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
+        if player.awaiting_teleport.lock().await.is_some() {
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
@@ -404,6 +408,10 @@ impl JavaClient {
         packet: SPlayerPositionRotation,
     ) {
         if !player.has_client_loaded() {
+            return;
+        }
+        // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
+        if player.awaiting_teleport.lock().await.is_some() {
             return;
         }
         // y = feet Y
@@ -817,6 +825,35 @@ impl JavaClient {
         let sneak = input.input & SPlayerInput::SNEAK != 0;
         if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
             player.get_entity().set_sneaking(sneak).await;
+        }
+
+        if sneak {
+            let vehicle = player.get_entity().vehicle.lock().await.clone();
+            if let Some(vehicle) = vehicle {
+                vehicle
+                    .get_entity()
+                    .remove_passenger(player.entity_id())
+                    .await;
+            }
+        }
+    }
+
+    pub async fn handle_move_vehicle(&self, player: &Arc<Player>, packet: SMoveVehicle) {
+        let entity = player.get_entity();
+        let vehicle = entity.vehicle.lock().await;
+        if let Some(vehicle) = vehicle.as_ref() {
+            let vehicle_entity = vehicle.get_entity();
+            vehicle_entity.set_pos(Vector3::new(packet.x, packet.y, packet.z));
+            vehicle_entity.set_rotation(packet.yaw, packet.pitch);
+        }
+    }
+
+    pub async fn handle_paddle_boat(&self, player: &Arc<Player>, packet: SPaddleBoat) {
+        let vehicle = player.get_entity().vehicle.lock().await.clone();
+        if let Some(vehicle) = vehicle {
+            vehicle
+                .set_paddle_state(packet.left_paddle, packet.right_paddle)
+                .await;
         }
     }
 
