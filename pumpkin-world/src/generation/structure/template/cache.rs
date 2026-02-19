@@ -115,12 +115,55 @@ impl TemplateCache {
     ///
     /// This function maps template names to their embedded byte data.
     /// Add new templates here as they are added to the assets.
-    fn load_template_bytes(_path: &str) -> Option<&'static [u8]> {
-        // Map template names to embedded files using include_bytes!
+    fn load_template_bytes(path: &str) -> Option<&'static [u8]> {
+        // Map template names to embedded files
         // Templates are stored in pumpkin-world/assets/structures/
-        // Example:
-        //   "igloo/top" => Some(include_bytes!("../../../../assets/structures/igloo/top.nbt")),
-        None
+        match path {
+            // Nether fossil templates
+            "nether_fossils/fossil_1" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_1.nbt"
+            )),
+            "nether_fossils/fossil_2" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_2.nbt"
+            )),
+            "nether_fossils/fossil_3" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_3.nbt"
+            )),
+            "nether_fossils/fossil_4" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_4.nbt"
+            )),
+            "nether_fossils/fossil_5" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_5.nbt"
+            )),
+            "nether_fossils/fossil_6" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_6.nbt"
+            )),
+            "nether_fossils/fossil_7" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_7.nbt"
+            )),
+            "nether_fossils/fossil_8" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_8.nbt"
+            )),
+            "nether_fossils/fossil_9" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_9.nbt"
+            )),
+            "nether_fossils/fossil_10" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_10.nbt"
+            )),
+            "nether_fossils/fossil_11" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_11.nbt"
+            )),
+            "nether_fossils/fossil_12" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_12.nbt"
+            )),
+            "nether_fossils/fossil_13" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_13.nbt"
+            )),
+            "nether_fossils/fossil_14" => Some(include_bytes!(
+                "../../../../assets/structures/nether_fossils/fossil_14.nbt"
+            )),
+            _ => None,
+        }
     }
 }
 
