@@ -80,6 +80,11 @@ impl DynamicOps for NbtOps {
         for (k, v) in entries {
             if let Some(key) = k.extract_string() {
                 compound.put(key, v);
+            } else {
+                // The Minecraft implementation just uses the string representation of the key tag,
+                // but that probably isn't meant to be intentionally used, so we will just
+                // log an error.
+                eprintln!("Invalid tag for key: {k}")
             }
         }
         compound.into()
