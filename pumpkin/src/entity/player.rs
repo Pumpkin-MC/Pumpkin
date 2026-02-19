@@ -2645,47 +2645,36 @@ impl Player {
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
         let server = self.world().server.upgrade().unwrap();
-        let sync_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
-        let window_type = self
-            .current_screen_handler
-            .lock()
+
+        let inferred_sync_id = self.screen_handler_sync_id.load(Ordering::Relaxed) + 1;
+        if let Some(screen_handler) = screen_handler_factory
+            .create_screen_handler(inferred_sync_id, &self.inventory, self)
             .await
-            .lock()
-            .await
-            .get_behaviour()
-            .window_type;
+        {
+            let screen_handler_temp = screen_handler.lock().await;
+            let window_type = screen_handler_temp.window_type();
 
-        // i need a Arc<Player> not Arc<&Player>
-        let player = server.get_player_by_uuid(self.gameprofile.id).unwrap();
-        let event = InventoryOpenEvent::new(player, window_type, sync_id);
+            // i need a Arc<Player> not Arc<&Player>
+            let player = server.get_player_by_uuid(self.gameprofile.id).unwrap();
+            let event = InventoryOpenEvent::new(player, window_type, inferred_sync_id);
 
-        send_cancellable! {{
-            server;
-            event;
-            'after: {
-                if !self
-                    .current_screen_handler
-                    .lock()
-                    .await
-                    .lock()
-                    .await
-                    .as_any()
-                    .is::<PlayerScreenHandler>()
-                {
-                    self.close_handled_screen().await;
-                }
-
-                self.increment_screen_handler_sync_id();
-
-                if let Some(screen_handler) = screen_handler_factory
-                    .create_screen_handler(
-                        self.screen_handler_sync_id.load(Ordering::Relaxed),
-                        &self.inventory,
-                        self,
-                    )
-                    .await
-                {
-                    let screen_handler_temp = screen_handler.lock().await;
+            send_cancellable! {{
+                server;
+                event;
+                'after: {
+                    if !self
+                        .current_screen_handler
+                        .lock()
+                        .await
+                        .lock()
+                        .await
+                        .as_any()
+                        .is::<PlayerScreenHandler>()
+                    {
+                        self.close_handled_screen().await;
+                    }
+                    // officially do it since the event wasn't canceled
+                    self.increment_screen_handler_sync_id();
                     self.client
                         .enqueue_packet(&COpenScreen::new(
                             screen_handler_temp.sync_id().into(),
@@ -2701,17 +2690,16 @@ impl Player {
                     *self.current_screen_handler.lock().await = screen_handler;
                     self.open_container_pos.store(block_pos);
                     Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
-                } else {
-                    //TODO: Send message if spectator
 
+                };
+                'cancelled: {
                     None
-                }
-            };
-            'cancelled: {
-                // do nothing
-                None
-            };
-        }}
+                };
+            }}
+        } else {
+            //TODO: Send message if spectator
+            None
+        }
     }
 
     pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot) {
