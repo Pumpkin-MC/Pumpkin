@@ -16,11 +16,13 @@ pub struct Explosion {
     power: f32,
     pos: Vector3<f64>,
 }
+
 impl Explosion {
     #[must_use]
     pub const fn new(power: f32, pos: Vector3<f64>) -> Self {
         Self { power, pos }
     }
+
     async fn get_blocks_to_destroy(
         &self,
         world: &World,
@@ -103,6 +105,12 @@ impl Explosion {
             if entity_base.is_immune_to_explosion() {
                 continue;
             }
+
+            // Skip spectators (no damage, no knockback)
+            if entity_base.is_spectator() {
+                continue;
+            }
+
             let entity = entity_base.get_entity();
 
             let distance = (entity.pos.load().squared_distance_to_vec(&self.pos)).sqrt() / radius;
