@@ -12,6 +12,7 @@ use pumpkin_datafixerupper::serialization::struct_builder::{
 use pumpkin_datafixerupper::{impl_get_list, impl_string_struct_builder, impl_struct_builder};
 use std::iter::Map;
 use std::vec::IntoIter;
+use tracing::warn;
 
 /// A [`DynamicOps`] to serialize to/deserialize from NBT data.
 pub struct NbtOps;
@@ -83,8 +84,8 @@ impl DynamicOps for NbtOps {
             } else {
                 // The Minecraft implementation just uses the string representation of the key tag,
                 // but that probably isn't meant to be intentionally used, so we will just
-                // log an error.
-                eprintln!("Invalid tag for key: {k}")
+                // log a warning.
+                warn!("Invalid key tag for creating NBT compound: {k}");
             }
         }
         compound.into()
