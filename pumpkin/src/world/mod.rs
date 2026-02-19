@@ -2980,7 +2980,8 @@ impl World {
                     ..Default::default()
                 };
                 let mut stacks = block::collect_loot(broken_block, params);
-                if let Some(player) = cause.clone()
+                if !stacks.is_empty()
+                    && let Some(player) = cause.clone()
                     && let Some(server) = self.server.upgrade()
                 {
                     let event = crate::plugin::block::block_drop_item::BlockDropItemEvent::new(
@@ -2991,9 +2992,10 @@ impl World {
                     );
                     let event = server.plugin_manager.fire(event).await;
                     if event.cancelled {
-                        return Some(new_state_id);
+                        stacks.clear();
+                    } else {
+                        stacks = event.items;
                     }
-                    stacks = event.items;
                 }
                 for stack in stacks {
                     self.drop_stack(position, stack).await;
