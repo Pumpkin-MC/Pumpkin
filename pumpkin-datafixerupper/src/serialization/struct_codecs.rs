@@ -1,7 +1,8 @@
 use crate::impl_compressor;
 use crate::serialization::HasValue;
+#[allow(unused_imports)] // Only used for documentation.
+use crate::serialization::codec::Codec;
 use crate::serialization::codecs::map_codec::MapCodecCodec;
-use crate::serialization::codecs::map_codec::new_map_codec_codec;
 use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
 use crate::serialization::key_compressor::KeyCompressor;
@@ -109,7 +110,7 @@ macro_rules! impl_struct_map_codec {
             $($field: Field<T, $codec_type>,)*
             f: fn(C1::Value $(, $codec_type::Value)*) -> T,
         ) -> $alias<T, C1 $(, $codec_type)*> {
-            new_map_codec_codec(
+            MapCodecCodec::Owned(
                 $name {
                     field_1,
                     $( $field, )*
@@ -130,7 +131,7 @@ macro_rules! impl_struct_map_codec {
             $($field: Field<T, $codec_type>,)*
             f: fn(C1::Value $(, $codec_type::Value)*) -> T,
         ) -> $alias<T, C1 $(, $codec_type)*> {
-            new_map_codec_codec(
+            MapCodecCodec::Owned(
                 $name {
                     field_1,
                     $( $field, )*
