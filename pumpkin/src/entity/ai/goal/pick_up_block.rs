@@ -65,13 +65,11 @@ impl Goal for PickUpBlockGoal {
                 return;
             }
 
-            // Raycast from enderman center to target block center to validate line of sight
-            // Vanilla: RaycastContext(endermanCenter, blockCenter, OUTLINE, NONE, enderman)
-            let enderman_pos = entity.pos.load();
+            let enderman_block = entity.block_pos.load();
             let enderman_center = Vector3::new(
-                enderman_pos.x,
-                enderman_pos.y + 1.45, // getBodyY(0.5) = pos.y + height*0.5 = 2.9*0.5
-                enderman_pos.z,
+                enderman_block.0.x as f64 + 0.5,
+                by as f64 + 0.5,
+                enderman_block.0.z as f64 + 0.5,
             );
             let block_center = Vector3::new(bx as f64 + 0.5, by as f64 + 0.5, bz as f64 + 0.5);
             if let Some((hit_pos, _)) = world
@@ -81,7 +79,6 @@ impl Goal for PickUpBlockGoal {
                 })
                 .await
             {
-                // If the raycast hit a different block than our target, skip pickup
                 if hit_pos != target_pos {
                     return;
                 }

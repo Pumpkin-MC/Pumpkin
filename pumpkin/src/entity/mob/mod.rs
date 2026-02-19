@@ -68,7 +68,7 @@ impl MobEntity {
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
-            attack_damage: 3.0,
+            attack_damage: 2.0,
             follow_range: 16.0,
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
