@@ -385,6 +385,7 @@ where
 /// # Example
 /// ```rust
 /// use pumpkin_datafixerupper::serialization::codec::*;
+/// use pumpkin_datafixerupper::serialization::map_codec::*;
 /// use pumpkin_datafixerupper::serialization::codecs::primitive::*;
 /// use pumpkin_datafixerupper::serialization::struct_codecs::*;
 /// use pumpkin_datafixerupper::struct_codec;
