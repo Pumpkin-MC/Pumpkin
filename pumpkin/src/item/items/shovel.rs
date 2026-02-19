@@ -35,6 +35,7 @@ impl ItemBehaviour for ShovelItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
+            let _ = item;
             let world = player.world();
             // Yes, Minecraft does hardcode these
             let mut changed = if (block == &Block::GRASS_BLOCK
@@ -91,7 +92,7 @@ impl ItemBehaviour for ShovelItem {
             }
 
             if changed && player.gamemode.load() != GameMode::Creative {
-                item.damage_item_with_context(1, false);
+                player.damage_held_item(1).await;
             }
         })
     }
