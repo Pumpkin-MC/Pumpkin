@@ -5,23 +5,22 @@ use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
-const PANIC_SPEED: f64 = 1.25;
-
 pub struct EscapeDangerGoal {
+    speed: f64,
     goal_control: Controls,
     target: Option<Vector3<f64>>,
 }
 
-impl Default for EscapeDangerGoal {
-    fn default() -> Self {
-        Self {
+impl EscapeDangerGoal {
+    #[must_use]
+    pub fn new(speed: f64) -> Box<Self> {
+        Box::new(Self {
+            speed,
             goal_control: Controls::MOVE,
             target: None,
-        }
+        })
     }
-}
 
-impl EscapeDangerGoal {
     fn is_in_danger(mob: &dyn Mob) -> bool {
         let mob_entity = mob.get_mob_entity();
         let entity = &mob_entity.living_entity.entity;
@@ -73,7 +72,7 @@ impl Goal for EscapeDangerGoal {
             if let Some(target) = self.target {
                 let pos = mob.get_mob_entity().living_entity.entity.pos.load();
                 let mut navigator = mob.get_mob_entity().navigator.lock().await;
-                navigator.set_progress(NavigatorGoal::new(pos, target, PANIC_SPEED));
+                navigator.set_progress(NavigatorGoal::new(pos, target, self.speed));
             }
         })
     }

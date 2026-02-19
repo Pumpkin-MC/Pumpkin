@@ -33,7 +33,7 @@ impl CatEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(EscapeDangerGoal::default()));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS)));
             goal_selector.add_goal(11, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
