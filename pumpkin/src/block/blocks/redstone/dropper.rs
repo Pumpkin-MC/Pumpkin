@@ -10,7 +10,7 @@ use crate::entity::item::ItemEntity;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{FacingExt, translation};
+use pumpkin_data::{Block, FacingExt, translation};
 use pumpkin_inventory::generic_container_screen_handler::create_generic_3x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -207,10 +207,7 @@ impl BlockBehaviour for DropperBlock {
                         triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
                     );
                     let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade() {
-                        // SAFETY: `args.block` points to block registry data with process-long
-                        // lifetime; this cast preserves identity for event payload compatibility.
-                        let block_static: &'static pumpkin_data::Block =
-                            unsafe { &*std::ptr::from_ref::<pumpkin_data::Block>(args.block) };
+                        let block_static = Block::from_id(args.block.id);
                         let event = crate::plugin::block::block_dispense::BlockDispenseEvent::new(
                             block_static,
                             *args.position,
