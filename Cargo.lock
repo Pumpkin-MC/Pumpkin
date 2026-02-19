@@ -2126,6 +2126,7 @@ dependencies = [
  "serde",
  "tempfile",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

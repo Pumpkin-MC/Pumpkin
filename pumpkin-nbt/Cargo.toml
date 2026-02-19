@@ -12,6 +12,7 @@ bytes.workspace = true
 
 cesu8.workspace = true
 flate2.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
