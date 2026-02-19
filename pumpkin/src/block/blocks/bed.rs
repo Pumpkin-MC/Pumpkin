@@ -5,6 +5,7 @@ use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::translation;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
@@ -15,6 +16,8 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
 use crate::block::OnLandedUponArgs;
+use crate::block::UpdateEntityMovementAfterFallOnArgs;
+use crate::block::bounce_entity_after_fall;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
@@ -90,10 +93,17 @@ impl BlockBehaviour for BedBlock {
         Box::pin(async move {
             if let Some(living) = args.entity.get_living_entity() {
                 living
-                    .handle_fall_damage(args.fall_distance * 0.5, 1.0)
+                    .handle_fall_damage(args.entity, args.fall_distance * 0.5, 1.0)
                     .await;
             }
         })
+    }
+
+    fn update_entity_movement_after_fall_on<'a>(
+        &'a self,
+        args: UpdateEntityMovementAfterFallOnArgs<'a>,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move { bounce_entity_after_fall(args.entity, 0.66) })
     }
 
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
@@ -243,7 +253,7 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate("block.minecraft.bed.obstructed", []),
+                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_OBSTRUCTED, []),
                         true,
                     )
                     .await;
@@ -256,7 +266,7 @@ impl BlockBehaviour for BedBlock {
 
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate("block.minecraft.bed.occupied", []),
+                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_OCCUPIED, []),
                         true,
                     )
                     .await;
@@ -275,7 +285,10 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate("block.minecraft.bed.too_far_away", []),
+                        &TextComponent::translate(
+                            translation::BLOCK_MINECRAFT_BED_TOO_FAR_AWAY,
+                            [],
+                        ),
                         true,
                     )
                     .await;
@@ -294,7 +307,10 @@ impl BlockBehaviour for BedBlock {
                 .await
             {
                 args.player
-                    .send_system_message(&TextComponent::translate("block.minecraft.set_spawn", []))
+                    .send_system_message(&TextComponent::translate(
+                        translation::BLOCK_MINECRAFT_SET_SPAWN,
+                        [],
+                    ))
                     .await;
             }
 
@@ -302,7 +318,7 @@ impl BlockBehaviour for BedBlock {
             if !can_sleep(args.world).await {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate("block.minecraft.bed.no_sleep", []),
+                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_NO_SLEEP, []),
                         true,
                     )
                     .await;
@@ -321,7 +337,10 @@ impl BlockBehaviour for BedBlock {
                 {
                     args.player
                         .send_system_message_raw(
-                            &TextComponent::translate("block.minecraft.bed.not_safe", []),
+                            &TextComponent::translate(
+                                translation::BLOCK_MINECRAFT_BED_NOT_SAFE,
+                                [],
+                            ),
                             true,
                         )
                         .await;

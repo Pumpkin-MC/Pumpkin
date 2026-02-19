@@ -7,10 +7,10 @@ use crate::block::{
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 
-use pumpkin_data::FacingExt;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
+use pumpkin_data::{FacingExt, translation};
 use pumpkin_inventory::generic_container_screen_handler::create_generic_3x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -47,7 +47,7 @@ impl ScreenHandlerFactory for DropperScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.dropper", &[])
+        TextComponent::translate(translation::CONTAINER_DROPPER, &[])
     }
 }
 
@@ -89,7 +89,7 @@ impl BlockBehaviour for DropperBlock {
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
-                    .open_handled_screen(&DropperScreenFactory(inventory))
+                    .open_handled_screen(&DropperScreenFactory(inventory), Some(*args.position))
                     .await;
             }
             BlockActionResult::Success

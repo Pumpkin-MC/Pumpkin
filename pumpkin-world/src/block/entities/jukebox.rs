@@ -12,10 +12,10 @@ use crate::inventory::{Clearable, Inventory, InventoryFuture};
 use crate::world::SimpleWorld;
 use crate::{block::entities::BlockEntity, item::ItemStack};
 
-/// Matches vanilla's JukeboxBlockEntity
+/// Matches vanilla's `JukeboxBlockEntity`
 pub struct JukeboxBlockEntity {
     position: BlockPos,
-    /// The record item stored in the jukebox (RecordItem in NBT)
+    /// The record item stored in the jukebox (`RecordItem` in NBT)
     record_stack: Arc<Mutex<ItemStack>>,
     /// Ticks since the current song started playing
     ticks_since_song_started: AtomicU64,
@@ -129,7 +129,7 @@ impl JukeboxBlockEntity {
         self.record_stack.lock().await.clone()
     }
 
-    /// Set the record stack - matches vanilla's setStack()
+    /// Set the record stack - matches vanilla's `setStack()`
     /// Note: The caller is responsible for updating block state and playing music
     pub async fn set_record(&self, stack: ItemStack) {
         *self.record_stack.lock().await = stack;
@@ -176,7 +176,7 @@ impl JukeboxBlockEntity {
     }
 }
 
-/// Implements single-slot inventory for jukebox (matches vanilla's SingleStackInventory)
+/// Implements single-slot inventory for jukebox (matches vanilla's `SingleStackInventory`)
 impl Inventory for JukeboxBlockEntity {
     fn size(&self) -> usize {
         1

@@ -20,6 +20,7 @@ use rustc_hash::FxHashMap;
 
 use super::{
     GlobalRandomConfig, biome_coords,
+    blender::{Blender, BlenderImpl},
     feature::placed_features::PLACED_FEATURES,
     noise::router::{
         multi_noise_sampler::MultiNoiseSampler, proto_noise_router::DoublePerlinNoiseBuilder,
@@ -29,7 +30,9 @@ use super::{
     section_coords,
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
-use crate::chunk::{ChunkData, ChunkHeightmapType};
+use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
+use crate::chunk::format::LightContainer;
+use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::StagedChunkEnum;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::noise::aquifer_sampler::{
@@ -44,7 +47,6 @@ use crate::generation::structure::try_generate_structure;
 use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
     BlockStateId, ProtoNoiseRouters,
-    biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier},
     block::RawBlockState,
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
@@ -152,6 +154,7 @@ pub struct ProtoChunk {
     height: u16,
     bottom_y: i8,
     pub stage: StagedChunkEnum,
+    pub light: ChunkLight,
 }
 
 pub struct TerrainCache {
@@ -186,6 +189,7 @@ impl ProtoChunk {
         biome_mixer_seed: i64,
     ) -> Self {
         let height = dimension.logical_height as u16;
+        let section_count = (height as usize) / 16;
 
         let default_heightmap = vec![i16::MIN; CHUNK_AREA].into_boxed_slice();
         Self {
@@ -195,9 +199,9 @@ impl ProtoChunk {
             flat_block_map: vec![0; CHUNK_AREA * height as usize].into_boxed_slice(),
             flat_biome_map: vec![
                 Biome::PLAINS.id;
-                biome_coords::from_block(CHUNK_DIM as usize)
-                    * biome_coords::from_block(CHUNK_DIM as usize)
-                    * biome_coords::from_block(height as usize)
+                biome_coords::from_block(CHUNK_DIM as i32) as usize
+                    * biome_coords::from_block(CHUNK_DIM as i32) as usize
+                    * biome_coords::from_block(height as i32) as usize
             ]
             .into_boxed_slice(),
             biome_mixer_seed,
@@ -209,10 +213,29 @@ impl ProtoChunk {
             height,
             bottom_y: dimension.min_y as i8,
             stage: StagedChunkEnum::Empty,
+            light: ChunkLight {
+                sky_light: (0..section_count)
+                    .map(|_| {
+                        if dimension.has_skylight {
+                            // Pre-allocate full arrays for sky light in dimensions with skylight
+                            // Initialize to 0 - lighting engine will calculate proper values
+                            LightContainer::new_filled(0)
+                        } else {
+                            // No skylight in Nether/End, can use Empty
+                            LightContainer::new_empty(0)
+                        }
+                    })
+                    .collect(),
+                block_light: (0..section_count)
+                    // Pre-allocate full arrays for block light
+                    // Initialize to 0 - lighting engine will set emissive blocks
+                    .map(|_| LightContainer::new_filled(0))
+                    .collect(),
+            },
         }
     }
 
-    pub async fn from_chunk_data(
+    pub fn from_chunk_data(
         chunk_data: &ChunkData,
         dimension: &Dimension,
         default_block: &'static BlockState,
@@ -225,6 +248,7 @@ impl ProtoChunk {
             default_block,
             biome_mixer_seed,
         );
+        proto_chunk.light = chunk_data.light_engine.lock().unwrap().clone();
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data.heightmap.lock().unwrap();
@@ -390,9 +414,9 @@ impl ProtoChunk {
 
     #[inline]
     fn local_pos_to_block_index(&self, x: i32, y: i32, z: i32) -> usize {
-        debug_assert!((0..16).contains(&x), "x out of bounds: {}", x);
-        debug_assert!((0..16).contains(&z), "z out of bounds: {}", z);
-        debug_assert!(y >= 0 && y < self.height() as i32, "y out of bounds: {}", y);
+        debug_assert!((0..16).contains(&x), "x out of bounds: {x}");
+        debug_assert!((0..16).contains(&z), "z out of bounds: {z}");
+        debug_assert!(y >= 0 && y < self.height() as i32, "y out of bounds: {y}");
 
         self.height() as usize * CHUNK_DIM as usize * x as usize
             + CHUNK_DIM as usize * y as usize
@@ -404,16 +428,15 @@ impl ProtoChunk {
     pub fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
         let biome_height = self.height() as usize >> 2;
 
-        debug_assert!((0..4).contains(&x), "Biome X out of bounds: {}", x);
-        debug_assert!((0..4).contains(&z), "Biome Z out of bounds: {}", z);
+        debug_assert!((0..4).contains(&x), "Biome X out of bounds: {x}");
+        debug_assert!((0..4).contains(&z), "Biome Z out of bounds: {z}");
         debug_assert!(
             y >= 0 && y < biome_height as i32,
-            "Biome Y out of bounds: {}",
-            y
+            "Biome Y out of bounds: {y}"
         );
 
-        biome_height * biome_coords::from_block(CHUNK_DIM as usize) * x as usize
-            + biome_coords::from_block(CHUNK_DIM as usize) * y as usize
+        biome_height * biome_coords::from_block(CHUNK_DIM as i32) as usize * x as usize
+            + biome_coords::from_block(CHUNK_DIM as i32) as usize * y as usize
             + z as usize
     }
 
@@ -539,7 +562,7 @@ impl ProtoChunk {
         );
 
         let horizontal_biome_end = biome_coords::from_block(
-            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+            horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
         );
         let surface_config = SurfaceHeightSamplerBuilderOptions::new(
             biome_coords::from_block(start_x),
@@ -577,7 +600,7 @@ impl ProtoChunk {
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
         let horizontal_biome_end = biome_coords::from_block(
-            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+            horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
         );
         let surface_config = SurfaceHeightSamplerBuilderOptions::new(
             biome_coords::from_block(start_x),
@@ -606,8 +629,19 @@ impl ProtoChunk {
         dimension: Dimension,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
+        let overworld_supplier = MultiNoiseBiomeSupplier::OVERWORLD;
+        let nether_supplier = MultiNoiseBiomeSupplier::NETHER;
+        let end_supplier = TheEndBiomeSupplier;
+        let base_supplier: &dyn BiomeSupplier = if dimension == Dimension::THE_END {
+            &end_supplier
+        } else if dimension == Dimension::THE_NETHER {
+            &nether_supplier
+        } else {
+            &overworld_supplier
+        };
+        let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
         let min_y = self.bottom_y();
-        let bottom_section = section_coords::block_to_section(min_y) as i32;
+        let bottom_section = section_coords::block_to_section(min_y as i32);
         let top_section = section_coords::block_to_section(min_y as i32 + self.height() as i32 - 1);
 
         let start_block_x = start_block_x(self.x);
@@ -620,27 +654,16 @@ impl ProtoChunk {
             let start_block_y = section_coords::section_to_block(i);
             let start_biome_y = biome_coords::from_block(start_block_y);
 
-            let biomes_per_section = biome_coords::from_block(CHUNK_DIM) as i32;
+            let biomes_per_section = biome_coords::from_block(CHUNK_DIM as i32);
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
-                        let biome = if dimension == Dimension::THE_END {
-                            TheEndBiomeSupplier::biome(
-                                start_biome_x + x,
-                                start_biome_y + y,
-                                start_biome_z + z,
-                                multi_noise_sampler,
-                                dimension,
-                            )
-                        } else {
-                            MultiNoiseBiomeSupplier::biome(
-                                start_biome_x + x,
-                                start_biome_y + y,
-                                start_biome_z + z,
-                                multi_noise_sampler,
-                                dimension,
-                            )
-                        };
+                        let biome = biome_supplier.biome(
+                            start_biome_x + x,
+                            start_biome_y + y,
+                            start_biome_z + z,
+                            multi_noise_sampler,
+                        );
                         let index = self.local_biome_pos_to_biome_index(
                             x,
                             start_biome_y + y - biome_coords::from_block(min_y as i32),

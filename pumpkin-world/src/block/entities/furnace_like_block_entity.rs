@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// Trait for extracting smelting experience from cooking block entities.
-/// This is a separate dyn-compatible trait since CookingBlockEntityBase is not.
+/// This is a separate dyn-compatible trait since `CookingBlockEntityBase` is not.
 pub trait ExperienceContainer: Send + Sync {
     /// Extract and reset accumulated experience, returning the total as an integer
     fn extract_experience(&self) -> i32;
@@ -28,7 +28,7 @@ pub trait CookingBlockEntityBase:
     /// Uses the result item ID as the recipe identifier
     fn add_recipe_used(&self, recipe: &CookingRecipe);
     /// Extract and reset accumulated experience, returning the total as an integer
-    /// Calculates XP from tracked recipes and clears the recipes_used map
+    /// Calculates XP from tracked recipes and clears the `recipes_used` map
     fn extract_experience_from_recipes(&self) -> i32;
 
     fn get_input_item(&self) -> impl std::future::Future<Output = Arc<Mutex<ItemStack>>>;
@@ -250,6 +250,7 @@ macro_rules! impl_clearable_for_cooking {
                     for slot in self.items.iter() {
                         *slot.lock().await = ItemStack::EMPTY.clone();
                     }
+                    self.mark_dirty();
                 })
             }
         }
@@ -304,6 +305,7 @@ macro_rules! impl_inventory_for_cooking {
                     let mut removed = ItemStack::EMPTY.clone();
                     let mut guard = self.items[slot].lock().await;
                     std::mem::swap(&mut removed, &mut *guard);
+                    self.mark_dirty();
                     removed
                 })
             }
@@ -313,9 +315,11 @@ macro_rules! impl_inventory_for_cooking {
                 slot: usize,
                 amount: u8,
             ) -> $crate::inventory::InventoryFuture<'_, ItemStack> {
-                Box::pin(
-                    async move { $crate::inventory::split_stack(&self.items, slot, amount).await },
-                )
+                Box::pin(async move {
+                    let res = $crate::inventory::split_stack(&self.items, slot, amount).await;
+                    self.mark_dirty();
+                    res
+                })
             }
 
             fn set_stack(
@@ -345,8 +349,10 @@ macro_rules! impl_inventory_for_cooking {
                             self.set_cooking_total_time(0);
                         }
                         self.set_cooking_time_spent(0);
-                        self.mark_dirty();
                     }
+
+                    // Always consider the inventory changed when setting a stack
+                    self.mark_dirty();
                 })
             }
 
@@ -490,7 +496,7 @@ macro_rules! impl_block_entity_for_cooking {
                     }
 
                     if is_dirty {
-                        self.is_dirty();
+                        self.mark_dirty();
                     }
                 })
             }
@@ -557,6 +563,7 @@ macro_rules! impl_block_entity_for_cooking {
                     nbt.put_short("cooking_time_spent", self.get_cooking_time_spent() as i16);
                     nbt.put_short("lit_total_time", self.get_lit_total_time() as i16);
                     nbt.put_short("lit_time_remaining", self.get_lit_time_remaining() as i16);
+
                     // Save RecipesUsed in vanilla format (map of recipe ID -> craft count)
                     // Scope the mutex guard so it's dropped before the await
                     {
@@ -575,7 +582,8 @@ macro_rules! impl_block_entity_for_cooking {
                             );
                         }
                     }
-                    self.write_data(nbt, &self.items, true).await;
+
+                    self.write_inventory_nbt(nbt, true).await;
                 })
             }
 

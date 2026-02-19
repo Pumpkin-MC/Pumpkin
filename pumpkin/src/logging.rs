@@ -2,70 +2,110 @@
 #![allow(clippy::print_stdout)]
 
 use flate2::write::GzEncoder;
-use log::{LevelFilter, Log, Record};
 use rustyline::completion::Completer;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
 use rustyline::history::FileHistory;
 use rustyline::validate::Validator;
 use rustyline::{Editor, Helper};
-use simplelog::{CombinedLogger, Config, SharedLogger, WriteLogger};
 use std::borrow::Cow;
 use std::collections::VecDeque;
-use std::fmt::format;
 use std::fs::File;
-use std::io::{self, BufWriter};
+use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
-use time::{Duration, OffsetDateTime, UtcOffset};
+use time::{Duration, OffsetDateTime};
+use tracing::Subscriber;
+use tracing_subscriber::Layer;
+use tracing_subscriber::filter::LevelFilter;
 
 use crate::command::CommandSender;
 use crate::command::tree::NodeType;
 use crate::server::Server;
 
+#[macro_export]
+macro_rules! log_at_level {
+    ($level:expr, $($arg:tt)*) => {
+        match $level {
+            tracing::Level::TRACE => tracing::trace!($($arg)*),
+            tracing::Level::DEBUG => tracing::debug!($($arg)*),
+            tracing::Level::INFO => tracing::info!($($arg)*),
+            tracing::Level::WARN => tracing::warn!($($arg)*),
+            tracing::Level::ERROR => tracing::error!($($arg)*),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! plugin_log {
+    ($level:expr, $plugin_name:expr, $($arg:tt)*) => {{
+        let plugin_name = $plugin_name;
+        match $level {
+            tracing::Level::TRACE => {
+                tracing::trace!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::DEBUG => {
+                tracing::debug!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::INFO => {
+                tracing::info!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::WARN => {
+                tracing::warn!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+            tracing::Level::ERROR => {
+                tracing::error!(
+                    target: "pumpkin_plugin",
+                    plugin = plugin_name,
+                    $($arg)*
+                )
+            },
+        }
+    }};
+}
+
 const LOG_DIR: &str = "logs";
-const MAX_ATTEMPTS: u32 = 100;
+const MAX_ATTEMPTS: u32 = 1000;
 
 /// A wrapper for our logger to hold the terminal input while no input is expected in order to
 /// properly flush logs to the output while they happen instead of batched
 pub struct ReadlineLogWrapper {
-    internal: Box<CombinedLogger>,
     readline: std::sync::Mutex<Option<Editor<PumpkinCommandCompleter, FileHistory>>>,
 }
 
 struct GzipRollingLoggerData {
     pub current_day_of_month: u8,
     pub last_rotate_time: time::OffsetDateTime,
-    pub latest_logger: WriteLogger<File>,
+    pub file: BufWriter<File>,
     latest_filename: String,
 }
 
 pub struct GzipRollingLogger {
     log_level: LevelFilter,
     data: std::sync::Mutex<GzipRollingLoggerData>,
-    config: Config,
-}
-
-impl SharedLogger for GzipRollingLogger {
-    fn level(&self) -> LevelFilter {
-        self.log_level
-    }
-
-    fn config(&self) -> Option<&Config> {
-        Some(&self.config)
-    }
-
-    fn as_log(self: Box<Self>) -> Box<dyn Log> {
-        Box::new(*self)
-    }
 }
 
 impl GzipRollingLogger {
     pub fn new(
         log_level: LevelFilter,
-        config: Config,
         filename: String,
-    ) -> Result<Box<Self>, Box<dyn std::error::Error>> {
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let now = time::OffsetDateTime::now_utc();
         std::fs::create_dir_all(LOG_DIR)?;
 
@@ -93,23 +133,21 @@ impl GzipRollingLogger {
             std::fs::remove_file(&latest_path)?;
         }
 
-        let new_logger = WriteLogger::new(log_level, config.clone(), File::create(&latest_path)?);
+        let file = BufWriter::new(File::create(&latest_path)?);
 
-        Ok(Box::new(Self {
+        Ok(Self {
             log_level,
             data: std::sync::Mutex::new(GzipRollingLoggerData {
                 current_day_of_month: now.day(),
                 last_rotate_time: now,
                 latest_filename: filename,
-                latest_logger: *new_logger,
+                file,
             }),
-            config,
-        }))
+        })
     }
 
     pub fn new_filename(yesterday: bool) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
-        let mut now = OffsetDateTime::now_utc().to_offset(local_offset);
+        let mut now = OffsetDateTime::now_utc();
 
         if yesterday {
             now -= Duration::days(1);
@@ -119,12 +157,36 @@ impl GzipRollingLogger {
 
         let log_path = PathBuf::from(LOG_DIR);
 
+        let mut oldest_log = None;
+
         for id in 1..=MAX_ATTEMPTS {
             let filename = log_path.join(format!("{date_format}-{id}.log.gz"));
 
             if !filename.exists() {
                 return Ok(filename);
             }
+
+            let Ok(modified_time) = filename.metadata().and_then(|m| m.modified()) else {
+                continue;
+            };
+
+            if let Some((_, old_time)) = oldest_log {
+                if modified_time < old_time {
+                    oldest_log = Some((filename, modified_time));
+                }
+
+                continue;
+            }
+
+            oldest_log = Some((filename, modified_time));
+        }
+
+        if let Some((path, _)) = oldest_log {
+            eprintln!(
+                "Max log ids ({MAX_ATTEMPTS}) used for {date_format}; overwriting oldest log file: {}",
+                path.display()
+            );
+            return Ok(path);
         }
 
         Err(format!(
@@ -139,6 +201,14 @@ impl GzipRollingLogger {
 
         let new_gz_path = Self::new_filename(true)?;
         let latest_path = PathBuf::from(LOG_DIR).join(&data.latest_filename);
+
+        // Flush and drop the current file
+        data.file.flush()?;
+        drop(std::mem::replace(
+            &mut data.file,
+            BufWriter::new(File::create("/dev/null")?),
+        ));
+
         let mut file = File::open(&latest_path)?;
         let mut encoder = GzEncoder::new(
             BufWriter::new(File::create(&new_gz_path)?),
@@ -149,11 +219,7 @@ impl GzipRollingLogger {
 
         data.current_day_of_month = now.day();
         data.last_rotate_time = now;
-        data.latest_logger = *WriteLogger::new(
-            self.log_level,
-            self.config.clone(),
-            File::create(&latest_path)?,
-        );
+        data.file = BufWriter::new(File::create(&latest_path)?);
         Ok(())
     }
 }
@@ -176,30 +242,46 @@ fn remove_ansi_color_code(s: &str) -> String {
     result
 }
 
-impl Log for GzipRollingLogger {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        metadata.level() <= self.log_level
-    }
+impl<S> Layer<S> for GzipRollingLogger
+where
+    S: Subscriber,
+{
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let metadata = event.metadata();
+        let level = metadata.level();
 
-    fn log(&self, record: &Record) {
-        if !self.enabled(record.metadata()) {
+        // Check if we should log this event based on level
+        let should_log = match *level {
+            tracing::Level::ERROR => self.log_level >= LevelFilter::ERROR,
+            tracing::Level::WARN => self.log_level >= LevelFilter::WARN,
+            tracing::Level::INFO => self.log_level >= LevelFilter::INFO,
+            tracing::Level::DEBUG => self.log_level >= LevelFilter::DEBUG,
+            tracing::Level::TRACE => self.log_level >= LevelFilter::TRACE,
+        };
+
+        if !should_log {
             return;
         }
 
         let now = time::OffsetDateTime::now_utc();
 
-        if let Ok(data) = self.data.lock() {
-            let original_string = format(*record.args());
-            let string = remove_ansi_color_code(&original_string);
-            data.latest_logger.log(
-                &Record::builder()
-                    .args(format_args!("{string}"))
-                    .metadata(record.metadata().clone())
-                    .module_path(record.module_path())
-                    .file(record.file())
-                    .line(record.line())
-                    .build(),
-            );
+        if let Ok(mut data) = self.data.lock() {
+            // Format the event
+            let mut visitor = StringVisitor::default();
+            event.record(&mut visitor);
+            let message = visitor.0;
+
+            let clean_message = remove_ansi_color_code(&message);
+
+            // Write to file
+            let _ = writeln!(data.file, "[{level}] {clean_message}");
+            let _ = data.file.flush();
+
+            // Check if we need to rotate
             if data.current_day_of_month != now.day() {
                 drop(data);
                 if let Err(e) = self.rotate_log() {
@@ -208,24 +290,27 @@ impl Log for GzipRollingLogger {
             }
         }
     }
+}
 
-    fn flush(&self) {
-        if let Ok(data) = self.data.lock() {
-            data.latest_logger.flush();
+#[derive(Default)]
+struct StringVisitor(String);
+
+impl tracing::field::Visit for StringVisitor {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "message" {
+            self.0 = format!("{value:?}");
+            // Remove quotes if present
+            if self.0.starts_with('"') && self.0.ends_with('"') {
+                self.0 = self.0[1..self.0.len() - 1].to_string();
+            }
         }
     }
 }
 
 impl ReadlineLogWrapper {
     #[must_use]
-    pub fn new(
-        log: Box<dyn SharedLogger + 'static>,
-        file_logger: Option<Box<dyn SharedLogger + 'static>>,
-        rl: Option<Editor<PumpkinCommandCompleter, FileHistory>>,
-    ) -> Self {
-        let loggers: Vec<Option<Box<dyn SharedLogger + 'static>>> = vec![Some(log), file_logger];
+    pub const fn new(rl: Option<Editor<PumpkinCommandCompleter, FileHistory>>) -> Self {
         Self {
-            internal: CombinedLogger::new(loggers.into_iter().flatten().collect()),
             readline: std::sync::Mutex::new(rl),
         }
     }
@@ -236,26 +321,13 @@ impl ReadlineLogWrapper {
             .map_or_else(|_| None, |mut result| result.take())
     }
 
+    // This isn't really dead code. It is just only used by the lib and not the bin for this
+    // crate, and as such creates a compiler warning.
     #[allow(dead_code)]
     pub(crate) fn return_readline(&self, rl: Editor<PumpkinCommandCompleter, FileHistory>) {
         if let Ok(mut result) = self.readline.lock() {
             let _ = result.insert(rl);
         }
-    }
-}
-
-// Writing to `stdout` is expensive anyway, so I don't think having a `Mutex` here is a big deal.
-impl Log for ReadlineLogWrapper {
-    fn log(&self, record: &log::Record) {
-        self.internal.log(record);
-    }
-
-    fn flush(&self) {
-        self.internal.flush();
-    }
-
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        self.internal.enabled(metadata)
     }
 }
 

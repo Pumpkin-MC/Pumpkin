@@ -1,6 +1,5 @@
 use std::sync::{Arc, atomic::Ordering};
 
-use log::warn;
 use pumpkin_data::{
     Block, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
@@ -11,6 +10,7 @@ use pumpkin_world::{
     block::entities::{BlockEntity, command_block::CommandBlockEntity},
     tick::TickPriority,
 };
+use tracing::warn;
 
 use crate::{
     block::{

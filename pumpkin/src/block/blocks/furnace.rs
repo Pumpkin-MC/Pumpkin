@@ -3,6 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::{
     block_properties::{BlockProperties, FurnaceLikeProperties},
     screen::WindowType,
+    translation,
 };
 use pumpkin_inventory::{
     furnace_like::furnace_like_screen_handler::FurnaceLikeScreenHandler,
@@ -74,7 +75,7 @@ impl ScreenHandlerFactory for FurnaceScreenFactory {
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
-        TextComponent::translate("container.furnace", &[])
+        TextComponent::translate(translation::CONTAINER_FURNACE, &[])
     }
 }
 
@@ -92,7 +93,7 @@ impl BlockBehaviour for FurnaceBlock {
                 let furnace_screen_factory =
                     FurnaceScreenFactory::new(inventory, property_delegate, experience_container);
                 args.player
-                    .open_handled_screen(&furnace_screen_factory)
+                    .open_handled_screen(&furnace_screen_factory, Some(*args.position))
                     .await;
             }
             crate::block::registry::BlockActionResult::Consume

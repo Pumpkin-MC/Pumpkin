@@ -6,6 +6,7 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::block_properties::{BlockProperties, LadderLikeProperties};
+use pumpkin_data::translation;
 use pumpkin_inventory::{
     generic_container_screen_handler::create_generic_9x3,
     player::player_inventory::PlayerInventory,
@@ -37,7 +38,7 @@ impl ScreenHandlerFactory for EnderChestScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.enderchest", &[])
+        TextComponent::translate(translation::CONTAINER_ENDERCHEST, &[])
     }
 }
 
@@ -82,7 +83,10 @@ impl BlockBehaviour for EnderChestBlock {
                 let inventory = args.player.ender_chest_inventory();
                 inventory.set_tracker(block_entity.get_tracker()).await;
                 args.player
-                    .open_handled_screen(&EnderChestScreenFactory(inventory.clone()))
+                    .open_handled_screen(
+                        &EnderChestScreenFactory(inventory.clone()),
+                        Some(*args.position),
+                    )
                     .await;
 
                 // TODO: player.incrementStat(Stats.OPEN_ENDERCHEST);

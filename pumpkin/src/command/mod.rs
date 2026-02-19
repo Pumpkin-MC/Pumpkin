@@ -79,13 +79,14 @@ impl fmt::Display for CommandSender {
 impl CommandSender {
     pub async fn send_message(&self, text: TextComponent) {
         match self {
-            Self::Console => log::info!("{}", text.to_pretty_console()),
+            #[allow(clippy::print_stdout)]
+            Self::Console => println!("{}", text.to_pretty_console()),
             Self::Player(c) => c.send_system_message(&text).await,
             Self::Rcon(s) => s.lock().await.push(text.to_pretty_console()),
             Self::CommandBlock(block_entity, _) => {
                 let mut last_output = block_entity.last_output.lock().await;
 
-                let now = time::OffsetDateTime::now_local().unwrap();
+                let now = time::OffsetDateTime::now_utc();
                 let format = time::macros::format_description!("[hour]:[minute]:[second]");
                 let timestamp = now.format(&format).unwrap();
 

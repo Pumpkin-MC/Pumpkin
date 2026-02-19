@@ -12,7 +12,7 @@ query = []
 
 [dependencies]
 pumpkin-nbt.workspace = true
-pumpkin-data.workspace = true
+pumpkin-data = { workspace = true, features = ["packet", "item_id_remap"] }
 pumpkin-macros.workspace = true
 pumpkin-world.workspace = true
 pumpkin-util.workspace = true
@@ -29,13 +29,13 @@ cfb8.workspace = true
 
 # compression
 async-compression = { workspace = true, features = ["tokio", "zlib"] }
+flate2.workspace = true
 
 take_mut.workspace = true
 bitflags.workspace = true
 
 [dev-dependencies]
 # Validate correctness
-flate2.workspace = true
 
 [lints]
 workspace = true
