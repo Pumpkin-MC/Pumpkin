@@ -3667,7 +3667,7 @@ impl pumpkin_world::world::SimpleWorld for World {
     }
 
     fn get_dimension(&self) -> WorldFuture<'_, &Dimension> {
-        Box::pin(async move {&self.dimension})
+        Box::pin(async move { &self.dimension })
     }
 
     fn play_sound<'a>(
