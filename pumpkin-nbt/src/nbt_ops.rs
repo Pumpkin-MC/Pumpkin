@@ -784,7 +784,7 @@ mod test {
         unbounded_map, validate,
     };
     use pumpkin_datafixerupper::serialization::codecs::list::ListCodec;
-    use pumpkin_datafixerupper::serialization::codecs::primitive::StringCodec;
+    use pumpkin_datafixerupper::serialization::codecs::primitive::{ByteBufferCodec, StringCodec};
     use pumpkin_datafixerupper::serialization::codecs::unbounded_map::UnboundedMapCodec;
     use pumpkin_datafixerupper::serialization::codecs::validated::ValidatedCodec;
     use pumpkin_datafixerupper::serialization::coders::{Decoder, Encoder};
@@ -910,7 +910,7 @@ mod test {
 
         assert_eq!(
             BYTE_BUFFER_CODEC
-                .parse(NbtTag::ByteArray(vec![1, 4].into_boxed_slice()), &INSTANCE)
+                .parse(NbtTag::ByteArray(Box::new([1, 4])), &INSTANCE)
                 .expect("Decoding should succeed"),
             vec![1, 4].into_boxed_slice()
         );
@@ -1466,6 +1466,126 @@ mod test {
                 .get_message()
                 .expect("Decoding should fail")
                 .starts_with("Could not fit i8")
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn packed_color() {
+        /// A color stored using 4 bytes, one each for red, green, blue and alpha.
+        #[derive(Debug, PartialEq, Clone)]
+        struct PackedColor {
+            r: u8,
+            g: u8,
+            b: u8,
+            /// Optional field, defaults to `255` (full alpha).
+            a: u8,
+        }
+
+        pub type PackedColorCodec = ComapFlatMapCodec<PackedColor, ByteBufferCodec>;
+        pub static PACKED_COLOR_CODEC: PackedColorCodec = comap_flat_map(
+            &BYTE_BUFFER_CODEC,
+            |v| {
+                // While decoding, our codec only accept byte buffers (arrays) with exactly 3 or 4 elements.
+                if v.len() == 4 {
+                    DataResult::success(PackedColor {
+                        r: v[0],
+                        g: v[1],
+                        b: v[2],
+                        a: v[3],
+                    })
+                } else if v.len() == 3 {
+                    // Alpha defaults to 255.
+                    DataResult::success(PackedColor {
+                        r: v[0],
+                        g: v[1],
+                        b: v[2],
+                        a: 255,
+                    })
+                } else {
+                    DataResult::error(format!("Invalid byte buffer for color: {v:?}"))
+                }
+            },
+            |c| vec![c.r, c.g, c.b, c.a].into_boxed_slice(),
+        );
+
+        // Encoding
+
+        assert_eq!(
+            PACKED_COLOR_CODEC
+                .encode_start(
+                    &PackedColor {
+                        r: 100,
+                        g: 121,
+                        b: 89,
+                        a: 201
+                    },
+                    &INSTANCE
+                )
+                .expect("Encoding should succeed"),
+            NbtTag::ByteArray(Box::new([100, 121, 89, 201]))
+        );
+
+        assert_eq!(
+            PACKED_COLOR_CODEC
+                .encode_start(
+                    &PackedColor {
+                        r: 0,
+                        g: 0,
+                        b: 0,
+                        a: 255
+                    },
+                    &INSTANCE
+                )
+                .expect("Encoding should succeed"),
+            NbtTag::ByteArray(Box::new([0, 0, 0, 255]))
+        );
+
+        // Decoding
+
+        assert_eq!(
+            PACKED_COLOR_CODEC
+                .parse(NbtTag::ByteArray(Box::new([100, 121, 89, 201])), &INSTANCE)
+                .expect("Decoding should succeed"),
+            PackedColor {
+                r: 100,
+                g: 121,
+                b: 89,
+                a: 201
+            }
+        );
+
+        assert_eq!(
+            PACKED_COLOR_CODEC
+                .parse(NbtTag::ByteArray(Box::new([255, 255, 0])), &INSTANCE)
+                .expect("Decoding should succeed"),
+            PackedColor {
+                r: 255,
+                g: 255,
+                b: 0,
+                a: 255
+            }
+        );
+
+        assert!(
+            PACKED_COLOR_CODEC
+                .parse(NbtTag::ByteArray(Box::new([120])), &INSTANCE)
+                .get_message()
+                .expect("Decoding should fail")
+                .starts_with("Invalid byte buffer for color")
+        );
+
+        // Even other number array types will work.
+        assert_eq!(
+            PACKED_COLOR_CODEC
+                .parse(NbtTag::IntArray(vec![1, 2, 3, 4]), &INSTANCE)
+                .expect("Decoding should succeed"),
+            PackedColor {
+                r: 1,
+                g: 2,
+                b: 3,
+                a: 4
+            }
         );
     }
 }
