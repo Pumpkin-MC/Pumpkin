@@ -40,6 +40,8 @@ impl Default for GlobalNodeId {
 /// to a tree yet.
 ///
 /// If you want to start a command with this node, use [`CommandDetachedNode`] instead.
+///
+/// To be of any utility, this must be attached to a tree later.
 pub struct LiteralDetachedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, DetachedNode>,
@@ -81,6 +83,8 @@ impl LiteralDetachedNode {
 /// to a tree yet.
 ///
 /// If you don't want to start a command with this node, use [`LiteralDetachedNode`] instead.
+///
+/// To be of any utility, this must be attached to a tree later.
 pub struct CommandDetachedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, DetachedNode>,
@@ -121,6 +125,8 @@ impl CommandDetachedNode {
 }
 
 /// Represents a node that accepts a specific type of argument.
+///
+/// To be of any utility, this must be attached to a tree later.
 pub struct ArgumentDetachedNode {
     pub owned: OwnedNodeData,
     pub children: FxHashMap<String, DetachedNode>,

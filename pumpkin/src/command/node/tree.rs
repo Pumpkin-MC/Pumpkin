@@ -140,15 +140,40 @@ impl Tree {
     }
 
     /// Adds a child to a given node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node to be added to a non-root node is a [`CommandDetachedNode`].
+    ///
+    /// Essentially, this means that a [`CommandDetachedNode`] must have the root node
+    /// of the tree *as its parent*, to be attached to the tree.
     pub fn add_child(&mut self, parent: NodeId, node: impl Into<DetachedNode>) -> NodeId {
+        let node = node.into();
+        assert!(
+            parent == ROOT_NODE_ID || !matches!(node, DetachedNode::Command(_)),
+            "Cannot add a CommandDetachedNode as a child of a non-root node"
+        );
+
         // First, attach the node to this tree.
-        let node = self.attach(node.into());
+        let node = self.attach(node);
         self.add_attached_child(parent, node);
         node
     }
 
     /// Adds an already-attached child to a given node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node identification to be added to a non-root node references a [`CommandAttachedNode`].
+    ///
+    /// Essentially, this means that a [`CommandAttachedNode`] must have the root node
+    /// of the tree *as its parent*.
     fn add_attached_child(&mut self, parent: NodeId, node: NodeId) {
+        assert!(
+            parent == ROOT_NODE_ID || self[node].classification() != NodeClassification::Command,
+            "Cannot add a CommandAttachedNode as a child of a non-root node"
+        );
+
         let node_name = self[node].name();
 
         let child = self[parent].children_ref().get(&node_name);
@@ -407,6 +432,21 @@ mod test {
 
         assert_eq!(tree.size(), 4);
         assert_eq!(tree.get_children(parent).len(), 2);
+    }
+
+    #[test]
+    #[should_panic = "Cannot add a CommandDetachedNode as a child of a non-root node"]
+    fn adding_command_node_to_non_root_node() {
+        let mut tree = Tree::new();
+
+        let parent: NodeId = tree
+            .add_child_to_root(CommandArgumentBuilder::new("foo", "A test command"))
+            .into();
+
+        tree.add_child(
+            parent,
+            CommandArgumentBuilder::new("bar", "Another test command"),
+        );
     }
 
     #[test]

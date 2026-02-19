@@ -42,6 +42,61 @@ impl Default for CommonArgumentBuilder {
     }
 }
 
+/// A short-form way to create a new [`CommandArgumentBuilder`]
+/// from a literal and a command description.
+///
+/// This should ideally be imported directly. Here's an example of usage:
+/// ```
+/// use pumpkin::command::argument_builder::command;
+///
+/// let builder = command("foo", "A test command");
+/// ```
+///
+/// The builder returned will eventually construct a [`CommandDetachedNode`].
+/// This node can then be registered into a dispatcher.
+pub fn command(
+    literal: impl Into<Cow<'static, str>>,
+    description: impl Into<Cow<'static, str>>,
+) -> CommandArgumentBuilder {
+    CommandArgumentBuilder::new(literal, description)
+}
+
+/// A short-form way to create a new [`LiteralArgumentBuilder`]
+/// from a literal.
+///
+/// This should ideally be imported directly. Here's an example of usage:
+/// ```
+/// use pumpkin::command::argument_builder::literal;
+///
+/// let builder = literal("bar");
+/// ```
+///
+/// The builder returned will eventually construct a [`LiteralDetachedNode`].
+pub fn literal(literal: impl Into<Cow<'static, str>>) -> LiteralArgumentBuilder {
+    LiteralArgumentBuilder::new(literal)
+}
+
+/// A short-form way to create a new [`RequiredArgumentBuilder`]
+/// from an argument type and name.
+///
+/// This should ideally be imported directly. Here's an example of usage:
+/// ```
+/// use pumpkin::command::{
+///     argument_builder::argument,
+///     argument_types::core::integer::IntegerArgumentType
+/// };
+///
+/// let argument_builder = argument("bar", IntegerArgumentType::new(1, 10));
+/// ```
+///
+/// The builder returned will eventually construct a [`ArgumentDetachedNode`].
+pub fn argument(
+    name: impl Into<Cow<'static, str>>,
+    arg_type: impl AnyArgumentType + 'static,
+) -> RequiredArgumentBuilder {
+    RequiredArgumentBuilder::new(name, arg_type)
+}
+
 /// A builder that builds a literal, non-command [`DetachedNode`].
 pub struct LiteralArgumentBuilder {
     common: CommonArgumentBuilder,
@@ -74,9 +129,10 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
     ///
     /// # Panics
     ///
-    /// Panics if this node is redirected to another node.
+    /// Panics if this node is redirected to another node, or the child
+    /// provided is of the type [`CommandDetachedNode`].
     #[must_use]
-    fn then(self, argument: impl Into<DetachedNode>) -> Self;
+    fn then(self, child: impl Into<DetachedNode>) -> Self;
 
     /// Gets the command to execute for the node being built.
     #[must_use]
@@ -152,6 +208,11 @@ macro_rules! impl_boilerplate_argument_builder {
                 "Cannot add children to a redirected node"
             );
             let node = argument.into();
+            assert!(
+                !matches!(node, DetachedNode::Command(_)),
+                "Cannot add a CommandDetachedNode as a child of a builder"
+            );
+
             self.common.arguments.insert(node.name(), node);
             self
         }
@@ -436,5 +497,12 @@ mod test {
         let _ = CommandArgumentBuilder::new("test", "A test command")
             .redirect(Redirection::Root)
             .then(LiteralArgumentBuilder::new("child"));
+    }
+
+    #[test]
+    #[should_panic = "Cannot add a CommandDetachedNode as a child of a builder"]
+    fn add_command_as_child() {
+        let _ = CommandArgumentBuilder::new("foo", "A test command")
+            .then(CommandArgumentBuilder::new("bar", "Another test command"));
     }
 }

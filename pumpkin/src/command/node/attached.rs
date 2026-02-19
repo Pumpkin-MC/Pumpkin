@@ -273,12 +273,6 @@ impl AttachedNode {
         }
     }
 
-    // pub global_id: GlobalNodeId,
-    //     pub requirement: Requirement,
-    //     pub modifier: RedirectModifier,
-    //     pub forks: bool,
-    //     pub command: Option<Command>
-
     /// Gets the requirement for this node to be run.
     #[must_use]
     pub const fn requirement(&self) -> &Requirement {
