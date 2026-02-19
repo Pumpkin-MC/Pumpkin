@@ -12,11 +12,12 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use std::pin::Pin;
 use std::sync::Arc;
+use pumpkin_data::translation;
 
 pub const REQUIRES_PLAYER: CommandErrorType<0> =
-    CommandErrorType::new("permissions.requires.player");
+    CommandErrorType::new(translation::PERMISSIONS_REQUIRES_PLAYER);
 pub const REQUIRES_ENTITY: CommandErrorType<0> =
-    CommandErrorType::new("permissions.requires.entity");
+    CommandErrorType::new(translation::PERMISSIONS_REQUIRES_ENTITY);
 
 pub trait ReturnValueCallable: Send + Sync {
     fn call(&self, value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;

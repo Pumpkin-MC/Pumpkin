@@ -1,49 +1,50 @@
-// These are akin to the translatable built-in exceptions in Minecraft.
+use pumpkin_data::translation;
 
+// These are akin to the translatable built-in exceptions in Minecraft.
 pub const READER_EXPECTED_START_QUOTE: CommandErrorType<0> =
-    CommandErrorType::new("parsing.quote.expected.start");
+    CommandErrorType::new(translation::PARSING_QUOTE_EXPECTED_START);
 pub const READER_EXPECTED_END_QUOTE: CommandErrorType<0> =
-    CommandErrorType::new("parsing.quote.expected.end");
+    CommandErrorType::new(translation::PARSING_QUOTE_EXPECTED_END);
 pub const READER_INVALID_ESCAPE: CommandErrorType<1> =
-    CommandErrorType::new("parsing.quote.escape");
-pub const READER_INVALID_BOOL: CommandErrorType<1> = CommandErrorType::new("parsing.bool.invalid");
+    CommandErrorType::new(translation::PARSING_QUOTE_ESCAPE);
+pub const READER_INVALID_BOOL: CommandErrorType<1> = CommandErrorType::new(translation::PARSING_BOOL_INVALID);
 pub const READER_EXPECTED_BOOL: CommandErrorType<0> =
-    CommandErrorType::new("parsing.bool.expected");
-pub const READER_INVALID_INT: CommandErrorType<1> = CommandErrorType::new("parsing.int.invalid");
-pub const READER_EXPECTED_INT: CommandErrorType<0> = CommandErrorType::new("parsing.int.expected");
-pub const READER_INVALID_LONG: CommandErrorType<1> = CommandErrorType::new("parsing.long.invalid");
+    CommandErrorType::new(translation::PARSING_BOOL_EXPECTED);
+pub const READER_INVALID_INT: CommandErrorType<1> = CommandErrorType::new(translation::PARSING_INT_INVALID);
+pub const READER_EXPECTED_INT: CommandErrorType<0> = CommandErrorType::new(translation::PARSING_INT_EXPECTED);
+pub const READER_INVALID_LONG: CommandErrorType<1> = CommandErrorType::new(translation::PARSING_LONG_INVALID);
 pub const READER_EXPECTED_LONG: CommandErrorType<0> =
-    CommandErrorType::new("parsing.long.expected");
+    CommandErrorType::new(translation::PARSING_LONG_EXPECTED);
 pub const READER_INVALID_DOUBLE: CommandErrorType<1> =
-    CommandErrorType::new("parsing.double.invalid");
+    CommandErrorType::new(translation::PARSING_DOUBLE_INVALID);
 pub const READER_EXPECTED_DOUBLE: CommandErrorType<0> =
-    CommandErrorType::new("parsing.double.expected");
+    CommandErrorType::new(translation::PARSING_DOUBLE_EXPECTED);
 pub const READER_INVALID_FLOAT: CommandErrorType<1> =
-    CommandErrorType::new("parsing.float.invalid");
+    CommandErrorType::new(translation::PARSING_FLOAT_INVALID);
 pub const READER_EXPECTED_FLOAT: CommandErrorType<0> =
-    CommandErrorType::new("parsing.float.expected");
-pub const READER_EXPECTED_SYMBOL: CommandErrorType<1> = CommandErrorType::new("parsing.expected");
+    CommandErrorType::new(translation::PARSING_FLOAT_EXPECTED);
+pub const READER_EXPECTED_SYMBOL: CommandErrorType<1> = CommandErrorType::new(translation::PARSING_EXPECTED);
 
 pub const LITERAL_INCORRECT: CommandErrorType<1> =
-    CommandErrorType::new("argument.literal.incorrect");
+    CommandErrorType::new(translation::ARGUMENT_LITERAL_INCORRECT);
 
-pub const DOUBLE_TOO_LOW: CommandErrorType<2> = CommandErrorType::new("argument.double.low");
-pub const DOUBLE_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new("argument.double.big");
-pub const FLOAT_TOO_LOW: CommandErrorType<2> = CommandErrorType::new("argument.float.low");
-pub const FLOAT_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new("argument.float.big");
-pub const INTEGER_TOO_LOW: CommandErrorType<2> = CommandErrorType::new("argument.integer.low");
-pub const INTEGER_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new("argument.integer.big");
-pub const LONG_TOO_LOW: CommandErrorType<2> = CommandErrorType::new("argument.long.low");
-pub const LONG_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new("argument.long.big");
+pub const DOUBLE_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_DOUBLE_LOW);
+pub const DOUBLE_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_DOUBLE_BIG);
+pub const FLOAT_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_FLOAT_LOW);
+pub const FLOAT_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_FLOAT_BIG);
+pub const INTEGER_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_INTEGER_LOW);
+pub const INTEGER_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_INTEGER_BIG);
+pub const LONG_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_LONG_LOW);
+pub const LONG_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_LONG_BIG);
 
 pub const DISPATCHER_UNKNOWN_COMMAND: CommandErrorType<0> =
-    CommandErrorType::new("command.unknown.command");
+    CommandErrorType::new(translation::COMMAND_UNKNOWN_COMMAND);
 pub const DISPATCHER_UNKNOWN_ARGUMENT: CommandErrorType<0> =
-    CommandErrorType::new("command.unknown.argument");
+    CommandErrorType::new(translation::COMMAND_UNKNOWN_ARGUMENT);
 pub const DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR: CommandErrorType<0> =
-    CommandErrorType::new("command.expected.separator");
+    CommandErrorType::new(translation::COMMAND_EXPECTED_SEPARATOR);
 pub const DISPATCHER_PARSE_EXCEPTION: CommandErrorType<1> =
-    CommandErrorType::new("command.exception");
+    CommandErrorType::new(translation::COMMAND_EXCEPTION);
 
 use crate::command::errors::{
     command_syntax_error::{CommandSyntaxError, ContextProvider},
@@ -51,10 +52,10 @@ use crate::command::errors::{
 };
 use pumpkin_util::text::TextComponent;
 
-/// Represents text that is generated at
+/// Represents text which can be used as a template that is generated at
 /// compile time and cannot change at runtime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CompileTimeText {
+pub enum TemplateText {
     /// This is first translated, then arguments are substituted (which are not constant)
     /// when it needs to be displayed.
     TranslationKey(&'static str),
@@ -165,7 +166,7 @@ mod sealed {
 /// key and the number of arguments (at runtime).
 pub trait AnyCommandErrorType: Sealed + std::fmt::Debug {
     /// Returns the underlying translation key of this specific error type.
-    fn text(&self) -> CompileTimeText;
+    fn text(&self) -> TemplateText;
 
     /// Returns the number of arguments supported by this error type.
     fn argument_count(&self) -> usize;
@@ -188,8 +189,8 @@ impl<T: AnyCommandErrorType> PartialEq<T> for dyn AnyCommandErrorType {
 // Implement the private trait for our types.
 impl<const N: usize> Sealed for CommandErrorType<N> {}
 impl<const N: usize> AnyCommandErrorType for CommandErrorType<N> {
-    fn text(&self) -> CompileTimeText {
-        CompileTimeText::TranslationKey(self.translation_key)
+    fn text(&self) -> TemplateText {
+        TemplateText::TranslationKey(self.translation_key)
     }
 
     fn argument_count(&self) -> usize {
@@ -199,8 +200,8 @@ impl<const N: usize> AnyCommandErrorType for CommandErrorType<N> {
 
 impl Sealed for LiteralCommandErrorType {}
 impl AnyCommandErrorType for LiteralCommandErrorType {
-    fn text(&self) -> CompileTimeText {
-        CompileTimeText::Literal(self.literal)
+    fn text(&self) -> TemplateText {
+        TemplateText::Literal(self.literal)
     }
 
     fn argument_count(&self) -> usize {
