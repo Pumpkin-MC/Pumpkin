@@ -19,6 +19,7 @@ static PUMPKIN_EN_US_JSON: &str = include_str!("../../assets/translations/en_us.
 static PUMPKIN_ES_ES_JSON: &str = include_str!("../../assets/translations/es_es.json");
 static PUMPKIN_FR_FR_JSON: &str = include_str!("../../assets/translations/fr_fr.json");
 static PUMPKIN_JA_JP_JSON: &str = include_str!("../../assets/translations/ja_jp.json");
+static PUMPKIN_NL_BE_JSON: &str = include_str!("../../assets/translations/nl_be.json");
 static PUMPKIN_RU_RU_JSON: &str = include_str!("../../assets/translations/ru_ru.json");
 static PUMPKIN_ZH_CN_JSON: &str = include_str!("../../assets/translations/zh_cn.json");
 static PUMPKIN_TR_TR_JSON: &str = include_str!("../../assets/translations/tr_tr.json");
@@ -71,9 +72,9 @@ pub fn get_translation(key: &str, locale: Locale) -> String {
         || {
             translations[Locale::EnUs as usize]
                 .get(&key)
-                .map_or(key, std::clone::Clone::clone)
+                .map_or(key, Clone::clone)
         },
-        std::clone::Clone::clone,
+        Clone::clone,
     )
 }
 
@@ -209,6 +210,8 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
             serde_json::from_str(PUMPKIN_FR_FR_JSON).expect("Could not parse fr_fr.json.");
         let pumpkin_ja_jp: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_JA_JP_JSON).expect("Could not parse ja_jp.json.");
+        let pumpkin_nl_be: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_NL_BE_JSON).expect("Could not parse nl_be.json.");
         let pumpkin_ru_ru: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_RU_RU_JSON).expect("Could not parse ru_ru.json.");
         let pumpkin_zh_cn: HashMap<String, String> =
@@ -236,6 +239,9 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
         }
         for (key, value) in pumpkin_ja_jp {
             array[Locale::JaJp as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_nl_be {
+            array[Locale::NlBe as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_ru_ru {
             array[Locale::RuRu as usize].insert(format!("pumpkin:{key}"), value);
