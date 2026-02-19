@@ -8,8 +8,9 @@ const SEARCH_RADIUS: f64 = 8.0;
 const MIN_DISTANCE_SQ: f64 = 9.0;
 const MAX_DISTANCE_SQ: f64 = 256.0;
 
+const SEARCH_Y_RANGE: f64 = 4.0;
+
 pub struct FollowParentGoal {
-    goal_control: Controls,
     speed: f64,
     parent: Option<Arc<dyn EntityBase>>,
     delay: i32,
@@ -19,7 +20,6 @@ impl FollowParentGoal {
     #[must_use]
     pub fn new(speed: f64) -> Self {
         Self {
-            goal_control: Controls::MOVE,
             speed,
             parent: None,
             delay: 0,
@@ -44,7 +44,11 @@ impl FollowParentGoal {
             if c_entity.age.load(Relaxed) < 0 {
                 continue;
             }
-            let dist_sq = pos.squared_distance_to_vec(&c_entity.pos.load());
+            let c_pos = c_entity.pos.load();
+            if (pos.y - c_pos.y).abs() > SEARCH_Y_RANGE {
+                continue;
+            }
+            let dist_sq = pos.squared_distance_to_vec(&c_pos);
             if dist_sq < MIN_DISTANCE_SQ {
                 continue;
             }
@@ -118,6 +122,6 @@ impl Goal for FollowParentGoal {
     }
 
     fn controls(&self) -> Controls {
-        self.goal_control
+        Controls::empty()
     }
 }
