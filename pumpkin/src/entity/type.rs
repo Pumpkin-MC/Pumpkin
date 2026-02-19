@@ -25,8 +25,8 @@ use crate::{
             zombie_villager::ZombieVillagerEntity,
         },
         passive::{
-            cat::CatEntity, cow::CowEntity, iron_golem::IronGolemEntity,
-            sheep::SheepEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity,
+            cat::CatEntity, cow::CowEntity, iron_golem::IronGolemEntity, sheep::SheepEntity,
+            snow_golem::SnowGolemEntity, wolf::WolfEntity,
         },
     },
     world::World,
