@@ -54,8 +54,7 @@ impl BlockBehaviour for DaylightDetectorBlock {
         args: GetRedstonePowerArgs<'a>,
     ) -> BlockFuture<'a, u8> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
-            let props = DaylightDetectorProperties::from_state_id(state.id, args.block);
+            let props = DaylightDetectorProperties::from_state_id(args.state.id, args.block);
 
             props.power.to_index() as u8
         })
