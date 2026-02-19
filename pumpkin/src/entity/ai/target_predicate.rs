@@ -97,7 +97,6 @@ impl TargetPredicate {
         tester: Option<&LivingEntity>,
         target: &LivingEntity,
     ) -> bool {
-        // 1. Basic equality and game state checks
         if tester.is_some_and(|t| std::ptr::eq(t, target)) {
             return false;
         }
@@ -106,63 +105,28 @@ impl TargetPredicate {
             return false;
         }
 
-        // if let Some(ref p) = self.predicate {
-        //     if !p(Arc::new(target.clone()), world.clone()).await {
-        //         return false;
-        //     }
-        // }
+        if self.attackable
+            && (!target.can_take_damage()
+                || world.level_info.load().difficulty == Difficulty::Peaceful)
+        {
+            return false;
+        }
 
-        match tester {
-            None => {
-                // 3. Logic for when there is no tester (e.g. searching for a random target)
-                if self.attackable
-                    && (!target.can_take_damage()
-                        || world.level_info.load().difficulty == Difficulty::Peaceful)
-                {
-                    return false;
-                }
+        if let Some(tester_ent) = tester
+            && self.base_max_distance > 0.0
+        {
+            // TODO: use distance_scaling_factor from target
+            let max_dist = self.base_max_distance.max(MIN_DISTANCE);
+            let dist_sq = tester_ent
+                .entity
+                .pos
+                .load()
+                .squared_distance_to_vec(&target.entity.pos.load());
+
+            if dist_sq > max_dist * max_dist {
+                return false;
             }
-            Some(tester_ent) => {
-                // TODO
-                if self.attackable {
-                    // TODO: || !tester_ent.can_target_type(target.get_type()) || tester_ent.is_teammate(target)
-                    // can_take_damage is wrong here
-                    if !tester_ent.can_take_damage() {
-                        return false;
-                    }
-                }
-
-                if self.base_max_distance > 0.0 {
-                    // TODO
-                    // let scaling = if self.use_distance_scaling_factor {
-                    //     target.get_attack_distance_scaling_factor(tester_ent)
-                    // } else {
-                    //     1.0
-                    // };
-
-                    let scaling = 1.0;
-
-                    let max_dist = (self.base_max_distance * scaling).max(MIN_DISTANCE);
-                    let dist_sq = tester_ent
-                        .entity
-                        .pos
-                        .load()
-                        .squared_distance_to_vec(&target.entity.pos.load());
-
-                    if dist_sq > max_dist * max_dist {
-                        return false;
-                    }
-                }
-
-                // TODO: Visibility check
-                // if self.respects_visibility {
-                //     if let Some(mob) = tester_ent.as_mob() {
-                //         if !mob.get_visibility_cache().can_see(target) {
-                //             return false;
-                //         }
-                //     }
-                // }
-            }
+            // TODO: visibility check (needs world raycast)
         }
 
         true

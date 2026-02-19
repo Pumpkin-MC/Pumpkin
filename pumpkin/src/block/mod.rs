@@ -75,6 +75,11 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
+    /// Called when an entity is standing on / walking over the top face of this block.
+    fn on_entity_step<'a>(&'a self, _args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     fn should_drop_items_on_explosion(&self) -> bool {
         true
     }
@@ -238,6 +243,15 @@ pub struct OnEntityCollisionArgs<'a> {
     pub state: &'a BlockState,
     pub position: &'a BlockPos,
     pub entity: &'a dyn EntityBase,
+}
+
+pub struct OnEntityStepArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+    pub entity: &'a dyn EntityBase,
+    pub below_supporting_block: bool,
 }
 
 pub struct ExplodeArgs<'a> {

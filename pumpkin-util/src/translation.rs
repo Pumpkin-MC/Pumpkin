@@ -19,8 +19,10 @@ static PUMPKIN_EN_US_JSON: &str = include_str!("../../assets/translations/en_us.
 static PUMPKIN_ES_ES_JSON: &str = include_str!("../../assets/translations/es_es.json");
 static PUMPKIN_FR_FR_JSON: &str = include_str!("../../assets/translations/fr_fr.json");
 static PUMPKIN_JA_JP_JSON: &str = include_str!("../../assets/translations/ja_jp.json");
+static PUMPKIN_RU_RU_JSON: &str = include_str!("../../assets/translations/ru_ru.json");
 static PUMPKIN_ZH_CN_JSON: &str = include_str!("../../assets/translations/zh_cn.json");
 static PUMPKIN_TR_TR_JSON: &str = include_str!("../../assets/translations/tr_tr.json");
+static PUMPKIN_UK_UA_JSON: &str = include_str!("../../assets/translations/uk_ua.json");
 static PUMPKIN_VI_VN_JSON: &str = include_str!("../../assets/translations/vi_vn.json");
 static PUMPKIN_PT_BR_JSON: &str = include_str!("../../assets/translations/pt_br.json");
 
@@ -207,10 +209,14 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
             serde_json::from_str(PUMPKIN_FR_FR_JSON).expect("Could not parse fr_fr.json.");
         let pumpkin_ja_jp: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_JA_JP_JSON).expect("Could not parse ja_jp.json.");
+        let pumpkin_ru_ru: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_RU_RU_JSON).expect("Could not parse ru_ru.json.");
         let pumpkin_zh_cn: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_ZH_CN_JSON).expect("Could not parse zh_cn.json.");
         let pumpkin_tr_tr: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_TR_TR_JSON).expect("Could not parse tr_tr.json.");
+        let pumpkin_uk_ua: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_UK_UA_JSON).expect("Could not parse uk_ua.json.");
         let pumpkin_vi_vn: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_VI_VN_JSON).expect("Could not parse vi_vn.json.");
         let pumpkin_pt_br: HashMap<String, String> =
@@ -231,11 +237,17 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
         for (key, value) in pumpkin_ja_jp {
             array[Locale::JaJp as usize].insert(format!("pumpkin:{key}"), value);
         }
+        for (key, value) in pumpkin_ru_ru {
+            array[Locale::RuRu as usize].insert(format!("pumpkin:{key}"), value);
+        }
         for (key, value) in pumpkin_zh_cn {
             array[Locale::ZhCn as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_tr_tr {
             array[Locale::TrTr as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_uk_ua {
+            array[Locale::UkUa as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_vi_vn {
             array[Locale::ViVn as usize].insert(format!("pumpkin:{key}"), value);

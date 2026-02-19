@@ -520,6 +520,12 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
+                },
+            ),
         ],
     };
     pub const ANDESITE: Item = Item {
@@ -19388,6 +19394,12 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Explosion,
+                },
+            ),
         ],
     };
     pub const NETHER_WART: Item = Item {
@@ -19482,6 +19494,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
+                },
+            ),
         ],
     };
     pub const NETHERITE_BLOCK: Item = Item {
@@ -19499,6 +19517,12 @@ impl Item {
                 AttributeModifiers,
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[]),
+                },
+            ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
                 },
             ),
         ],
@@ -19542,6 +19566,12 @@ impl Item {
                             slot: AttributeModifierSlot::Feet,
                         },
                     ]),
+                },
+            ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
                 },
             ),
             (
@@ -19604,6 +19634,12 @@ impl Item {
                 },
             ),
             (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
+                },
+            ),
+            (
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::CHEST,
@@ -19660,6 +19696,12 @@ impl Item {
                             slot: AttributeModifierSlot::Head,
                         },
                     ]),
+                },
+            ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
                 },
             ),
             (
@@ -19734,6 +19776,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
+                },
+            ),
         ],
     };
     pub const NETHERITE_HORSE_ARMOR: Item = Item {
@@ -19776,6 +19824,12 @@ impl Item {
                 },
             ),
             (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
+                },
+            ),
+            (
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
@@ -19810,6 +19864,12 @@ impl Item {
                 AttributeModifiers,
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[]),
+                },
+            ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
                 },
             ),
         ],
@@ -19853,6 +19913,12 @@ impl Item {
                             slot: AttributeModifierSlot::Legs,
                         },
                     ]),
+                },
+            ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
                 },
             ),
             (
@@ -19910,6 +19976,12 @@ impl Item {
                             slot: AttributeModifierSlot::Body,
                         },
                     ]),
+                },
+            ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
                 },
             ),
             (
@@ -19986,6 +20058,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
+                },
+            ),
         ],
     };
     pub const NETHERITE_SCRAP: Item = Item {
@@ -20003,6 +20081,12 @@ impl Item {
                 AttributeModifiers,
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[]),
+                },
+            ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
                 },
             ),
         ],
@@ -20061,6 +20145,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
+                },
+            ),
         ],
     };
     pub const NETHERITE_SPEAR: Item = Item {
@@ -20095,6 +20185,12 @@ impl Item {
                             slot: AttributeModifierSlot::MainHand,
                         },
                     ]),
+                },
+            ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
                 },
             ),
         ],
@@ -20156,6 +20252,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 2,
                     can_destroy_blocks_in_creative: false,
+                },
+            ),
+            (
+                DamageResistant,
+                &DamageResistantImpl {
+                    res_type: DamageResistantType::Fire,
                 },
             ),
         ],

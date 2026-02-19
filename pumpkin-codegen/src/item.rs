@@ -41,6 +41,8 @@ pub struct ItemComponents {
     pub blocks_attacks: Option<BlocksAttacks>,
     #[serde(rename = "minecraft:death_protection")]
     pub death_protection: Option<DeathProtection>,
+    #[serde(rename = "minecraft:damage_resistant")]
+    pub damage_resistant: Option<DamageResistantComponent>,
 }
 
 impl ToTokens for ItemComponents {
@@ -239,6 +241,51 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (DeathProtection, &DeathProtectionImpl), });
         }
 
+        if let Some(damage_resistant) = &self.damage_resistant {
+            let res_type_variant = match damage_resistant.types.as_str() {
+                // Common canonical and shorthand forms mapped to enum variant names
+                "#minecraft:always_hurts_ender_dragons" | "minecraft:always_hurts_ender_dragons" | "always_hurts_ender_dragons" => "AlwaysHurtsEnderDragons",
+                "#minecraft:always_kills_armor_stands" | "minecraft:always_kills_armor_stands" | "always_kills_armor_stands" => "AlwaysKillsArmorStands",
+                "#minecraft:always_most_significant_fall" | "minecraft:always_most_significant_fall" | "always_most_significant_fall" => "AlwaysMostSignificantFall",
+                "#minecraft:always_triggers_silverfish" | "minecraft:always_triggers_silverfish" | "always_triggers_silverfish" => "AlwaysTriggersSilverfish",
+                "#minecraft:avoids_guardian_thorns" | "minecraft:avoids_guardian_thorns" | "avoids_guardian_thorns" => "AvoidsGuardianThorns",
+                "#minecraft:burns_armor_stands" | "minecraft:burns_armor_stands" | "burns_armor_stands" => "BurnsArmorStands",
+                "#minecraft:burn_from_stepping" | "minecraft:burn_from_stepping" | "burn_from_stepping" => "BurnFromStepping",
+                "#minecraft:bypasses_armor" | "minecraft:bypasses_armor" | "bypasses_armor" => "BypassesArmor",
+                "#minecraft:bypasses_cooldown" | "minecraft:bypasses_cooldown" | "bypasses_cooldown" => "BypassesCooldown",
+                "#minecraft:bypasses_effects" | "minecraft:bypasses_effects" | "bypasses_effects" => "BypassesEffects",
+                "#minecraft:bypasses_enchantments" | "minecraft:bypasses_enchantments" | "bypasses_enchantments" => "BypassesEnchantments",
+                "#minecraft:bypasses_invulnerability" | "minecraft:bypasses_invulnerability" | "bypasses_invulnerability" => "BypassesInvulnerability",
+                "#minecraft:bypasses_resistance" | "minecraft:bypasses_resistance" | "bypasses_resistance" => "BypassesResistance",
+                "#minecraft:bypasses_shield" | "minecraft:bypasses_shield" | "bypasses_shield" => "BypassesShield",
+                "#minecraft:bypasses_wolf_armor" | "minecraft:bypasses_wolf_armor" | "bypasses_wolf_armor" => "BypassesWolfArmor",
+                "#minecraft:can_break_armor_stand" | "minecraft:can_break_armor_stand" | "can_break_armor_stand" => "CanBreakArmorStands",
+                "#minecraft:damages_helmet" | "minecraft:damages_helmet" | "damages_helmet" => "DamagesHelmet",
+                "#minecraft:ignites_armor_stands" | "minecraft:ignites_armor_stands" | "ignites_armor_stands" => "IgnitesArmorStands",
+                "#minecraft:is_drowning" | "minecraft:is_drowning" | "is_drowning" => "Drowning",
+                "#minecraft:is_explosion" | "minecraft:is_explosion" | "is_explosion" | "explosion" => "Explosion",
+                "#minecraft:is_fall" | "minecraft:is_fall" | "is_fall" | "fall" => "Fall",
+                "#minecraft:is_fire" | "minecraft:is_fire" | "is_fire" | "fire" | "in_fire" | "minecraft:in_fire" => "Fire",
+                "#minecraft:is_freezing" | "minecraft:is_freezing" | "is_freezing" => "Freezing",
+                "#minecraft:is_lightning" | "minecraft:is_lightning" | "is_lightning" => "Lightning",
+                "#minecraft:is_player_attack" | "minecraft:is_player_attack" | "is_player_attack" => "PlayerAttack",
+                "#minecraft:is_projectile" | "minecraft:is_projectile" | "is_projectile" => "Projectile",
+                "#minecraft:mace_smash" | "minecraft:mace_smash" | "mace_smash" => "MaceSmash",
+                "#minecraft:no_anger" | "minecraft:no_anger" | "no_anger" => "NoAnger",
+                "#minecraft:no_impact" | "minecraft:no_impact" | "no_impact" => "NoImpact",
+                "#minecraft:no_knockback" | "minecraft:no_knockback" | "no_knockback" => "NoKnockback",
+                "#minecraft:panic_causes" | "minecraft:panic_causes" | "panic_causes" => "PanicCauses",
+                "#minecraft:panic_environmental_causes" | "minecraft:panic_environmental_causes" | "panic_environmental_causes" => "PanicEnvironmentalCauses",
+                "#minecraft:witch_resistant_to" | "minecraft:witch_resistant_to" | "witch_resistant_to" => "WitchResistantTo",
+                "#minecraft:wither_immune_to" | "minecraft:wither_immune_to" | "wither_immune_to" => "WitherImmuneTo",
+                _ => "Generic",
+            };
+            let res_type_ident = format_ident!("{}", res_type_variant);
+            tokens.extend(quote! { (DamageResistant, &DamageResistantImpl {
+                res_type: DamageResistantType::#res_type_ident,
+            }), });
+        }
+
         if let Some(equippable) = &self.equippable {
             let slot = match equippable.slot.as_str() {
                 "mainhand" => quote! { &EquipmentSlot::MAIN_HAND },
@@ -407,6 +454,11 @@ pub struct DeathProtection {
 #[derive(Deserialize, Clone)]
 pub struct BlocksAttacks {
     // TODO
+}
+
+#[derive(Deserialize, Clone)]
+pub struct DamageResistantComponent {
+    pub types: String,
 }
 
 #[derive(Deserialize, Clone)]

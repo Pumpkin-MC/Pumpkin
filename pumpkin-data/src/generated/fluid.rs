@@ -639,29 +639,12 @@ impl Fluid {
     #[allow(unreachable_patterns, clippy::match_overlapping_arm)]
     pub const fn from_state_id(id: u16) -> Option<&'static Self> {
         match id {
-            0u16..=0u16 => Some(&Fluid::EMPTY),
-            86u16..=86u16 => Some(&Fluid::WATER),
-            86u16..=101u16 => Some(&Fluid::FLOWING_WATER),
-            102u16..=102u16 => Some(&Fluid::LAVA),
-            102u16..=117u16 => Some(&Fluid::FLOWING_LAVA),
+            0..=0 => Some(&Fluid::EMPTY),
+            86..=86 => Some(&Fluid::WATER),
+            102..=102 => Some(&Fluid::LAVA),
+            86..=101 => Some(&Fluid::FLOWING_WATER),
+            102..=117 => Some(&Fluid::FLOWING_LAVA),
             _ => None,
-        }
-    }
-    pub fn same_fluid_type(a: u16, b: u16) -> bool {
-        a == b
-            || (a == 1 && b == 2)
-            || (a == 2 && b == 1)
-            || (a == 3 && b == 4)
-            || (a == 4 && b == 3)
-    }
-    pub fn matches_type(&self, other: &Fluid) -> bool {
-        Self::same_fluid_type(self.id, other.id)
-    }
-    pub fn to_flowing(&self) -> &'static Fluid {
-        match self.id {
-            2 => &Fluid::FLOWING_WATER,
-            4 => &Fluid::FLOWING_LAVA,
-            _ => Fluid::from_id(self.id).unwrap_or(&Fluid::EMPTY),
         }
     }
     pub fn ident_to_fluid_id(name: &str) -> Option<u8> {
@@ -712,6 +695,23 @@ impl Fluid {
                 &Fluid::FLOWING_LAVA,
             )),
             _ => panic!("Invalid props"),
+        }
+    }
+    pub fn same_fluid_type(a: u16, b: u16) -> bool {
+        a == b
+            || (a == 1 && b == 2)
+            || (a == 2 && b == 1)
+            || (a == 3 && b == 4)
+            || (a == 4 && b == 3)
+    }
+    pub fn matches_type(&self, other: &Fluid) -> bool {
+        Self::same_fluid_type(self.id, other.id)
+    }
+    pub fn to_flowing(&self) -> &'static Fluid {
+        match self.id {
+            2 => &Fluid::FLOWING_WATER,
+            4 => &Fluid::FLOWING_LAVA,
+            _ => Fluid::from_id(self.id).unwrap_or(&Fluid::EMPTY),
         }
     }
     pub fn is_source(&self, state_id: u16) -> bool {
