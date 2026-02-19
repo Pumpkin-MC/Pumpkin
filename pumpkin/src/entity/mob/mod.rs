@@ -229,6 +229,10 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    fn can_attack_with_owner(&self, _target: &dyn EntityBase, _owner: &dyn EntityBase) -> bool {
+        true
+    }
+
     fn get_mob_gravity(&self) -> f64 {
         self.get_mob_entity().living_entity.get_gravity()
     }

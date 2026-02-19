@@ -4,6 +4,8 @@ use crate::entity::mob::Mob;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
+const FOLLOW_RANGE: f64 = 16.0;
+
 pub struct OwnerHurtByTargetGoal {
     target: Option<Arc<dyn EntityBase>>,
     last_attacked_time: i32,
@@ -54,6 +56,10 @@ impl Goal for OwnerHurtByTargetGoal {
                 return false;
             }
 
+            if !mob.can_attack_with_owner(attacker.as_ref(), &*owner) {
+                return false;
+            }
+
             self.target = Some(attacker);
             true
         })
@@ -65,7 +71,12 @@ impl Goal for OwnerHurtByTargetGoal {
             let Some(t) = target.as_ref() else {
                 return false;
             };
-            t.get_entity().is_alive()
+            if !t.get_entity().is_alive() {
+                return false;
+            }
+            let my_pos = mob.get_entity().pos.load();
+            let target_pos = t.get_entity().pos.load();
+            my_pos.squared_distance_to_vec(&target_pos) <= FOLLOW_RANGE * FOLLOW_RANGE
         })
     }
 
