@@ -1,6 +1,6 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicI32, Ordering},
+    atomic::{AtomicI32, Ordering, Ordering::Relaxed},
 };
 
 use pumpkin_data::{entity::EntityType, item::Item};
@@ -51,7 +51,7 @@ impl ChickenEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(EscapeDangerGoal::default()));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.4));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -74,6 +74,9 @@ impl Mob for ChickenEntity {
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {
+            if self.mob_entity.living_entity.dead.load(Relaxed) {
+                return;
+            }
             if self.egg_lay_time.fetch_sub(1, Ordering::Relaxed) <= 1 {
                 let next_time = rand::rng().random_range(6000..12000);
                 let entity = &self.mob_entity.living_entity.entity;
