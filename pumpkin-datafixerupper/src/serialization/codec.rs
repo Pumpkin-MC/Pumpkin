@@ -79,9 +79,10 @@ use std::hash::Hash;
 ///   for when the value does not exist while decoding.
 /// - [`lenient_optional_field`] and [`lenient_optional_field_with_default`] for lenient versions of the above two optional field methods.
 ///
-/// To create a `Field` object using a `MapCodec`, use [`super::map_codec::for_getter`] to include a getter method
-/// to tell the codec how to get some value (for encoding) from a struct instance. These `Field`s can then be placed
-/// in the `struct_codec` body, one for each pair, along with a constructor function at the end
+/// To create a `Field` object using a `MapCodec`, use [`super::map_codec::for_getter`] (which takes a `MapCodec` to own)
+/// or, in more specific cases, [`super::map_codec::for_getter_ref`] (which takes a static `MapCodec` pointer), to include a getter method
+/// to tell the codec how to get some value (for encoding) from a struct instance.
+/// These `Field`s can then be placed in the `struct_codec` body, one for each pair, along with a constructor function at the end
 /// to tell the codec how to create an instance (for decoding) with the provided values. See the documentation
 /// of the `struct_codec` macro for a basic example for defining a struct codec.
 ///
