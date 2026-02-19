@@ -50,6 +50,19 @@ pub enum NodeIdClassification {
 /// between two nodes, even if from different commands.
 ///
 /// This tree can be indexed like an array but with [`NodeId`].
+///
+/// # Hierarchy
+/// This tree can have four different types of nodes, which are the following:
+///
+/// - **Root**:     Does not have a parent. Exactly one instance of this type of node
+///                 exists per [`Tree`]. Always identifiable by [`ROOT_NODE_ID`].
+///
+/// - **Command**:  Its parent must be the root node, and specifies the start of a
+///                 command definition.
+///
+/// - **Literal**:  Accepts a particular constant word.
+///
+/// - **Argument**: Parses and accepts a specific type of value. This is very dynamic.
 #[derive(Clone)]
 pub struct Tree {
     /// All the nodes stored in this tree.
@@ -164,10 +177,11 @@ impl Tree {
     ///
     /// # Panics
     ///
-    /// Panics if the node identification to be added to a non-root node references a [`CommandAttachedNode`].
+    /// Panics if the node to be added to a non-root node is a [`CommandAttachedNode`],
+    /// or if the node to be added to a node is a [`RootAttachedNode`],
     ///
     /// Essentially, this means that a [`CommandAttachedNode`] must have the root node
-    /// of the tree *as its parent*.
+    /// of the tree *as its parent*, and [`RootAttachedNode`] cannot have a parent.
     fn add_attached_child(&mut self, parent: NodeId, node: NodeId) {
         assert!(
             parent == ROOT_NODE_ID || self[node].classification() != NodeClassification::Command,

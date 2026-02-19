@@ -51,6 +51,9 @@ pub static EMPTY_CONSUMER: LazyLock<Arc<EmptyResultConsumer>> =
     LazyLock::new(|| Arc::new(EmptyResultConsumer));
 
 /// The core command dispatcher, used to register, parse and execute commands.
+///
+/// Internally, this dispatcher stores a [`Tree`]. Refer to its documentation
+/// for more information about nodes.
 pub struct CommandDispatcher {
     pub tree: Arc<Tree>,
     pub consumer: Arc<dyn ResultConsumer>,
