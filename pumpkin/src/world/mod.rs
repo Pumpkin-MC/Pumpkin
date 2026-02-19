@@ -2988,12 +2988,10 @@ impl World {
                         player,
                         broken_block,
                         *position,
-                        stacks,
+                        std::mem::take(&mut stacks),
                     );
                     let event = server.plugin_manager.fire(event).await;
-                    if event.cancelled {
-                        stacks.clear();
-                    } else {
+                    if !event.cancelled {
                         stacks = event.items;
                     }
                 }
