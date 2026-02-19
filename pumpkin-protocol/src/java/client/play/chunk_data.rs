@@ -23,18 +23,16 @@ impl ClientPacket for CChunkData<'_> {
     #[expect(clippy::too_many_lines)]
     fn write_packet_data(
         &self,
-        write: impl Write,
+        mut write: impl Write,
         version: &MinecraftVersion,
     ) -> Result<(), WritingError> {
-        let mut write = write;
-
         // Chunk X
         write.write_i32_be(self.0.x)?;
         // Chunk Z
         write.write_i32_be(self.0.z)?;
 
         let heightmaps = self.0.heightmap.lock().unwrap();
-        if version < &MinecraftVersion::V_1_21_5 {
+        if version <= &MinecraftVersion::V_1_21_4 {
             pumpkin_nbt::serializer::to_bytes_unnamed(&*heightmaps, &mut write)
                 .map_err(|err| WritingError::Serde(err.to_string()))?;
         } else {
@@ -114,8 +112,15 @@ impl ClientPacket for CChunkData<'_> {
                     NetworkPalette::Direct => {}
                 }
 
-                for packed in block_network.packed_data {
-                    blocks_and_biomes_buf.write_i64_be(packed)?;
+                if version <= &MinecraftVersion::V_1_21_4 {
+                    blocks_and_biomes_buf
+                        .write_list(&block_network.packed_data, |buf, &packed| {
+                            buf.write_i64_be(packed)
+                        })?;
+                } else {
+                    for packed in block_network.packed_data {
+                        blocks_and_biomes_buf.write_i64_be(packed)?;
+                    }
                 }
 
                 let biome_network = biome_palette.convert_network();
@@ -141,8 +146,15 @@ impl ClientPacket for CChunkData<'_> {
                     NetworkPalette::Direct => {}
                 }
 
-                for packed in biome_network.packed_data {
-                    blocks_and_biomes_buf.write_i64_be(packed)?;
+                if version <= &MinecraftVersion::V_1_21_4 {
+                    blocks_and_biomes_buf
+                        .write_list(&biome_network.packed_data, |buf, &packed| {
+                            buf.write_i64_be(packed)
+                        })?;
+                } else {
+                    for packed in biome_network.packed_data {
+                        blocks_and_biomes_buf.write_i64_be(packed)?;
+                    }
                 }
             }
 
