@@ -47,10 +47,7 @@ impl FollowOwnerGoal {
     fn distance_to_owner_sq(mob: &dyn Mob, owner: &Player) -> f64 {
         let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
         let owner_pos = owner.living_entity.entity.pos.load();
-        let dx = mob_pos.x - owner_pos.x;
-        let dy = mob_pos.y - owner_pos.y;
-        let dz = mob_pos.z - owner_pos.z;
-        dx * dx + dy * dy + dz * dz
+        mob_pos.squared_distance_to_vec(&owner_pos)
     }
 
     async fn try_teleport_to_owner(mob: &dyn Mob, owner: &Player) {
@@ -58,45 +55,56 @@ impl FollowOwnerGoal {
         let mob_entity = &mob.get_mob_entity().living_entity.entity;
         let world = mob_entity.world.load_full();
 
-        let offsets: [(i32, i32); 10] = {
+        let offsets: [(i32, i32, i32); 10] = {
             let mut rng = mob.get_random();
-            std::array::from_fn(|_| (rng.random_range(-3..=3), rng.random_range(-3..=3)))
+            std::array::from_fn(|_| {
+                (
+                    rng.random_range(-3..=3),
+                    rng.random_range(-1..=1),
+                    rng.random_range(-3..=3),
+                )
+            })
         };
 
-        for (dx, dz) in offsets {
-            let target_x = owner_pos.x + dx as f64;
-            let target_z = owner_pos.z + dz as f64;
-            let target_y = owner_pos.y.floor();
-
-            let block_pos = BlockPos(Vector3::new(
-                target_x as i32,
-                target_y as i32,
-                target_z as i32,
-            ));
-
-            let block = world.get_block_state(&block_pos).await;
-            if block.is_air() {
-                let above = BlockPos(Vector3::new(
-                    target_x as i32,
-                    target_y as i32 + 1,
-                    target_z as i32,
-                ));
-                let above_block = world.get_block_state(&above).await;
-                if above_block.is_air() {
-                    mob_entity
-                        .teleport(
-                            Vector3::new(target_x + 0.5, target_y, target_z + 0.5),
-                            None,
-                            None,
-                            world.clone(),
-                        )
-                        .await;
-
-                    let mut navigator = mob.get_mob_entity().navigator.lock().await;
-                    navigator.stop();
-                    return;
-                }
+        for (dx, dy, dz) in offsets {
+            if dx.abs() < 2 && dz.abs() < 2 {
+                continue;
             }
+
+            let target_x = owner_pos.x.floor() as i32 + dx;
+            let target_y = owner_pos.y.floor() as i32 + dy;
+            let target_z = owner_pos.z.floor() as i32 + dz;
+
+            let below = BlockPos(Vector3::new(target_x, target_y - 1, target_z));
+            let block_below = world.get_block_state(&below).await;
+            if !block_below.is_solid() {
+                continue;
+            }
+
+            let at = BlockPos(Vector3::new(target_x, target_y, target_z));
+            let above = BlockPos(Vector3::new(target_x, target_y + 1, target_z));
+            let block_at = world.get_block_state(&at).await;
+            let block_above = world.get_block_state(&above).await;
+            if !block_at.is_air() || !block_above.is_air() {
+                continue;
+            }
+
+            mob_entity
+                .teleport(
+                    Vector3::new(
+                        target_x as f64 + 0.5,
+                        target_y as f64,
+                        target_z as f64 + 0.5,
+                    ),
+                    None,
+                    None,
+                    world.clone(),
+                )
+                .await;
+
+            let mut navigator = mob.get_mob_entity().navigator.lock().await;
+            navigator.stop();
+            return;
         }
     }
 }
@@ -162,10 +170,17 @@ impl Goal for FollowOwnerGoal {
             let should_teleport = dist_sq >= TELEPORT_DISTANCE_SQ;
 
             if !should_teleport {
-                let owner_pos = owner.living_entity.entity.pos.load();
                 let mob_entity = mob.get_mob_entity();
+                let owner_eye_pos = owner.living_entity.entity.get_eye_pos();
                 let mut look_control = mob_entity.look_control.lock().await;
-                look_control.look_at_position(mob, owner_pos);
+                look_control.look_at_with_range(
+                    owner_eye_pos.x,
+                    owner_eye_pos.y,
+                    owner_eye_pos.z,
+                    10.0,
+                    mob.get_max_look_pitch_change(),
+                );
+                drop(look_control);
             }
 
             self.update_countdown -= 1;
@@ -178,11 +193,7 @@ impl Goal for FollowOwnerGoal {
                     let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
                     let owner_pos = owner.living_entity.entity.pos.load();
                     let mut navigator = mob.get_mob_entity().navigator.lock().await;
-                    navigator.set_progress(NavigatorGoal {
-                        current_progress: mob_pos,
-                        destination: owner_pos,
-                        speed: self.speed,
-                    });
+                    navigator.set_progress(NavigatorGoal::new(mob_pos, owner_pos, self.speed));
                 }
             }
         })
