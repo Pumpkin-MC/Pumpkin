@@ -5,6 +5,7 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_data::translation;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
@@ -12,7 +13,6 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use std::pin::Pin;
 use std::sync::Arc;
-use pumpkin_data::translation;
 
 pub const REQUIRES_PLAYER: CommandErrorType<0> =
     CommandErrorType::new(translation::PERMISSIONS_REQUIRES_PLAYER);

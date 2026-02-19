@@ -7,12 +7,16 @@ pub const READER_EXPECTED_END_QUOTE: CommandErrorType<0> =
     CommandErrorType::new(translation::PARSING_QUOTE_EXPECTED_END);
 pub const READER_INVALID_ESCAPE: CommandErrorType<1> =
     CommandErrorType::new(translation::PARSING_QUOTE_ESCAPE);
-pub const READER_INVALID_BOOL: CommandErrorType<1> = CommandErrorType::new(translation::PARSING_BOOL_INVALID);
+pub const READER_INVALID_BOOL: CommandErrorType<1> =
+    CommandErrorType::new(translation::PARSING_BOOL_INVALID);
 pub const READER_EXPECTED_BOOL: CommandErrorType<0> =
     CommandErrorType::new(translation::PARSING_BOOL_EXPECTED);
-pub const READER_INVALID_INT: CommandErrorType<1> = CommandErrorType::new(translation::PARSING_INT_INVALID);
-pub const READER_EXPECTED_INT: CommandErrorType<0> = CommandErrorType::new(translation::PARSING_INT_EXPECTED);
-pub const READER_INVALID_LONG: CommandErrorType<1> = CommandErrorType::new(translation::PARSING_LONG_INVALID);
+pub const READER_INVALID_INT: CommandErrorType<1> =
+    CommandErrorType::new(translation::PARSING_INT_INVALID);
+pub const READER_EXPECTED_INT: CommandErrorType<0> =
+    CommandErrorType::new(translation::PARSING_INT_EXPECTED);
+pub const READER_INVALID_LONG: CommandErrorType<1> =
+    CommandErrorType::new(translation::PARSING_LONG_INVALID);
 pub const READER_EXPECTED_LONG: CommandErrorType<0> =
     CommandErrorType::new(translation::PARSING_LONG_EXPECTED);
 pub const READER_INVALID_DOUBLE: CommandErrorType<1> =
@@ -23,19 +27,27 @@ pub const READER_INVALID_FLOAT: CommandErrorType<1> =
     CommandErrorType::new(translation::PARSING_FLOAT_INVALID);
 pub const READER_EXPECTED_FLOAT: CommandErrorType<0> =
     CommandErrorType::new(translation::PARSING_FLOAT_EXPECTED);
-pub const READER_EXPECTED_SYMBOL: CommandErrorType<1> = CommandErrorType::new(translation::PARSING_EXPECTED);
+pub const READER_EXPECTED_SYMBOL: CommandErrorType<1> =
+    CommandErrorType::new(translation::PARSING_EXPECTED);
 
 pub const LITERAL_INCORRECT: CommandErrorType<1> =
     CommandErrorType::new(translation::ARGUMENT_LITERAL_INCORRECT);
 
-pub const DOUBLE_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_DOUBLE_LOW);
-pub const DOUBLE_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_DOUBLE_BIG);
-pub const FLOAT_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_FLOAT_LOW);
-pub const FLOAT_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_FLOAT_BIG);
-pub const INTEGER_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_INTEGER_LOW);
-pub const INTEGER_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_INTEGER_BIG);
+pub const DOUBLE_TOO_LOW: CommandErrorType<2> =
+    CommandErrorType::new(translation::ARGUMENT_DOUBLE_LOW);
+pub const DOUBLE_TOO_HIGH: CommandErrorType<2> =
+    CommandErrorType::new(translation::ARGUMENT_DOUBLE_BIG);
+pub const FLOAT_TOO_LOW: CommandErrorType<2> =
+    CommandErrorType::new(translation::ARGUMENT_FLOAT_LOW);
+pub const FLOAT_TOO_HIGH: CommandErrorType<2> =
+    CommandErrorType::new(translation::ARGUMENT_FLOAT_BIG);
+pub const INTEGER_TOO_LOW: CommandErrorType<2> =
+    CommandErrorType::new(translation::ARGUMENT_INTEGER_LOW);
+pub const INTEGER_TOO_HIGH: CommandErrorType<2> =
+    CommandErrorType::new(translation::ARGUMENT_INTEGER_BIG);
 pub const LONG_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_LONG_LOW);
-pub const LONG_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_LONG_BIG);
+pub const LONG_TOO_HIGH: CommandErrorType<2> =
+    CommandErrorType::new(translation::ARGUMENT_LONG_BIG);
 
 pub const DISPATCHER_UNKNOWN_COMMAND: CommandErrorType<0> =
     CommandErrorType::new(translation::COMMAND_UNKNOWN_COMMAND);
