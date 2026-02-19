@@ -2758,23 +2758,31 @@ impl Player {
             ItemStack::EMPTY.clone()
         };
 
+        let screen_handler_identifier = screen_handler.get_behaviour().get_identifier().to_string();
+        let screen_handler_window_type = screen_handler.window_type();
+        let screen_handler_sync_id = screen_handler.sync_id();
+        let is_player_inventory_click = screen_handler.window_type().is_none();
         let event = PlayerInventoryClickEvent::new(
             self.clone(),
-            screen_handler.get_behaviour().get_identifier().to_string(),
+            screen_handler_identifier,
             i32::from(slot),
             i32::from(packet.button),
             packet.mode.clone(),
             cursor_stack.clone(),
             clicked_slot_stack.clone(),
-            screen_handler.window_type(),
-            screen_handler.sync_id(),
-            screen_handler.window_type().is_none(),
+            screen_handler_window_type,
+            screen_handler_sync_id,
+            is_player_inventory_click,
         );
+        drop(screen_handler);
 
         send_cancellable! {{
             server;
             event;
             'after: {
+                let screen_handler = self.current_screen_handler.lock().await;
+                let mut screen_handler = screen_handler.lock().await;
+
                 screen_handler.disable_sync();
                 screen_handler
                     .on_slot_click(
@@ -2800,6 +2808,8 @@ impl Player {
                 }
             };
             'cancelled: {
+                let screen_handler = self.current_screen_handler.lock().await;
+                let mut screen_handler = screen_handler.lock().await;
                 screen_handler.sync_state().await;
             }
         }}
