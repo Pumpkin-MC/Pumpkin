@@ -30,7 +30,10 @@ use crate::{
     net::{ClientPlatform, java::JavaClient},
     plugin::{
         block::block_break::BlockBreakEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
+        player::{
+            player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
+            player_spawn_location::PlayerSpawnLocationEvent,
+        },
     },
     server::Server,
 };
@@ -1626,6 +1629,15 @@ impl World {
             );
             (position, info.spawn_yaw, info.spawn_pitch)
         };
+
+        let mut position = position;
+        if let Some(server) = self.server.upgrade() {
+            let event = PlayerSpawnLocationEvent::new(player.clone(), position, self.uuid);
+            let event = server.plugin_manager.fire(event).await;
+            if event.world_uuid == self.uuid {
+                position = event.spawn_position;
+            }
+        }
 
         let velocity = player.living_entity.entity.velocity.load();
 

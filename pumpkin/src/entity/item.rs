@@ -1,7 +1,10 @@
-use crate::{entity::EntityBaseFuture, server::Server};
+use crate::{
+    entity::EntityBaseFuture, plugin::player::player_pickup_arrow::PlayerPickupArrowEvent,
+    server::Server,
+};
 use core::f32;
-use pumpkin_data::data_component_impl::DamageResistantImpl;
-use pumpkin_data::data_component_impl::DamageResistantType;
+use pumpkin_data::data_component_impl::{DamageResistantImpl, DamageResistantType};
+use pumpkin_data::item::Item;
 use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -12,6 +15,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
 
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 use std::sync::{
     Arc,
     atomic::{
@@ -20,8 +24,6 @@ use std::sync::{
     },
 };
 use tokio::sync::Mutex;
-
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
     entity: Entity,
@@ -443,6 +445,29 @@ impl EntityBase for ItemEntity {
                 || player.living_entity.health.load() <= 0.0
             {
                 return;
+            }
+
+            let (item_stack_snapshot, item_id, item_count) = {
+                let stack = self.item_stack.lock().await;
+                (stack.clone(), stack.item.id, stack.item_count)
+            };
+
+            if (item_id == Item::ARROW.id
+                || item_id == Item::SPECTRAL_ARROW.id
+                || item_id == Item::TIPPED_ARROW.id)
+                && let Some(server) = player.world().server.upgrade()
+            {
+                let event = PlayerPickupArrowEvent::new(
+                    player.clone(),
+                    self.entity.entity_uuid,
+                    self.entity.entity_uuid,
+                    item_stack_snapshot.clone(),
+                    item_count as i32,
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
+                }
             }
 
             if player
