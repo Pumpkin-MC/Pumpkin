@@ -115,12 +115,22 @@ impl TemplateCache {
     ///
     /// This function maps template names to their embedded byte data.
     /// Add new templates here as they are added to the assets.
-    fn load_template_bytes(_path: &str) -> Option<&'static [u8]> {
-        // Map template names to embedded files using include_bytes!
+    fn load_template_bytes(path: &str) -> Option<&'static [u8]> {
+        // Map template names to embedded files
         // Templates are stored in pumpkin-world/assets/structures/
-        // Example:
-        //   "igloo/top" => Some(include_bytes!("../../../../assets/structures/igloo/top.nbt")),
-        None
+        match path {
+            // Igloo templates
+            "igloo/top" => Some(include_bytes!(
+                "../../../../assets/structures/igloo/top.nbt"
+            )),
+            "igloo/middle" => Some(include_bytes!(
+                "../../../../assets/structures/igloo/middle.nbt"
+            )),
+            "igloo/bottom" => Some(include_bytes!(
+                "../../../../assets/structures/igloo/bottom.nbt"
+            )),
+            _ => None,
+        }
     }
 }
 
@@ -159,5 +169,60 @@ mod tests {
     fn test_unknown_template_returns_none() {
         let cache = TemplateCache::new();
         assert!(cache.get("nonexistent/template").is_none());
+    }
+
+    #[test]
+    fn test_load_igloo_top() {
+        let cache = TemplateCache::new();
+        let template = cache.get("igloo/top").expect("Failed to load igloo/top");
+
+        // Verify vanilla igloo/top dimensions (7x5x8)
+        assert_eq!(template.size.x, 7);
+        assert_eq!(template.size.y, 5);
+        assert_eq!(template.size.z, 8);
+
+        // Verify it has blocks
+        assert!(!template.blocks.is_empty());
+        // Verify it has a palette
+        assert!(!template.palette.is_empty());
+    }
+
+    #[test]
+    fn test_load_igloo_middle() {
+        let cache = TemplateCache::new();
+        let template = cache
+            .get("igloo/middle")
+            .expect("Failed to load igloo/middle");
+
+        // Verify vanilla igloo/middle dimensions (3x3x3)
+        assert_eq!(template.size.x, 3);
+        assert_eq!(template.size.y, 3);
+        assert_eq!(template.size.z, 3);
+    }
+
+    #[test]
+    fn test_load_igloo_bottom() {
+        let cache = TemplateCache::new();
+        let template = cache
+            .get("igloo/bottom")
+            .expect("Failed to load igloo/bottom");
+
+        // Verify vanilla igloo/bottom dimensions (7x6x9)
+        assert_eq!(template.size.x, 7);
+        assert_eq!(template.size.y, 6);
+        assert_eq!(template.size.z, 9);
+    }
+
+    #[test]
+    fn test_cache_reuses_templates() {
+        let cache = TemplateCache::new();
+
+        // Load twice
+        let first = cache.get("igloo/top").expect("First load failed");
+        let second = cache.get("igloo/top").expect("Second load failed");
+
+        // Should be the same Arc (pointer equality)
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(cache.len(), 1);
     }
 }

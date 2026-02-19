@@ -9,7 +9,7 @@ use crate::{
         biome_coords,
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
-            buried_treasure::BuriedTreasureGenerator, create_chunk_random,
+            buried_treasure::BuriedTreasureGenerator, create_chunk_random, igloo::IglooGenerator,
             stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
         },
     },
@@ -49,6 +49,7 @@ pub fn try_generate_structure(
         StructureKeys::Stronghold => {
             StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
         }
+        StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
         // TODO: Implement other structure types
         _ => None,
     };
