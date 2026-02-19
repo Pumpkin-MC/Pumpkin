@@ -397,6 +397,11 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             .store(ticks, Relaxed);
     }
 
+    fn is_panicking(&self) -> bool {
+        self.get_path_aware_entity()
+            .is_some_and(PathAwareEntity::is_panicking)
+    }
+
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }

@@ -252,6 +252,10 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     fn set_breeding_cooldown(&self, _ticks: i32) {}
 
+    fn is_panicking(&self) -> bool {
+        false
+    }
+
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
 

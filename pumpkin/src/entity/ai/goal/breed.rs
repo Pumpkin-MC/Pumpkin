@@ -45,7 +45,8 @@ impl BreedGoal {
             if c_entity.entity_type != my_type {
                 continue;
             }
-            if !candidate.is_in_love() || !candidate.is_breeding_ready() {
+            if !candidate.is_in_love() || !candidate.is_breeding_ready() || candidate.is_panicking()
+            {
                 continue;
             }
 
@@ -98,7 +99,7 @@ impl Goal for BreedGoal {
                 return false;
             };
 
-            if !mate.get_entity().is_alive() {
+            if !mate.get_entity().is_alive() || mate.is_panicking() {
                 return false;
             }
 
@@ -137,10 +138,8 @@ impl Goal for BreedGoal {
             let my_pos = mob.get_entity().pos.load();
             let dist_sq = my_pos.squared_distance_to_vec(&mate_pos);
 
-            if dist_sq > 9.0 || self.timer % 10 == 0 {
-                let mut navigator = mob_entity.navigator.lock().await;
-                navigator.set_progress(NavigatorGoal::new(my_pos, mate_pos, self.speed));
-            }
+            let mut navigator = mob_entity.navigator.lock().await;
+            navigator.set_progress(NavigatorGoal::new(my_pos, mate_pos, self.speed));
 
             self.timer += 1;
 
