@@ -1,4 +1,6 @@
+use pumpkin_data::entity::EntityType;
 use pumpkin_macros::{Event, cancellable};
+use pumpkin_util::Hand;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
 
@@ -16,11 +18,11 @@ pub struct PlayerInteractAtEntityEvent {
     /// The UUID of the entity.
     pub entity_uuid: uuid::Uuid,
 
-    /// The entity type (registry key).
-    pub entity_type: String,
+    /// The entity type.
+    pub entity_type: &'static EntityType,
 
     /// The hand used.
-    pub hand: String,
+    pub hand: Hand,
 
     /// The clicked position on the entity.
     pub clicked_position: Vector3<f32>,
@@ -31,8 +33,8 @@ impl PlayerInteractAtEntityEvent {
     pub const fn new(
         player: Arc<Player>,
         entity_uuid: uuid::Uuid,
-        entity_type: String,
-        hand: String,
+        entity_type: &'static EntityType,
+        hand: Hand,
         clicked_position: Vector3<f32>,
     ) -> Self {
         Self {
