@@ -12,21 +12,29 @@ use crate::serialization::map_like::MapLike;
 use crate::serialization::struct_builder::StructBuilder;
 use std::fmt::Display;
 
-/// A single field object to build a struct codec, which takes a [`MapCodec`] and a getter.
+/// A single field object to build a struct codec, which either takes an *owned* or *borrowed* [`MapCodec`] and a getter.
 ///
 /// - `T` is the composite type to get from.
 /// - `C` is the [`MapCodec`] for serializing/deserializing the field.
-pub struct Field<T, C: MapCodec> {
-    map_codec: C,
-    getter: fn(&T) -> &C::Value,
+pub enum Field<T, C: MapCodec + 'static> {
+    Owned(C, fn(&T) -> &C::Value),
+    Borrowed(&'static C, fn(&T) -> &C::Value),
 }
 
-/// Creates a new [`Field`] from a [`MapCodec`].
-pub(crate) const fn new_field<T, C: MapCodec>(
-    map_codec: C,
-    getter: fn(&T) -> &C::Value,
-) -> Field<T, C> {
-    Field { map_codec, getter }
+impl<T, C: MapCodec + 'static> Field<T, C> {
+    fn getter(&self) -> &fn(&T) -> &C::Value {
+        match self {
+            Self::Owned(_, g) => g,
+            Self::Borrowed(_, g) => g,
+        }
+    }
+
+    const fn map_codec(&self) -> &C {
+        match self {
+            Self::Owned(c, _) => c,
+            Self::Borrowed(c, _) => c,
+        }
+    }
 }
 
 /// Macro to generate a `StructMapCodecN` struct (structure codec of `N` arguments).
@@ -49,8 +57,8 @@ macro_rules! impl_struct_map_codec {
         impl<T, C1: MapCodec $(, $codec_type: MapCodec)* > Keyable for $name<T, C1 $(, $codec_type)*> {
             #[allow(unused_mut)]
             fn keys(&self) -> Vec<String> {
-                let mut keys = self.field_1.map_codec.keys();
-                $( keys.extend(self.$field.map_codec.keys()); )*
+                let mut keys = self.field_1.map_codec().keys();
+                $( keys.extend(self.$field.map_codec().keys()); )*
                 keys
             }
         }
@@ -63,14 +71,12 @@ macro_rules! impl_struct_map_codec {
             #[allow(clippy::let_and_return)]
             fn encode<U: Display + PartialEq + Clone, B: StructBuilder<Value = U>>(&self, input: &Self::Value, ops: &'static impl DynamicOps<Value=U>, prefix: B) -> B {
                 let prefix =
-                    self.field_1
-                        .map_codec
-                        .encode((self.field_1.getter)(input), ops, prefix);
+                    self.field_1.map_codec()
+                        .encode((self.field_1.getter())(input), ops, prefix);
                 $(
                     let prefix =
-                    self.$field
-                        .map_codec
-                        .encode((self.$field.getter)(input), ops, prefix);
+                    self.$field.map_codec()
+                        .encode((self.$field.getter())(input), ops, prefix);
                 )*
                 prefix
             }
@@ -82,9 +88,9 @@ macro_rules! impl_struct_map_codec {
                 input: &impl MapLike<Value = U>,
                 ops: &'static impl DynamicOps<Value = U>,
             ) -> DataResult<Self::Value> {
-                self.field_1.map_codec.decode(input, ops).$apply_func(
+                self.field_1.map_codec().decode(input, ops).$apply_func(
                     self.apply_function,
-                    $( self.$field.map_codec.decode(input, ops), )*
+                    $( self.$field.map_codec().decode(input, ops), )*
                 )
             }
         }
