@@ -26,8 +26,7 @@ use crate::{
         },
         passive::{
             cat::CatEntity, iron_golem::IronGolemEntity, sheep::SheepEntity,
-            snow_golem::SnowGolemEntity,
-            wolf::WolfEntity,
+            snow_golem::SnowGolemEntity, wolf::WolfEntity,
         },
     },
     world::World,
