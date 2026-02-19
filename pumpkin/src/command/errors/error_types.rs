@@ -115,11 +115,14 @@ impl<const N: usize> CommandErrorType<N> {
     }
 }
 
-/// A command error that requires **exactly** `N` translation arguments.
+/// A command error that is not translated, and cannot take any arguments.
 /// This takes a constant string literal. If you want the translatable version,
 /// use [`CommandErrorType`].
 ///
-/// **Use this for custom Pumpkin error messages.**
+/// [`CommandErrorType`] should be preferred to this whenever possible.
+///
+/// Use this for custom error messages, which don't have any
+/// translation in vanilla.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LiteralCommandErrorType {
     pub literal: &'static str,
@@ -251,3 +254,69 @@ error_type_no_arg_slice_impl!(N = 1 => arg1                   | "by taking 1 tra
 error_type_no_arg_slice_impl!(N = 2 => arg1, arg2             | "by taking 2 translation arguments.");
 error_type_no_arg_slice_impl!(N = 3 => arg1, arg2, arg3       | "by taking 3 translation arguments.");
 error_type_no_arg_slice_impl!(N = 4 => arg1, arg2, arg3, arg4 | "by taking 4 translation arguments.");
+
+#[cfg(test)]
+mod test {
+    use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
+    use crate::command::string_reader::StringReader;
+    use pumpkin_util::text::TextComponent;
+
+    const TEST_LITERAL_ERROR_TYPE: LiteralCommandErrorType =
+        LiteralCommandErrorType::new("Test error");
+    const TEST_TRANSLATABLE_ERROR_TYPE: CommandErrorType<1> =
+        CommandErrorType::new("this.key.is.arbitrary");
+
+    #[test]
+    fn create_literal_error() {
+        let mut reader = StringReader::new("foo bar");
+        reader.set_cursor(4);
+
+        let error = TEST_LITERAL_ERROR_TYPE.create(&reader);
+
+        assert_eq!(error.error_type, &TEST_LITERAL_ERROR_TYPE);
+        assert_eq!(error.message, TextComponent::text("Test error"));
+
+        match &error.context {
+            Some(context) => {
+                assert_eq!(context.cursor, 4);
+                assert_eq!(context.input, "foo bar");
+            }
+            None => panic!("There should have been a context for the error"),
+        }
+    }
+
+    #[test]
+    fn create_literal_error_without_context() {
+        let error = TEST_LITERAL_ERROR_TYPE.create_without_context();
+
+        assert_eq!(error.error_type, &TEST_LITERAL_ERROR_TYPE);
+        assert_eq!(error.message, TextComponent::text("Test error"));
+        assert_eq!(error.context, None);
+    }
+
+    #[test]
+    fn create_translatable_error() {
+        let mut reader = StringReader::new("foo bar");
+        reader.set_cursor(4);
+
+        let error =
+            TEST_TRANSLATABLE_ERROR_TYPE.create(&reader, TextComponent::text("some argument"));
+
+        assert_eq!(error.error_type, &TEST_TRANSLATABLE_ERROR_TYPE);
+        assert_eq!(
+            error.message,
+            TextComponent::translate(
+                "this.key.is.arbitrary",
+                [TextComponent::text("some argument")]
+            )
+        );
+
+        match &error.context {
+            Some(context) => {
+                assert_eq!(context.cursor, 4);
+                assert_eq!(context.input, "foo bar");
+            }
+            None => panic!("There should have been a context for the error"),
+        }
+    }
+}

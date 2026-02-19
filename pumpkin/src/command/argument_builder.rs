@@ -324,13 +324,15 @@ impl ArgumentBuilder<ArgumentDetachedNode> for RequiredArgumentBuilder {
 
 #[cfg(test)]
 mod test {
-    use crate::command::argument_builder::{ArgumentBuilder, CommandArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder};
+    use crate::command::argument_builder::{
+        ArgumentBuilder, CommandArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder,
+    };
     use crate::command::argument_types::core::double::DoubleArgumentType;
     use crate::command::argument_types::core::integer::IntegerArgumentType;
     use crate::command::argument_types::core::string::StringArgumentType;
     use crate::command::errors::error_types;
-    use crate::command::node::attached::AttachedNode;
     use crate::command::node::Redirection;
+    use crate::command::node::attached::AttachedNode;
     use crate::command::node::tree::Tree;
     use crate::command::string_reader::StringReader;
 
@@ -352,11 +354,21 @@ mod test {
         let mut reader1 = StringReader::new("5");
         let mut reader2 = StringReader::new("11");
 
-        let boxed_result = node.meta.argument_type.parse(&mut reader1).expect("The parsing should not have errored");
-        let result = boxed_result.downcast::<i32>().expect("Downcasting shouldn't have failed");
+        let boxed_result = node
+            .meta
+            .argument_type
+            .parse(&mut reader1)
+            .expect("The parsing should not have errored");
+        let result = boxed_result
+            .downcast::<i32>()
+            .expect("Downcasting shouldn't have failed");
         assert_eq!(result, Box::new(5));
 
-        let error = node.meta.argument_type.parse(&mut reader2).expect_err("The parsing should have errored as 11 is outside the range");
+        let error = node
+            .meta
+            .argument_type
+            .parse(&mut reader2)
+            .expect_err("The parsing should have errored as 11 is outside the range");
         assert!(error.is(&error_types::INTEGER_TOO_HIGH));
     }
 
@@ -366,9 +378,7 @@ mod test {
         for letter in 'a'..='z' {
             // Add a node per letter for the argument.
             let letter_string = letter.to_string();
-            builder = builder.then(
-                LiteralArgumentBuilder::new(letter_string)
-            );
+            builder = builder.then(LiteralArgumentBuilder::new(letter_string));
         }
 
         let node = builder.build();
@@ -377,20 +387,15 @@ mod test {
 
     #[test]
     fn required_multiple() {
-        let builder =
-            CommandArgumentBuilder::new("test", "A test command")
-                .then(
-                    RequiredArgumentBuilder::new(
-                        "number",
-                        DoubleArgumentType::any()
-                    )
-                )
-                .then(
-                    RequiredArgumentBuilder::new(
-                        "word",
-                        StringArgumentType::SingleWord
-                    )
-                );
+        let builder = CommandArgumentBuilder::new("test", "A test command")
+            .then(RequiredArgumentBuilder::new(
+                "number",
+                DoubleArgumentType::any(),
+            ))
+            .then(RequiredArgumentBuilder::new(
+                "word",
+                StringArgumentType::SingleWord,
+            ));
 
         let node = builder.build();
         assert_eq!(node.children.len(), 2);
@@ -399,16 +404,19 @@ mod test {
     #[test]
     fn redirect() {
         let builder =
-            CommandArgumentBuilder::new("test", "A test command")
-                .redirect(Redirection::Root);
+            CommandArgumentBuilder::new("test", "A test command").redirect(Redirection::Root);
 
         let mut tree = Tree::new();
-        let node_id = tree.add_child_to_root(builder.build());
+        let node_id = tree.add_child_to_root(builder);
 
         let node = &tree[node_id];
-        let redirect = node.redirect.expect("Redirection should exist as it was added before");
+        let redirect = node
+            .redirect
+            .expect("Redirection should exist as it was added before");
 
-        let target_id = tree.resolve(redirect).expect("Target should have been resolved properly");
+        let target_id = tree
+            .resolve(redirect)
+            .expect("Target should have been resolved properly");
         let target = &tree[target_id];
 
         assert!(matches!(target, AttachedNode::Root(_)));
@@ -417,18 +425,16 @@ mod test {
     #[test]
     #[should_panic = "Cannot forward a node with children. The node must have no children to redirect somewhere else"]
     fn redirect_after_child() {
-        let _ =
-            CommandArgumentBuilder::new("test", "A test command")
-                .then(LiteralArgumentBuilder::new("child"))
-                .redirect(Redirection::Root);
+        let _ = CommandArgumentBuilder::new("test", "A test command")
+            .then(LiteralArgumentBuilder::new("child"))
+            .redirect(Redirection::Root);
     }
 
     #[test]
     #[should_panic = "Cannot add children to a redirected node"]
     fn redirect_before_child() {
-        let _ =
-            CommandArgumentBuilder::new("test", "A test command")
-                .redirect(Redirection::Root)
-                .then(LiteralArgumentBuilder::new("child"));
+        let _ = CommandArgumentBuilder::new("test", "A test command")
+            .redirect(Redirection::Root)
+            .then(LiteralArgumentBuilder::new("child"));
     }
 }

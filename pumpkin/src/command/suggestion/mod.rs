@@ -1,17 +1,43 @@
 pub mod suggestions;
 
 use pumpkin_util::text::TextComponent;
+use std::fmt::Debug;
 use std::hash::Hash;
-use std::{borrow::Borrow, cmp::Ordering, collections::HashSet, fmt::Debug};
 
 use crate::command::context::string_range::StringRange;
 
 /// A structure that describes the text of a suggestion.
-/// It can either contain a [`String`], or an [`i32`].
+/// It's actual value can either be a [`String`], or an [`i32`].
+///
+/// Use the [`new`] method to create new [`SuggestionType`]s.
 ///
 /// If you want to use an `i32` for a suggestion's text,
 /// go with [`SuggestionType::Integer`]. In all other cases,
 /// go with [`SuggestionType::Text`].
+///
+/// # Invariant
+/// A [`SuggestionText::Text`] **shall not exist** if it can instead
+/// be fully expressed as a [`SuggestionText::Integer`] (no leading zeros).
+/// This is important to establish proper ordering.
+/// ```
+/// let five_suggestion_1 = SuggestionText::new(5);
+/// let five_suggestion_2 = SuggestionText::new("5");
+/// let zero_five_suggestion = SuggestionText::new("05");
+///
+/// // `five_suggestion_1` and `five_suggestion_2`
+/// // are both instances of `SuggestionText::Integer`,
+/// // as guaranteed by the invariant, both having
+/// // the same integer `5`.
+/// assert_eq!(five_suggestion_1, five_suggestion_2);
+///
+/// // `zero_five_suggestion` contains a leading zero,
+/// // and hence does not have an integer representing it
+/// // fully, so it is an instance of `SuggestionText::Text`.
+/// assert_ne!(five_suggestion_1, zero_five_suggestion);
+/// ```
+/// Violating this invariant is a logic error.
+///
+/// [`new`]: SuggestionText::new
 #[derive(Debug, Clone)]
 pub enum SuggestionText {
     /// The normal one to use. Stores a [`String`].
@@ -25,13 +51,22 @@ pub enum SuggestionText {
 
 impl From<String> for SuggestionText {
     fn from(text: String) -> Self {
-        Self::Text(text)
+        if let Ok(integer) = text.parse::<i32>()
+            && integer.to_string() == text
+        {
+            Self::Integer {
+                cached_text: text,
+                value: integer,
+            }
+        } else {
+            Self::Text(text)
+        }
     }
 }
 
 impl From<&str> for SuggestionText {
     fn from(text: &str) -> Self {
-        Self::Text(text.to_owned())
+        text.to_owned().into()
     }
 }
 
@@ -55,30 +90,18 @@ impl SuggestionText {
             Self::Integer { cached_text, .. } => cached_text,
         }
     }
-}
 
-impl Ord for SuggestionText {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match (self, other) {
-            (Self::Text(a), Self::Text(b)) => a.cmp(b),
-            (Self::Integer { cached_text: a, .. }, Self::Integer { cached_text: b, .. }) => {
-                a.cmp(b)
-            }
-            (a, b) => a.cached_text().cmp(b.cached_text()),
-        }
-    }
-}
-
-impl PartialOrd for SuggestionText {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+    /// Creates a new [`SuggestionText`] from a usable value.
+    /// This value can be a `&str`, a [`String`], or an `i32`.
+    pub fn new(value: impl Into<Self>) -> Self {
+        value.into()
     }
 }
 
 impl Eq for SuggestionText {}
 impl PartialEq for SuggestionText {
     fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
+        self.cached_text() == other.cached_text()
     }
 }
 
@@ -200,97 +223,11 @@ impl Suggestion {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Suggestions {
-    pub range: StringRange,
-    pub suggestions: Vec<Suggestion>,
-}
-
-impl Suggestions {
-    /// Constructs a new [`Suggestions`] structure from
-    /// a range and [`Suggestion`]s.
-    #[must_use]
-    pub const fn new(range: StringRange, suggestions: Vec<Suggestion>) -> Self {
-        Self { range, suggestions }
-    }
-
-    /// Constructs a new [`Suggestions`] of zero size and no range.
-    #[must_use]
-    pub const fn empty() -> Self {
-        Self::new(StringRange::at(0), vec![])
-    }
-
-    /// Returns whether this [`Suggestions`] *is* of zero size.
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.suggestions.is_empty()
-    }
-
-    /// Merges all [`Suggestions`] provided with a command into a single [`Suggestions`].
-    #[must_use]
-    pub fn merge<I, S>(command: &str, input: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Borrow<Self>,
-    {
-        let input: Vec<S> = input.into_iter().collect();
-
-        if input.is_empty() {
-            return Self::empty();
-        } else if input.len() == 1 {
-            return input[0].borrow().clone();
-        }
-
-        let mut texts = HashSet::new();
-
-        for suggestions in &input {
-            for suggestion in &suggestions.borrow().suggestions {
-                texts.insert(suggestion);
-            }
-        }
-
-        Self::create(command, texts)
-    }
-
-    /// Creates a single [`Suggestions`] structure from
-    /// many [`Suggestion`]s and a command.
-    #[must_use]
-    pub fn create<I, S>(command: &str, suggestions: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Borrow<Suggestion>,
-    {
-        let suggestions: Vec<S> = suggestions.into_iter().collect();
-
-        if suggestions.is_empty() {
-            return Self::empty();
-        }
-
-        // First, we figure out the range encompassing all suggestions provided.
-        let range = suggestions
-            .iter()
-            .map(|s| s.borrow().range)
-            .reduce(StringRange::encompass)
-            .unwrap();
-
-        let mut texts: HashSet<Suggestion> = HashSet::new();
-        for suggestion in &suggestions {
-            texts.insert(suggestion.borrow().expand(command, range));
-        }
-
-        let mut texts: Vec<_> = texts.into_iter().collect();
-        texts.sort_by(|a, b| a.text.cmp(&b.text));
-
-        Self::new(range, texts)
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use crate::command::{
-        context::string_range::StringRange,
-        suggestion::{Suggestion, Suggestions},
-    };
+    use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
+    use crate::command::{context::string_range::StringRange, suggestion::Suggestion};
+    use std::slice;
 
     #[test]
     fn apply_insertion_start() {
@@ -298,7 +235,7 @@ mod test {
         assert_eq!(
             suggestion.apply("'Server is now running'"),
             "Pumpkin once said: 'Server is now running'".to_owned()
-        )
+        );
     }
 
     #[test]
@@ -307,7 +244,7 @@ mod test {
         assert_eq!(
             suggestion.apply("Fast, and User-Friendly"),
             "Fast, Efficient, and User-Friendly".to_owned()
-        )
+        );
     }
 
     #[test]
@@ -316,7 +253,7 @@ mod test {
         assert_eq!(
             suggestion.apply("The server"),
             "The server has stopped".to_owned()
-        )
+        );
     }
 
     #[test]
@@ -325,13 +262,13 @@ mod test {
         assert_eq!(
             suggestion.apply("Hello world!"),
             "Goodbye world!".to_owned()
-        )
+        );
     }
 
     #[test]
     fn apply_replacement_middle() {
         let suggestion = Suggestion::without_tooltip(StringRange::between(6, 11), "melon");
-        assert_eq!(suggestion.apply("Hello world!"), "Hello melon!".to_owned())
+        assert_eq!(suggestion.apply("Hello world!"), "Hello melon!".to_owned());
     }
 
     #[test]
@@ -340,7 +277,7 @@ mod test {
         assert_eq!(
             suggestion.apply("Pumpkin is a vegetable."),
             "Pumpkin is a fruit.".to_owned()
-        )
+        );
     }
 
     #[test]
@@ -350,13 +287,13 @@ mod test {
         assert_eq!(
             suggestion.apply("I'm not related to the other phrase."),
             "This is a phrase.".to_owned()
-        )
+        );
     }
 
     #[test]
     fn expand_unchanged() {
         let suggestion = Suggestion::without_tooltip(StringRange::at(1), "oo");
-        assert_eq!(suggestion.expand("f", StringRange::at(1)), suggestion)
+        assert_eq!(suggestion.expand("f", StringRange::at(1)), suggestion);
     }
 
     #[test]
@@ -365,7 +302,7 @@ mod test {
         assert_eq!(
             suggestion.expand("f", StringRange::between(0, 1)),
             Suggestion::without_tooltip(StringRange::between(0, 1), "foo")
-        )
+        );
     }
 
     #[test]
@@ -374,7 +311,7 @@ mod test {
         assert_eq!(
             suggestion.expand("r", StringRange::between(0, 1)),
             Suggestion::without_tooltip(StringRange::between(0, 1), "bar")
-        )
+        );
     }
 
     #[test]
@@ -392,7 +329,7 @@ mod test {
                 StringRange::between(0, 52),
                 "A block called Pumpkin can be sheared to make a Carved Pumpkin and can be crafted into its seeds"
             )
-        )
+        );
     }
 
     #[test]
@@ -401,13 +338,13 @@ mod test {
         assert_eq!(
             suggestion.expand("Hello world!", StringRange::between(0, 12)),
             Suggestion::without_tooltip(StringRange::between(0, 12), "Hello everyone!")
-        )
+        );
     }
 
     #[test]
     fn merge_empty() {
         let merged = Suggestions::merge("foo b", &[]);
-        assert!(merged.is_empty())
+        assert!(merged.is_empty());
     }
 
     #[test]
@@ -416,7 +353,7 @@ mod test {
             StringRange::at(5),
             vec![Suggestion::without_tooltip(StringRange::at(5), "ar")],
         );
-        let merged = Suggestions::merge("foo b", &[suggestions.clone()]);
+        let merged = Suggestions::merge("foo b", slice::from_ref(&suggestions));
         assert_eq!(merged, suggestions);
     }
 
@@ -449,6 +386,91 @@ mod test {
                 Suggestion::without_tooltip(StringRange::between(4, 5), "foo"),
                 Suggestion::without_tooltip(StringRange::between(4, 5), "qux"),
             ]
+        );
+    }
+
+    #[test]
+    fn suggest_append() {
+        let suggestions = SuggestionsBuilder::new("Hello w", 6)
+            .suggest("world!")
+            .build();
+
+        assert_eq!(
+            suggestions.suggestions,
+            vec![Suggestion::without_tooltip(
+                StringRange::between(6, 7),
+                "world!"
+            )]
+        );
+        assert_eq!(suggestions.range, StringRange::between(6, 7));
+    }
+
+    #[test]
+    fn suggest_replace() {
+        let suggestions = SuggestionsBuilder::new("Hello w", 6)
+            .suggest("everyone!")
+            .build();
+
+        assert_eq!(
+            suggestions.suggestions,
+            vec![Suggestion::without_tooltip(
+                StringRange::between(6, 7),
+                "everyone!"
+            )]
+        );
+        assert_eq!(suggestions.range, StringRange::between(6, 7));
+    }
+
+    #[test]
+    fn suggest_noop() {
+        let suggestions = SuggestionsBuilder::new("hello", 6).build();
+
+        assert!(suggestions.is_empty());
+    }
+
+    #[test]
+    fn suggest_multiple() {
+        let suggestions = SuggestionsBuilder::new("Cut a b", 6)
+            .suggest("banana")
+            .suggest("plum")
+            .suggest("tomato")
+            .build();
+
+        assert_eq!(
+            suggestions.suggestions,
+            vec![
+                Suggestion::without_tooltip(StringRange::between(6, 7), "banana"),
+                Suggestion::without_tooltip(StringRange::between(6, 7), "plum"),
+                Suggestion::without_tooltip(StringRange::between(6, 7), "tomato")
+            ]
+        );
+        assert_eq!(suggestions.range, StringRange::between(6, 7));
+    }
+
+    #[test]
+    fn sort() {
+        let suggestions = SuggestionsBuilder::new("A random thing to say is foobar", 25)
+            .suggest("1")
+            .suggest(9)
+            .suggest("4")
+            .suggest(6)
+            .suggest("05")
+            .suggest(533)
+            .suggest("x8")
+            .suggest("a")
+            .suggest("x")
+            .suggest("6x")
+            .build();
+
+        let internal_sorted_repr: Vec<String> = suggestions
+            .suggestions
+            .into_iter()
+            .map(|suggestion| suggestion.text_as_string())
+            .collect();
+
+        assert_eq!(
+            internal_sorted_repr,
+            vec!["05", "1", "4", "6", "6x", "9", "533", "a", "x", "x8"]
         );
     }
 }

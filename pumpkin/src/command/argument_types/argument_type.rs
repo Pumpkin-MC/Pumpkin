@@ -1,7 +1,7 @@
 use crate::command::argument_types::argument_type::sealed::Sealed;
 use crate::command::context::command_context::CommandContext;
 use crate::command::context::command_source::CommandSource;
-use crate::command::suggestion::Suggestions;
+use crate::command::suggestion::suggestions::Suggestions;
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use crate::command::{
     errors::command_syntax_error::CommandSyntaxError, string_reader::StringReader,

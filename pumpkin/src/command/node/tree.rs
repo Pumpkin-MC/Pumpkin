@@ -22,7 +22,7 @@ pub const ROOT_NODE_ID: NodeId = NodeId(NonZero::new(1).unwrap());
 /// A consumer which takes ambiguity of input (when two or more nodes are satisfied)
 pub trait AmbiguityConsumer {
     fn ambiguous(
-        &self,
+        &mut self,
         tree: &Tree,
         parent: NodeId,
         child: NodeId,
@@ -131,18 +131,18 @@ impl Tree {
     }
 
     /// Adds a [`CommandDetachedNode`] to the root node of this tree.
-    pub fn add_child_to_root(&mut self, node: CommandDetachedNode) -> CommandNodeId {
+    pub fn add_child_to_root(&mut self, node: impl Into<CommandDetachedNode>) -> CommandNodeId {
         // First, attach the node to this tree.
-        let node = self.attach(node.into());
+        let node = self.attach(node.into().into());
         self.add_attached_child(ROOT_NODE_ID, node);
         // This is safe as the node ID now points to a `CommandAttachedNode`.
         CommandNodeId(node.0)
     }
 
     /// Adds a child to a given node.
-    pub fn add_child(&mut self, parent: NodeId, node: DetachedNode) -> NodeId {
+    pub fn add_child(&mut self, parent: NodeId, node: impl Into<DetachedNode>) -> NodeId {
         // First, attach the node to this tree.
-        let node = self.attach(node);
+        let node = self.attach(node.into());
         self.add_attached_child(parent, node);
         node
     }
@@ -182,7 +182,7 @@ impl Tree {
     }
 
     /// Finds ambiguities of input and gives them to the [`AmbiguityConsumer`].
-    pub fn find_ambiguities(&self, node: NodeId, consumer: &impl AmbiguityConsumer) {
+    pub fn find_ambiguities(&self, node: NodeId, consumer: &mut impl AmbiguityConsumer) {
         let mut matches: FxHashSet<String> = FxHashSet::default();
 
         for child in self.get_children(node) {
@@ -191,7 +191,7 @@ impl Tree {
                     continue;
                 }
                 for input in self[child].examples() {
-                    if self[node].is_valid_input(&input) {
+                    if self[sibling].is_valid_input(&input) {
                         matches.insert(input.clone());
                     }
                 }
@@ -364,3 +364,95 @@ macro_rules! impl_index_index_mut {
 impl_index_index_mut!(LiteralNodeId -> AttachedNode::Literal(LiteralAttachedNode));
 impl_index_index_mut!(CommandNodeId -> AttachedNode::Command(CommandAttachedNode));
 impl_index_index_mut!(ArgumentNodeId -> AttachedNode::Argument(ArgumentAttachedNode));
+
+#[cfg(test)]
+mod test {
+    use crate::command::argument_builder::{
+        ArgumentBuilder, CommandArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder,
+    };
+    use crate::command::argument_types::core::string::StringArgumentType;
+    use crate::command::node::attached::NodeId;
+    use crate::command::node::tree::{AmbiguityConsumer, Tree};
+
+    #[test]
+    fn adding_nodes() {
+        // New tree (containing only one root node)
+        let mut tree = Tree::new();
+        assert_eq!(tree.size(), 1);
+
+        // Adding one node.
+        tree.add_child_to_root(CommandArgumentBuilder::new("foo", "A test command"));
+        assert_eq!(tree.size(), 2);
+
+        // Adding a node with children.
+        tree.add_child_to_root(
+            // Each subcommand is a child.
+            CommandArgumentBuilder::new("bar", "Another test command")
+                .then(LiteralArgumentBuilder::new("baz"))
+                .then(LiteralArgumentBuilder::new("qux")),
+        );
+        assert_eq!(tree.size(), 5);
+    }
+
+    #[test]
+    fn adding_children_to_attached_node() {
+        let mut tree = Tree::new();
+
+        let parent: NodeId = tree
+            .add_child_to_root(CommandArgumentBuilder::new("foo", "A test command"))
+            .into();
+
+        tree.add_child(parent, LiteralArgumentBuilder::new("baz"));
+        tree.add_child(parent, LiteralArgumentBuilder::new("qux"));
+
+        assert_eq!(tree.size(), 4);
+        assert_eq!(tree.get_children(parent).len(), 2);
+    }
+
+    #[test]
+    fn finding_ambiguities() {
+        struct Consumer {
+            inputs_received: usize,
+            expected_parent: NodeId,
+            expected_sibling: NodeId,
+        }
+
+        impl AmbiguityConsumer for Consumer {
+            fn ambiguous(
+                &mut self,
+                _tree: &Tree,
+                parent: NodeId,
+                _child: NodeId,
+                sibling: NodeId,
+                inputs: Vec<String>,
+            ) {
+                self.inputs_received += inputs.len();
+
+                assert_eq!(self.expected_parent, parent);
+                assert_eq!(self.expected_sibling, sibling);
+            }
+        }
+
+        let mut tree = Tree::new();
+
+        let parent: NodeId = tree
+            .add_child_to_root(CommandArgumentBuilder::new("foo", "A test command"))
+            .into();
+
+        tree.add_child(parent, LiteralArgumentBuilder::new("hello"));
+        tree.add_child(parent, LiteralArgumentBuilder::new("bye"));
+        let sibling = tree.add_child(
+            parent,
+            RequiredArgumentBuilder::new("string", StringArgumentType::SingleWord),
+        );
+
+        let mut consumer = Consumer {
+            inputs_received: 0,
+            expected_parent: parent,
+            expected_sibling: sibling,
+        };
+        tree.find_ambiguities(parent, &mut consumer);
+
+        assert_eq!(consumer.inputs_received, 2);
+    }
+}

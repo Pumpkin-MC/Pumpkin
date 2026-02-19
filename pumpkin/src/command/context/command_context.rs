@@ -502,32 +502,38 @@ impl<'a> CommandContextBuilder<'a> {
 #[cfg(test)]
 mod test {
     use std::sync::Arc;
-    use crate::command::context::command_context::{CommandContextBuilder, ParsedArgument};
+
+    use crate::command::argument_builder::{ArgumentBuilder, CommandArgumentBuilder};
+    use crate::command::context::command_context::{
+        CommandContext, CommandContextBuilder, ContextChain, ParsedArgument, Stage,
+    };
     use crate::command::context::command_source::CommandSource;
     use crate::command::context::string_range::StringRange;
     use crate::command::errors::command_syntax_error::CommandSyntaxError;
-    use crate::command::node::dispatcher::CommandDispatcher;
+    use crate::command::node::dispatcher::{CommandDispatcher, EmptyResultConsumer};
     use crate::command::node::tree::ROOT_NODE_ID;
+    use crate::command::node::{CommandExecutor, CommandExecutorResult, Redirection};
+
+    struct TenExecutor;
+    impl CommandExecutor for TenExecutor {
+        fn execute<'a>(&'a self, _context: &'a CommandContext) -> CommandExecutorResult<'a> {
+            Box::pin(async move { Ok(10) })
+        }
+    }
 
     // For testing purposes
     fn builder(dispatcher: &CommandDispatcher) -> CommandContextBuilder<'_> {
         let mut builder = CommandContextBuilder::new(
-            &dispatcher,
+            dispatcher,
             Arc::new(CommandSource::dummy()),
             dispatcher.tree.clone(),
             ROOT_NODE_ID,
-            0
+            0,
         );
 
-        let parsed_argument = ParsedArgument::new(
-            StringRange::between(0, 1),
-            Box::new(6789_i32)
-        );
+        let parsed_argument = ParsedArgument::new(StringRange::between(0, 1), Box::new(6789i32));
 
-        builder.with_argument(
-            "foo".to_string(),
-            Arc::new(parsed_argument)
-        );
+        builder.with_argument("foo".to_string(), Arc::new(parsed_argument));
 
         builder
     }
@@ -559,5 +565,104 @@ mod test {
 
         let context = builder.build("6789");
         assert!(context.get_argument::<f32>("foo").is_err());
+    }
+
+    #[tokio::test]
+    async fn execute_single_command_chain() {
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher
+            .register(CommandArgumentBuilder::new("foo", "A test command").executes(TenExecutor));
+
+        let source = Arc::new(CommandSource::dummy());
+        let result = dispatcher.parse_input("foo", &source);
+        let top_context = result.context.build("foo");
+        let chain = ContextChain::try_flatten(&top_context)
+            .expect("The context should have properly flattened, as it has a command to execute");
+
+        assert_eq!(
+            chain.execute_all(&source, &EmptyResultConsumer).await,
+            Ok(10)
+        );
+    }
+
+    #[tokio::test]
+    async fn execute_redirected_command_chain() {
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher
+            .register(CommandArgumentBuilder::new("foo", "A test command").executes(TenExecutor));
+        dispatcher.register(
+            CommandArgumentBuilder::new("bar", "Another test command").redirect(Redirection::Root),
+        );
+
+        let source = Arc::new(CommandSource::dummy());
+        let result = dispatcher.parse_input("bar foo", &source);
+        let top_context = result.context.build("bar foo");
+        let chain = ContextChain::try_flatten(&top_context)
+            .expect("The context should have properly flattened, as it has a command to execute");
+
+        assert_eq!(
+            chain.execute_all(&source, &EmptyResultConsumer).await,
+            Ok(10)
+        );
+    }
+
+    #[test]
+    fn single_stage_execution() {
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher
+            .register(CommandArgumentBuilder::new("foo", "A test command").executes(TenExecutor));
+
+        let source = Arc::new(CommandSource::dummy());
+        let result = dispatcher.parse_input("foo", &source);
+        let top_context = result.context.build("foo");
+        let chain = ContextChain::try_flatten(&top_context)
+            .expect("The context should have properly flattened, as it has a command to execute");
+
+        assert_eq!(chain.get_stage(), Stage::EXECUTE);
+        assert!(chain.next_stage().is_none());
+    }
+
+    #[test]
+    fn multi_stage_execution() {
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher
+            .register(CommandArgumentBuilder::new("foo", "A test command").executes(TenExecutor));
+        dispatcher.register(
+            CommandArgumentBuilder::new("bar", "Another test command").redirect(Redirection::Root),
+        );
+        dispatcher.register(
+            CommandArgumentBuilder::new("qux", "Yet another test command")
+                .redirect(Redirection::Root),
+        );
+
+        let source = Arc::new(CommandSource::dummy());
+        let result = dispatcher.parse_input("bar qux foo", &source);
+        let top_context = result.context.build("bar qux foo");
+        let chain = ContextChain::try_flatten(&top_context)
+            .expect("The context should have properly flattened, as it has a command to execute");
+        assert_eq!(chain.get_stage(), Stage::MODIFY);
+
+        let chain2 = chain
+            .next_stage()
+            .expect("There should have been the next stage");
+        assert_eq!(chain2.get_stage(), Stage::MODIFY);
+
+        let chain3 = chain2
+            .next_stage()
+            .expect("There should have been the next stage");
+        assert_eq!(chain3.get_stage(), Stage::EXECUTE);
+        assert!(chain3.next_stage().is_none());
+    }
+
+    #[test]
+    fn missing_command() {
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher.register(CommandArgumentBuilder::new("foo", "A test command"));
+
+        let source = Arc::new(CommandSource::dummy());
+        let result = dispatcher.parse_input("foo", &source);
+        let top_context = result.context.build("foo");
+
+        assert!(ContextChain::try_flatten(&top_context).is_none());
     }
 }

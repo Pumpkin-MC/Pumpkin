@@ -19,8 +19,8 @@ impl StringRange {
         Self { start, end }
     }
 
-    /// Constructs an empty range at the left side of
-    /// a one character with index `pos`.
+    /// Constructs an empty range on the left side of
+    /// one character with index `pos`.
     #[must_use]
     pub const fn at(pos: usize) -> Self {
         Self::between(pos, pos)

@@ -87,7 +87,7 @@ impl CommandDispatcher {
         // cloning, and even if it did, the `Arc` will get copied again later
         // by the sources.
         let arc_mut = Arc::make_mut(&mut self.tree);
-        arc_mut.add_child_to_root(command_node.into())
+        arc_mut.add_child_to_root(command_node)
     }
 
     /// Executes the given command with the provided source, returning a result of execution.
@@ -296,31 +296,30 @@ mod test {
 
     #[tokio::test]
     async fn arithmetic_command() {
-        let mut dispatcher = CommandDispatcher::new();
-
         enum Operation {
-            ADD,
-            SUBTRACT,
-            MULTIPLY,
-            DIVIDE,
+            Add,
+            Subtract,
+            Multiply,
+            Divide,
         }
-        struct Executor(Operation);
 
+        struct Executor(Operation);
         impl CommandExecutor for Executor {
             fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
                 Box::pin(async move {
                     let operand1: i32 = context.get_argument("operand1")?;
                     let operand2: i32 = context.get_argument("operand2")?;
                     Ok(match self.0 {
-                        Operation::ADD => operand1 + operand2,
-                        Operation::SUBTRACT => operand1 - operand2,
-                        Operation::MULTIPLY => operand1 * operand2,
-                        Operation::DIVIDE => operand1 / operand2,
+                        Operation::Add => operand1 + operand2,
+                        Operation::Subtract => operand1 - operand2,
+                        Operation::Multiply => operand1 * operand2,
+                        Operation::Divide => operand1 / operand2,
                     })
                 })
             }
         }
 
+        let mut dispatcher = CommandDispatcher::new();
         dispatcher.register(
             CommandArgumentBuilder::new(
                 "arithmetic",
@@ -331,25 +330,25 @@ mod test {
                     .then(
                         LiteralArgumentBuilder::new("+").then(
                             RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
-                                .executes(Executor(Operation::ADD)),
+                                .executes(Executor(Operation::Add)),
                         ),
                     )
                     .then(
                         LiteralArgumentBuilder::new("-").then(
                             RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
-                                .executes(Executor(Operation::SUBTRACT)),
+                                .executes(Executor(Operation::Subtract)),
                         ),
                     )
                     .then(
                         LiteralArgumentBuilder::new("*").then(
                             RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
-                                .executes(Executor(Operation::MULTIPLY)),
+                                .executes(Executor(Operation::Multiply)),
                         ),
                     )
                     .then(
                         LiteralArgumentBuilder::new("/").then(
                             RequiredArgumentBuilder::new("operand2", IntegerArgumentType::any())
-                                .executes(Executor(Operation::DIVIDE)),
+                                .executes(Executor(Operation::Divide)),
                         ),
                     ),
             ),
@@ -389,20 +388,19 @@ mod test {
 
     #[tokio::test]
     async fn alias_complex() {
-        let mut dispatcher = CommandDispatcher::new();
-
         struct Executor;
-
         impl CommandExecutor for Executor {
             fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
                 Box::pin(async move { context.get_argument("result") })
             }
         }
 
+        let mut dispatcher = CommandDispatcher::new();
+
         let a = dispatcher.register(CommandArgumentBuilder::new("a", "A command").then(
             RequiredArgumentBuilder::new("result", IntegerArgumentType::any()).executes(Executor),
         ));
-        // Note that this time, we SHOULD use redirect - it is leading to another node having command.
+        // Note that this time, we SHOULD use redirect - it is leading to another node having `command`.
         dispatcher.register(CommandArgumentBuilder::new("b", "An alias for /a").redirect(a));
         let source = CommandSource::dummy();
         assert_eq!(dispatcher.execute_input("a 5", &source).await, Ok(5));
@@ -411,15 +409,14 @@ mod test {
 
     #[tokio::test]
     async fn recurse() {
-        let mut dispatcher = CommandDispatcher::new();
-
         struct Executor;
-
         impl CommandExecutor for Executor {
             fn execute<'a>(&'a self, _context: &'a CommandContext) -> CommandExecutorResult<'a> {
                 Box::pin(async move { Ok(1) })
             }
         }
+
+        let mut dispatcher = CommandDispatcher::new();
 
         let mut builder = CommandArgumentBuilder::new(
             "recurse",

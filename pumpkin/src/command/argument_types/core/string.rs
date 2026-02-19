@@ -56,7 +56,7 @@ mod test {
             "single-quoted string!".to_owned()
         );
 
-        assert_parse_ok_reset!(&mut reader, StringArgumentType::SingleWord, "".to_owned());
+        assert_parse_ok_reset!(&mut reader, StringArgumentType::SingleWord, String::new());
 
         assert_parse_ok_reset!(
             &mut reader,
@@ -75,7 +75,7 @@ mod test {
             "double-quoted string!".to_owned()
         );
 
-        assert_parse_ok_reset!(&mut reader, StringArgumentType::SingleWord, "".to_owned());
+        assert_parse_ok_reset!(&mut reader, StringArgumentType::SingleWord, String::new());
 
         assert_parse_ok_reset!(
             &mut reader,
