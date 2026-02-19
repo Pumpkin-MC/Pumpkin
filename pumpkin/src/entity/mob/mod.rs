@@ -266,6 +266,13 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
 
+            if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
+                mob_entity.breeding_cooldown.fetch_sub(1, Relaxed);
+            }
+            if mob_entity.love_ticks.load(Relaxed) > 0 {
+                mob_entity.love_ticks.fetch_sub(1, Relaxed);
+            }
+
             self.mob_tick(&caller).await;
 
             // AI runs before physics (vanilla order: goals → navigator → look → physics)

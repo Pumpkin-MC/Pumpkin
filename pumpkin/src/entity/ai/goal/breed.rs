@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
@@ -69,21 +68,12 @@ impl BreedGoal {
         mob_entity
             .breeding_cooldown
             .store(6000, std::sync::atomic::Ordering::Relaxed);
-        entity.set_age(6000);
 
         mate.reset_love();
         mate.set_breeding_cooldown(6000);
-        mate.get_entity().set_age(6000);
 
         let parent_pos = entity.pos.load();
-        let mate_pos = mate.get_entity().pos.load();
-        let baby_pos = Vector3::new(
-            f64::midpoint(parent_pos.x, mate_pos.x),
-            parent_pos.y.max(mate_pos.y),
-            f64::midpoint(parent_pos.z, mate_pos.z),
-        );
-
-        let baby = from_type(entity.entity_type, baby_pos, &world, Uuid::new_v4()).await;
+        let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()).await;
         baby.get_entity().set_age(-24000);
         world.spawn_entity(baby).await;
     }
@@ -108,11 +98,7 @@ impl Goal for BreedGoal {
                 return false;
             };
 
-            if mate
-                .get_entity()
-                .removed
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+            if !mate.get_entity().is_alive() {
                 return false;
             }
 
