@@ -1,3 +1,4 @@
+use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
@@ -5,6 +6,7 @@ use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use std::mem;
@@ -61,6 +63,7 @@ pub struct LivingEntity {
     pub health: AtomicCell<f32>,
     pub item_use_time: AtomicI32,
     pub item_in_use: Mutex<Option<ItemStack>>,
+    pub active_hand: Mutex<Option<Hand>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
@@ -126,6 +129,7 @@ impl LivingEntity {
             dead: AtomicBool::new(false),
             item_use_time: AtomicI32::new(0),
             item_in_use: Mutex::new(None),
+            active_hand: Mutex::new(None),
             livings_flags: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
@@ -181,6 +185,7 @@ impl LivingEntity {
         self.item_use_time
             .store(stack.get_max_use_time(), Ordering::Relaxed);
         *self.item_in_use.lock().await = Some(stack);
+        *self.active_hand.lock().await = Some(hand);
         self.set_living_flag(Self::USING_ITEM_FLAG, true).await;
         self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left)
             .await;
@@ -206,6 +211,7 @@ impl LivingEntity {
 
     pub async fn clear_active_hand(&self) {
         *self.item_in_use.lock().await = None;
+        *self.active_hand.lock().await = None;
         self.item_use_time.store(0, Ordering::Relaxed);
 
         self.set_living_flag(Self::USING_ITEM_FLAG, false).await;
@@ -234,11 +240,18 @@ impl LivingEntity {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
+        // Insert the effect and notify clients so they receive the mob effect packet
+        let eff_clone = effect.clone();
         self.active_effects
             .lock()
             .await
-            .insert(effect.effect_type, effect);
-        // TODO broadcast metadata
+            .insert(eff_clone.effect_type, eff_clone.clone());
+        // Broadcast the add/update mob effect packet to nearby players
+        self.entity
+            .world
+            .load()
+            .send_add_mob_effect(&self.entity, &eff_clone)
+            .await;
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -1376,6 +1389,7 @@ impl EntityBase for LivingEntity {
         GRAVITY
     }
 
+    #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
         caller: Arc<dyn EntityBase>,
@@ -1454,6 +1468,7 @@ impl EntityBase for LivingEntity {
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
                     // Consume item
+                    let mut is_potion = false;
                     if let Some(food) = item.get_data_component::<FoodImpl>()
                         && let Some(player) = caller.get_player()
                     {
@@ -1462,13 +1477,80 @@ impl EntityBase for LivingEntity {
                             .eat(player, food.nutrition as u8, food.saturation)
                             .await;
                     }
+
+                    // Handle potion consumption
+                    if item.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().is_some() {
+                        let effects = crate::item::potion::PotionContents::read_potion_effects(item);
+                        crate::item::potion::PotionContents::apply_effects_to(self, effects, 1.0, crate::item::potion::PotionApplicationSource::Normal).await;
+                        is_potion = true;
+                    }
+
                     if let Some(player) = caller.get_player() {
-                        player
-                            .inventory
-                            .held_item()
-                            .lock()
-                            .await
-                            .decrement_unless_creative(player.gamemode.load(), 1);
+                        // Prefer modifying the exact stack that matches the consumed item:
+                        // 1) selected hotbar (held_item)
+                        // 2) off-hand
+                        // 3) fallback to active_hand if the above didn't match
+                        let mut handled = false;
+
+                        // Check main hand (hotbar selected)
+                        let held_arc = player.inventory.held_item();
+                        {
+                            let mut held_lock = held_arc.lock().await;
+                            if held_lock.are_items_and_components_equal(item) {
+                                if is_potion {
+                                    if player.gamemode.load() != GameMode::Creative {
+                                        held_lock.decrement(1);
+                                        if held_lock.is_empty() {
+                                            *held_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                        }
+                                    }
+                                } else {
+                                    held_lock.decrement_unless_creative(player.gamemode.load(), 1);
+                                }
+                                handled = true;
+                            }
+                        }
+
+                        if !handled {
+                            // Check off-hand
+                            let off_arc = player.inventory.off_hand_item().await;
+                            let mut off_lock = off_arc.lock().await;
+                            if off_lock.are_items_and_components_equal(item) {
+                                if is_potion {
+                                    if player.gamemode.load() != GameMode::Creative {
+                                        off_lock.decrement(1);
+                                        if off_lock.is_empty() {
+                                            *off_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                        }
+                                    }
+                                } else {
+                                    off_lock.decrement_unless_creative(player.gamemode.load(), 1);
+                                }
+
+                                handled = true;
+                            }
+                        }
+
+                        if !handled {
+                            // Use stored active_hand (as a fallback)
+                            let active_hand = *self.active_hand.lock().await;
+                            let hand_to_modify = active_hand.unwrap_or(Hand::Right);
+                            let item_stack = self
+                                .get_stack_in_hand(caller.as_ref(), hand_to_modify)
+                                .await;
+                            let mut item_lock = item_stack.lock().await;
+
+                            if is_potion {
+                                if player.gamemode.load() != GameMode::Creative {
+                                    item_lock.decrement(1);
+                                    if item_lock.is_empty() {
+                                        *item_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                    }
+                                }
+                            } else {
+                                item_lock.decrement_unless_creative(player.gamemode.load(), 1);
+                            }
+                        }
                     }
 
                     self.clear_active_hand().await;

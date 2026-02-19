@@ -59,6 +59,9 @@ pub async fn from_type(
         id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity).await,
         id if id == EntityType::WOLF.id => WolfEntity::new(entity).await,
         id if id == EntityType::WITHER.id => WitherEntity::new(entity).await,
+        id if id == EntityType::AREA_EFFECT_CLOUD.id => {
+            crate::entity::area_effect_cloud::AreaEffectCloudEntity::new(entity)
+        }
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
