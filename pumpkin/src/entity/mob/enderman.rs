@@ -479,10 +479,16 @@ impl Mob for EndermanEntity {
     fn on_damage<'a>(
         &'a self,
         _damage_type: DamageType,
-        _source: Option<&'a dyn EntityBase>,
+        source: Option<&'a dyn EntityBase>,
     ) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            self.teleport_randomly().await;
+            if source.is_some_and(|s| s.get_living_entity().is_some()) {
+                return;
+            }
+            let should_teleport = self.get_random().random_range(0..10) != 0;
+            if should_teleport {
+                self.teleport_randomly().await;
+            }
         })
     }
 }

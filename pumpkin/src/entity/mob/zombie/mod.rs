@@ -29,6 +29,7 @@ pub struct ZombieEntity {
 impl ZombieEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
         let mut mob_entity = MobEntity::new(entity);
+        mob_entity.attack_damage = 3.0;
         mob_entity.follow_range = 35.0;
         let zombie = Self { mob_entity };
         let mob_arc = Arc::new(zombie);
