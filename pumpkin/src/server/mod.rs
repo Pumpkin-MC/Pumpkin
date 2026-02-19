@@ -9,6 +9,7 @@ use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
 use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
+use crate::plugin::player::player_permission_setup::PlayerPermissionSetupEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::custom_bossbar::CustomBossbars;
@@ -411,6 +412,15 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+
+        let event = self
+            .plugin_manager
+            .fire(PlayerPermissionSetupEvent::new(
+                player.clone(),
+                player.permission_lvl.load(),
+            ))
+            .await;
+        player.permission_lvl.store(event.permission_lvl);
 
         send_cancellable! {{
             self;
