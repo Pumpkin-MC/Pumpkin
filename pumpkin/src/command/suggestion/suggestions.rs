@@ -236,7 +236,7 @@ impl Suggestions {
                 (Some(text), Some(integer)) => match text.0.cmp(&integer.0) {
                     Ordering::Less => PushSide::Text,
                     Ordering::Greater => PushSide::Integer,
-                    Ordering::Equal => unreachable!("invariant of Suggestion was not held"),
+                    Ordering::Equal => unreachable!(),
                 },
                 (Some(_), None) => PushSide::Text,
                 (None, Some(_)) => PushSide::Integer,
