@@ -78,10 +78,9 @@ impl Goal for PickUpBlockGoal {
                     state.is_solid()
                 })
                 .await
+                && hit_pos != target_pos
             {
-                if hit_pos != target_pos {
-                    return;
-                }
+                return;
             }
 
             // Vanilla stores the block's DEFAULT state, not the in-world state
