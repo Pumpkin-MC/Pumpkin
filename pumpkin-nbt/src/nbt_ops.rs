@@ -1486,7 +1486,7 @@ mod test {
         pub static PACKED_COLOR_CODEC: PackedColorCodec = comap_flat_map(
             &BYTE_BUFFER_CODEC,
             |v| {
-                // While decoding, our codec only accept byte buffers (arrays) with exactly 3 or 4 elements.
+                // While decoding, our codec only accepts byte buffers (arrays) with exactly 3 or 4 elements.
                 if v.len() == 4 {
                     DataResult::success(PackedColor {
                         r: v[0],
