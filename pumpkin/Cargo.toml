@@ -26,6 +26,7 @@ pumpkin-world.workspace = true
 pumpkin-data.workspace = true
 pumpkin-protocol.workspace = true
 pumpkin-macros.workspace = true
+pumpkin-plugin-host.workspace = true
 
 crossbeam.workspace = true
 uuid.workspace = true

@@ -37,7 +37,9 @@ impl CommandExecutor for Executor {
                 };
                 let hover_text = format!(
                     "Version: {}\nAuthors: {}\nDescription: {}",
-                    metadata.version, metadata.authors, metadata.description
+                    metadata.version,
+                    metadata.authors.join(", "),
+                    metadata.description
                 );
                 let component = TextComponent::text(fmt)
                     .color_named(NamedColor::Green)
