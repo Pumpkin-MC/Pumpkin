@@ -759,6 +759,7 @@ pub trait ScreenHandler: Send + Sync {
                                     cursor_stack.decrement(inserting_count);
                                 }
                                 if cursor_stack.is_empty() {
+                                    *cursor_stack = ItemStack::EMPTY.clone();
                                     break;
                                 }
                             }

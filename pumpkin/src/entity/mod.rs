@@ -240,6 +240,22 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         Box::pin(async {})
     }
 
+    fn is_in_love(&self) -> bool {
+        false
+    }
+
+    fn is_breeding_ready(&self) -> bool {
+        false
+    }
+
+    fn reset_love(&self) {}
+
+    fn set_breeding_cooldown(&self, _ticks: i32) {}
+
+    fn is_panicking(&self) -> bool {
+        false
+    }
+
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
 
@@ -397,6 +413,8 @@ pub struct Entity {
     pub invulnerable: AtomicBool,
     /// List of damage types this entity is immune to
     pub damage_immunities: Vec<DamageType>,
+    // Whether the entity is immune to fire (to disable visual fire and fire damage)
+    pub fire_immune: AtomicBool,
     pub fire_ticks: AtomicI32,
     pub has_visual_fire: AtomicBool,
     /// The number of ticks the entity has been frozen (in powder snow)
@@ -499,6 +517,7 @@ impl Entity {
             invulnerable: AtomicBool::new(false),
             damage_immunities: Vec::new(),
             data: AtomicI32::new(0),
+            fire_immune: AtomicBool::new(false),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
             frozen_ticks: AtomicI32::new(0),
@@ -680,12 +699,20 @@ impl Entity {
         }
     }
 
+    /// Returns the block position of the block the (non-player) entity is standing on, if any.
+    pub fn get_supporting_block_pos(&self) -> Option<BlockPos> {
+        // Check if the entity is on the ground
+        if !self.on_ground.load(Ordering::Relaxed) {
+            return None;
+        }
+
+        self.supporting_block_pos.load()
+    }
+
     #[expect(clippy::float_cmp)]
     async fn adjust_movement_for_collisions(&self, movement: Vector3<f64>) -> Vector3<f64> {
         self.on_ground.store(false, Ordering::SeqCst);
-
         self.supporting_block_pos.store(None);
-
         self.horizontal_collision.store(false, Ordering::SeqCst);
 
         if movement.length_squared() == 0.0 {
@@ -707,14 +734,10 @@ impl Entity {
         let mut adjusted_movement = movement;
 
         // Y-Axis adjustment
-
         if movement.get_axis(Axis::Y) != 0.0 {
             let mut max_time = 1.0;
-
             let mut positions = block_positions.into_iter();
-
             let (mut collisions_len, mut position) = positions.next().unwrap();
-
             let mut supporting_block_pos = None;
 
             for (i, inert_box) in collisions.iter().enumerate() {
@@ -730,19 +753,20 @@ impl Entity {
                 ) {
                     max_time = collision_time;
 
-                    supporting_block_pos = Some(position);
+                    // If the entity is moving downwards and collides, set the supporting block position
+                    if movement.get_axis(Axis::Y) < 0.0 {
+                        supporting_block_pos = Some(position);
+                    }
                 }
             }
 
             if max_time != 1.0 {
                 let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-
                 adjusted_movement.set_axis(Axis::Y, changed_component);
             }
 
             self.on_ground
                 .store(supporting_block_pos.is_some(), Ordering::SeqCst);
-
             self.supporting_block_pos.store(supporting_block_pos);
         }
 
@@ -768,9 +792,7 @@ impl Entity {
 
             if max_time != 1.0 {
                 let changed_component = adjusted_movement.get_axis(axis) * max_time;
-
                 adjusted_movement.set_axis(axis, changed_component);
-
                 horizontal_collision = true;
             }
         }
@@ -1633,7 +1655,10 @@ impl Entity {
     }
 
     pub fn set_on_fire_for(&self, seconds: f32) {
-        self.set_on_fire_for_ticks((seconds * 20.0).floor() as u32);
+        // Exclude fire-immune entities (ex. certain items) from burn damage
+        if !self.fire_immune.load(Ordering::Relaxed) {
+            self.set_on_fire_for_ticks((seconds * 20.0).floor() as u32);
+        }
     }
 
     pub fn set_on_fire_for_ticks(&self, ticks: u32) {
@@ -2452,8 +2477,12 @@ impl EntityBase for Entity {
             self.update_fluid_state(&caller).await;
             self.check_out_of_world(&*caller).await;
             let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
+
+            // Check for fire immunity (or if the specific entity is)
+            let is_immune =
+                self.entity_type.fire_immune || self.fire_immune.load(Ordering::Relaxed);
             if fire_ticks > 0 {
-                if self.entity_type.fire_immune {
+                if is_immune {
                     self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
                     if self.fire_ticks.load(Ordering::Relaxed) < 0 {
                         self.extinguish();
@@ -2466,8 +2495,10 @@ impl EntityBase for Entity {
                     self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
                 }
             }
-            self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
-                .await;
+
+            // Check if visual fire should be sent
+            let should_render_fire = self.fire_ticks.load(Ordering::Relaxed) > 0 && !is_immune;
+            self.set_on_fire(should_render_fire).await;
 
             // Tick freeze state (powder snow)
             self.tick_frozen(&*caller).await;
