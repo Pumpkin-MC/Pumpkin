@@ -1,6 +1,5 @@
 use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
-use pumpkin_plugin_host::metadata::PluginMetadata;
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
@@ -17,6 +16,8 @@ pub mod loader;
 
 use crate::{LOGGER_IMPL, plugin::loader::wasm::WasmPluginLoader, server::Server};
 pub use api::*;
+
+pub use pumpkin_plugin_host::metadata::PluginMetadata;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
