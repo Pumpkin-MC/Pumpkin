@@ -17,16 +17,12 @@ use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
 use crate::serialization::keyable::Keyable;
 use crate::serialization::map_codec::ComposedMapCodec;
-#[allow(unused_imports)] // Only used in documentation.
-use crate::serialization::map_codec::MapCodec;
 use crate::serialization::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
 use crate::serialization::map_codecs::optional_field::{
     DefaultValueProviderMapCodec, OptionalFieldMapCodec, new_default_value_provider_map_codec,
     new_optional_field_map_codec,
 };
 use crate::serialization::map_codecs::simple::{SimpleMapCodec, new_simple_map_codec};
-#[allow(unused_imports)] // Only used in documentation.
-use crate::serialization::struct_codecs::Field;
 use std::fmt::Display;
 use std::hash::Hash;
 
@@ -79,12 +75,12 @@ use std::hash::Hash;
 ///   for when the value does not exist while decoding.
 /// - [`lenient_optional_field`] and [`lenient_optional_field_with_default`] for lenient versions of the above two optional field methods.
 ///
-/// To create a `Field` object using a `MapCodec`, use [`super::map_codec::for_getter`] (which takes a `MapCodec` to own)
-/// or, in more specific cases, [`super::map_codec::for_getter_ref`] (which takes a static `MapCodec` pointer), to include a getter method
+/// To create a `Field` object using a `MapCodec`, use [`for_getter`] (which takes a `MapCodec` to own)
+/// or, in more specific cases, [`for_getter_ref`] (which takes a static `MapCodec` pointer) to include a getter method
 /// to tell the codec how to get some value (for encoding) from a struct instance.
 /// These `Field`s can then be placed in the `struct_codec` body, one for each pair, along with a constructor function at the end
 /// to tell the codec how to create an instance (for decoding) with the provided values. See the documentation
-/// of the `struct_codec` macro for a basic example for defining a struct codec.
+/// of the `struct_codec!` macro for a basic example for defining a struct codec.
 ///
 /// ## Unbounded Maps
 /// Use the [`unbounded_map`] function to create a codec encoding/decoding a `HashMap` of any arbitrary key.
@@ -104,6 +100,11 @@ use std::hash::Hash;
 /// The [`validate`] function returns a codec wrapper that validates a value before encoding and after decoding.
 /// A validated codec takes a function that can either return an [`Ok`] for a success,
 /// or an [`Err`] with the provided message to place in a `DataResult`.
+///
+/// [`MapCodec`]: super::map_codec::MapCodec
+/// [`for_getter`]: super::map_codec::for_getter
+/// [`for_getter_ref`]: super::map_codec::for_getter_ref
+/// [`Field`]: super::struct_codecs::Field
 pub trait Codec: Encoder + Decoder {}
 
 // Any struct implementing Encoder<Value = A> and Decoder<Value = A> will also implement Codec<Value = A>.
