@@ -77,7 +77,7 @@ pub struct Tree {
 
     /// Keys linking [`GlobalNodeId`] to the [`NodeId`] for this tree.
     /// Useful for redirecting.
-    ids_map: FxHashMap<GlobalNodeId, NodeId>
+    ids_map: FxHashMap<GlobalNodeId, NodeId>,
 }
 
 impl Default for Tree {
@@ -95,14 +95,12 @@ impl Tree {
         ids_map.insert(node.owned.global_id, ROOT_NODE_ID);
         Self {
             nodes: vec![AttachedNode::Root(node)],
-            ids_map
+            ids_map,
         }
     }
 
-    /// Allocate a new [`NodeId`] that was currently free from this tree.
-    /// This reuses freed node slots, and if none are left, then this
-    /// creates new IDs.
-    fn alloc(&mut self) -> NodeId {
+    /// Allocates a new [`NodeId`] by creating a new unique one.
+    const fn alloc(&self) -> NodeId {
         NodeId(NonZero::new(self.nodes.len() + 1).expect("expected a non-zero id"))
     }
 
