@@ -1,0 +1,8 @@
+interface context {
+    use server.{server};
+
+    resource context {
+        register-event: func(function-pointer: s32);
+        get-server: func() -> server;
+    }
+}

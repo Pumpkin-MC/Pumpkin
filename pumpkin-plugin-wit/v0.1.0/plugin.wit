@@ -1,0 +1,17 @@
+package pumpkin:plugin;
+
+world plugin {
+    use context.{context};
+
+    // This is what the host should provide to the plugin
+    import logging;
+    import server;
+    import context;
+
+    // This is what the plugin should provide
+    export init-plugin: func();
+    export on-load: func(context: context) -> result<_, string>;
+    export on-unload: func(context: context) -> result<_, string>;
+    export metadata;
+    export common;
+}

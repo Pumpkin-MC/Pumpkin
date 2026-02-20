@@ -1,18 +1,16 @@
-use crate::plugin::api::{Plugin, PluginMetadata};
+use crate::plugin::api::Plugin;
+use pumpkin_plugin_host::{metadata::PluginMetadata, wasm_host::PluginInitError};
 use std::{any::Any, path::Path, pin::Pin};
 use thiserror::Error;
 
 pub mod native;
+pub mod wasm;
 
 pub type PluginLoadFuture<'a> = Pin<
     Box<
         dyn Future<
                 Output = Result<
-                    (
-                        Box<dyn Plugin>,
-                        PluginMetadata<'static>,
-                        Box<dyn Any + Send + Sync>,
-                    ),
+                    (Box<dyn Plugin>, PluginMetadata, Box<dyn Any + Send + Sync>),
                     LoaderError,
                 >,
             > + Send
@@ -69,4 +67,7 @@ pub enum LoaderError {
         plugin_version: u32,
         server_version: u32,
     },
+
+    #[error("Wasm plugin initialization error: {0}")]
+    WasmInitializationError(#[from] PluginInitError),
 }

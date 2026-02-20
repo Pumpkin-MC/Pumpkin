@@ -1,5 +1,6 @@
 use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
+use pumpkin_plugin_host::metadata::PluginMetadata;
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
@@ -14,7 +15,7 @@ use tracing::{error, info};
 pub mod api;
 pub mod loader;
 
-use crate::{LOGGER_IMPL, server::Server};
+use crate::{LOGGER_IMPL, plugin::loader::wasm::WasmPluginLoader, server::Server};
 pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -176,7 +177,7 @@ pub struct PluginManager {
 /// OS specific issues
 /// - Windows: Plugin cannot be unloaded, it can be only active or not
 struct LoadedPlugin {
-    metadata: PluginMetadata<'static>,
+    metadata: PluginMetadata,
     instance: Option<Box<dyn Plugin>>,
     loader: Arc<dyn PluginLoader>,
     loader_data: Option<Box<dyn Any + Send + Sync>>,
@@ -207,7 +208,10 @@ impl Default for PluginManager {
     fn default() -> Self {
         Self {
             plugins: RwLock::new(Vec::new()),
-            loaders: RwLock::new(vec![Arc::new(NativePluginLoader)]),
+            loaders: RwLock::new(vec![
+                Arc::new(NativePluginLoader),
+                Arc::new(WasmPluginLoader),
+            ]),
             server: RwLock::new(None),
             handlers: Arc::new(RwLock::new(HashMap::new())),
             unloaded_files: RwLock::new(HashSet::new()),
@@ -503,7 +507,7 @@ impl PluginManager {
 
     /// Get list of active plugins
     #[must_use]
-    pub async fn active_plugins(&self) -> Vec<PluginMetadata<'static>> {
+    pub async fn active_plugins(&self) -> Vec<PluginMetadata> {
         let plugins = self.plugins.read().await;
         plugins
             .iter()
@@ -521,7 +525,7 @@ impl PluginManager {
 
     /// Get list of loaded plugins
     #[must_use]
-    pub async fn loaded_plugins(&self) -> Vec<PluginMetadata<'static>> {
+    pub async fn loaded_plugins(&self) -> Vec<PluginMetadata> {
         let plugins = self.plugins.read().await;
         plugins.iter().map(|p| p.metadata.clone()).collect()
     }

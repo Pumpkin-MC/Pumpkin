@@ -1,0 +1,5 @@
+interface common {
+    // resource callback {
+    //     call: func(data: string);
+    // }
+}

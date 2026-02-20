@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{LoggerOption, command::client_suggestions, plugin_log};
+use pumpkin_plugin_host::metadata::PluginMetadata;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
@@ -20,7 +21,7 @@ use crate::{
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-use super::{EventPriority, Payload, PluginMetadata};
+use super::{EventPriority, Payload};
 
 /// The `Context` struct represents the context of a plugin, containing metadata,
 /// a server reference, and event handlers.
@@ -30,7 +31,7 @@ use super::{EventPriority, Payload, PluginMetadata};
 /// - `server`: A reference to the server on which the plugin operates.
 /// - `handlers`: A map of event handlers, protected by a read-write lock for safe access across threads.
 pub struct Context {
-    metadata: PluginMetadata<'static>,
+    metadata: PluginMetadata,
     pub server: Arc<Server>,
     pub handlers: Arc<RwLock<HandlerMap>>,
     pub plugin_manager: Arc<PluginManager>,
@@ -49,7 +50,7 @@ impl Context {
     /// A new instance of `Context`.
     #[must_use]
     pub fn new(
-        metadata: PluginMetadata<'static>,
+        metadata: PluginMetadata,
         server: Arc<Server>,
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
@@ -72,7 +73,7 @@ impl Context {
     /// A string representing the path to the data folder.
     #[must_use]
     pub fn get_data_folder(&self) -> PathBuf {
-        let path = Path::new("./plugins").join(self.metadata.name);
+        let path = Path::new("./plugins").join(&self.metadata.name);
         if !path.exists() {
             fs::create_dir_all(&path).unwrap();
         }
@@ -156,13 +157,12 @@ impl Context {
         tree: crate::command::tree::CommandTree,
         permission: P,
     ) {
-        let plugin_name = self.metadata.name;
         let permission = permission.into();
 
         let full_permission_node = if permission.contains(':') {
             permission
         } else {
-            format!("{plugin_name}:{permission}")
+            format!("{}:{permission}", self.metadata.name)
         };
 
         {
@@ -209,12 +209,13 @@ impl Context {
     /// Register a permission for this plugin
     pub async fn register_permission(&self, permission: Permission) -> Result<(), String> {
         // Ensure the permission has the correct namespace
-        let plugin_name = self.metadata.name;
-
-        if !permission.node.starts_with(&format!("{plugin_name}:")) {
+        if !permission
+            .node
+            .starts_with(&format!("{}:", self.metadata.name))
+        {
             return Err(format!(
                 "Permission {} must use the plugin's namespace ({})",
-                permission.node, plugin_name
+                permission.node, self.metadata.name
             ));
         }
 
@@ -339,6 +340,6 @@ impl Context {
         } else {
             Level::INFO
         };
-        plugin_log!(level, self.metadata.name, "{}", message);
+        plugin_log!(level, &self.metadata.name, "{}", message);
     }
 }
