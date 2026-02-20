@@ -37,8 +37,8 @@ impl BlockBehaviour for DaylightDetectorBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async {
-            let player_abilites = args.player.abilities.lock();
-            if !player_abilites.await.allow_modify_world {
+            let player_abilities = args.player.abilities.lock();
+            if !player_abilities.await.allow_modify_world {
                 return BlockActionResult::Pass;
             }
 
