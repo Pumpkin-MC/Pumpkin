@@ -32,7 +32,12 @@ impl ClientPacket for CUpdateTags<'_> {
         write.write_list(self.tags, |p, registry_key| {
             p.write_string(&format!("minecraft:{}", registry_key.identifier_string(),))?;
 
-            let values = get_registry_key_tags(*version, *registry_key).unwrap();
+            let Some(values) = get_registry_key_tags(*version, *registry_key) else {
+                // no tags defined for that registry key in this version
+                // write an empty list and continue
+                p.write_var_int(&VarInt::from(0))?;
+                return Ok(());
+            };
             p.write_var_int(&values.len().try_into().map_err(|_| {
                 WritingError::Message(format!("{} isn't representable as a VarInt", values.len()))
             })?)?;

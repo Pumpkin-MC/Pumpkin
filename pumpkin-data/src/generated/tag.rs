@@ -3,57 +3,60 @@ use pumpkin_util::version::MinecraftVersion;
 pub type Tag = (&'static [&'static str], &'static [u16]);
 #[derive(Eq, PartialEq, Hash, Debug, Clone, Copy)]
 pub enum RegistryKey {
-    PaintingVariant,
-    WorldgenBiome,
-    Instrument,
-    Block,
-    BannerPattern,
-    Item,
-    GameEvent,
-    Timeline,
-    Dialog,
-    Enchantment,
-    Fluid,
-    PointOfInterestType,
     DamageType,
+    PaintingVariant,
     EntityType,
+    DimensionType,
+    Block,
+    Timeline,
+    BannerPattern,
+    GameEvent,
+    Item,
+    Dialog,
+    PointOfInterestType,
+    Fluid,
+    Instrument,
+    WorldgenBiome,
+    Enchantment,
 }
 impl RegistryKey {
     pub fn from_string(s: &str) -> Option<Self> {
         match s {
-            "painting_variant" => Some(Self::PaintingVariant),
-            "worldgen/biome" => Some(Self::WorldgenBiome),
-            "instrument" => Some(Self::Instrument),
-            "block" => Some(Self::Block),
-            "banner_pattern" => Some(Self::BannerPattern),
-            "item" => Some(Self::Item),
-            "game_event" => Some(Self::GameEvent),
-            "timeline" => Some(Self::Timeline),
-            "dialog" => Some(Self::Dialog),
-            "enchantment" => Some(Self::Enchantment),
-            "fluid" => Some(Self::Fluid),
-            "point_of_interest_type" => Some(Self::PointOfInterestType),
             "damage_type" => Some(Self::DamageType),
+            "painting_variant" => Some(Self::PaintingVariant),
             "entity_type" => Some(Self::EntityType),
+            "dimension_type" => Some(Self::DimensionType),
+            "block" => Some(Self::Block),
+            "timeline" => Some(Self::Timeline),
+            "banner_pattern" => Some(Self::BannerPattern),
+            "game_event" => Some(Self::GameEvent),
+            "item" => Some(Self::Item),
+            "dialog" => Some(Self::Dialog),
+            "point_of_interest_type" => Some(Self::PointOfInterestType),
+            "fluid" => Some(Self::Fluid),
+            "instrument" => Some(Self::Instrument),
+            "worldgen/biome" => Some(Self::WorldgenBiome),
+            "enchantment" => Some(Self::Enchantment),
             _ => None,
         }
     }
     pub fn identifier_string(&self) -> &str {
         match self {
-            Self::PaintingVariant => "painting_variant",
-            Self::WorldgenBiome => "worldgen/biome",
-            Self::Instrument => "instrument",
-            Self::Block => "block",
-            Self::BannerPattern => "banner_pattern",
-            Self::Item => "item",
-            Self::GameEvent => "game_event",
-            Self::Timeline => "timeline",
-            Self::Dialog => "dialog",
-            Self::Enchantment => "enchantment",
-            Self::Fluid => "fluid",
-            Self::PointOfInterestType => "point_of_interest_type",
             Self::DamageType => "damage_type",
+            Self::PaintingVariant => "painting_variant",
             Self::EntityType => "entity_type",
+            Self::DimensionType => "dimension_type",
+            Self::Block => "block",
+            Self::Timeline => "timeline",
+            Self::BannerPattern => "banner_pattern",
+            Self::GameEvent => "game_event",
+            Self::Item => "item",
+            Self::Dialog => "dialog",
+            Self::PointOfInterestType => "point_of_interest_type",
+            Self::Fluid => "fluid",
+            Self::Instrument => "instrument",
+            Self::WorldgenBiome => "worldgen/biome",
+            Self::Enchantment => "enchantment",
         }
     }
 }
@@ -12886,11 +12889,13 @@ pub mod PointOfInterestType {
 pub(crate) static POINTOFINTERESTTYPE_TAGS: phf::Map<&'static str, &'static Tag> = phf::phf_map! { "minecraft:acquirable_job_site" => & PointOfInterestType :: MINECRAFT_ACQUIRABLE_JOB_SITE , "minecraft:bee_home" => & PointOfInterestType :: MINECRAFT_BEE_HOME , "minecraft:village" => & PointOfInterestType :: MINECRAFT_VILLAGE };
 #[allow(non_snake_case)]
 pub mod Timeline {
-    pub const MINECRAFT_IN_END: super::Tag = (&["villager_schedule"], &[]);
-    pub const MINECRAFT_IN_NETHER: super::Tag = (&["villager_schedule"], &[]);
-    pub const MINECRAFT_IN_OVERWORLD: super::Tag =
-        (&["villager_schedule", "day", "moon", "early_game"], &[]);
-    pub const MINECRAFT_UNIVERSAL: super::Tag = (&["villager_schedule"], &[]);
+    pub const MINECRAFT_IN_END: super::Tag = (&["villager_schedule"], &[3u16]);
+    pub const MINECRAFT_IN_NETHER: super::Tag = (&["villager_schedule"], &[3u16]);
+    pub const MINECRAFT_IN_OVERWORLD: super::Tag = (
+        &["villager_schedule", "day", "moon", "early_game"],
+        &[3u16, 0u16, 2u16, 1u16],
+    );
+    pub const MINECRAFT_UNIVERSAL: super::Tag = (&["villager_schedule"], &[3u16]);
 }
 pub(crate) static TIMELINE_TAGS: phf::Map<&'static str, &'static Tag> = phf::phf_map! { "minecraft:in_end" => & Timeline :: MINECRAFT_IN_END , "minecraft:in_nether" => & Timeline :: MINECRAFT_IN_NETHER , "minecraft:in_overworld" => & Timeline :: MINECRAFT_IN_OVERWORLD , "minecraft:universal" => & Timeline :: MINECRAFT_UNIVERSAL };
 #[allow(non_snake_case)]
