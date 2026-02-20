@@ -46,7 +46,7 @@ impl CommandExecutor for ListExecutor {
 
             for (i, metadata) in plugins.iter().enumerate() {
                 let fmt = if i == plugins.len() - 1 {
-                    metadata.name.to_string()
+                    metadata.name.clone()
                 } else {
                     format!("{}, ", metadata.name)
                 };

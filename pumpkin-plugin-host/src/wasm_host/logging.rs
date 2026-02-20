@@ -16,13 +16,13 @@ pub async fn log_tracing(event_bytes: Vec<u8>) {
             .map(|v| match v {
                 SerializeValue::Debug(d) => match d {
                     DebugRecord::De(s) => s.as_str().to_string(),
-                    _ => String::new(),
+                    DebugRecord::Ser(_) => String::new(),
                 },
                 SerializeValue::Str(s) => s.as_str().to_string(),
                 _ => String::new(),
             })
             .unwrap_or_default(),
-        _ => String::new(),
+        tracing_serde_structured::SerializeRecordFields::Ser(_) => String::new(),
     };
 
     let target = event.metadata.target.as_str().to_string();
@@ -46,7 +46,7 @@ pub async fn log_tracing(event_bytes: Vec<u8>) {
             .filter(|(k, _)| k.as_str() != "message")
             .map(|(k, v)| (k.as_str(), v))
             .collect(),
-        _ => vec![],
+        tracing_serde_structured::SerializeRecordFields::Ser(_) => vec![],
     };
 
     let fields_str = if extra.is_empty() {

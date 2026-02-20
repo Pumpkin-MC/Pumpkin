@@ -27,7 +27,14 @@ pub struct PluginHostState {
     pub resource_table: ResourceTable,
 }
 
+impl Default for PluginHostState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PluginHostState {
+    #[must_use]
     pub fn new() -> Self {
         let resource_table = ResourceTable::new();
         Self {

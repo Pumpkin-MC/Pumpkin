@@ -31,7 +31,7 @@ impl CommandExecutor for Executor {
 
             for (i, metadata) in plugins.clone().into_iter().enumerate() {
                 let fmt = if i == plugins.len() - 1 {
-                    metadata.name.to_string()
+                    metadata.name.clone()
                 } else {
                     format!("{}, ", metadata.name)
                 };
