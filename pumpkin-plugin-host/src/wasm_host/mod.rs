@@ -50,11 +50,10 @@ impl PluginRuntime {
         let mut config = wasmtime::Config::new();
         config.async_support(true);
         config.wasm_component_model(true);
-        let engine =
-            Engine::new(&config).map_err(|err| PluginInitError::EngineCreationFailed(err))?;
+        let engine = Engine::new(&config).map_err(PluginInitError::EngineCreationFailed)?;
 
-        let linker_v0_1_0 = wit::v0_1_0::setup_linker(&engine)
-            .map_err(|err| PluginInitError::LinkerSetupFailed(err))?;
+        let linker_v0_1_0 =
+            wit::v0_1_0::setup_linker(&engine).map_err(PluginInitError::LinkerSetupFailed)?;
 
         Ok(Self {
             engine,
@@ -92,10 +91,10 @@ impl PluginRuntime {
 fn probe_api_version_from_bytes(wasm_bytes: &[u8]) -> Result<String, PluginInitError> {
     let parser = wasmparser::Parser::new(0);
     for payload in parser.parse_all(wasm_bytes) {
-        if let wasmparser::Payload::CustomSection(reader) = payload? {
-            if reader.name() == "pumpkin:api-version" {
-                return Ok(String::from_utf8_lossy(reader.data()).to_string());
-            }
+        if let wasmparser::Payload::CustomSection(reader) = payload?
+            && reader.name() == "pumpkin:api-version"
+        {
+            return Ok(String::from_utf8_lossy(reader.data()).to_string());
         }
     }
     Err(PluginInitError::MissingApiVersionSection)
