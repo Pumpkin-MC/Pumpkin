@@ -8,11 +8,11 @@ use tag_match::TagMatchRuleTest;
 
 use crate::block::RawBlockState;
 
-mod block_match;
-mod block_state_match;
-mod random_block_match;
-mod random_block_state_match;
-mod tag_match;
+pub mod block_match;
+pub mod block_state_match;
+pub mod random_block_match;
+pub mod random_block_state_match;
+pub mod tag_match;
 
 #[derive(Deserialize)]
 #[serde(tag = "predicate_type")]

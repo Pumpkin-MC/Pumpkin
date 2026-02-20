@@ -12,13 +12,13 @@ use crate::{block::RawBlockState, generation::proto_chunk::GenerationCache};
 
 #[derive(Deserialize)]
 pub struct OreFeature {
-    size: i32,
-    discard_chance_on_air_exposure: f32,
-    targets: Vec<OreTarget>,
+    pub size: i32,
+    pub discard_chance_on_air_exposure: f32,
+    pub targets: Vec<OreTarget>,
 }
 
 #[derive(Deserialize)]
-struct OreTarget {
+pub struct OreTarget {
     pub target: RuleTest,
     pub state: BlockStateCodec,
 }

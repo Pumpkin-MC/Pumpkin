@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct SeaPickleFeature {
-    count: IntProvider,
+    pub count: IntProvider,
 }
 
 impl SeaPickleFeature {

@@ -13,16 +13,16 @@ use crate::{
 
 #[derive(Deserialize)]
 pub struct BlockColumnFeature {
-    layers: Vec<Layer>,
-    direction: BlockDirection,
-    allowed_placement: BlockPredicate,
-    prioritize_tip: bool,
+    pub layers: Vec<Layer>,
+    pub direction: BlockDirection,
+    pub allowed_placement: BlockPredicate,
+    pub prioritize_tip: bool,
 }
 
 #[derive(Deserialize)]
-struct Layer {
-    height: IntProvider,
-    provider: BlockStateProvider,
+pub struct Layer {
+    pub height: IntProvider,
+    pub provider: BlockStateProvider,
 }
 
 impl BlockColumnFeature {

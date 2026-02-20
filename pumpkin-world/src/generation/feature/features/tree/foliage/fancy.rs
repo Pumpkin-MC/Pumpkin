@@ -8,7 +8,7 @@ use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct LargeOakFoliagePlacer {
-    height: i32,
+    pub height: i32,
 }
 
 impl LargeOakFoliagePlacer {

@@ -5,7 +5,7 @@ use crate::{ProtoChunk, generation::block_state_provider::BlockStateProvider};
 
 #[derive(Deserialize)]
 pub struct FallenTreeFeature {
-    trunk_provider: BlockStateProvider,
+    pub trunk_provider: BlockStateProvider,
 }
 
 impl FallenTreeFeature {

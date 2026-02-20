@@ -11,7 +11,7 @@ use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct SpruceFoliagePlacer {
-    trunk_height: IntProvider,
+    pub trunk_height: IntProvider,
 }
 
 impl SpruceFoliagePlacer {

@@ -14,7 +14,7 @@ use crate::world::BlockRegistryExt;
 
 #[derive(Deserialize)]
 pub struct BambooFeature {
-    probability: f32,
+    pub probability: f32,
 }
 
 impl BambooFeature {

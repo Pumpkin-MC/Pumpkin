@@ -10,8 +10,8 @@ use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct BendingTrunkPlacer {
-    min_height_for_leaves: u32,
-    bend_length: IntProvider,
+    pub min_height_for_leaves: u32,
+    pub bend_length: IntProvider,
 }
 
 impl BendingTrunkPlacer {

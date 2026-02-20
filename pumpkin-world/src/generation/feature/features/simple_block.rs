@@ -10,8 +10,8 @@ use crate::{
 
 #[derive(Deserialize)]
 pub struct SimpleBlockFeature {
-    to_place: BlockStateProvider,
-    schedule_tick: Option<bool>,
+    pub to_place: BlockStateProvider,
+    pub schedule_tick: Option<bool>,
 }
 
 impl SimpleBlockFeature {

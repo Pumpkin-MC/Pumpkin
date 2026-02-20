@@ -10,9 +10,9 @@ use crate::{generation::block_state_provider::BlockStateProvider, world::BlockRe
 
 #[derive(Deserialize)]
 pub struct NetherForestVegetationFeature {
-    state_provider: BlockStateProvider,
-    spread_width: i32,
-    spread_height: i32,
+    pub state_provider: BlockStateProvider,
+    pub spread_width: i32,
+    pub spread_height: i32,
 }
 
 impl NetherForestVegetationFeature {

@@ -11,8 +11,8 @@ use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct RandomSpreadFoliagePlacer {
-    foliage_height: IntProvider,
-    leaf_placement_attempts: i32,
+    pub foliage_height: IntProvider,
+    pub leaf_placement_attempts: i32,
 }
 
 impl RandomSpreadFoliagePlacer {

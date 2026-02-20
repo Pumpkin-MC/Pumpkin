@@ -50,9 +50,9 @@ impl BlockStateProvider {
 
 #[derive(Deserialize)]
 pub struct RandomizedIntBlockStateProvider {
-    source: Box<BlockStateProvider>,
-    property: String,
-    values: IntProvider,
+    pub source: Box<BlockStateProvider>,
+    pub property: String,
+    pub values: IntProvider,
 }
 
 impl RandomizedIntBlockStateProvider {
@@ -64,7 +64,7 @@ impl RandomizedIntBlockStateProvider {
 
 #[derive(Deserialize)]
 pub struct PillarBlockStateProvider {
-    state: BlockStateCodec,
+    pub state: BlockStateCodec,
 }
 
 impl PillarBlockStateProvider {
@@ -77,10 +77,10 @@ impl PillarBlockStateProvider {
 #[derive(Deserialize)]
 pub struct DualNoiseBlockStateProvider {
     #[serde(flatten)]
-    base: NoiseBlockStateProvider,
-    variety: [u32; 2],
-    slow_noise: DoublePerlinNoiseParametersCodec,
-    slow_scale: f64,
+    pub base: NoiseBlockStateProvider,
+    pub variety: [u32; 2],
+    pub slow_noise: DoublePerlinNoiseParametersCodec,
+    pub slow_scale: f64,
 }
 
 impl DualNoiseBlockStateProvider {
@@ -120,7 +120,7 @@ impl DualNoiseBlockStateProvider {
 
 #[derive(Deserialize)]
 pub struct WeightedBlockStateProvider {
-    entries: Vec<Weighted<BlockStateCodec>>,
+    pub entries: Vec<Weighted<BlockStateCodec>>,
 }
 
 impl WeightedBlockStateProvider {
@@ -131,7 +131,7 @@ impl WeightedBlockStateProvider {
 
 #[derive(Deserialize)]
 pub struct SimpleStateProvider {
-    state: BlockStateCodec,
+    pub state: BlockStateCodec,
 }
 
 impl SimpleStateProvider {
@@ -142,9 +142,9 @@ impl SimpleStateProvider {
 
 #[derive(Deserialize)]
 pub struct NoiseBlockStateProviderBase {
-    seed: i64,
-    noise: DoublePerlinNoiseParametersCodec,
-    scale: f32,
+    pub seed: i64,
+    pub noise: DoublePerlinNoiseParametersCodec,
+    pub scale: f32,
 }
 
 impl NoiseBlockStateProviderBase {
@@ -166,8 +166,8 @@ impl NoiseBlockStateProviderBase {
 #[derive(Deserialize)]
 pub struct NoiseBlockStateProvider {
     #[serde(flatten)]
-    base: NoiseBlockStateProviderBase,
-    states: Vec<BlockStateCodec>,
+    pub base: NoiseBlockStateProviderBase,
+    pub states: Vec<BlockStateCodec>,
 }
 
 impl NoiseBlockStateProvider {
@@ -198,12 +198,12 @@ impl NoiseBlockStateProvider {
 #[derive(Deserialize)]
 pub struct NoiseThresholdBlockStateProvider {
     #[serde(flatten)]
-    base: NoiseBlockStateProviderBase,
-    threshold: f32,
-    high_chance: f32,
-    default_state: BlockStateCodec,
-    low_states: Vec<BlockStateCodec>,
-    high_states: Vec<BlockStateCodec>,
+    pub base: NoiseBlockStateProviderBase,
+    pub threshold: f32,
+    pub high_chance: f32,
+    pub default_state: BlockStateCodec,
+    pub low_states: Vec<BlockStateCodec>,
+    pub high_states: Vec<BlockStateCodec>,
 }
 
 impl NoiseThresholdBlockStateProvider {

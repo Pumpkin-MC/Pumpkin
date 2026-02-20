@@ -9,10 +9,10 @@ use crate::{generation::feature::placed_features::PlacedFeature, world::BlockReg
 
 #[derive(Deserialize)]
 pub struct RandomPatchFeature {
-    tries: u8,
-    xz_spread: u8,
-    y_spread: u8,
-    feature: Box<PlacedFeature>,
+    pub tries: u8,
+    pub xz_spread: u8,
+    pub y_spread: u8,
+    pub feature: Box<PlacedFeature>,
 }
 
 impl RandomPatchFeature {

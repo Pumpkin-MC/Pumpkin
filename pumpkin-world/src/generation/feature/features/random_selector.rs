@@ -9,14 +9,14 @@ use crate::{generation::feature::placed_features::PlacedFeatureWrapper, world::B
 
 #[derive(Deserialize)]
 pub struct RandomFeature {
-    features: Vec<RandomFeatureEntry>,
-    default: Box<PlacedFeatureWrapper>,
+    pub features: Vec<RandomFeatureEntry>,
+    pub default: Box<PlacedFeatureWrapper>,
 }
 
 #[derive(Deserialize)]
-struct RandomFeatureEntry {
-    feature: PlacedFeatureWrapper,
-    chance: f32,
+pub struct RandomFeatureEntry {
+    pub feature: PlacedFeatureWrapper,
+    pub chance: f32,
 }
 
 impl RandomFeature {

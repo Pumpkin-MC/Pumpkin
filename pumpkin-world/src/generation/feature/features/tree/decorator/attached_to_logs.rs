@@ -10,9 +10,9 @@ use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct AttachedToLogsTreeDecorator {
-    probability: f32,
-    block_provider: BlockStateProvider,
-    directions: Vec<BlockDirection>,
+    pub probability: f32,
+    pub block_provider: BlockStateProvider,
+    pub directions: Vec<BlockDirection>,
 }
 
 impl AttachedToLogsTreeDecorator {

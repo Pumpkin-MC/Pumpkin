@@ -5,7 +5,7 @@ use crate::block::RawBlockState;
 
 #[derive(Deserialize)]
 pub struct TagMatchRuleTest {
-    tag: String,
+    pub tag: String,
 }
 
 impl TagMatchRuleTest {

@@ -27,9 +27,9 @@ impl FeatureSizeType {
 
 #[derive(Deserialize)]
 pub struct TwoLayersFeatureSize {
-    limit: u8,
-    lower_size: u8,
-    upper_size: u8,
+    pub limit: u8,
+    pub lower_size: u8,
+    pub upper_size: u8,
 }
 
 impl TwoLayersFeatureSize {
@@ -44,11 +44,11 @@ impl TwoLayersFeatureSize {
 
 #[derive(Deserialize)]
 pub struct ThreeLayersFeatureSize {
-    limit: u8,
-    upper_limit: u8,
-    lower_size: u8,
-    middle_size: u8,
-    upper_size: u8,
+    pub limit: u8,
+    pub upper_limit: u8,
+    pub lower_size: u8,
+    pub middle_size: u8,
+    pub upper_size: u8,
 }
 
 impl ThreeLayersFeatureSize {

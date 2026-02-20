@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use pumpkin_util::{include_json_static, math::position::BlockPos, random::RandomGenerator};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
 use super::features::{
@@ -70,9 +70,8 @@ use super::features::{
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::BlockRegistryExt;
 
-pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> = LazyLock::new(
-    || include_json_static!("../../../../assets/configured_features.json", HashMap<String, ConfiguredFeature>),
-);
+pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> =
+    LazyLock::new(build_configured_features);
 
 // Yes this may look ugly and you wonder why this is hard coded, but its makes sense to hardcode since we have to add logic for these in code
 #[derive(Deserialize)]
@@ -373,3 +372,5 @@ impl ConfiguredFeature {
         }
     }
 }
+
+include!("configured_features_generated.rs");

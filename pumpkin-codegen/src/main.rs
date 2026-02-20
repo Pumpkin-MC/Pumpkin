@@ -17,6 +17,7 @@ mod block_state_remap;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
+mod configured_feature;
 mod damage_type;
 mod data_component;
 mod dimension;
@@ -40,6 +41,7 @@ mod noise_parameter;
 mod noise_router;
 mod packet;
 mod particle;
+mod placed_feature;
 mod potion;
 mod potion_brewing;
 mod recipe_remainder;
@@ -57,6 +59,7 @@ mod translations;
 mod world_event;
 
 pub const OUT_DIR: &str = "../pumpkin-data/src/generated";
+pub const WORLD_OUT_DIR: &str = placed_feature::WORLD_OUT_DIR;
 
 pub fn main() {
     type BuilderFn = fn() -> TokenStream;
@@ -130,6 +133,29 @@ pub fn main() {
 
         write_generated_file(&final_code, file);
     });
+
+    // Generate world-specific files (placed/configured features)
+    let world_build_functions: Vec<(BuilderFn, &str)> = vec![
+        (placed_feature::build, "placed_features_generated.rs"),
+        (configured_feature::build, "configured_features_generated.rs"),
+    ];
+
+    fs::create_dir_all(WORLD_OUT_DIR).expect("Failed to create world output directory");
+
+    world_build_functions.par_iter().for_each(|(build_fn, file)| {
+        println!("Parsing {}", file);
+
+        let raw_code = build_fn().to_string();
+
+        let header = "/* This file is generated. Do not edit manually. */\n";
+
+        let final_code = format_code(&raw_code).map_or_else(
+            |_| format!("{header}{raw_code}"),
+            |formatted| format!("{header}{formatted}"),
+        );
+
+        write_world_generated_file(&final_code, file);
+    });
     println!("Done")
 }
 
@@ -147,6 +173,20 @@ pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
 
 pub fn write_generated_file(new_code: &str, out_file: &str) {
     let path = Path::new(OUT_DIR).join(out_file);
+
+    if path.exists()
+        && let Ok(existing_code) = fs::read_to_string(&path)
+        && existing_code == new_code
+    {
+        return;
+    }
+
+    fs::write(&path, new_code)
+        .unwrap_or_else(|_| panic!("Failed to write to file: {}", path.display()));
+}
+
+pub fn write_world_generated_file(new_code: &str, out_file: &str) {
+    let path = Path::new(WORLD_OUT_DIR).join(out_file);
 
     if path.exists()
         && let Ok(existing_code) = fs::read_to_string(&path)

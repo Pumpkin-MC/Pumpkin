@@ -30,9 +30,9 @@ impl HeightProvider {
 
 #[derive(Deserialize)]
 pub struct VeryBiasedToBottomHeightProvider {
-    min_inclusive: YOffset,
-    max_inclusive: YOffset,
-    inner: Option<NonZeroU32>,
+    pub min_inclusive: YOffset,
+    pub max_inclusive: YOffset,
+    pub inner: Option<NonZeroU32>,
 }
 
 impl VeryBiasedToBottomHeightProvider {
@@ -50,8 +50,8 @@ impl VeryBiasedToBottomHeightProvider {
 
 #[derive(Deserialize)]
 pub struct UniformHeightProvider {
-    min_inclusive: YOffset,
-    max_inclusive: YOffset,
+    pub min_inclusive: YOffset,
+    pub max_inclusive: YOffset,
 }
 
 impl UniformHeightProvider {
@@ -65,9 +65,9 @@ impl UniformHeightProvider {
 
 #[derive(Deserialize)]
 pub struct TrapezoidHeightProvider {
-    min_inclusive: YOffset,
-    max_inclusive: YOffset,
-    plateau: Option<i32>,
+    pub min_inclusive: YOffset,
+    pub max_inclusive: YOffset,
+    pub plateau: Option<i32>,
 }
 
 impl TrapezoidHeightProvider {

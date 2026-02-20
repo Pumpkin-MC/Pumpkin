@@ -4,7 +4,7 @@ use crate::block::{BlockStateCodec, RawBlockState};
 
 #[derive(Deserialize)]
 pub struct BlockStateMatchRuleTest {
-    block_state: BlockStateCodec,
+    pub block_state: BlockStateCodec,
 }
 
 impl BlockStateMatchRuleTest {

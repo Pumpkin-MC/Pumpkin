@@ -9,7 +9,7 @@ use crate::{generation::feature::placed_features::PlacedFeature, world::BlockReg
 
 #[derive(Deserialize)]
 pub struct SimpleRandomFeature {
-    features: Vec<PlacedFeature>,
+    pub features: Vec<PlacedFeature>,
 }
 
 impl SimpleRandomFeature {

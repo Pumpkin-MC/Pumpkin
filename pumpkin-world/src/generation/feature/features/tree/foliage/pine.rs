@@ -11,7 +11,7 @@ use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct PineFoliagePlacer {
-    height: IntProvider,
+    pub height: IntProvider,
 }
 
 impl PineFoliagePlacer {

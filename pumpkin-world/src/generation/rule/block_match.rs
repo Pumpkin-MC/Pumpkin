@@ -5,7 +5,7 @@ use crate::block::RawBlockState;
 #[derive(Deserialize)]
 pub struct BlockMatchRuleTest {
     // This should be a Block codec, so this is wrong
-    block: String,
+    pub block: String,
 }
 
 impl BlockMatchRuleTest {

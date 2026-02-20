@@ -9,8 +9,8 @@ use crate::{generation::feature::placed_features::PlacedFeatureWrapper, world::B
 
 #[derive(Deserialize)]
 pub struct RandomBooleanFeature {
-    feature_true: Box<PlacedFeatureWrapper>,
-    feature_false: Box<PlacedFeatureWrapper>,
+    pub feature_true: Box<PlacedFeatureWrapper>,
+    pub feature_false: Box<PlacedFeatureWrapper>,
 }
 
 impl RandomBooleanFeature {

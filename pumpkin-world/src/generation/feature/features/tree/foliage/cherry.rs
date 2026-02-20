@@ -11,11 +11,11 @@ use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct CherryFoliagePlacer {
-    height: IntProvider,
-    wide_bottom_layer_hole_chance: f32,
-    corner_hole_chance: f32,
-    hanging_leaves_chance: f32,
-    hanging_leaves_extension_chance: f32,
+    pub height: IntProvider,
+    pub wide_bottom_layer_hole_chance: f32,
+    pub corner_hole_chance: f32,
+    pub hanging_leaves_chance: f32,
+    pub hanging_leaves_extension_chance: f32,
 }
 
 impl CherryFoliagePlacer {

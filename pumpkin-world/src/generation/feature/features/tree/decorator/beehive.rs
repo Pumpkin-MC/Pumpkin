@@ -2,5 +2,5 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct BeehiveTreeDecorator {
-    probability: f32,
+    pub probability: f32,
 }

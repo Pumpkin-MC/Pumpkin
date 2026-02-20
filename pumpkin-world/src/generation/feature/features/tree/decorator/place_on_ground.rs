@@ -10,10 +10,10 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct PlaceOnGroundTreeDecorator {
-    tries: i32,
-    radius: i32,
-    height: i32,
-    block_state_provider: BlockStateProvider,
+    pub tries: i32,
+    pub radius: i32,
+    pub height: i32,
+    pub block_state_provider: BlockStateProvider,
 }
 
 impl PlaceOnGroundTreeDecorator {

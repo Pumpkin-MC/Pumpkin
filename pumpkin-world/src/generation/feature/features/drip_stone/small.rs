@@ -8,10 +8,10 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct SmallDripstoneFeature {
-    chance_of_taller_dripstone: f32,
-    chance_of_directional_spread: f32,
-    chance_of_spread_radius2: f32,
-    chance_of_spread_radius3: f32,
+    pub chance_of_taller_dripstone: f32,
+    pub chance_of_directional_spread: f32,
+    pub chance_of_spread_radius2: f32,
+    pub chance_of_spread_radius3: f32,
 }
 
 impl SmallDripstoneFeature {

@@ -1,6 +1,6 @@
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_util::{HeightMap, include_json_static};
+use pumpkin_util::HeightMap;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter;
@@ -20,9 +20,8 @@ use crate::world::BlockRegistryExt;
 
 use super::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
 
-pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> = LazyLock::new(
-    || include_json_static!("../../../../assets/placed_feature.json", HashMap<String, PlacedFeature>),
-);
+pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> =
+    LazyLock::new(build_placed_features);
 
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -45,8 +44,8 @@ impl PlacedFeatureWrapper {
 #[derive(Deserialize)]
 pub struct PlacedFeature {
     /// The name of the configuired feature
-    feature: Feature,
-    placement: Vec<PlacementModifier>,
+    pub feature: Feature,
+    pub placement: Vec<PlacementModifier>,
 }
 
 #[derive(Deserialize)]
@@ -192,9 +191,9 @@ impl PlacementModifier {
 
 #[derive(Deserialize)]
 pub struct NoiseBasedCountPlacementModifier {
-    noise_to_count_ratio: i32,
-    noise_factor: f64,
-    noise_offset: f64,
+    pub noise_to_count_ratio: i32,
+    pub noise_factor: f64,
+    pub noise_offset: f64,
 }
 
 impl CountPlacementModifierBase for NoiseBasedCountPlacementModifier {
@@ -212,9 +211,9 @@ impl CountPlacementModifierBase for NoiseBasedCountPlacementModifier {
 
 #[derive(Deserialize)]
 pub struct NoiseThresholdCountPlacementModifier {
-    noise_level: f64,
-    below_noise: i32,
-    above_noise: i32,
+    pub noise_level: f64,
+    pub below_noise: i32,
+    pub above_noise: i32,
 }
 
 impl CountPlacementModifierBase for NoiseThresholdCountPlacementModifier {
@@ -230,10 +229,10 @@ impl CountPlacementModifierBase for NoiseThresholdCountPlacementModifier {
 
 #[derive(Deserialize)]
 pub struct EnvironmentScanPlacementModifier {
-    direction_of_search: BlockDirection,
-    target_condition: BlockPredicate,
-    allowed_search_condition: Option<BlockPredicate>,
-    max_steps: i32,
+    pub direction_of_search: BlockDirection,
+    pub target_condition: BlockPredicate,
+    pub allowed_search_condition: Option<BlockPredicate>,
+    pub max_steps: i32,
 }
 
 impl EnvironmentScanPlacementModifier {
@@ -276,8 +275,8 @@ impl EnvironmentScanPlacementModifier {
 
 #[derive(Deserialize)]
 pub struct RandomOffsetPlacementModifier {
-    xz_spread: IntProvider,
-    y_spread: IntProvider,
+    pub xz_spread: IntProvider,
+    pub y_spread: IntProvider,
 }
 
 impl RandomOffsetPlacementModifier {
@@ -295,7 +294,7 @@ impl RandomOffsetPlacementModifier {
 
 #[derive(Deserialize)]
 pub struct CountOnEveryLayerPlacementModifier {
-    count: IntProvider,
+    pub count: IntProvider,
 }
 
 impl CountOnEveryLayerPlacementModifier {
@@ -363,7 +362,7 @@ impl CountOnEveryLayerPlacementModifier {
 
 #[derive(Deserialize)]
 pub struct BlockFilterPlacementModifier {
-    predicate: BlockPredicate,
+    pub predicate: BlockPredicate,
 }
 
 impl ConditionalPlacementModifier for BlockFilterPlacementModifier {
@@ -381,9 +380,9 @@ impl ConditionalPlacementModifier for BlockFilterPlacementModifier {
 
 #[derive(Deserialize)]
 pub struct SurfaceThresholdFilterPlacementModifier {
-    heightmap: HeightMap,
-    min_inclusive: Option<i32>,
-    max_inclusive: Option<i32>,
+    pub heightmap: HeightMap,
+    pub min_inclusive: Option<i32>,
+    pub max_inclusive: Option<i32>,
 }
 
 impl ConditionalPlacementModifier for SurfaceThresholdFilterPlacementModifier {
@@ -404,7 +403,7 @@ impl ConditionalPlacementModifier for SurfaceThresholdFilterPlacementModifier {
 
 #[derive(Deserialize)]
 pub struct RarityFilterPlacementModifier {
-    chance: u32,
+    pub chance: u32,
 }
 
 impl ConditionalPlacementModifier for RarityFilterPlacementModifier {
@@ -436,7 +435,7 @@ impl SquarePlacementModifier {
 
 #[derive(Deserialize)]
 pub struct CountPlacementModifier {
-    count: IntProvider,
+    pub count: IntProvider,
 }
 
 impl CountPlacementModifierBase for CountPlacementModifier {
@@ -447,7 +446,7 @@ impl CountPlacementModifierBase for CountPlacementModifier {
 
 #[derive(Deserialize)]
 pub struct SurfaceWaterDepthFilterPlacementModifier {
-    max_water_depth: i32,
+    pub max_water_depth: i32,
 }
 
 impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
@@ -491,7 +490,7 @@ impl ConditionalPlacementModifier for BiomePlacementModifier {
 
 #[derive(Deserialize)]
 pub struct HeightRangePlacementModifier {
-    height: HeightProvider,
+    pub height: HeightProvider,
 }
 
 impl HeightRangePlacementModifier {
@@ -510,7 +509,7 @@ impl HeightRangePlacementModifier {
 
 #[derive(Deserialize)]
 pub struct HeightmapPlacementModifier {
-    heightmap: HeightMap,
+    pub heightmap: HeightMap,
 }
 
 impl HeightmapPlacementModifier {
@@ -570,3 +569,5 @@ pub trait ConditionalPlacementModifier {
         pos: BlockPos,
     ) -> bool;
 }
+
+include!("placed_features_generated.rs");

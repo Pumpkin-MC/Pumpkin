@@ -19,22 +19,22 @@ use spruce::SpruceFoliagePlacer;
 use super::{TreeFeature, TreeNode};
 use crate::generation::proto_chunk::GenerationCache;
 
-mod acacia;
-mod blob;
-mod bush;
-mod cherry;
-mod dark_oak;
-mod fancy;
-mod jungle;
-mod mega_pine;
-mod pine;
-mod random_spread;
-mod spruce;
+pub mod acacia;
+pub mod blob;
+pub mod bush;
+pub mod cherry;
+pub mod dark_oak;
+pub mod fancy;
+pub mod jungle;
+pub mod mega_pine;
+pub mod pine;
+pub mod random_spread;
+pub mod spruce;
 
 #[derive(Deserialize)]
 pub struct FoliagePlacer {
-    radius: IntProvider,
-    offset: IntProvider,
+    pub radius: IntProvider,
+    pub offset: IntProvider,
     #[serde(flatten)]
     pub r#type: FoliageType,
 }

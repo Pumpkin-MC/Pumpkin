@@ -10,9 +10,9 @@ use crate::{block::BlockStateCodec, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct ReplaceBlobsFeature {
-    target: BlockStateCodec,
-    state: BlockStateCodec,
-    radius: IntProvider,
+    pub target: BlockStateCodec,
+    pub state: BlockStateCodec,
+    pub radius: IntProvider,
 }
 
 impl ReplaceBlobsFeature {
