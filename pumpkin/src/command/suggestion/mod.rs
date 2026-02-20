@@ -20,6 +20,8 @@ use crate::command::context::string_range::StringRange;
 /// be fully expressed as a [`SuggestionText::Integer`] (no leading zeros).
 /// This is important to establish proper ordering.
 /// ```
+/// use pumpkin::command::suggestion::SuggestionText;
+///
 /// let five_suggestion_1 = SuggestionText::new(5);
 /// let five_suggestion_2 = SuggestionText::new("5");
 /// let zero_five_suggestion = SuggestionText::new("05");
