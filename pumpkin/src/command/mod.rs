@@ -133,21 +133,25 @@ impl CommandSender {
         }
     }
 
-    /// Check if the sender has a specific permission
-    pub async fn has_permission(&self, server: &Server, node: &str) -> bool {
+    pub async fn has_permission(
+        &self,
+        server: &Server,
+        node: &str,
+    ) -> (bool, Option<TextComponent>) {
         match self {
-            Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
+            Self::Console | Self::Rcon(_) => (true, None),
             Self::Player(p) => p.has_permission(server, node).await,
             Self::CommandBlock(..) => {
                 let perm_reg = server.permission_registry.read().await;
                 let Some(p) = perm_reg.get_permission(node) else {
-                    return false;
+                    return (false, None);
                 };
-                match p.default {
+                let allowed = match p.default {
                     PermissionDefault::Allow => true,
                     PermissionDefault::Deny => false,
                     PermissionDefault::Op(o) => o <= PermissionLvl::Two,
-                }
+                };
+                (allowed, None)
             }
         }
     }

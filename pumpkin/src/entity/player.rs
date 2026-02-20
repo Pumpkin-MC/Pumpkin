@@ -2752,8 +2752,11 @@ impl Player {
         }
     }
 
-    /// Check if the player has a specific permission
-    pub async fn has_permission(self: &Arc<Self>, server: &Server, node: &str) -> bool {
+    pub async fn has_permission(
+        self: &Arc<Self>,
+        server: &Server,
+        node: &str,
+    ) -> (bool, Option<pumpkin_util::text::TextComponent>) {
         let perm_manager = server.permission_manager.read().await;
         let result = perm_manager
             .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
@@ -2768,7 +2771,7 @@ impl Player {
                 result,
             ))
             .await;
-        event.result
+        (event.result, event.denial_message)
     }
 
     pub fn is_creative(&self) -> bool {
