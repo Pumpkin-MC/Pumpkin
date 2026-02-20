@@ -21,7 +21,7 @@ use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
-use crate::plugin::player::inventory::inventory_click_event::PlayerInventoryClickEvent;
+use crate::plugin::player::inventory::creative_inventory_click_event::CreativeInventoryClickEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
@@ -55,7 +55,7 @@ use pumpkin_protocol::java::server::play::{
     SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities,
     SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
     SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
-    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, SlotActionType, Status,
+    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -1921,24 +1921,14 @@ impl JavaClient {
                 .get_slot(packet.slot as usize)
                 .get_cloned_stack()
                 .await;
-
-            let identifier = player_screen_handler
-                .get_behaviour()
-                .get_identifier()
-                .to_string();
             let sync_id = player_screen_handler.sync_id();
 
-            let event = PlayerInventoryClickEvent::new(
+            let event = CreativeInventoryClickEvent::new(
                 player_arc,
-                identifier,
                 i32::from(packet.slot),
-                0,
-                SlotActionType::Clone,
                 item_stack.clone(),
                 clicked_slot_stack,
-                None,
                 sync_id,
-                true,
             );
 
             send_cancellable! {{

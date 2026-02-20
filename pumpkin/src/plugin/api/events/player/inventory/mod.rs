@@ -1,3 +1,4 @@
+pub mod creative_inventory_click_event;
 pub mod inventory_click_event;
 pub mod inventory_close_event;
 pub mod inventory_open_event;

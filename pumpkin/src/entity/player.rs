@@ -2704,8 +2704,8 @@ impl Player {
 
     pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot) {
         self.update_last_action_time();
-        let screen_handler = self.current_screen_handler.lock().await;
-        let mut screen_handler = screen_handler.lock().await;
+        let screen_handler_init = self.current_screen_handler.lock().await;
+        let mut screen_handler = screen_handler_init.lock().await;
         let behaviour = screen_handler.get_behaviour();
 
         // behaviour is dropped here
@@ -2775,13 +2775,15 @@ impl Player {
             is_player_inventory_click,
         );
         drop(screen_handler);
+        drop(screen_handler_init);
 
         send_cancellable! {{
             server;
             event;
             'after: {
-                let screen_handler = self.current_screen_handler.lock().await;
-                let mut screen_handler = screen_handler.lock().await;
+                let screen_handler_init = self.current_screen_handler.lock().await;
+                let mut screen_handler = screen_handler_init.lock().await;
+
 
                 screen_handler.disable_sync();
                 screen_handler
@@ -2805,12 +2807,16 @@ impl Player {
                 } else {
                     screen_handler.send_content_updates().await;
                     drop(screen_handler);
+                    drop(screen_handler_init);
                 }
             };
             'cancelled: {
-                let screen_handler = self.current_screen_handler.lock().await;
-                let mut screen_handler = screen_handler.lock().await;
+                let screen_handler_init = self.current_screen_handler.lock().await;
+                let mut screen_handler = screen_handler_init.lock().await;
+
                 screen_handler.sync_state().await;
+                drop(screen_handler);
+                drop(screen_handler_init);
             }
         }}
     }
