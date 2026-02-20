@@ -1,9 +1,3 @@
-#[allow(unused_imports)] // Only used in documentation.
-use crate::serialization::codec::{
-    Codec, field, lenient_optional_field, lenient_optional_field_with_default, optional_field,
-    optional_field_with_default,
-};
-
 use crate::serialization::HasValue;
 use crate::serialization::data_result::DataResult;
 use crate::serialization::dynamic_ops::DynamicOps;
@@ -55,6 +49,13 @@ use std::sync::Arc;
 /// The [`validate`] function returns a codec wrapper that validates a value before encoding and after decoding.
 /// A validated codec takes a function that can either return an [`Ok`] for a success,
 /// or an [`Err`] with the provided message to place in a `DataResult`.
+///
+/// [`Codec`]: super::codec::Codec
+/// [`field`]: super::codec::field
+/// [`optional_field`]: super::codec::optional_field
+/// [`lenient_optional_field`]: super::codec::lenient_optional_field
+/// [`optional_field_with_default`]: super::codec::optional_field_with_default
+/// [`lenient_optional_field_with_default`]: super::codec::lenient_optional_field_with_default
 pub trait MapCodec: MapEncoder + MapDecoder {}
 
 // Any struct implementing MapEncoder<Value = A> and MapDecoder<Value = A> will also implement MapCodec<Value = A>.
