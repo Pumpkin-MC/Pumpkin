@@ -1073,7 +1073,7 @@ pub struct ScreenHandlerBehaviour {
     // Note from insilicon
     // I plan on expanding the ease and ability of inventory use for plugin developers.
     // A few little things need to be added for these events like the identifier.
-    // This identifier is set to a random 16 character string which can be used to identify inventories.
+    // This identifier is set to a random 36 character string which can be used to identify inventories.
     pub identifier: String,
 }
 
