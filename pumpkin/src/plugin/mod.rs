@@ -238,7 +238,7 @@ impl PluginManager {
             plugins
                 .iter()
                 .filter(|p| p.is_active)
-                .map(|p| p.metadata.name.to_string())
+                .map(|p| p.metadata.name.clone())
                 .collect()
         };
 
@@ -339,7 +339,7 @@ impl PluginManager {
                 self.plugin_states
                     .write()
                     .await
-                    .insert(metadata.name.to_string(), PluginState::Loading);
+                    .insert(metadata.name.clone(), PluginState::Loading);
 
                 let self_ref = self
                     .self_ref
@@ -385,7 +385,7 @@ impl PluginManager {
                 // Spawn async task for plugin initialization
                 let self_ref_clone = Arc::clone(&self_ref);
                 let state_notify = Arc::clone(&self.state_notify);
-                let plugin_name = metadata.name.to_string();
+                let plugin_name = metadata.name.clone();
                 let loader_clone = loader.clone();
 
                 let task = tokio::spawn(async move {
