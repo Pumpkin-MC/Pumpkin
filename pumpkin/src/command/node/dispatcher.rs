@@ -12,6 +12,7 @@ use crate::command::node::detached::CommandDetachedNode;
 use crate::command::node::tree::{ROOT_NODE_ID, Tree};
 use crate::command::string_reader::StringReader;
 use rustc_hash::FxHashMap;
+use std::pin::Pin;
 use std::sync::{Arc, LazyLock};
 
 pub const ARG_SEPARATOR: &str = " ";
@@ -37,25 +38,53 @@ pub struct ParsingResult<'a> {
 
 /// Structs implementing this trait are able to execute upon command completion.
 pub trait ResultConsumer {
-    fn on_command_completion(&self, context: &CommandContext, result: ReturnValue);
+    fn on_command_completion<'a>(
+        &'a self,
+        context: &'a CommandContext,
+        result: ReturnValue,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 }
 
 /// A [`ResultConsumer`] which does nothing.
 pub struct EmptyResultConsumer;
 
 impl ResultConsumer for EmptyResultConsumer {
-    fn on_command_completion(&self, _context: &CommandContext, _result: ReturnValue) {}
+    fn on_command_completion<'a>(
+        &self,
+        _context: &'a CommandContext,
+        _result: ReturnValue,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async {})
+    }
 }
 
 pub static EMPTY_CONSUMER: LazyLock<Arc<EmptyResultConsumer>> =
     LazyLock::new(|| Arc::new(EmptyResultConsumer));
+
+/// A [`ResultConsumer`] which defers the given result to the source provided.
+pub struct ResultDeferrer;
+
+impl ResultConsumer for ResultDeferrer {
+    fn on_command_completion<'a>(
+        &self,
+        context: &'a CommandContext,
+        result: ReturnValue,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            context.source.command_result_taker.call(result).await;
+        })
+    }
+}
+
+pub static RESULT_DEFERRER: LazyLock<Arc<ResultDeferrer>> =
+    LazyLock::new(|| Arc::new(ResultDeferrer));
 
 /// The core command dispatcher, used to register, parse and execute commands.
 ///
 /// Internally, this dispatcher stores a [`Tree`]. Refer to its documentation
 /// for more information about nodes.
 pub struct CommandDispatcher {
-    pub tree: Arc<Tree>,
+    pub tree: Tree,
     pub consumer: Arc<dyn ResultConsumer>,
 }
 
@@ -75,22 +104,19 @@ impl CommandDispatcher {
     /// Creates this [`CommandDispatcher`] from a pre-existing tree.
     pub fn from_existing_tree(tree: Tree) -> Self {
         Self {
-            tree: Arc::new(tree),
-            consumer: EMPTY_CONSUMER.clone(),
+            tree,
+            consumer: RESULT_DEFERRER.clone(),
         }
     }
 
     /// Registers a command which can then be dispatched.
     /// Returns the local ID of the node attached to the tree.
+    ///
+    /// Note that, at least for now with this system, there is no way to
+    /// unregister a command. This is due to redirection to
+    /// potentially unregistered (freed) nodes.
     pub fn register(&mut self, command_node: impl Into<CommandDetachedNode>) -> CommandNodeId {
-        // TODO: Determine if this is well optimized enough for a dispatcher.
-        //
-        // Mutations in dispatchers are extremely rare after server boot.
-        // Thus, the following code will have a very low chance of actually
-        // cloning, and even if it did, the `Arc` will get copied again later
-        // by the sources.
-        let arc_mut = Arc::make_mut(&mut self.tree);
-        arc_mut.add_child_to_root(command_node)
+        self.tree.add_child_to_root(command_node)
     }
 
     /// Executes the given command with the provided source, returning a result of execution.
@@ -115,7 +141,7 @@ impl CommandDispatcher {
         reader: &mut StringReader<'_>,
         source: &CommandSource,
     ) -> Result<i32, CommandSyntaxError> {
-        let parsed = self.parse(reader, source);
+        let parsed = self.parse(reader, source).await;
         self.execute(parsed).await
     }
 
@@ -137,7 +163,8 @@ impl CommandDispatcher {
         match ContextChain::try_flatten(&original_context) {
             None => {
                 self.consumer
-                    .on_command_completion(&original_context, ReturnValue::Failure);
+                    .on_command_completion(&original_context, ReturnValue::Failure)
+                    .await;
                 Err(DISPATCHER_UNKNOWN_COMMAND.create(&parsed.reader))
             }
             Some(flat_context) => {
@@ -150,27 +177,30 @@ impl CommandDispatcher {
 
     /// Only parses a given source with the specified source.
     #[must_use]
-    pub fn parse_input(&self, command: &str, source: &CommandSource) -> ParsingResult<'_> {
+    pub async fn parse_input(&self, command: &str, source: &CommandSource) -> ParsingResult<'_> {
         let mut reader = StringReader::new(command);
-        self.parse(&mut reader, source)
+        self.parse(&mut reader, source).await
     }
 
     /// Parses a command owned by a [`StringReader`] with the provided source.
-    pub fn parse(&self, reader: &mut StringReader, source: &CommandSource) -> ParsingResult<'_> {
+    pub async fn parse(
+        &self,
+        reader: &mut StringReader<'_>,
+        source: &CommandSource,
+    ) -> ParsingResult<'_> {
         let context = CommandContextBuilder::new(
             self,
             Arc::new(source.clone()),
-            self.tree.clone(),
             ROOT_NODE_ID,
             reader.cursor(),
         );
-        self.parse_nodes(ROOT_NODE_ID, reader, &context)
+        self.parse_nodes(ROOT_NODE_ID, reader, &context).await
     }
 
-    fn parse_nodes<'a>(
+    async fn parse_nodes<'a>(
         &'a self,
         node: NodeId,
-        original_reader: &mut StringReader,
+        original_reader: &mut StringReader<'_>,
         context_so_far: &CommandContextBuilder<'a>,
     ) -> ParsingResult<'a> {
         let source = context_so_far.source.clone();
@@ -179,7 +209,7 @@ impl CommandDispatcher {
         let cursor = original_reader.cursor();
 
         for child in self.tree.get_relevant_nodes(original_reader, node) {
-            if !self.tree.can_use(child, &source) {
+            if !self.tree.can_use(child, &source).await {
                 continue;
             }
             let mut context = context_so_far.clone();
@@ -213,14 +243,10 @@ impl CommandDispatcher {
                         reader.set_cursor(cursor);
                         continue;
                     };
-                    let child_context = CommandContextBuilder::new(
-                        self,
-                        source,
-                        self.tree.clone(),
-                        redirect,
-                        reader.cursor(),
-                    );
-                    let parsed = self.parse_nodes(redirect, &mut reader, &child_context);
+                    let child_context =
+                        CommandContextBuilder::new(self, source, redirect, reader.cursor());
+                    let parsed =
+                        Box::pin(self.parse_nodes(redirect, &mut reader, &child_context)).await;
                     context.with_child(parsed.context);
                     return ParsingResult {
                         context,
@@ -228,7 +254,7 @@ impl CommandDispatcher {
                         reader: parsed.reader,
                     };
                 }
-                let parsed = self.parse_nodes(child, &mut reader, &context);
+                let parsed = Box::pin(self.parse_nodes(child, &mut reader, &context)).await;
                 potentials.push(parsed);
             } else {
                 potentials.push(ParsingResult {

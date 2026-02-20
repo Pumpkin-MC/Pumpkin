@@ -48,6 +48,16 @@ impl ResultValueTaker {
     pub fn new() -> Self {
         Self(Vec::new())
     }
+
+    /// Calls all the contained callbacks of this taker with the returned result.
+    #[must_use]
+    pub fn call(&self, return_value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async move {
+            for callback in &self.0 {
+                callback.call(return_value).await;
+            }
+        })
+    }
 }
 
 impl Default for ResultValueTaker {
@@ -88,7 +98,6 @@ pub struct CommandSource {
     pub silent: bool,
     pub command_result_taker: ResultValueTaker,
     pub entity_anchor: EntityAnchor,
-    // TODO: Add permission
 }
 
 impl CommandSource {
@@ -358,7 +367,7 @@ impl CommandSource {
 
     /// Gets the server as a result:
     ///
-    /// - If this source actually contains a server, it returns that..
+    /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain the server, but it may not in a unit test.
     #[must_use]
     pub fn server(&self) -> Arc<Server> {
@@ -454,6 +463,33 @@ impl CommandSource {
                         .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
+        }
+    }
+
+    /// Returns whether this source has the permission provided.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this source does not have a reference to the
+    /// server (i.e. this is a dummy [`CommandSource`].)
+    #[must_use]
+    pub async fn has_permission(&self, permission: &str) -> bool {
+        self.output.has_permission(&self.server(), permission).await
+    }
+
+    /// Returns whether this source has the permission provided.
+    ///
+    /// # Panics
+    ///
+    /// Panics **if, and only if** both the following conditions are met:
+    ///
+    /// - permission is not [`None`].
+    /// - this source does not have a reference to the server (i.e. this is a dummy [`CommandSource`].)
+    #[must_use]
+    pub async fn has_permission_from_option(&self, permission: Option<&str>) -> bool {
+        match permission {
+            None => true,
+            Some(permission) => self.has_permission(permission).await,
         }
     }
 }

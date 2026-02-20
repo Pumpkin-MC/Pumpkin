@@ -57,6 +57,7 @@ pub enum CommandSender {
     /// world context it exists in for coordinate-relative execution (e.g., `~ ~ ~`).
     CommandBlock(Arc<CommandBlockEntity>, Arc<World>),
     /// Nothingness. Anything sent to this sender is void.
+    /// Has the same permissions as that of `CommandBlock`.
     Dummy,
 }
 

@@ -55,15 +55,20 @@ impl LiteralDetachedNode {
     ///
     /// # Note
     /// Prefer using the [`LiteralArgumentBuilder`] over this function.
-    pub fn new(
+    #[expect(clippy::too_many_arguments)]
+    pub fn new<P>(
         global_id: GlobalNodeId,
         literal: impl Into<Cow<'static, str>>,
         command: Option<Command>,
         requirement: Requirement,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
+        permission: Option<P>,
         forks: bool,
-    ) -> Self {
+    ) -> Self
+    where
+        P: Into<Cow<'static, str>>,
+    {
         Self {
             owned: OwnedNodeData {
                 global_id,
@@ -71,6 +76,7 @@ impl LiteralDetachedNode {
                 modifier,
                 forks,
                 command,
+                permission: permission.map(Into::into),
             },
             children: FxHashMap::default(),
             redirect,
@@ -99,7 +105,7 @@ impl CommandDetachedNode {
     /// # Note
     /// Prefer using the [`LiteralArgumentBuilder`] over this function.
     #[expect(clippy::too_many_arguments)]
-    pub fn new(
+    pub fn new<P>(
         global_id: GlobalNodeId,
         literal: impl Into<Cow<'static, str>>,
         description: impl Into<Cow<'static, str>>,
@@ -107,8 +113,12 @@ impl CommandDetachedNode {
         requirement: Requirement,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
+        permission: Option<P>,
         forks: bool,
-    ) -> Self {
+    ) -> Self
+    where
+        P: Into<Cow<'static, str>>,
+    {
         Self {
             owned: OwnedNodeData {
                 global_id,
@@ -116,6 +126,7 @@ impl CommandDetachedNode {
                 modifier,
                 forks,
                 command,
+                permission: permission.map(Into::into),
             },
             children: FxHashMap::default(),
             redirect,
@@ -141,7 +152,7 @@ impl ArgumentDetachedNode {
     /// # Note
     /// Prefer using the [`RequiredArgumentBuilder`] over this function.
     #[expect(clippy::too_many_arguments)]
-    pub fn new(
+    pub fn new<P>(
         global_id: GlobalNodeId,
         name: impl Into<Cow<'static, str>>,
         argument_type: Arc<dyn AnyArgumentType>,
@@ -149,8 +160,12 @@ impl ArgumentDetachedNode {
         requirement: Requirement,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
+        permission: Option<P>,
         forks: bool,
-    ) -> Self {
+    ) -> Self
+    where
+        P: Into<Cow<'static, str>>,
+    {
         Self {
             owned: OwnedNodeData {
                 global_id,
@@ -158,6 +173,7 @@ impl ArgumentDetachedNode {
                 modifier,
                 forks,
                 command,
+                permission: permission.map(Into::into),
             },
             children: FxHashMap::default(),
             redirect,

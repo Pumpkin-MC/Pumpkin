@@ -54,15 +54,19 @@ pub enum NodeIdClassification {
 /// # Hierarchy
 /// This tree can have four different types of nodes, which are the following:
 ///
-/// - **Root**:     Does not have a parent. Exactly one instance of this type of node
-///                 exists per [`Tree`]. Always identifiable by [`ROOT_NODE_ID`].
+/// - **Root**:
+///   Does not have a parent. Exactly one instance of this type of node
+///   exists per [`Tree`]. Always identifiable by [`ROOT_NODE_ID`].
 ///
-/// - **Command**:  Its parent must be the root node, and specifies the start of a
-///                 command definition.
+/// - **Command**:
+///   Its parent must be the root node, and specifies the start of a
+///   command definition.
 ///
-/// - **Literal**:  Accepts a particular constant word.
+/// - **Literal**:
+///   Accepts a particular constant word.
 ///
-/// - **Argument**: Parses and accepts a specific type of value. This is very dynamic.
+/// - **Argument**:
+///   Parses and accepts a specific type of value. This is very dynamic.
 #[derive(Clone)]
 pub struct Tree {
     /// All the nodes stored in this tree.
@@ -74,6 +78,9 @@ pub struct Tree {
     /// Keys linking [`GlobalNodeId`] to the [`NodeId`] for this tree.
     /// Useful for redirecting.
     ids_map: FxHashMap<GlobalNodeId, NodeId>,
+
+    /// Freed node slot IDs.
+    free: Vec<NodeId>,
 }
 
 impl Default for Tree {
@@ -92,6 +99,18 @@ impl Tree {
         Self {
             nodes: vec![AttachedNode::Root(node)],
             ids_map,
+            free: Vec::new(),
+        }
+    }
+
+    /// Allocate a new [`NodeId`] that was currently free from this tree.
+    /// This reuses freed node slots, and if none are left, then this
+    /// creates new IDs.
+    fn alloc(&mut self) -> NodeId {
+        if let Some(free) = self.free.pop() {
+            free
+        } else {
+            NodeId(NonZero::new(self.nodes.len() + 1).expect("expected a non-zero id"))
         }
     }
 
@@ -99,7 +118,7 @@ impl Tree {
     /// its [`NodeId`].
     fn add(&mut self, node: AttachedNode) -> NodeId {
         let global_id = node.global_id();
-        let local_id = NodeId(NonZero::new(self.nodes.len() + 1).expect("expected a non-zero id"));
+        let local_id = self.alloc();
 
         // Update state variables.
         self.nodes.push(node);
@@ -216,8 +235,11 @@ impl Tree {
 
     /// Returns whether the given node is able to be used by a given source.
     #[must_use]
-    pub fn can_use(&self, node: NodeId, source: &CommandSource) -> bool {
-        self[node].requirement().evaluate(source)
+    pub async fn can_use(&self, node: NodeId, source: &CommandSource) -> bool {
+        source
+            .has_permission_from_option(self[node].permission())
+            .await
+            && self[node].requirement().evaluate(source).await
     }
 
     /// Finds ambiguities of input and gives them to the [`AmbiguityConsumer`].

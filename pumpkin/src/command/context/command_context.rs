@@ -51,7 +51,7 @@ impl ParsedArgument {
 
 /// Represents the context used when commands are run.
 #[derive(Clone)]
-pub struct CommandContext {
+pub struct CommandContext<'a> {
     /// The source running the commands.
     pub source: Arc<CommandSource>,
 
@@ -63,7 +63,7 @@ pub struct CommandContext {
     pub arguments: FxHashMap<String, Arc<ParsedArgument>>,
 
     /// The tree this context is related to.
-    pub tree: Arc<Tree>,
+    pub tree: &'a Tree,
 
     /// The root that this context will use, bound to the tree
     /// Not necessarily the root node of the tree, however.
@@ -89,7 +89,7 @@ pub struct CommandContext {
     pub command: Option<Command>,
 }
 
-impl CommandContext {
+impl CommandContext<'_> {
     /// Copies this context with the source provided.
     #[must_use]
     pub fn with_source(&self, source: Arc<CommandSource>) -> Self {
@@ -103,7 +103,7 @@ impl CommandContext {
             modifier: self.modifier.clone(),
             forks: self.forks,
             command: self.command.clone(),
-            tree: self.tree.clone(),
+            tree: self.tree,
             root: self.root,
         }
     }
@@ -144,22 +144,22 @@ impl CommandContext {
 
 /// Represents a linked chain of [`CommandContext`]s, where the previous links to the next as a child.
 #[derive(Clone)]
-pub struct ContextChain {
+pub struct ContextChain<'a> {
     /// The modifiers of this context chain.
-    modifiers: Vec<Arc<CommandContext>>,
+    modifiers: Vec<Arc<CommandContext<'a>>>,
 
     /// That specific [`CommandContext`] to execute.
-    execute: Arc<CommandContext>,
+    execute: Arc<CommandContext<'a>>,
 }
 
-impl ContextChain {
+impl<'a> ContextChain<'a> {
     /// Creates a new chain of contexts from a vector of them and one to execute.
     ///
     /// # Panics
     ///
     /// Panics if the `execute` given is non-executable.
     #[must_use]
-    pub fn new(modifiers: Vec<Arc<CommandContext>>, execute: Arc<CommandContext>) -> Self {
+    pub fn new(modifiers: Vec<Arc<CommandContext<'a>>>, execute: Arc<CommandContext<'a>>) -> Self {
         assert!(
             execute.command.is_some(),
             "Expected last command in chain to be executable"
@@ -170,7 +170,7 @@ impl ContextChain {
     /// Tries to flatten a [`CommandContext`]. If no command
     /// is available at the end of chain, [`None`] is returned.
     #[must_use]
-    pub fn try_flatten(root: &CommandContext) -> Option<Self> {
+    pub fn try_flatten(root: &CommandContext<'a>) -> Option<Self> {
         let mut modifiers = Vec::new();
         let mut current = root;
 
@@ -189,7 +189,7 @@ impl ContextChain {
 
     /// Runs the given modifier with provided details.
     pub async fn run_modifier(
-        modifier: &CommandContext,
+        modifier: &CommandContext<'a>,
         source: &Arc<CommandSource>,
         result_consumer: &dyn ResultConsumer,
         forked_mode: bool,
@@ -204,7 +204,9 @@ impl ContextChain {
         let mut result = source_modifier.sources(&context_to_use).await;
 
         if result.is_err() {
-            result_consumer.on_command_completion(&context_to_use, ReturnValue::Failure);
+            result_consumer
+                .on_command_completion(&context_to_use, ReturnValue::Failure)
+                .await;
             if forked_mode {
                 result = Ok(vec![]);
             }
@@ -219,7 +221,7 @@ impl ContextChain {
     ///
     /// Panics if the `executable` provided cannot be executed.
     pub async fn run_executable(
-        executable: &CommandContext,
+        executable: &CommandContext<'a>,
         source: &Arc<CommandSource>,
         result_consumer: &dyn ResultConsumer,
         forked_mode: bool,
@@ -232,10 +234,14 @@ impl ContextChain {
         };
 
         if let Ok(result) = result {
-            result_consumer.on_command_completion(&context_to_use, ReturnValue::Success(result));
+            result_consumer
+                .on_command_completion(&context_to_use, ReturnValue::Success(result))
+                .await;
             Ok(if forked_mode { 1 } else { result })
         } else {
-            result_consumer.on_command_completion(&context_to_use, ReturnValue::Failure);
+            result_consumer
+                .on_command_completion(&context_to_use, ReturnValue::Failure)
+                .await;
             if forked_mode {
                 result = Ok(0);
             }
@@ -297,7 +303,7 @@ impl ContextChain {
 
     /// Gets a reference to the top context of this chain.
     #[must_use]
-    pub fn get_top_context(&self) -> &Arc<CommandContext> {
+    pub fn get_top_context(&'_ self) -> &'_ Arc<CommandContext<'_>> {
         if self.modifiers.is_empty() {
             &self.execute
         } else {
@@ -306,7 +312,7 @@ impl ContextChain {
     }
 
     /// Gets a mutable reference to the top context of this chain.
-    pub fn get_top_context_mut(&mut self) -> &mut Arc<CommandContext> {
+    pub fn get_top_context_mut(&'_ mut self) -> &mut Arc<CommandContext<'a>> {
         if self.modifiers.is_empty() {
             &mut self.execute
         } else {
@@ -343,9 +349,6 @@ pub struct CommandContextBuilder<'a> {
     /// can be fetched for command execution.
     pub arguments: FxHashMap<String, Arc<ParsedArgument>>,
 
-    /// The tree this context is related to.
-    pub tree: Arc<Tree>,
-
     /// The root that this context will use, bound to the tree
     /// Not necessarily the root node of the tree, however.
     pub root: NodeId,
@@ -378,7 +381,6 @@ impl<'a> CommandContextBuilder<'a> {
     pub fn new(
         dispatcher: &'a CommandDispatcher,
         source: Arc<CommandSource>,
-        tree: Arc<Tree>,
         root: NodeId,
         start: usize,
     ) -> Self {
@@ -386,7 +388,6 @@ impl<'a> CommandContextBuilder<'a> {
             dispatcher,
             source,
             arguments: FxHashMap::default(),
-            tree,
             root,
             nodes: Vec::new(),
             range: StringRange::at(start),
@@ -399,12 +400,12 @@ impl<'a> CommandContextBuilder<'a> {
 
     /// Builds the required [`CommandContext`], consuming itself in the process.
     #[must_use]
-    pub fn build(self, input: &str) -> CommandContext {
+    pub fn build(self, input: &str) -> CommandContext<'a> {
         CommandContext {
             source: self.source,
             input: input.to_string(),
             arguments: self.arguments,
-            tree: self.tree,
+            tree: &self.dispatcher.tree,
             root: self.root,
             nodes: self.nodes,
             range: self.range,
@@ -434,8 +435,8 @@ impl<'a> CommandContextBuilder<'a> {
     pub fn with_node(&mut self, node: NodeId, range: StringRange) {
         self.nodes.push(ParsedNode { node, range });
         self.range = StringRange::encompass(self.range, range);
-        self.modifier = self.tree[node].modifier().clone();
-        self.forks = self.tree[node].forks();
+        self.modifier = self.dispatcher.tree[node].modifier().clone();
+        self.forks = self.dispatcher.tree[node].forks();
     }
 
     /// Mutates itself with the new child set.
@@ -522,11 +523,10 @@ mod test {
     }
 
     // For testing purposes
-    fn builder(dispatcher: &CommandDispatcher) -> CommandContextBuilder<'_> {
+    fn builder(dispatcher: &'_ CommandDispatcher) -> CommandContextBuilder<'_> {
         let mut builder = CommandContextBuilder::new(
             dispatcher,
             Arc::new(CommandSource::dummy()),
-            dispatcher.tree.clone(),
             ROOT_NODE_ID,
             0,
         );
@@ -574,7 +574,7 @@ mod test {
             .register(CommandArgumentBuilder::new("foo", "A test command").executes(TenExecutor));
 
         let source = Arc::new(CommandSource::dummy());
-        let result = dispatcher.parse_input("foo", &source);
+        let result = dispatcher.parse_input("foo", &source).await;
         let top_context = result.context.build("foo");
         let chain = ContextChain::try_flatten(&top_context)
             .expect("The context should have properly flattened, as it has a command to execute");
@@ -595,7 +595,7 @@ mod test {
         );
 
         let source = Arc::new(CommandSource::dummy());
-        let result = dispatcher.parse_input("bar foo", &source);
+        let result = dispatcher.parse_input("bar foo", &source).await;
         let top_context = result.context.build("bar foo");
         let chain = ContextChain::try_flatten(&top_context)
             .expect("The context should have properly flattened, as it has a command to execute");
@@ -606,14 +606,14 @@ mod test {
         );
     }
 
-    #[test]
-    fn single_stage_execution() {
+    #[tokio::test]
+    async fn single_stage_execution() {
         let mut dispatcher = CommandDispatcher::new();
         dispatcher
             .register(CommandArgumentBuilder::new("foo", "A test command").executes(TenExecutor));
 
         let source = Arc::new(CommandSource::dummy());
-        let result = dispatcher.parse_input("foo", &source);
+        let result = dispatcher.parse_input("foo", &source).await;
         let top_context = result.context.build("foo");
         let chain = ContextChain::try_flatten(&top_context)
             .expect("The context should have properly flattened, as it has a command to execute");
@@ -622,8 +622,8 @@ mod test {
         assert!(chain.next_stage().is_none());
     }
 
-    #[test]
-    fn multi_stage_execution() {
+    #[tokio::test]
+    async fn multi_stage_execution() {
         let mut dispatcher = CommandDispatcher::new();
         dispatcher
             .register(CommandArgumentBuilder::new("foo", "A test command").executes(TenExecutor));
@@ -636,7 +636,7 @@ mod test {
         );
 
         let source = Arc::new(CommandSource::dummy());
-        let result = dispatcher.parse_input("bar qux foo", &source);
+        let result = dispatcher.parse_input("bar qux foo", &source).await;
         let top_context = result.context.build("bar qux foo");
         let chain = ContextChain::try_flatten(&top_context)
             .expect("The context should have properly flattened, as it has a command to execute");
@@ -654,13 +654,13 @@ mod test {
         assert!(chain3.next_stage().is_none());
     }
 
-    #[test]
-    fn missing_command() {
+    #[tokio::test]
+    async fn missing_command() {
         let mut dispatcher = CommandDispatcher::new();
         dispatcher.register(CommandArgumentBuilder::new("foo", "A test command"));
 
         let source = Arc::new(CommandSource::dummy());
-        let result = dispatcher.parse_input("foo", &source);
+        let result = dispatcher.parse_input("foo", &source).await;
         let top_context = result.context.build("foo");
 
         assert!(ContextChain::try_flatten(&top_context).is_none());

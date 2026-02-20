@@ -41,7 +41,7 @@ pub type RedirectModifierResult<'a> =
 
 /// A function that performs the required modification.
 pub type RedirectModifierExecutor =
-    dyn Fn(&CommandContext) -> RedirectModifierResult<'_> + Send + Sync;
+    dyn for<'c> Fn(&'c CommandContext) -> RedirectModifierResult<'c> + Send + Sync;
 
 /// A function that returns a new collection of sources from a given context.
 #[derive(Clone)]
@@ -66,25 +66,29 @@ impl RedirectModifier {
     }
 }
 
+/// Represents the result of a node requirement as a pinned boxed [`Future`].
+pub type RequirementResult<'a> = Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
+
 /// A structure that returns if the source is qualified enough to run the command.
 #[derive(Clone)]
 pub enum Requirement {
     /// Always returns `true`, i.e. no matter the source,
-    /// it will always be qualified enough to run the command.
+    /// it will always be qualified enough to run the command,
+    /// according to this requirement.
     AlwaysQualified,
 
     /// The given source must satisfy the condition to
     /// be allowed to run the command.
-    Condition(Arc<dyn Fn(&CommandSource) -> bool + Send + Sync>),
+    Condition(Arc<dyn Fn(&CommandSource) -> RequirementResult<'_> + Send + Sync>),
 }
 
 impl Requirement {
     /// Evaluates the given condition, returning whether the
     /// given [`CommandSource`] satisfies this requirement.
     #[must_use]
-    pub fn evaluate(&self, command_source: &CommandSource) -> bool {
+    pub fn evaluate<'a>(&'a self, command_source: &'a CommandSource) -> RequirementResult<'a> {
         match self {
-            Self::AlwaysQualified => true,
+            Self::AlwaysQualified => Box::pin(async { true }),
             Self::Condition(condition) => condition(command_source),
         }
     }
@@ -98,6 +102,7 @@ pub struct OwnedNodeData {
     pub modifier: RedirectModifier,
     pub forks: bool,
     pub command: Option<Command>,
+    pub permission: Option<Cow<'static, str>>,
 }
 
 /// Represents the extra metadata of a node storing a literal.

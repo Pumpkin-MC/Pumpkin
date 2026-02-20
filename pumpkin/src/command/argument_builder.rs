@@ -11,7 +11,9 @@ use std::sync::Arc;
 /// Represents an intermediate struct for
 /// building arguments for commands.
 ///
-/// Note: This is an implementation detail.
+/// # Note
+///
+/// This is an implementation detail.
 struct CommonArgumentBuilder {
     pub global_id: GlobalNodeId,
     pub arguments: FxHashMap<String, DetachedNode>,
@@ -19,6 +21,7 @@ struct CommonArgumentBuilder {
     pub requirement: Requirement,
     pub target: Option<Redirection>,
     pub modifier: RedirectModifier,
+    pub permission: Option<Cow<'static, str>>,
     pub forks: bool,
 }
 
@@ -31,6 +34,7 @@ impl CommonArgumentBuilder {
             requirement: Requirement::AlwaysQualified,
             target: None,
             modifier: RedirectModifier::OneSource,
+            permission: None,
             forks: false,
         }
     }
@@ -45,7 +49,7 @@ impl Default for CommonArgumentBuilder {
 /// A short-form way to create a new [`CommandArgumentBuilder`]
 /// from a literal and a command description.
 ///
-/// This should ideally be imported directly. Here's an example of usage:
+/// This can be imported directly without a prefix, or imported with the `argument_builder::` prefix. Here's an example of usage:
 /// ```
 /// use pumpkin::command::argument_builder::command;
 ///
@@ -64,7 +68,7 @@ pub fn command(
 /// A short-form way to create a new [`LiteralArgumentBuilder`]
 /// from a literal.
 ///
-/// This should ideally be imported directly. Here's an example of usage:
+/// This can be imported directly without a prefix, or imported with the `argument_builder::` prefix. Here's an example of usage:
 /// ```
 /// use pumpkin::command::argument_builder::literal;
 ///
@@ -79,7 +83,7 @@ pub fn literal(literal: impl Into<Cow<'static, str>>) -> LiteralArgumentBuilder 
 /// A short-form way to create a new [`RequiredArgumentBuilder`]
 /// from an argument type and name.
 ///
-/// This should ideally be imported directly. Here's an example of usage:
+/// This can be imported directly without a prefix, or imported with the `argument_builder::` prefix. Here's an example of usage:
 /// ```
 /// use pumpkin::command::{
 ///     argument_builder::argument,
@@ -176,6 +180,10 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
     #[must_use]
     fn target(&self) -> Option<Redirection>;
 
+    /// Gets the permission required by this node to run, in addition to the requirement in the node.
+    #[must_use]
+    fn permission(&self) -> Option<&str>;
+
     /// Gets the redirect modifier of the node this [`ArgumentBuilder`] is building.
     #[must_use]
     fn redirect_modifier(&self) -> RedirectModifier;
@@ -252,6 +260,10 @@ macro_rules! impl_boilerplate_argument_builder {
 
         fn target(&self) -> Option<Redirection> {
             self.common.target.clone()
+        }
+
+        fn permission(&self) -> Option<&str> {
+            self.common.permission.as_deref()
         }
 
         fn redirect_modifier(&self) -> RedirectModifier {
@@ -338,6 +350,7 @@ impl ArgumentBuilder<LiteralDetachedNode> for LiteralArgumentBuilder {
             self.common.requirement,
             self.common.target,
             self.common.modifier,
+            self.common.permission,
             self.common.forks,
         );
         node.children = self.common.arguments;
@@ -357,6 +370,7 @@ impl ArgumentBuilder<CommandDetachedNode> for CommandArgumentBuilder {
             self.common.requirement,
             self.common.target,
             self.common.modifier,
+            self.common.permission,
             self.common.forks,
         );
         node.children = self.common.arguments;
@@ -376,6 +390,7 @@ impl ArgumentBuilder<ArgumentDetachedNode> for RequiredArgumentBuilder {
             self.common.requirement,
             self.common.target,
             self.common.modifier,
+            self.common.permission,
             self.common.forks,
         );
         node.children = self.common.arguments;
@@ -385,9 +400,7 @@ impl ArgumentBuilder<ArgumentDetachedNode> for RequiredArgumentBuilder {
 
 #[cfg(test)]
 mod test {
-    use crate::command::argument_builder::{
-        ArgumentBuilder, CommandArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder,
-    };
+    use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
     use crate::command::argument_types::core::double::DoubleArgumentType;
     use crate::command::argument_types::core::integer::IntegerArgumentType;
     use crate::command::argument_types::core::string::StringArgumentType;
@@ -399,7 +412,7 @@ mod test {
 
     #[test]
     fn literal_one() {
-        let builder = LiteralArgumentBuilder::new("test");
+        let builder = literal("test");
         let node = builder.build();
 
         assert_eq!(node.meta.literal, "test");
@@ -407,7 +420,7 @@ mod test {
 
     #[test]
     fn required_one() {
-        let builder = RequiredArgumentBuilder::new("test", IntegerArgumentType::new(1, 10));
+        let builder = argument("test", IntegerArgumentType::new(1, 10));
         let node = builder.build();
 
         assert_eq!(node.meta.name, "test");
@@ -435,11 +448,11 @@ mod test {
 
     #[test]
     fn literal_multiple() {
-        let mut builder = CommandArgumentBuilder::new("letter", "A test command");
+        let mut builder = command("letter", "A test command");
         for letter in 'a'..='z' {
             // Add a node per letter for the argument.
             let letter_string = letter.to_string();
-            builder = builder.then(LiteralArgumentBuilder::new(letter_string));
+            builder = builder.then(literal(letter_string));
         }
 
         let node = builder.build();
@@ -448,15 +461,9 @@ mod test {
 
     #[test]
     fn required_multiple() {
-        let builder = CommandArgumentBuilder::new("test", "A test command")
-            .then(RequiredArgumentBuilder::new(
-                "number",
-                DoubleArgumentType::any(),
-            ))
-            .then(RequiredArgumentBuilder::new(
-                "word",
-                StringArgumentType::SingleWord,
-            ));
+        let builder = command("test", "A test command")
+            .then(argument("number", DoubleArgumentType::any()))
+            .then(argument("word", StringArgumentType::SingleWord));
 
         let node = builder.build();
         assert_eq!(node.children.len(), 2);
@@ -464,8 +471,7 @@ mod test {
 
     #[test]
     fn redirect() {
-        let builder =
-            CommandArgumentBuilder::new("test", "A test command").redirect(Redirection::Root);
+        let builder = command("test", "A test command").redirect(Redirection::Root);
 
         let mut tree = Tree::new();
         let node_id = tree.add_child_to_root(builder);
@@ -486,23 +492,22 @@ mod test {
     #[test]
     #[should_panic = "Cannot forward a node with children. The node must have no children to redirect somewhere else"]
     fn redirect_after_child() {
-        let _ = CommandArgumentBuilder::new("test", "A test command")
-            .then(LiteralArgumentBuilder::new("child"))
+        let _ = command("test", "A test command")
+            .then(literal("child"))
             .redirect(Redirection::Root);
     }
 
     #[test]
     #[should_panic = "Cannot add children to a redirected node"]
     fn redirect_before_child() {
-        let _ = CommandArgumentBuilder::new("test", "A test command")
+        let _ = command("test", "A test command")
             .redirect(Redirection::Root)
-            .then(LiteralArgumentBuilder::new("child"));
+            .then(literal("child"));
     }
 
     #[test]
     #[should_panic = "Cannot add a CommandDetachedNode as a child of a builder"]
     fn add_command_as_child() {
-        let _ = CommandArgumentBuilder::new("foo", "A test command")
-            .then(CommandArgumentBuilder::new("bar", "Another test command"));
+        let _ = command("foo", "A test command").then(command("bar", "Another test command"));
     }
 }
