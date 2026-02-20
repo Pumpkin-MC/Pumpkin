@@ -2702,6 +2702,7 @@ impl Player {
         }
     }
 
+    #[allow(clippy::too_many_lines)] // its 101, it wants 100
     pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot) {
         self.update_last_action_time();
         let screen_handler_init = self.current_screen_handler.lock().await;
@@ -2783,7 +2784,6 @@ impl Player {
             'after: {
                 let screen_handler_init = self.current_screen_handler.lock().await;
                 let mut screen_handler = screen_handler_init.lock().await;
-
 
                 screen_handler.disable_sync();
                 screen_handler
