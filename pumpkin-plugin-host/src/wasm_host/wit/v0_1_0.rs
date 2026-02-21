@@ -3,7 +3,7 @@ use wasmtime::component::{Component, HasData, Linker, bindgen};
 use wasmtime::{Engine, Store};
 
 use crate::wasm_host::state::{ContextResource, ServerResource};
-use crate::wasm_host::wit::v0_1_0::pumpkin::plugin::server::{Difficulty, Server};
+use crate::wasm_host::wit::v0_1_0::pumpkin::plugin::{player, server::{Difficulty, Server}};
 use crate::{
     metadata::PluginMetadata,
     wasm_host::{PluginInstance, WasmPlugin, logging::log_tracing, state::PluginHostState},
@@ -66,7 +66,6 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     }
 }
 
-impl pumpkin::plugin::server::Host for PluginHostState {}
 
 impl pumpkin::plugin::context::HostContext for PluginHostState {
     async fn drop(&mut self, rep: wasmtime::component::Resource<Context>) -> wasmtime::Result<()> {
@@ -100,7 +99,34 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
     }
 }
 
+impl pumpkin::plugin::player::HostPlayer for PluginHostState {
+    async fn drop(
+        &mut self,
+        rep: wasmtime::component::Resource<pumpkin::plugin::player::Player>,
+    ) -> wasmtime::Result<()> {
+        // TODO: implement
+        todo!()
+    }
+
+    async fn get_id(&mut self, player: wasmtime::component::Resource<player::Player>) -> String { todo!() }
+}
+
+impl pumpkin::plugin::common::HostTextComponent for PluginHostState {
+    async fn drop(
+        &mut self,
+        _rep: wasmtime::component::Resource<pumpkin::plugin::common::TextComponent>,
+    ) -> wasmtime::Result<()> {
+        // TODO: implement
+        todo!()
+    }
+}
+
+
+impl pumpkin::plugin::player::Host for PluginHostState {}
+impl pumpkin::plugin::common::Host for PluginHostState {}
 impl pumpkin::plugin::context::Host for PluginHostState {}
+impl pumpkin::plugin::server::Host for PluginHostState {}
+impl pumpkin::plugin::event::Host for PluginHostState {}
 
 pub fn setup_linker(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState>> {
     let mut linker = Linker::new(engine);

@@ -1,0 +1,5 @@
+interface player {
+    resource player {
+        get-id: func () -> string;
+    }
+}
