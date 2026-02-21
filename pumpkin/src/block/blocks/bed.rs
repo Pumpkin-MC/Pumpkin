@@ -24,6 +24,7 @@ use crate::block::{
     PlacedArgs,
 };
 use crate::entity::{Entity, EntityBase};
+use crate::plugin::player::player_bed_enter::PlayerBedEnterEvent;
 use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
@@ -345,6 +346,18 @@ impl BlockBehaviour for BedBlock {
                         )
                         .await;
                     return BlockActionResult::SuccessServer;
+                }
+            }
+
+            if let Some(server) = args.world.server.upgrade() {
+                let bed_position = bed_head_pos.to_f64().add_raw(0.5, 0.0, 0.5);
+                if let Some(player_arc) = args.world.get_player_by_uuid(args.player.gameprofile.id)
+                {
+                    let event = PlayerBedEnterEvent::new(player_arc, bed_position);
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return BlockActionResult::SuccessServer;
+                    }
                 }
             }
 
