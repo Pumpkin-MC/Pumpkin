@@ -1,4 +1,5 @@
 use pumpkin_macros::Event;
+use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
@@ -10,6 +11,7 @@ pub struct PlayerPermissionCheckEvent {
     pub player: Arc<Player>,
     pub permission: String,
     pub result: bool,
+    pub denial_message: Option<TextComponent>,
 }
 
 impl PlayerPermissionCheckEvent {
@@ -18,6 +20,7 @@ impl PlayerPermissionCheckEvent {
             player,
             permission,
             result,
+            denial_message: None,
         }
     }
 }

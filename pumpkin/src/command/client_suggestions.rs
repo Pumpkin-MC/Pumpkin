@@ -26,7 +26,8 @@ pub async fn send_c_commands_packet(
             continue;
         };
 
-        if !cmd_src.has_permission(server, permission.as_str()).await {
+        let (allowed, _) = cmd_src.has_permission(server, permission.as_str()).await;
+        if !allowed {
             continue;
         }
 
