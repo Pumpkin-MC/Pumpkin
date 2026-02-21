@@ -5,6 +5,10 @@ use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
+const RANGE: i32 = 5;
+const RECENT_DAMAGE_TICKS: i32 = 100;
+const TARGET_ATTEMPTS: usize = 10;
+
 pub struct EscapeDangerGoal {
     speed: f64,
     goal_control: Controls,
@@ -22,29 +26,33 @@ impl EscapeDangerGoal {
     }
 
     fn is_in_danger(mob: &dyn Mob) -> bool {
-        let mob_entity = mob.get_mob_entity();
-        let entity = &mob_entity.living_entity.entity;
-        let fire_ticks = entity.fire_ticks.load(Relaxed);
-        if fire_ticks > 0 {
+        let living = &mob.get_mob_entity().living_entity;
+
+        if living.entity.fire_ticks.load(Relaxed) > 0 {
             return true;
         }
-        let age = entity.age.load(Relaxed);
-        let last_attacked_time = mob_entity.living_entity.last_attacked_time.load(Relaxed);
-        last_attacked_time > 0 && (age - last_attacked_time) < 100
+
+        let last_attacked = living.last_attacked_time.load(Relaxed);
+        if last_attacked == 0 {
+            return false;
+        }
+        let age = living.entity.age.load(Relaxed);
+        age - last_attacked < RECENT_DAMAGE_TICKS
     }
 
     fn find_escape_target(mob: &dyn Mob) -> Option<Vector3<f64>> {
         let pos = mob.get_mob_entity().living_entity.entity.pos.load();
         let mut rng = mob.get_random();
 
-        for _ in 0..10 {
-            let dx = rng.random_range(-5.0..=5.0);
-            let dz = rng.random_range(-5.0..=5.0);
-            if dx == 0.0 && dz == 0.0 {
+        for _ in 0..TARGET_ATTEMPTS {
+            let dx = rng.random_range(-RANGE..=RANGE);
+            let dz = rng.random_range(-RANGE..=RANGE);
+            if dx == 0 && dz == 0 {
                 continue;
             }
-            return Some(Vector3::new(pos.x + dx, pos.y, pos.z + dz));
+            return Some(Vector3::new(pos.x + dx as f64, pos.y, pos.z + dz as f64));
         }
+
         None
     }
 }
