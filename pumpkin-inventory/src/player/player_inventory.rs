@@ -314,7 +314,7 @@ impl Clearable for PlayerInventory {
                 *item.lock().await = ItemStack::EMPTY.clone();
             }
 
-            self.entity_equipment.lock().await.clear();
+            self.entity_equipment.lock().await.clear().await;
         })
     }
 }
