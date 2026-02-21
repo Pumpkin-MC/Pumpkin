@@ -69,6 +69,24 @@ impl FireBlock {
         false
     }
 
+    async fn should_fade(world: &Arc<World>, pos: &BlockPos, block: &Block) -> bool {
+        if let Some(server) = world.server.upgrade() {
+            // SAFETY: block references point to registry-backed data that outlives runtime use.
+            let block_static: &'static Block = unsafe { &*std::ptr::from_ref::<Block>(block) };
+            let event = crate::plugin::block::block_fade::BlockFadeEvent::new(
+                block_static,
+                &Block::AIR,
+                *pos,
+                world.uuid,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return false;
+            }
+        }
+        true
+    }
+
     pub async fn get_state_for_position(
         &self,
         world: &World,
@@ -170,7 +188,7 @@ impl FireBlock {
                 world
                     .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
                     .await;
-            } else {
+            } else if Self::should_fade(world, pos, block).await {
                 world
                     .set_block_state(
                         pos,
@@ -295,13 +313,15 @@ impl BlockBehaviour for FireBlock {
                 })
                 .await
             {
-                world
-                    .set_block_state(
-                        pos,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
+                if Self::should_fade(world, pos, block).await {
+                    world
+                        .set_block_state(
+                            pos,
+                            Block::AIR.default_state.id,
+                            BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                }
                 return;
             }
 
@@ -356,13 +376,15 @@ impl BlockBehaviour for FireBlock {
                 if !self.are_blocks_around_flammable(world.as_ref(), pos).await {
                     let block_below_state = world.get_block_state(&pos.down()).await;
                     if !block_below_state.is_side_solid(BlockDirection::Up) || new_age > 3 {
-                        world
-                            .set_block_state(
-                                pos,
-                                Block::AIR.default_state.id,
-                                BlockFlags::NOTIFY_NEIGHBORS,
-                            )
-                            .await;
+                        if Self::should_fade(world, pos, block).await {
+                            world
+                                .set_block_state(
+                                    pos,
+                                    Block::AIR.default_state.id,
+                                    BlockFlags::NOTIFY_NEIGHBORS,
+                                )
+                                .await;
+                        }
                         return;
                     }
                 }
@@ -372,13 +394,15 @@ impl BlockBehaviour for FireBlock {
                     && rand::rng().random_range(0..4) == 0
                     && !Self::is_flammable(world.get_block_state(&pos.down()).await)
                 {
-                    world
-                        .set_block_state(
-                            pos,
-                            Block::AIR.default_state.id,
-                            BlockFlags::NOTIFY_NEIGHBORS,
-                        )
-                        .await;
+                    if Self::should_fade(world, pos, block).await {
+                        world
+                            .set_block_state(
+                                pos,
+                                Block::AIR.default_state.id,
+                                BlockFlags::NOTIFY_NEIGHBORS,
+                            )
+                            .await;
+                    }
                     return;
                 }
             }
