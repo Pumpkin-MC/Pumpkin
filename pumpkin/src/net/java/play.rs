@@ -21,6 +21,7 @@ use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
+use crate::plugin::block::sign_change::SignChangeEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
@@ -1744,7 +1745,7 @@ impl JavaClient {
         BlockActionResult::Pass
     }
 
-    pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
+    pub async fn handle_sign_update(&self, player: &Arc<Player>, sign_data: SUpdateSign) {
         let world = player.living_entity.entity.world.load_full();
         let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
             return;
@@ -1762,11 +1763,36 @@ impl JavaClient {
             &sign_entity.back_text
         };
 
-        *text.messages.lock().unwrap() = [
+        let mut lines = vec![
             sign_data.line_1,
             sign_data.line_2,
             sign_data.line_3,
             sign_data.line_4,
+        ];
+        if let Some(server) = world.server.upgrade() {
+            let block = world.get_block(&sign_data.location).await;
+            let event = SignChangeEvent::new(
+                player.clone(),
+                block,
+                sign_data.location,
+                lines,
+                sign_data.is_front_text,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
+            }
+            lines = event.lines;
+        }
+
+        if lines.len() < 4 {
+            lines.resize(4, String::new());
+        }
+        *text.messages.lock().unwrap() = [
+            lines[0].clone(),
+            lines[1].clone(),
+            lines[2].clone(),
+            lines[3].clone(),
         ];
         *sign_entity.currently_editing_player.lock().await = None;
         world.update_block_entity(&block_entity).await;

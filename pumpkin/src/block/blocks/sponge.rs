@@ -4,6 +4,7 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 use crate::block::{BlockBehaviour, BlockFuture, OnNeighborUpdateArgs, PlacedArgs};
+use crate::plugin::block::sponge_absorb::SpongeAbsorbEvent;
 use pumpkin_data::Block;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::particle::Particle;
@@ -67,6 +68,18 @@ impl SpongeBlock {
         if water_blocks.is_empty() {
             false
         } else {
+            if let Some(server) = world.server.upgrade() {
+                let event =
+                    SpongeAbsorbEvent::new(&Block::SPONGE, *position, world.uuid, water_blocks);
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return false;
+                }
+                water_blocks = event.blocks;
+            }
+            if water_blocks.is_empty() {
+                return false;
+            }
             for water_pos in &water_blocks {
                 world
                     .set_block_state(water_pos, 0, BlockFlags::NOTIFY_ALL)
