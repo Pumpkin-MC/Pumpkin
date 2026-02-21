@@ -1277,6 +1277,27 @@ impl EntityBase for LivingEntity {
                 }
             }
 
+            let effective_amount = if let Some(server) = world.server.upgrade() {
+                let event = crate::plugin::entity::entity_damage::EntityDamageEvent::new(
+                    self.entity.entity_uuid,
+                    amount,
+                    damage_type,
+                );
+                let event = server
+                    .plugin_manager
+                    .fire::<crate::plugin::entity::entity_damage::EntityDamageEvent>(event)
+                    .await;
+                if event.cancelled {
+                    return false;
+                }
+                if event.damage <= 0.0 {
+                    return false;
+                }
+                event.damage
+            } else {
+                amount
+            };
+
             // These damage types bypass the hurt cooldown and death protection
             let bypasses_cooldown_protection =
                 damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
@@ -1285,17 +1306,17 @@ impl EntityBase for LivingEntity {
             let play_sound;
             let mut damage_amount =
                 if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
-                    if amount <= last_damage {
+                    if effective_amount <= last_damage {
                         return false;
                     }
                     play_sound = false;
-                    amount - self.last_damage_taken.load()
+                    effective_amount - self.last_damage_taken.load()
                 } else {
                     self.hurt_cooldown.store(20, Relaxed);
                     play_sound = true;
-                    amount
+                    effective_amount
                 };
-            self.last_damage_taken.store(amount);
+            self.last_damage_taken.store(effective_amount);
             damage_amount = damage_amount.max(0.0);
 
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
@@ -1360,6 +1381,16 @@ impl EntityBase for LivingEntity {
                 && (bypasses_cooldown_protection || !self.try_use_death_protector(caller).await)
             {
                 self.on_death(damage_type, source, cause).await;
+                if let Some(server) = world.server.upgrade() {
+                    let event = crate::plugin::entity::entity_death::EntityDeathEvent::new(
+                        self.entity.entity_uuid,
+                        damage_type,
+                    );
+                    server
+                        .plugin_manager
+                        .fire::<crate::plugin::entity::entity_death::EntityDeathEvent>(event)
+                        .await;
+                }
             }
 
             if damage_amount > 0.0 {

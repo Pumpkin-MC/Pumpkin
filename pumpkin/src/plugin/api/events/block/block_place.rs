@@ -24,7 +24,7 @@ pub struct BlockPlaceEvent {
     pub block_placed_against: &'static Block,
 
     /// The position where the block is being placed.
-    pub block_position: BlockPos,
+    pub position: BlockPos,
 
     /// A boolean indicating whether the player can build.
     pub can_build: bool,
@@ -36,14 +36,14 @@ impl BlockPlaceEvent {
         player: Arc<Player>,
         block_placed: &'static Block,
         block_placed_against: &'static Block,
-        block_position: BlockPos,
+        position: BlockPos,
         can_build: bool,
     ) -> Self {
         Self {
             player,
             block_placed,
             block_placed_against,
-            block_position,
+            position,
             can_build,
             cancelled: false,
         }
