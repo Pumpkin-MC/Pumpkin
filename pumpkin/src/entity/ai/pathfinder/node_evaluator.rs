@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::entity::ai::pathfinder::{
@@ -54,33 +55,15 @@ pub struct MobData {
 
 impl MobData {
     #[must_use]
-    pub fn new_zombie(position: Vector3<f64>, on_ground: bool) -> Self {
-        let mut path_type_malus = HashMap::new();
-
-        path_type_malus.insert(PathType::DangerFire, 16.0);
-        path_type_malus.insert(PathType::DamageFire, -1.0);
-        path_type_malus.insert(PathType::Water, 8.0);
-        path_type_malus.insert(PathType::Lava, -1.0);
-        path_type_malus.insert(PathType::DangerOther, 8.0);
-
-        Self {
-            position,
-            width: 0.6,
-            height: 1.95,
-            max_step_height: 1.0,
-            max_fall_distance: 3.0,
-            can_swim: false,
-            can_walk_on_water: false,
-            avoids_fire: true,
-            avoids_water: false,
-            on_ground,
-            path_type_malus,
-        }
-    }
-
-    #[must_use]
-    pub fn new(position: Vector3<f64>, width: f32, height: f32, max_step_height: f32) -> Self {
-        Self {
+    pub fn new(
+        position: Vector3<f64>,
+        width: f32,
+        height: f32,
+        max_step_height: f32,
+        on_ground: bool,
+        entity_type: &EntityType,
+    ) -> Self {
+        let mut mob_data = Self {
             position,
             width,
             height,
@@ -90,8 +73,107 @@ impl MobData {
             can_walk_on_water: false,
             avoids_fire: true,
             avoids_water: false,
-            on_ground: true,
+            on_ground,
             path_type_malus: HashMap::new(),
+        };
+        mob_data.apply_type_penalties(entity_type);
+        mob_data
+    }
+
+    fn apply_type_penalties(&mut self, entity_type: &EntityType) {
+        let id = entity_type.id;
+
+        let is_animal = id == EntityType::SHEEP.id
+            || id == EntityType::COW.id
+            || id == EntityType::PIG.id
+            || id == EntityType::CHICKEN.id
+            || id == EntityType::RABBIT.id
+            || id == EntityType::HORSE.id
+            || id == EntityType::DONKEY.id
+            || id == EntityType::MULE.id
+            || id == EntityType::LLAMA.id
+            || id == EntityType::FOX.id
+            || id == EntityType::WOLF.id
+            || id == EntityType::CAT.id
+            || id == EntityType::OCELOT.id
+            || id == EntityType::PARROT.id
+            || id == EntityType::BEE.id
+            || id == EntityType::GOAT.id
+            || id == EntityType::FROG.id
+            || id == EntityType::SNIFFER.id
+            || id == EntityType::TURTLE.id
+            || id == EntityType::PANDA.id
+            || id == EntityType::CAMEL.id
+            || id == EntityType::ARMADILLO.id;
+
+        if is_animal {
+            self.set_pathfinding_malus(PathType::DangerFire, 16.0);
+            self.set_pathfinding_malus(PathType::DamageFire, -1.0);
+        }
+
+        if id == EntityType::ZOMBIE.id
+            || id == EntityType::HUSK.id
+            || id == EntityType::ZOMBIE_VILLAGER.id
+        {
+            self.set_pathfinding_malus(PathType::DangerFire, 16.0);
+            self.set_pathfinding_malus(PathType::DamageFire, -1.0);
+            self.set_pathfinding_malus(PathType::Water, 8.0);
+            self.set_pathfinding_malus(PathType::Lava, -1.0);
+            self.set_pathfinding_malus(PathType::DangerOther, 8.0);
+        }
+
+        if id == EntityType::DROWNED.id {
+            self.set_pathfinding_malus(PathType::Water, 0.0);
+        }
+
+        if id == EntityType::ENDERMAN.id {
+            self.set_pathfinding_malus(PathType::Water, -1.0);
+        }
+
+        if id == EntityType::CHICKEN.id {
+            self.set_pathfinding_malus(PathType::Water, 0.0);
+        }
+
+        if id == EntityType::SKELETON.id
+            || id == EntityType::STRAY.id
+            || id == EntityType::WITHER_SKELETON.id
+        {
+            self.set_pathfinding_malus(PathType::DangerFire, 16.0);
+            self.set_pathfinding_malus(PathType::DamageFire, -1.0);
+        }
+
+        if id == EntityType::WITHER_SKELETON.id {
+            self.set_pathfinding_malus(PathType::Lava, 8.0);
+        }
+
+        if id == EntityType::CREEPER.id {
+            self.set_pathfinding_malus(PathType::DangerFire, 16.0);
+            self.set_pathfinding_malus(PathType::DamageFire, -1.0);
+        }
+
+        if id == EntityType::BLAZE.id {
+            self.set_pathfinding_malus(PathType::Water, -1.0);
+            self.set_pathfinding_malus(PathType::Lava, 8.0);
+            self.set_pathfinding_malus(PathType::DangerFire, 0.0);
+            self.set_pathfinding_malus(PathType::DamageFire, 0.0);
+        }
+
+        if id == EntityType::VILLAGER.id || id == EntityType::WANDERING_TRADER.id {
+            self.set_pathfinding_malus(PathType::DangerFire, 16.0);
+            self.set_pathfinding_malus(PathType::DamageFire, -1.0);
+        }
+
+        if id == EntityType::TURTLE.id {
+            self.set_pathfinding_malus(PathType::Water, 0.0);
+            self.set_pathfinding_malus(PathType::DoorIronClosed, -1.0);
+            self.set_pathfinding_malus(PathType::DoorWoodClosed, -1.0);
+            self.set_pathfinding_malus(PathType::DoorOpen, -1.0);
+        }
+
+        if id == EntityType::SNIFFER.id {
+            self.set_pathfinding_malus(PathType::Water, -1.0);
+            self.set_pathfinding_malus(PathType::DangerPowderSnow, -1.0);
+            self.set_pathfinding_malus(PathType::DamageCautious, -1.0);
         }
     }
 
@@ -133,7 +215,7 @@ pub struct BaseNodeEvaluator {
     pub nodes: HashMap<i32, Node>,
     pub entity_width: i32,
     pub entity_height: i32,
-    pub entity_depth: i32, // Same as width?
+    pub entity_depth: i32,
     pub can_pass_doors: bool,
     pub can_open_doors: bool,
     pub can_float: bool,
