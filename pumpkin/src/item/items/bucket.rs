@@ -3,6 +3,8 @@ use std::{pin::Pin, sync::Arc};
 use crate::{
     entity::player::Player,
     item::{ItemBehaviour, ItemMetadata},
+    plugin::player::player_bucket_empty::PlayerBucketEmptyEvent,
+    plugin::player::player_bucket_fill::PlayerBucketFillEvent,
 };
 use pumpkin_data::{
     Block,
@@ -18,6 +20,10 @@ use pumpkin_util::{
 use pumpkin_world::{inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags};
 
 use crate::world::World;
+
+fn block_key(block: &Block) -> String {
+    format!("minecraft:{}", block.name)
+}
 
 pub struct EmptyBucketItem;
 pub struct FilledBucketItem;
@@ -94,6 +100,7 @@ fn set_waterlogged(block: &Block, state: u16, waterlogged: bool) -> u16 {
 }
 
 impl ItemBehaviour for EmptyBucketItem {
+    #[expect(clippy::too_many_lines)]
     fn normal_use<'a>(
         &'a self,
         _block: &'a Item,
@@ -187,6 +194,24 @@ impl ItemBehaviour for EmptyBucketItem {
                 &Item::WATER_BUCKET
             };
 
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+            {
+                let position = block_pos.to_f64();
+                let event = PlayerBucketFillEvent::new(
+                    player_arc,
+                    position,
+                    block_key(block),
+                    Some(direction),
+                    format!("minecraft:{}", item.registry_key),
+                    "HAND".to_string(),
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
+                }
+            }
+
             if player.gamemode.load() == GameMode::Creative {
                 //Check if player already has the item in their inventory
                 for i in 0..player.inventory.main_inventory.len() {
@@ -216,6 +241,7 @@ impl ItemBehaviour for EmptyBucketItem {
 }
 
 impl ItemBehaviour for FilledBucketItem {
+    #[expect(clippy::too_many_lines)]
     fn normal_use<'a>(
         &'a self,
         item: &'a Item,
@@ -249,6 +275,32 @@ impl ItemBehaviour for FilledBucketItem {
                 return;
             }
             let (block, state) = world.get_block_and_state_id(&pos).await;
+
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+            {
+                let target_pos = if waterlogged_check(block, state).is_some()
+                    || state == Block::LAVA.default_state.id
+                    || state == Block::WATER.default_state.id
+                {
+                    pos
+                } else {
+                    pos.offset(direction.to_offset())
+                };
+                let target_block = world.get_block(&target_pos).await;
+                let event = PlayerBucketEmptyEvent::new(
+                    player_arc,
+                    target_pos.to_f64(),
+                    block_key(target_block),
+                    Some(direction),
+                    format!("minecraft:{}", item.registry_key),
+                    "HAND".to_string(),
+                );
+                let event = server.plugin_manager.fire(event).await;
+                if event.cancelled {
+                    return;
+                }
+            }
             if waterlogged_check(block, state).is_some() && item.id == Item::WATER_BUCKET.id {
                 let state_id = set_waterlogged(block, state, true);
                 world

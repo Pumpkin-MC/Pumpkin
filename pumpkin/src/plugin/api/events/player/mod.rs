@@ -1,3 +1,6 @@
+pub mod player_bucket_empty;
+pub mod player_bucket_entity;
+pub mod player_bucket_fill;
 pub mod player_change_world;
 pub mod player_chat;
 pub mod player_command_send;

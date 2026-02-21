@@ -21,6 +21,7 @@ use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
+use crate::plugin::player::player_bucket_entity::PlayerBucketEntityEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
@@ -1233,6 +1234,7 @@ impl JavaClient {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_interact(
         &self,
         player: &Arc<Player>,
@@ -1312,6 +1314,31 @@ impl JavaClient {
                         }
                         ActionType::Interact | ActionType::InteractAt => {
                             let held = player.inventory.held_item();
+                            let item_key = {
+                                let item_guard = held.lock().await;
+                                format!("minecraft:{}", item_guard.get_item().registry_key)
+                            };
+                            if let Some(entity) = world.get_entity_by_id(entity_id.0)
+                                && (item_key.ends_with("_bucket")
+                                    || item_key == "minecraft:bucket")
+                            {
+                                let bucket_event = PlayerBucketEntityEvent::new(
+                                    player.clone(),
+                                    entity.get_entity().entity_uuid,
+                                    format!(
+                                        "minecraft:{}",
+                                        entity.get_entity().entity_type.resource_name
+                                    ),
+                                    item_key.clone(),
+                                    String::new(),
+                                    "HAND".to_string(),
+                                );
+                                let bucket_event = server.plugin_manager.fire(bucket_event).await;
+                                if bucket_event.cancelled {
+                                    return;
+                                }
+                            }
+
                             let mut stack = held.lock().await;
                             if !event.target.interact(player, &mut stack).await {
                                 server
