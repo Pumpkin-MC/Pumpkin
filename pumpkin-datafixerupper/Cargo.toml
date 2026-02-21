@@ -1,0 +1,12 @@
+[package]
+name = "pumpkin-datafixerupper"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+dashmap.workspace = true
+
+[lints]
+workspace = true
