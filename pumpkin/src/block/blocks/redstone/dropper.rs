@@ -10,7 +10,7 @@ use crate::entity::item::ItemEntity;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{FacingExt, translation};
+use pumpkin_data::{Block, FacingExt, translation};
 use pumpkin_inventory::generic_container_screen_handler::create_generic_3x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -206,6 +206,23 @@ impl BlockBehaviour for DropperBlock {
                         triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
                         triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
                     );
+                    let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade() {
+                        let block_static = Block::from_id(args.block.id);
+                        let event = crate::plugin::block::block_dispense::BlockDispenseEvent::new(
+                            block_static,
+                            *args.position,
+                            drop_item,
+                            velocity,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled || event.item_stack.is_empty() {
+                            item.item_count = item.item_count.saturating_add(1);
+                            return;
+                        }
+                        (event.item_stack, event.velocity)
+                    } else {
+                        (drop_item, velocity)
+                    };
                     let item_entity = Arc::new(
                         ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await,
                     );
