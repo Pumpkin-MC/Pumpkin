@@ -376,6 +376,39 @@ async fn move_piston(
         return false;
     }
 
+    if let Some(server) = world.server.upgrade() {
+        let block = world.get_block(block_pos).await;
+        let moved_blocks = handler.moved_blocks.clone();
+        let length = moved_blocks.len() as i32;
+        if extend {
+            let event = crate::plugin::block::block_piston_extend::BlockPistonExtendEvent::new(
+                block,
+                *block_pos,
+                dir,
+                length,
+                moved_blocks,
+                world.uuid,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return false;
+            }
+        } else {
+            let event = crate::plugin::block::block_piston_retract::BlockPistonRetractEvent::new(
+                block,
+                *block_pos,
+                dir,
+                length,
+                moved_blocks,
+                world.uuid,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return false;
+            }
+        }
+    }
+
     let mut moved_blocks_map: FxHashMap<BlockPos, &BlockState> = FxHashMap::default();
     let moved_blocks: Vec<BlockPos> = handler.moved_blocks;
 
