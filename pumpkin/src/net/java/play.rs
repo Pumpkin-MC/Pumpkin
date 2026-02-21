@@ -20,6 +20,7 @@ use crate::error::PumpkinError;
 use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
+use crate::plugin::block::block_can_build::BlockCanBuildEvent;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
@@ -2200,6 +2201,39 @@ impl JavaClient {
             .await
         {
             return Ok(false);
+        }
+
+        if let Some(server) = world.server.upgrade() {
+            let can_build_event = BlockCanBuildEvent {
+                player: player.clone(),
+                block_to_build: block,
+                buildable: true,
+                block: clicked_block,
+                block_pos: final_block_pos,
+                cancelled: false,
+            };
+            let can_build_event = server
+                .plugin_manager
+                .fire::<BlockCanBuildEvent>(can_build_event)
+                .await;
+            if can_build_event.cancelled || !can_build_event.buildable {
+                return Ok(false);
+            }
+
+            let event = BlockPlaceEvent {
+                player: player.clone(),
+                block_placed: block,
+                block_placed_against: clicked_block,
+                block_position: final_block_pos,
+                position: final_block_pos,
+                can_build: true,
+                cancelled: false,
+            };
+
+            let event = server.plugin_manager.fire::<BlockPlaceEvent>(event).await;
+            if event.cancelled || !event.can_build {
+                return Ok(false);
+            }
         }
 
         let new_state = server
