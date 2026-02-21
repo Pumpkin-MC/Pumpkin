@@ -4,8 +4,6 @@ use pumpkin_util::Difficulty;
 use wasmtime::component::ResourceTable;
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
-use crate::wasm_host::wit::v0_1_0::pumpkin::plugin::{context::Context, server::Server};
-
 pub trait ServerProvider: Send + Sync {
     fn get_difficulty(&self) -> Difficulty;
 }
@@ -43,18 +41,18 @@ impl PluginHostState {
         }
     }
 
-    pub fn add_server(
+    pub fn add_server<T>(
         &mut self,
         provider: Arc<dyn ServerProvider>,
-    ) -> wasmtime::Result<wasmtime::component::Resource<Server>> {
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(ServerResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
-    pub fn add_context(
+    pub fn add_context<T>(
         &mut self,
         provider: Arc<dyn ContextProvider>,
-    ) -> wasmtime::Result<wasmtime::component::Resource<Context>> {
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(ContextResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
