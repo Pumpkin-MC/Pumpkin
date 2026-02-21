@@ -30,6 +30,7 @@ use crate::{
 
 pub mod barrel;
 pub mod bed;
+pub mod bell;
 pub mod blasting_furnace;
 pub mod chest;
 pub mod chest_like_block_entity;
