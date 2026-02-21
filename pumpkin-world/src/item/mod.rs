@@ -233,7 +233,7 @@ impl ItemStack {
     }
 
     #[must_use]
-    pub const fn get_item(&self) -> &Item {
+    pub const fn get_item(&self) -> &'static Item {
         if self.is_empty() {
             &Item::AIR
         } else {
@@ -328,7 +328,8 @@ impl ItemStack {
 
     #[must_use]
     pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
-        if self.item != other.item || self.patch.len() != other.patch.len() {
+        // Items must match
+        if self.item != other.item {
             return false;
         }
         for (id, data) in &self.patch {
@@ -352,6 +353,7 @@ impl ItemStack {
                 return false;
             }
         }
+
         true
     }
 

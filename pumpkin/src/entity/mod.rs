@@ -61,6 +61,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub mod ai;
+pub mod area_effect_cloud;
 pub mod boss;
 pub mod breath;
 pub mod decoration;

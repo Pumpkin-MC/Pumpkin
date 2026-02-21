@@ -108,6 +108,18 @@ pub fn build() -> TokenStream {
             to: &'static Item,
         }
 
+        impl PotionRecipe {
+            pub fn from(&self) -> &'static Potion { self.from }
+            pub fn ingredient(&self) -> &'static [&'static Item] { self.ingredient }
+            pub fn to(&self) -> &'static Potion { self.to }
+        }
+
+        impl ItemRecipe {
+            pub fn from(&self) -> &'static Item { self.from }
+            pub fn ingredient(&self) -> &'static [&'static Item] { self.ingredient }
+            pub fn to(&self) -> &'static Item { self.to }
+        }
+
         pub const ITEM_RECIPES: [ItemRecipe; #item_len] = [#(#item_recipes_tokens)*];
         pub const POTION_RECIPES: [PotionRecipe; #potion_len] = [#(#potion_recipes_tokens)*];
     }

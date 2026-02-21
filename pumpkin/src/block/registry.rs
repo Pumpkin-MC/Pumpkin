@@ -4,6 +4,7 @@ use crate::block::blocks::banners::BannerBlock;
 use crate::block::blocks::barrel::BarrelBlock;
 use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::bed::BedBlock;
+use crate::block::blocks::brewing_stand::BrewingStandBlock;
 use crate::block::blocks::cake::CakeBlock;
 use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::candle_cakes::CandleCakeBlock;
@@ -180,6 +181,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FenceBlock);
     manager.register(FlowerPotBlock);
     manager.register(FurnaceBlock);
+    manager.register(BrewingStandBlock);
     manager.register(BlastFurnaceBlock);
     manager.register(SmokerBlock);
     manager.register(GlassPaneBlock);
