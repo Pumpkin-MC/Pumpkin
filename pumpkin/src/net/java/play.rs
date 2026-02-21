@@ -20,6 +20,7 @@ use crate::error::PumpkinError;
 use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
+use crate::plugin::block::block_can_build::BlockCanBuildEvent;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
@@ -29,6 +30,7 @@ use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractU
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::{
     BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
 };
@@ -36,6 +38,7 @@ use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, Equippabl
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, translation};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -2200,6 +2203,60 @@ impl JavaClient {
             .await
         {
             return Ok(false);
+        }
+
+        if let Some(server) = world.server.upgrade() {
+            let can_build_event = BlockCanBuildEvent {
+                player: player.clone(),
+                block_to_build: block,
+                buildable: true,
+                block: clicked_block,
+                cancelled: false,
+            };
+            let can_build_event = server
+                .plugin_manager
+                .fire::<BlockCanBuildEvent>(can_build_event)
+                .await;
+            if can_build_event.cancelled || !can_build_event.buildable {
+                return Ok(false);
+            }
+
+            let event = BlockPlaceEvent {
+                player: player.clone(),
+                block_placed: block,
+                block_placed_against: clicked_block,
+                block_position: final_block_pos,
+                can_build: true,
+                cancelled: false,
+            };
+
+            let event = server.plugin_manager.fire::<BlockPlaceEvent>(event).await;
+            if event.cancelled || !event.can_build {
+                return Ok(false);
+            }
+
+            let mut multi_positions = Vec::new();
+            if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_DOORS) {
+                multi_positions.push(final_block_pos);
+                multi_positions.push(final_block_pos.offset(BlockDirection::Up.to_offset()));
+            } else if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
+                let facing = player.living_entity.entity.get_horizontal_facing();
+                multi_positions.push(final_block_pos);
+                multi_positions
+                    .push(final_block_pos.offset(facing.to_block_direction().to_offset()));
+            }
+            if multi_positions.len() > 1 {
+                let multi_event =
+                    crate::plugin::block::block_multi_place::BlockMultiPlaceEvent::new(
+                        player.clone(),
+                        block,
+                        multi_positions,
+                    );
+                let multi_event = server.plugin_manager.fire(multi_event).await;
+                if multi_event.cancelled {
+                    return Ok(false);
+                }
+            }
         }
 
         let new_state = server
