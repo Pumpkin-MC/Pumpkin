@@ -435,6 +435,10 @@ impl EntityBase for ArmorStandEntity {
             true
         })
     }
+
+    fn get_gravity(&self) -> f64 {
+        0.04
+    }
 }
 
 pub enum ArmorStandFlags {
