@@ -84,6 +84,7 @@ use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
+use crate::plugin::player::player_exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
@@ -2496,6 +2497,16 @@ impl Player {
 
     /// Add experience points to the player.
     pub async fn add_experience_points(&self, added_points: i32) {
+        let mut added_points = added_points;
+        if let Some(server) = self.world().server.upgrade() {
+            let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) else {
+                return;
+            };
+            let event = PlayerExpChangeEvent::new(player, added_points);
+            let event = server.plugin_manager.fire(event).await;
+            added_points = event.amount;
+        }
+
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
         let total_exp = experience::points_to_level(current_level) + current_points;
