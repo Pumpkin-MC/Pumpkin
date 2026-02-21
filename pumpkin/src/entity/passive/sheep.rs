@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use pumpkin_data::{
-    entity::EntityType, item::Item, meta_data_type::MetaDataType, tracked_data::TrackedData,
+    entity::EntityType, item::Item, meta_data_type::MetaDataType, tracked_data::TrackedId,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -20,6 +20,11 @@ use crate::entity::{
 };
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
+
+const SHEEP_COLOR_INDEX: TrackedId = TrackedId {
+    latest: 17u8,
+    v1_21_7: 17u8,
+};
 
 pub struct SheepEntity {
     pub mob_entity: MobEntity,
@@ -77,7 +82,7 @@ impl SheepEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_COLOR,
+                SHEEP_COLOR_INDEX,
                 MetaDataType::Byte,
                 byte as i8,
             )])

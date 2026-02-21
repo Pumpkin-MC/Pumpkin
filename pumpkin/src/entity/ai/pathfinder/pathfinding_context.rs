@@ -18,7 +18,7 @@ use std::{collections::HashMap, sync::Arc};
 pub struct PathfindingContext {
     path_type_cache: Option<PathTypeCache>,
     mob_position: Vector3<i32>,
-    world: Arc<World>,
+    pub world: Arc<World>,
     collision_cache: HashMap<Vector3<i32>, bool>,
 }
 
@@ -231,7 +231,7 @@ impl PathfindingContext {
 
         let block_pos = pos.as_blockpos();
         let state = self.world.get_block_state(&block_pos).await;
-        let has_collision = state.is_full_cube();
+        let has_collision = !state.collision_shapes.is_empty();
 
         self.collision_cache.insert(pos, has_collision);
         has_collision
