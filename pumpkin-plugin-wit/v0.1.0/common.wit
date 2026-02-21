@@ -1,5 +1,4 @@
 interface common {
-    // resource callback {
-    //     call: func(data: string);
-    // }
+    /// This is a serialized text component as a postcard byte array
+    type raw-text-component = list<u8>;
 }

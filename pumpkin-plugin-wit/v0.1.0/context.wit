@@ -1,8 +1,9 @@
 interface context {
     use server.{server};
+    use event.{event-priority};
 
     resource context {
-        register-event: func(function-pointer: s32);
+        register-event: func(handler-id: u32, event-priority: event-priority, blocking: bool);
         get-server: func() -> server;
     }
 }

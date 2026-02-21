@@ -1,8 +1,11 @@
-use crate::logging::WitSubscriber;
+use crate::{events::EVENT_HANDLERS, logging::WitSubscriber};
+
+pub mod events;
 
 pub use wit::pumpkin::plugin::context::Context;
 
 pub mod logging;
+pub mod text_component;
 
 mod wit {
     wit_bindgen::generate!({
@@ -46,6 +49,15 @@ impl wit::Guest for Component {
 
     fn on_unload(context: Context) -> Result<(), String> {
         plugin().on_unload(context)
+    }
+
+    fn handle_event(event_id: u32, event: events::Event) -> events::Event {
+        let handlers = EVENT_HANDLERS.lock().unwrap();
+        if let Some(handler) = handlers.get(&event_id) {
+            handler.handle_erased(event)
+        } else {
+            event
+        }
     }
 }
 
