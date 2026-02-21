@@ -148,7 +148,7 @@ async fn handle_packet(
                             .active_plugins()
                             .await
                             .into_iter()
-                            .map(|meta| meta.name.to_string())
+                            .map(|meta| meta.name)
                             .reduce(|acc, name| format!("{acc}, {name}"))
                             .unwrap_or_default();
 
