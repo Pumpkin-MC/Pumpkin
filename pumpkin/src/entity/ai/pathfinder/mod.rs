@@ -47,7 +47,6 @@ pub struct Navigator {
     current_goal: Option<NavigatorGoal>,
     evaluator: WalkNodeEvaluator,
     current_path: Option<Path>,
-    // Stuck detection
     ticks_on_current_node: u32,
     last_node_index: usize,
     total_ticks: u32,
@@ -76,9 +75,6 @@ impl Default for Navigator {
     }
 }
 
-// If I counted correctly this should be equal to the number of iters that vanilla does for
-// a zombie (yes, vanilla does a different number of iterations based on the mob and some
-// other things)
 // TODO: Calculate from mob attributes like in vanilla
 const MAX_ITERS: usize = 560;
 
@@ -161,7 +157,6 @@ impl Navigator {
         start_node.g = 0.0;
         let start_dist = start_node.distance(&target);
         target.update_best(start_dist, &start_node);
-        // Start node uses raw distance (no 1.5x multiplier - that's only for neighbors)
         start_node.h = start_dist;
         start_node.f = start_node.h;
         start_node.walked_dist = 0.0;
@@ -263,7 +258,6 @@ impl Navigator {
     #[allow(clippy::too_many_lines)]
     pub async fn tick(&mut self, entity: &LivingEntity) {
         let Some(goal) = self.current_goal.take() else {
-            // Idle: stop the mob
             entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
             return;
         };
@@ -331,6 +325,7 @@ impl Navigator {
             }
 
             let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+            let current_pos = entity.entity.pos.load();
 
             if let Some(next_block) = path.get_next_node_pos() {
                 let target_pos = Vector3::new(
@@ -339,39 +334,61 @@ impl Navigator {
                     f64::from(next_block.z) + 0.5,
                 );
 
-                let current_pos = entity.entity.pos.load();
                 let dx = target_pos.x - current_pos.x;
                 let dy = target_pos.y - current_pos.y;
                 let dz = target_pos.z - current_pos.z;
+                let horizontal_dist = (dx * dx + dz * dz).sqrt();
 
-                let horizontal_dist_sq = dx * dx + dz * dz;
-                let horizontal_dist = horizontal_dist_sq.sqrt();
-
-                // Skip node if we're above it on the same XZ column and airborne (falling toward it)
-                if !on_ground && horizontal_dist < NODE_REACH_XZ && dy < -0.5 {
+                if !on_ground && current_pos.y > target_pos.y {
+                    let mob_bx = current_pos.x.floor() as i32;
+                    let mob_bz = current_pos.z.floor() as i32;
+                    if mob_bx == next_block.x && mob_bz == next_block.z {
+                        path.advance();
+                    }
+                } else if on_ground && horizontal_dist < 1.0 && dy >= -1.5 && dy < 0.0 {
                     path.advance();
-                    self.current_goal = Some(goal);
-                    return;
-                }
-
-                if horizontal_dist < NODE_REACH_XZ && dy.abs() < NODE_REACH_Y {
+                } else if horizontal_dist < NODE_REACH_XZ && dy.abs() < NODE_REACH_Y {
                     path.advance();
-                    self.current_goal = Some(goal);
-                    return;
-                }
+                } else {
+                    let cur_dist_sq = dx * dx + dy * dy + dz * dz;
+                    if cur_dist_sq < 4.0 {
+                        let next_idx = path.get_next_node_index() + 1;
+                        if let Some(nn_pos) = path.get_node_pos(next_idx) {
+                            let nn_dx = f64::from(nn_pos.x) + 0.5 - current_pos.x;
+                            let nn_dy = f64::from(nn_pos.y) - current_pos.y;
+                            let nn_dz = f64::from(nn_pos.z) + 0.5 - current_pos.z;
+                            let nn_dist_sq =
+                                nn_dx * nn_dx + nn_dy * nn_dy + nn_dz * nn_dz;
 
-                // Don't try to path-follow while airborne — let gravity handle it
-                if !on_ground {
-                    entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                    self.current_goal = Some(goal);
-                    return;
+                            if nn_dist_sq < cur_dist_sq || cur_dist_sq < 0.5 {
+                                let dot = dx * nn_dx + dy * nn_dy + dz * nn_dz;
+                                if dot < 0.0 {
+                                    path.advance();
+                                }
+                            }
+                        }
+                    }
                 }
+            }
 
-                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
+            if let Some(next_block) = path.get_next_node_pos() {
+                let target_pos = Vector3::new(
+                    f64::from(next_block.x) + 0.5,
+                    f64::from(next_block.y),
+                    f64::from(next_block.z) + 0.5,
+                );
+
+                let dx = target_pos.x - current_pos.x;
+                let dy = target_pos.y - current_pos.y;
+                let dz = target_pos.z - current_pos.z;
+                let horizontal_dist = (dx * dx + dz * dz).sqrt();
+
+                let desired_yaw =
+                    wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
                 let current_yaw = entity.entity.yaw.load();
                 let yaw_diff = wrap_degrees(desired_yaw - current_yaw);
-                let target_yaw =
-                    current_yaw + yaw_diff.clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
+                let target_yaw = current_yaw
+                    + yaw_diff.clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
                 entity.entity.yaw.store(target_yaw);
                 entity.entity.head_yaw.store(target_yaw);
                 entity.entity.body_yaw.store(target_yaw);
@@ -383,16 +400,10 @@ impl Navigator {
                     .movement_input
                     .store(Vector3::new(0.0, 0.0, mob_speed));
 
-                // Jump when the next node is above step height and we're close enough horizontally
-                if dy > MOB_STEP_HEIGHT && horizontal_dist < 2.0 {
-                    entity
-                        .jumping
-                        .store(true, std::sync::atomic::Ordering::SeqCst);
-                } else {
-                    entity
-                        .jumping
-                        .store(false, std::sync::atomic::Ordering::SeqCst);
-                }
+                let should_jump = on_ground && dy > MOB_STEP_HEIGHT && horizontal_dist < 2.0;
+                entity
+                    .jumping
+                    .store(should_jump, std::sync::atomic::Ordering::SeqCst);
             } else {
                 self.current_path = None;
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
