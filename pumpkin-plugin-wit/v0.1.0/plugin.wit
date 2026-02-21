@@ -2,6 +2,7 @@ package pumpkin:plugin;
 
 world plugin {
     use context.{context};
+    use event.{event};
 
     // This is what the host should provide to the plugin
     import logging;
@@ -14,4 +15,5 @@ world plugin {
     export on-unload: func(context: context) -> result<_, string>;
     export metadata;
     export common;
+    export handle-event: func(event-id: u32, event: event) -> event;
 }
