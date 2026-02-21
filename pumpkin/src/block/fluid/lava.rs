@@ -43,10 +43,22 @@ impl FlowingLava {
             let neighbor_pos = block_pos.offset(dir.to_offset());
             if world.get_block(&neighbor_pos).await == &Block::WATER {
                 let block = if is_still {
-                    Block::OBSIDIAN
+                    &Block::OBSIDIAN
                 } else {
-                    Block::COBBLESTONE
+                    &Block::COBBLESTONE
                 };
+                if let Some(server) = world.server.upgrade() {
+                    let event = crate::plugin::block::block_form::BlockFormEvent::new(
+                        block,
+                        &Block::LAVA,
+                        *block_pos,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return false;
+                    }
+                }
                 world
                     .set_block_state(
                         block_pos,
@@ -60,6 +72,18 @@ impl FlowingLava {
                 return false;
             }
             if below_is_soul_soil && world.get_block(&neighbor_pos).await == &Block::BLUE_ICE {
+                if let Some(server) = world.server.upgrade() {
+                    let event = crate::plugin::block::block_form::BlockFormEvent::new(
+                        &Block::BASALT,
+                        &Block::LAVA,
+                        *block_pos,
+                        world.uuid,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return false;
+                    }
+                }
                 world
                     .set_block_state(
                         block_pos,
