@@ -12,7 +12,7 @@ use std::pin::Pin;
 /// Represents an argument type that parses a particular type `Item`.
 pub trait ArgumentType: Send + Sync {
     /// The data type that this argument type parses.
-    type Item: Send + Sync + Clone + 'static;
+    type Item: Send + Sync;
 
     /// Parses a `T` by using a [`StringReader`]. Call this only if you have no source.
     ///

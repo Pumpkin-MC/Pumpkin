@@ -125,16 +125,45 @@ impl CommandContext<'_> {
         current_child
     }
 
-    /// Gets a particular argument with type `T`.
-    /// If it fails, an error is returned.
-    pub fn get_argument<T: Clone + 'static>(&self, name: &str) -> Result<T, CommandSyntaxError> {
+    /// Returns a reference to a particular argument with type `T`.
+    /// If it fails, an error with the appropriate message is returned.
+    ///
+    /// Ideally should be used with the `?` operator.
+    ///
+    /// # Example
+    /// A simple example that takes two arguments specified from the node
+    /// and returns their sum as the status output of the `Executor`:
+    /// ```
+    /// use pumpkin::command::node::dispatcher::Executor;
+    ///
+    /// struct Executor;
+    /// impl CommandExecutor for Executor {
+    ///     fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+    ///         Box::pin(async move {
+    ///             // The `get_argument` method returns a `Result<&i32, CommandSyntaxError>`.
+    ///             // We apply the `?` operator first, propagating the `CommandSyntaxError` if contained.
+    ///             // Finally, we dereference the `&i32`, as `i32` implements Copy.
+    ///             let operand1: i32 = *context.get_argument("operand1")?;
+    ///             let operand2: i32 = *context.get_argument("operand2")?;
+    ///             Ok(operand1 + operand2)
+    ///         })
+    ///     }
+    /// }
+    /// ```
+    pub fn get_argument<T: 'static>(&self, name: &str) -> Result<&T, CommandSyntaxError> {
+        // The errors below should never happen due to user input.
+        // If an error below this comment is returned, that means the command was
+        // improperly defined.
+        //
+        // Still, we provide helpful errors instead of panicking.
+
         let arg = self.arguments.get(name).ok_or_else(|| {
             DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(format!(
                 "Could not find argument with name '{name}'"
             )))
         })?;
         let dyn_ref = &*arg.result;
-        dyn_ref.downcast_ref::<T>().cloned().ok_or_else(|| {
+        dyn_ref.downcast_ref::<T>().ok_or_else(|| {
             DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(format!(
                 "Could not downcast argument '{name}'"
             )))
@@ -544,7 +573,7 @@ mod test {
         let builder = builder(&dispatcher);
 
         let context = builder.build("6789");
-        assert_eq!(context.get_argument::<i32>("foo")?, 6789);
+        assert_eq!(context.get_argument::<i32>("foo")?, &6789);
 
         Ok(())
     }

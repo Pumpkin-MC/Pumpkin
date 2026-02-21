@@ -336,8 +336,8 @@ mod test {
         impl CommandExecutor for Executor {
             fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
                 Box::pin(async move {
-                    let operand1: i32 = context.get_argument("operand1")?;
-                    let operand2: i32 = context.get_argument("operand2")?;
+                    let operand1: i32 = *context.get_argument("operand1")?;
+                    let operand2: i32 = *context.get_argument("operand2")?;
                     Ok(match self.0 {
                         Operation::Add => operand1 + operand2,
                         Operation::Subtract => operand1 - operand2,
@@ -420,7 +420,7 @@ mod test {
         struct Executor;
         impl CommandExecutor for Executor {
             fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-                Box::pin(async move { context.get_argument("result") })
+                Box::pin(async move { Ok(*context.get_argument("result")?) })
             }
         }
 
