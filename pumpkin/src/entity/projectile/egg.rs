@@ -74,7 +74,7 @@ impl EntityBase for EggEntity {
             entity
                 .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_ITEM,
-                    MetaDataType::ItemStack,
+                    MetaDataType::ITEM_STACK,
                     &ItemStackSerializer::from(stack.clone()),
                 )])
                 .await;

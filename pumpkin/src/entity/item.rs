@@ -394,7 +394,7 @@ impl EntityBase for ItemEntity {
             self.entity
                 .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_STACK,
-                    MetaDataType::ItemStack,
+                    MetaDataType::ITEM_STACK,
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )])
                 .await;

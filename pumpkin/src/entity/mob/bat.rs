@@ -59,7 +59,7 @@ impl BatEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_BAT_FLAGS,
-                MetaDataType::Byte,
+                MetaDataType::BYTE,
                 flags,
             )])
             .await;

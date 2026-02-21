@@ -785,34 +785,39 @@ impl JavaClient {
         }
         player.update_last_action_time();
 
-        if let Ok(action) = Action::try_from(command.action.0) {
-            let entity = &player.living_entity.entity;
-            match action {
-                Action::StartSprinting => {
-                    if !entity.sprinting.load(Ordering::Relaxed) {
-                        entity.set_sprinting(true).await;
-                    }
+        let entity = &player.living_entity.entity;
+        match command.action {
+            Action::StartSprinting => {
+                if !entity.sprinting.load(Ordering::Relaxed) {
+                    entity.set_sprinting(true).await;
                 }
-                Action::StopSprinting => {
-                    if entity.sprinting.load(Ordering::Relaxed) {
-                        entity.set_sprinting(false).await;
-                    }
-                }
-                Action::LeaveBed => player.wake_up().await,
-
-                Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
-                    debug!("todo");
-                }
-                Action::StartFlyingElytra => {
-                    let fall_flying = entity.check_fall_flying();
-                    if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
-                        entity.set_fall_flying(fall_flying).await;
-                    }
-                } // TODO
             }
-        } else {
-            self.kick(TextComponent::text("Invalid player command"))
+            Action::StopSprinting => {
+                if entity.sprinting.load(Ordering::Relaxed) {
+                    entity.set_sprinting(false).await;
+                }
+            }
+            Action::LeaveBed => player.wake_up().await,
+
+            Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
+                debug!("todo");
+            }
+            Action::StartFlyingElytra => {
+                let fall_flying = entity.check_fall_flying();
+                if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
+                    entity.set_fall_flying(fall_flying).await;
+                }
+            }
+            // <= 1.21.5
+            Action::StartSneaking | Action::StopSneaking => {
+                self.handle_player_input(
+                    player,
+                    SPlayerInput {
+                        input: SPlayerInput::SNEAK,
+                    },
+                )
                 .await;
+            }
         }
     }
 

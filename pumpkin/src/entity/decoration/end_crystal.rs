@@ -20,7 +20,7 @@ impl EndCrystalEntity {
         self.entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_SHOW_BOTTOM,
-                MetaDataType::Boolean,
+                MetaDataType::BOOLEAN,
                 show_bottom,
             )])
             .await;

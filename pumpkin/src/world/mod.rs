@@ -1758,7 +1758,7 @@ impl World {
                 {
                     let meta = Metadata::new(
                         TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
-                        MetaDataType::Byte,
+                        MetaDataType::BYTE,
                         config.skin_parts,
                     );
                     meta.write(&mut buf, &client.version.load()).unwrap();

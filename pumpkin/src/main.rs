@@ -5,7 +5,7 @@
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
 
-use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use std::{
     io::{self},
     sync::{Arc, LazyLock, OnceLock},
@@ -78,7 +78,7 @@ async fn main() {
             TextComponent::text(CARGO_PKG_VERSION.to_string())
                 .color_named(NamedColor::Green)
                 .to_pretty_console(),
-            TextComponent::text(CURRENT_MC_PROTOCOL.to_string())
+            TextComponent::text(CURRENT_MC_VERSION.protocol_version().to_string())
                 .color_named(NamedColor::DarkBlue)
                 .to_pretty_console()
         ))

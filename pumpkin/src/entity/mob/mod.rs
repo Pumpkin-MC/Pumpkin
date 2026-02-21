@@ -102,7 +102,7 @@ impl MobEntity {
                 .entity
                 .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_MOB_FLAGS,
-                    MetaDataType::Byte,
+                    MetaDataType::BYTE,
                     new_b,
                 )])
                 .await;
