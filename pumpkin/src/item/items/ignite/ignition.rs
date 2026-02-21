@@ -16,6 +16,7 @@ impl Ignition {
         location: BlockPos,
         face: BlockDirection,
         block: &Block,
+        cause: &str,
     ) -> bool
     where
         F: FnOnce(Arc<World>, BlockPos, u16) -> Fut,
@@ -32,6 +33,30 @@ impl Ignition {
         let state_id = world.get_block_state_id(&location).await;
 
         if let Some(new_state_id) = can_be_lit(block, state_id) {
+            if let Some(server) = world.server.upgrade() {
+                let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) else {
+                    return false;
+                };
+                // SAFETY: block references come from global block registry tables.
+                let igniting_block: &'static Block =
+                    unsafe { &*std::ptr::from_ref::<Block>(block) };
+                let event = crate::plugin::block::block_ignite::BlockIgniteEvent {
+                    player: player_arc,
+                    block: igniting_block,
+                    igniting_block,
+                    block_pos: location,
+                    world_uuid: world.uuid,
+                    cause: cause.to_string(),
+                    cancelled: false,
+                };
+                let event = server
+                    .plugin_manager
+                    .fire::<crate::plugin::block::block_ignite::BlockIgniteEvent>(event)
+                    .await;
+                if event.cancelled {
+                    return false;
+                }
+            }
             ignite_logic(world.clone(), location, new_state_id).await;
             return true;
         }
@@ -40,6 +65,33 @@ impl Ignition {
             .get_state_for_position(&world, &fire_block, &pos)
             .await;
         if FireBlockBase::can_place_at(&world, &pos).await {
+            if let Some(server) = world.server.upgrade() {
+                let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) else {
+                    return false;
+                };
+                // SAFETY: block references come from global block registry tables.
+                let igniting_block: &'static Block =
+                    unsafe { &*std::ptr::from_ref::<Block>(block) };
+                // SAFETY: block references come from global block registry tables.
+                let fire_block_ref: &'static Block =
+                    unsafe { &*std::ptr::from_ref::<Block>(&fire_block) };
+                let event = crate::plugin::block::block_ignite::BlockIgniteEvent {
+                    player: player_arc,
+                    block: fire_block_ref,
+                    igniting_block,
+                    block_pos: pos,
+                    world_uuid: world.uuid,
+                    cause: cause.to_string(),
+                    cancelled: false,
+                };
+                let event = server
+                    .plugin_manager
+                    .fire::<crate::plugin::block::block_ignite::BlockIgniteEvent>(event)
+                    .await;
+                if event.cancelled {
+                    return false;
+                }
+            }
             ignite_logic(world.clone(), pos, state_id).await;
             return true;
         }
