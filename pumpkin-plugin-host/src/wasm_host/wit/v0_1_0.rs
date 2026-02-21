@@ -3,7 +3,11 @@ use wasmtime::component::{Component, HasData, Linker, bindgen};
 use wasmtime::{Engine, Store};
 
 use crate::wasm_host::state::{ContextResource, ServerResource};
-use crate::wasm_host::wit::v0_1_0::pumpkin::plugin::{player, server::{Difficulty, Server}};
+use crate::wasm_host::wit::v0_1_0::pumpkin::plugin::context::EventPriority;
+use crate::wasm_host::wit::v0_1_0::pumpkin::plugin::{
+    player,
+    server::{Difficulty, Server},
+};
 use crate::{
     metadata::PluginMetadata,
     wasm_host::{PluginInstance, WasmPlugin, logging::log_tracing, state::PluginHostState},
@@ -66,7 +70,6 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     }
 }
 
-
 impl pumpkin::plugin::context::HostContext for PluginHostState {
     async fn drop(&mut self, rep: wasmtime::component::Resource<Context>) -> wasmtime::Result<()> {
         let _ = self
@@ -93,7 +96,9 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
     async fn register_event(
         &mut self,
         _context: wasmtime::component::Resource<Context>,
-        _function_pointer: i32,
+        handler_id: u32,
+        event_priority: EventPriority,
+        blocking: bool,
     ) {
         todo!()
     }
@@ -108,19 +113,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         todo!()
     }
 
-    async fn get_id(&mut self, player: wasmtime::component::Resource<player::Player>) -> String { todo!() }
-}
-
-impl pumpkin::plugin::common::HostTextComponent for PluginHostState {
-    async fn drop(
-        &mut self,
-        _rep: wasmtime::component::Resource<pumpkin::plugin::common::TextComponent>,
-    ) -> wasmtime::Result<()> {
-        // TODO: implement
+    async fn get_id(&mut self, player: wasmtime::component::Resource<player::Player>) -> String {
         todo!()
     }
 }
-
 
 impl pumpkin::plugin::player::Host for PluginHostState {}
 impl pumpkin::plugin::common::Host for PluginHostState {}
