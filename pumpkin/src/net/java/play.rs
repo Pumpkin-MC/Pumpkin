@@ -794,7 +794,7 @@ impl JavaClient {
                 Action::StartSprinting => {
                     if !entity.sprinting.load(Ordering::Relaxed) {
                         if let Some(server) = player.world().server.upgrade() {
-                            let event = crate::plugin::player::player_toggle_sprint::PlayerToggleSprintEvent::new(
+                            let event = crate::plugin::player::toggle_sprint::PlayerToggleSprintEvent::new(
                                 player.clone(),
                                 true,
                             );
@@ -809,7 +809,7 @@ impl JavaClient {
                 Action::StopSprinting => {
                     if entity.sprinting.load(Ordering::Relaxed) {
                         if let Some(server) = player.world().server.upgrade() {
-                            let event = crate::plugin::player::player_toggle_sprint::PlayerToggleSprintEvent::new(
+                            let event = crate::plugin::player::toggle_sprint::PlayerToggleSprintEvent::new(
                                 player.clone(),
                                 false,
                             );
@@ -843,7 +843,7 @@ impl JavaClient {
         let sneak = input.input & SPlayerInput::SNEAK != 0;
         if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
             if let Some(server) = player.world().server.upgrade() {
-                let event = crate::plugin::player::player_toggle_sneak::PlayerToggleSneakEvent::new(
+                let event = crate::plugin::player::toggle_sneak::PlayerToggleSneakEvent::new(
                     player.clone(),
                     sneak,
                 );
@@ -1548,7 +1548,7 @@ impl JavaClient {
                     let main_hand = player.inventory.held_item().lock().await.clone();
                     let off_hand = player.inventory.off_hand_item().await.lock().await.clone();
                     if let Some(server) = player.world().server.upgrade() {
-                        let event = crate::plugin::player::player_swap_hand_items::PlayerSwapHandItemsEvent::new(
+                        let event = crate::plugin::player::swap_hand_items::PlayerSwapHandItemsEvent::new(
                             player.clone(),
                             off_hand.clone(),
                             main_hand.clone(),
@@ -1637,7 +1637,7 @@ impl JavaClient {
             && let Some(server) = player.world().server.upgrade()
             && let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
         {
-            let event = crate::plugin::player::player_toggle_flight::PlayerToggleFlightEvent::new(
+            let event = crate::plugin::player::toggle_flight::PlayerToggleFlightEvent::new(
                 player_arc, flying,
             );
             let event = server.plugin_manager.fire(event).await;

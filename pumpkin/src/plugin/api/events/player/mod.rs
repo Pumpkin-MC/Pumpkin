@@ -10,11 +10,11 @@ pub mod player_join;
 pub mod player_leave;
 pub mod player_login;
 pub mod player_move;
-pub mod player_swap_hand_items;
+pub mod swap_hand_items;
 pub mod player_teleport;
-pub mod player_toggle_flight;
-pub mod player_toggle_sneak;
-pub mod player_toggle_sprint;
+pub mod toggle_flight;
+pub mod toggle_sneak;
+pub mod toggle_sprint;
 
 use std::sync::Arc;
 
