@@ -282,7 +282,7 @@ async fn bone_meal(
         && let Some(server) = world.server.upgrade()
     {
         let block = world.get_block(position).await;
-        let event = crate::plugin::block::block_fertilize::BlockFertilizeEvent::new(
+        let event = crate::plugin::block::fertilize::BlockFertilizeEvent::new(
             player, block, *position, potential,
         );
         let event = server.plugin_manager.fire(event).await;
