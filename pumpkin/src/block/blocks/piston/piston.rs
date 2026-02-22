@@ -381,7 +381,7 @@ async fn move_piston(
         let moved_blocks = handler.moved_blocks.clone();
         let length = moved_blocks.len() as i32;
         if extend {
-            let event = crate::plugin::block::block_piston_extend::BlockPistonExtendEvent::new(
+            let event = crate::plugin::block::piston_extend::BlockPistonExtendEvent::new(
                 block,
                 *block_pos,
                 dir,
@@ -394,7 +394,7 @@ async fn move_piston(
                 return false;
             }
         } else {
-            let event = crate::plugin::block::block_piston_retract::BlockPistonRetractEvent::new(
+            let event = crate::plugin::block::piston_retract::BlockPistonRetractEvent::new(
                 block,
                 *block_pos,
                 dir,

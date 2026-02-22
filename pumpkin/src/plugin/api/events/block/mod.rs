@@ -1,8 +1,8 @@
 pub mod block_break;
 pub mod block_burn;
 pub mod block_can_build;
-pub mod block_piston_extend;
-pub mod block_piston_retract;
+pub mod piston_extend;
+pub mod piston_retract;
 pub mod block_place;
 
 use pumpkin_data::Block;
