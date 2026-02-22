@@ -1,4 +1,5 @@
 use crate::HasValue;
+use crate::coders::{Decoder, Encoder};
 use crate::data_result::DataResult;
 use crate::dynamic_ops::DynamicOps;
 use crate::key_compressor::KeyCompressor;
@@ -412,5 +413,62 @@ pub(crate) const fn flat_map<B, D: MapDecoder>(
     FlatMappedMapDecoderImpl {
         decoder,
         function: f,
+    }
+}
+
+/// An [`Encoder`] implementation of a [`MapEncoder`].
+pub struct MapEncoderEncoder<M: MapEncoder + 'static> {
+    map_encoder: &'static M,
+}
+
+impl<M: MapEncoder> HasValue for MapEncoderEncoder<M> {
+    type Value = M::Value;
+}
+
+impl<M: MapEncoder> Encoder for MapEncoderEncoder<M> {
+    fn encode<T: Display + PartialEq + Clone>(
+        &self,
+        input: &Self::Value,
+        ops: &'static impl DynamicOps<Value = T>,
+        prefix: T,
+    ) -> DataResult<T> {
+        self.map_encoder
+            .encode(input, ops, self.map_encoder.builder(ops))
+            .build(prefix)
+    }
+}
+
+/// Creates a new [`MapEncoderEncoder`] with the provided reference to a [`MapEncoder`].
+pub const fn new_map_encoder_encoder<M: MapEncoder>(
+    map_encoder: &'static M,
+) -> MapEncoderEncoder<M> {
+    MapEncoderEncoder { map_encoder }
+}
+
+/// Creates a new [`MapDecoderDecoder`] with the provided reference to a [`MapDecoder`].
+pub const fn new_map_decoder_decoder<M: MapDecoder>(
+    map_decoder: &'static M,
+) -> MapDecoderDecoder<M> {
+    MapDecoderDecoder { map_decoder }
+}
+
+/// A [`Decoder`] implementation of a [`MapDecoder`].
+pub struct MapDecoderDecoder<M: MapDecoder + 'static> {
+    map_decoder: &'static M,
+}
+
+impl<M: MapDecoder> HasValue for MapDecoderDecoder<M> {
+    type Value = M::Value;
+}
+
+impl<M: MapDecoder> Decoder for MapDecoderDecoder<M> {
+    fn decode<T: Display + PartialEq + Clone>(
+        &self,
+        input: T,
+        ops: &'static impl DynamicOps<Value = T>,
+    ) -> DataResult<(Self::Value, T)> {
+        self.map_decoder
+            .compressed_decode(input.clone(), ops)
+            .map(|r| (r, input))
     }
 }

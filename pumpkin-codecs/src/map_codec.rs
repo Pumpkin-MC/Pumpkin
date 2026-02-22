@@ -14,6 +14,8 @@ use crate::struct_builder::StructBuilder;
 use crate::struct_codecs::Field;
 use std::fmt::Display;
 use std::sync::Arc;
+use crate::codecs::map_codec::MapCodecCodec;
+use crate::map_codecs::key_dispatch::{new_key_dispatch_map_codec, KeyDispatchMapCodec, KeyDispatchable};
 
 /// A type of *codec* which encodes/decodes fields of a map.
 ///
@@ -37,6 +39,9 @@ use std::sync::Arc;
 /// - [`optional_field`] and [`lenient_optional_field`]: For optional fields encoding/decoding an [`Option`] type.
 /// - [`optional_field_with_default`] and [`lenient_optional_field_with_default`]:
 ///   For optional fields which have a default value for when no value is found while decoding.
+///
+/// ## Dispatch Map Codecs
+/// Similar to
 ///
 /// # Transformers
 /// A map codec of a type `B` can be implemented by *transforming* another codec of type `A` to work with type `B`,
@@ -238,4 +243,20 @@ pub const fn validate<C: MapCodec>(
     validator: fn(&C::Value) -> Result<(), String>,
 ) -> ValidatedMapCodec<C> {
     new_validated_map_codec(codec, validator)
+}
+
+pub type KeyDispatchCodec<T, C> = MapCodecCodec<KeyDispatchMapCodec<T, C>>;
+
+/// Creates a [`Codec`] for a type implementing [`KeyDispatchable`] with the provided differentiator key.
+///
+/// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key.
+pub const fn dispatch<T: KeyDispatchable, C: MapCodec<Value = T::Key>>(codec: C) -> KeyDispatchCodec<T, C> {
+    MapCodecCodec::Owned(dispatch_map(codec))
+}
+
+/// Creates a [`MapCodec`] for a type implementing [`KeyDispatchable`] with the provided differentiator key.
+///
+/// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key.
+pub const fn dispatch_map<T: KeyDispatchable, C: MapCodec<Value = T::Key>>(codec: C) -> KeyDispatchMapCodec<T, C> {
+    new_key_dispatch_map_codec(codec)
 }

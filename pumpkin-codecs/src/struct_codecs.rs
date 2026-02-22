@@ -109,14 +109,12 @@ macro_rules! impl_struct_map_codec {
             field_1: Field<T, C1>,
             $($field: Field<T, $codec_type>,)*
             f: fn(C1::Value $(, $codec_type::Value)*) -> T,
-        ) -> $alias<T, C1 $(, $codec_type)*> {
-            MapCodecCodec::Owned(
-                $name {
-                    field_1,
-                    $( $field, )*
-                    apply_function: f
-                }
-            )
+        ) -> $name<T, C1 $(, $codec_type)*> {
+            $name {
+                field_1,
+                $( $field, )*
+                apply_function: f
+            }
         }
     };
 
@@ -130,14 +128,12 @@ macro_rules! impl_struct_map_codec {
             field_1: Field<T, C1>,
             $($field: Field<T, $codec_type>,)*
             f: fn(C1::Value $(, $codec_type::Value)*) -> T,
-        ) -> $alias<T, C1 $(, $codec_type)*> {
-            MapCodecCodec::Owned(
-                $name {
-                    field_1,
-                    $( $field, )*
-                    apply_function: f
-                }
-            )
+        ) -> $name<T, C1 $(, $codec_type)*> {
+            $name {
+                field_1,
+                $( $field, )*
+                apply_function: f
+            }
         }
     };
 }

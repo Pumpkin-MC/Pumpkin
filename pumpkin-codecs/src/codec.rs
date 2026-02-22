@@ -16,7 +16,7 @@ use crate::coders::{
 use crate::data_result::DataResult;
 use crate::dynamic_ops::DynamicOps;
 use crate::keyable::Keyable;
-use crate::map_codec::ComposedMapCodec;
+use crate::map_codec::{ComposedMapCodec, KeyDispatchCodec};
 use crate::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
 use crate::map_codecs::optional_field::{
     DefaultValueProviderMapCodec, OptionalFieldMapCodec, new_default_value_provider_map_codec,
@@ -25,6 +25,7 @@ use crate::map_codecs::optional_field::{
 use crate::map_codecs::simple::{SimpleMapCodec, new_simple_map_codec};
 use std::fmt::Display;
 use std::hash::Hash;
+use crate::map_codecs::key_dispatch::{KeyDispatchMapCodec, KeyDispatchable};
 
 /// A type of *codec* describing the way to **encode from and decode to** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
 ///
@@ -85,6 +86,10 @@ use std::hash::Hash;
 /// ## Unbounded Maps
 /// Use the [`unbounded_map`] function to create a codec encoding/decoding a `HashMap` of any arbitrary key.
 /// **Unbounded map codecs only support keys that can encode from/decode to strings.**
+///
+/// ## Dispatch
+/// This is usually for enum types (or any type with variants that may each store different values.)
+/// Use [`dispatch`] or [`dispatch_with_key`] to create a codec structure for a type that has variants of different contents.
 ///
 /// # Transformers
 /// A map codec of a type `B` can be implemented by *transforming* another codec of type `A` to work with type `B`.
@@ -378,9 +383,9 @@ where
 
 // Struct codec functions
 
-/// Creates a structure [`Codec`]. This macro supports up to *16* [`Field`]s.
+/// Creates a structure [`MapCodec`]. This macro supports up to *16* [`Field`]s.
 ///
-/// Struct codec types are usually pretty large. To combat this, use `pub type ... = ...` to
+/// Struct map codec types are usually pretty large. To combat this, use `pub type ... = ...` to
 /// only store the complicated type once and never use it again. Rust can easily infer the type
 /// for you after you define your codec.
 ///
@@ -390,7 +395,7 @@ where
 /// use pumpkin_codecs::map_codec::*;
 /// use pumpkin_codecs::codecs::primitive::*;
 /// use pumpkin_codecs::struct_codecs::*;
-/// use pumpkin_codecs::struct_codec;
+/// use pumpkin_codecs::struct_map_codec;
 ///
 /// // An example struct to make a codec for.
 /// pub struct Person {
@@ -398,18 +403,20 @@ where
 ///     age: u32
 /// }
 ///
-/// // Type to avoid writing this struct codec's type again.
-/// pub type PersonCodec = StructCodec2<Person, FieldMapCodec<StringCodec>, FieldMapCodec<UintCodec>>;
+/// // Type to avoid writing this struct map codec's type again.
+/// pub type PersonMapCodec = StructMapCodec2<Person, FieldMapCodec<StringCodec>, FieldMapCodec<UintCodec>>;
 ///
 /// // The actual codec.
-/// pub static PERSON_CODEC: PersonCodec = struct_codec!(
+/// pub static PERSON_CODEC: PersonMapCodec = struct_map_codec!(
 ///      for_getter(field(&STRING_CODEC, "name"), |person: &Person| &person.name),
 ///      for_getter(field(&UINT_CODEC, "age"), |person: &Person| &person.age),
 ///      |name, age| Person {name, age}
 ///  );
 /// ```
+///
+/// [`Field`]: super::struct_codecs::Field
 #[macro_export]
-macro_rules! struct_codec {
+macro_rules! struct_map_codec {
     ($f1:expr, $f:expr $(,)?) => {
         $crate::struct_codecs::struct_1($f1, $f)
     };
@@ -471,6 +478,84 @@ macro_rules! struct_codec {
             $f,
         )
     };
+}
+
+/// Creates a structure [`Codec`]. This macro supports up to *16* [`Field`]s.
+///
+/// Struct codec types are usually pretty large. To combat this, use `pub type ... = ...` to
+/// only store the complicated type once and never use it again. Rust can easily infer the type
+/// for you after you define your codec.
+///
+/// # Example
+/// ```rust
+/// use pumpkin_codecs::codec::*;
+/// use pumpkin_codecs::map_codec::*;
+/// use pumpkin_codecs::codecs::primitive::*;
+/// use pumpkin_codecs::struct_codecs::*;
+/// use pumpkin_codecs::struct_codec;
+///
+/// // An example struct to make a codec for.
+/// pub struct Person {
+///     name: String,
+///     age: u32
+/// }
+///
+/// // Type to avoid writing this struct codec's type again.
+/// pub type PersonCodec = StructCodec2<Person, FieldMapCodec<StringCodec>, FieldMapCodec<UintCodec>>;
+///
+/// // The actual codec.
+/// pub static PERSON_CODEC: PersonCodec = struct_codec!(
+///      for_getter(field(&STRING_CODEC, "name"), |person: &Person| &person.name),
+///      for_getter(field(&UINT_CODEC, "age"), |person: &Person| &person.age),
+///      |name, age| Person {name, age}
+///  );
+/// ```
+///
+/// [`Field`]: super::struct_codecs::Field
+#[macro_export]
+macro_rules! struct_codec {
+    ($($params:tt)*) => {
+        $crate::codecs::map_codec::MapCodecCodec::Owned(
+            $crate::struct_map_codec!($($params)*)
+        )
+    };
+}
+
+pub type FieldedKeyDispatchCodec<T, C> = KeyDispatchCodec<T, FieldMapCodec<C>>;
+pub type FieldedKeyDispatchMapCodec<T, C> = KeyDispatchMapCodec<T, FieldMapCodec<C>>;
+
+// Dispatch functions
+
+/// Creates a [`Codec`] for a type implementing [`KeyDispatchable`], using the provided `Codec` as the codec for the differentiator key.
+///
+/// The differentiator key will be `"value"`.
+///
+/// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key (`"type"`).
+pub const fn dispatch<T: KeyDispatchable, C: Codec<Value = T::Key>>(codec: &'static C) -> FieldedKeyDispatchCodec<T, C> {
+    dispatch_with_key("value", codec)
+}
+
+/// Creates a [`Codec`] for a type implementing [`KeyDispatchable`], using the provided `Codec` as the codec for the differentiator key and the differentiator key.
+///
+/// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key.
+pub const fn dispatch_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(key: &'static str, codec: &'static C) -> FieldedKeyDispatchCodec<T, C> {
+    super::map_codec::dispatch(field(codec, key))
+}
+
+/// Creates a [`Codec`] for a type implementing [`KeyDispatchable`], using the provided `Codec` as the codec for the differentiator key.
+///
+/// The differentiator key will be `"value"`.
+///
+/// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key (`"type"`).
+pub const fn dispatch_map<T: KeyDispatchable, C: Codec<Value = T::Key>>(codec: &'static C) -> FieldedKeyDispatchMapCodec<T, C> {
+    dispatch_map_with_key("value", codec)
+}
+
+/// Creates a [`MapCodec`] for a type implementing [`KeyDispatchable`], using the provided [`Codec`] as the codec for the differentiator key and the differentiator key.
+///
+/// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key.
+pub const fn dispatch_map_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(key: &'static str, codec: &'static C) -> FieldedKeyDispatchMapCodec<T, C> {
+    super::map_codec::dispatch_map(field(codec, key))
 }
 
 // Field functions
