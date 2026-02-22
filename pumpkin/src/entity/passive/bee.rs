@@ -15,7 +15,6 @@ use crate::entity::{
             bee_wander::BeeWanderGoal, escape_danger::EscapeDangerGoal,
             follow_parent::FollowParentGoal, look_around::LookAroundGoal,
             look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-            wander_around::WanderAroundGoal,
         },
         move_control::MoveControl,
     },
@@ -91,7 +90,6 @@ impl BeeEntity {
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, BEE_TEMPT_ITEMS)));
             goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.25)));
-            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(7, Box::new(BeeWanderGoal::new(1.0)));
             goal_selector.add_goal(
                 8,

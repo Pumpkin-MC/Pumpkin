@@ -67,6 +67,7 @@ const FOLLOW_RANGE: f32 = 35.0;
 
 const NODE_REACH_XZ: f64 = 0.5;
 const NODE_REACH_Y: f64 = 1.0;
+const FLYING_GOAL_REACH_DIST_SQ: f64 = 1.0;
 
 // TODO: Read from entity attributes (vanilla default 0.6)
 const MOB_STEP_HEIGHT: f64 = 0.6;
@@ -80,6 +81,10 @@ impl Navigator {
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
         self.current_goal = Some(goal);
         self.current_path = None;
+        self.ticks_on_current_node = 0;
+        self.last_node_index = 0;
+        self.total_ticks = 0;
+        self.path_start_pos = None;
     }
 
     pub const fn set_speed(&mut self, speed: f64) {
@@ -229,12 +234,54 @@ impl Navigator {
         };
 
         if goal.current_progress == goal.destination {
-            self.current_path = None;
             entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+            self.stop();
             return;
         }
 
         self.total_ticks += 1;
+
+        // Flying mobs should steer toward the requested destination directly.
+        // Using ground path nodes for flyers causes stale hover states and vertical drift.
+        if move_control.is_flying() {
+            let current_pos = entity.entity.pos.load();
+            let dx = goal.destination.x - current_pos.x;
+            let dy = goal.destination.y - current_pos.y;
+            let dz = goal.destination.z - current_pos.z;
+            let dist_sq = dx * dx + dy * dy + dz * dz;
+
+            if dist_sq <= FLYING_GOAL_REACH_DIST_SQ {
+                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+                self.stop();
+                return;
+            }
+
+            if self.total_ticks.is_multiple_of(100) {
+                if let Some(start_pos) = self.path_start_pos {
+                    let moved_x = current_pos.x - start_pos.x;
+                    let moved_y = current_pos.y - start_pos.y;
+                    let moved_z = current_pos.z - start_pos.z;
+                    let moved_sq = moved_x * moved_x + moved_y * moved_y + moved_z * moved_z;
+                    if moved_sq < 2.0 * 2.0 {
+                        entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+                        self.stop();
+                        return;
+                    }
+                }
+                self.path_start_pos = Some(current_pos);
+            } else if self.path_start_pos.is_none() {
+                self.path_start_pos = Some(current_pos);
+            }
+
+            move_control.set_wanted_position(
+                goal.destination.x,
+                goal.destination.y,
+                goal.destination.z,
+                goal.speed,
+            );
+            self.current_goal = Some(goal);
+            return;
+        }
 
         if self.needs_new_path(&goal) {
             self.current_path = self.compute_path(entity, goal.destination).await;
@@ -245,14 +292,14 @@ impl Navigator {
 
         if self.current_path.is_none() {
             entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-            self.current_goal = Some(goal);
+            self.stop();
             return;
         }
 
         if let Some(path) = &mut self.current_path {
             if path.is_done() || !path.is_valid() {
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                self.current_goal = Some(goal);
+                self.stop();
                 return;
             }
 
@@ -265,10 +312,8 @@ impl Navigator {
             }
 
             if self.ticks_on_current_node > 100 {
-                self.current_path = None;
-                self.ticks_on_current_node = 0;
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                self.current_goal = Some(goal);
+                self.stop();
                 return;
             }
 
@@ -280,10 +325,8 @@ impl Navigator {
                     let dz = current_pos.z - start_pos.z;
                     let dist_sq = dx * dx + dy * dy + dz * dz;
                     if dist_sq < 2.0 * 2.0 {
-                        self.current_path = None;
-                        self.ticks_on_current_node = 0;
                         entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                        self.current_goal = Some(goal);
+                        self.stop();
                         return;
                     }
                 }
@@ -307,31 +350,14 @@ impl Navigator {
                 let horizontal_dist_sq = dx * dx + dz * dz;
                 let horizontal_dist = horizontal_dist_sq.sqrt();
 
-                // Flying mobs: delegate movement to their MoveControl
-                if move_control.is_flying() {
-                    let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
-
-                    // Skip node if we're above it on the same XZ column and airborne
-                    if !on_ground && horizontal_dist < NODE_REACH_XZ && dy < -0.5 {
-                        path.advance();
+                if horizontal_dist < NODE_REACH_XZ && dy.abs() < NODE_REACH_Y {
+                    path.advance();
+                    if path.is_done() {
+                        entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+                        self.stop();
+                    } else {
                         self.current_goal = Some(goal);
-                        return;
                     }
-
-                    if horizontal_dist < NODE_REACH_XZ && dy.abs() < NODE_REACH_Y {
-                        path.advance();
-                        self.current_goal = Some(goal);
-                        return;
-                    }
-
-                    // Set wanted position on the move control — it handles velocity
-                    move_control.set_wanted_position(
-                        target_pos.x,
-                        target_pos.y,
-                        target_pos.z,
-                        goal.speed,
-                    );
-                    self.current_goal = Some(goal);
                     return;
                 }
 
@@ -368,8 +394,9 @@ impl Navigator {
                         .store(false, std::sync::atomic::Ordering::SeqCst);
                 }
             } else {
-                self.current_path = None;
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+                self.stop();
+                return;
             }
         }
 

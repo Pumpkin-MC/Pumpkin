@@ -3,6 +3,14 @@ use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
+const MAX_XZ_DISTANCE: f64 = 8.0;
+const HOVER_VERTICAL_DISTANCE: i32 = 7;
+const AIR_VERTICAL_DISTANCE: i32 = 4;
+const HOVER_MIN_HEIGHT: i32 = 1;
+const HOVER_MAX_HEIGHT: i32 = 3;
+const AIR_FLYING_HEIGHT: i32 = -2;
+const MAX_XZ_RADIANS_DIFF: f64 = std::f64::consts::FRAC_PI_2;
+
 pub struct BeeWanderGoal {
     goal_control: Controls,
     speed: f64,
@@ -21,22 +29,58 @@ impl BeeWanderGoal {
         }
     }
 
-    fn find_hover_target(mob: &dyn Mob) -> Vector3<f64> {
+    fn find_hover_target(mob: &dyn Mob) -> Option<Vector3<f64>> {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let pos = entity.pos.load();
         let yaw_rad = entity.yaw.load().to_radians();
         let mut rng = mob.get_random();
         let view_x = -(yaw_rad.sin() as f64);
         let view_z = yaw_rad.cos() as f64;
+        let hover_height = rng.random_range(HOVER_MIN_HEIGHT..=HOVER_MAX_HEIGHT);
 
-        let range = 8.0;
-        let y_range = 4.0;
+        // Match vanilla BeeWanderGoal sampling:
+        // 1) HoverRandomPos-style directional hover
+        // 2) AirAndWaterRandomPos-style fallback
+        Self::sample_directional_target(
+            &mut rng,
+            pos,
+            view_x,
+            view_z,
+            HOVER_VERTICAL_DISTANCE,
+            hover_height,
+        )
+        .or_else(|| {
+            Self::sample_directional_target(
+                &mut rng,
+                pos,
+                view_x,
+                view_z,
+                AIR_VERTICAL_DISTANCE,
+                AIR_FLYING_HEIGHT,
+            )
+        })
+    }
 
-        let dx = view_x * range * 0.5 + rng.random_range(-range..=range) * 0.5;
-        let dy = rng.random_range(-y_range..=y_range) * 0.5;
-        let dz = view_z * range * 0.5 + rng.random_range(-range..=range) * 0.5;
+    fn sample_directional_target(
+        rng: &mut rand::rngs::ThreadRng,
+        pos: Vector3<f64>,
+        x_dir: f64,
+        z_dir: f64,
+        vertical_dist: i32,
+        flying_height: i32,
+    ) -> Option<Vector3<f64>> {
+        let yaw_center = z_dir.atan2(x_dir) - std::f64::consts::FRAC_PI_2;
+        let yaw = yaw_center + rng.random_range(-MAX_XZ_RADIANS_DIFF..=MAX_XZ_RADIANS_DIFF);
+        let dist = rng.random_range(0.0..1.0).sqrt() * MAX_XZ_DISTANCE * std::f64::consts::SQRT_2;
+        let xt = -dist * yaw.sin();
+        let zt = dist * yaw.cos();
 
-        Vector3::new(pos.x + dx, pos.y + dy, pos.z + dz)
+        if xt.abs() > MAX_XZ_DISTANCE || zt.abs() > MAX_XZ_DISTANCE {
+            return None;
+        }
+
+        let yt = f64::from(rng.random_range(-vertical_dist..=vertical_dist) + flying_height);
+        Some(Vector3::new(pos.x + xt, pos.y + yt, pos.z + zt))
     }
 }
 
@@ -47,8 +91,8 @@ impl Goal for BeeWanderGoal {
                 return false;
             }
 
-            self.target = Some(Self::find_hover_target(mob));
-            true
+            self.target = Self::find_hover_target(mob);
+            self.target.is_some()
         })
     }
 
