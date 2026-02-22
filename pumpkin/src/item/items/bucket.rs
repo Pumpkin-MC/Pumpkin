@@ -3,8 +3,8 @@ use std::{pin::Pin, sync::Arc};
 use crate::{
     entity::player::Player,
     item::{ItemBehaviour, ItemMetadata},
-    plugin::player::player_bucket_empty::PlayerBucketEmptyEvent,
-    plugin::player::player_bucket_fill::PlayerBucketFillEvent,
+    plugin::player::bucket_empty::PlayerBucketEmptyEvent,
+    plugin::player::bucket_fill::PlayerBucketFillEvent,
 };
 use pumpkin_data::{
     Block,
