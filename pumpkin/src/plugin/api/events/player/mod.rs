@@ -9,7 +9,7 @@ pub mod player_gamemode_change;
 pub mod player_interact_entity_event;
 pub mod player_interact_event;
 pub mod player_interact_unknown_entity_event;
-pub mod player_item_held;
+pub mod item_held;
 pub mod player_join;
 pub mod player_leave;
 pub mod player_login;
