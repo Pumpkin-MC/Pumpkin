@@ -1,12 +1,12 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering::Relaxed},
+    atomic::{AtomicI32, AtomicU8, Ordering::Relaxed},
 };
 
 use pumpkin_data::{
     entity::EntityType, item::Item, meta_data_type::MetaDataType, tracked_data::TrackedData,
 };
-use pumpkin_protocol::java::client::play::Metadata;
+use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
@@ -48,7 +48,7 @@ const STING_DEATH_COUNTDOWN: i32 = 1200;
 pub struct BeeEntity {
     pub mob_entity: MobEntity,
     bee_flags: AtomicU8,
-    anger_end_time: AtomicI64,
+    anger_end_time: AtomicI32,
     time_since_sting: AtomicI32,
     ticks_without_nectar: AtomicI32,
     stay_out_of_hive_countdown: AtomicI32,
@@ -63,7 +63,7 @@ impl BeeEntity {
         let bee = Self {
             mob_entity,
             bee_flags: AtomicU8::new(0),
-            anger_end_time: AtomicI64::new(-1),
+            anger_end_time: AtomicI32::new(0),
             time_since_sting: AtomicI32::new(0),
             ticks_without_nectar: AtomicI32::new(0),
             stay_out_of_hive_countdown: AtomicI32::new(0),
@@ -154,8 +154,8 @@ impl BeeEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_ANGER_END_TIME,
-                MetaDataType::Long,
-                anger,
+                MetaDataType::Integer,
+                VarInt(anger),
             )])
             .await;
     }
