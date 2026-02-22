@@ -4,8 +4,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use crate::{LoggerOption, command::client_suggestions, plugin_log};
-use pumpkin_plugin_host::metadata::PluginMetadata;
+use crate::{LoggerOption, command::client_suggestions, plugin::PluginMetadata, plugin_log};
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},

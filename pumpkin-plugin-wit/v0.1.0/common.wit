@@ -1,4 +1,8 @@
 interface common {
+    // TODO: This should actually be a resource in the future. Otherwise,
+    // any changes the the Rust definition of TextComponent will potentially
+    // break backwards compatibility. Absolutely do not leave this around before
+    // doing a v1.0.0 official release
     /// This is a serialized text component as a postcard byte array
     type raw-text-component = list<u8>;
 }

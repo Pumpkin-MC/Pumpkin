@@ -11,7 +11,6 @@ members = [
     "pumpkin/",
     "pumpkin-data",
     "pumpkin-plugin-api",
-    "pumpkin-plugin-host",
 ]
 exclude = ["pumpkin-codegen"]
 
@@ -148,7 +147,6 @@ pumpkin-nbt = { path = "pumpkin-nbt" }
 pumpkin-protocol = { path = "pumpkin-protocol" }
 pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
-pumpkin-plugin-host = { path = "pumpkin-plugin-host" }
 quote = "1.0"
 rand = "0.10.0"
 rsa = "=0.10.0-rc.15"

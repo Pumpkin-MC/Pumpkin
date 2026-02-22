@@ -2,7 +2,7 @@ use crate::{events::EVENT_HANDLERS, logging::WitSubscriber};
 
 pub mod events;
 
-pub use wit::pumpkin::plugin::context::Context;
+pub use wit::pumpkin::plugin::context::{Context, Server};
 
 pub mod logging;
 pub mod text_component;
@@ -51,10 +51,10 @@ impl wit::Guest for Component {
         plugin().on_unload(context)
     }
 
-    fn handle_event(event_id: u32, event: events::Event) -> events::Event {
+    fn handle_event(event_id: u32, server: Server, event: events::Event) -> events::Event {
         let handlers = EVENT_HANDLERS.lock().unwrap();
         if let Some(handler) = handlers.get(&event_id) {
-            handler.handle_erased(event)
+            handler.handle_erased(server, event)
         } else {
             event
         }
