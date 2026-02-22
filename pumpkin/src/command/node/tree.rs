@@ -416,6 +416,15 @@ impl_index_index_mut!(LiteralNodeId -> AttachedNode::Literal(LiteralAttachedNode
 impl_index_index_mut!(CommandNodeId -> AttachedNode::Command(CommandAttachedNode));
 impl_index_index_mut!(ArgumentNodeId -> AttachedNode::Argument(ArgumentAttachedNode));
 
+impl<'a> IntoIterator for &'a Tree {
+    type Item = &'a AttachedNode;
+    type IntoIter = std::slice::Iter<'a, AttachedNode>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.nodes.iter()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::command::argument_builder::{

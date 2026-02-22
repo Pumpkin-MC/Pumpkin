@@ -12,7 +12,7 @@ use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::custom_bossbar::CustomBossbars;
-use crate::{command::dispatcher::CommandDispatcher, entity::player::Player, world::World};
+use crate::{command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World};
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
@@ -316,6 +316,7 @@ impl Server {
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
         // TODO: this is really bad
         let world_guard = self.worlds.load();
+
         if dimension == &Dimension::OVERWORLD {
             world_guard.first()
         } else if dimension == &Dimension::THE_NETHER {

@@ -176,7 +176,7 @@ mod sealed {
 /// It exposes the common properties of such types, while making
 /// it more dynamic to access its properties, like the translation
 /// key and the number of arguments (at runtime).
-pub trait AnyCommandErrorType: Sealed + std::fmt::Debug {
+pub trait AnyCommandErrorType: Send + Sync + Sealed + std::fmt::Debug {
     /// Returns the underlying translation key of this specific error type.
     fn text(&self) -> TemplateText;
 

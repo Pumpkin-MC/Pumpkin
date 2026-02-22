@@ -43,6 +43,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
             let dispatcher = server.command_dispatcher.read().await;
 
             dispatcher
+                .fallback_dispatcher
                 .get_tree(s)
                 .ok()
                 .map(|tree| Arg::CommandTree(tree.clone()))
@@ -62,6 +63,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
 
             let dispatcher = server.command_dispatcher.read().await;
             let suggestions = dispatcher
+                .fallback_dispatcher
                 .commands
                 .keys()
                 .filter(|suggestion| suggestion.starts_with(input))

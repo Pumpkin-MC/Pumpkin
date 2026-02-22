@@ -9,11 +9,18 @@ use crate::command::errors::error_types::{
 };
 use crate::command::node::attached::{CommandNodeId, NodeId};
 use crate::command::node::detached::CommandDetachedNode;
-use crate::command::node::tree::{ROOT_NODE_ID, Tree};
+use crate::command::node::tree::{NodeIdClassification, ROOT_NODE_ID, Tree};
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
+use futures::future;
+use pumpkin_protocol::java::client::play::CommandSuggestion;
 use rustc_hash::FxHashMap;
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock};
+use pumpkin_data::translation::COMMAND_CONTEXT_HERE;
+use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::color::{Color, NamedColor};
+use pumpkin_util::text::TextComponent;
 
 pub const ARG_SEPARATOR: &str = " ";
 pub const ARG_SEPARATOR_CHAR: char = ' ';
@@ -37,7 +44,7 @@ pub struct ParsingResult<'a> {
 }
 
 /// Structs implementing this trait are able to execute upon command completion.
-pub trait ResultConsumer {
+pub trait ResultConsumer: Sync + Send {
     fn on_command_completion<'a>(
         &'a self,
         context: &'a CommandContext,
@@ -86,6 +93,11 @@ pub static RESULT_DEFERRER: LazyLock<Arc<ResultDeferrer>> =
 pub struct CommandDispatcher {
     pub tree: Tree,
     pub consumer: Arc<dyn ResultConsumer>,
+
+    // Temporary setup:
+    // We add this because we have a lot of commands
+    // still dependent on this dispatcher.
+    pub fallback_dispatcher: crate::command::dispatcher::CommandDispatcher
 }
 
 impl Default for CommandDispatcher {
@@ -106,6 +118,7 @@ impl CommandDispatcher {
         Self {
             tree,
             consumer: RESULT_DEFERRER.clone(),
+            fallback_dispatcher: crate::command::dispatcher::CommandDispatcher::default()
         }
     }
 
@@ -285,6 +298,189 @@ impl CommandDispatcher {
                 })
                 .unwrap()
         }
+    }
+
+    /// Handle the execution of a command by a given source (sender),
+    /// returning appropriate error messages to it if necessary.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the source given to it is a dummy one.
+    pub async fn handle_command<'a>(
+        &'a self,
+        source: &CommandSource,
+        input: &'a str
+    ) {
+        assert!(source.server.is_some(), "Source provided to this command was a dummy source");
+
+        let output = self.execute_input(input, source).await;
+
+        if let Err(error) = output {
+            // We check if the error came because a command could not be found.
+            if error.is(&DISPATCHER_UNKNOWN_COMMAND) {
+                // Run the fallback dispatcher instead.
+                // It might have the command we're looking for.
+                self.fallback_dispatcher.handle_command(
+                    &source.output,
+                    source.server().as_ref(),
+                    input
+                ).await;
+            } else {
+                // Print the error to the output.
+                Self::send_error_to_source(
+                    source,
+                    error,
+                    input
+                ).await;
+            }
+        }
+    }
+
+    /// Sends a command error to the provided source.
+    /// This also shows the contextual information
+    /// leading up to the error if necessary.
+    pub async fn send_error_to_source(
+        source: &CommandSource,
+        error: CommandSyntaxError,
+        command: &str
+    ) {
+        source.send_message(error.message).await;
+        if let Some(context) = error.context {
+            let i = context.input.len().min(context.cursor);
+
+            let mut error_text =
+                TextComponent::text("")
+                    .color(Color::Named(NamedColor::Gray))
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: format!("/{command}").into()
+                    });
+
+            if i > 10 {
+                error_text = error_text.add_text("...");
+            }
+
+            let command_snippet = &context.input[0.max(i - 10)..i];
+            error_text = error_text.add_text(command_snippet.to_owned());
+
+            if i < context.input.len() {
+                let errored_part = &context.input[i..];
+                error_text = error_text.add_child(
+                    TextComponent::text(errored_part.to_owned())
+                        .color(Color::Named(NamedColor::Red))
+                        .underlined()
+                );
+            }
+
+            error_text = error_text.add_child(
+                TextComponent::translate(COMMAND_CONTEXT_HERE, &[])
+                    .color(Color::Named(NamedColor::Red))
+                    .underlined()
+            );
+
+            source.send_error(error_text).await;
+        }
+    }
+
+    /// Returns a new [`Suggestions`] structure in the future
+    /// from the given parsing result, which was a command that was parsed,
+    /// assuming the cursor is at the end.
+    /// 
+    /// This is useful to tell the client on what suggestions are there next.
+    pub async fn get_completion_suggestions_at_end(&self, parsing_result: ParsingResult<'_>) -> Suggestions {
+        let length = parsing_result.reader.total_length();
+        self.get_completion_suggestions(parsing_result, length).await
+    }
+
+    /// Returns a new [`Suggestions`] structure in the future
+    /// from the given parsing result, which was a command that was parsed.
+    /// 
+    /// This is useful to tell the client on what suggestions are there next.
+    pub async fn get_completion_suggestions(&self, parsing_result: ParsingResult<'_>, cursor: usize) -> Suggestions {    
+        let context = parsing_result.context;
+        let (parent, start) = {
+            let node_before_cursor = context.find_suggestion_context(cursor);
+            (node_before_cursor.parent, node_before_cursor.starting_position.min(cursor))
+        };
+
+        let full_input = parsing_result.reader.string();
+        let truncated_input = &full_input[0..cursor];
+
+        let children = self.tree.get_children(parent);
+        let capacity = children.len();
+        let mut futures = Vec::with_capacity(capacity);
+
+        let context = context.build(truncated_input);
+
+        for child in children {
+            let mut builder = SuggestionsBuilder::new(truncated_input, start);
+
+            let future: Pin<Box<dyn Future<Output = Suggestions> + Send>> = match self.tree.classify_id(child) {
+                NodeIdClassification::Root => Box::pin(async { Suggestions::empty() }),
+                NodeIdClassification::Literal(literal_node_id) => {
+                    Box::pin(async move {
+                        let node = &self.tree[literal_node_id];
+                        if node.meta.literal_lowercase.starts_with(builder.remaining_lowercase()) {
+                            builder.suggest(&*node.meta.literal).build()
+                        } else {
+                            Suggestions::empty()
+                        }
+                    })
+                },
+                NodeIdClassification::Command(command_node_id) => {
+                    Box::pin(async move {
+                        let node = &self.tree[command_node_id];
+                        if node.meta.literal_lowercase.starts_with(builder.remaining_lowercase()) {
+                            builder.suggest(&*node.meta.literal).build()
+                        } else {
+                            Suggestions::empty()
+                        }
+                    })
+                },
+                NodeIdClassification::Argument(argument_node_id) => {
+                    let node = &self.tree[argument_node_id];
+                    node.meta.argument_type.list_suggestions(&context, &mut builder)
+                },
+            };
+
+            futures.push(future);
+        }
+
+        let suggestions = future::join_all(futures).await;
+        Suggestions::merge(full_input, suggestions)
+    }
+
+    /// Gets all the suggestions in the future as a [`Vec`] of [`CommandSuggestion`].
+    /// 
+    /// # Panics
+    /// 
+    /// This function currently panics if the source provided was a dummy source.
+    /// This is subject to change in the future.
+    pub async fn suggest(
+        &self,
+        input: &str,
+        source: &CommandSource
+    ) -> Vec<CommandSuggestion> {
+        let future1 = async move {
+            let parsed = self.parse_input(input, source).await;
+            let suggestions = self.get_completion_suggestions_at_end(parsed).await;
+
+            suggestions
+                .suggestions
+                .into_iter()
+                .map(|suggestion| CommandSuggestion {
+                    suggestion: suggestion.text.cached_text().clone(),
+                    tooltip: suggestion.tooltip,
+                })
+                .collect::<Vec<CommandSuggestion>>()
+        };
+
+        let future2 = async move {
+            self.fallback_dispatcher.find_suggestions(&source.output, &source.server(), input).await
+        };
+
+        let (mut a, mut b) = future::join(future1, future2).await;
+        a.append(&mut b);
+        a
     }
 }
 

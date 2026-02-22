@@ -1,3 +1,5 @@
+use pumpkin_protocol::java::client::play::SuggestionProviders;
+
 use crate::command::argument_types::argument_type::sealed::Sealed;
 use crate::command::context::command_context::CommandContext;
 use crate::command::context::command_source::CommandSource;
@@ -8,6 +10,8 @@ use crate::command::{
 };
 use std::any::Any;
 use std::pin::Pin;
+
+pub type JavaClientArgumentType<'a> = pumpkin_protocol::java::client::play::ArgumentType<'a>;
 
 /// Represents an argument type that parses a particular type `Item`.
 pub trait ArgumentType: Send + Sync {
@@ -41,6 +45,17 @@ pub trait ArgumentType: Send + Sync {
         _suggestions_builder: &mut SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
         Box::pin(async move { Suggestions::empty() })
+    }
+
+    /// Returns the Java client-side parser used for this argument type.
+    #[must_use]
+    fn client_side_parser(&self) -> JavaClientArgumentType;
+
+    /// Overrides the suggestion providers provided from this argument if a [`Some`] containing them
+    /// is returned.
+    #[must_use]
+    fn override_suggestion_providers(&self) -> Option<SuggestionProviders> {
+        None
     }
 
     /// Gets a selected list of examples which are considered
@@ -90,6 +105,17 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
         suggestions_builder: &mut SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>>;
 
+    /// Returns the Java client-side parser used for this argument type.
+    #[must_use]
+    fn client_side_parser(&self) -> JavaClientArgumentType;
+
+    /// Overrides the suggestion providers provided from this argument if a [`Some`] containing them
+    /// is returned.
+    #[must_use]
+    fn override_suggestion_providers(&self) -> Option<SuggestionProviders> {
+        None
+    }
+
     /// Gets a selected list of examples which are considered
     /// valid when parsed into type `T`.
     ///
@@ -135,5 +161,13 @@ impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> AnyArgumentType for U 
 
     fn examples(&self) -> Vec<String> {
         self.examples()
+    }
+    
+    fn client_side_parser(&self) -> pumpkin_protocol::java::client::play::ArgumentType {
+        self.client_side_parser()
+    }
+
+    fn override_suggestion_providers(&self) -> Option<SuggestionProviders> {
+        self.override_suggestion_providers()
     }
 }

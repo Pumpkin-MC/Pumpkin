@@ -1,5 +1,5 @@
 use crate::command::{
-    argument_types::argument_type::ArgumentType, errors::command_syntax_error::CommandSyntaxError,
+    argument_types::argument_type::{ArgumentType, JavaClientArgumentType}, errors::command_syntax_error::CommandSyntaxError,
     string_reader::StringReader,
 };
 
@@ -16,6 +16,10 @@ impl ArgumentType for BoolArgumentType {
 
     fn examples(&self) -> Vec<String> {
         examples!("true", "false")
+    }
+    
+    fn client_side_parser(&self) -> JavaClientArgumentType {
+        JavaClientArgumentType::Bool
     }
 }
 

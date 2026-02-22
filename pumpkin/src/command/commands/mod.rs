@@ -4,8 +4,7 @@ use pumpkin_util::{
     permission::{Permission, PermissionDefault, PermissionRegistry},
 };
 use tokio::sync::RwLock;
-
-use super::dispatcher::CommandDispatcher;
+use crate::command::node::dispatcher::CommandDispatcher;
 
 mod ban;
 mod banip;
@@ -63,7 +62,7 @@ pub async fn default_dispatcher(
     registry: &RwLock<PermissionRegistry>,
     basic_config: &BasicConfiguration,
 ) -> CommandDispatcher {
-    let mut dispatcher = CommandDispatcher::default();
+    let mut dispatcher = crate::command::dispatcher::CommandDispatcher::default();
 
     register_permissions(registry).await;
 
@@ -154,6 +153,13 @@ pub async fn default_dispatcher(
     );
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
+
+
+    let dispatcher = {
+        let mut wrapper_dispatcher = CommandDispatcher::new();
+        wrapper_dispatcher.fallback_dispatcher = dispatcher;
+        wrapper_dispatcher
+    };
 
     dispatcher
 }

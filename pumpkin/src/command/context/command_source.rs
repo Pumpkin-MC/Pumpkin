@@ -110,7 +110,7 @@ impl CommandSource {
     /// a server or a world. If there is attempt to fetch the server or a world from
     /// the returned source, there will be a panic!
     #[must_use]
-    pub fn dummy() -> Self {
+    pub(crate) fn dummy() -> Self {
         Self {
             output: CommandSender::Dummy,
             world: None,
@@ -137,8 +137,6 @@ impl CommandSource {
         name: String,
         display_name: TextComponent,
         server: Arc<Server>,
-        silent: bool,
-        command_result_taker: ResultValueTaker,
         entity_anchor: EntityAnchor,
     ) -> Self {
         Self {
@@ -150,8 +148,8 @@ impl CommandSource {
             name,
             display_name,
             server: Some(server),
-            silent,
-            command_result_taker,
+            silent: false,
+            command_result_taker: ResultValueTaker(Vec::new()),
             entity_anchor,
         }
     }
