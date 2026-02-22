@@ -3,25 +3,22 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{generation::section_coords, world::BlockRegistryExt};
 
-#[derive(Deserialize)]
 pub struct EndSpikeFeature {
-    crystal_invulnerable: bool,
-    spikes: Vec<Spike>,
+    pub crystal_invulnerable: bool,
+    pub spikes: Vec<Spike>,
 }
 
-#[derive(Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct Spike {
-    center_x: i32,
-    center_z: i32,
-    radius: i32,
-    height: i32,
-    guarded: bool,
+#[derive(Clone)]
+pub struct Spike {
+    pub center_x: i32,
+    pub center_z: i32,
+    pub radius: i32,
+    pub height: i32,
+    pub guarded: bool,
 }
 
 impl Spike {

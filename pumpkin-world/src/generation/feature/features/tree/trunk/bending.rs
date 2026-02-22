@@ -3,15 +3,13 @@ use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::generation::feature::features::tree::{TreeNode, trunk::TrunkPlacer};
 use crate::generation::proto_chunk::GenerationCache;
 
-#[derive(Deserialize)]
 pub struct BendingTrunkPlacer {
-    min_height_for_leaves: u32,
-    bend_length: IntProvider,
+    pub min_height_for_leaves: u32,
+    pub bend_length: IntProvider,
 }
 
 impl BendingTrunkPlacer {

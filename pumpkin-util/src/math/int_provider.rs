@@ -128,7 +128,7 @@ impl IntProvider {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ConstantIntProvider {
-    value: i32,
+    pub value: i32,
 }
 
 impl ToTokens for ConstantIntProvider {
@@ -207,9 +207,9 @@ impl BiasedToBottomIntProvider {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ClampedIntProvider {
-    source: Box<IntProvider>,
-    min_inclusive: i32,
-    max_inclusive: i32,
+    pub source: Box<IntProvider>,
+    pub min_inclusive: i32,
+    pub max_inclusive: i32,
 }
 
 impl ToTokens for ClampedIntProvider {
@@ -256,10 +256,10 @@ impl ClampedIntProvider {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct ClampedNormalIntProvider {
-    mean: f32,
-    deviation: f32,
-    min_inclusive: i32,
-    max_inclusive: i32,
+    pub mean: f32,
+    pub deviation: f32,
+    pub min_inclusive: i32,
+    pub max_inclusive: i32,
 }
 
 impl ToTokens for ClampedNormalIntProvider {
@@ -310,8 +310,8 @@ impl ClampedNormalIntProvider {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct WeightedEntry {
-    data: IntProvider,
-    weight: i32,
+    pub data: IntProvider,
+    pub weight: i32,
 }
 
 impl ToTokens for WeightedEntry {
@@ -326,7 +326,7 @@ impl ToTokens for WeightedEntry {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct WeightedListIntProvider {
-    distribution: Vec<WeightedEntry>,
+    pub distribution: Vec<WeightedEntry>,
 }
 
 impl ToTokens for WeightedListIntProvider {

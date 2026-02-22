@@ -7,11 +7,9 @@ use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
-#[derive(Deserialize)]
 pub struct SeaPickleFeature {
-    count: IntProvider,
+    pub count: IntProvider,
 }
 
 impl SeaPickleFeature {

@@ -1,11 +1,9 @@
 use pumpkin_data::Block;
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::BlockRegistryExt;
 
-#[derive(Deserialize)]
 pub struct EndPlatformFeature;
 
 impl EndPlatformFeature {

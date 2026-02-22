@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
+pub use serde_json;
+
 pub use difficulty::Difficulty;
 pub use gamemode::GameMode;
 pub use permission::PermissionLvl;
@@ -56,8 +58,10 @@ macro_rules! global_path {
 macro_rules! read_data_from_file {
     ($path:expr) => {{
         use $crate::global_path;
-        serde_json::from_str(&std::fs::read_to_string(global_path!($path)).expect("no data file"))
-            .expect("failed to decode data")
+        $crate::serde_json::from_str(
+            &std::fs::read_to_string(global_path!($path)).expect("no data file"),
+        )
+        .expect("failed to decode data")
     }};
 }
 
@@ -65,9 +69,19 @@ macro_rules! read_data_from_file {
 #[macro_export]
 macro_rules! include_json_static {
     ($path:expr, $ty:ty) => {{
-        serde_json::from_str::<$ty>(include_str!($path))
+        $crate::serde_json::from_str::<$ty>(include_str!($path))
             .expect(concat!("Could not parse JSON file: ", $path))
     }};
+}
+
+/// Asserts that two floating-point numbers are approximately equal within a given delta.
+#[macro_export]
+macro_rules! assert_eq_delta {
+    ($x:expr, $y:expr, $d:expr) => {
+        if 2f64 * ($x - $y).abs() > $d * ($x.abs() + $y.abs()) {
+            panic!("{} vs {} ({} vs {})", $x, $y, ($x - $y).abs(), $d);
+        }
+    };
 }
 
 /// The minimum number of bits required to represent this number
@@ -170,15 +184,6 @@ impl<T> IndexMut<usize> for MutableSplitSlice<'_, T> {
             &mut self.end[index - self.start.len() - 1]
         }
     }
-}
-
-#[macro_export]
-macro_rules! assert_eq_delta {
-    ($x:expr, $y:expr, $d:expr) => {
-        if 2f64 * ($x - $y).abs() > $d * ($x.abs() + $y.abs()) {
-            panic!("{} vs {} ({} vs {})", $x, $y, ($x - $y).abs(), $d);
-        }
-    };
 }
 
 /// Represents the player's dominant hand.
