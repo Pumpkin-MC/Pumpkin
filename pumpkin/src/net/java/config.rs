@@ -6,7 +6,7 @@ use crate::{
         PlayerConfig, can_not_join,
         java::{JavaClient, PacketHandlerResult},
     },
-    plugin::player::player_resource_pack_status::PlayerResourcePackStatusEvent,
+    plugin::player::resource_pack_status::PlayerResourcePackStatusEvent,
     server::Server,
 };
 use core::str;
