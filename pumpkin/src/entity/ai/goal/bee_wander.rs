@@ -148,7 +148,7 @@ impl BeeWanderGoal {
     ) -> Option<Vector3<i32>> {
         let yaw_center = z_dir.atan2(x_dir) - std::f64::consts::FRAC_PI_2;
         let yaw = yaw_center + rng.random_range(-MAX_XZ_RADIANS_DIFF..=MAX_XZ_RADIANS_DIFF);
-        let dist = rng.random_range(0.0_f64..1.0_f64).sqrt()
+        let dist = rng.random_range(0.0f64..1.0f64).sqrt()
             * max_horizontal_dist
             * std::f64::consts::SQRT_2;
         let xt = -dist * yaw.sin();

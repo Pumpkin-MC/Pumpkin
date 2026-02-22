@@ -91,8 +91,8 @@ impl FlyNodeEvaluator {
         node.is_some_and(|n| !n.closed)
     }
 
-    fn push_if_open(out: &mut Vec<Node>, node: &Option<Node>) {
-        if let Some(node) = node.as_ref()
+    fn push_if_open(out: &mut Vec<Node>, node: Option<&Node>) {
+        if let Some(node) = node
             && !node.closed
         {
             out.push(node.clone());
@@ -143,19 +143,23 @@ impl FlyNodeEvaluator {
         let x_padding = (SMALL_MOB_INFLATED_START_NODE_BOUNDING_BOX - (max_x - min_x)).max(0.0);
         let y_padding = (SMALL_MOB_INFLATED_START_NODE_BOUNDING_BOX - (max_y - min_y)).max(0.0);
 
-        let min_x_i = (min_x - x_padding).floor() as i32;
-        let min_y_i = (min_y - y_padding).floor() as i32;
-        let min_z_i = (min_z - z_padding).floor() as i32;
-        let max_x_i = (max_x + x_padding).floor() as i32;
-        let max_y_i = (max_y + y_padding).floor() as i32;
-        let max_z_i = (max_z + z_padding).floor() as i32;
+        let min = (
+            (min_x - x_padding).floor() as i32,
+            (min_y - y_padding).floor() as i32,
+            (min_z - z_padding).floor() as i32,
+        );
+        let max = (
+            (max_x + x_padding).floor() as i32,
+            (max_y + y_padding).floor() as i32,
+            (max_z + z_padding).floor() as i32,
+        );
 
-        let low_x = min_x_i.min(max_x_i);
-        let high_x = min_x_i.max(max_x_i);
-        let low_y = min_y_i.min(max_y_i);
-        let high_y = min_y_i.max(max_y_i);
-        let low_z = min_z_i.min(max_z_i);
-        let high_z = min_z_i.max(max_z_i);
+        let low_x = min.0.min(max.0);
+        let high_x = min.0.max(max.0);
+        let low_y = min.1.min(max.1);
+        let high_y = min.1.max(max.1);
+        let low_z = min.2.min(max.2);
+        let high_z = min.2.max(max.2);
 
         let mut rng = rand::rng();
         for _ in 0..MAX_START_NODE_CANDIDATES {
@@ -234,29 +238,29 @@ impl NodeEvaluator for FlyNodeEvaluator {
         let pos = current.pos.0;
 
         let south = self.find_accepted_node(pos.add_raw(0, 0, 1)).await;
-        Self::push_if_open(&mut neighbors, &south);
+        Self::push_if_open(&mut neighbors, south.as_ref());
 
         let west = self.find_accepted_node(pos.add_raw(-1, 0, 0)).await;
-        Self::push_if_open(&mut neighbors, &west);
+        Self::push_if_open(&mut neighbors, west.as_ref());
 
         let east = self.find_accepted_node(pos.add_raw(1, 0, 0)).await;
-        Self::push_if_open(&mut neighbors, &east);
+        Self::push_if_open(&mut neighbors, east.as_ref());
 
         let north = self.find_accepted_node(pos.add_raw(0, 0, -1)).await;
-        Self::push_if_open(&mut neighbors, &north);
+        Self::push_if_open(&mut neighbors, north.as_ref());
 
         let up = self.find_accepted_node(pos.add_raw(0, 1, 0)).await;
-        Self::push_if_open(&mut neighbors, &up);
+        Self::push_if_open(&mut neighbors, up.as_ref());
 
         let down = self.find_accepted_node(pos.add_raw(0, -1, 0)).await;
-        Self::push_if_open(&mut neighbors, &down);
+        Self::push_if_open(&mut neighbors, down.as_ref());
 
         let south_up = self.find_accepted_node(pos.add_raw(0, 1, 1)).await;
         if Self::is_open(south_up.as_ref())
             && Self::has_malus(south.as_ref())
             && Self::has_malus(up.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &south_up);
+            Self::push_if_open(&mut neighbors, south_up.as_ref());
         }
 
         let west_up = self.find_accepted_node(pos.add_raw(-1, 1, 0)).await;
@@ -264,7 +268,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(west.as_ref())
             && Self::has_malus(up.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &west_up);
+            Self::push_if_open(&mut neighbors, west_up.as_ref());
         }
 
         let east_up = self.find_accepted_node(pos.add_raw(1, 1, 0)).await;
@@ -272,7 +276,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(east.as_ref())
             && Self::has_malus(up.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &east_up);
+            Self::push_if_open(&mut neighbors, east_up.as_ref());
         }
 
         let north_up = self.find_accepted_node(pos.add_raw(0, 1, -1)).await;
@@ -280,7 +284,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(north.as_ref())
             && Self::has_malus(up.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &north_up);
+            Self::push_if_open(&mut neighbors, north_up.as_ref());
         }
 
         let south_down = self.find_accepted_node(pos.add_raw(0, -1, 1)).await;
@@ -288,7 +292,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(south.as_ref())
             && Self::has_malus(down.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &south_down);
+            Self::push_if_open(&mut neighbors, south_down.as_ref());
         }
 
         let west_down = self.find_accepted_node(pos.add_raw(-1, -1, 0)).await;
@@ -296,7 +300,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(west.as_ref())
             && Self::has_malus(down.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &west_down);
+            Self::push_if_open(&mut neighbors, west_down.as_ref());
         }
 
         let east_down = self.find_accepted_node(pos.add_raw(1, -1, 0)).await;
@@ -304,7 +308,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(east.as_ref())
             && Self::has_malus(down.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &east_down);
+            Self::push_if_open(&mut neighbors, east_down.as_ref());
         }
 
         let north_down = self.find_accepted_node(pos.add_raw(0, -1, -1)).await;
@@ -312,7 +316,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(north.as_ref())
             && Self::has_malus(down.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &north_down);
+            Self::push_if_open(&mut neighbors, north_down.as_ref());
         }
 
         let north_east = self.find_accepted_node(pos.add_raw(1, 0, -1)).await;
@@ -320,7 +324,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(north.as_ref())
             && Self::has_malus(east.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &north_east);
+            Self::push_if_open(&mut neighbors, north_east.as_ref());
         }
 
         let south_east = self.find_accepted_node(pos.add_raw(1, 0, 1)).await;
@@ -328,7 +332,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(south.as_ref())
             && Self::has_malus(east.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &south_east);
+            Self::push_if_open(&mut neighbors, south_east.as_ref());
         }
 
         let north_west = self.find_accepted_node(pos.add_raw(-1, 0, -1)).await;
@@ -336,7 +340,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(north.as_ref())
             && Self::has_malus(west.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &north_west);
+            Self::push_if_open(&mut neighbors, north_west.as_ref());
         }
 
         let south_west = self.find_accepted_node(pos.add_raw(-1, 0, 1)).await;
@@ -344,7 +348,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(south.as_ref())
             && Self::has_malus(west.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &south_west);
+            Self::push_if_open(&mut neighbors, south_west.as_ref());
         }
 
         let north_east_up = self.find_accepted_node(pos.add_raw(1, 1, -1)).await;
@@ -356,7 +360,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(north_up.as_ref())
             && Self::has_malus(east_up.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &north_east_up);
+            Self::push_if_open(&mut neighbors, north_east_up.as_ref());
         }
 
         let south_east_up = self.find_accepted_node(pos.add_raw(1, 1, 1)).await;
@@ -368,7 +372,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(south_up.as_ref())
             && Self::has_malus(east_up.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &south_east_up);
+            Self::push_if_open(&mut neighbors, south_east_up.as_ref());
         }
 
         let north_west_up = self.find_accepted_node(pos.add_raw(-1, 1, -1)).await;
@@ -380,7 +384,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(north_up.as_ref())
             && Self::has_malus(west_up.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &north_west_up);
+            Self::push_if_open(&mut neighbors, north_west_up.as_ref());
         }
 
         let south_west_up = self.find_accepted_node(pos.add_raw(-1, 1, 1)).await;
@@ -392,7 +396,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(south_up.as_ref())
             && Self::has_malus(west_up.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &south_west_up);
+            Self::push_if_open(&mut neighbors, south_west_up.as_ref());
         }
 
         let north_east_down = self.find_accepted_node(pos.add_raw(1, -1, -1)).await;
@@ -404,7 +408,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(north_down.as_ref())
             && Self::has_malus(east_down.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &north_east_down);
+            Self::push_if_open(&mut neighbors, north_east_down.as_ref());
         }
 
         let south_east_down = self.find_accepted_node(pos.add_raw(1, -1, 1)).await;
@@ -416,7 +420,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(south_down.as_ref())
             && Self::has_malus(east_down.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &south_east_down);
+            Self::push_if_open(&mut neighbors, south_east_down.as_ref());
         }
 
         let north_west_down = self.find_accepted_node(pos.add_raw(-1, -1, -1)).await;
@@ -428,7 +432,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(north_down.as_ref())
             && Self::has_malus(west_down.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &north_west_down);
+            Self::push_if_open(&mut neighbors, north_west_down.as_ref());
         }
 
         let south_west_down = self.find_accepted_node(pos.add_raw(-1, -1, 1)).await;
@@ -440,7 +444,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
             && Self::has_malus(south_down.as_ref())
             && Self::has_malus(west_down.as_ref())
         {
-            Self::push_if_open(&mut neighbors, &south_west_down);
+            Self::push_if_open(&mut neighbors, south_west_down.as_ref());
         }
 
         neighbors
@@ -462,7 +466,7 @@ impl NodeEvaluator for FlyNodeEvaluator {
                     let check_pos = pos.add_raw(dx, dy, dz);
                     let mut cell_type = context.get_path_type_from_state(check_pos).await;
 
-                    if cell_type == PathType::Open && check_pos.y >= world_bottom_y + 1 {
+                    if cell_type == PathType::Open && check_pos.y > world_bottom_y {
                         let below_pos = check_pos.add_raw(0, -1, 0);
                         let below_type = context.get_path_type_from_state(below_pos).await;
                         cell_type = match below_type {

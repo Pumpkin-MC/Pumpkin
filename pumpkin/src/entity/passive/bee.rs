@@ -82,8 +82,8 @@ impl BeeEntity {
             let mut navigator = mob_arc.mob_entity.navigator.lock().await;
             navigator.set_can_open_doors(false);
             navigator.set_can_float(false);
-            navigator.set_required_path_length(48.0);
-        }
+            navigator.set_required_path_length(48.0)
+        };
 
         *mob_arc.mob_entity.move_control.lock().await = MoveControl::flying(20, true);
 

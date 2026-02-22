@@ -105,19 +105,19 @@ impl Default for Navigator {
 }
 
 impl Navigator {
-    fn max_path_length(&self) -> f32 {
+    const fn max_path_length(&self) -> f32 {
         FOLLOW_RANGE.max(self.required_path_length)
     }
 
-    pub fn set_can_open_doors(&mut self, can_open_doors: bool) {
+    pub const fn set_can_open_doors(&mut self, can_open_doors: bool) {
         self.can_open_doors = can_open_doors;
     }
 
-    pub fn set_can_float(&mut self, can_float: bool) {
+    pub const fn set_can_float(&mut self, can_float: bool) {
         self.can_float = can_float;
     }
 
-    pub fn set_required_path_length(&mut self, length: f32) {
+    pub const fn set_required_path_length(&mut self, length: f32) {
         self.required_path_length = length.max(0.0);
     }
 
@@ -376,11 +376,11 @@ impl Navigator {
 
                 let in_liquid = entity.entity.touching_water.load(Ordering::Relaxed)
                     || entity.entity.touching_lava.load(Ordering::Relaxed);
-                let is_passenger = if let Ok(vehicle) = entity.entity.vehicle.try_lock() {
-                    vehicle.is_some()
-                } else {
-                    false
-                };
+                let is_passenger = entity
+                    .entity
+                    .vehicle
+                    .try_lock()
+                    .is_ok_and(|vehicle| vehicle.is_some());
                 let can_update_path = (self.can_float && in_liquid) || !is_passenger;
 
                 if !can_update_path {
