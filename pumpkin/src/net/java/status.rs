@@ -5,7 +5,7 @@ use pumpkin_protocol::{
 };
 
 use crate::{
-    net::java::JavaClient, plugin::server::server_list_ping::ServerListPingEvent, server::Server,
+    net::java::JavaClient, plugin::server::list_ping::ServerListPingEvent, server::Server,
 };
 use tracing::debug;
 
