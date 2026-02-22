@@ -14,16 +14,6 @@ use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
 pub mod serializer;
 
-// TODO: This is a bit hacky
-const NO_PREFIX_MARKER: &str = "__network_no_prefix";
-
-pub fn network_serialize_no_prefix<T: serde::Serialize, S: serde::Serializer>(
-    input: T,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    serializer.serialize_newtype_struct(NO_PREFIX_MARKER, &input)
-}
-
 #[derive(Debug, Error)]
 pub enum ReadingError {
     #[error("EOF, Tried to read {0} but No bytes left to consume")]

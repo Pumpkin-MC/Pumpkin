@@ -81,6 +81,12 @@ impl Navigator {
         self.current_path = None;
     }
 
+    pub const fn set_speed(&mut self, speed: f64) {
+        if let Some(goal) = &mut self.current_goal {
+            goal.speed = speed;
+        }
+    }
+
     pub fn stop(&mut self) {
         self.current_goal = None;
         self.current_path = None;

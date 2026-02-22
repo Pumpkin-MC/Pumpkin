@@ -87,6 +87,11 @@ pub struct LivingEntity {
     /// The tick at which this entity was last attacked (entity age).
     pub last_attacked_time: AtomicI32,
 
+    /// The entity ID of the entity this living entity last attacked.
+    pub last_attacking_id: AtomicI32,
+    /// The tick at which this entity last attacked something (entity age).
+    pub last_attack_time: AtomicI32,
+
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
 }
@@ -136,6 +141,8 @@ impl LivingEntity {
             climbing_pos: AtomicCell::new(None),
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
+            last_attacking_id: AtomicI32::new(0),
+            last_attack_time: AtomicI32::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
             movement_speed: AtomicCell::new(default_movement_speed),
             water_movement_speed_multiplier,

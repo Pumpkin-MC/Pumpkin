@@ -85,6 +85,7 @@ use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
+use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
@@ -731,6 +732,18 @@ impl Player {
         }
 
         player_attack_sound(&pos, &world, attack_type).await;
+
+        self.living_entity.last_attacking_id.store(
+            victim_entity.entity_id,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        self.living_entity.last_attack_time.store(
+            self.living_entity
+                .entity
+                .age
+                .load(std::sync::atomic::Ordering::Relaxed),
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
         if victim.get_living_entity().is_some() {
             let mut knockback_strength = 1.0;
@@ -2740,11 +2753,22 @@ impl Player {
     }
 
     /// Check if the player has a specific permission
-    pub async fn has_permission(&self, server: &Server, node: &str) -> bool {
+    pub async fn has_permission(self: &Arc<Self>, server: &Server, node: &str) -> bool {
         let perm_manager = server.permission_manager.read().await;
-        perm_manager
+        let result = perm_manager
             .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
-            .await
+            .await;
+        drop(perm_manager);
+
+        let event = server
+            .plugin_manager
+            .fire(PlayerPermissionCheckEvent::new(
+                self.clone(),
+                node.to_string(),
+                result,
+            ))
+            .await;
+        event.result
     }
 
     pub fn is_creative(&self) -> bool {
