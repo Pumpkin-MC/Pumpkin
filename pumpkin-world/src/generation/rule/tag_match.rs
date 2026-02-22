@@ -1,9 +1,7 @@
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use serde::Deserialize;
 
 use crate::block::RawBlockState;
 
-#[derive(Deserialize)]
 pub struct TagMatchRuleTest {
     pub tag: String,
 }

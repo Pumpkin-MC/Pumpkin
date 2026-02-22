@@ -2,12 +2,10 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{generation::feature::placed_features::PlacedFeatureWrapper, world::BlockRegistryExt};
 
-#[derive(Deserialize)]
 pub struct RandomBooleanFeature {
     pub feature_true: Box<PlacedFeatureWrapper>,
     pub feature_false: Box<PlacedFeatureWrapper>,

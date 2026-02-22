@@ -3,13 +3,11 @@ use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::RandomGenerator,
 };
-use serde::Deserialize;
 
 use super::{FoliagePlacer, LeaveValidator};
 use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
 
-#[derive(Deserialize)]
 pub struct MegaPineFoliagePlacer {
     pub crown_height: IntProvider,
 }

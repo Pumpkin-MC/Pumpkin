@@ -3,19 +3,16 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{generation::section_coords, world::BlockRegistryExt};
 
-#[derive(Deserialize)]
 pub struct EndSpikeFeature {
     pub crystal_invulnerable: bool,
     pub spikes: Vec<Spike>,
 }
 
-#[derive(Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone)]
 pub struct Spike {
     pub center_x: i32,
     pub center_z: i32,

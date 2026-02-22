@@ -1,8 +1,5 @@
-use serde::Deserialize;
-
 use crate::block::{BlockStateCodec, RawBlockState};
 
-#[derive(Deserialize)]
 pub struct BlockStateMatchRuleTest {
     pub block_state: BlockStateCodec,
 }

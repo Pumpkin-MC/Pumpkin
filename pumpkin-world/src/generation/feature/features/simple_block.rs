@@ -1,6 +1,5 @@
 use pumpkin_data::Block;
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{
@@ -8,7 +7,6 @@ use crate::{
     world::{BlockAccessor, BlockRegistryExt},
 };
 
-#[derive(Deserialize)]
 pub struct SimpleBlockFeature {
     pub to_place: BlockStateProvider,
     pub schedule_tick: Option<bool>,

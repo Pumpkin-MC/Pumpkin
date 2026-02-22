@@ -5,7 +5,7 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
+
 use straight::StraightTrunkPlacer;
 
 use super::{TreeFeature, TreeNode};
@@ -26,12 +26,10 @@ pub mod mega_jungle;
 pub mod straight;
 pub mod upwards_branching;
 
-#[derive(Deserialize)]
 pub struct TrunkPlacer {
     pub base_height: u8,
     pub height_rand_a: u8,
     pub height_rand_b: u8,
-    #[serde(flatten)]
     pub r#type: TrunkType,
 }
 
@@ -110,26 +108,15 @@ impl TrunkPlacer {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(tag = "type")]
 pub enum TrunkType {
-    #[serde(rename = "minecraft:straight_trunk_placer")]
     Straight(StraightTrunkPlacer),
-    #[serde(rename = "minecraft:forking_trunk_placer")]
     Forking(ForkingTrunkPlacer),
-    #[serde(rename = "minecraft:giant_trunk_placer")]
     Giant(GiantTrunkPlacer),
-    #[serde(rename = "minecraft:mega_jungle_trunk_placer")]
     MegaJungle(MegaJungleTrunkPlacer),
-    #[serde(rename = "minecraft:dark_oak_trunk_placer")]
     DarkOak(DarkOakTrunkPlacer),
-    #[serde(rename = "minecraft:fancy_trunk_placer")]
     Fancy(FancyTrunkPlacer),
-    #[serde(rename = "minecraft:bending_trunk_placer")]
     Bending(BendingTrunkPlacer),
-    #[serde(rename = "minecraft:upwards_branching_trunk_placer")]
     UpwardsBranching(UpwardsBranchingTrunkPlacer),
-    #[serde(rename = "minecraft:cherry_trunk_placer")]
     Cherry(CherryTrunkPlacer),
 }
 

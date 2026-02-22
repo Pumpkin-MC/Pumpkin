@@ -1,18 +1,10 @@
-use serde::Deserialize;
-
-#[derive(Deserialize)]
 pub struct FeatureSize {
     pub min_clipped_height: Option<u8>,
-    #[serde(flatten)]
     pub r#type: FeatureSizeType,
 }
 
-#[derive(Deserialize)]
-#[serde(tag = "type")]
 pub enum FeatureSizeType {
-    #[serde(rename = "minecraft:three_layers_feature_size")]
     ThreeLayersFeatureSize(ThreeLayersFeatureSize),
-    #[serde(rename = "minecraft:two_layers_feature_size")]
     TwoLayersFeatureSize(TwoLayersFeatureSize),
 }
 
@@ -25,7 +17,6 @@ impl FeatureSizeType {
     }
 }
 
-#[derive(Deserialize)]
 pub struct TwoLayersFeatureSize {
     pub limit: u8,
     pub lower_size: u8,
@@ -42,7 +33,6 @@ impl TwoLayersFeatureSize {
     }
 }
 
-#[derive(Deserialize)]
 pub struct ThreeLayersFeatureSize {
     pub limit: u8,
     pub upper_limit: u8,

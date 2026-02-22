@@ -2,12 +2,10 @@ use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{generation::feature::placed_features::PlacedFeature, world::BlockRegistryExt};
 
-#[derive(Deserialize)]
 pub struct RandomPatchFeature {
     pub tries: u8,
     pub xz_spread: u8,

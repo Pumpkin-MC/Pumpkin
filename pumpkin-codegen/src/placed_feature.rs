@@ -3,8 +3,6 @@ use quote::quote;
 use serde_json::Value;
 use std::fs;
 
-pub const WORLD_OUT_DIR: &str = "../pumpkin-world/src/generation/feature";
-
 pub fn build() -> TokenStream {
     let json_content =
         fs::read_to_string("../assets/placed_feature.json").expect("Failed to read placed_feature.json");

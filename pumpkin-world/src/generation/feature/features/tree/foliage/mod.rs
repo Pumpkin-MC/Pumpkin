@@ -13,7 +13,7 @@ use pumpkin_util::{
     random::RandomGenerator,
 };
 use random_spread::RandomSpreadFoliagePlacer;
-use serde::Deserialize;
+
 use spruce::SpruceFoliagePlacer;
 
 use super::{TreeFeature, TreeNode};
@@ -31,11 +31,9 @@ pub mod pine;
 pub mod random_spread;
 pub mod spruce;
 
-#[derive(Deserialize)]
 pub struct FoliagePlacer {
     pub radius: IntProvider,
     pub offset: IntProvider,
-    #[serde(flatten)]
     pub r#type: FoliageType,
 }
 
@@ -139,30 +137,17 @@ impl FoliagePlacer {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(tag = "type")]
 pub enum FoliageType {
-    #[serde(rename = "minecraft:blob_foliage_placer")]
     Blob(BlobFoliagePlacer),
-    #[serde(rename = "minecraft:spruce_foliage_placer")]
     Spruce(SpruceFoliagePlacer),
-    #[serde(rename = "minecraft:pine_foliage_placer")]
     Pine(PineFoliagePlacer),
-    #[serde(rename = "minecraft:acacia_foliage_placer")]
     Acacia(AcaciaFoliagePlacer),
-    #[serde(rename = "minecraft:bush_foliage_placer")]
     Bush(BushFoliagePlacer),
-    #[serde(rename = "minecraft:fancy_foliage_placer")]
     Fancy(LargeOakFoliagePlacer),
-    #[serde(rename = "minecraft:jungle_foliage_placer")]
     Jungle(JungleFoliagePlacer),
-    #[serde(rename = "minecraft:mega_pine_foliage_placer")]
     MegaPine(MegaPineFoliagePlacer),
-    #[serde(rename = "minecraft:dark_oak_foliage_placer")]
     DarkOak(DarkOakFoliagePlacer),
-    #[serde(rename = "minecraft:random_spread_foliage_placer")]
     RandomSpread(RandomSpreadFoliagePlacer),
-    #[serde(rename = "minecraft:cherry_foliage_placer")]
     Cherry(CherryFoliagePlacer),
 }
 

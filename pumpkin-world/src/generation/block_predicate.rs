@@ -3,42 +3,26 @@ use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use serde::Deserialize;
 
 use crate::block::RawBlockState;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{block::BlockStateCodec, world::BlockRegistryExt};
 
-#[derive(Deserialize)]
-#[serde(tag = "type")]
 pub enum BlockPredicate {
-    #[serde(rename = "minecraft:matching_blocks")]
     MatchingBlocks(MatchingBlocksBlockPredicate),
-    #[serde(rename = "minecraft:matching_block_tag")]
     MatchingBlockTag(MatchingBlockTagPredicate),
-    #[serde(rename = "minecraft:matching_fluids")]
     MatchingFluids(MatchingFluidsBlockPredicate),
-    #[serde(rename = "minecraft:has_sturdy_face")]
     HasSturdyFace(HasSturdyFacePredicate),
-    #[serde(rename = "minecraft:solid")]
     Solid(SolidBlockPredicate),
-    #[serde(rename = "minecraft:replaceable")]
     Replaceable(ReplaceableBlockPredicate),
-    #[serde(rename = "minecraft:would_survive")]
     WouldSurvive(WouldSurviveBlockPredicate),
-    #[serde(rename = "minecraft:inside_world_bounds")]
     InsideWorldBounds(InsideWorldBoundsBlockPredicate),
-    #[serde(rename = "minecraft:any_of")]
     AnyOf(AnyOfBlockPredicate),
-    #[serde(rename = "minecraft:all_of")]
     AllOf(AllOfBlockPredicate),
-    #[serde(rename = "minecraft:not")]
     Not(NotBlockPredicate),
-    #[serde(rename = "minecraft:true")]
     AlwaysTrue,
     // Not used
-    // #[serde(rename = "minecraft:unobstructed")]
-    // Unobstructed(EmptyTODOStruct),
+    //     // Unobstructed(EmptyTODOStruct),
 }
 
 impl BlockPredicate {
@@ -65,9 +49,7 @@ impl BlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct MatchingBlocksBlockPredicate {
-    #[serde(flatten)]
     pub offset: OffsetBlocksBlockPredicate,
     pub blocks: MatchingBlocksWrapper,
 }
@@ -87,7 +69,6 @@ impl MatchingBlocksBlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct InsideWorldBoundsBlockPredicate {
     pub offset: Vector3<i32>,
 }
@@ -99,9 +80,7 @@ impl InsideWorldBoundsBlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct MatchingFluidsBlockPredicate {
-    #[serde(flatten)]
     pub offset: OffsetBlocksBlockPredicate,
     pub fluids: MatchingBlocksWrapper,
 }
@@ -121,9 +100,7 @@ impl MatchingFluidsBlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct MatchingBlockTagPredicate {
-    #[serde(flatten)]
     pub offset: OffsetBlocksBlockPredicate,
     pub tag: String,
 }
@@ -137,9 +114,7 @@ impl MatchingBlockTagPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct HasSturdyFacePredicate {
-    #[serde(flatten)]
     pub offset: OffsetBlocksBlockPredicate,
     pub direction: BlockDirection,
 }
@@ -151,7 +126,6 @@ impl HasSturdyFacePredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct AnyOfBlockPredicate {
     pub predicates: Vec<BlockPredicate>,
 }
@@ -173,7 +147,6 @@ impl AnyOfBlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct AllOfBlockPredicate {
     pub predicates: Vec<BlockPredicate>,
 }
@@ -195,7 +168,6 @@ impl AllOfBlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct NotBlockPredicate {
     pub predicate: Box<BlockPredicate>,
 }
@@ -211,9 +183,7 @@ impl NotBlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct SolidBlockPredicate {
-    #[serde(flatten)]
     pub offset: OffsetBlocksBlockPredicate,
 }
 
@@ -224,9 +194,7 @@ impl SolidBlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct WouldSurviveBlockPredicate {
-    #[serde(flatten)]
     pub offset: OffsetBlocksBlockPredicate,
     pub state: BlockStateCodec,
 }
@@ -246,9 +214,7 @@ impl WouldSurviveBlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct ReplaceableBlockPredicate {
-    #[serde(flatten)]
     pub offset: OffsetBlocksBlockPredicate,
 }
 
@@ -259,7 +225,6 @@ impl ReplaceableBlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
 pub struct OffsetBlocksBlockPredicate {
     pub offset: Option<Vector3<i32>>,
 }
@@ -296,8 +261,6 @@ impl OffsetBlocksBlockPredicate {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(untagged)]
 pub enum MatchingBlocksWrapper {
     Single(String),
     Multiple(Vec<String>),

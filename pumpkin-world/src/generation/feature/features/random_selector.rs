@@ -2,18 +2,15 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{generation::feature::placed_features::PlacedFeatureWrapper, world::BlockRegistryExt};
 
-#[derive(Deserialize)]
 pub struct RandomFeature {
     pub features: Vec<RandomFeatureEntry>,
     pub default: Box<PlacedFeatureWrapper>,
 }
 
-#[derive(Deserialize)]
 pub struct RandomFeatureEntry {
     pub feature: PlacedFeatureWrapper,
     pub chance: f32,

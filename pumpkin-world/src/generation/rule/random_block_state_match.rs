@@ -1,9 +1,7 @@
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
-use serde::Deserialize;
 
 use crate::block::{BlockStateCodec, RawBlockState};
 
-#[derive(Deserialize)]
 pub struct RandomBlockStateMatchRuleTest {
     pub block_state: BlockStateCodec,
     pub probability: f32,

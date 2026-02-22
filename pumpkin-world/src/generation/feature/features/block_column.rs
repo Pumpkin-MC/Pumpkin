@@ -3,7 +3,6 @@ use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::RandomGenerator,
 };
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{
@@ -11,7 +10,6 @@ use crate::{
     world::BlockRegistryExt,
 };
 
-#[derive(Deserialize)]
 pub struct BlockColumnFeature {
     pub layers: Vec<Layer>,
     pub direction: BlockDirection,
@@ -19,7 +17,6 @@ pub struct BlockColumnFeature {
     pub prioritize_tip: bool,
 }
 
-#[derive(Deserialize)]
 pub struct Layer {
     pub height: IntProvider,
     pub provider: BlockStateProvider,

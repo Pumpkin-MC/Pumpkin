@@ -3,13 +3,11 @@ use pumpkin_util::{
     math::int_provider::IntProvider,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use super::{FoliagePlacer, LeaveValidator};
 use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
 
-#[derive(Deserialize)]
 pub struct CherryFoliagePlacer {
     pub height: IntProvider,
     pub wide_bottom_layer_hole_chance: f32,

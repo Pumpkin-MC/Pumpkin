@@ -6,9 +6,7 @@ use pumpkin_util::{
     math::{block_box::BlockBox, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
-#[derive(Deserialize)]
 pub struct PlaceOnGroundTreeDecorator {
     pub tries: i32,
     pub radius: i32,

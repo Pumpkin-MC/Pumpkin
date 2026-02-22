@@ -7,9 +7,7 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
-#[derive(Deserialize)]
 pub struct SeagrassFeature {
     pub probability: f32,
 }

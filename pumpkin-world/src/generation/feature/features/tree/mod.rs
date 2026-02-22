@@ -3,7 +3,7 @@ use foliage::FoliagePlacer;
 use pumpkin_data::tag;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
-use serde::Deserialize;
+
 use trunk::TrunkPlacer;
 
 use crate::generation::proto_chunk::GenerationCache;
@@ -13,7 +13,6 @@ pub mod decorator;
 pub mod foliage;
 pub mod trunk;
 
-#[derive(Deserialize)]
 pub struct TreeFeature {
     pub dirt_provider: BlockStateProvider,
     pub trunk_provider: BlockStateProvider,

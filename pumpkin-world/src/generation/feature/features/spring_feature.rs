@@ -1,11 +1,9 @@
 use pumpkin_data::BlockDirection;
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{block::BlockStateCodec, world::BlockRegistryExt};
 
-#[derive(Deserialize)]
 pub struct SpringFeatureFeature {
     pub state: BlockStateCodec,
     pub requires_block_below: bool,
@@ -14,8 +12,7 @@ pub struct SpringFeatureFeature {
     pub valid_blocks: BlockWrapper,
 }
 
-#[derive(Deserialize, Clone)]
-#[serde(untagged)]
+#[derive(Clone)]
 pub enum BlockWrapper {
     Single(String),
     Multi(Vec<String>),

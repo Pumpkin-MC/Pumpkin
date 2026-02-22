@@ -5,19 +5,16 @@ use pumpkin_util::{
     math::{lerp, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::{block::BlockStateCodec, generation::rule::RuleTest, world::BlockRegistryExt};
 use crate::{block::RawBlockState, generation::proto_chunk::GenerationCache};
 
-#[derive(Deserialize)]
 pub struct OreFeature {
     pub size: i32,
     pub discard_chance_on_air_exposure: f32,
     pub targets: Vec<OreTarget>,
 }
 
-#[derive(Deserialize)]
 pub struct OreTarget {
     pub target: RuleTest,
     pub state: BlockStateCodec,

@@ -4,9 +4,7 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
-#[derive(Deserialize)]
 pub struct SmallDripstoneFeature {
     pub chance_of_taller_dripstone: f32,
     pub chance_of_directional_spread: f32,
