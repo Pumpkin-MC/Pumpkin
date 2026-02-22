@@ -10,6 +10,7 @@ pub mod breed;
 pub mod creeper_ignite;
 pub mod eat_grass;
 pub mod escape_danger;
+pub mod fish_swim;
 pub mod follow_owner;
 pub mod follow_parent;
 pub mod goal_selector;

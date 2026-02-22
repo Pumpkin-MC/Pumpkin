@@ -1,8 +1,11 @@
 pub mod bee;
 pub mod cat;
 pub mod chicken;
+pub mod cod;
 pub mod cow;
 pub mod iron_golem;
+pub mod salmon;
 pub mod sheep;
 pub mod snow_golem;
+pub mod tropical_fish;
 pub mod wolf;
