@@ -1,4 +1,4 @@
-pub mod player_armor_stand_manipulate;
+pub mod armor_stand_manipulate;
 pub mod player_change_world;
 pub mod player_chat;
 pub mod player_command_send;
