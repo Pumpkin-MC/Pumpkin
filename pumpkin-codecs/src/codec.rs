@@ -1,4 +1,5 @@
 use crate::HasValue;
+use crate::codecs::either::{EitherCodec, new_either_codec};
 use crate::codecs::lazy::{LazyCodec, new_lazy_codec};
 use crate::codecs::list::{ListCodec, new_list_codec};
 use crate::codecs::primitive::{
@@ -25,7 +26,6 @@ use crate::map_codecs::optional_field::{
 use crate::map_codecs::simple::{SimpleMapCodec, new_simple_map_codec};
 use std::fmt::Display;
 use std::hash::Hash;
-use crate::serialization::codecs::either::{new_either_codec, EitherCodec};
 
 /// A type of *codec* describing the way to **encode from and decode to** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
 ///
@@ -385,7 +385,10 @@ where
 
 /// Creates an [`EitherCodec`] with the provided left and right codecs to tell the way to serialize/deserialize
 /// their respective types.
-pub const fn either<L: Codec, R: Codec>(left_codec: &'static L, right_codec: &'static R) -> EitherCodec<L, R> {
+pub const fn either<L: Codec, R: Codec>(
+    left_codec: &'static L,
+    right_codec: &'static R,
+) -> EitherCodec<L, R> {
     new_either_codec(left_codec, right_codec)
 }
 
