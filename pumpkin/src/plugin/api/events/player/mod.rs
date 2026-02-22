@@ -1,9 +1,9 @@
 pub mod changed_main_hand;
+pub mod exp_change;
 pub mod player_change_world;
 pub mod player_chat;
 pub mod player_command_send;
 pub mod player_custom_payload;
-pub mod exp_change;
 pub mod player_gamemode_change;
 pub mod player_interact_entity_event;
 pub mod player_interact_event;
