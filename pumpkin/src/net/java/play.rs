@@ -1415,7 +1415,7 @@ impl JavaClient {
                         let speed = block::calc_block_breaking(player, state, block).await;
                         let item_stack = player.inventory.held_item().lock().await.clone();
                         let block_damage_event =
-                            crate::plugin::block::block_damage::BlockDamageEvent::new(
+                            crate::plugin::block::damage::BlockDamageEvent::new(
                                 player.clone(),
                                 block,
                                 position,
@@ -1491,7 +1491,7 @@ impl JavaClient {
                             world.get_block_and_state(&player_action.position).await;
                         let item_stack = player.inventory.held_item().lock().await.clone();
                         let event =
-                            crate::plugin::block::block_damage_abort::BlockDamageAbortEvent::new(
+                            crate::plugin::block::damage_abort::BlockDamageAbortEvent::new(
                                 player.clone(),
                                 block,
                                 player_action.position,
