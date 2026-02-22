@@ -1,38 +1,19 @@
 use std::{any::Any, path::Path, sync::Arc};
 
-use pumpkin_plugin_host::wasm_host::{
-    PluginRuntime, WasmPlugin,
-    state::{ContextProvider, ServerProvider},
-};
-use pumpkin_util::Difficulty;
+use wasm_host::{PluginRuntime, WasmPlugin};
 
-use crate::{
-    plugin::{
-        Context, Plugin, PluginFuture,
-        loader::{PluginLoadFuture, PluginLoader, PluginUnloadFuture},
-    },
-    server::Server,
+use crate::plugin::{
+    Context, Plugin, PluginFuture,
+    loader::{PluginLoadFuture, PluginLoader, PluginUnloadFuture},
 };
 
-struct WasmPluginContextProvider(Arc<Context>);
-struct WasmPluginServerProvider(Arc<Server>);
+pub mod wasm_host;
 
-impl ContextProvider for WasmPluginContextProvider {
-    fn get_server(&self) -> Arc<dyn ServerProvider> {
-        Arc::new(WasmPluginServerProvider(self.0.server.clone()))
-    }
-}
-
-impl ServerProvider for WasmPluginServerProvider {
-    fn get_difficulty(&self) -> Difficulty {
-        self.0.get_difficulty()
-    }
-}
-
-impl Plugin for WasmPlugin {
+impl Plugin for Arc<WasmPlugin> {
     fn on_load(&mut self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move {
-            self.on_load(Arc::new(WasmPluginContextProvider(context)))
+            self.as_ref()
+                .on_load(context)
                 .await
                 .map_err(|err| err.to_string())?
         })
@@ -40,7 +21,8 @@ impl Plugin for WasmPlugin {
 
     fn on_unload(&mut self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move {
-            self.on_unload(Arc::new(WasmPluginContextProvider(context)))
+            self.as_ref()
+                .on_unload(context)
                 .await
                 .map_err(|err| err.to_string())?
         })

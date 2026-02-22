@@ -13,6 +13,11 @@ interface event {
     record player-join-event-data {
         player: player,
         text-component: raw-text-component,
+        cancelled: bool
+    }
+
+    enum event-type {
+        player-join-event,
     }
 
     variant event {

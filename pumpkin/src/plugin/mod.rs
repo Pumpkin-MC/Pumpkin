@@ -17,8 +17,6 @@ pub mod loader;
 use crate::{LOGGER_IMPL, plugin::loader::wasm::WasmPluginLoader, server::Server};
 pub use api::*;
 
-pub use pumpkin_plugin_host::metadata::PluginMetadata;
-
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Bump this whenever the public plugin API or any event layout changes in a way

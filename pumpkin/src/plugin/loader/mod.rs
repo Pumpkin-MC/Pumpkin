@@ -1,5 +1,4 @@
-use crate::plugin::api::Plugin;
-use pumpkin_plugin_host::{metadata::PluginMetadata, wasm_host::PluginInitError};
+use crate::plugin::{PluginMetadata, api::Plugin, loader::wasm::wasm_host::PluginInitError};
 use std::{any::Any, path::Path, pin::Pin};
 use thiserror::Error;
 
