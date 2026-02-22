@@ -1490,13 +1490,12 @@ impl JavaClient {
                         let (block, _state) =
                             world.get_block_and_state(&player_action.position).await;
                         let item_stack = player.inventory.held_item().lock().await.clone();
-                        let event =
-                            crate::plugin::block::damage_abort::BlockDamageAbortEvent::new(
-                                player.clone(),
-                                block,
-                                player_action.position,
-                                item_stack,
-                            );
+                        let event = crate::plugin::block::damage_abort::BlockDamageAbortEvent::new(
+                            player.clone(),
+                            block,
+                            player_action.position,
+                            item_stack,
+                        );
                         let _ = server.plugin_manager.fire(event).await;
                     }
                     self.update_sequence(player, player_action.sequence.0);
