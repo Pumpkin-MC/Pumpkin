@@ -246,7 +246,7 @@ impl MoveControl {
     }
 }
 
-fn idle_output(yaw: f32, pitch: f32) -> MoveControlOutput {
+const fn idle_output(yaw: f32, pitch: f32) -> MoveControlOutput {
     MoveControlOutput {
         movement: Vector3::new(0.0, 0.0, 0.0),
         yaw,
