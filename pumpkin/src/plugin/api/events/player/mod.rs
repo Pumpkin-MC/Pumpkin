@@ -10,9 +10,9 @@ pub mod player_join;
 pub mod player_leave;
 pub mod player_login;
 pub mod player_move;
-pub mod player_register_channel;
+pub mod register_channel;
 pub mod player_teleport;
-pub mod player_unregister_channel;
+pub mod unregister_channel;
 
 use std::sync::Arc;
 

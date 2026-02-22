@@ -27,8 +27,8 @@ use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEve
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
-use crate::plugin::player::player_register_channel::PlayerRegisterChannelEvent;
-use crate::plugin::player::player_unregister_channel::PlayerUnregisterChannelEvent;
+use crate::plugin::player::register_channel::PlayerRegisterChannelEvent;
+use crate::plugin::player::unregister_channel::PlayerUnregisterChannelEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
