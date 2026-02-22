@@ -3,7 +3,7 @@ pub mod player_chat;
 pub mod player_command_send;
 pub mod player_custom_payload;
 pub mod player_gamemode_change;
-pub mod player_harvest_block;
+pub mod harvest_block;
 pub mod player_interact_entity_event;
 pub mod player_interact_event;
 pub mod player_interact_unknown_entity_event;
