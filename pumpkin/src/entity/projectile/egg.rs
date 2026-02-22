@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use crate::plugin::player::player_egg_throw::PlayerEggThrowEvent;
+use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity,
