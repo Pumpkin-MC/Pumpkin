@@ -53,7 +53,7 @@ pub(crate) trait PressurePlate {
             let next_output = if let Some(server) = world.server.upgrade() {
                 // SAFETY: `block` references registry-backed block data with static lifetime.
                 let block_static: &'static Block = unsafe { &*std::ptr::from_ref::<Block>(block) };
-                let event = crate::plugin::block::block_redstone::BlockRedstoneEvent::new(
+                let event = crate::plugin::block::redstone::BlockRedstoneEvent::new(
                     block_static,
                     *pos,
                     i32::from(output),
