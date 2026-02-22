@@ -1,3 +1,4 @@
+pub mod bee;
 pub mod cat;
 pub mod chicken;
 pub mod cow;
