@@ -1,6 +1,6 @@
-pub mod entity_damage;
-pub mod entity_death;
-pub mod entity_spawn;
+pub mod damage;
+pub mod death;
+pub mod spawn;
 
 use std::sync::Arc;
 

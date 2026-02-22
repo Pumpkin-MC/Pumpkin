@@ -1271,14 +1271,14 @@ impl EntityBase for LivingEntity {
             }
 
             let effective_amount = if let Some(server) = world.server.upgrade() {
-                let event = crate::plugin::entity::entity_damage::EntityDamageEvent::new(
+                let event = crate::plugin::entity::damage::EntityDamageEvent::new(
                     self.entity.entity_uuid,
                     amount,
                     damage_type,
                 );
                 let event = server
                     .plugin_manager
-                    .fire::<crate::plugin::entity::entity_damage::EntityDamageEvent>(event)
+                    .fire::<crate::plugin::entity::damage::EntityDamageEvent>(event)
                     .await;
                 if event.cancelled {
                     return false;
@@ -1375,13 +1375,13 @@ impl EntityBase for LivingEntity {
             {
                 self.on_death(damage_type, source, cause).await;
                 if let Some(server) = world.server.upgrade() {
-                    let event = crate::plugin::entity::entity_death::EntityDeathEvent::new(
+                    let event = crate::plugin::entity::death::EntityDeathEvent::new(
                         self.entity.entity_uuid,
                         damage_type,
                     );
                     server
                         .plugin_manager
-                        .fire::<crate::plugin::entity::entity_death::EntityDeathEvent>(event)
+                        .fire::<crate::plugin::entity::death::EntityDeathEvent>(event)
                         .await;
                 }
             }
