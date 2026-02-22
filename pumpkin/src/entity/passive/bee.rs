@@ -10,11 +10,14 @@ use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
-    ai::goal::{
-        bee_wander::BeeWanderGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::LookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+    ai::{
+        goal::{
+            bee_wander::BeeWanderGoal, escape_danger::EscapeDangerGoal,
+            follow_parent::FollowParentGoal, look_around::LookAroundGoal,
+            look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+            wander_around::WanderAroundGoal,
+        },
+        move_control::MoveControl,
     },
     mob::{Mob, MobEntity},
 };
@@ -52,7 +55,6 @@ pub struct BeeEntity {
     time_since_sting: AtomicI32,
     ticks_without_nectar: AtomicI32,
     stay_out_of_hive_countdown: AtomicI32,
-
     #[expect(dead_code)]
     under_water_ticks: AtomicI32,
 }
@@ -76,12 +78,15 @@ impl BeeEntity {
         };
 
         mob_arc.mob_entity.living_entity.movement_speed.store(0.3);
+
+        *mob_arc.mob_entity.move_control.lock().await = MoveControl::flying(20, true);
+
         mob_arc.sync_bee_flags_metadata().await;
         mob_arc.sync_anger_metadata().await;
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
-
+            // Priority order adapted from vanilla registerGoals()
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, BEE_TEMPT_ITEMS)));
@@ -184,13 +189,12 @@ impl Mob for BeeEntity {
                 return;
             }
 
-            let entity = &self.mob_entity.living_entity.entity;
-
-            let on_ground = entity.on_ground.load(Relaxed);
+            // Decrement hive cooldown
             if self.stay_out_of_hive_countdown.load(Relaxed) > 0 {
                 self.stay_out_of_hive_countdown.fetch_sub(1, Relaxed);
             }
 
+            // Track ticks without nectar
             if !self.get_flag(FLAG_HAS_NECTAR) {
                 self.ticks_without_nectar.fetch_add(1, Relaxed);
             }
@@ -207,19 +211,6 @@ impl Mob for BeeEntity {
             }
 
             self.sync_bee_flags_metadata().await;
-
-            if !on_ground {
-                let velo = entity.velocity.load();
-                if velo.y < -0.1 {
-                    entity
-                        .velocity
-                        .store(pumpkin_util::math::vector3::Vector3::new(
-                            velo.x,
-                            velo.y * 0.6,
-                            velo.z,
-                        ));
-                }
-            }
         })
     }
 }

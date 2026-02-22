@@ -1,5 +1,6 @@
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::move_control::MoveControl;
 use crate::entity::living::LivingEntity;
 
 use crate::entity::ai::pathfinder::binary_heap::BinaryHeap;
@@ -220,7 +221,7 @@ impl Navigator {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn tick(&mut self, entity: &LivingEntity) {
+    pub async fn tick(&mut self, entity: &LivingEntity, move_control: &mut MoveControl) {
         let Some(goal) = self.current_goal.take() else {
             // Idle: stop the mob
             entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
@@ -306,20 +307,34 @@ impl Navigator {
                 let horizontal_dist_sq = dx * dx + dz * dz;
                 let horizontal_dist = horizontal_dist_sq.sqrt();
 
-                // Skip node if we're above it on the same XZ column and airborne (falling toward it)
-                if !on_ground && horizontal_dist < NODE_REACH_XZ && dy < -0.5 {
-                    path.advance();
+                // Flying mobs: delegate movement to their MoveControl
+                if move_control.is_flying() {
+                    let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+
+                    // Skip node if we're above it on the same XZ column and airborne
+                    if !on_ground && horizontal_dist < NODE_REACH_XZ && dy < -0.5 {
+                        path.advance();
+                        self.current_goal = Some(goal);
+                        return;
+                    }
+
+                    if horizontal_dist < NODE_REACH_XZ && dy.abs() < NODE_REACH_Y {
+                        path.advance();
+                        self.current_goal = Some(goal);
+                        return;
+                    }
+
+                    // Set wanted position on the move control — it handles velocity
+                    move_control.set_wanted_position(
+                        target_pos.x,
+                        target_pos.y,
+                        target_pos.z,
+                        goal.speed,
+                    );
                     self.current_goal = Some(goal);
                     return;
                 }
 
-                if horizontal_dist < NODE_REACH_XZ && dy.abs() < NODE_REACH_Y {
-                    path.advance();
-                    self.current_goal = Some(goal);
-                    return;
-                }
-
-                // Don't try to path-follow while airborne — let gravity handle it
                 if !on_ground {
                     entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
                     self.current_goal = Some(goal);

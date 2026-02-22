@@ -1,4 +1,7 @@
-use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{
+    Entity, EntityBase, NBTStorage, ai::move_control::MoveControl, ai::pathfinder::Navigator,
+    living::LivingEntity,
+};
 use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
@@ -34,6 +37,7 @@ pub struct MobEntity {
     pub goals_selector: Mutex<GoalSelector>,
     pub target_selector: Mutex<GoalSelector>,
     pub navigator: Mutex<Navigator>,
+    pub move_control: Mutex<MoveControl>,
     pub target: Mutex<Option<Arc<dyn EntityBase>>>,
     pub look_control: Mutex<LookControl>,
     pub position_target: AtomicCell<BlockPos>,
@@ -60,6 +64,7 @@ impl MobEntity {
             goals_selector: Mutex::new(GoalSelector::default()),
             target_selector: Mutex::new(GoalSelector::default()),
             navigator: Mutex::new(Navigator::default()),
+            move_control: Mutex::new(MoveControl::default()),
             target: Mutex::new(None),
             look_control: Mutex::new(LookControl::default()),
             position_target: AtomicCell::new(BlockPos::ZERO),
@@ -317,9 +322,31 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 mob_entity.goals_selector.lock().await.tick(self).await;
             }
 
-            let mut navigator = mob_entity.navigator.lock().await;
-            navigator.tick(&mob_entity.living_entity).await;
-            drop(navigator);
+            {
+                let mut navigator = mob_entity.navigator.lock().await;
+                let mut move_ctrl = mob_entity.move_control.lock().await;
+                navigator
+                    .tick(&mob_entity.living_entity, &mut move_ctrl)
+                    .await;
+
+                // Tick move control after navigator (vanilla order)
+                let pos = mob_entity.living_entity.entity.pos.load();
+                let yaw = mob_entity.living_entity.entity.yaw.load();
+                let pitch = mob_entity.living_entity.entity.pitch.load();
+                let on_ground = mob_entity.living_entity.entity.on_ground.load(Relaxed);
+                let speed = mob_entity.living_entity.movement_speed.load();
+
+                if let Some((movement, new_yaw, new_pitch)) =
+                    move_ctrl.tick(pos, yaw, pitch, on_ground, speed)
+                {
+                    mob_entity.living_entity.movement_input.store(movement);
+                    mob_entity.living_entity.movement_speed.store(speed);
+                    mob_entity.living_entity.entity.yaw.store(new_yaw);
+                    mob_entity.living_entity.entity.head_yaw.store(new_yaw);
+                    mob_entity.living_entity.entity.body_yaw.store(new_yaw);
+                    mob_entity.living_entity.entity.pitch.store(new_pitch);
+                }
+            }
 
             let mut look_control = mob_entity.look_control.lock().await;
             look_control.tick(self).await;
