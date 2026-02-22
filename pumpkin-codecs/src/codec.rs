@@ -18,6 +18,7 @@ use crate::dynamic_ops::DynamicOps;
 use crate::keyable::Keyable;
 use crate::map_codec::{ComposedMapCodec, KeyDispatchCodec};
 use crate::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
+use crate::map_codecs::key_dispatch::{KeyDispatchMapCodec, KeyDispatchable};
 use crate::map_codecs::optional_field::{
     DefaultValueProviderMapCodec, OptionalFieldMapCodec, new_default_value_provider_map_codec,
     new_optional_field_map_codec,
@@ -25,7 +26,6 @@ use crate::map_codecs::optional_field::{
 use crate::map_codecs::simple::{SimpleMapCodec, new_simple_map_codec};
 use std::fmt::Display;
 use std::hash::Hash;
-use crate::map_codecs::key_dispatch::{KeyDispatchMapCodec, KeyDispatchable};
 
 /// A type of *codec* describing the way to **encode from and decode to** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
 ///
@@ -89,7 +89,7 @@ use crate::map_codecs::key_dispatch::{KeyDispatchMapCodec, KeyDispatchable};
 ///
 /// ## Dispatch
 /// This is usually for enum types (or any type with variants that may each store different values.)
-/// Use [`dispatch`] or [`dispatch_with_key`] to create a codec structure for a type that has variants of different contents.
+/// Use [`dispatch`] or [`dispatch_with_key`] to create a codec for a type that has variants of different contents.
 ///
 /// # Transformers
 /// A map codec of a type `B` can be implemented by *transforming* another codec of type `A` to work with type `B`.
@@ -531,15 +531,20 @@ pub type FieldedKeyDispatchMapCodec<T, C> = KeyDispatchMapCodec<T, FieldMapCodec
 /// The differentiator key will be `"value"`.
 ///
 /// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key (`"type"`).
-pub const fn dispatch<T: KeyDispatchable, C: Codec<Value = T::Key>>(codec: &'static C) -> FieldedKeyDispatchCodec<T, C> {
-    dispatch_with_key("value", codec)
+pub const fn dispatch<T: KeyDispatchable, C: Codec<Value = T::Key>>(
+    codec: &'static C,
+) -> FieldedKeyDispatchCodec<T, C> {
+    dispatch_with_key("type", codec)
 }
 
 /// Creates a [`Codec`] for a type implementing [`KeyDispatchable`], using the provided `Codec` as the codec for the differentiator key and the differentiator key.
 ///
 /// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key.
-pub const fn dispatch_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(key: &'static str, codec: &'static C) -> FieldedKeyDispatchCodec<T, C> {
-    super::map_codec::dispatch(field(codec, key))
+pub const fn dispatch_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(
+    key: &'static str,
+    codec: &'static C,
+) -> FieldedKeyDispatchCodec<T, C> {
+    super::map_codec::dispatch_map_codec_to_codec(field(codec, key))
 }
 
 /// Creates a [`Codec`] for a type implementing [`KeyDispatchable`], using the provided `Codec` as the codec for the differentiator key.
@@ -547,15 +552,20 @@ pub const fn dispatch_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(key
 /// The differentiator key will be `"value"`.
 ///
 /// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key (`"type"`).
-pub const fn dispatch_map<T: KeyDispatchable, C: Codec<Value = T::Key>>(codec: &'static C) -> FieldedKeyDispatchMapCodec<T, C> {
-    dispatch_map_with_key("value", codec)
+pub const fn dispatch_map<T: KeyDispatchable, C: Codec<Value = T::Key>>(
+    codec: &'static C,
+) -> FieldedKeyDispatchMapCodec<T, C> {
+    dispatch_map_with_key("type", codec)
 }
 
 /// Creates a [`MapCodec`] for a type implementing [`KeyDispatchable`], using the provided [`Codec`] as the codec for the differentiator key and the differentiator key.
 ///
 /// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key.
-pub const fn dispatch_map_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(key: &'static str, codec: &'static C) -> FieldedKeyDispatchMapCodec<T, C> {
-    super::map_codec::dispatch_map(field(codec, key))
+pub const fn dispatch_map_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(
+    key: &'static str,
+    codec: &'static C,
+) -> FieldedKeyDispatchMapCodec<T, C> {
+    super::map_codec::dispatch_map_codec_to_map_codec(field(codec, key))
 }
 
 // Field functions

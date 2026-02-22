@@ -35,13 +35,14 @@ use crate::map_codecs::key_dispatch::{new_key_dispatch_map_codec, KeyDispatchMap
 ///
 /// ## Field Map Codecs
 /// These are the most commonly used map codecs. The `codec` module has methods for creating them with a `Codec` instance:
-/// - [`field`]: For required fields.
-/// - [`optional_field`] and [`lenient_optional_field`]: For optional fields encoding/decoding an [`Option`] type.
-/// - [`optional_field_with_default`] and [`lenient_optional_field_with_default`]:
+/// - [`codec::field`]: For required fields.
+/// - [`codec::optional_field`] and [`codec::lenient_optional_field`]: For optional fields encoding/decoding an [`Option`] type.
+/// - [`codec::optional_field_with_default`] and [`codec::lenient_optional_field_with_default`]:
 ///   For optional fields which have a default value for when no value is found while decoding.
 ///
 /// ## Dispatch Map Codecs
-/// Similar to
+/// Similar to codecs, use [`codec::dispatch_map`] or [`codec::dispatch_map_with_key`] to create a direct [`KeyDispatchMapCodec`]
+/// with the provided `MapCodec`, which serializes/deserializes a type with variants of different contents.
 ///
 /// # Transformers
 /// A map codec of a type `B` can be implemented by *transforming* another codec of type `A` to work with type `B`,
@@ -54,13 +55,6 @@ use crate::map_codecs::key_dispatch::{new_key_dispatch_map_codec, KeyDispatchMap
 /// The [`validate`] function returns a codec wrapper that validates a value before encoding and after decoding.
 /// A validated codec takes a function that can either return an [`Ok`] for a success,
 /// or an [`Err`] with the provided message to place in a `DataResult`.
-///
-/// [`Codec`]: super::codec::Codec
-/// [`field`]: super::codec::field
-/// [`optional_field`]: super::codec::optional_field
-/// [`lenient_optional_field`]: super::codec::lenient_optional_field
-/// [`optional_field_with_default`]: super::codec::optional_field_with_default
-/// [`lenient_optional_field_with_default`]: super::codec::lenient_optional_field_with_default
 pub trait MapCodec: MapEncoder + MapDecoder {}
 
 // Any struct implementing MapEncoder<Value = A> and MapDecoder<Value = A> will also implement MapCodec<Value = A>.
@@ -247,16 +241,23 @@ pub const fn validate<C: MapCodec>(
 
 pub type KeyDispatchCodec<T, C> = MapCodecCodec<KeyDispatchMapCodec<T, C>>;
 
-/// Creates a [`Codec`] for a type implementing [`KeyDispatchable`] with the provided differentiator key.
+/// Creates a [`Codec`] for a type implementing [`KeyDispatchable`] with the provided differentiator key, using the provided `MapCodec` for the differentiator key field.
 ///
 /// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key.
-pub const fn dispatch<T: KeyDispatchable, C: MapCodec<Value = T::Key>>(codec: C) -> KeyDispatchCodec<T, C> {
-    MapCodecCodec::Owned(dispatch_map(codec))
+pub const fn dispatch_map_codec_to_codec<T: KeyDispatchable, C: MapCodec<Value = T::Key>>(
+    codec: C,
+) -> KeyDispatchCodec<T, C> {
+    MapCodecCodec::Owned(dispatch_map_codec_to_map_codec(codec))
 }
 
-/// Creates a [`MapCodec`] for a type implementing [`KeyDispatchable`] with the provided differentiator key.
+/// Creates a [`MapCodec`] for a type implementing [`KeyDispatchable`] with the provided differentiator key, using the provided `MapCodec` for the differentiator key field.
 ///
 /// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key.
-pub const fn dispatch_map<T: KeyDispatchable, C: MapCodec<Value = T::Key>>(codec: C) -> KeyDispatchMapCodec<T, C> {
+pub(crate) const fn dispatch_map_codec_to_map_codec<
+    T: KeyDispatchable,
+    C: MapCodec<Value = T::Key>,
+>(
+    codec: C,
+) -> KeyDispatchMapCodec<T, C> {
     new_key_dispatch_map_codec(codec)
 }
