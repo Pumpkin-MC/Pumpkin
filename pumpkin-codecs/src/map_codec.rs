@@ -14,6 +14,7 @@ use crate::struct_builder::StructBuilder;
 use crate::struct_codecs::Field;
 use std::fmt::Display;
 use std::sync::Arc;
+use crate::serialization::map_codecs::either::{new_either_map_codec, EitherMapCodec};
 
 /// A type of *codec* which encodes/decodes fields of a map.
 ///
@@ -38,6 +39,10 @@ use std::sync::Arc;
 /// - [`optional_field_with_default`] and [`lenient_optional_field_with_default`]:
 ///   For optional fields which have a default value for when no value is found while decoding.
 ///
+/// ## Either
+/// Use [`either`] to create an [`EitherMapCodec`] that can use one of two provided codecs to serialize/deserialize
+/// an [`Either`].
+///
 /// # Transformers
 /// A map codec of a type `B` can be implemented by *transforming* another codec of type `A` to work with type `B`,
 /// similar to a `Codec`.
@@ -56,6 +61,8 @@ use std::sync::Arc;
 /// [`lenient_optional_field`]: super::codec::lenient_optional_field
 /// [`optional_field_with_default`]: super::codec::optional_field_with_default
 /// [`lenient_optional_field_with_default`]: super::codec::lenient_optional_field_with_default
+///
+/// [`Either`]: crate::util::either::Either
 pub trait MapCodec: MapEncoder + MapDecoder {}
 
 // Any struct implementing MapEncoder<Value = A> and MapDecoder<Value = A> will also implement MapCodec<Value = A>.
@@ -238,4 +245,13 @@ pub const fn validate<C: MapCodec>(
     validator: fn(&C::Value) -> Result<(), String>,
 ) -> ValidatedMapCodec<C> {
     new_validated_map_codec(codec, validator)
+}
+
+/// Creates an [`EitherMapCodec`]  with the provided left and right codecs to tell the way to serialize/deserialize
+/// their respective types.
+pub const fn either<L: MapCodec, R: MapCodec>(
+    left_codec: &'static L,
+    right_codec: &'static R
+) -> EitherMapCodec<L, R> {
+    new_either_map_codec(left_codec, right_codec)
 }

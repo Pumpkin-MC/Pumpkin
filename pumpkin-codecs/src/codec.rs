@@ -25,6 +25,7 @@ use crate::map_codecs::optional_field::{
 use crate::map_codecs::simple::{SimpleMapCodec, new_simple_map_codec};
 use std::fmt::Display;
 use std::hash::Hash;
+use crate::serialization::codecs::either::{new_either_codec, EitherCodec};
 
 /// A type of *codec* describing the way to **encode from and decode to** something of a type `Value`  (`Value` -> `?` and `?` -> `Value`).
 ///
@@ -86,6 +87,10 @@ use std::hash::Hash;
 /// Use the [`unbounded_map`] function to create a codec encoding/decoding a `HashMap` of any arbitrary key.
 /// **Unbounded map codecs only support keys that can encode from/decode to strings.**
 ///
+/// ## Either
+/// Use the [`either`] function to create a codec that can use one of two provided codecs to serialize/deserialize
+/// an [`Either`].
+///
 /// # Transformers
 /// A map codec of a type `B` can be implemented by *transforming* another codec of type `A` to work with type `B`.
 /// The following methods can be used depending on the equivalence relation between the two types:
@@ -105,6 +110,8 @@ use std::hash::Hash;
 /// [`for_getter`]: super::map_codec::for_getter
 /// [`for_getter_ref`]: super::map_codec::for_getter_ref
 /// [`Field`]: super::struct_codecs::Field
+///
+/// [`Either`]: crate::util::either::Either
 pub trait Codec: Encoder + Decoder {}
 
 // Any struct implementing Encoder<Value = A> and Decoder<Value = A> will also implement Codec<Value = A>.
@@ -374,6 +381,12 @@ where
     <K as HasValue>::Value: Display + Eq + Hash,
 {
     new_unbounded_map_codec(key_codec, element_codec)
+}
+
+/// Creates an [`EitherCodec`] with the provided left and right codecs to tell the way to serialize/deserialize
+/// their respective types.
+pub const fn either<L: Codec, R: Codec>(left_codec: &'static L, right_codec: &'static R) -> EitherCodec<L, R> {
+    new_either_codec(left_codec, right_codec)
 }
 
 // Struct codec functions
