@@ -26,7 +26,7 @@ use crate::{
     entity::{EntityBase, player::Player},
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{
-        player_chat::PlayerChatEvent, player_command_preprocess::PlayerCommandPreprocessEvent,
+        player_chat::PlayerChatEvent, command_preprocess::PlayerCommandPreprocessEvent,
     },
     server::{Server, seasonal_events},
     world::chunker::{self},
