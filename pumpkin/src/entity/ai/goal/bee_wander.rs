@@ -3,9 +3,6 @@ use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
-/// Flying wander goal for bees. Unlike ground-based `WanderAroundGoal`,
-/// bees pick random air positions and hover towards them with velocity-based movement.
-/// Adapted from vanilla `BeeWanderGoal`.
 pub struct BeeWanderGoal {
     goal_control: Controls,
     speed: f64,
@@ -20,19 +17,15 @@ impl BeeWanderGoal {
             goal_control: Controls::MOVE,
             speed,
             target: None,
-            chance: to_goal_ticks(10), // vanilla: nextInt(10) == 0
+            chance: to_goal_ticks(10),
         }
     }
 
-    /// Pick a random air position nearby, biased towards the bee's view direction.
-    /// Vanilla uses HoverRandomPos / AirAndWaterRandomPos; we approximate with random offsets.
     fn find_hover_target(mob: &dyn Mob) -> Vector3<f64> {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let pos = entity.pos.load();
         let yaw_rad = entity.yaw.load().to_radians();
         let mut rng = mob.get_random();
-
-        // Bias direction by view vector (vanilla: getViewVector)
         let view_x = -(yaw_rad.sin() as f64);
         let view_z = yaw_rad.cos() as f64;
 
@@ -50,7 +43,6 @@ impl BeeWanderGoal {
 impl Goal for BeeWanderGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            // Only start wandering occasionally, like vanilla 1/10 chance
             if mob.get_random().random_range(0..self.chance) != 0 {
                 return false;
             }
