@@ -1,79 +1,96 @@
-pub mod anvil;
-pub mod barrel;
-pub mod barrier;
-pub mod bed;
-pub mod cake;
-pub mod campfire;
-pub mod candle_cakes;
-pub mod candles;
-pub mod carpet;
-pub mod carved_pumpkin;
-pub mod chain;
-pub mod chests;
-pub mod chiseled_bookshelf;
-pub mod cobweb;
-pub mod command;
-pub mod composter;
-pub mod crafting_table;
-pub mod dirt_path;
-pub mod doors;
+// Portals & dimension blocks
 pub mod end_portal;
 pub mod end_portal_frame;
 pub mod end_rod;
-pub mod falling;
-pub mod farmland;
-pub mod fence_gates;
-pub mod fences;
-pub mod fire;
-pub mod flower_pots;
-pub mod furnace;
-pub mod glass_panes;
-pub mod glazed_terracotta;
-pub mod grindstone;
-pub mod hay;
-pub mod infested;
-pub mod iron_bars;
-pub mod jukebox;
-pub mod ladder;
-pub mod lanterns;
-pub mod logs;
-pub mod magma;
-pub mod mangrove_roots;
 pub mod nether_portal;
+
+// Storage & containers
+pub mod barrel;
+pub mod chests;
+pub mod ender_chest;
+pub mod hopper;
+pub mod shulker_box;
+
+// Workstations & processing
+pub mod blast_furnace;
+pub mod brewing_stand;
+pub mod crafting_table;
+pub mod furnace;
+pub mod grindstone;
+pub mod smoker;
+
+// Redstone & mechanisms
+pub mod command; // command block / redstone control
 pub mod note;
 pub mod piston;
-pub mod plant;
-pub mod powder_snow;
-pub mod pumpkin;
 pub mod redstone;
+
+// Doors, gates & openings
+pub mod doors;
+pub mod fence_gates;
+pub mod fences;
+pub mod trapdoor;
+
+// Building & structural blocks
+pub mod barrier;
+pub mod chain;
+pub mod glass_panes;
+pub mod glazed_terracotta;
+pub mod iron_bars;
+pub mod slabs;
+pub mod stairs;
+pub mod walls;
+
+// Decorative & furnishings
+pub mod banners;
+pub mod bed;
+pub mod carpet;
+pub mod chiseled_bookshelf;
+pub mod flower_pots;
+pub mod jukebox;
+pub mod lectern;
 pub mod shelf;
 pub mod signs;
 pub mod skull_block;
-pub mod slabs;
-pub mod slime;
-pub mod snow;
-pub mod spawner;
-pub mod sponge;
-pub mod stairs;
-pub mod tnt;
-pub mod torches;
-pub mod trapdoor;
-pub mod vine;
-pub mod walls;
-pub mod wither_rose;
 pub mod wither_skull;
 
-pub mod banners;
-pub mod shulker_box;
+// Lighting, heat & fire
+pub mod campfire;
+pub mod candle_cakes;
+pub mod candles;
+pub mod fire;
+pub mod lanterns;
+pub mod magma;
+pub mod torches;
 
-pub mod blast_furnace;
+// Plants, crops & natural blocks
+pub mod carved_pumpkin;
+pub mod farmland;
+pub mod hay;
+pub mod logs;
+pub mod mangrove_roots;
+pub mod plant;
+pub mod pumpkin;
+pub mod vine;
+pub mod wither_rose;
 
-pub mod hopper;
+// Terrain / environment / physics
+pub mod cobweb;
+pub mod dirt_path;
+pub mod falling;
+pub mod infested;
+pub mod powder_snow;
+pub mod snow;
+pub mod sponge;
 
-pub mod smoker;
+// Entities, hazards & misc gameplay blocks
+pub mod anvil;
+pub mod cake;
+pub mod composter;
+pub mod ladder;
+pub mod slime;
+pub mod spawner;
+pub mod tnt;
 
-pub mod ender_chest;
-
-// abstract
+// Misc / abstract
 pub mod abstract_wall_mounting;
-pub mod lectern;

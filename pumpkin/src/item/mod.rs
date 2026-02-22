@@ -1,4 +1,5 @@
 pub mod items;
+pub mod potion;
 pub mod registry;
 
 use std::any::Any;
