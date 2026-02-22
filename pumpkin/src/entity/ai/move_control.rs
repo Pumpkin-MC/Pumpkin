@@ -23,6 +23,7 @@ pub struct MoveControlInput {
     pub on_ground: bool,
     pub touching_water: bool,
     pub movement_speed: f64,
+    pub flying_speed: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -137,12 +138,13 @@ impl MoveControl {
 
     fn tick_flying(
         max_turn: i32,
-        _hovers_in_place: bool,
+        hovers_in_place: bool,
         wanted: &mut Option<WantedPosition>,
         operation: &mut MoveOperation,
         input: MoveControlInput,
     ) -> MoveControlOutput {
         if *operation != MoveOperation::MoveTo {
+            let _ = hovers_in_place;
             return idle_output(input.yaw, input.pitch);
         }
         *operation = MoveOperation::Wait;
@@ -162,11 +164,10 @@ impl MoveControl {
         let desired_yaw = (zd.atan2(xd) as f32).to_degrees() - 90.0;
         let new_yaw = rotlerp(input.yaw, desired_yaw, 90.0);
 
-        // Approximate vanilla FLYING_SPEED (0.6) as movement_speed * 2.0.
         let speed = if input.on_ground {
             wanted_position.speed * input.movement_speed
         } else {
-            wanted_position.speed * input.movement_speed * 2.0
+            wanted_position.speed * input.flying_speed
         };
         let horizontal_dist = xd.hypot(zd);
         let new_pitch = if yd.abs() > 1.0e-5 || horizontal_dist > 1.0e-5 {

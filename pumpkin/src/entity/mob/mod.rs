@@ -234,6 +234,13 @@ pub trait Mob: EntityBase + Send + Sync {
         75.0
     }
 
+    fn is_angry(&self) -> bool {
+        false
+    }
+    fn is_pollinating(&self) -> bool {
+        false
+    }
+
     fn get_mob_entity(&self) -> &MobEntity;
 
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
@@ -267,6 +274,11 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_y_velocity_drag(&self) -> Option<f64> {
         None
+    }
+
+    /// Equivalent to vanilla `Attributes.FLYING_SPEED` for flying move controls.
+    fn get_mob_flying_speed(&self) -> f64 {
+        self.get_mob_entity().living_entity.movement_speed.load()
     }
 
     fn mob_interact<'a>(
@@ -339,6 +351,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 let on_ground = mob_entity.living_entity.entity.on_ground.load(Relaxed);
                 let touching_water = mob_entity.living_entity.entity.touching_water.load(Relaxed);
                 let speed = mob_entity.living_entity.movement_speed.load();
+                let flying_speed = self.get_mob_flying_speed();
                 let input = MoveControlInput {
                     pos,
                     velocity,
@@ -347,6 +360,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                     on_ground,
                     touching_water,
                     movement_speed: speed,
+                    flying_speed,
                 };
 
                 if let Some(output) = move_ctrl.tick(input) {

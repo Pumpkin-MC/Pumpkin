@@ -46,6 +46,11 @@ impl PathfindingContext {
         self.mob_position
     }
 
+    #[must_use]
+    pub fn world_bottom_y(&self) -> i32 {
+        self.world.get_bottom_y()
+    }
+
     pub async fn get_path_type_from_state(&mut self, pos: Vector3<i32>) -> PathType {
         if let Some(ref cache) = self.path_type_cache
             && let Some(pt) = cache.get(pos)

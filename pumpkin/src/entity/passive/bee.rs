@@ -78,6 +78,13 @@ impl BeeEntity {
 
         mob_arc.mob_entity.living_entity.movement_speed.store(0.3);
 
+        {
+            let mut navigator = mob_arc.mob_entity.navigator.lock().await;
+            navigator.set_can_open_doors(false);
+            navigator.set_can_float(false);
+            navigator.set_required_path_length(48.0);
+        }
+
         *mob_arc.mob_entity.move_control.lock().await = MoveControl::flying(20, true);
 
         mob_arc.sync_bee_flags_metadata().await;
@@ -179,6 +186,21 @@ impl Mob for BeeEntity {
     /// Vanilla flying entity drag
     fn get_mob_y_velocity_drag(&self) -> Option<f64> {
         Some(0.6)
+    }
+
+    fn get_mob_flying_speed(&self) -> f64 {
+        0.6
+    }
+
+    fn is_angry(&self) -> bool {
+        if let Ok(target) = self.mob_entity.target.try_lock() {
+            return target.is_some();
+        }
+        false
+    }
+
+    fn is_pollinating(&self) -> bool {
+        false
     }
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {

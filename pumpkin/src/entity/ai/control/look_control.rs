@@ -69,8 +69,12 @@ impl LookControl {
     }
 
     pub async fn tick(&mut self, mob: &dyn Mob) {
+        if mob.is_angry() {
+            return;
+        }
+
         let entity = mob.get_entity();
-        if Self::should_stay_horizontal() {
+        if !mob.is_pollinating() {
             entity.set_pitch(0.0);
         }
 
@@ -99,10 +103,6 @@ impl LookControl {
         }
 
         self.clamp_head_yaw(mob).await;
-    }
-
-    const fn should_stay_horizontal() -> bool {
-        true
     }
 
     async fn clamp_head_yaw(&self, mob: &dyn Mob) {
