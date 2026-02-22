@@ -3230,7 +3230,7 @@ impl World {
             let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos).await;
 
             if let Some(server) = self.server.upgrade() {
-                let event = crate::plugin::block::block_physics::BlockPhysicsEvent::new(
+                let event = crate::plugin::block::physics::BlockPhysicsEvent::new(
                     neighbor_block,
                     neighbor_pos,
                     source_block,

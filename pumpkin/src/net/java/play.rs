@@ -2247,7 +2247,7 @@ impl JavaClient {
             }
             if multi_positions.len() > 1 {
                 let multi_event =
-                    crate::plugin::block::block_multi_place::BlockMultiPlaceEvent::new(
+                    crate::plugin::block::multi_place::BlockMultiPlaceEvent::new(
                         player.clone(),
                         block,
                         multi_positions,
