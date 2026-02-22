@@ -1504,7 +1504,7 @@ impl JavaClient {
                     if block_drop && let Some(server) = world.server.upgrade() {
                         let tool = player.inventory.held_item().lock().await.clone();
                         let block_key = format!("minecraft:{}", block.name);
-                        let event = crate::plugin::player::player_harvest_block::PlayerHarvestBlockEvent::new(
+                        let event = crate::plugin::player::harvest_block::PlayerHarvestBlockEvent::new(
                             player.clone(),
                             location,
                             block_key,
