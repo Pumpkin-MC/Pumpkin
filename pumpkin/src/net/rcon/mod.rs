@@ -11,7 +11,7 @@ use tokio::{
 };
 use tracing::{debug, error, info};
 
-use crate::{SHOULD_STOP, STOP_INTERRUPT, command::context::command_source::{CommandSource, EntityAnchor, ResultValueTaker}, server::Server};
+use crate::{SHOULD_STOP, STOP_INTERRUPT, command::context::command_source::{CommandSource, EntityAnchor}, server::Server};
 
 mod packet;
 

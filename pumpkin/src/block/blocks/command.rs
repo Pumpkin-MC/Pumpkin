@@ -17,7 +17,7 @@ use crate::{
         BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, NormalUseArgs,
         OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
         registry::BlockActionResult,
-    }, command::context::command_source::{EntityAnchor, ResultValueTaker}, server::Server, world::World
+    }, command::context::command_source::EntityAnchor, server::Server, world::World
 };
 use crate::command::CommandSender;
 use crate::command::context::command_source::CommandSource;

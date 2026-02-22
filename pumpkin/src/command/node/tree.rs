@@ -223,6 +223,19 @@ impl Tree {
         self[node].children_ref().values().copied().collect()
     }
 
+    /// Gets the children of the root node in the tree.
+    #[must_use]
+    pub fn get_root_children(&self) -> Vec<CommandNodeId> {
+        self[ROOT_NODE_ID]
+            .children_ref()
+            .values()
+            .copied()
+            // This should be fine as all children of the
+            // root node are Command Nodes.
+            .map(|id| CommandNodeId(id.0))
+            .collect()
+    }
+
     /// Returns whether the given node is able to be used by a given source.
     #[must_use]
     pub async fn can_use(&self, node: NodeId, source: &CommandSource) -> bool {

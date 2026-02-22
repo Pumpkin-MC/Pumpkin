@@ -12,9 +12,11 @@ use crate::command::node::detached::CommandDetachedNode;
 use crate::command::node::tree::{NodeIdClassification, ROOT_NODE_ID, Tree};
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
+use crate::command::tree::Command;
 use futures::future;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use rustc_hash::FxHashMap;
+use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock};
 use pumpkin_data::translation::COMMAND_CONTEXT_HERE;
@@ -481,6 +483,55 @@ impl CommandDispatcher {
         let (mut a, mut b) = future::join(future1, future2).await;
         a.append(&mut b);
         a
+    }
+
+    /// Gets all the commands usable in this dispatcher, sorted.
+    /// The map returned has the key as the command name
+    /// and the value as the command's description.
+    pub fn get_all_commands(&self) -> BTreeMap<&str, &str> {
+        let mut commands: BTreeMap<&str, &str> = BTreeMap::new();
+
+        for command in self.tree.get_root_children() {
+            let meta = &self.tree[command].meta;
+            commands.insert(&meta.literal_lowercase, &meta.description);
+        }
+
+        for fallback_command in self.fallback_dispatcher.commands.values() {
+            if let Command::Tree(command_tree) = fallback_command {
+                for name in &command_tree.names {
+                    commands.insert(name, &command_tree.description);
+                }
+            }
+        }
+
+        commands
+    }
+
+    /// Gets all the commands usable in this dispatcher, which
+    /// the given source is able to use.
+    /// The map returned has the key as the command name
+    /// and the value as the command's description.
+    pub async fn get_all_permitted_commands(&self, source: &CommandSource) -> BTreeMap<&str, &str> {
+        let mut commands: BTreeMap<&str, &str> = BTreeMap::new();
+
+        for command in self.tree.get_root_children() {
+            if self.tree.can_use(command.into(), source).await {
+                let meta = &self.tree[command].meta;
+                commands.insert(&meta.literal_lowercase, &meta.description);
+            }
+        }
+
+        for fallback_command in self.fallback_dispatcher.commands.values() {
+            if let Command::Tree(command_tree) = fallback_command {
+                if let Some(permission) = self.fallback_dispatcher.permissions.get(&command_tree.names[0]) && source.has_permission(permission).await {
+                    for name in &command_tree.names {
+                        commands.insert(name, &command_tree.description);
+                    }
+                }
+            }
+        }
+
+        commands
     }
 }
 

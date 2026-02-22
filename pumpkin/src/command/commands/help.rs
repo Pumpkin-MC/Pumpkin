@@ -120,6 +120,9 @@ impl CommandExecutor for BaseHelpExecutor {
             };
 
             let dispatcher = server.command_dispatcher.read().await;
+
+            let commands = dispatcher.get_all_permitted_commands(source)
+
             let commands: Vec<&CommandTree> = dispatcher
                 .commands
                 .values()

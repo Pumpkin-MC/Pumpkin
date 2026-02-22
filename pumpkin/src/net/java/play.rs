@@ -13,7 +13,6 @@ use tracing::{Level, debug, error, info, trace, warn};
 use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
-use crate::command::CommandSender;
 use crate::entity::EntityBase;
 use crate::entity::player::{ChatMode, ChatSession, Player};
 use crate::error::PumpkinError;
