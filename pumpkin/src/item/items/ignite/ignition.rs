@@ -40,7 +40,7 @@ impl Ignition {
                 // SAFETY: block references come from global block registry tables.
                 let igniting_block: &'static Block =
                     unsafe { &*std::ptr::from_ref::<Block>(block) };
-                let event = crate::plugin::block::block_ignite::BlockIgniteEvent {
+                let event = crate::plugin::block::ignite::BlockIgniteEvent {
                     player: player_arc,
                     block: igniting_block,
                     igniting_block,
@@ -51,7 +51,7 @@ impl Ignition {
                 };
                 let event = server
                     .plugin_manager
-                    .fire::<crate::plugin::block::block_ignite::BlockIgniteEvent>(event)
+                    .fire::<crate::plugin::block::ignite::BlockIgniteEvent>(event)
                     .await;
                 if event.cancelled {
                     return false;
@@ -75,7 +75,7 @@ impl Ignition {
                 // SAFETY: block references come from global block registry tables.
                 let fire_block_ref: &'static Block =
                     unsafe { &*std::ptr::from_ref::<Block>(&fire_block) };
-                let event = crate::plugin::block::block_ignite::BlockIgniteEvent {
+                let event = crate::plugin::block::ignite::BlockIgniteEvent {
                     player: player_arc,
                     block: fire_block_ref,
                     igniting_block,
@@ -86,7 +86,7 @@ impl Ignition {
                 };
                 let event = server
                     .plugin_manager
-                    .fire::<crate::plugin::block::block_ignite::BlockIgniteEvent>(event)
+                    .fire::<crate::plugin::block::ignite::BlockIgniteEvent>(event)
                     .await;
                 if event.cancelled {
                     return false;
