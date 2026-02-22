@@ -229,6 +229,13 @@ impl ItemStack {
         if self.get_data_component::<BlocksAttacksImpl>().is_some() {
             return 72000;
         }
+        if self.item.id == Item::BOW.id
+            || self.item.id == Item::CROSSBOW.id
+            || self.item.id == Item::TRIDENT.id
+            || self.item.id == Item::SPYGLASS.id
+        {
+            return 72000;
+        }
         0
     }
 
