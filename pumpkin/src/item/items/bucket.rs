@@ -315,7 +315,9 @@ impl ItemBehaviour for FilledBucketItem {
                 mob.get_entity().set_rotation(yaw, 0.0);
 
                 // Fish bucket entities must keep persistence/despawn rules from bucket origin.
+                // Start from a full entity NBT snapshot so read_nbt_non_mut has required base tags.
                 let mut nbt = NbtCompound::new();
+                mob.as_nbt_storage().write_nbt(&mut nbt).await;
                 nbt.put_bool("FromBucket", true);
                 mob.as_nbt_storage().read_nbt_non_mut(&nbt).await;
 
