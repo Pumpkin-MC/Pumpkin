@@ -2246,12 +2246,11 @@ impl JavaClient {
                     .push(final_block_pos.offset(facing.to_block_direction().to_offset()));
             }
             if multi_positions.len() > 1 {
-                let multi_event =
-                    crate::plugin::block::multi_place::BlockMultiPlaceEvent::new(
-                        player.clone(),
-                        block,
-                        multi_positions,
-                    );
+                let multi_event = crate::plugin::block::multi_place::BlockMultiPlaceEvent::new(
+                    player.clone(),
+                    block,
+                    multi_positions,
+                );
                 let multi_event = server.plugin_manager.fire(multi_event).await;
                 if multi_event.cancelled {
                     return Ok(false);
