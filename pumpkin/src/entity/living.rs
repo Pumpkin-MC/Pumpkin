@@ -25,7 +25,9 @@ use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DeathMessageType;
-use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
+use pumpkin_data::data_component_impl::{
+    ConsumableImpl, DeathProtectionImpl, EquipmentSlot, FoodImpl,
+};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::sound::SoundCategory;
@@ -189,7 +191,7 @@ impl LivingEntity {
             .store(stack.get_max_use_time(), Ordering::Relaxed);
         *self.item_in_use.lock().await = Some(stack);
         self.set_living_flag(Self::USING_ITEM_FLAG, true).await;
-        self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left)
+        self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand.is_off_interaction_hand())
             .await;
     }
 
@@ -216,6 +218,13 @@ impl LivingEntity {
         self.item_use_time.store(0, Ordering::Relaxed);
 
         self.set_living_flag(Self::USING_ITEM_FLAG, false).await;
+        self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, false)
+            .await;
+    }
+
+    #[must_use]
+    pub fn is_off_hand_active(&self) -> bool {
+        self.livings_flags.load(Ordering::Relaxed) & Self::OFF_HAND_ACTIVE_FLAG != 0
     }
 
     pub async fn heal(&self, additional_health: f32) {
@@ -1099,8 +1108,8 @@ impl LivingEntity {
         hand: Hand,
     ) -> Arc<Mutex<ItemStack>> {
         match hand {
-            Hand::Left => self.off_hand_item().await,
-            Hand::Right => self.held_item(caller).await,
+            Hand::Left => self.held_item(caller).await,
+            Hand::Right => self.off_hand_item().await,
         }
     }
 
@@ -1460,22 +1469,36 @@ impl EntityBase for LivingEntity {
                 if let Some(item) = item_in_use.as_ref()
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
-                    // Consume item
-                    if let Some(food) = item.get_data_component::<FoodImpl>()
+                    // Only consumables are auto-finished at the end of use.
+                    if item.get_data_component::<ConsumableImpl>().is_some()
                         && let Some(player) = caller.get_player()
                     {
-                        player
-                            .hunger_manager
-                            .eat(player, food.nutrition as u8, food.saturation)
-                            .await;
-                    }
-                    if let Some(player) = caller.get_player() {
-                        player
-                            .inventory
-                            .held_item()
-                            .lock()
-                            .await
-                            .decrement_unless_creative(player.gamemode.load(), 1);
+                        if let Some(food) = item.get_data_component::<FoodImpl>() {
+                            player
+                                .hunger_manager
+                                .eat(player, food.nutrition as u8, food.saturation)
+                                .await;
+                        }
+
+                        let (slot_index, item_stack) = if self.is_off_hand_active() {
+                            (
+                                PlayerInventory::OFF_HAND_SLOT,
+                                player.inventory.off_hand_item().await,
+                            )
+                        } else {
+                            (
+                                player.inventory.get_selected_slot() as usize,
+                                player.inventory.held_item(),
+                            )
+                        };
+
+                        let updated_stack = {
+                            let mut stack = item_stack.lock().await;
+                            stack.decrement_unless_creative(player.gamemode.load(), 1);
+                            stack.clone()
+                        };
+
+                        player.sync_hand_slot(slot_index, updated_stack).await;
                     }
 
                     self.clear_active_hand().await;

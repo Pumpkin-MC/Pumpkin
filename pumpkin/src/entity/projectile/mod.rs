@@ -12,12 +12,14 @@ use std::{
 pub mod egg;
 pub mod firework_rocket;
 pub mod snowball;
+pub mod trident;
 pub mod wind_charge;
 
 #[must_use]
 pub fn is_projectile(entity_type: &EntityType) -> bool {
     *entity_type == EntityType::EGG
         || *entity_type == EntityType::SNOWBALL
+        || *entity_type == EntityType::TRIDENT
         || *entity_type == EntityType::FIREWORK_ROCKET
         || *entity_type == EntityType::WIND_CHARGE
 }
