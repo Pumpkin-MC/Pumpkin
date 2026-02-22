@@ -47,9 +47,9 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::plugin::player::player_item_break::PlayerItemBreakEvent;
-use crate::plugin::player::player_item_consume::PlayerItemConsumeEvent;
-use crate::plugin::player::player_item_damage::PlayerItemDamageEvent;
+use crate::plugin::player::item_break::PlayerItemBreakEvent;
+use crate::plugin::player::item_consume::PlayerItemConsumeEvent;
+use crate::plugin::player::item_damage::PlayerItemDamageEvent;
 
 /// Represents a living entity within the game world.
 ///
