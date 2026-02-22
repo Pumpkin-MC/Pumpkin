@@ -4,10 +4,7 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 use wasmtime::{Engine, Store};
 
-use crate::{
-    metadata::PluginMetadata,
-    wasm_host::state::{ContextProvider, PluginHostState},
-};
+use crate::plugin::{Context, PluginMetadata, loader::wasm::wasm_host::state::PluginHostState};
 
 pub mod logging;
 pub mod state;
@@ -41,7 +38,7 @@ pub enum PluginInstance {
 }
 
 pub struct WasmPlugin {
-    pub plugin: PluginInstance,
+    pub plugin_instance: PluginInstance,
     pub store: Mutex<Store<PluginHostState>>,
 }
 
@@ -64,7 +61,7 @@ impl PluginRuntime {
     pub async fn init_plugin<P: AsRef<Path>>(
         &self,
         path: P,
-    ) -> Result<(WasmPlugin, PluginMetadata), PluginInitError> {
+    ) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
         let wasm_bytes = std::fs::read(path)?;
 
         let api_version = probe_api_version_from_bytes(&wasm_bytes)?;
@@ -75,14 +72,17 @@ impl PluginRuntime {
 
         let component = wasmtime::component::Component::new(&self.engine, &wasm_bytes)?;
 
-        let plugin = match api_version.as_str() {
+        let (wasm_plugin, metadata) = match api_version.as_str() {
             "0.1.0" => {
                 wit::v0_1_0::init_plugin(&self.engine, &self.linker_v0_1_0, component).await?
             }
             _ => return Err(PluginInitError::ApiVersionMismatch(api_version)),
         };
 
-        Ok(plugin)
+        let wasm_plugin = Arc::new(wasm_plugin);
+        wasm_plugin.store.lock().await.data_mut().plugin = Some(Arc::downgrade(&wasm_plugin));
+
+        Ok((wasm_plugin, metadata))
     }
 }
 
@@ -102,28 +102,28 @@ fn probe_api_version_from_bytes(wasm_bytes: &[u8]) -> Result<String, PluginInitE
 
 impl WasmPlugin {
     pub async fn on_load(
-        &mut self,
-        context_provider: Arc<dyn ContextProvider + Send + Sync>,
+        &self,
+        context: Arc<Context>,
     ) -> Result<Result<(), String>, wasmtime::Error> {
         let mut store = self.store.lock().await;
 
-        match self.plugin {
+        match self.plugin_instance {
             PluginInstance::V0_1_0(ref plugin) => {
-                let context = store.data_mut().add_context(context_provider)?;
+                let context = store.data_mut().add_context(context)?;
                 plugin.call_on_load(&mut *store, context).await
             }
         }
     }
 
     pub async fn on_unload(
-        &mut self,
-        context_provider: Arc<dyn ContextProvider + Send + Sync>,
+        &self,
+        context: Arc<Context>,
     ) -> Result<Result<(), String>, wasmtime::Error> {
         let mut store = self.store.lock().await;
 
-        match self.plugin {
+        match self.plugin_instance {
             PluginInstance::V0_1_0(ref plugin) => {
-                let context = store.data_mut().add_context(context_provider)?;
+                let context = store.data_mut().add_context(context)?;
                 plugin.call_on_unload(&mut *store, context).await
             }
         }

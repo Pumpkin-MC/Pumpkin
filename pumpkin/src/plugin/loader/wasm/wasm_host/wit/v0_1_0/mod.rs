@@ -1,17 +1,26 @@
+use std::sync::Arc;
+
 use tokio::sync::Mutex;
 use wasmtime::component::{Component, HasData, Linker, bindgen};
 use wasmtime::{Engine, Store};
 
-use crate::wasm_host::state::{ContextResource, ServerResource};
-use crate::wasm_host::wit::v0_1_0::pumpkin::plugin::context::EventPriority;
-use crate::wasm_host::wit::v0_1_0::pumpkin::plugin::{
-    player,
-    server::{Difficulty, Server},
+use crate::plugin::loader::wasm::wasm_host::state::PlayerResource;
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1_0::events::WasmPluginV0_1_0EventHandler;
+use crate::plugin::{
+    PluginMetadata,
+    loader::wasm::wasm_host::{
+        PluginInstance, WasmPlugin,
+        logging::log_tracing,
+        state::{ContextResource, PluginHostState, ServerResource},
+        wit::v0_1_0::pumpkin::plugin::{
+            event::{EventPriority, EventType},
+            player,
+            server::{Difficulty, Server},
+        },
+    },
 };
-use crate::{
-    metadata::PluginMetadata,
-    wasm_host::{PluginInstance, WasmPlugin, logging::log_tracing, state::PluginHostState},
-};
+
+pub mod events;
 
 bindgen!({
     path: "../pumpkin-plugin-wit/v0.1.0",
@@ -88,19 +97,53 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .expect("invalid context resource handle")
             .downcast_ref::<ContextResource>()
             .expect("resource type mismatch");
-        let server_provider = resource.provider.get_server();
+        let server_provider = resource.provider.server.clone();
         self.add_server(server_provider)
             .expect("failed to add server resource")
     }
 
     async fn register_event(
         &mut self,
-        _context: wasmtime::component::Resource<Context>,
+        context: wasmtime::component::Resource<Context>,
         handler_id: u32,
+        event_type: EventType,
         event_priority: EventPriority,
         blocking: bool,
     ) {
-        todo!()
+        let resource = self
+            .resource_table
+            .get_any_mut(context.rep())
+            .expect("invalid context resource handle")
+            .downcast_ref::<ContextResource>()
+            .expect("resource type mismatch");
+
+        let priority = match event_priority {
+            EventPriority::Highest => crate::plugin::EventPriority::Highest,
+            EventPriority::High => crate::plugin::EventPriority::High,
+            EventPriority::Normal => crate::plugin::EventPriority::Normal,
+            EventPriority::Low => crate::plugin::EventPriority::Low,
+            EventPriority::Lowest => crate::plugin::EventPriority::Lowest,
+        };
+
+        let plugin = self
+            .plugin
+            .as_ref()
+            .expect("plugin should always be initialized here")
+            .upgrade()
+            .expect("plugin has been dropped");
+
+        let handler = Arc::new(WasmPluginV0_1_0EventHandler { handler_id, plugin });
+
+        match event_type {
+            EventType::PlayerJoinEvent => {
+                resource
+                    .provider
+                    .register_event::<crate::plugin::player::player_join::PlayerJoinEvent, _>(
+                        handler, priority, blocking,
+                    )
+                    .await;
+            }
+        }
     }
 }
 
@@ -109,12 +152,20 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         &mut self,
         rep: wasmtime::component::Resource<pumpkin::plugin::player::Player>,
     ) -> wasmtime::Result<()> {
-        // TODO: implement
-        todo!()
+        let _ = self
+            .resource_table
+            .delete::<PlayerResource>(wasmtime::component::Resource::new_own(rep.rep()));
+        Ok(())
     }
 
     async fn get_id(&mut self, player: wasmtime::component::Resource<player::Player>) -> String {
-        todo!()
+        let resource = self
+            .resource_table
+            .get_any_mut(player.rep())
+            .expect("invalid player resource handle")
+            .downcast_ref::<PlayerResource>()
+            .expect("resource type mismatch");
+        resource.provider.gameprofile.id.to_string()
     }
 }
 
@@ -157,7 +208,7 @@ pub async fn init_plugin(
 
     Ok((
         WasmPlugin {
-            plugin: PluginInstance::V0_1_0(plugin),
+            plugin_instance: PluginInstance::V0_1_0(plugin),
             store: Mutex::new(store),
         },
         metadata,
