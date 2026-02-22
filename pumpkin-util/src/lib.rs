@@ -65,15 +65,6 @@ macro_rules! read_data_from_file {
     }};
 }
 
-/// Includes a JSON file on build time. Use this for static files.
-#[macro_export]
-macro_rules! include_json_static {
-    ($path:expr, $ty:ty) => {{
-        $crate::serde_json::from_str::<$ty>(include_str!($path))
-            .expect(concat!("Could not parse JSON file: ", $path))
-    }};
-}
-
 /// Asserts that two floating-point numbers are approximately equal within a given delta.
 #[macro_export]
 macro_rules! assert_eq_delta {
