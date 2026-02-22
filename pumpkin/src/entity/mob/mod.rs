@@ -331,20 +331,28 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
                 // Tick move control after navigator (vanilla order)
                 let pos = mob_entity.living_entity.entity.pos.load();
+                let velocity = mob_entity.living_entity.entity.velocity.load();
                 let yaw = mob_entity.living_entity.entity.yaw.load();
                 let pitch = mob_entity.living_entity.entity.pitch.load();
                 let on_ground = mob_entity.living_entity.entity.on_ground.load(Relaxed);
+                let touching_water = mob_entity.living_entity.entity.touching_water.load(Relaxed);
                 let speed = mob_entity.living_entity.movement_speed.load();
 
-                if let Some((movement, new_yaw, new_pitch)) =
-                    move_ctrl.tick(pos, yaw, pitch, on_ground, speed)
+                if let Some(output) =
+                    move_ctrl.tick(pos, velocity, yaw, pitch, on_ground, touching_water, speed)
                 {
-                    mob_entity.living_entity.movement_input.store(movement);
+                    mob_entity
+                        .living_entity
+                        .movement_input
+                        .store(output.movement);
                     mob_entity.living_entity.movement_speed.store(speed);
-                    mob_entity.living_entity.entity.yaw.store(new_yaw);
-                    mob_entity.living_entity.entity.head_yaw.store(new_yaw);
-                    mob_entity.living_entity.entity.body_yaw.store(new_yaw);
-                    mob_entity.living_entity.entity.pitch.store(new_pitch);
+                    if let Some(new_velocity) = output.velocity {
+                        mob_entity.living_entity.entity.velocity.store(new_velocity);
+                    }
+                    mob_entity.living_entity.entity.yaw.store(output.yaw);
+                    mob_entity.living_entity.entity.head_yaw.store(output.yaw);
+                    mob_entity.living_entity.entity.body_yaw.store(output.yaw);
+                    mob_entity.living_entity.entity.pitch.store(output.pitch);
                 }
             }
 
