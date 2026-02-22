@@ -170,7 +170,7 @@ pub trait FlowingFluid: Send + Sync {
                 if let Some(server) = world.server.upgrade() {
                     let source_block = world.get_block(block_pos).await;
                     let to_block = world.get_block(&target_pos).await;
-                    let event = crate::plugin::block::block_from_to::BlockFromToEvent::new(
+                    let event = crate::plugin::block::from_to::BlockFromToEvent::new(
                         source_block,
                         *block_pos,
                         to_block,
@@ -543,7 +543,7 @@ pub trait FlowingFluid: Send + Sync {
                 if let Some(server) = world.server.upgrade() {
                     let source_block = world.get_block(block_pos).await;
                     let to_block = world.get_block(&target_pos).await;
-                    let event = crate::plugin::block::block_from_to::BlockFromToEvent::new(
+                    let event = crate::plugin::block::from_to::BlockFromToEvent::new(
                         source_block,
                         *block_pos,
                         to_block,
