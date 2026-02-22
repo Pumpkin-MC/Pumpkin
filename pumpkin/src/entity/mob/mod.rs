@@ -6,6 +6,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
@@ -154,8 +155,9 @@ impl MobEntity {
     }
 
     pub async fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
-        // TODO: Use entity attributes for damage once implemented
-        const ZOMBIE_ATTACK_DAMAGE: f32 = 3.0;
+        let attack_damage: f32 =
+            self.living_entity
+                .get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
 
         if self.living_entity.dead.load(Relaxed) {
             return;
@@ -164,7 +166,7 @@ impl MobEntity {
         let damaged = target
             .damage_with_context(
                 target,
-                ZOMBIE_ATTACK_DAMAGE,
+                attack_damage,
                 DamageType::MOB_ATTACK,
                 None,
                 Some(caller),

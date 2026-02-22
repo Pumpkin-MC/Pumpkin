@@ -1,5 +1,7 @@
 use std::sync::{Arc, Weak};
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
@@ -37,6 +39,16 @@ impl EndermanEntity {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::ATTACK_DAMAGE, 7.0)
+            .add(Attributes::FOLLOW_RANGE, 64.0)
+            .add(Attributes::MOVEMENT_SPEED, 0.3)
+            .add(Attributes::STEP_HEIGHT, 1.0)
+            .add(Attributes::MAX_HEALTH, 40.0)
     }
 }
 
