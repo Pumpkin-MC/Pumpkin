@@ -1,8 +1,8 @@
 pub mod block_break;
 pub mod block_burn;
 pub mod block_can_build;
-pub mod drop_item;
 pub mod block_place;
+pub mod drop_item;
 
 use pumpkin_data::Block;
 
