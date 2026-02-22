@@ -176,7 +176,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
     fn execute<'a>(
         &'a self,
         _sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -193,12 +193,11 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
             // For teleport, we use absolute values only (ignore relative flags)
             let (yaw, _, pitch, _) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
 
-            // todo command context
-            let world = server.worlds.load().first().unwrap().clone();
             for target in targets {
+                let world = target.get_entity().world.load_full();
                 target
                     .clone()
-                    .teleport(pos, Some(yaw), Some(pitch), world.clone())
+                    .teleport(pos, Some(yaw), Some(pitch), world)
                     .await;
             }
 
