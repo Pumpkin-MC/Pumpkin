@@ -1,7 +1,10 @@
 use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs};
 use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
-use pumpkin_data::Block;
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::world::BlockAccessor;
 pub struct Fungus;
 
 impl BlockMetadata for Fungus {
@@ -13,10 +16,6 @@ impl BlockMetadata for Fungus {
 impl BlockBehaviour for Fungus {
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
-            let block = args.block_accessor.get_block(&args.position.down()).await;
-            if supports_fungus(block) {
-                return true;
-            }
             <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
         })
     }
@@ -25,10 +24,6 @@ impl BlockBehaviour for Fungus {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            let block = args.world.get_block(&args.position.down()).await;
-            if supports_fungus(block) {
-                return args.state_id;
-            }
             <Self as PlantBlockBase>::get_state_for_neighbor_update(
                 self,
                 args.world,
@@ -39,8 +34,25 @@ impl BlockBehaviour for Fungus {
         })
     }
 }
-impl PlantBlockBase for Fungus {}
-//other supporting block types are included in PlantBlockBase
+impl PlantBlockBase for Fungus {
+    async fn can_plant_on_top(
+        &self,
+        block_accessor: &dyn pumpkin_world::world::BlockAccessor,
+        pos: &pumpkin_util::math::position::BlockPos,
+    ) -> bool {
+        let block = block_accessor.get_block(pos).await;
+        supports_fungus(block)
+    }
+    async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down()).await
+    }
+}
 fn supports_fungus(block: &Block) -> bool {
-    block == &Block::WARPED_NYLIUM || block == &Block::CRIMSON_NYLIUM || block == &Block::SOUL_SOIL
+    block.has_tag(&tag::Block::MINECRAFT_DIRT)
+        || block == &Block::FARMLAND
+        || block == &Block::WARPED_NYLIUM
+        || block == &Block::CRIMSON_NYLIUM
+        || block == &Block::SOUL_SOIL
+        || block == &Block::MUD
+        || block == &Block::MUDDY_MANGROVE_ROOTS
 }
