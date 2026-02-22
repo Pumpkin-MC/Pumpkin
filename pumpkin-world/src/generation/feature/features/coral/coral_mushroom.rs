@@ -3,11 +3,9 @@ use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use super::CoralFeature;
 
-#[derive(Deserialize)]
 pub struct CoralMushroomFeature;
 
 impl CoralMushroomFeature {

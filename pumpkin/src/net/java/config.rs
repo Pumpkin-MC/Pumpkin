@@ -179,9 +179,23 @@ impl JavaClient {
             pumpkin_data::tag::RegistryKey::EntityType,
             pumpkin_data::tag::RegistryKey::Dialog,
         ];
+
+        // optionally include timeline/dimension_type if there are any tags to send
         if self.version.load().protocol_version() >= MinecraftVersion::V_1_21_11.protocol_version()
+            && let Some(map) = pumpkin_data::tag::get_registry_key_tags(
+                self.version.load(),
+                pumpkin_data::tag::RegistryKey::Timeline,
+            )
+            && !map.is_empty()
         {
             tags.push(pumpkin_data::tag::RegistryKey::Timeline);
+        }
+        if let Some(map) = pumpkin_data::tag::get_registry_key_tags(
+            self.version.load(),
+            pumpkin_data::tag::RegistryKey::DimensionType,
+        ) && !map.is_empty()
+        {
+            tags.push(pumpkin_data::tag::RegistryKey::DimensionType);
         }
         self.send_packet_now(&CUpdateTags::new(&tags)).await;
 

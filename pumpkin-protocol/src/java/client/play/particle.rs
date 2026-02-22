@@ -1,9 +1,13 @@
+use std::io::Write;
+
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_PARTICLES;
 use pumpkin_macros::java_packet;
-use pumpkin_util::math::vector3::Vector3;
-use serde::Serialize;
+use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
 
-use crate::{VarInt, ser::network_serialize_no_prefix};
+use crate::{
+    ClientPacket, VarInt,
+    ser::{NetworkWriteExt, WritingError},
+};
 
 /// Spawns a cluster of particles at a specific location.
 ///
@@ -11,7 +15,6 @@ use crate::{VarInt, ser::network_serialize_no_prefix};
 /// precise control over particle density, spread, and speed. It can also
 /// carry extra data for complex particles like redstone dust (color) or
 /// block/item breaking (textures).
-#[derive(Serialize)]
 #[java_packet(PLAY_LEVEL_PARTICLES)]
 pub struct CParticle<'a> {
     /// If true, the particle renders even if the client's "Particles"
@@ -32,7 +35,6 @@ pub struct CParticle<'a> {
     pub particle_id: VarInt,
     /// Extra data required by specific particles (e.g., block states for
     /// `block` particles or RGB values for `dust`).
-    #[serde(serialize_with = "network_serialize_no_prefix")]
     pub data: &'a [u8],
 }
 
@@ -59,5 +61,32 @@ impl<'a> CParticle<'a> {
             particle_id,
             data,
         }
+    }
+}
+
+impl ClientPacket for CParticle<'_> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let mut write = write;
+
+        write.write_bool(self.force_spawn)?;
+        write.write_bool(self.important)?;
+
+        write.write_f64_be(self.position.x)?;
+        write.write_f64_be(self.position.y)?;
+        write.write_f64_be(self.position.z)?;
+
+        write.write_f32_be(self.offset.x)?;
+        write.write_f32_be(self.offset.y)?;
+        write.write_f32_be(self.offset.z)?;
+
+        write.write_f32_be(self.max_speed)?;
+        write.write_i32_be(self.particle_count)?;
+        write.write_var_int(&self.particle_id)?;
+
+        write.write_all(self.data).map_err(WritingError::IoError)
     }
 }
