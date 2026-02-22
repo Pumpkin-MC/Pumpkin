@@ -210,7 +210,7 @@ impl Explosion {
         let mut yield_rate = 1.0f32;
 
         if let Some(server) = world.server.upgrade() {
-            let event = crate::plugin::block::block_explode::BlockExplodeEvent::new(
+            let event = crate::plugin::block::explode::BlockExplodeEvent::new(
                 source_block,
                 source_pos,
                 world.uuid,
