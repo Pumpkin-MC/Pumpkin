@@ -10,15 +10,15 @@ pub mod player_join;
 pub mod player_leave;
 pub mod player_login;
 pub mod player_move;
-pub mod player_pickup_arrow;
-pub mod player_portal;
-pub mod player_recipe_discover;
-pub mod player_riptide;
-pub mod player_shear_entity;
-pub mod player_spawn_location;
-pub mod player_statistic_increment;
+pub mod pickup_arrow;
+pub mod portal;
+pub mod recipe_discover;
+pub mod riptide;
+pub mod shear_entity;
+pub mod spawn_location;
+pub mod statistic_increment;
 pub mod player_teleport;
-pub mod player_velocity;
+pub mod velocity;
 
 use std::sync::Arc;
 

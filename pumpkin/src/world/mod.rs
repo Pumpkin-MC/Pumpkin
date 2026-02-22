@@ -32,7 +32,7 @@ use crate::{
         block::block_break::BlockBreakEvent,
         player::{
             player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
-            player_spawn_location::PlayerSpawnLocationEvent,
+            spawn_location::PlayerSpawnLocationEvent,
         },
     },
     server::Server,
