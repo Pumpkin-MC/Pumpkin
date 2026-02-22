@@ -1,8 +1,8 @@
 pub mod block_break;
 pub mod block_burn;
 pub mod block_can_build;
-pub mod explode;
 pub mod block_place;
+pub mod explode;
 
 use pumpkin_data::Block;
 
