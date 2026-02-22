@@ -2984,7 +2984,7 @@ impl World {
                     && let Some(player) = cause.clone()
                     && let Some(server) = self.server.upgrade()
                 {
-                    let event = crate::plugin::block::block_drop_item::BlockDropItemEvent::new(
+                    let event = crate::plugin::block::drop_item::BlockDropItemEvent::new(
                         player,
                         broken_block,
                         *position,
