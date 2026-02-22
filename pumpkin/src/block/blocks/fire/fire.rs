@@ -73,7 +73,7 @@ impl FireBlock {
         if let Some(server) = world.server.upgrade() {
             // SAFETY: block references point to registry-backed data that outlives runtime use.
             let block_static: &'static Block = unsafe { &*std::ptr::from_ref::<Block>(block) };
-            let event = crate::plugin::block::block_fade::BlockFadeEvent::new(
+            let event = crate::plugin::block::fade::BlockFadeEvent::new(
                 block_static,
                 &Block::AIR,
                 *pos,
