@@ -1278,7 +1278,7 @@ impl Player {
         if let Some(server) = world.server.upgrade() {
             let bed_position = respawn_point.position.to_f64().add_raw(0.5, 0.0, 0.5);
             if let Some(player) = server.get_player_by_uuid(self.gameprofile.id) {
-                let event = crate::plugin::player::player_bed_leave::PlayerBedLeaveEvent::new(
+                let event = crate::plugin::player::bed_leave::PlayerBedLeaveEvent::new(
                     player,
                     bed_position,
                 );

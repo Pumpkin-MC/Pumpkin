@@ -1,5 +1,5 @@
-pub mod player_bed_enter;
-pub mod player_bed_leave;
+pub mod bed_enter;
+pub mod bed_leave;
 pub mod player_change_world;
 pub mod player_chat;
 pub mod player_command_send;
