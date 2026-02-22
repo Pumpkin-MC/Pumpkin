@@ -57,7 +57,7 @@ impl CodEntity {
         mob_arc
     }
 
-    fn from_bucket(&self) -> bool {
+    fn is_from_bucket(&self) -> bool {
         self.from_bucket.load(Relaxed)
     }
 
@@ -72,7 +72,7 @@ impl CodEntity {
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_FROM_BUCKET,
                 MetaDataType::Boolean,
-                self.from_bucket(),
+                self.is_from_bucket(),
             )])
             .await;
     }
@@ -82,7 +82,7 @@ impl NBTStorage for CodEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.mob_entity.living_entity.entity.write_nbt(nbt).await;
-            nbt.put_bool("FromBucket", self.from_bucket());
+            nbt.put_bool("FromBucket", self.is_from_bucket());
         })
     }
 

@@ -1,23 +1,26 @@
 use std::{pin::Pin, sync::Arc};
 
 use crate::{
-    entity::player::Player,
+    entity::{player::Player, r#type::from_type},
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
     Block,
     dimension::Dimension,
+    entity::EntityType,
     fluid::Fluid,
     item::Item,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_util::{
     GameMode,
-    math::{position::BlockPos, vector3::Vector3},
+    math::{position::BlockPos, vector3::Vector3, wrap_degrees},
 };
 use pumpkin_world::{inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags};
+use uuid::Uuid;
 
 use crate::world::World;
+use pumpkin_nbt::compound::NbtCompound;
 
 pub struct EmptyBucketItem;
 pub struct FilledBucketItem;
@@ -91,6 +94,15 @@ fn set_waterlogged(block: &Block, state: u16, waterlogged: bool) -> u16 {
         })
         .collect();
     block.from_properties(&props).to_state_id(block)
+}
+
+const fn bucket_entity_type(item: &Item) -> Option<&'static EntityType> {
+    Some(match item.id {
+        id if id == Item::COD_BUCKET.id => &EntityType::COD,
+        id if id == Item::SALMON_BUCKET.id => &EntityType::SALMON,
+        id if id == Item::TROPICAL_FISH_BUCKET.id => &EntityType::TROPICAL_FISH,
+        _ => return None,
+    })
 }
 
 impl ItemBehaviour for EmptyBucketItem {
@@ -248,6 +260,7 @@ impl ItemBehaviour for FilledBucketItem {
                     .await;
                 return;
             }
+            let mut placed_pos = pos;
             let (block, state) = world.get_block_and_state_id(&pos).await;
             if waterlogged_check(block, state).is_some() && item.id == Item::WATER_BUCKET.id {
                 let state_id = set_waterlogged(block, state, true);
@@ -258,9 +271,9 @@ impl ItemBehaviour for FilledBucketItem {
                     .schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal)
                     .await;
             } else {
-                let (block, state) = world
-                    .get_block_and_state(&pos.offset(direction.to_offset()))
-                    .await;
+                let offset_pos = pos.offset(direction.to_offset());
+                placed_pos = offset_pos;
+                let (block, state) = world.get_block_and_state(&offset_pos).await;
 
                 if waterlogged_check(block, state.id).is_some() {
                     if item.id == Item::LAVA_BUCKET.id {
@@ -269,24 +282,15 @@ impl ItemBehaviour for FilledBucketItem {
                     let state_id = set_waterlogged(block, state.id, true);
 
                     world
-                        .set_block_state(
-                            &pos.offset(direction.to_offset()),
-                            state_id,
-                            BlockFlags::NOTIFY_NEIGHBORS,
-                        )
+                        .set_block_state(&offset_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                         .await;
                     world
-                        .schedule_fluid_tick(
-                            &Fluid::WATER,
-                            pos.offset(direction.to_offset()),
-                            5,
-                            TickPriority::Normal,
-                        )
+                        .schedule_fluid_tick(&Fluid::WATER, offset_pos, 5, TickPriority::Normal)
                         .await;
                 } else if state.id == Block::AIR.default_state.id || state.is_liquid() {
                     world
                         .set_block_state(
-                            &pos.offset(direction.to_offset()),
+                            &offset_pos,
                             if item.id == Item::LAVA_BUCKET.id {
                                 Block::LAVA.default_state.id
                             } else {
@@ -300,7 +304,24 @@ impl ItemBehaviour for FilledBucketItem {
                 }
             }
 
-            //TODO: Spawn entity if applicable
+            if let Some(entity_type) = bucket_entity_type(item) {
+                let spawn_pos = Vector3::new(
+                    f64::from(placed_pos.0.x) + 0.5,
+                    f64::from(placed_pos.0.y),
+                    f64::from(placed_pos.0.z) + 0.5,
+                );
+                let mob = from_type(entity_type, spawn_pos, &world, Uuid::new_v4()).await;
+                let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
+                mob.get_entity().set_rotation(yaw, 0.0);
+
+                // Fish bucket entities must keep persistence/despawn rules from bucket origin.
+                let mut nbt = NbtCompound::new();
+                nbt.put_bool("FromBucket", true);
+                mob.as_nbt_storage().read_nbt_non_mut(&nbt).await;
+
+                world.spawn_entity(mob).await;
+            }
+
             if player.gamemode.load() != GameMode::Creative {
                 let item_stack = ItemStack::new(1, &Item::BUCKET);
                 player

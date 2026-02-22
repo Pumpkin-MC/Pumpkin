@@ -15,6 +15,17 @@ pub struct WantedPosition {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct MoveControlInput {
+    pub pos: Vector3<f64>,
+    pub velocity: Vector3<f64>,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub on_ground: bool,
+    pub touching_water: bool,
+    pub movement_speed: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct MoveControlOutput {
     pub movement: Vector3<f64>,
     pub yaw: f32,
@@ -25,7 +36,9 @@ pub struct MoveControlOutput {
 
 /// Movement control strategy. `Ground` preserves existing navigator behaviour;
 /// `Flying` matches vanilla `FlyingMoveControl` (bees, parrots, allays, vexes).
+#[derive(Default)]
 pub enum MoveControl {
+    #[default]
     Ground,
     Flying {
         /// Max pitch turn per tick (e.g. 20 for bees)
@@ -43,18 +56,13 @@ pub enum MoveControl {
     },
 }
 
-impl Default for MoveControl {
-    fn default() -> Self {
-        Self::Ground
-    }
-}
-
 /// Minimum distance squared before considering "arrived"
 const MIN_DIST_SQ: f64 = 2.5e-7;
 
 impl MoveControl {
     /// Create a new flying move control (vanilla `FlyingMoveControl`).
-    pub fn flying(max_turn: i32, hovers_in_place: bool) -> Self {
+    #[must_use]
+    pub const fn flying(max_turn: i32, hovers_in_place: bool) -> Self {
         Self::Flying {
             max_turn,
             hovers_in_place,
@@ -64,7 +72,8 @@ impl MoveControl {
     }
 
     /// Create a fish move control.
-    pub fn fish(max_turn_y: i32) -> Self {
+    #[must_use]
+    pub const fn fish(max_turn_y: i32) -> Self {
         Self::Fish {
             max_turn_y,
             wanted: None,
@@ -72,7 +81,7 @@ impl MoveControl {
         }
     }
 
-    pub fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed: f64) {
+    pub const fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed: f64) {
         match self {
             Self::Flying {
                 wanted, operation, ..
@@ -87,6 +96,7 @@ impl MoveControl {
         }
     }
 
+    #[must_use]
     pub fn has_wanted(&self) -> bool {
         match self {
             Self::Ground => false,
@@ -97,20 +107,12 @@ impl MoveControl {
     }
 
     /// Returns true if this is a flying move control.
-    pub fn is_flying(&self) -> bool {
+    #[must_use]
+    pub const fn is_flying(&self) -> bool {
         matches!(self, Self::Flying { .. })
     }
 
-    pub fn tick(
-        &mut self,
-        pos: Vector3<f64>,
-        velocity: Vector3<f64>,
-        yaw: f32,
-        pitch: f32,
-        on_ground: bool,
-        touching_water: bool,
-        movement_speed: f64,
-    ) -> Option<MoveControlOutput> {
+    pub fn tick(&mut self, input: MoveControlInput) -> Option<MoveControlOutput> {
         match self {
             Self::Ground => None,
             Self::Flying {
@@ -118,139 +120,147 @@ impl MoveControl {
                 hovers_in_place,
                 wanted,
                 operation,
-            } => {
-                if *operation == MoveOperation::MoveTo {
-                    *operation = MoveOperation::Wait;
-                    if let Some(w) = wanted.take() {
-                        let xd = w.x - pos.x;
-                        let yd = w.y - pos.y;
-                        let zd = w.z - pos.z;
-                        let dd = xd * xd + yd * yd + zd * zd;
-
-                        if dd < MIN_DIST_SQ {
-                            // Already at target
-                            return Some(MoveControlOutput {
-                                movement: Vector3::new(0.0, 0.0, 0.0),
-                                yaw,
-                                pitch,
-                                velocity: None,
-                            });
-                        }
-
-                        let desired_yaw = (zd.atan2(xd) as f32).to_degrees() - 90.0;
-                        let new_yaw = rotlerp(yaw, desired_yaw, 90.0);
-
-                        // Approximate vanilla FLYING_SPEED (0.6) as movement_speed * 2.0
-                        let speed = if on_ground {
-                            w.speed * movement_speed
-                        } else {
-                            w.speed * movement_speed * 2.0
-                        };
-
-                        let horizontal_dist = (xd * xd + zd * zd).sqrt();
-                        let new_pitch = if yd.abs() > 1.0e-5 || horizontal_dist > 1.0e-5 {
-                            let desired_pitch = -(yd.atan2(horizontal_dist) as f32).to_degrees();
-                            rotlerp(pitch, desired_pitch, *max_turn as f32)
-                        } else {
-                            pitch
-                        };
-
-                        let vertical_speed = if yd > 0.0 { speed } else { -speed };
-                        let movement = Vector3::new(0.0, vertical_speed, speed);
-                        return Some(MoveControlOutput {
-                            movement,
-                            yaw: new_yaw,
-                            pitch: new_pitch,
-                            velocity: None,
-                        });
-                    }
-
-                    Some(MoveControlOutput {
-                        movement: Vector3::new(0.0, 0.0, 0.0),
-                        yaw,
-                        pitch,
-                        velocity: None,
-                    })
-                } else {
-                    let _ = hovers_in_place;
-                    Some(MoveControlOutput {
-                        movement: Vector3::new(0.0, 0.0, 0.0),
-                        yaw,
-                        pitch,
-                        velocity: None,
-                    })
-                }
-            }
+            } => Some(Self::tick_flying(
+                *max_turn,
+                *hovers_in_place,
+                wanted,
+                operation,
+                input,
+            )),
             Self::Fish {
                 max_turn_y,
                 wanted,
                 operation,
-            } => {
-                // Vanilla fish gently float upward while their eyes are in water.
-                let mut next_velocity = velocity;
-                if touching_water {
-                    next_velocity.y += 0.005;
+            } => Some(Self::tick_fish(*max_turn_y, wanted, operation, input)),
+        }
+    }
+
+    fn tick_flying(
+        max_turn: i32,
+        _hovers_in_place: bool,
+        wanted: &mut Option<WantedPosition>,
+        operation: &mut MoveOperation,
+        input: MoveControlInput,
+    ) -> MoveControlOutput {
+        if *operation != MoveOperation::MoveTo {
+            return idle_output(input.yaw, input.pitch);
+        }
+        *operation = MoveOperation::Wait;
+
+        let Some(wanted_position) = wanted.take() else {
+            return idle_output(input.yaw, input.pitch);
+        };
+
+        let xd = wanted_position.x - input.pos.x;
+        let yd = wanted_position.y - input.pos.y;
+        let zd = wanted_position.z - input.pos.z;
+        let distance_sq = xd * xd + yd * yd + zd * zd;
+        if distance_sq < MIN_DIST_SQ {
+            return idle_output(input.yaw, input.pitch);
+        }
+
+        let desired_yaw = (zd.atan2(xd) as f32).to_degrees() - 90.0;
+        let new_yaw = rotlerp(input.yaw, desired_yaw, 90.0);
+
+        // Approximate vanilla FLYING_SPEED (0.6) as movement_speed * 2.0.
+        let speed = if input.on_ground {
+            wanted_position.speed * input.movement_speed
+        } else {
+            wanted_position.speed * input.movement_speed * 2.0
+        };
+        let horizontal_dist = xd.hypot(zd);
+        let new_pitch = if yd.abs() > 1.0e-5 || horizontal_dist > 1.0e-5 {
+            let desired_pitch = -(yd.atan2(horizontal_dist) as f32).to_degrees();
+            rotlerp(input.pitch, desired_pitch, max_turn as f32)
+        } else {
+            input.pitch
+        };
+
+        let vertical_speed = if yd > 0.0 { speed } else { -speed };
+        MoveControlOutput {
+            movement: Vector3::new(0.0, vertical_speed, speed),
+            yaw: new_yaw,
+            pitch: new_pitch,
+            velocity: None,
+        }
+    }
+
+    fn tick_fish(
+        max_turn_y: i32,
+        wanted: &mut Option<WantedPosition>,
+        operation: &mut MoveOperation,
+        input: MoveControlInput,
+    ) -> MoveControlOutput {
+        // Vanilla fish gently float upward while their eyes are in water.
+        let mut next_velocity = input.velocity;
+        if input.touching_water {
+            next_velocity.y += 0.005;
+        }
+
+        if *operation == MoveOperation::MoveTo {
+            *operation = MoveOperation::Wait;
+
+            if let Some(wanted_position) = wanted.take() {
+                let xd = wanted_position.x - input.pos.x;
+                let yd = wanted_position.y - input.pos.y;
+                let zd = wanted_position.z - input.pos.z;
+                let distance_sq = xd * xd + yd * yd + zd * zd;
+
+                if distance_sq < MIN_DIST_SQ {
+                    return fish_idle_output(input.yaw, input.pitch, next_velocity);
                 }
 
-                if *operation == MoveOperation::MoveTo {
-                    *operation = MoveOperation::Wait;
+                let desired_yaw = (zd.atan2(xd) as f32).to_degrees() - 90.0;
+                let new_yaw = rotlerp(input.yaw, desired_yaw, max_turn_y as f32);
 
-                    if let Some(w) = wanted.take() {
-                        let xd = w.x - pos.x;
-                        let yd = w.y - pos.y;
-                        let zd = w.z - pos.z;
-                        let dd = xd * xd + yd * yd + zd * zd;
+                let target_speed = (wanted_position.speed * input.movement_speed).max(0.0);
+                let horizontal_speed = input.velocity.x.hypot(input.velocity.z);
+                let speed = lerp(horizontal_speed, target_speed, 0.125);
+                let distance = distance_sq.sqrt();
 
-                        if dd < MIN_DIST_SQ {
-                            return Some(MoveControlOutput {
-                                movement: Vector3::default(),
-                                yaw,
-                                pitch,
-                                velocity: Some(next_velocity),
-                            });
-                        }
-
-                        let desired_yaw = (zd.atan2(xd) as f32).to_degrees() - 90.0;
-                        let new_yaw = rotlerp(yaw, desired_yaw, *max_turn_y as f32);
-
-                        let target_speed = (w.speed * movement_speed).max(0.0);
-                        let horizontal_speed =
-                            (velocity.x * velocity.x + velocity.z * velocity.z).sqrt();
-                        let speed = lerp(horizontal_speed, target_speed, 0.125);
-                        let distance = dd.sqrt();
-
-                        if distance > 1.0e-7 {
-                            next_velocity.x += (xd / distance * speed - velocity.x) * 0.125;
-                            next_velocity.y += (yd / distance * speed - velocity.y) * 0.125;
-                            next_velocity.z += (zd / distance * speed - velocity.z) * 0.125;
-                        }
-
-                        let horizontal_dist = (xd * xd + zd * zd).sqrt();
-                        let new_pitch = if yd.abs() > 1.0e-5 || horizontal_dist > 1.0e-5 {
-                            let desired_pitch = (-(yd.atan2(horizontal_dist) as f32).to_degrees())
-                                .clamp(-85.0, 85.0);
-                            rotlerp(pitch, desired_pitch, 5.0)
-                        } else {
-                            pitch
-                        };
-
-                        return Some(MoveControlOutput {
-                            movement: Vector3::default(),
-                            yaw: new_yaw,
-                            pitch: new_pitch,
-                            velocity: Some(next_velocity),
-                        });
-                    }
+                if distance > 1.0e-7 {
+                    next_velocity.x += (xd / distance * speed - input.velocity.x) * 0.125;
+                    next_velocity.y += (yd / distance * speed - input.velocity.y) * 0.125;
+                    next_velocity.z += (zd / distance * speed - input.velocity.z) * 0.125;
                 }
 
-                Some(MoveControlOutput {
+                let horizontal_dist = xd.hypot(zd);
+                let new_pitch = if yd.abs() > 1.0e-5 || horizontal_dist > 1.0e-5 {
+                    let desired_pitch =
+                        (-(yd.atan2(horizontal_dist) as f32).to_degrees()).clamp(-85.0, 85.0);
+                    rotlerp(input.pitch, desired_pitch, 5.0)
+                } else {
+                    input.pitch
+                };
+
+                return MoveControlOutput {
                     movement: Vector3::default(),
-                    yaw,
-                    pitch,
+                    yaw: new_yaw,
+                    pitch: new_pitch,
                     velocity: Some(next_velocity),
-                })
+                };
             }
         }
+
+        fish_idle_output(input.yaw, input.pitch, next_velocity)
+    }
+}
+
+fn idle_output(yaw: f32, pitch: f32) -> MoveControlOutput {
+    MoveControlOutput {
+        movement: Vector3::new(0.0, 0.0, 0.0),
+        yaw,
+        pitch,
+        velocity: None,
+    }
+}
+
+fn fish_idle_output(yaw: f32, pitch: f32, velocity: Vector3<f64>) -> MoveControlOutput {
+    MoveControlOutput {
+        movement: Vector3::default(),
+        yaw,
+        pitch,
+        velocity: Some(velocity),
     }
 }
 

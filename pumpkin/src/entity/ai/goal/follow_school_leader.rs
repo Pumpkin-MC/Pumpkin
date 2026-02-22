@@ -26,7 +26,7 @@ pub struct FollowSchoolLeaderGoal {
 
 impl FollowSchoolLeaderGoal {
     #[must_use]
-    pub fn new(school_leader_id: Arc<AtomicI32>) -> Self {
+    pub const fn new(school_leader_id: Arc<AtomicI32>) -> Self {
         Self {
             goal_control: Controls::MOVE,
             school_leader_id,
@@ -64,7 +64,7 @@ impl FollowSchoolLeaderGoal {
         Some(leader)
     }
 
-    fn find_nearest_same_type_leader(&self, mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
+    fn find_nearest_same_type_leader(mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let pos = entity.pos.load();
         let world = entity.world.load();
@@ -107,7 +107,7 @@ impl Goal for FollowSchoolLeaderGoal {
 
             self.next_start_tick = Self::next_start_tick(mob);
 
-            let Some(leader) = self.find_nearest_same_type_leader(mob) else {
+            let Some(leader) = Self::find_nearest_same_type_leader(mob) else {
                 return false;
             };
 

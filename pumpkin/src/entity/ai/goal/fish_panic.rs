@@ -60,6 +60,12 @@ impl FishPanicGoal {
     }
 }
 
+impl Default for FishPanicGoal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Goal for FishPanicGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {

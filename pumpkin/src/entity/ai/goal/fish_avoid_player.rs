@@ -30,7 +30,7 @@ impl FishAvoidPlayerGoal {
         }
     }
 
-    fn find_threat(&self, mob: &dyn Mob) -> Option<Arc<Player>> {
+    fn find_threat(mob: &dyn Mob) -> Option<Arc<Player>> {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let position = entity.pos.load();
         let world = entity.world.load();
@@ -66,6 +66,12 @@ impl FishAvoidPlayerGoal {
     }
 }
 
+impl Default for FishAvoidPlayerGoal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Goal for FishAvoidPlayerGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
@@ -73,7 +79,7 @@ impl Goal for FishAvoidPlayerGoal {
                 return false;
             }
 
-            let Some(threat) = self.find_threat(mob) else {
+            let Some(threat) = Self::find_threat(mob) else {
                 return false;
             };
 
@@ -102,7 +108,7 @@ impl Goal for FishAvoidPlayerGoal {
         Box::pin(async move {
             let Some(threat) = self
                 .get_tracked_threat(mob)
-                .or_else(|| self.find_threat(mob))
+                .or_else(|| Self::find_threat(mob))
             else {
                 self.target = None;
                 self.threat_id = None;

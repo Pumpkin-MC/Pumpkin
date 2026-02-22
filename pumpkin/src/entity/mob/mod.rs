@@ -1,5 +1,7 @@
 use super::{
-    Entity, EntityBase, NBTStorage, ai::move_control::MoveControl, ai::pathfinder::Navigator,
+    Entity, EntityBase, NBTStorage,
+    ai::move_control::{MoveControl, MoveControlInput},
+    ai::pathfinder::Navigator,
     living::LivingEntity,
 };
 use crate::entity::EntityBaseFuture;
@@ -337,10 +339,17 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 let on_ground = mob_entity.living_entity.entity.on_ground.load(Relaxed);
                 let touching_water = mob_entity.living_entity.entity.touching_water.load(Relaxed);
                 let speed = mob_entity.living_entity.movement_speed.load();
+                let input = MoveControlInput {
+                    pos,
+                    velocity,
+                    yaw,
+                    pitch,
+                    on_ground,
+                    touching_water,
+                    movement_speed: speed,
+                };
 
-                if let Some(output) =
-                    move_ctrl.tick(pos, velocity, yaw, pitch, on_ground, touching_water, speed)
-                {
+                if let Some(output) = move_ctrl.tick(input) {
                     mob_entity
                         .living_entity
                         .movement_input

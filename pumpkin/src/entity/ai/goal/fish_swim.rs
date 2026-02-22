@@ -22,7 +22,7 @@ pub struct FishSwimGoal {
 
 impl FishSwimGoal {
     #[must_use]
-    pub fn new(school_leader_id: Arc<AtomicI32>) -> Self {
+    pub const fn new(school_leader_id: Arc<AtomicI32>) -> Self {
         Self {
             goal_control: Controls::MOVE,
             school_leader_id,
