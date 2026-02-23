@@ -525,7 +525,7 @@ pub type DefaultedFieldCodec<C> =
 /// Creates a [`MapCodec`] for an optional field which relies on the provided [`Codec`] for serialization/deserialization, along with a default value factory.
 ///
 /// The factory provided is used for equality checks and for creating a new default value
-/// for when no value is found.
+/// for when no value is found. *If the encoded value is equal to the default value (provided via the factory), it is omitted.*
 ///
 /// The returned `MapCodec` is also *not lenient*, meaning that it will not give a complete (successful) result
 /// if the decoded field value is an error [`DataResult`] (partial or no result). Most of the time, you will
@@ -544,7 +544,7 @@ where
 /// Creates a [`MapCodec`] for an optional field which relies on the provided [`Codec`] for serialization/deserialization, along with a default value factory.
 ///
 /// The factory provided is used for equality checks and for creating a new default value
-/// for when no value is found.
+/// for when no value is found. *If the encoded value is equal to the default value (provided via the factory), it is omitted.*
 ///
 /// The returned `MapCodec` is also *lenient*, meaning that it will still give a complete (successful) result
 /// if the decoded field value is an error [`DataResult`] (partial or no result). Most of the time, you will
