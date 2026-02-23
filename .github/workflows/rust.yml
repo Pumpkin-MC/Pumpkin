@@ -106,26 +106,40 @@ jobs:
             macos-latest,
             macos-15-intel,
           ]
+        cpu_target:
+          - default
+          - v2
+          - v3
         toolchain:
           - stable
     steps:
       - uses: actions/checkout@v6
-
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - name: Build Release
         shell: bash
+        if: ${{ (matrix.cpu_target != 'default' && runner.arch == 'X64') || (matrix.cpu_target == 'default' && runner.arch != 'X64') }}
         run: |
-          if [[ "${{ runner.arch }}" == "X64" ]]; then
+          if [ "${{ matrix.cpu_target }}" == "v2" ]; then
+            export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v2"
+          elif [ "${{ matrix.cpu_target }}" == "v3" ]; then
             export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
           fi
           cargo build --verbose --release
       - name: Prepare artifacts
         shell: bash
+        if: ${{ (matrix.cpu_target != 'default' && runner.arch == 'X64') || (matrix.cpu_target == 'default' && runner.arch != 'X64') }}
         run: |
           mkdir -p dist
-          if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
-          cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}$EXT"
+          if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; else EXT=""; fi
+          if [ "${{ matrix.cpu_target }}" == "v2" ]; then
+            target_arch="x86-64-v2"
+          elif [ "${{ matrix.cpu_target }}" == "v3" ]; then
+            target_arch="x86-64-v3"
+          else
+            target_arch="${{ runner.arch }}"
+          fi
+          cp "target/release/pumpkin$EXT" "dist/pumpkin-${target_arch}-${{ runner.os }}$EXT"
       - name: Export executable
         uses: actions/upload-artifact@v6
         with:
@@ -152,13 +166,11 @@ jobs:
           echo "From commit: $(git rev-parse --short HEAD)" > dist/RELEASE.md
           echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
           cat dist/RELEASE.md
-
       - name: Update the nightly tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag --force nightly && git push --force origin tag nightly
-
       - name: Draft a nightly github release
         uses: softprops/action-gh-release@v2
         with:
