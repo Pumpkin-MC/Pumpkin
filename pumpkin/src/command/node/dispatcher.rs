@@ -14,15 +14,15 @@ use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::command::tree::Command;
 use futures::future;
+use pumpkin_data::translation::COMMAND_CONTEXT_HERE;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::color::{Color, NamedColor};
 use rustc_hash::FxHashMap;
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock};
-use pumpkin_data::translation::COMMAND_CONTEXT_HERE;
-use pumpkin_util::text::click::ClickEvent;
-use pumpkin_util::text::color::{Color, NamedColor};
-use pumpkin_util::text::TextComponent;
 
 pub const ARG_SEPARATOR: &str = " ";
 pub const ARG_SEPARATOR_CHAR: char = ' ';
@@ -99,7 +99,7 @@ pub struct CommandDispatcher {
     // Temporary setup:
     // We add this because we have a lot of commands
     // still dependent on this dispatcher.
-    pub fallback_dispatcher: crate::command::dispatcher::CommandDispatcher
+    pub fallback_dispatcher: crate::command::dispatcher::CommandDispatcher,
 }
 
 impl Default for CommandDispatcher {
@@ -120,7 +120,7 @@ impl CommandDispatcher {
         Self {
             tree,
             consumer: RESULT_DEFERRER.clone(),
-            fallback_dispatcher: crate::command::dispatcher::CommandDispatcher::default()
+            fallback_dispatcher: crate::command::dispatcher::CommandDispatcher::default(),
         }
     }
 
@@ -311,12 +311,11 @@ impl CommandDispatcher {
     /// # Panics
     ///
     /// Panics if the source given to it is a dummy one.
-    pub async fn handle_command<'a>(
-        &'a self,
-        source: &CommandSource,
-        mut input: &'a str
-    ) {
-        assert!(source.server.is_some(), "Source provided to this command was a dummy source");
+    pub async fn handle_command<'a>(&'a self, source: &CommandSource, mut input: &'a str) {
+        assert!(
+            source.server.is_some(),
+            "Source provided to this command was a dummy source"
+        );
 
         if let Some(sliced) = input.strip_prefix("/") {
             input = sliced;
@@ -329,18 +328,12 @@ impl CommandDispatcher {
             if error.is(&DISPATCHER_UNKNOWN_COMMAND) {
                 // Run the fallback dispatcher instead.
                 // It might have the command we're looking for.
-                self.fallback_dispatcher.handle_command(
-                    &source.output,
-                    source.server().as_ref(),
-                    input
-                ).await;
+                self.fallback_dispatcher
+                    .handle_command(&source.output, source.server().as_ref(), input)
+                    .await;
             } else {
                 // Print the error to the output.
-                Self::send_error_to_source(
-                    source,
-                    error,
-                    input
-                ).await;
+                Self::send_error_to_source(source, error, input).await;
             }
         }
     }
@@ -351,25 +344,20 @@ impl CommandDispatcher {
     pub async fn send_error_to_source(
         source: &CommandSource,
         error: CommandSyntaxError,
-        command: &str
+        command: &str,
     ) {
-        source.send_message(
-            error
-                .message
-                .color(
-                    Color::Named(NamedColor::Red)
-                )
-        ).await;
+        source
+            .send_message(error.message.color(Color::Named(NamedColor::Red)))
+            .await;
 
         if let Some(context) = error.context {
             let i = context.input.len().min(context.cursor);
 
-            let mut error_text =
-                TextComponent::text("")
-                    .color(Color::Named(NamedColor::Gray))
-                    .click_event(ClickEvent::SuggestCommand {
-                        command: format!("/{command}").into()
-                    });
+            let mut error_text = TextComponent::text("")
+                .color(Color::Named(NamedColor::Gray))
+                .click_event(ClickEvent::SuggestCommand {
+                    command: format!("/{command}").into(),
+                });
 
             if i > 10 {
                 error_text = error_text.add_text("...");
@@ -385,14 +373,14 @@ impl CommandDispatcher {
                 error_text = error_text.add_child(
                     TextComponent::text(errored_part.to_owned())
                         .color(Color::Named(NamedColor::Red))
-                        .underlined()
+                        .underlined(),
                 );
             }
 
             error_text = error_text.add_child(
                 TextComponent::translate(COMMAND_CONTEXT_HERE, &[])
                     .color(Color::Named(NamedColor::Red))
-                    .italic()
+                    .italic(),
             );
 
             source.send_error(error_text).await;
@@ -402,22 +390,33 @@ impl CommandDispatcher {
     /// Returns a new [`Suggestions`] structure in the future
     /// from the given parsing result, which was a command that was parsed,
     /// assuming the cursor is at the end.
-    /// 
+    ///
     /// This is useful to tell the client on what suggestions are there next.
-    pub async fn get_completion_suggestions_at_end(&self, parsing_result: ParsingResult<'_>) -> Suggestions {
+    pub async fn get_completion_suggestions_at_end(
+        &self,
+        parsing_result: ParsingResult<'_>,
+    ) -> Suggestions {
         let length = parsing_result.reader.total_length();
-        self.get_completion_suggestions(parsing_result, length).await
+        self.get_completion_suggestions(parsing_result, length)
+            .await
     }
 
     /// Returns a new [`Suggestions`] structure in the future
     /// from the given parsing result, which was a command that was parsed.
-    /// 
+    ///
     /// This is useful to tell the client on what suggestions are there next.
-    pub async fn get_completion_suggestions(&self, parsing_result: ParsingResult<'_>, cursor: usize) -> Suggestions {    
+    pub async fn get_completion_suggestions(
+        &self,
+        parsing_result: ParsingResult<'_>,
+        cursor: usize,
+    ) -> Suggestions {
         let context = parsing_result.context;
         let (parent, start) = {
             let node_before_cursor = context.find_suggestion_context(cursor);
-            (node_before_cursor.parent, node_before_cursor.starting_position.min(cursor))
+            (
+                node_before_cursor.parent,
+                node_before_cursor.starting_position.min(cursor),
+            )
         };
 
         let full_input = parsing_result.reader.string();
@@ -433,33 +432,40 @@ impl CommandDispatcher {
         for child in children {
             let mut builder = SuggestionsBuilder::new(truncated_input, start);
 
-            let future: Pin<Box<dyn Future<Output = Suggestions> + Send>> = match self.tree.classify_id(child) {
-                NodeIdClassification::Root => Box::pin(async { Suggestions::empty() }),
-                NodeIdClassification::Literal(literal_node_id) => {
-                    Box::pin(async move {
+            let future: Pin<Box<dyn Future<Output = Suggestions> + Send>> =
+                match self.tree.classify_id(child) {
+                    NodeIdClassification::Root => Box::pin(async { Suggestions::empty() }),
+                    NodeIdClassification::Literal(literal_node_id) => Box::pin(async move {
                         let node = &self.tree[literal_node_id];
-                        if node.meta.literal_lowercase.starts_with(builder.remaining_lowercase()) {
+                        if node
+                            .meta
+                            .literal_lowercase
+                            .starts_with(builder.remaining_lowercase())
+                        {
                             builder.suggest(&*node.meta.literal).build()
                         } else {
                             Suggestions::empty()
                         }
-                    })
-                },
-                NodeIdClassification::Command(command_node_id) => {
-                    Box::pin(async move {
+                    }),
+                    NodeIdClassification::Command(command_node_id) => Box::pin(async move {
                         let node = &self.tree[command_node_id];
-                        if node.meta.literal_lowercase.starts_with(builder.remaining_lowercase()) {
+                        if node
+                            .meta
+                            .literal_lowercase
+                            .starts_with(builder.remaining_lowercase())
+                        {
                             builder.suggest(&*node.meta.literal).build()
                         } else {
                             Suggestions::empty()
                         }
-                    })
-                },
-                NodeIdClassification::Argument(argument_node_id) => {
-                    let node = &self.tree[argument_node_id];
-                    node.meta.argument_type.list_suggestions(&context, &mut builder)
-                },
-            };
+                    }),
+                    NodeIdClassification::Argument(argument_node_id) => {
+                        let node = &self.tree[argument_node_id];
+                        node.meta
+                            .argument_type
+                            .list_suggestions(&context, &mut builder)
+                    }
+                };
 
             futures.push(future);
         }
@@ -469,16 +475,12 @@ impl CommandDispatcher {
     }
 
     /// Gets all the suggestions in the future as a [`Vec`] of [`CommandSuggestion`].
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// This function currently panics if the source provided was a dummy source.
     /// This is subject to change in the future.
-    pub async fn suggest(
-        &self,
-        input: &str,
-        source: &CommandSource
-    ) -> Vec<CommandSuggestion> {
+    pub async fn suggest(&self, input: &str, source: &CommandSource) -> Vec<CommandSuggestion> {
         let future1 = async move {
             let parsed = self.parse_input(input, source).await;
             let suggestions = self.get_completion_suggestions_at_end(parsed).await;
@@ -494,7 +496,9 @@ impl CommandDispatcher {
         };
 
         let future2 = async move {
-            self.fallback_dispatcher.find_suggestions(&source.output, source.server(), input).await
+            self.fallback_dispatcher
+                .find_suggestions(&source.output, source.server(), input)
+                .await
         };
 
         let (mut a, mut b) = future::join(future1, future2).await;
@@ -542,11 +546,16 @@ impl CommandDispatcher {
 
         for fallback_command in self.fallback_dispatcher.commands.values() {
             if let Command::Tree(command_tree) = fallback_command
-                && let Some(permission) = self.fallback_dispatcher.permissions.get(&command_tree.names[0]) && source.has_permission(permission).await {
-                    for name in &command_tree.names {
-                        commands.insert(name, &command_tree.description);
-                    }
+                && let Some(permission) = self
+                    .fallback_dispatcher
+                    .permissions
+                    .get(&command_tree.names[0])
+                && source.has_permission(permission).await
+            {
+                for name in &command_tree.names {
+                    commands.insert(name, &command_tree.description);
                 }
+            }
         }
 
         commands
@@ -557,7 +566,10 @@ impl CommandDispatcher {
     /// The key is the command identifier,
     /// and the value is a tuple of `(description, usage)`.
     #[must_use]
-    pub async fn get_all_permitted_commands_usage(&self, source: &CommandSource) -> BTreeMap<&str, (&str, Box<str>)> {
+    pub async fn get_all_permitted_commands_usage(
+        &self,
+        source: &CommandSource,
+    ) -> BTreeMap<&str, (&str, Box<str>)> {
         let mut commands: BTreeMap<&str, (&str, Box<str>)> = BTreeMap::new();
 
         for (command_node_id, mut usage) in self.get_usage_of_commands(source).await {
@@ -570,11 +582,22 @@ impl CommandDispatcher {
 
         for fallback_command in self.fallback_dispatcher.commands.values() {
             if let Command::Tree(command_tree) = fallback_command
-                && let Some(permission) = self.fallback_dispatcher.permissions.get(&command_tree.names[0]) && source.has_permission(permission).await {
-                        let usage = command_tree.to_string();
-                        for name in &command_tree.names {
-                            commands.insert(name, (command_tree.description.as_ref(), usage.clone().into_boxed_str()));
-                    }
+                && let Some(permission) = self
+                    .fallback_dispatcher
+                    .permissions
+                    .get(&command_tree.names[0])
+                && source.has_permission(permission).await
+            {
+                let usage = command_tree.to_string();
+                for name in &command_tree.names {
+                    commands.insert(
+                        name,
+                        (
+                            command_tree.description.as_ref(),
+                            usage.clone().into_boxed_str(),
+                        ),
+                    );
+                }
             }
         }
 
@@ -586,12 +609,21 @@ impl CommandDispatcher {
     ///
     /// The key is the command identifier,
     /// and the value is a tuple of `(description, usage)`.
-    pub async fn get_permitted_command_usage(&self, source: &CommandSource, command: &str) -> Option<(&str, Box<str>)> {
-        if let Some(output) = self.get_permitted_command_usage_non_fallback(source, command).await {
+    pub async fn get_permitted_command_usage(
+        &self,
+        source: &CommandSource,
+        command: &str,
+    ) -> Option<(&str, Box<str>)> {
+        if let Some(output) = self
+            .get_permitted_command_usage_non_fallback(source, command)
+            .await
+        {
             Some(output)
         } else {
             let tree = self.fallback_dispatcher.get_tree(command).ok()?;
-            if let Some(permission) = self.fallback_dispatcher.permissions.get(&tree.names[0]) && source.has_permission(permission).await {
+            if let Some(permission) = self.fallback_dispatcher.permissions.get(&tree.names[0])
+                && source.has_permission(permission).await
+            {
                 Some((tree.description.as_ref(), tree.to_string().into_boxed_str()))
             } else {
                 None
@@ -599,7 +631,11 @@ impl CommandDispatcher {
         }
     }
 
-    async fn get_permitted_command_usage_non_fallback(&self, source: &CommandSource, command: &str) -> Option<(&str, Box<str>)> {
+    async fn get_permitted_command_usage_non_fallback(
+        &self,
+        source: &CommandSource,
+        command: &str,
+    ) -> Option<(&str, Box<str>)> {
         let command_node_id = self.tree.get(command)?;
 
         // This propagates `None` to the function result if permissions are insufficient.
@@ -611,18 +647,30 @@ impl CommandDispatcher {
     }
 
     /// Returns the usage of the given command node.
-    pub async fn get_usage_of_command(&self, command_node: CommandNodeId, source: &CommandSource) -> Option<String> {
+    pub async fn get_usage_of_command(
+        &self,
+        command_node: CommandNodeId,
+        source: &CommandSource,
+    ) -> Option<String> {
         // We know the root DOES NOT have an executor, so we pass false to `is_optional`.
-        self.get_usage_recursive(command_node.into(), source, false, false, None).await
+        self.get_usage_recursive(command_node.into(), source, false, false, None)
+            .await
     }
 
     /// Returns the usage of each child of the given node (permitted for the given source).
-    pub async fn get_usage_of_children(&self, node: NodeId, source: &CommandSource) -> FxHashMap<NodeId, String> {
+    pub async fn get_usage_of_children(
+        &self,
+        node: NodeId,
+        source: &CommandSource,
+    ) -> FxHashMap<NodeId, String> {
         let mut map = FxHashMap::default();
 
         let is_optional = self.tree[node].command().is_some();
         for child in self.tree.get_children(node) {
-            if let Some(usage) = self.get_usage_recursive(child, source, is_optional, false, None).await {
+            if let Some(usage) = self
+                .get_usage_recursive(child, source, is_optional, false, None)
+                .await
+            {
                 map.insert(child, usage);
             }
         }
@@ -631,7 +679,10 @@ impl CommandDispatcher {
     }
 
     /// Returns the usage of each command (permitted for the given source).
-    pub async fn get_usage_of_commands(&self, source: &CommandSource) -> FxHashMap<CommandNodeId, String> {
+    pub async fn get_usage_of_commands(
+        &self,
+        source: &CommandSource,
+    ) -> FxHashMap<CommandNodeId, String> {
         self.get_usage_of_children(ROOT_NODE_ID, source)
             .await
             .into_iter()
@@ -641,103 +692,120 @@ impl CommandDispatcher {
     }
 
     /// Internal function to recurse usages.
-    fn get_usage_recursive<'a>(&'a self, node: NodeId, source: &'a CommandSource, is_optional: bool, deep: bool, redirector_usage_text: Option<String>) -> Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
-        Box::pin(
-            async move {
-                if !self.tree.can_use(node, source).await {
-                    return None;
-                }
-
-                let usage_text = redirector_usage_text.unwrap_or_else(|| {
-                    let mut text = self.tree[node].usage_text();
-                    if is_optional {
-                        text = format!("{USAGE_OPTIONAL_OPEN}{text}{USAGE_OPTIONAL_CLOSE}");
-                    }
-                    text
-                });
-                let child_optional = self.tree[node].command().is_some();
-
-                if !deep {
-                    if let Some(redirect) = self.tree[node].redirect() {
-                        if let Some(target) = self.tree.resolve(redirect) {
-                            let target_usage =
-                                if target == node {
-                                    "...".to_string()
-                                } else if self.tree.is_command_node(node) && self.tree.is_command_node(target) {
-                                    // We do this so for example it will show usage for /?:
-                                    //
-                                    // /? [<commandOrPage>]
-                                    //
-                                    // instead of
-                                    //
-                                    // /? -> help
-                                    return self.get_usage_recursive(target, source, is_optional, deep, Some(usage_text)).await;
-                                } else {
-                                    format!("-> {}", self.tree[target].usage_text())
-                                };
-                            return Some(format!("{usage_text}{ARG_SEPARATOR}{target_usage}"));
-                        }
-                    } else {
-                        let mut children = Vec::new();
-                        for child in self.tree.get_children(node) {
-                            if self.tree.can_use(child, source).await {
-                                children.push(child);
-                            }
-                        }
-
-                        if children.len() == 1 {
-                            let child = children[0];
-                            if let Some(child_usage_text) = self.get_usage_recursive(child, source, child_optional, true, None).await {
-                                return Some(format!("{usage_text}{ARG_SEPARATOR}{child_usage_text}"));
-                            } else if !children.is_empty() {
-                                let mut child_usages = Vec::new();
-                                // TODO: Optimize this set algorithm while keeping insertion order.
-                                for child in children {
-                                    if let Some(child_usage_text) = self.get_usage_recursive(child, source, child_optional, true, None).await
-                                        && !child_usages.contains(&child_usage_text) {
-                                        child_usages.push(child_usage_text);
-                                        }
-                                }
-                                if child_usages.len() == 1 {
-                                    let mut child_usage =
-                                        child_usages
-                                            .into_iter()
-                                            .next()
-                                            .unwrap();
-                                    if is_optional {
-                                        child_usage = format!("{USAGE_OPTIONAL_OPEN}{child_usage}{USAGE_OPTIONAL_CLOSE}");
-                                    }
-                                    return Some(format!("{usage_text}{ARG_SEPARATOR}{child_usage}"))
-                                } else if !child_usages.is_empty() {
-                                    let (open, close) =
-                                        if child_optional {
-                                            (USAGE_OPTIONAL_OPEN, USAGE_OPTIONAL_CLOSE)
-                                        } else {
-                                            (USAGE_REQUIRED_OPEN, USAGE_REQUIRED_CLOSE)
-                                        };
-
-                                    let mut result_usage = usage_text;
-                                    result_usage += ARG_SEPARATOR;
-                                    result_usage += open;
-                                    let mut first = true;
-                                    for child_usage in child_usages {
-                                        if !first {
-                                            result_usage += USAGE_OR;
-                                        }
-                                        result_usage += &*child_usage;
-                                        first = false;
-                                    }
-                                    result_usage += close;
-                                    return Some(result_usage);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Some(usage_text)
+    fn get_usage_recursive<'a>(
+        &'a self,
+        node: NodeId,
+        source: &'a CommandSource,
+        is_optional: bool,
+        deep: bool,
+        redirector_usage_text: Option<String>,
+    ) -> Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async move {
+            if !self.tree.can_use(node, source).await {
+                return None;
             }
-        )
+
+            let usage_text = redirector_usage_text.unwrap_or_else(|| {
+                let mut text = self.tree[node].usage_text();
+                if is_optional {
+                    text = format!("{USAGE_OPTIONAL_OPEN}{text}{USAGE_OPTIONAL_CLOSE}");
+                }
+                text
+            });
+            let child_optional = self.tree[node].command().is_some();
+
+            if !deep {
+                if let Some(redirect) = self.tree[node].redirect() {
+                    if let Some(target) = self.tree.resolve(redirect) {
+                        let target_usage = if target == node {
+                            "...".to_string()
+                        } else if self.tree.is_command_node(node)
+                            && self.tree.is_command_node(target)
+                        {
+                            // We do this so for example it will show usage for /?:
+                            //
+                            // /? [<commandOrPage>]
+                            //
+                            // instead of
+                            //
+                            // /? -> help
+                            return self
+                                .get_usage_recursive(
+                                    target,
+                                    source,
+                                    is_optional,
+                                    deep,
+                                    Some(usage_text),
+                                )
+                                .await;
+                        } else {
+                            format!("-> {}", self.tree[target].usage_text())
+                        };
+                        return Some(format!("{usage_text}{ARG_SEPARATOR}{target_usage}"));
+                    }
+                } else {
+                    let mut children = Vec::new();
+                    for child in self.tree.get_children(node) {
+                        if self.tree.can_use(child, source).await {
+                            children.push(child);
+                        }
+                    }
+
+                    if children.len() == 1 {
+                        let child = children[0];
+                        if let Some(child_usage_text) = self
+                            .get_usage_recursive(child, source, child_optional, true, None)
+                            .await
+                        {
+                            return Some(format!("{usage_text}{ARG_SEPARATOR}{child_usage_text}"));
+                        } else if !children.is_empty() {
+                            let mut child_usages = Vec::new();
+                            // TODO: Optimize this set algorithm while keeping insertion order.
+                            for child in children {
+                                if let Some(child_usage_text) = self
+                                    .get_usage_recursive(child, source, child_optional, true, None)
+                                    .await
+                                    && !child_usages.contains(&child_usage_text)
+                                {
+                                    child_usages.push(child_usage_text);
+                                }
+                            }
+                            if child_usages.len() == 1 {
+                                let mut child_usage = child_usages.into_iter().next().unwrap();
+                                if is_optional {
+                                    child_usage = format!(
+                                        "{USAGE_OPTIONAL_OPEN}{child_usage}{USAGE_OPTIONAL_CLOSE}"
+                                    );
+                                }
+                                return Some(format!("{usage_text}{ARG_SEPARATOR}{child_usage}"));
+                            } else if !child_usages.is_empty() {
+                                let (open, close) = if child_optional {
+                                    (USAGE_OPTIONAL_OPEN, USAGE_OPTIONAL_CLOSE)
+                                } else {
+                                    (USAGE_REQUIRED_OPEN, USAGE_REQUIRED_CLOSE)
+                                };
+
+                                let mut result_usage = usage_text;
+                                result_usage += ARG_SEPARATOR;
+                                result_usage += open;
+                                let mut first = true;
+                                for child_usage in child_usages {
+                                    if !first {
+                                        result_usage += USAGE_OR;
+                                    }
+                                    result_usage += &*child_usage;
+                                    first = false;
+                                }
+                                result_usage += close;
+                                return Some(result_usage);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Some(usage_text)
+        })
     }
 }
 

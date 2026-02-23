@@ -138,7 +138,7 @@ impl CommandSource {
         rotation: Vector2<f32>,
         name: String,
         display_name: TextComponent,
-        server: Arc<Server>
+        server: Arc<Server>,
     ) -> Self {
         Self {
             output,

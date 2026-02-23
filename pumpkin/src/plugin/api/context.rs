@@ -167,7 +167,9 @@ impl Context {
 
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.fallback_dispatcher.register(tree, full_permission_node);
+            dispatcher_lock
+                .fallback_dispatcher
+                .register(tree, full_permission_node);
         };
 
         self.reload_commands_for_everyone().await;
@@ -201,11 +203,7 @@ impl Context {
     /// - `player`: The player for which the commands will be reloaded.
     pub async fn reload_commands_for(&self, player: &Arc<Player>) {
         let command_dispatcher = self.server.command_dispatcher.read().await;
-        client_suggestions::send_c_commands_packet(
-            player,
-            &self.server,
-            &command_dispatcher,
-        ).await;
+        client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher).await;
     }
 
     /// Register a permission for this plugin

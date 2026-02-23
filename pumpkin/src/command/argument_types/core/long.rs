@@ -1,5 +1,8 @@
 use crate::command::{
-    argument_types::{argument_type::{ArgumentType, JavaClientArgumentType}, core::within_or_err},
+    argument_types::{
+        argument_type::{ArgumentType, JavaClientArgumentType},
+        core::within_or_err,
+    },
     errors::{command_syntax_error::CommandSyntaxError, error_types},
     string_reader::StringReader,
 };
@@ -28,15 +31,15 @@ impl ArgumentType for LongArgumentType {
         )
     }
 
-    fn examples(&self) -> Vec<String> {
-        examples!("0", "123", "-123")
-    }
-
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::Long {
             min: (self.min != i64::MIN).then_some(self.min),
-            max: (self.min != i64::MAX).then_some(self.max)
+            max: (self.min != i64::MAX).then_some(self.max),
         }
+    }
+
+    fn examples(&self) -> Vec<String> {
+        examples!("0", "123", "-123")
     }
 }
 

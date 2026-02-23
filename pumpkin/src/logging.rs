@@ -426,12 +426,11 @@ impl Completer for PumpkinCommandCompleter {
                 if cmd.trim().is_empty() {
                     // Give all commands as suggestions.
 
-                    let suggestions: Vec<String> =
-                        dispatcher
-                            .get_all_commands()
-                            .keys()
-                            .map(ToString::to_string)
-                            .collect();
+                    let suggestions: Vec<String> = dispatcher
+                        .get_all_commands()
+                        .keys()
+                        .map(ToString::to_string)
+                        .collect();
                     return Ok((pos, suggestions));
                 }
             }
@@ -446,12 +445,11 @@ impl Completer for PumpkinCommandCompleter {
 
                 if !suggestions.is_empty() {
                     let start = suggestions.range.start;
-                    let suggestions =
-                        suggestions
-                            .suggestions
-                            .into_iter()
-                            .map(|s| s.text.cached_text().clone())
-                            .collect();
+                    let suggestions = suggestions
+                        .suggestions
+                        .into_iter()
+                        .map(|s| s.text.cached_text().clone())
+                        .collect();
                     return Ok((start, suggestions));
                 }
             }

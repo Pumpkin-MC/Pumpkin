@@ -1,10 +1,10 @@
+use crate::command::node::dispatcher::CommandDispatcher;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionDefault, PermissionRegistry},
 };
 use tokio::sync::RwLock;
-use crate::command::node::dispatcher::CommandDispatcher;
 
 mod ban;
 mod banip;

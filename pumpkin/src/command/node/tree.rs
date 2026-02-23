@@ -99,7 +99,7 @@ impl Tree {
         Self {
             nodes: vec![AttachedNode::Root(node)],
             ids_map,
-            command_node_mappings: FxHashMap::default()
+            command_node_mappings: FxHashMap::default(),
         }
     }
 

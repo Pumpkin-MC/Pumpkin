@@ -8,11 +8,13 @@ use crate::server::Server;
 use crate::world::World;
 use args::ConsumedArgs;
 
+use crate::command::context::command_source::CommandSource;
+use crate::entity::EntityBase;
 use dispatcher::CommandError;
-use pumpkin_data::dimension::Dimension;
-use pumpkin_data::block_properties::Facing;
-use pumpkin_data::block_properties::CommandBlockLikeProperties;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::CommandBlockLikeProperties;
+use pumpkin_data::block_properties::Facing;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
@@ -20,8 +22,6 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::translation::Locale;
 use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
-use crate::command::context::command_source::{CommandSource};
-use crate::entity::EntityBase;
 
 pub mod args;
 pub mod argument_builder;
@@ -245,7 +245,7 @@ impl CommandSender {
                     Vector2::new(0.0, 0.0),
                     "Rcon".to_owned(),
                     TextComponent::text("Rcon"),
-                    server.clone()
+                    server.clone(),
                 )
             }
             Self::Console => {
@@ -258,27 +258,26 @@ impl CommandSender {
                     Vector2::new(0.0, 0.0),
                     "Server".to_owned(),
                     TextComponent::text("Server"),
-                    server.clone()
+                    server.clone(),
                 )
             }
-            Self::Player(player) => {
-                CommandSource::new(
-                    Self::Player(player.clone()),
-                    player.world(),
-                    Some(player.clone()),
-                    player.position(),
-                    player.rotation().into(),
-                    player.get_display_name().await.get_text(),
-                    player.get_display_name().await,
-                    server.clone()
-                )
-            }
+            Self::Player(player) => CommandSource::new(
+                Self::Player(player.clone()),
+                player.world(),
+                Some(player.clone()),
+                player.position(),
+                player.rotation().into(),
+                player.get_display_name().await.get_text(),
+                player.get_display_name().await,
+                server.clone(),
+            ),
             Self::CommandBlock(command_entity, world) => {
                 let pos = command_entity.position;
 
                 let state_id = world.get_block_state_id(&pos).await;
                 let block = world.get_block(&pos).await;
-                let command_block_props = CommandBlockLikeProperties::from_state_id(state_id, block);
+                let command_block_props =
+                    CommandBlockLikeProperties::from_state_id(state_id, block);
                 let facing = command_block_props.facing;
 
                 let horizontal_direction = match facing {
@@ -299,7 +298,7 @@ impl CommandSender {
                     Vector2::new(0.0, horizontal_direction),
                     name.clone().get_text(),
                     name,
-                    server.clone()
+                    server.clone(),
                 )
             }
             Self::Dummy => {
@@ -312,7 +311,7 @@ impl CommandSender {
                     Vector2::new(0.0, 0.0),
                     String::new(),
                     TextComponent::text(""),
-                    server.clone()
+                    server.clone(),
                 )
             }
         }
@@ -323,11 +322,7 @@ impl CommandSender {
         let spawn_point = {
             let level_data = world.level_info.load();
 
-            Vector3::new(
-                level_data.spawn_x,
-                level_data.spawn_y,
-                level_data.spawn_z
-            )
+            Vector3::new(level_data.spawn_x, level_data.spawn_y, level_data.spawn_z)
         };
 
         (world, spawn_point.to_f64())

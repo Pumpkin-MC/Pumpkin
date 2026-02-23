@@ -96,14 +96,10 @@ impl Requirement {
 
 impl<F> From<F> for Requirement
 where
-    F: Fn(&CommandSource) -> RequirementResult<'_> + Send + Sync + 'static
+    F: Fn(&CommandSource) -> RequirementResult<'_> + Send + Sync + 'static,
 {
     fn from(value: F) -> Self {
-        Self::Condition(
-            Arc::new(
-                value
-            )
-        )
+        Self::Condition(Arc::new(value))
     }
 }
 

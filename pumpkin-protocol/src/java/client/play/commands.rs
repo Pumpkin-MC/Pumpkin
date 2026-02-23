@@ -56,7 +56,7 @@ pub enum ProtoNodeType<'a> {
     Literal {
         name: &'a str,
         is_executable: bool,
-        redirect_target: Option<i32>
+        redirect_target: Option<i32>,
     },
     Argument {
         name: &'a str,
@@ -85,7 +85,7 @@ impl ProtoNode<'_> {
             ProtoNodeType::Literal {
                 name: _,
                 is_executable,
-                redirect_target
+                redirect_target,
             } => {
                 let mut n = 1;
                 if is_executable {
@@ -102,7 +102,7 @@ impl ProtoNode<'_> {
                 is_executable,
                 parser: _,
                 override_suggestion_type,
-                redirect_target
+                redirect_target,
             } => {
                 let mut n = 2;
                 if override_suggestion_type.is_some() {
@@ -139,13 +139,16 @@ impl ProtoNode<'_> {
         }
 
         // parser id + properties
-        if let ProtoNodeType::Argument {parser, ..} = &self.node_type {
+        if let ProtoNodeType::Argument { parser, .. } = &self.node_type {
             parser.write_to_buffer(write, version)?;
         }
 
         if flags & Self::FLAG_HAS_SUGGESTION_TYPE != 0 {
             match &self.node_type {
-                ProtoNodeType::Argument {override_suggestion_type, ..} => {
+                ProtoNodeType::Argument {
+                    override_suggestion_type,
+                    ..
+                } => {
                     // suggestion type
                     let suggestion_type = &override_suggestion_type.expect("ProtoNode::FLAG_HAS_SUGGESTION_TYPE should only be set if override_suggestion_type is not `None`.");
                     write.write_string(suggestion_type.resource_location())?;

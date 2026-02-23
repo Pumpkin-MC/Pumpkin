@@ -1,5 +1,8 @@
 use crate::command::{
-    argument_types::{argument_type::{ArgumentType, JavaClientArgumentType}, core::within_or_err},
+    argument_types::{
+        argument_type::{ArgumentType, JavaClientArgumentType},
+        core::within_or_err,
+    },
     errors::{command_syntax_error::CommandSyntaxError, error_types},
     string_reader::StringReader,
 };
@@ -31,7 +34,7 @@ impl ArgumentType for IntegerArgumentType {
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::Integer {
             min: (self.min != i32::MIN).then_some(self.min),
-            max: (self.min != i32::MAX).then_some(self.max)
+            max: (self.min != i32::MAX).then_some(self.max),
         }
     }
 

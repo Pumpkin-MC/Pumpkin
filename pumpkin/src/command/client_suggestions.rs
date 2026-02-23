@@ -1,11 +1,19 @@
-use std::sync::Arc;
-use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::{CCommands, ProtoNode, ProtoNodeType}};
-
-use crate::{command::node::{attached::{AttachedNode, NodeId}, dispatcher::CommandDispatcher, tree::ROOT_NODE_ID}, entity::player::Player};
-
-use super::{
-    tree::{Node, NodeType},
+use pumpkin_protocol::{
+    codec::var_int::VarInt,
+    java::client::play::{CCommands, ProtoNode, ProtoNodeType},
 };
+use std::sync::Arc;
+
+use crate::{
+    command::node::{
+        attached::{AttachedNode, NodeId},
+        dispatcher::CommandDispatcher,
+        tree::ROOT_NODE_ID,
+    },
+    entity::player::Player,
+};
+
+use super::tree::{Node, NodeType};
 
 pub async fn send_c_commands_packet(
     player: &Arc<Player>,
@@ -62,37 +70,37 @@ pub async fn send_c_commands_packet(
     let mut root_node_children_second: Box<[VarInt]> = Box::new([]);
     for node in &dispatcher.tree {
         // We map IDs to the indexes:
-        let children: Box<[VarInt]> =
-            node.children_ref()
-                .values()
-                .copied()
-                .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-                .map(|i| i.try_into().expect("i32 limit reached for ids"))
-                .collect();
+        let children: Box<[VarInt]> = node
+            .children_ref()
+            .values()
+            .copied()
+            .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
+            .map(|i| i.try_into().expect("i32 limit reached for ids"))
+            .collect();
 
-        let redirect_target =
-            node.redirect()
-                .and_then(|redirection| dispatcher.tree.resolve(redirection))
-                .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-                .map(|i| i.try_into().expect("i32 limit reached for ids"));
+        let redirect_target = node
+            .redirect()
+            .and_then(|redirection| dispatcher.tree.resolve(redirection))
+            .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
+            .map(|i| i.try_into().expect("i32 limit reached for ids"));
 
         match node {
             AttachedNode::Root(_) => {
                 // We skip the root node because we already have a root node.
                 // We do need to capture its children though, for later.
                 root_node_children_second = children;
-            },
+            }
             AttachedNode::Literal(literal_attached_node) => {
                 let node = ProtoNode {
                     children,
                     node_type: ProtoNodeType::Literal {
                         name: &literal_attached_node.meta.literal,
                         is_executable: literal_attached_node.owned.command.is_some(),
-                        redirect_target
+                        redirect_target,
                     },
                 };
                 proto_nodes.push(node);
-            },
+            }
             AttachedNode::Command(command_attached_node) => {
                 let node = ProtoNode {
                     children,
@@ -103,7 +111,7 @@ pub async fn send_c_commands_packet(
                     },
                 };
                 proto_nodes.push(node);
-            },
+            }
             AttachedNode::Argument(argument_attached_node) => {
                 let arg_type = &argument_attached_node.meta.argument_type;
 
@@ -114,14 +122,14 @@ pub async fn send_c_commands_packet(
                         is_executable: argument_attached_node.owned.command.is_some(),
                         parser: arg_type.client_side_parser(),
                         override_suggestion_type: arg_type.override_suggestion_providers(),
-                        redirect_target
-                    }
+                        redirect_target,
+                    },
                 };
                 proto_nodes.push(node);
-            },
+            }
         }
     }
-    
+
     if !root_node_children_second.is_empty() {
         let root_node = &mut proto_nodes[root_node_index];
 

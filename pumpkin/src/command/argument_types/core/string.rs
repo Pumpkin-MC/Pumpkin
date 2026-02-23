@@ -1,7 +1,8 @@
 use pumpkin_protocol::java::client::play::StringProtoArgBehavior;
 
 use crate::command::{
-    argument_types::argument_type::{ArgumentType, JavaClientArgumentType}, errors::command_syntax_error::CommandSyntaxError,
+    argument_types::argument_type::{ArgumentType, JavaClientArgumentType},
+    errors::command_syntax_error::CommandSyntaxError,
     string_reader::StringReader,
 };
 
@@ -31,22 +32,20 @@ impl ArgumentType for StringArgumentType {
         }
     }
 
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+        JavaClientArgumentType::String(match self {
+            Self::SingleWord => StringProtoArgBehavior::SingleWord,
+            Self::QuotablePhrase => StringProtoArgBehavior::QuotablePhrase,
+            Self::GreedyPhrase => StringProtoArgBehavior::GreedyPhrase,
+        })
+    }
+
     fn examples(&self) -> Vec<String> {
         match self {
             Self::SingleWord => examples!("word", "words_with_underscores"),
             Self::QuotablePhrase => examples!("\"quoted phrase\"", "word", "\"\""),
             Self::GreedyPhrase => examples!("word", "words with spaces", "\"and symbols\""),
         }
-    }
-
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
-        JavaClientArgumentType::String(
-            match self {
-                Self::SingleWord => StringProtoArgBehavior::SingleWord,
-                Self::QuotablePhrase => StringProtoArgBehavior::QuotablePhrase,
-                Self::GreedyPhrase => StringProtoArgBehavior::GreedyPhrase,
-            }
-        )
     }
 }
 

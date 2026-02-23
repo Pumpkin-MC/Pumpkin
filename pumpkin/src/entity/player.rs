@@ -78,9 +78,9 @@ use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 
 use crate::block;
 use crate::block::blocks::bed::BedBlock;
-use crate::command::{client_suggestions, CommandSender};
 use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::{CommandSender, client_suggestions};
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
@@ -2871,7 +2871,9 @@ impl Player {
     }
 
     pub async fn get_command_source(self: &Arc<Self>, server: &Arc<Server>) -> CommandSource {
-        CommandSender::Player(self.clone()).into_source(server).await
+        CommandSender::Player(self.clone())
+            .into_source(server)
+            .await
     }
 }
 
