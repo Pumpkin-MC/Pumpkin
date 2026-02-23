@@ -430,7 +430,6 @@ impl Completer for PumpkinCommandCompleter {
                         dispatcher
                             .get_all_commands()
                             .keys()
-                            .into_iter()
                             .map(ToString::to_string)
                             .collect();
                     return Ok((pos, suggestions));
@@ -439,7 +438,7 @@ impl Completer for PumpkinCommandCompleter {
 
             {
                 let mut reader = StringReader::new(cmd);
-                if let Some('/') = reader.peek() {
+                if reader.peek() == Some('/') {
                     reader.skip();
                 }
                 let parsed = dispatcher.parse(&mut reader, &source).await;

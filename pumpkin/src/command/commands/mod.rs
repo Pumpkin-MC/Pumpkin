@@ -1,4 +1,3 @@
-use std::ops::DerefMut;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_util::{
     PermissionLvl,
@@ -67,9 +66,9 @@ pub async fn default_dispatcher(
     let mut dispatcher = crate::command::dispatcher::CommandDispatcher::default();
 
     let mut registry_lock = registry.write().await;
-    let registry = registry_lock.deref_mut();
+    let registry = &mut *registry_lock;
 
-    register_permissions(registry).await;
+    register_permissions(registry);
 
     // Zero
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
@@ -170,7 +169,7 @@ pub async fn default_dispatcher(
     dispatcher
 }
 
-async fn register_permissions(registry: &mut PermissionRegistry) {
+fn register_permissions(registry: &mut PermissionRegistry) {
     // Register level 0 permissions (allowed by default)
     register_level_0_permissions(registry);
 

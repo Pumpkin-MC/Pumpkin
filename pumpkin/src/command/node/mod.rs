@@ -99,7 +99,7 @@ where
     F: Fn(&CommandSource) -> RequirementResult<'_> + Send + Sync + 'static
 {
     fn from(value: F) -> Self {
-        Requirement::Condition(
+        Self::Condition(
             Arc::new(
                 value
             )

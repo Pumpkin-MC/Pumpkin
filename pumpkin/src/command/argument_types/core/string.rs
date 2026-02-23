@@ -42,9 +42,9 @@ impl ArgumentType for StringArgumentType {
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::String(
             match self {
-                StringArgumentType::SingleWord => StringProtoArgBehavior::SingleWord,
-                StringArgumentType::QuotablePhrase => StringProtoArgBehavior::QuotablePhrase,
-                StringArgumentType::GreedyPhrase => StringProtoArgBehavior::GreedyPhrase,
+                Self::SingleWord => StringProtoArgBehavior::SingleWord,
+                Self::QuotablePhrase => StringProtoArgBehavior::QuotablePhrase,
+                Self::GreedyPhrase => StringProtoArgBehavior::GreedyPhrase,
             }
         )
     }

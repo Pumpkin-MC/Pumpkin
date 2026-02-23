@@ -65,7 +65,7 @@ pub async fn send_c_commands_packet(
         let children: Box<[VarInt]> =
             node.children_ref()
                 .values()
-                .cloned()
+                .copied()
                 .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
                 .map(|i| i.try_into().expect("i32 limit reached for ids"))
                 .collect();

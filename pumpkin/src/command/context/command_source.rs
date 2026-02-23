@@ -360,7 +360,7 @@ impl CommandSource {
     /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain a world, but it may not in a unit test.
     #[must_use]
-    pub fn world(&self) -> &Arc<World> {
+    pub const fn world(&self) -> &Arc<World> {
         self.world.as_ref().expect("Expected world to exist")
     }
 
@@ -369,8 +369,8 @@ impl CommandSource {
     /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain the server, but it may not in a unit test.
     #[must_use]
-    pub fn server(&self) -> &Arc<Server> {
-        &self.server.as_ref().expect("Expected server to exist")
+    pub const fn server(&self) -> &Arc<Server> {
+        self.server.as_ref().expect("Expected server to exist")
     }
 
     /// Gets the player as an option:
@@ -473,7 +473,7 @@ impl CommandSource {
     /// server (i.e. this is a dummy [`CommandSource`].)
     #[must_use]
     pub async fn has_permission(&self, permission: &str) -> bool {
-        self.output.has_permission(&self.server(), permission).await
+        self.output.has_permission(self.server(), permission).await
     }
 
     /// Returns whether this source has the permission provided.

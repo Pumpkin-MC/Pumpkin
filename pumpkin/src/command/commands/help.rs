@@ -89,7 +89,7 @@ impl ArgumentType for HelpArgumentType {
 
 impl HelpCommandExecutor {
     fn create_help_command_with_given_page_number(page_number: usize, arrow: &'static str) -> TextComponent {
-        let cmd = format!("/help {}", page_number);
+        let cmd = format!("/help {page_number}");
         TextComponent::text(arrow)
             .color(Color::Named(NamedColor::Aqua))
             .click_event(ClickEvent::RunCommand {
@@ -97,19 +97,19 @@ impl HelpCommandExecutor {
             })
     }
 
-    fn page<'a>(&'a self, context: &'a CommandContext, page_number: usize) -> CommandExecutorResult<'a> {
+    fn page<'a>(context: &'a CommandContext, page_number: usize) -> CommandExecutorResult<'a> {
         Box::pin(
             async move {
                 let server = context.source.server();
 
                 let dispatcher = server.command_dispatcher.read().await;
                 let commands = dispatcher
-                    .get_all_permitted_commands_usage(&*context.source)
+                    .get_all_permitted_commands_usage(&context.source)
                     .await;
 
                 let commands_available = commands.len();
 
-                let total_pages = (commands.len() + COMMANDS_PER_PAGE - 1) / COMMANDS_PER_PAGE;
+                let total_pages = commands.len().div_ceil(COMMANDS_PER_PAGE);
                 let page = page_number.min(total_pages);
 
                 let start = (page - 1) * COMMANDS_PER_PAGE;
@@ -151,7 +151,7 @@ impl HelpCommandExecutor {
                     );
 
                 for (command, (description, usage)) in page_commands {
-                    let command_declaration = format!("/{}", command);
+                    let command_declaration = format!("/{command}");
                     message = message.add_child(
                         TextComponent::text(command_declaration.clone())
                             .color_named(NamedColor::Gold)
@@ -196,15 +196,15 @@ impl HelpCommandExecutor {
         )
     }
 
-    fn command<'a>(&'a self, context: &'a CommandContext, command: &'a str) -> CommandExecutorResult<'a> {
+    fn command<'a>(context: &'a CommandContext, command: &'a str) -> CommandExecutorResult<'a> {
         Box::pin(async move {
             let dispatcher = context.source.server().command_dispatcher.read().await;
 
-            let Some((usage, description)) = dispatcher.get_permitted_command_usage(&*context.source, command).await else {
+            let Some((usage, description)) = dispatcher.get_permitted_command_usage(&context.source, command).await else {
                 return Err(FAILED_ERROR_TYPE.create_without_context());
             };
 
-            let header_text = format!(" Help - /{} ", command);
+            let header_text = format!(" Help - /{command} ");
 
             let mut message = TextComponent::text("")
                 .add_child(
@@ -247,7 +247,7 @@ impl HelpCommandExecutor {
                                 .color_named(NamedColor::White),
                         )
                         .click_event(ClickEvent::SuggestCommand {
-                            command: format!("{command}").into(),
+                            command: command.to_string().into(),
                         }),
                 );
 
@@ -267,8 +267,8 @@ impl CommandExecutor for HelpCommandExecutor {
         let arg = context.get_argument(ARG).unwrap_or(&HelpArgument::Page(1));
 
         match arg {
-            HelpArgument::Command(command) => self.command(context, command),
-            HelpArgument::Page(page_number) => self.page(context, *page_number)
+            HelpArgument::Command(command) => Self::command(context, command),
+            HelpArgument::Page(page_number) => Self::page(context, *page_number)
         }
     }
 }

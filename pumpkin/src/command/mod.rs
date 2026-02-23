@@ -235,10 +235,10 @@ impl CommandSender {
     #[must_use]
     pub async fn into_source(self, server: &Arc<Server>) -> CommandSource {
         match self {
-            CommandSender::Rcon(rcon) => {
+            Self::Rcon(rcon) => {
                 let (world, spawn_point) = Self::get_world_and_spawn_point(server);
                 CommandSource::new(
-                    CommandSender::Rcon(rcon),
+                    Self::Rcon(rcon),
                     world,
                     None,
                     spawn_point,
@@ -248,10 +248,10 @@ impl CommandSender {
                     server.clone()
                 )
             }
-            CommandSender::Console => {
+            Self::Console => {
                 let (world, spawn_point) = Self::get_world_and_spawn_point(server);
                 CommandSource::new(
-                    CommandSender::Console,
+                    Self::Console,
                     world,
                     None,
                     spawn_point,
@@ -261,9 +261,9 @@ impl CommandSender {
                     server.clone()
                 )
             }
-            CommandSender::Player(player) => {
+            Self::Player(player) => {
                 CommandSource::new(
-                    CommandSender::Player(player.clone()),
+                    Self::Player(player.clone()),
                     player.world(),
                     Some(player.clone()),
                     player.position(),
@@ -273,7 +273,7 @@ impl CommandSender {
                     server.clone()
                 )
             }
-            CommandSender::CommandBlock(command_entity, world) => {
+            Self::CommandBlock(command_entity, world) => {
                 let pos = command_entity.position;
 
                 let state_id = world.get_block_state_id(&pos).await;
@@ -292,7 +292,7 @@ impl CommandSender {
                 let name = TextComponent::text("@");
 
                 CommandSource::new(
-                    CommandSender::CommandBlock(command_entity, world.clone()),
+                    Self::CommandBlock(command_entity, world.clone()),
                     world,
                     None,
                     pos.to_centered_f64(),
@@ -302,10 +302,10 @@ impl CommandSender {
                     server.clone()
                 )
             }
-            CommandSender::Dummy => {
+            Self::Dummy => {
                 let (world, spawn_point) = Self::get_world_and_spawn_point(server);
                 CommandSource::new(
-                    CommandSender::Dummy,
+                    Self::Dummy,
                     world,
                     None,
                     spawn_point,

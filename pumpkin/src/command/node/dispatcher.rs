@@ -494,7 +494,7 @@ impl CommandDispatcher {
         };
 
         let future2 = async move {
-            self.fallback_dispatcher.find_suggestions(&source.output, &source.server(), input).await
+            self.fallback_dispatcher.find_suggestions(&source.output, source.server(), input).await
         };
 
         let (mut a, mut b) = future::join(future1, future2).await;
@@ -505,6 +505,7 @@ impl CommandDispatcher {
     /// Gets all the commands usable in this dispatcher, sorted.
     /// The map returned has the key as the command name
     /// and the value as the command's description.
+    #[must_use]
     pub fn get_all_commands(&self) -> BTreeMap<&str, &str> {
         let mut commands: BTreeMap<&str, &str> = BTreeMap::new();
 
@@ -528,6 +529,7 @@ impl CommandDispatcher {
     /// the given source is able to use.
     /// The map returned has the key as the command name
     /// and the value as the command's description.
+    #[must_use]
     pub async fn get_all_permitted_commands(&self, source: &CommandSource) -> BTreeMap<&str, &str> {
         let mut commands: BTreeMap<&str, &str> = BTreeMap::new();
 
@@ -539,13 +541,12 @@ impl CommandDispatcher {
         }
 
         for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command {
-                if let Some(permission) = self.fallback_dispatcher.permissions.get(&command_tree.names[0]) && source.has_permission(permission).await {
+            if let Command::Tree(command_tree) = fallback_command
+                && let Some(permission) = self.fallback_dispatcher.permissions.get(&command_tree.names[0]) && source.has_permission(permission).await {
                     for name in &command_tree.names {
                         commands.insert(name, &command_tree.description);
                     }
                 }
-            }
         }
 
         commands
@@ -555,6 +556,7 @@ impl CommandDispatcher {
     ///
     /// The key is the command identifier,
     /// and the value is a tuple of `(description, usage)`.
+    #[must_use]
     pub async fn get_all_permitted_commands_usage(&self, source: &CommandSource) -> BTreeMap<&str, (&str, Box<str>)> {
         let mut commands: BTreeMap<&str, (&str, Box<str>)> = BTreeMap::new();
 
@@ -567,13 +569,12 @@ impl CommandDispatcher {
         }
 
         for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command {
-                if let Some(permission) = self.fallback_dispatcher.permissions.get(&command_tree.names[0]) && source.has_permission(permission).await {
-                    let usage = command_tree.to_string();
-                    for name in &command_tree.names {
-                        commands.insert(name, (command_tree.description.as_ref(), usage.clone().into_boxed_str()));
+            if let Command::Tree(command_tree) = fallback_command
+                && let Some(permission) = self.fallback_dispatcher.permissions.get(&command_tree.names[0]) && source.has_permission(permission).await {
+                        let usage = command_tree.to_string();
+                        for name in &command_tree.names {
+                            commands.insert(name, (command_tree.description.as_ref(), usage.clone().into_boxed_str()));
                     }
-                }
             }
         }
 
@@ -692,11 +693,10 @@ impl CommandDispatcher {
                                 let mut child_usages = Vec::new();
                                 // TODO: Optimize this set algorithm while keeping insertion order.
                                 for child in children {
-                                    if let Some(child_usage_text) = self.get_usage_recursive(child, source, child_optional, true, None).await {
-                                        if !child_usages.contains(&child_usage_text) {
-                                            child_usages.push(child_usage_text);
+                                    if let Some(child_usage_text) = self.get_usage_recursive(child, source, child_optional, true, None).await
+                                        && !child_usages.contains(&child_usage_text) {
+                                        child_usages.push(child_usage_text);
                                         }
-                                    }
                                 }
                                 if child_usages.len() == 1 {
                                     let mut child_usage =

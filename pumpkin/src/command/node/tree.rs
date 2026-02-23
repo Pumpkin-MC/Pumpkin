@@ -291,13 +291,12 @@ impl Tree {
     }
 
     /// Returns whether the given ID points to a command node.
+    #[must_use]
     pub fn is_command_node(&self, node: NodeId) -> bool {
-        match self[node].classification() {
-            NodeClassification::Command => true,
-            _ => false
-        }
+        matches!(self[node].classification(), NodeClassification::Command)
     }
 
+    #[must_use]
     pub fn get_relevant_nodes(&self, reader: &mut StringReader, node: NodeId) -> Vec<NodeId> {
         let children = self.get_children(node);
         let mut literals = Vec::new();
@@ -393,8 +392,14 @@ impl Tree {
     }
 
     /// Gets the command node by ID, given its literal.
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<CommandNodeId> {
-        self.command_node_mappings.get(name).cloned()
+        self.command_node_mappings.get(name).copied()
+    }
+
+    /// Returns an iterator to all the nodes of this tree.
+    pub fn iter(&self) -> std::slice::Iter<'_, AttachedNode> {
+        self.nodes.iter()
     }
 }
 
@@ -455,7 +460,7 @@ impl<'a> IntoIterator for &'a Tree {
     type IntoIter = std::slice::Iter<'a, AttachedNode>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.nodes.iter()
+        self.iter()
     }
 }
 

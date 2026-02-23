@@ -2870,7 +2870,7 @@ impl Player {
         (!state.is_air()).then_some(fallback_pos)
     }
 
-    pub async fn get_command_source(self: &Arc<Player>, server: &Arc<Server>) -> CommandSource {
+    pub async fn get_command_source(self: &Arc<Self>, server: &Arc<Server>) -> CommandSource {
         CommandSender::Player(self.clone()).into_source(server).await
     }
 }
