@@ -103,7 +103,7 @@ impl HelpCommandExecutor {
 
     fn page<'a>(context: &'a CommandContext, page_number: usize) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            let server = context.source.server();
+            let server = context.server();
 
             let dispatcher = server.command_dispatcher.read().await;
             let commands = dispatcher
@@ -196,7 +196,7 @@ impl HelpCommandExecutor {
 
     fn command<'a>(context: &'a CommandContext, command: &'a str) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            let dispatcher = context.source.server().command_dispatcher.read().await;
+            let dispatcher = context.server().command_dispatcher.read().await;
 
             let Some((usage, description)) = dispatcher
                 .get_permitted_command_usage(&context.source, command)

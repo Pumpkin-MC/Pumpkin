@@ -6,6 +6,8 @@ use crate::command::node::attached::NodeId;
 use crate::command::node::dispatcher::{CommandDispatcher, ResultConsumer};
 use crate::command::node::tree::Tree;
 use crate::command::node::{Command, RedirectModifier};
+use crate::server::Server;
+use crate::world::World;
 use pumpkin_util::text::TextComponent;
 use rustc_hash::FxHashMap;
 use std::any::Any;
@@ -65,7 +67,7 @@ pub struct CommandContext<'a> {
     /// The tree this context is related to.
     pub tree: &'a Tree,
 
-    /// The root that this context will use, bound to the tree
+    /// The root that this context will use, bound to the tree.
     /// Not necessarily the root node of the tree, however.
     pub root: NodeId,
 
@@ -169,6 +171,18 @@ impl CommandContext<'_> {
                 "Could not downcast argument '{name}'"
             )))
         })
+    }
+
+    /// Gets the server of this context.
+    #[must_use]
+    pub fn server(&self) -> &Arc<Server> {
+        self.source.server()
+    }
+
+    /// Gets the world of this context.
+    #[must_use]
+    pub fn world(&self) -> &Arc<World> {
+        self.source.world()
     }
 }
 
