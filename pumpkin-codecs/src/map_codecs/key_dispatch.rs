@@ -109,7 +109,6 @@ macro_rules! impl_variant_getter {
 /// This macro has two ways of using it:
 /// - Using a *String* to differentiate between variants.
 /// - Using a *enum* to differentiate between variants, whose variants are **all units**.
-///   The enum **must** implement `Display` for errors.
 ///
 /// Place this in an `impl KeyDispatchable for ...` block.
 ///
@@ -117,8 +116,14 @@ macro_rules! impl_variant_getter {
 /// ```txt
 /// (Self::A(..), "a") => A_MAP_CODEC
 /// ```
-/// Here, `Self::A(...)` is a pattern and `"a"` is the differentiator pattern (a string slice here).
+/// Here, `Self::A(...)` is a pattern and `"a"` is the differentiator value (a string slice here).
 /// `A_MAP_CODEC` is the map codec that will be used for encoding/decoding the specific fields of `A`.
+/// For using unit enums, it would look like:
+/// ```txt
+/// (Self::A(..), A) => A_MAP_CODEC
+/// ```
+/// Here, the `A` without the self is part of the differentiator enum (as an identifier).
+/// There is no need to specify the enum type, as that is already handled by this macro.
 ///
 /// You don't have to add a branch for every variant, but any left variant `MapCodec`s will be considered `todo!()`,
 /// so if *any encoding* is attempted with an unimplemented variant, it will **panic**.
@@ -142,7 +147,7 @@ macro_rules! impl_variant_getter {
 ///     B { field: i32 }
 /// }
 ///
-/// // `MapCodec`s for specific variants will probably not be used anywhere else, so it's
+/// // `MapCodec`s for specific variants might not be used anywhere else, so it's
 /// // fine to keep their types as is without using `pub type ...`.
 ///
 /// // pub static A_MAP_CODEC: StructMapCodec1<Example, FieldMapCodec<StringCodec>> = ...
@@ -220,8 +225,8 @@ macro_rules! impl_variant_getter {
 ///     impl_key_dispatchable!(
 ///         // We use a String to differentiate our enum.
 ///         enum ExampleType,
-///         (Self::A(..), ExampleType::A) => A_MAP_CODEC,
-///         (Self::B {..}, ExampleType::B) => B_MAP_CODEC,
+///         (Self::A(..), A) => A_MAP_CODEC,
+///         (Self::B {..}, B) => B_MAP_CODEC,
 ///     );
 /// }
 /// ```
@@ -307,7 +312,7 @@ macro_rules! impl_key_dispatchable {
     // For `KeyDispatchable`s that differentiate using an enum.
     (
         // Differentiator value enum (must be unit)
-        enum $e:ty,
+        enum $e:ident,
 
         // (Enum::FOO, Key::Foo) => FOO_MAP_CODEC
         $(
@@ -321,7 +326,7 @@ macro_rules! impl_key_dispatchable {
         #[allow(unreachable_patterns)]
         fn decode<T: std::fmt::Display + PartialEq + Clone>(key: Self::Key, input: T, ops: &'static impl $crate::dynamic_ops::DynamicOps<Value=T>) -> $crate::data_result::DataResult<Self> {
             match key {
-                $( $matched => $crate::map_coders::new_map_decoder_decoder(&$map_codec).parse(input, ops), )+
+                $( $e::$matched => $crate::map_coders::new_map_decoder_decoder(&$map_codec).parse(input, ops), )+
 
                 _ => $crate::data_result::DataResult::error(format!("Invalid differentiator value {key}")),
             }
@@ -330,7 +335,7 @@ macro_rules! impl_key_dispatchable {
         #[allow(unreachable_patterns)]
         fn map_decode<T: std::fmt::Display + PartialEq + Clone>(key: Self::Key, input: &impl $crate::map_like::MapLike<Value=T>, ops: &'static impl $crate::dynamic_ops::DynamicOps<Value=T>) -> $crate::data_result::DataResult<Self> {
             match key {
-                $( $matched => $map_codec.decode(input, ops), )+
+                $( $e::$matched => $map_codec.decode(input, ops), )+
 
                 _ => $crate::data_result::DataResult::error(format!("Invalid differentiator value {key}")),
             }
@@ -338,7 +343,7 @@ macro_rules! impl_key_dispatchable {
 
         fn key(&self) -> Self::Key {
             match self {
-                $( $variant => $matched, )+
+                $( $variant => $e::$matched, )+
             }
         }
 
