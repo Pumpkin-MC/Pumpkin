@@ -273,7 +273,7 @@ impl Goal for BeeWanderGoal {
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let navigator = mob.get_mob_entity().navigator.lock().await;
-            !navigator.is_idle()
+            navigator.is_in_progress()
         })
     }
 

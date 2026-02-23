@@ -298,6 +298,85 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 }
 
+async fn tick_navigation_and_move_control(mob_entity: &MobEntity, flying_speed: f64) {
+    let mut navigator = mob_entity.navigator.lock().await;
+    let mut move_ctrl = mob_entity.move_control.lock().await;
+    navigator
+        .tick(&mob_entity.living_entity, &mut move_ctrl)
+        .await;
+
+    // Tick move control after navigator (vanilla order)
+    let pos = mob_entity.living_entity.entity.pos.load();
+    let velocity = mob_entity.living_entity.entity.velocity.load();
+    let yaw = mob_entity.living_entity.entity.yaw.load();
+    let pitch = mob_entity.living_entity.entity.pitch.load();
+    let on_ground = mob_entity.living_entity.entity.on_ground.load(Relaxed);
+    let touching_water = mob_entity.living_entity.entity.touching_water.load(Relaxed);
+    let current_speed = mob_entity.living_entity.movement_speed.load();
+    let input = MoveControlInput {
+        pos,
+        velocity,
+        yaw,
+        pitch,
+        on_ground,
+        touching_water,
+        movement_speed: current_speed,
+        flying_speed,
+    };
+
+    if let Some(output) = move_ctrl.tick(input) {
+        mob_entity
+            .living_entity
+            .movement_input
+            .store(output.movement);
+        mob_entity
+            .living_entity
+            .movement_speed
+            .store(output.movement_speed.unwrap_or(current_speed));
+        if let Some(new_velocity) = output.velocity {
+            mob_entity.living_entity.entity.velocity.store(new_velocity);
+        }
+        mob_entity.living_entity.entity.yaw.store(output.yaw);
+        mob_entity.living_entity.entity.head_yaw.store(output.yaw);
+        mob_entity.living_entity.entity.body_yaw.store(output.yaw);
+        mob_entity.living_entity.entity.pitch.store(output.pitch);
+    }
+}
+
+async fn broadcast_rotation_updates(mob_entity: &MobEntity) {
+    // Send rotation packets after look_control finalizes head_yaw and pitch
+    let entity = &mob_entity.living_entity.entity;
+    let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
+    let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
+    let head_yaw = (entity.head_yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
+
+    let last_yaw = mob_entity.last_sent_yaw.load(Relaxed);
+    let last_pitch = mob_entity.last_sent_pitch.load(Relaxed);
+    let last_head_yaw = mob_entity.last_sent_head_yaw.load(Relaxed);
+
+    if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
+        let world = entity.world.load();
+        world
+            .broadcast_packet_all(&CUpdateEntityRot::new(
+                entity.entity_id.into(),
+                yaw,
+                pitch,
+                entity.on_ground.load(Relaxed),
+            ))
+            .await;
+        mob_entity.last_sent_yaw.store(yaw, Relaxed);
+        mob_entity.last_sent_pitch.store(pitch, Relaxed);
+    }
+
+    if head_yaw.abs_diff(last_head_yaw) >= 1 {
+        let world = entity.world.load();
+        world
+            .broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), head_yaw))
+            .await;
+        mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
+    }
+}
+
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn tick<'a>(
         &'a self,
@@ -336,48 +415,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 mob_entity.goals_selector.lock().await.tick(self).await;
             }
 
-            {
-                let mut navigator = mob_entity.navigator.lock().await;
-                let mut move_ctrl = mob_entity.move_control.lock().await;
-                navigator
-                    .tick(&mob_entity.living_entity, &mut move_ctrl)
-                    .await;
-
-                // Tick move control after navigator (vanilla order)
-                let pos = mob_entity.living_entity.entity.pos.load();
-                let velocity = mob_entity.living_entity.entity.velocity.load();
-                let yaw = mob_entity.living_entity.entity.yaw.load();
-                let pitch = mob_entity.living_entity.entity.pitch.load();
-                let on_ground = mob_entity.living_entity.entity.on_ground.load(Relaxed);
-                let touching_water = mob_entity.living_entity.entity.touching_water.load(Relaxed);
-                let speed = mob_entity.living_entity.movement_speed.load();
-                let flying_speed = self.get_mob_flying_speed();
-                let input = MoveControlInput {
-                    pos,
-                    velocity,
-                    yaw,
-                    pitch,
-                    on_ground,
-                    touching_water,
-                    movement_speed: speed,
-                    flying_speed,
-                };
-
-                if let Some(output) = move_ctrl.tick(input) {
-                    mob_entity
-                        .living_entity
-                        .movement_input
-                        .store(output.movement);
-                    mob_entity.living_entity.movement_speed.store(speed);
-                    if let Some(new_velocity) = output.velocity {
-                        mob_entity.living_entity.entity.velocity.store(new_velocity);
-                    }
-                    mob_entity.living_entity.entity.yaw.store(output.yaw);
-                    mob_entity.living_entity.entity.head_yaw.store(output.yaw);
-                    mob_entity.living_entity.entity.body_yaw.store(output.yaw);
-                    mob_entity.living_entity.entity.pitch.store(output.pitch);
-                }
-            }
+            tick_navigation_and_move_control(mob_entity, self.get_mob_flying_speed()).await;
 
             let mut look_control = mob_entity.look_control.lock().await;
             look_control.tick(self).await;
@@ -387,37 +425,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             self.post_tick().await;
 
-            // Send rotation packets after look_control finalizes head_yaw and pitch
-            let entity = &mob_entity.living_entity.entity;
-            let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            let head_yaw = (entity.head_yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-
-            let last_yaw = mob_entity.last_sent_yaw.load(Relaxed);
-            let last_pitch = mob_entity.last_sent_pitch.load(Relaxed);
-            let last_head_yaw = mob_entity.last_sent_head_yaw.load(Relaxed);
-
-            if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
-                let world = entity.world.load();
-                world
-                    .broadcast_packet_all(&CUpdateEntityRot::new(
-                        entity.entity_id.into(),
-                        yaw,
-                        pitch,
-                        entity.on_ground.load(Relaxed),
-                    ))
-                    .await;
-                mob_entity.last_sent_yaw.store(yaw, Relaxed);
-                mob_entity.last_sent_pitch.store(pitch, Relaxed);
-            }
-
-            if head_yaw.abs_diff(last_head_yaw) >= 1 {
-                let world = entity.world.load();
-                world
-                    .broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), head_yaw))
-                    .await;
-                mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
-            }
+            broadcast_rotation_updates(mob_entity).await;
         })
     }
 

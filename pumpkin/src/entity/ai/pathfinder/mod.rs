@@ -540,4 +540,11 @@ impl Navigator {
     pub const fn is_idle(&self) -> bool {
         self.current_goal.is_none()
     }
+
+    #[must_use]
+    pub fn is_in_progress(&self) -> bool {
+        self.current_path
+            .as_ref()
+            .is_some_and(|path| path.is_valid() && !path.is_done())
+    }
 }

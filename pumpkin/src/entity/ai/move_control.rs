@@ -33,6 +33,8 @@ pub struct MoveControlOutput {
     pub pitch: f32,
     /// Optional direct velocity override for controls that emulate vanilla bespoke movement.
     pub velocity: Option<Vector3<f64>>,
+    /// Optional movement speed override for controls that mirror vanilla speed updates.
+    pub movement_speed: Option<f64>,
 }
 
 /// Movement control strategy. `Ground` preserves existing navigator behaviour;
@@ -144,13 +146,12 @@ impl MoveControl {
         input: MoveControlInput,
     ) -> MoveControlOutput {
         if *operation != MoveOperation::MoveTo {
-            let _ = hovers_in_place;
-            return idle_output(input.yaw, input.pitch);
+            return flying_idle_output(hovers_in_place, input.yaw, input.pitch);
         }
         *operation = MoveOperation::Wait;
 
         let Some(wanted_position) = wanted.take() else {
-            return idle_output(input.yaw, input.pitch);
+            return flying_idle_output(hovers_in_place, input.yaw, input.pitch);
         };
 
         let xd = wanted_position.x - input.pos.x;
@@ -183,6 +184,7 @@ impl MoveControl {
             yaw: new_yaw,
             pitch: new_pitch,
             velocity: None,
+            movement_speed: Some(speed),
         }
     }
 
@@ -239,6 +241,7 @@ impl MoveControl {
                     yaw: new_yaw,
                     pitch: new_pitch,
                     velocity: Some(next_velocity),
+                    movement_speed: None,
                 };
             }
         }
@@ -253,7 +256,15 @@ const fn idle_output(yaw: f32, pitch: f32) -> MoveControlOutput {
         yaw,
         pitch,
         velocity: None,
+        movement_speed: None,
     }
+}
+
+const fn flying_idle_output(hovers_in_place: bool, yaw: f32, pitch: f32) -> MoveControlOutput {
+    if !hovers_in_place {
+        // Vanilla toggles noGravity here; Pumpkin applies gravity via `get_gravity()` in physics.
+    }
+    idle_output(yaw, pitch)
 }
 
 fn fish_idle_output(yaw: f32, pitch: f32, velocity: Vector3<f64>) -> MoveControlOutput {
@@ -262,6 +273,7 @@ fn fish_idle_output(yaw: f32, pitch: f32, velocity: Vector3<f64>) -> MoveControl
         yaw,
         pitch,
         velocity: Some(velocity),
+        movement_speed: None,
     }
 }
 
