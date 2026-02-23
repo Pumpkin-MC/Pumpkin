@@ -5,6 +5,7 @@ use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::TextComponent;
 use crate::command::argument_builder::{argument, command, ArgumentBuilder};
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
+use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::{CommandErrorType, INTEGER_TOO_HIGH, INTEGER_TOO_LOW};
@@ -54,7 +55,13 @@ impl ArgumentType for HelpArgumentType {
                 }
             }
             Err(error) => {
-                let text = reader.read_unquoted_string()?;
+                // Hacky way to greedily parse the remaining text.
+                // This can never fail.
+                //
+                // We use greedy phrases for now
+                // as the `?` command as the argument
+                // doesn't work for the unquoted word one.
+                let text = StringArgumentType::GreedyPhrase.parse(reader)?;
 
                 {
                     let mut integer_text = text.as_str();
@@ -76,13 +83,13 @@ impl ArgumentType for HelpArgumentType {
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
-        JavaClientArgumentType::String(StringProtoArgBehavior::SingleWord)
+        JavaClientArgumentType::String(StringProtoArgBehavior::GreedyPhrase)
     }
 }
 
 impl HelpCommandExecutor {
     fn create_help_command_with_given_page_number(page_number: usize, arrow: &'static str) -> TextComponent {
-        let cmd = format!("/help {}", page_number - 1);
+        let cmd = format!("/help {}", page_number);
         TextComponent::text(arrow)
             .color(Color::Named(NamedColor::Aqua))
             .click_event(ClickEvent::RunCommand {

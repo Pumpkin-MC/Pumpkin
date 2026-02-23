@@ -414,7 +414,8 @@ impl CommandDispatcher {
         };
 
         let full_input = parsing_result.reader.string();
-        let truncated_input = &full_input[0..cursor];
+
+        let truncated_input = &full_input[0..cursor.min(full_input.len())];
 
         let children = self.tree.get_children(parent);
         let capacity = children.len();
@@ -578,6 +579,19 @@ impl CommandDispatcher {
     /// The key is the command identifier,
     /// and the value is a tuple of `(description, usage)`.
     pub async fn get_permitted_command_usage(&self, source: &CommandSource, command: &str) -> Option<(&str, Box<str>)> {
+        if let Some(output) = self.get_permitted_command_usage_non_fallback(source, command).await {
+            Some(output)
+        } else {
+            let tree = self.fallback_dispatcher.get_tree(command).ok()?;
+            if let Some(permission) = self.fallback_dispatcher.permissions.get(&tree.names[0]) && source.has_permission(permission).await {
+                Some((tree.description.as_ref(), tree.to_string().into_boxed_str()))
+            } else {
+                None
+            }
+        }
+    }
+
+    async fn get_permitted_command_usage_non_fallback(&self, source: &CommandSource, command: &str) -> Option<(&str, Box<str>)> {
         let command_node_id = self.tree.get(command)?;
 
         // This propagates `None` to the function result if permissions are insufficient.
