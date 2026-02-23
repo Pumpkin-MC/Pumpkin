@@ -65,7 +65,7 @@ pub trait KeyDispatchable: Sized {
 ///
 /// # Example
 /// ```rust
-/// # use pumpkin_codecs::{struct_map_codec, impl_getter_variant, impl_key_dispatchable};
+/// # use pumpkin_codecs::{struct_map_codec, impl_variant_getter, impl_key_dispatchable};
 /// # use pumpkin_codecs::codec::{field, FieldMapCodec, INT_CODEC, STRING_CODEC};
 /// # use pumpkin_codecs::codecs::primitive::*;
 /// # use pumpkin_codecs::coders::{Encoder, Decoder};
@@ -82,18 +82,18 @@ pub trait KeyDispatchable: Sized {
 ///
 /// /// A [`MapCodec`] for specific fields of `Example::A`.
 /// pub static A_MAP_CODEC: StructMapCodec1<Example, FieldMapCodec<StringCodec>> = struct_map_codec!(
-///     for_getter(field(&STRING_CODEC, "a_field"), impl_getter_variant!(Example::A(x) => x)),
+///     for_getter(field(&STRING_CODEC, "a_field"), impl_variant_getter!(Example::A(x) => x)),
 ///     Example::A
 /// );
 ///
 /// /// A [`MapCodec`] for specific fields of `Example::B`.
 /// pub static B_MAP_CODEC: StructMapCodec1<Example, FieldMapCodec<IntCodec>> = struct_map_codec!(
-///     for_getter(field(&INT_CODEC, "b_field"),  impl_getter_variant!(Example::B {field: x} => x)),
+///     for_getter(field(&INT_CODEC, "b_field"),  impl_variant_getter!(Example::B {field: x} => x)),
 ///     |i| Example::B { field: i }
 /// );
 /// ```
 #[macro_export]
-macro_rules! impl_getter_variant {
+macro_rules! impl_variant_getter {
     ($pattern:pat => $result:expr) => {
         |ty|
             if let $pattern = ty {
@@ -126,7 +126,7 @@ macro_rules! impl_getter_variant {
 /// # Examples
 ///
 /// ```rust
-/// # use pumpkin_codecs::{struct_map_codec, impl_getter_variant, impl_key_dispatchable};
+/// # use pumpkin_codecs::{struct_map_codec, impl_variant_getter, impl_key_dispatchable};
 /// # use pumpkin_codecs::codec::{field, FieldMapCodec, INT_CODEC, STRING_CODEC};
 /// # use pumpkin_codecs::codecs::primitive::*;
 /// # use pumpkin_codecs::coders::{Encoder, Decoder};
@@ -149,12 +149,12 @@ macro_rules! impl_getter_variant {
 /// // pub static B_MAP_CODEC: StructMapCodec1<Example, FieldMapCodec<IntCodec>> = ...
 /// #
 /// # pub static A_MAP_CODEC: StructMapCodec1<Example, FieldMapCodec<StringCodec>> = struct_map_codec!(
-/// #     for_getter(field(&STRING_CODEC, "a_field"), impl_getter_variant!(Example::A(x) => x)),
+/// #     for_getter(field(&STRING_CODEC, "a_field"), impl_variant_getter!(Example::A(x) => x)),
 /// #     Example::A
 /// # );
 /// #
 /// # pub static B_MAP_CODEC: StructMapCodec1<Example, FieldMapCodec<IntCodec>> = struct_map_codec!(
-/// #     for_getter(field(&INT_CODEC, "b_field"),  impl_getter_variant!(Example::B {field: x} => x)),
+/// #     for_getter(field(&INT_CODEC, "b_field"),  impl_variant_getter!(Example::B {field: x} => x)),
 /// #     |i| Example::B { field: i }
 /// # );
 ///
@@ -173,7 +173,7 @@ macro_rules! impl_getter_variant {
 /// An enum implementation would look something like this:
 ///
 /// ```rust
-/// # use pumpkin_codecs::{struct_map_codec, impl_getter_variant, impl_key_dispatchable};
+/// # use pumpkin_codecs::{struct_map_codec, impl_variant_getter, impl_key_dispatchable};
 /// # use pumpkin_codecs::codec::{field, FieldMapCodec, INT_CODEC, STRING_CODEC};
 /// # use pumpkin_codecs::codecs::primitive::*;
 /// # use pumpkin_codecs::coders::{Encoder, Decoder};
@@ -184,12 +184,12 @@ macro_rules! impl_getter_variant {
 /// # use pumpkin_codecs::map_codecs::key_dispatch::*;
 /// #
 /// # pub static A_MAP_CODEC: StructMapCodec1<Example, FieldMapCodec<StringCodec>> = struct_map_codec!(
-/// #     for_getter(field(&STRING_CODEC, "a_field"), impl_getter_variant!(Example::A(x) => x)),
+/// #     for_getter(field(&STRING_CODEC, "a_field"), impl_variant_getter!(Example::A(x) => x)),
 /// #     Example::A
 /// # );
 /// #
 /// # pub static B_MAP_CODEC: StructMapCodec1<Example, FieldMapCodec<IntCodec>> = struct_map_codec!(
-/// #     for_getter(field(&INT_CODEC, "b_field"),  impl_getter_variant!(Example::B {field: x} => x)),
+/// #     for_getter(field(&INT_CODEC, "b_field"),  impl_variant_getter!(Example::B {field: x} => x)),
 /// #     |i| Example::B { field: i }
 /// # );
 /// use std::fmt;
@@ -457,7 +457,7 @@ mod test {
     pub static CIRCLE_MAP_CODEC: CircleMapCodec = struct_map_codec!(
         for_getter(
             field(&DOUBLE_CODEC, "radius"),
-            impl_getter_variant!(Shape::Circle { radius } => radius)
+            impl_variant_getter!(Shape::Circle { radius } => radius)
         ),
         |radius| Shape::Circle { radius },
     );
@@ -467,11 +467,11 @@ mod test {
     pub static RECTANGLE_MAP_CODEC: RectangleMapCodec = struct_map_codec!(
         for_getter(
             field(&DOUBLE_CODEC, "width"),
-            impl_getter_variant!(Shape::Rectangle { width, .. } => width)
+            impl_variant_getter!(Shape::Rectangle { width, .. } => width)
         ),
         for_getter(
             field(&DOUBLE_CODEC, "height"),
-            impl_getter_variant!(Shape::Rectangle { height, .. } => height)
+            impl_variant_getter!(Shape::Rectangle { height, .. } => height)
         ),
         |width, height| Shape::Rectangle { width, height },
     );
@@ -489,7 +489,7 @@ mod test {
                 ),
                 "sides"
             ),
-            impl_getter_variant!(Shape::Triangle { sides, .. } => sides)
+            impl_variant_getter!(Shape::Triangle { sides, .. } => sides)
         ),
         |sides| Shape::Triangle { sides },
     );
