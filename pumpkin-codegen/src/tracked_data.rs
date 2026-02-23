@@ -8,6 +8,7 @@ const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
 
 pub(crate) fn build() -> TokenStream {
     let assets = [
+        (MinecraftVersion::V_1_21, "1_21_tracked_data.json"),
         (MinecraftVersion::V_1_21_2, "1_21_2_tracked_data.json"),
         (MinecraftVersion::V_1_21_4, "1_21_4_tracked_data.json"),
         (MinecraftVersion::V_1_21_5, "1_21_5_tracked_data.json"),

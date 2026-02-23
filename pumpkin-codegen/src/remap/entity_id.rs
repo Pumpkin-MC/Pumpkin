@@ -5,10 +5,15 @@ use crate::remap::{MappingNode, ParsedMappings, Remapper};
 use crate::version::MinecraftVersion;
 
 pub fn build() -> TokenStream {
+    let node_1_21 = MappingNode {
+        version: MinecraftVersion::V_1_21,
+        value: "../assets/viaversion/data/mappings-1.21to1.21.2.nbt",
+        child: None,
+    };
     let node_1_21_2 = MappingNode {
         version: MinecraftVersion::V_1_21_2,
         value: "../assets/viaversion/data/mappings-1.21.2to1.21.4.nbt",
-        child: None,
+        child: Some(&node_1_21),
     };
     let node_1_21_4 = MappingNode {
         version: MinecraftVersion::V_1_21_4,

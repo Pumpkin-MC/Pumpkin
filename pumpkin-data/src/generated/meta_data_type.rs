@@ -1,6 +1,7 @@
 /* This file is generated. Do not edit manually. */
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MetaDataType {
+    v1_21: i32,
     v1_21_2: i32,
     v1_21_4: i32,
     v1_21_5: i32,
@@ -11,6 +12,7 @@ pub struct MetaDataType {
 }
 impl MetaDataType {
     pub const ARM: MetaDataType = MetaDataType {
+        v1_21: -1i32,
         v1_21_2: -1i32,
         v1_21_4: -1i32,
         v1_21_5: -1i32,
@@ -20,6 +22,7 @@ impl MetaDataType {
         v1_21_11: 38i32,
     };
     pub const ARMADILLO_STATE: MetaDataType = MetaDataType {
+        v1_21: 28i32,
         v1_21_2: 28i32,
         v1_21_4: 28i32,
         v1_21_5: 32i32,
@@ -29,6 +32,7 @@ impl MetaDataType {
         v1_21_11: 32i32,
     };
     pub const BLOCK_POS: MetaDataType = MetaDataType {
+        v1_21: 10i32,
         v1_21_2: 10i32,
         v1_21_4: 10i32,
         v1_21_5: 10i32,
@@ -38,6 +42,7 @@ impl MetaDataType {
         v1_21_11: 10i32,
     };
     pub const BLOCK_STATE: MetaDataType = MetaDataType {
+        v1_21: 14i32,
         v1_21_2: 14i32,
         v1_21_4: 14i32,
         v1_21_5: 14i32,
@@ -47,6 +52,7 @@ impl MetaDataType {
         v1_21_11: 14i32,
     };
     pub const BOOLEAN: MetaDataType = MetaDataType {
+        v1_21: 8i32,
         v1_21_2: 8i32,
         v1_21_4: 8i32,
         v1_21_5: 8i32,
@@ -56,6 +62,7 @@ impl MetaDataType {
         v1_21_11: 8i32,
     };
     pub const BYTE: MetaDataType = MetaDataType {
+        v1_21: 0i32,
         v1_21_2: 0i32,
         v1_21_4: 0i32,
         v1_21_5: 0i32,
@@ -65,6 +72,7 @@ impl MetaDataType {
         v1_21_11: 0i32,
     };
     pub const CAT_VARIANT: MetaDataType = MetaDataType {
+        v1_21: 22i32,
         v1_21_2: 22i32,
         v1_21_4: 22i32,
         v1_21_5: 22i32,
@@ -74,6 +82,7 @@ impl MetaDataType {
         v1_21_11: 21i32,
     };
     pub const CHICKEN_VARIANT: MetaDataType = MetaDataType {
+        v1_21: -1i32,
         v1_21_2: -1i32,
         v1_21_4: -1i32,
         v1_21_5: 28i32,
@@ -83,6 +92,7 @@ impl MetaDataType {
         v1_21_11: 27i32,
     };
     pub const COPPER_GOLEM_STATE: MetaDataType = MetaDataType {
+        v1_21: -1i32,
         v1_21_2: -1i32,
         v1_21_4: -1i32,
         v1_21_5: -1i32,
@@ -92,6 +102,7 @@ impl MetaDataType {
         v1_21_11: 33i32,
     };
     pub const COW_VARIANT: MetaDataType = MetaDataType {
+        v1_21: -1i32,
         v1_21_2: -1i32,
         v1_21_4: -1i32,
         v1_21_5: 23i32,
@@ -101,6 +112,7 @@ impl MetaDataType {
         v1_21_11: 22i32,
     };
     pub const ENTITY_POSE: MetaDataType = MetaDataType {
+        v1_21: 21i32,
         v1_21_2: 21i32,
         v1_21_4: 21i32,
         v1_21_5: 21i32,
@@ -110,6 +122,7 @@ impl MetaDataType {
         v1_21_11: 20i32,
     };
     pub const FACING: MetaDataType = MetaDataType {
+        v1_21: 12i32,
         v1_21_2: 12i32,
         v1_21_4: 12i32,
         v1_21_5: 12i32,
@@ -119,6 +132,7 @@ impl MetaDataType {
         v1_21_11: 12i32,
     };
     pub const FLOAT: MetaDataType = MetaDataType {
+        v1_21: 3i32,
         v1_21_2: 3i32,
         v1_21_4: 3i32,
         v1_21_5: 3i32,
@@ -128,6 +142,7 @@ impl MetaDataType {
         v1_21_11: 3i32,
     };
     pub const FROG_VARIANT: MetaDataType = MetaDataType {
+        v1_21: 24i32,
         v1_21_2: 24i32,
         v1_21_4: 24i32,
         v1_21_5: 26i32,
@@ -137,6 +152,7 @@ impl MetaDataType {
         v1_21_11: 25i32,
     };
     pub const INTEGER: MetaDataType = MetaDataType {
+        v1_21: 1i32,
         v1_21_2: 1i32,
         v1_21_4: 1i32,
         v1_21_5: 1i32,
@@ -146,6 +162,7 @@ impl MetaDataType {
         v1_21_11: 1i32,
     };
     pub const ITEM_STACK: MetaDataType = MetaDataType {
+        v1_21: 7i32,
         v1_21_2: 7i32,
         v1_21_4: 7i32,
         v1_21_5: 7i32,
@@ -155,6 +172,7 @@ impl MetaDataType {
         v1_21_11: 7i32,
     };
     pub const LAZY_ENTITY_REFERENCE: MetaDataType = MetaDataType {
+        v1_21: -1i32,
         v1_21_2: -1i32,
         v1_21_4: -1i32,
         v1_21_5: 13i32,
@@ -164,6 +182,7 @@ impl MetaDataType {
         v1_21_11: 13i32,
     };
     pub const LONG: MetaDataType = MetaDataType {
+        v1_21: 2i32,
         v1_21_2: 2i32,
         v1_21_4: 2i32,
         v1_21_5: 2i32,
@@ -173,6 +192,7 @@ impl MetaDataType {
         v1_21_11: 2i32,
     };
     pub const NBT_COMPOUND: MetaDataType = MetaDataType {
+        v1_21: 16i32,
         v1_21_2: 16i32,
         v1_21_4: 16i32,
         v1_21_5: 16i32,
@@ -182,6 +202,7 @@ impl MetaDataType {
         v1_21_11: -1i32,
     };
     pub const OPTIONAL_BLOCK_POS: MetaDataType = MetaDataType {
+        v1_21: 11i32,
         v1_21_2: 11i32,
         v1_21_4: 11i32,
         v1_21_5: 11i32,
@@ -191,6 +212,7 @@ impl MetaDataType {
         v1_21_11: 11i32,
     };
     pub const OPTIONAL_BLOCK_STATE: MetaDataType = MetaDataType {
+        v1_21: 15i32,
         v1_21_2: 15i32,
         v1_21_4: 15i32,
         v1_21_5: 15i32,
@@ -200,6 +222,7 @@ impl MetaDataType {
         v1_21_11: 15i32,
     };
     pub const OPTIONAL_GLOBAL_POS: MetaDataType = MetaDataType {
+        v1_21: 25i32,
         v1_21_2: 25i32,
         v1_21_4: 25i32,
         v1_21_5: 29i32,
@@ -209,6 +232,7 @@ impl MetaDataType {
         v1_21_11: 29i32,
     };
     pub const OPTIONAL_INT: MetaDataType = MetaDataType {
+        v1_21: 20i32,
         v1_21_2: 20i32,
         v1_21_4: 20i32,
         v1_21_5: 20i32,
@@ -218,6 +242,7 @@ impl MetaDataType {
         v1_21_11: 19i32,
     };
     pub const OPTIONAL_TEXT_COMPONENT: MetaDataType = MetaDataType {
+        v1_21: 6i32,
         v1_21_2: 6i32,
         v1_21_4: 6i32,
         v1_21_5: 6i32,
@@ -227,6 +252,7 @@ impl MetaDataType {
         v1_21_11: 6i32,
     };
     pub const OPTIONAL_UUID: MetaDataType = MetaDataType {
+        v1_21: 13i32,
         v1_21_2: 13i32,
         v1_21_4: 13i32,
         v1_21_5: -1i32,
@@ -236,6 +262,7 @@ impl MetaDataType {
         v1_21_11: -1i32,
     };
     pub const OXIDATION_LEVEL: MetaDataType = MetaDataType {
+        v1_21: -1i32,
         v1_21_2: -1i32,
         v1_21_4: -1i32,
         v1_21_5: -1i32,
@@ -245,6 +272,7 @@ impl MetaDataType {
         v1_21_11: 34i32,
     };
     pub const PAINTING_VARIANT: MetaDataType = MetaDataType {
+        v1_21: 26i32,
         v1_21_2: 26i32,
         v1_21_4: 26i32,
         v1_21_5: 30i32,
@@ -254,6 +282,7 @@ impl MetaDataType {
         v1_21_11: 30i32,
     };
     pub const PARTICLE: MetaDataType = MetaDataType {
+        v1_21: 17i32,
         v1_21_2: 17i32,
         v1_21_4: 17i32,
         v1_21_5: 17i32,
@@ -263,6 +292,7 @@ impl MetaDataType {
         v1_21_11: 16i32,
     };
     pub const PARTICLE_LIST: MetaDataType = MetaDataType {
+        v1_21: 18i32,
         v1_21_2: 18i32,
         v1_21_4: 18i32,
         v1_21_5: 18i32,
@@ -272,6 +302,7 @@ impl MetaDataType {
         v1_21_11: 17i32,
     };
     pub const PIG_VARIANT: MetaDataType = MetaDataType {
+        v1_21: -1i32,
         v1_21_2: -1i32,
         v1_21_4: -1i32,
         v1_21_5: 27i32,
@@ -281,6 +312,7 @@ impl MetaDataType {
         v1_21_11: 26i32,
     };
     pub const PROFILE: MetaDataType = MetaDataType {
+        v1_21: -1i32,
         v1_21_2: -1i32,
         v1_21_4: -1i32,
         v1_21_5: -1i32,
@@ -290,6 +322,7 @@ impl MetaDataType {
         v1_21_11: 37i32,
     };
     pub const QUATERNION_F: MetaDataType = MetaDataType {
+        v1_21: 30i32,
         v1_21_2: 30i32,
         v1_21_4: 30i32,
         v1_21_5: 34i32,
@@ -299,6 +332,7 @@ impl MetaDataType {
         v1_21_11: 36i32,
     };
     pub const ROTATION: MetaDataType = MetaDataType {
+        v1_21: 9i32,
         v1_21_2: 9i32,
         v1_21_4: 9i32,
         v1_21_5: 9i32,
@@ -308,6 +342,7 @@ impl MetaDataType {
         v1_21_11: 9i32,
     };
     pub const SNIFFER_STATE: MetaDataType = MetaDataType {
+        v1_21: 27i32,
         v1_21_2: 27i32,
         v1_21_4: 27i32,
         v1_21_5: 31i32,
@@ -317,6 +352,7 @@ impl MetaDataType {
         v1_21_11: 31i32,
     };
     pub const STRING: MetaDataType = MetaDataType {
+        v1_21: 4i32,
         v1_21_2: 4i32,
         v1_21_4: 4i32,
         v1_21_5: 4i32,
@@ -326,6 +362,7 @@ impl MetaDataType {
         v1_21_11: 4i32,
     };
     pub const TEXT_COMPONENT: MetaDataType = MetaDataType {
+        v1_21: 5i32,
         v1_21_2: 5i32,
         v1_21_4: 5i32,
         v1_21_5: 5i32,
@@ -335,6 +372,7 @@ impl MetaDataType {
         v1_21_11: 5i32,
     };
     pub const VECTOR_3F: MetaDataType = MetaDataType {
+        v1_21: 29i32,
         v1_21_2: 29i32,
         v1_21_4: 29i32,
         v1_21_5: 33i32,
@@ -344,6 +382,7 @@ impl MetaDataType {
         v1_21_11: 35i32,
     };
     pub const VILLAGER_DATA: MetaDataType = MetaDataType {
+        v1_21: 19i32,
         v1_21_2: 19i32,
         v1_21_4: 19i32,
         v1_21_5: 19i32,
@@ -353,6 +392,7 @@ impl MetaDataType {
         v1_21_11: 18i32,
     };
     pub const WOLF_SOUND_VARIANT: MetaDataType = MetaDataType {
+        v1_21: -1i32,
         v1_21_2: -1i32,
         v1_21_4: -1i32,
         v1_21_5: 25i32,
@@ -362,6 +402,7 @@ impl MetaDataType {
         v1_21_11: 24i32,
     };
     pub const WOLF_VARIANT: MetaDataType = MetaDataType {
+        v1_21: 23i32,
         v1_21_2: 23i32,
         v1_21_4: 23i32,
         v1_21_5: 24i32,
@@ -371,6 +412,7 @@ impl MetaDataType {
         v1_21_11: 23i32,
     };
     pub const ZOMBIE_NAUTILUS_VARIANT: MetaDataType = MetaDataType {
+        v1_21: -1i32,
         v1_21_2: -1i32,
         v1_21_4: -1i32,
         v1_21_5: -1i32,
@@ -381,6 +423,7 @@ impl MetaDataType {
     };
     pub const fn id(&self, version: pumpkin_util::version::MinecraftVersion) -> i32 {
         match version {
+            pumpkin_util::version::MinecraftVersion::V_1_21 => self.v1_21,
             pumpkin_util::version::MinecraftVersion::V_1_21_2 => self.v1_21_2,
             pumpkin_util::version::MinecraftVersion::V_1_21_4 => self.v1_21_4,
             pumpkin_util::version::MinecraftVersion::V_1_21_5 => self.v1_21_5,

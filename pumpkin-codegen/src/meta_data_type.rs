@@ -7,6 +7,7 @@ use crate::version::MinecraftVersion;
 
 pub fn build() -> TokenStream {
     let assets = [
+        (MinecraftVersion::V_1_21, "1_21_meta_data_type.json"),
         (MinecraftVersion::V_1_21_2, "1_21_2_meta_data_type.json"),
         (MinecraftVersion::V_1_21_4, "1_21_4_meta_data_type.json"),
         (MinecraftVersion::V_1_21_5, "1_21_5_meta_data_type.json"),
@@ -22,7 +23,7 @@ pub fn build() -> TokenStream {
         let path = format!("../assets/meta_data_type/{file}");
         let parsed: BTreeMap<String, i32> =
             serde_json::from_str(&fs::read_to_string(&path).unwrap())
-                .expect(&format!("Failed to parse {file}"));
+                .unwrap_or_else(|_| panic!("Failed to parse {file}"));
         for (name, id) in parsed {
             handlers_map.entry(name).or_default().insert(ver, id);
         }
@@ -45,7 +46,7 @@ pub fn build() -> TokenStream {
         let mut fields = TokenStream::new();
         for (ver, _) in &assets {
             let field_ident = ver.to_field_ident();
-            let id = ids.get(&ver).unwrap_or(&-1);
+            let id = ids.get(ver).unwrap_or(&-1);
             fields.extend(quote! {
                 #field_ident: #id,
             });

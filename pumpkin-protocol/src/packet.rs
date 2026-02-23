@@ -1,6 +1,5 @@
 use std::io::{Error, Read, Write};
 
-use pumpkin_data::packet::PacketId;
 use pumpkin_util::version::MinecraftVersion;
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -16,13 +15,8 @@ pub trait Packet {
 }
 
 pub trait MultiVersionJavaPacket {
-    const PACKET_ID: PacketId;
-
     #[must_use]
-    #[inline]
-    fn to_id(version: MinecraftVersion) -> i32 {
-        Self::PACKET_ID.to_id(version)
-    }
+    fn to_id(version: MinecraftVersion) -> i32;
 }
 
 impl<P: MultiVersionJavaPacket + Serialize> ClientPacket for P {

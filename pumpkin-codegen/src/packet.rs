@@ -17,6 +17,7 @@ pub struct Packets {
 
 pub(crate) fn build() -> TokenStream {
     let assets = [
+        (MinecraftVersion::V_1_21, "1_21_packets.json"),
         (MinecraftVersion::V_1_21_2, "1_21_2_packets.json"),
         (MinecraftVersion::V_1_21_4, "1_21_4_packets.json"),
         (MinecraftVersion::V_1_21_5, "1_21_5_packets.json"),
@@ -49,7 +50,7 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::version::MinecraftVersion;
 
         pub const CURRENT_MC_VERSION: MinecraftVersion = #LATEST_VERSION;
-        pub const LOWEST_SUPPORTED_MC_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_2;
+        pub const LOWEST_SUPPORTED_MC_VERSION: MinecraftVersion = MinecraftVersion::V_1_21;
 
         #packet_id_struct
 
@@ -117,55 +118,43 @@ fn generate_struct<T>(versions: &BTreeMap<MinecraftVersion, T>) -> TokenStream {
     }
 }
 
-/// Generate mapped constants where `latest_version` is considered the baseline.
-/// `versions` must include the `latest_version` entry.
 fn generate_mapped_consts(
     versions: &BTreeMap<MinecraftVersion, Packets>,
     is_serverbound: bool,
 ) -> TokenStream {
-    let mut output = TokenStream::new();
+    let mut conv_packets = BTreeMap::<_, BTreeMap<_, _>>::new();
 
-    // Latest = baseline (use provided latest_version)
-    let latest = versions
-        .get(&LATEST_VERSION)
-        .expect("Latest version not found in versions map");
-
-    let latest_phases = if is_serverbound {
-        &latest.serverbound
-    } else {
-        &latest.clientbound
-    };
-
-    for (phase, packets) in latest_phases {
-        for name in packets.keys() {
-            let sanitized_name = name.replace(['/', '-'], "_").to_uppercase();
-            let const_name = format_ident!("{}_{}", phase.to_uppercase(), sanitized_name);
-
-            // Build initialization values for each version field (in the same order as version_field_idents)
-            let mut init_pairs = TokenStream::new();
-            for (ver, map) in versions {
-                let phase_map = if is_serverbound {
-                    &map.serverbound
-                } else {
-                    &map.clientbound
-                };
-                let field_ident = ver.to_field_ident();
-                let id = phase_map
-                    .get(phase)
-                    .and_then(|p| p.get(name))
-                    .copied()
-                    .unwrap_or(-1);
-                init_pairs.extend(quote! {
-                    #field_ident: #id,
-                });
+    for (ver, packets) in versions {
+        let phases = if is_serverbound {
+            &packets.serverbound
+        } else {
+            &packets.clientbound
+        };
+        for (phase, packets) in phases {
+            for (name, &id) in packets {
+                let sanitized_name = name.replace(['/', '-'], "_").to_uppercase();
+                let const_name = format!("{}_{}", phase.to_uppercase(), sanitized_name);
+                conv_packets.entry(const_name).or_default().insert(ver, id);
             }
+        }
+    }
 
-            output.extend(quote! {
-                pub const #const_name: super::PacketId = super::PacketId {
-                    #init_pairs
-                };
+    let mut output = TokenStream::new();
+    for (name, values) in conv_packets {
+        let mut init_pairs = TokenStream::new();
+        for ver in versions.keys() {
+            let id = values.get(ver).copied().unwrap_or(-1);
+            let field_ident = ver.to_field_ident();
+            init_pairs.extend(quote! {
+                #field_ident: #id,
             });
         }
+        let const_name = format_ident!("{}", name);
+        output.extend(quote! {
+            pub const #const_name: super::PacketId = super::PacketId {
+                #init_pairs
+            };
+        });
     }
 
     output

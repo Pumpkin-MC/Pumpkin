@@ -371,6 +371,13 @@ impl JavaClient {
         version: MinecraftVersion,
         mut write: impl Write,
     ) -> Result<(), WritingError> {
+        if P::to_id(version) == -1 {
+            error!(
+                "Packet ID for version {} is invalid ({} at latest)",
+                version,
+                P::to_id(CURRENT_MC_VERSION)
+            );
+        }
         write.write_var_int(&VarInt(P::to_id(version)))?;
         packet.write_packet_data(write, &version)
     }
