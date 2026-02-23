@@ -73,70 +73,80 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
             }
 
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                const MAX_COMPONENTS: i32 = 256;
+
                 let item_count = seq
                     .next_element::<VarInt>()?
-                    .ok_or(de::Error::custom("Failed to decode VarInt"))?;
+                    .ok_or_else(|| de::Error::custom("Failed to decode VarInt"))?;
 
-                let slot = if item_count.0 == 0 {
-                    ItemStackSerializer(Cow::Borrowed(ItemStack::EMPTY))
-                } else {
-                    let item_id = seq
+                if item_count.0 == 0 {
+                    return Ok(ItemStackSerializer(Cow::Borrowed(ItemStack::EMPTY)));
+                }
+
+                let item_id = seq
+                    .next_element::<VarInt>()?
+                    .ok_or_else(|| de::Error::custom("No item id VarInt!"))?;
+
+                let num_to_add = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
+                let num_to_remove = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
+
+                if num_to_add < 0 || num_to_remove < 0 {
+                    return Err(de::Error::custom("Negative component count"));
+                }
+
+                let total_components = num_to_add
+                    .checked_add(num_to_remove)
+                    .ok_or_else(|| de::Error::custom("Component count overflow"))?;
+
+                if total_components > MAX_COMPONENTS {
+                    return Err(de::Error::custom("Too many components in ItemStack patch"));
+                }
+
+                let mut patch = Vec::with_capacity((num_to_add + num_to_remove) as usize);
+
+                for _ in 0..num_to_add {
+                    let id_val = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No item id VarInt!"))?;
+                        .ok_or_else(|| de::Error::custom("Missing component ID"))?
+                        .0;
+                    let id = DataComponent::try_from_id(id_val as u8).ok_or_else(|| {
+                        de::Error::custom(format!("Unknown component ID: {id_val}"))
+                    })?;
 
-                    let num_components_to_add = seq
+                    // Minecraft protocol sends a byte length for the component data here
+                    let _byte_len = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No component add length VarInt!"))?
-                        .0 as usize;
-                    let num_components_to_remove = seq
+                        .ok_or_else(|| de::Error::custom("No data len VarInt!"))?;
+
+                    let component_impl = deserialize(id, &mut seq)?;
+
+                    patch.push((id, Some(component_impl)));
+                }
+
+                for _ in 0..num_to_remove {
+                    let id_val = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No component remove length VarInt!"))?
-                        .0 as usize;
+                        .ok_or_else(|| de::Error::custom("Missing remove component ID"))?
+                        .0;
+                    let id = DataComponent::try_from_id(id_val as u8)
+                        .ok_or_else(|| de::Error::custom("Unknown component ID"))?;
+                    patch.push((id, None));
+                }
 
-                    let mut patch =
-                        Vec::with_capacity(num_components_to_add + num_components_to_remove);
-                    for _ in 0..num_components_to_add {
-                        let id = seq
-                            .next_element::<VarInt>()?
-                            .ok_or(de::Error::custom("No component id VarInt!"))?
-                            .0;
-                        let id = u8::try_from(id)
-                            .map_err(|_| de::Error::custom("Unknown component id VarInt!"))?;
-                        let id = DataComponent::try_from_id(id)
-                            .ok_or(de::Error::custom("Unknown component id VarInt!"))?;
-                        let _byte_len = seq
-                            .next_element::<VarInt>()?
-                            .ok_or(de::Error::custom("No data len VarInt!"))?;
-                        patch.push((id, Some(deserialize(id, &mut seq)?)));
-                    }
-                    for _ in 0..num_components_to_remove {
-                        let id = seq
-                            .next_element::<VarInt>()?
-                            .ok_or(de::Error::custom("No component id VarInt!"))?
-                            .0;
-                        let id = u8::try_from(id)
-                            .map_err(|_| de::Error::custom("Unknown component id VarInt!"))?;
-                        let id = DataComponent::try_from_id(id)
-                            .ok_or(de::Error::custom("Unknown component id VarInt!"))?;
-                        patch.push((id, None));
-                    }
+                let item_id_u16: u16 = item_id
+                    .0
+                    .try_into()
+                    .map_err(|_| de::Error::custom("Invalid item id!"))?;
 
-                    let item_id: u16 = item_id
-                        .0
-                        .try_into()
-                        .map_err(|_| de::Error::custom("Invalid item id!"))?;
-
-                    ItemStackSerializer(Cow::Owned(ItemStack::new_with_component(
+                Ok(ItemStackSerializer(Cow::Owned(
+                    ItemStack::new_with_component(
                         item_count.0 as u8,
-                        Item::from_id(item_id).unwrap_or(&Item::AIR),
+                        Item::from_id(item_id_u16).unwrap_or(&Item::AIR),
                         patch,
-                    )))
-                };
-
-                Ok(slot)
+                    ),
+                )))
             }
         }
-
         deserializer.deserialize_seq(Visitor)
     }
 }
@@ -311,12 +321,17 @@ impl<'de> Deserialize<'de> for ItemComponentHash {
             }
 
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                const MAX_COMPONENTS: i32 = 256;
+
                 let mut added = Vec::new();
                 let mut removed = Vec::new();
 
                 let added_length = seq
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("No added length VarInt!"))?;
+                if added_length.0 < 0 || added_length.0 > MAX_COMPONENTS {
+                    return Err(de::Error::custom("added_length out of bounds"));
+                }
                 for _ in 0..added_length.0 {
                     let component_id = seq
                         .next_element::<VarInt>()?
@@ -330,6 +345,9 @@ impl<'de> Deserialize<'de> for ItemComponentHash {
                 let removed_length = seq
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("No removed length VarInt!"))?;
+                if removed_length.0 < 0 || removed_length.0 > MAX_COMPONENTS {
+                    return Err(de::Error::custom("removed_length out of bounds"));
+                }
                 for _ in 0..removed_length.0 {
                     let component_id = seq
                         .next_element::<VarInt>()?

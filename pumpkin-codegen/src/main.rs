@@ -16,6 +16,7 @@ mod block;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
+mod configured_feature;
 mod damage_type;
 mod data_component;
 mod dimension;
@@ -38,6 +39,7 @@ mod noise_parameter;
 mod noise_router;
 mod packet;
 mod particle;
+mod placed_feature;
 mod potion;
 mod potion_brewing;
 mod recipe_remainder;
@@ -112,6 +114,8 @@ pub fn main() {
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
         (recipe_remainder::build, "recipe_remainder.rs"),
+        (placed_feature::build, "placed_features_generated.rs"),
+        (configured_feature::build, "configured_features_generated.rs"),
     ];
     build_functions.extend(remap::build());
 

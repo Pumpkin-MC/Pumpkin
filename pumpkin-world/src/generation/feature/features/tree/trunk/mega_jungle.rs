@@ -5,7 +5,6 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::generation::feature::features::tree::{
     TreeNode,
@@ -13,7 +12,6 @@ use crate::generation::feature::features::tree::{
 };
 use crate::generation::proto_chunk::GenerationCache;
 
-#[derive(Deserialize)]
 pub struct MegaJungleTrunkPlacer;
 
 impl MegaJungleTrunkPlacer {

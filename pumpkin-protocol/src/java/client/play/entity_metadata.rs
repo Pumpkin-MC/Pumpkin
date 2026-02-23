@@ -1,15 +1,16 @@
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 
 use pumpkin_data::{
     block_state_remap::remap_block_state_for_version, meta_data_type::MetaDataType,
     packet::clientbound::PLAY_SET_ENTITY_DATA, tracked_data::TrackedId,
 };
 use pumpkin_macros::java_packet;
+use pumpkin_util::version::MinecraftVersion;
 use serde::Serialize;
 
 use crate::{
-    VarInt,
-    ser::{NetworkWriteExt, WritingError, network_serialize_no_prefix, serializer},
+    ClientPacket, VarInt,
+    ser::{NetworkWriteExt, WritingError, serializer},
 };
 
 /// Updates the "Data Tracker" values for an entity.
@@ -17,14 +18,12 @@ use crate::{
 /// Entity Metadata (or `DataWatchers`) controls persistent visual states that
 /// don't require a full packet to update, such as whether an entity is on fire,
 /// crouching, glowing, or the custom name displayed above its head.
-#[derive(Serialize)]
 #[java_packet(PLAY_SET_ENTITY_DATA)]
 pub struct CSetEntityMetadata {
     /// The Entity ID of the entity whose metadata is being updated.
     pub entity_id: VarInt,
     /// A serialized collection of metadata entries.
     /// Ends with a terminal byte (0xFF).
-    #[serde(serialize_with = "network_serialize_no_prefix")]
     pub metadata: Box<[u8]>,
 }
 
@@ -35,6 +34,23 @@ impl CSetEntityMetadata {
             entity_id,
             metadata,
         }
+    }
+}
+
+impl ClientPacket for CSetEntityMetadata {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let mut write = write;
+
+        // 1. Entity ID
+        write.write_var_int(&self.entity_id)?;
+
+        write
+            .write_all(&self.metadata)
+            .map_err(WritingError::IoError)
     }
 }
 

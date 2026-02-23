@@ -6,7 +6,6 @@ use pumpkin_util::{
     math::{block_box::BlockBox, position::BlockPos},
     random::RandomGenerator,
 };
-use serde::Deserialize;
 
 use crate::{
     ProtoChunk,
@@ -22,7 +21,6 @@ use crate::{
     },
 };
 
-#[derive(Deserialize)]
 pub struct BuriedTreasureGenerator;
 
 impl StructureGenerator for BuriedTreasureGenerator {

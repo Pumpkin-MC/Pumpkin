@@ -1398,17 +1398,20 @@ impl JavaClient {
                     // TODO: Config
                     if player.gamemode.load() == GameMode::Creative {
                         // Block break & play sound
-                        world
+                        let new_state = world
                             .break_block(
                                 &position,
                                 Some(player.clone()),
                                 BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
                             )
                             .await;
-                        server
-                            .block_registry
-                            .broken(&world, block, player, &position, server, state)
-                            .await;
+                        if new_state.is_some() {
+                            server
+                                .block_registry
+                                .broken(&world, block, player, &position, server, state)
+                                .await;
+                        }
+                        self.sync_block_state_to_client(&world, position).await;
                         self.update_sequence(player, player_action.sequence.0);
                         return;
                     }
@@ -1421,18 +1424,21 @@ impl JavaClient {
                         // Instant break
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&position).await;
-                            world
+                            let new_state = world
                                 .break_block(
                                     &position,
                                     Some(player.clone()),
                                     BlockFlags::NOTIFY_NEIGHBORS,
                                 )
                                 .await;
-                            server
-                                .block_registry
-                                .broken(&world, block, player, &position, server, broken_state)
-                                .await;
-                            player.apply_tool_damage_for_block_break(broken_state).await;
+                            if new_state.is_some() {
+                                server
+                                    .block_registry
+                                    .broken(&world, block, player, &position, server, broken_state)
+                                    .await;
+                                player.apply_tool_damage_for_block_break(broken_state).await;
+                            }
+                            self.sync_block_state_to_client(&world, position).await;
                         } else {
                             player.mining.store(true, Ordering::Relaxed);
                             *player.mining_pos.lock().await = position;
@@ -1504,6 +1510,7 @@ impl JavaClient {
                             .await;
                         player.apply_tool_damage_for_block_break(state).await;
                     }
+                    self.sync_block_state_to_client(&world, location).await;
 
                     self.update_sequence(player, player_action.sequence.0);
                 }
@@ -1554,6 +1561,15 @@ impl JavaClient {
             player.packet_sequence.load(Ordering::Relaxed).max(sequence),
             Ordering::Relaxed,
         );
+    }
+
+    async fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
+        let synced_state_id = world.get_block_state_id(&position).await;
+        self.send_packet_now(&CBlockUpdate::new(
+            position,
+            VarInt(i32::from(synced_state_id)),
+        ))
+        .await;
     }
 
     pub async fn handle_player_abilities(
