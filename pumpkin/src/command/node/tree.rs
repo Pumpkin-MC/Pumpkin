@@ -290,6 +290,14 @@ impl Tree {
         }
     }
 
+    /// Returns whether the given ID points to a command node.
+    pub fn is_command_node(&self, node: NodeId) -> bool {
+        match self[node].classification() {
+            NodeClassification::Command => true,
+            _ => false
+        }
+    }
+
     pub fn get_relevant_nodes(&self, reader: &mut StringReader, node: NodeId) -> Vec<NodeId> {
         let children = self.get_children(node);
         let mut literals = Vec::new();

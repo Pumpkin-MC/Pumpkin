@@ -591,7 +591,7 @@ impl CommandDispatcher {
     /// Returns the usage of the given command node.
     pub async fn get_usage_of_command(&self, command_node: CommandNodeId, source: &CommandSource) -> Option<String> {
         // We know the root DOES NOT have an executor, so we pass false to `is_optional`.
-        self.get_usage_recursive(command_node.into(), source, false, false).await
+        self.get_usage_recursive(command_node.into(), source, false, false, None).await
     }
 
     /// Returns the usage of each child of the given node (permitted for the given source).
@@ -600,7 +600,7 @@ impl CommandDispatcher {
 
         let is_optional = self.tree[node].command().is_some();
         for child in self.tree.get_children(node) {
-            if let Some(usage) = self.get_usage_recursive(child, source, is_optional, false).await {
+            if let Some(usage) = self.get_usage_recursive(child, source, is_optional, false, None).await {
                 map.insert(child, usage);
             }
         }
@@ -619,17 +619,20 @@ impl CommandDispatcher {
     }
 
     /// Internal function to recurse usages.
-    fn get_usage_recursive<'a>(&'a self, node: NodeId, source: &'a CommandSource, is_optional: bool, deep: bool) -> Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+    fn get_usage_recursive<'a>(&'a self, node: NodeId, source: &'a CommandSource, is_optional: bool, deep: bool, redirector_usage_text: Option<String>) -> Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
         Box::pin(
             async move {
                 if !self.tree.can_use(node, source).await {
                     return None;
                 }
 
-                let mut usage_text = self.tree[node].usage_text();
-                if is_optional {
-                    usage_text = format!("{USAGE_OPTIONAL_OPEN}{usage_text}{USAGE_OPTIONAL_CLOSE}");
-                }
+                let usage_text = redirector_usage_text.unwrap_or_else(|| {
+                    let mut text = self.tree[node].usage_text();
+                    if is_optional {
+                        text = format!("{USAGE_OPTIONAL_OPEN}{text}{USAGE_OPTIONAL_CLOSE}");
+                    }
+                    text
+                });
                 let child_optional = self.tree[node].command().is_some();
 
                 if !deep {
@@ -638,6 +641,15 @@ impl CommandDispatcher {
                             let target_usage =
                                 if target == node {
                                     "...".to_string()
+                                } else if self.tree.is_command_node(node) && self.tree.is_command_node(target) {
+                                    // We do this so for example it will show usage for /?:
+                                    //
+                                    // /? [<commandOrPage>]
+                                    //
+                                    // instead of
+                                    //
+                                    // /? -> help
+                                    return self.get_usage_recursive(target, source, is_optional, deep, Some(usage_text)).await;
                                 } else {
                                     format!("-> {}", self.tree[target].usage_text())
                                 };
@@ -653,13 +665,13 @@ impl CommandDispatcher {
 
                         if children.len() == 1 {
                             let child = children[0];
-                            if let Some(child_usage_text) = self.get_usage_recursive(child, source, child_optional, true).await {
+                            if let Some(child_usage_text) = self.get_usage_recursive(child, source, child_optional, true, None).await {
                                 return Some(format!("{usage_text}{ARG_SEPARATOR}{child_usage_text}"));
                             } else if !children.is_empty() {
                                 let mut child_usages = Vec::new();
                                 // TODO: Optimize this set algorithm while keeping insertion order.
                                 for child in children {
-                                    if let Some(child_usage_text) = self.get_usage_recursive(child, source, child_optional, true).await {
+                                    if let Some(child_usage_text) = self.get_usage_recursive(child, source, child_optional, true, None).await {
                                         if !child_usages.contains(&child_usage_text) {
                                             child_usages.push(child_usage_text);
                                         }
