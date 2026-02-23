@@ -540,7 +540,7 @@ fn setup_stdin_console(server: Arc<Server>) {
 
                     'after: {
                         server.command_dispatcher.read().await
-                            .handle_command(&command::CommandSender::Console, &server, command.as_str())
+                            .handle_command(&command::CommandSender::Console.into_source(&server).await, command.as_str())
                             .await;
                     };
                 }}
@@ -607,7 +607,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
 
                     'after: {
                         server.command_dispatcher.read().await
-                            .handle_command(&command::CommandSender::Console, &server, &line)
+                            .handle_command(&command::CommandSender::Console.into_source(&server).await, &line)
                             .await;
                     }
                 }}

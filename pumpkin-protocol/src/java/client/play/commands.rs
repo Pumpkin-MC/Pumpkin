@@ -56,10 +56,12 @@ pub enum ProtoNodeType<'a> {
     Literal {
         name: &'a str,
         is_executable: bool,
+        redirect_target: Option<i32>
     },
     Argument {
         name: &'a str,
         is_executable: bool,
+        redirect_target: Option<i32>,
         parser: ArgumentType<'a>,
         override_suggestion_type: Option<SuggestionProviders>,
     },
@@ -72,15 +74,22 @@ impl ProtoNode<'_> {
 
     pub fn write_to(&self, write: &mut impl Write) -> Result<(), WritingError> {
         // flags
+        let mut redirect_target_on_flag = 0i32;
+
         let flags = match self.node_type {
             ProtoNodeType::Root => 0,
             ProtoNodeType::Literal {
                 name: _,
                 is_executable,
+                redirect_target
             } => {
                 let mut n = 1;
                 if is_executable {
                     n |= Self::FLAG_IS_EXECUTABLE;
+                }
+                if let Some(target) = redirect_target {
+                    n |= Self::FLAG_HAS_REDIRECT;
+                    redirect_target_on_flag = target;
                 }
                 n
             }
@@ -89,6 +98,7 @@ impl ProtoNode<'_> {
                 is_executable,
                 parser: _,
                 override_suggestion_type,
+                redirect_target
             } => {
                 let mut n = 2;
                 if override_suggestion_type.is_some() {
@@ -96,6 +106,10 @@ impl ProtoNode<'_> {
                 }
                 if is_executable {
                     n |= Self::FLAG_IS_EXECUTABLE;
+                }
+                if let Some(target) = redirect_target {
+                    n |= Self::FLAG_HAS_REDIRECT;
+                    redirect_target_on_flag = target;
                 }
                 n
             }
@@ -109,7 +123,7 @@ impl ProtoNode<'_> {
 
         // redirect node
         if flags & Self::FLAG_HAS_REDIRECT != 0 {
-            write.write_var_int(&1.into())?;
+            write.write_var_int(&redirect_target_on_flag.into())?;
         }
 
         // name
@@ -121,24 +135,13 @@ impl ProtoNode<'_> {
         }
 
         // parser id + properties
-        if let ProtoNodeType::Argument {
-            name: _,
-            is_executable: _,
-            parser,
-            override_suggestion_type: _,
-        } = &self.node_type
-        {
+        if let ProtoNodeType::Argument {parser, ..} = &self.node_type {
             parser.write_to_buffer(write)?;
         }
 
         if flags & Self::FLAG_HAS_SUGGESTION_TYPE != 0 {
             match &self.node_type {
-                ProtoNodeType::Argument {
-                    name: _,
-                    is_executable: _,
-                    parser: _,
-                    override_suggestion_type,
-                } => {
+                ProtoNodeType::Argument {override_suggestion_type, ..} => {
                     // suggestion type
                     let suggestion_type = &override_suggestion_type.expect("ProtoNode::FLAG_HAS_SUGGESTION_TYPE should only be set if override_suggestion_type is not `None`.");
                     write.write_string(suggestion_type.resource_location())?;

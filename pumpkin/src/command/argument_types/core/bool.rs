@@ -17,8 +17,8 @@ impl ArgumentType for BoolArgumentType {
     fn examples(&self) -> Vec<String> {
         examples!("true", "false")
     }
-    
-    fn client_side_parser(&self) -> JavaClientArgumentType {
+
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::Bool
     }
 }

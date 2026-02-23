@@ -94,6 +94,19 @@ impl Requirement {
     }
 }
 
+impl<F> From<F> for Requirement
+where
+    F: Fn(&CommandSource) -> RequirementResult<'_> + Send + Sync + 'static
+{
+    fn from(value: F) -> Self {
+        Requirement::Condition(
+            Arc::new(
+                value
+            )
+        )
+    }
+}
+
 /// Stores common owned data for a node.
 #[derive(Clone)]
 pub struct OwnedNodeData {

@@ -167,20 +167,10 @@ impl Context {
 
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.register(tree, full_permission_node);
+            dispatcher_lock.fallback_dispatcher.register(tree, full_permission_node);
         };
 
-        for world in self.server.worlds.load().iter() {
-            for player in world.players.load().iter() {
-                let command_dispatcher = self.server.command_dispatcher.read().await;
-                client_suggestions::send_c_commands_packet(
-                    player,
-                    &self.server,
-                    &command_dispatcher,
-                )
-                .await;
-            }
-        }
+        self.reload_commands_for_everyone().await;
     }
 
     /// Asynchronously unregisters a command from the server.
@@ -190,20 +180,32 @@ impl Context {
     pub async fn unregister_command(&self, name: &str) {
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.unregister(name);
+            dispatcher_lock.fallback_dispatcher.unregister(name);
         };
 
+        self.reload_commands_for_everyone().await;
+    }
+
+    /// Asynchronously reloads (resends) all commands for all currently online players.
+    pub async fn reload_commands_for_everyone(&self) {
         for world in self.server.worlds.load().iter() {
             for player in world.players.load().iter() {
-                let command_dispatcher = self.server.command_dispatcher.read().await;
-                client_suggestions::send_c_commands_packet(
-                    player,
-                    &self.server,
-                    &command_dispatcher,
-                )
-                .await;
+                self.reload_commands_for(player).await;
             }
         }
+    }
+
+    /// Asynchronously reloads (resends) all commands for a particular player on the server.
+    ///
+    /// # Arguments
+    /// - `player`: The player for which the commands will be reloaded.
+    pub async fn reload_commands_for(&self, player: &Arc<Player>) {
+        let command_dispatcher = self.server.command_dispatcher.read().await;
+        client_suggestions::send_c_commands_packet(
+            player,
+            &self.server,
+            &command_dispatcher,
+        ).await;
     }
 
     /// Register a permission for this plugin

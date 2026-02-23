@@ -1,3 +1,4 @@
+use std::ops::DerefMut;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_util::{
     PermissionLvl,
@@ -64,11 +65,13 @@ pub async fn default_dispatcher(
 ) -> CommandDispatcher {
     let mut dispatcher = crate::command::dispatcher::CommandDispatcher::default();
 
+    let mut registry_lock = registry.write().await;
+    let registry = registry_lock.deref_mut();
+
     register_permissions(registry).await;
 
     // Zero
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
-    dispatcher.register(help::init_command_tree(), "minecraft:command.help");
     dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
@@ -154,30 +157,29 @@ pub async fn default_dispatcher(
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
 
-
-    let dispatcher = {
+    let mut dispatcher = {
         let mut wrapper_dispatcher = CommandDispatcher::new();
         wrapper_dispatcher.fallback_dispatcher = dispatcher;
         wrapper_dispatcher
     };
 
+    help::register(&mut dispatcher, registry);
+
     dispatcher
 }
 
-async fn register_permissions(permission_registry: &RwLock<PermissionRegistry>) {
-    let mut registry = permission_registry.write().await;
-
+async fn register_permissions(registry: &mut PermissionRegistry) {
     // Register level 0 permissions (allowed by default)
-    register_level_0_permissions(&mut registry);
+    register_level_0_permissions(registry);
 
     // Register level 2 permissions (OP level 2)
-    register_level_2_permissions(&mut registry);
+    register_level_2_permissions(registry);
 
     // Register level 3 permissions (OP level 3)
-    register_level_3_permissions(&mut registry);
+    register_level_3_permissions(registry);
 
     // Register level 4 permissions (OP level 4)
-    register_level_4_permissions(&mut registry);
+    register_level_4_permissions(registry);
 }
 
 fn register_level_0_permissions(registry: &mut PermissionRegistry) {
@@ -186,13 +188,6 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.pumpkin",
             "Shows information about the Pumpkin server",
-            PermissionDefault::Allow,
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.help",
-            "Lists available commands and their usage",
             PermissionDefault::Allow,
         ))
         .unwrap();

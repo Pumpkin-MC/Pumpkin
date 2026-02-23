@@ -78,6 +78,9 @@ pub struct Tree {
     /// Keys linking [`GlobalNodeId`] to the [`NodeId`] for this tree.
     /// Useful for redirecting.
     ids_map: FxHashMap<GlobalNodeId, NodeId>,
+
+    /// Cached mappings for each command.
+    command_node_mappings: FxHashMap<String, CommandNodeId>,
 }
 
 impl Default for Tree {
@@ -96,6 +99,7 @@ impl Tree {
         Self {
             nodes: vec![AttachedNode::Root(node)],
             ids_map,
+            command_node_mappings: FxHashMap::default()
         }
     }
 
@@ -155,10 +159,16 @@ impl Tree {
     /// Adds a [`CommandDetachedNode`] to the root node of this tree.
     pub fn add_child_to_root(&mut self, node: impl Into<CommandDetachedNode>) -> CommandNodeId {
         // First, attach the node to this tree.
-        let node = self.attach(node.into().into());
+        let node = node.into();
+        let name = node.meta.literal.to_string();
+        let node = self.attach(node.into());
         self.add_attached_child(ROOT_NODE_ID, node);
+
         // This is safe as the node ID now points to a `CommandAttachedNode`.
-        CommandNodeId(node.0)
+        let node = CommandNodeId(node.0);
+
+        self.command_node_mappings.insert(name, node);
+        node
     }
 
     /// Adds a child to a given node.
@@ -281,8 +291,6 @@ impl Tree {
     }
 
     pub fn get_relevant_nodes(&self, reader: &mut StringReader, node: NodeId) -> Vec<NodeId> {
-        // TODO: Determine whether this function should be optimized or not.
-
         let children = self.get_children(node);
         let mut literals = Vec::new();
         let mut commands = Vec::new();
@@ -374,6 +382,11 @@ impl Tree {
             Redirection::Global(id) => self.ids_map.get(&id).copied(),
             Redirection::Local(id) => (id.0 < self.size_nonzero()).then_some(id),
         }
+    }
+
+    /// Gets the command node by ID, given its literal.
+    pub fn get(&self, name: &str) -> Option<CommandNodeId> {
+        self.command_node_mappings.get(name).cloned()
     }
 }
 

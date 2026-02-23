@@ -184,6 +184,27 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
     #[must_use]
     fn permission(&self) -> Option<&str>;
 
+    /// Sets the requirement of the node being built to a particular predicate.
+    ///
+    /// This is not the only condition a source needs to traverse this node.
+    /// It also must have the required permission of this node, set by [`requires_permission`](ArgumentBuilder::requires_permission).
+    ///
+    /// In summary, for a sender to use this node, it must satisfy both
+    /// the requirement and the permission.
+    #[must_use]
+    fn requires(self, requirement: impl Into<Requirement>) -> Self;
+
+    /// Sets the permission of the node being built to a value.
+    ///
+    /// By default, a node does not need a permission to be traversed.
+    /// This is not the only condition a source needs to traverse this node.
+    /// It also must satisfy requirement of this node, set by [`requires`](ArgumentBuilder::requires).
+    ///
+    /// In summary, for a sender to use this node, it must satisfy both
+    /// the requirement and the permission.
+    #[must_use]
+    fn requires_permission(self, permission: impl Into<Cow<'static, str>>) -> Self;
+
     /// Gets the redirect modifier of the node this [`ArgumentBuilder`] is building.
     #[must_use]
     fn redirect_modifier(&self) -> RedirectModifier;
@@ -231,6 +252,16 @@ macro_rules! impl_boilerplate_argument_builder {
 
         fn executes(mut self, command: impl CommandExecutor + 'static) -> Self {
             self.common.command = Some(Arc::new(command));
+            self
+        }
+
+        fn requires(mut self, requirement: impl Into<Requirement>) -> Self {
+            self.common.requirement = requirement.into();
+            self
+        }
+
+        fn requires_permission(mut self, permission: impl Into<Cow<'static, str>>) -> Self {
+            self.common.permission = Some(permission.into());
             self
         }
 

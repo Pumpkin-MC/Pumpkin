@@ -32,7 +32,7 @@ impl ArgumentType for FloatArgumentType {
         examples!("0", "1.2", ".5", "-1", "-.5", "-1234.56")
     }
 
-    fn client_side_parser(&self) -> JavaClientArgumentType {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::Float {
             min: (self.min != f32::MIN).then_some(self.min),
             max: (self.min != f32::MAX).then_some(self.max)

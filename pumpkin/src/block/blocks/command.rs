@@ -4,23 +4,21 @@ use pumpkin_data::{
     Block, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
 };
-use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos, text::TextComponent};
+use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
 use pumpkin_world::{
     BlockStateId,
     block::entities::{BlockEntity, command_block::CommandBlockEntity},
     tick::TickPriority,
 };
 use tracing::warn;
-use pumpkin_util::math::vector2::Vector2;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, NormalUseArgs,
         OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
         registry::BlockActionResult,
-    }, command::context::command_source::EntityAnchor, server::Server, world::World
+    }, server::Server, world::World
 };
 use crate::command::CommandSender;
-use crate::command::context::command_source::CommandSource;
 use super::redstone::block_receives_redstone_power;
 
 pub struct CommandBlock;
@@ -136,34 +134,7 @@ impl CommandBlock {
         if command.is_empty() {
             command_entity.success_count.store(0, Ordering::Release);
         } else {
-            let pos = command_entity.get_position();
-
-            let state_id = world.get_block_state_id(&pos).await;
-            let block = world.get_block(&pos).await;
-            let command_block_props = CommandBlockLikeProperties::from_state_id(state_id, block);
-            let facing = command_block_props.facing;
-
-            let horizontal_diration = match facing {
-                Facing::South => 0.0,
-                Facing::West => 90.0,
-                Facing::North => 180.0,
-                Facing::Up | Facing::Down | Facing::East => 270.0,
-            };
-
-            // TODO: when command blocks get custom names, add a check for it
-            let name = TextComponent::text("@");
-
-            let source = CommandSource::new(
-                CommandSender::CommandBlock(command_entity, world.clone()),
-                world,
-                None,
-                pos.to_centered_f64(),
-                Vector2::new(0.0, horizontal_diration),
-                name.clone().get_text(),
-                name,
-                server.clone(),
-                EntityAnchor::Feet
-            );
+            let source = CommandSender::CommandBlock(command_entity, world.clone()).into_source(server).await;
 
             server
                 .command_dispatcher

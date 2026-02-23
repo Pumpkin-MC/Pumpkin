@@ -78,8 +78,8 @@ use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 
 use crate::block;
 use crate::block::blocks::bed::BedBlock;
-use crate::command::client_suggestions;
-use crate::command::context::command_source::{CommandSource, EntityAnchor};
+use crate::command::{client_suggestions, CommandSender};
+use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
@@ -2871,17 +2871,7 @@ impl Player {
     }
 
     pub async fn get_command_source(self: &Arc<Player>, server: &Arc<Server>) -> CommandSource {
-        CommandSource::new(
-            crate::command::CommandSender::Player(self.clone()),
-            self.world(),
-            Some(self.clone()),
-            self.position(),
-            self.rotation().into(),
-            self.get_display_name().await.get_text(),
-            self.get_display_name().await,
-            server.clone(),
-            EntityAnchor::Feet
-        )
+        CommandSender::Player(self.clone()).into_source(server).await
     }
 }
 

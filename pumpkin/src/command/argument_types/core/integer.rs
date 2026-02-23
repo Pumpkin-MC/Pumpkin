@@ -28,15 +28,15 @@ impl ArgumentType for IntegerArgumentType {
         )
     }
 
-    fn examples(&self) -> Vec<String> {
-        examples!("0", "123", "-123")
-    }
-
-    fn client_side_parser(&self) -> JavaClientArgumentType {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::Integer {
             min: (self.min != i32::MIN).then_some(self.min),
             max: (self.min != i32::MAX).then_some(self.max)
         }
+    }
+
+    fn examples(&self) -> Vec<String> {
+        examples!("0", "123", "-123")
     }
 }
 

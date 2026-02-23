@@ -2,8 +2,6 @@ use std::{net::SocketAddr, sync::atomic::Ordering};
 
 use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
 use pumpkin_config::RCONConfig;
-use pumpkin_data::dimension::Dimension;
-use pumpkin_util::{math::{vector2::Vector2, vector3::Vector3}, text::TextComponent};
 use std::sync::Arc;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -11,7 +9,8 @@ use tokio::{
 };
 use tracing::{debug, error, info};
 
-use crate::{SHOULD_STOP, STOP_INTERRUPT, command::context::command_source::{CommandSource, EntityAnchor}, server::Server};
+use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
+use crate::command::CommandSender;
 
 mod packet;
 
@@ -129,28 +128,7 @@ impl RCONClient {
                     let output_clone = output.clone();
                     let packet_body = packet.get_body().to_owned();
 
-                    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
-                    let spawnpoint = {
-                        let level_data = world.level_info.load();
-
-                        Vector3::new(
-                            level_data.spawn_x,
-                            level_data.spawn_y,
-                            level_data.spawn_z
-                        )
-                    };
-
-                    let command_source = CommandSource::new(
-                        crate::command::CommandSender::Rcon(output_clone),
-                        world,
-                        None,
-                        spawnpoint.to_f64(),
-                        Vector2::new(0.0, 0.0),
-                        "Rcon".to_owned(),
-                        TextComponent::text("Rcon"),
-                        server.clone(),
-                        EntityAnchor::Feet
-                    );
+                    let command_source = CommandSender::Rcon(output_clone).into_source(server).await;
 
                     // Wait task complete before send output
                     let _ = tokio::spawn(async move {

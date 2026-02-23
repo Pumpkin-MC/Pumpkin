@@ -32,7 +32,7 @@ impl ArgumentType for DoubleArgumentType {
         examples!("0", "1.2", ".5", "-1", "-.5", "-1234.56")
     }
 
-    fn client_side_parser(&self) -> JavaClientArgumentType {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::Double {
             min: (self.min != f64::MIN).then_some(self.min),
             max: (self.min != f64::MAX).then_some(self.max)

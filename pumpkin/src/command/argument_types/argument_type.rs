@@ -49,7 +49,7 @@ pub trait ArgumentType: Send + Sync {
 
     /// Returns the Java client-side parser used for this argument type.
     #[must_use]
-    fn client_side_parser(&self) -> JavaClientArgumentType;
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_>;
 
     /// Overrides the suggestion providers provided from this argument if a [`Some`] containing them
     /// is returned.
@@ -107,7 +107,7 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
 
     /// Returns the Java client-side parser used for this argument type.
     #[must_use]
-    fn client_side_parser(&self) -> JavaClientArgumentType;
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_>;
 
     /// Overrides the suggestion providers provided from this argument if a [`Some`] containing them
     /// is returned.
@@ -159,15 +159,15 @@ impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> AnyArgumentType for U 
         self.list_suggestions(context, suggestions_builder)
     }
 
-    fn examples(&self) -> Vec<String> {
-        self.examples()
-    }
-    
-    fn client_side_parser(&self) -> pumpkin_protocol::java::client::play::ArgumentType {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         self.client_side_parser()
     }
 
     fn override_suggestion_providers(&self) -> Option<SuggestionProviders> {
         self.override_suggestion_providers()
+    }
+
+    fn examples(&self) -> Vec<String> {
+        self.examples()
     }
 }

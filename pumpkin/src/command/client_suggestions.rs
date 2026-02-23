@@ -1,5 +1,4 @@
 use std::sync::Arc;
-
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::{CCommands, ProtoNode, ProtoNodeType}};
 
 use crate::{command::node::{attached::{AttachedNode, NodeId}, dispatcher::CommandDispatcher, tree::ROOT_NODE_ID}, entity::player::Player};
@@ -39,6 +38,7 @@ pub async fn send_c_commands_packet(
             node_type: ProtoNodeType::Literal {
                 name: key,
                 is_executable,
+                redirect_target: None,
             },
         };
 
@@ -63,16 +63,21 @@ pub async fn send_c_commands_packet(
     for node in &dispatcher.tree {
         // We map IDs to the indexes:
         let children: Box<[VarInt]> =
-            node
-                .children_ref()
+            node.children_ref()
                 .values()
                 .cloned()
                 .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-                .map(|i| i.try_into().expect("integer limit reached for ids"))
+                .map(|i| i.try_into().expect("i32 limit reached for ids"))
                 .collect();
 
+        let redirect_target =
+            node.redirect()
+                .and_then(|redirection| dispatcher.tree.resolve(redirection))
+                .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
+                .map(|i| i.try_into().expect("i32 limit reached for ids"));
+
         match node {
-            AttachedNode::Root(root_attached_node) => {
+            AttachedNode::Root(_) => {
                 // We skip the root node because we already have a root node.
                 // We do need to capture its children though, for later.
                 root_node_children_second = children;
@@ -82,7 +87,8 @@ pub async fn send_c_commands_packet(
                     children,
                     node_type: ProtoNodeType::Literal {
                         name: &literal_attached_node.meta.literal,
-                        is_executable: literal_attached_node.owned.command.is_some()
+                        is_executable: literal_attached_node.owned.command.is_some(),
+                        redirect_target
                     },
                 };
                 proto_nodes.push(node);
@@ -92,7 +98,8 @@ pub async fn send_c_commands_packet(
                     children,
                     node_type: ProtoNodeType::Literal {
                         name: &command_attached_node.meta.literal,
-                        is_executable: command_attached_node.owned.command.is_some()
+                        is_executable: command_attached_node.owned.command.is_some(),
+                        redirect_target,
                     },
                 };
                 proto_nodes.push(node);
@@ -107,6 +114,7 @@ pub async fn send_c_commands_packet(
                         is_executable: argument_attached_node.owned.command.is_some(),
                         parser: arg_type.client_side_parser(),
                         override_suggestion_type: arg_type.override_suggestion_providers(),
+                        redirect_target
                     }
                 };
                 proto_nodes.push(node);
@@ -135,7 +143,7 @@ fn resolve_node_id(node_id: NodeId, node_id_offset: usize, root_node_index: usiz
     if node_id == ROOT_NODE_ID {
         root_node_index
     } else {
-        node_id_offset + node_id.0.get() - 1
+        node_id_offset + node_id.0.get() - 2
     }
 }
 
@@ -180,6 +188,7 @@ fn nodes_to_proto_node_builders<'a>(
                     node_type: ProtoNodeType::Argument {
                         name,
                         is_executable: node_is_executable,
+                        redirect_target: None,
                         parser: consumer.get_client_side_parser(),
                         override_suggestion_type: consumer
                             .get_client_side_suggestion_type_override(),
@@ -195,6 +204,7 @@ fn nodes_to_proto_node_builders<'a>(
                     node_type: ProtoNodeType::Literal {
                         name: string,
                         is_executable: node_is_executable,
+                        redirect_target: None,
                     },
                 });
             }

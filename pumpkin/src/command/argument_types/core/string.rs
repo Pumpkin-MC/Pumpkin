@@ -39,7 +39,7 @@ impl ArgumentType for StringArgumentType {
         }
     }
 
-    fn client_side_parser(&self) -> JavaClientArgumentType {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::String(
             match self {
                 StringArgumentType::SingleWord => StringProtoArgBehavior::SingleWord,

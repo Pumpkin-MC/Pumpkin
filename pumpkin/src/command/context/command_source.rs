@@ -110,6 +110,8 @@ impl CommandSource {
     /// a server or a world. If there is attempt to fetch the server or a world from
     /// the returned source, there will be a panic!
     #[must_use]
+    // We use it in tests
+    #[allow(dead_code)]
     pub(crate) fn dummy() -> Self {
         Self {
             output: CommandSender::Dummy,
@@ -136,8 +138,7 @@ impl CommandSource {
         rotation: Vector2<f32>,
         name: String,
         display_name: TextComponent,
-        server: Arc<Server>,
-        entity_anchor: EntityAnchor,
+        server: Arc<Server>
     ) -> Self {
         Self {
             output,
@@ -150,7 +151,7 @@ impl CommandSource {
             server: Some(server),
             silent: false,
             command_result_taker: ResultValueTaker(Vec::new()),
-            entity_anchor,
+            entity_anchor: EntityAnchor::Feet,
         }
     }
 
@@ -359,8 +360,8 @@ impl CommandSource {
     /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain a world, but it may not in a unit test.
     #[must_use]
-    pub fn world(&self) -> Arc<World> {
-        self.world.clone().expect("Expected world to exist")
+    pub fn world(&self) -> &Arc<World> {
+        self.world.as_ref().expect("Expected world to exist")
     }
 
     /// Gets the server as a result:
@@ -368,8 +369,8 @@ impl CommandSource {
     /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain the server, but it may not in a unit test.
     #[must_use]
-    pub fn server(&self) -> Arc<Server> {
-        self.server.clone().expect("Expected server to exist")
+    pub fn server(&self) -> &Arc<Server> {
+        &self.server.as_ref().expect("Expected server to exist")
     }
 
     /// Gets the player as an option:
