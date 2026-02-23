@@ -305,15 +305,22 @@ impl CommandDispatcher {
     /// Handle the execution of a command by a given source (sender),
     /// returning appropriate error messages to it if necessary.
     ///
+    /// If the input starts with one slash (`/`), it is removed
+    /// inside the call itself.
+    ///
     /// # Panics
     ///
     /// Panics if the source given to it is a dummy one.
     pub async fn handle_command<'a>(
         &'a self,
         source: &CommandSource,
-        input: &'a str
+        mut input: &'a str
     ) {
         assert!(source.server.is_some(), "Source provided to this command was a dummy source");
+
+        if let Some(sliced) = input.strip_prefix("/") {
+            input = sliced;
+        }
 
         let output = self.execute_input(input, source).await;
 

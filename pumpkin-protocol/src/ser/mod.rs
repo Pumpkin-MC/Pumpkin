@@ -103,7 +103,7 @@ impl<R: Read> NetworkReadExt for R {
 
     fn read_boxed_slice(&mut self, length: usize) -> Result<Box<[u8]>, ReadingError> {
         const MAX_SLICE_LENGTH: usize = 2 * 1024 * 64; // 64KB, largest valid MC packet
-        if !(1..=MAX_SLICE_LENGTH).contains(&length) {
+        if !(0..=MAX_SLICE_LENGTH).contains(&length) {
             return Err(ReadingError::Message(format!(
                 "read_boxed_slice: length {length} out of bounds"
             )));

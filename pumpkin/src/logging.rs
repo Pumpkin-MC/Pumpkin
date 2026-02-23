@@ -420,7 +420,23 @@ impl Completer for PumpkinCommandCompleter {
             let dispatcher = server.command_dispatcher.read().await;
             let source = CommandSender::Console.into_source(server).await;
 
-            // temporary setup to unify both dispatchers for now
+            // Temporary setups to unify both dispatchers for now:
+
+            {
+                if cmd.trim().is_empty() {
+                    // Give all commands as suggestions.
+
+                    let suggestions: Vec<String> =
+                        dispatcher
+                            .get_all_commands()
+                            .keys()
+                            .into_iter()
+                            .map(ToString::to_string)
+                            .collect();
+                    return Ok((pos, suggestions));
+                }
+            }
+
             {
                 let mut reader = StringReader::new(cmd);
                 if let Some('/') = reader.peek() {
