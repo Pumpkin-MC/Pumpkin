@@ -445,6 +445,10 @@ impl EntityBase for ItemEntity {
                 return;
             }
 
+            if player.is_spectator() {
+                return;
+            }
+
             if player
                 .inventory
                 .insert_stack_anywhere(&mut *self.item_stack.lock().await)
