@@ -35,8 +35,7 @@ impl PluginLoader for WasmPluginLoader {
         Box::pin(async {
             let path = path.to_owned();
 
-            let runtime = PluginRuntime::new()?;
-
+            let runtime = PluginRuntime::new(&path)?;
             let (plugin, metadata) = runtime.init_plugin(&path).await?;
 
             Ok((
