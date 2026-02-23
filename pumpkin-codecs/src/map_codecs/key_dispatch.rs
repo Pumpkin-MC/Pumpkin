@@ -108,7 +108,7 @@ macro_rules! impl_getter_variant {
 ///
 /// This macro has two ways of using it:
 /// - Using a *String* to differentiate between variants.
-/// - Using an *enum* to differentiate between variants.
+/// - Using a *enum* to differentiate between variants, whose variants are **all units**.
 ///   The enum **must** implement `Display` for errors.
 ///
 /// Place this in an `impl KeyDispatchable for ...` block.
