@@ -2,15 +2,15 @@ use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
         wit::v0_1_0::{
-            events::IntoV0_1_0WasmEvent,
+            events::ToV0_1_0WasmEvent,
             pumpkin::plugin::event::{Event, PlayerJoinEventData},
         },
     },
     player::player_join::PlayerJoinEvent,
 };
 
-impl IntoV0_1_0WasmEvent for PlayerJoinEvent {
-    fn into_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToV0_1_0WasmEvent for PlayerJoinEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player_resource = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -21,7 +21,7 @@ impl IntoV0_1_0WasmEvent for PlayerJoinEvent {
 
         Event::PlayerJoinEvent(PlayerJoinEventData {
             player: player_resource,
-            text_component: text_component,
+            text_component,
             cancelled: self.cancelled,
         })
     }

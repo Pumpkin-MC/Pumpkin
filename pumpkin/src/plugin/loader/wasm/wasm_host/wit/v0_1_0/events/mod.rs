@@ -15,18 +15,18 @@ pub struct WasmPluginV0_1_0EventHandler {
     pub plugin: Arc<WasmPlugin>,
 }
 
-pub trait IntoV0_1_0WasmEvent {
-    fn into_v0_1_0_wasm_event(
+pub trait ToV0_1_0WasmEvent {
+    fn to_v0_1_0_wasm_event(
         &self,
         state: &mut PluginHostState,
     ) -> wit::v0_1_0::pumpkin::plugin::event::Event;
 }
 
-impl<E: Payload + IntoV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0EventHandler {
+impl<E: Payload + ToV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0EventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            let event = event.into_v0_1_0_wasm_event(store.data_mut());
+            let event = event.to_v0_1_0_wasm_event(store.data_mut());
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1_0(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
@@ -46,7 +46,7 @@ impl<E: Payload + IntoV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0Event
     ) -> BoxFuture<'a, ()> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            let event = event.into_v0_1_0_wasm_event(store.data_mut());
+            let event = event.to_v0_1_0_wasm_event(store.data_mut());
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1_0(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();

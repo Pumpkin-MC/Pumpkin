@@ -39,11 +39,11 @@ impl FromIntoEvent for PlayerJoinEventData {
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub trait EventHandler<E> {
-    fn handle<'a>(&'a self, server: Server, event: E) -> E;
+    fn handle(&self, server: Server, event: E) -> E;
 }
 
 pub(crate) trait ErasedEventHandler: Send + Sync {
-    fn handle_erased<'a>(&'a self, server: Server, event: Event) -> Event;
+    fn handle_erased(&self, server: Server, event: Event) -> Event;
 }
 
 struct HandlerWrapper<E, H> {
