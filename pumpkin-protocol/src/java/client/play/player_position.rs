@@ -56,27 +56,39 @@ impl CPlayerPosition {
 impl ClientPacket for CPlayerPosition {
     fn write_packet_data(
         &self,
-        write: impl Write,
-        _version: &MinecraftVersion,
+        mut write: impl Write,
+        version: &MinecraftVersion,
     ) -> Result<(), WritingError> {
-        let mut write = write;
-
-        write.write_var_int(&self.teleport_id)?;
-        write.write_f64_be(self.position.x)?;
-        write.write_f64_be(self.position.y)?;
-        write.write_f64_be(self.position.z)?;
-        write.write_f64_be(self.delta.x)?;
-        write.write_f64_be(self.delta.y)?;
-        write.write_f64_be(self.delta.z)?;
-        write.write_f32_be(self.yaw)?;
-        write.write_f32_be(self.pitch)?;
-        // not sure about that
-        write.write_i32_be(PositionFlag::get_bitfield(self.relatives.as_slice()))
+        if version >= &MinecraftVersion::V_1_21_2 {
+            write.write_var_int(&self.teleport_id)?;
+            write.write_f64_be(self.position.x)?;
+            write.write_f64_be(self.position.y)?;
+            write.write_f64_be(self.position.z)?;
+            write.write_f64_be(self.delta.x)?;
+            write.write_f64_be(self.delta.y)?;
+            write.write_f64_be(self.delta.z)?;
+            write.write_f32_be(self.yaw)?;
+            write.write_f32_be(self.pitch)?;
+            // not sure about that
+            write.write_i32_be(PositionFlag::get_bitfield(self.relatives.as_slice()))?;
+        } else {
+            write.write_f64_be(self.position.x)?;
+            write.write_f64_be(self.position.y)?;
+            write.write_f64_be(self.position.z)?;
+            write.write_f32_be(self.yaw)?;
+            write.write_f32_be(self.pitch)?;
+            write.write_u8(PositionFlag::get_bitfield(self.relatives.as_slice()) as u8)?;
+            write.write_var_int(&self.teleport_id)?;
+        }
+        Ok(())
     }
 }
 
 impl ServerPacket for CPlayerPosition {
-    fn read(mut read: impl std::io::Read) -> Result<Self, crate::ser::ReadingError> {
+    fn read(
+        mut read: impl std::io::Read,
+        _version: &MinecraftVersion,
+    ) -> Result<Self, crate::ser::ReadingError> {
         Ok(Self {
             teleport_id: read.get_var_int()?,
             // TODO

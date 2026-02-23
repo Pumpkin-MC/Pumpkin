@@ -1,12 +1,10 @@
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
-use serde::Deserialize;
 
 use crate::block::{BlockStateCodec, RawBlockState};
 
-#[derive(Deserialize)]
 pub struct RandomBlockStateMatchRuleTest {
-    block_state: BlockStateCodec,
-    probability: f32,
+    pub block_state: BlockStateCodec,
+    pub probability: f32,
 }
 
 impl RandomBlockStateMatchRuleTest {

@@ -78,7 +78,7 @@ impl SheepEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_COLOR,
-                MetaDataType::Byte,
+                MetaDataType::BYTE,
                 byte as i8,
             )])
             .await;

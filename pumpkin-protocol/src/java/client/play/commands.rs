@@ -35,11 +35,11 @@ impl ClientPacket for CCommands<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &MinecraftVersion,
+        version: &MinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list(&self.nodes, |bytebuf, node: &ProtoNode| {
-            node.write_to(bytebuf)
+            node.write_to(bytebuf, version)
         })?;
         write.write_var_int(&self.root_node_index)
     }
@@ -72,7 +72,11 @@ impl ProtoNode<'_> {
     const FLAG_HAS_REDIRECT: u8 = 8;
     const FLAG_HAS_SUGGESTION_TYPE: u8 = 16;
 
-    pub fn write_to(&self, write: &mut impl Write) -> Result<(), WritingError> {
+    pub fn write_to(
+        &self,
+        write: &mut impl Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         // flags
         let mut redirect_target_on_flag = 0i32;
 
@@ -136,7 +140,7 @@ impl ProtoNode<'_> {
 
         // parser id + properties
         if let ProtoNodeType::Argument {parser, ..} = &self.node_type {
-            parser.write_to_buffer(write)?;
+            parser.write_to_buffer(write, version)?;
         }
 
         if flags & Self::FLAG_HAS_SUGGESTION_TYPE != 0 {
@@ -223,11 +227,33 @@ impl ArgumentType<'_> {
 
     pub const SCORE_HOLDER_FLAG_ALLOW_MULTIPLE: u8 = 1;
 
-    #[expect(clippy::match_same_arms)]
-    pub fn write_to_buffer(&self, write: &mut impl Write) -> Result<(), WritingError> {
+    #[must_use]
+    pub fn to_id(&self, version: &MinecraftVersion) -> i32 {
         // Safety: Since Self is repr(u32), it is guaranteed to hold the discriminant in the first 4 bytes
         // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
-        let id = unsafe { *std::ptr::from_ref::<Self>(self).cast::<i32>() };
+        let mut id = unsafe { *std::ptr::from_ref::<Self>(self).cast::<i32>() };
+
+        if version < &MinecraftVersion::V_1_21_6 {
+            match id {
+                ..=16 => {}
+                // 17 => HexColor
+                18..=53 => id -= 1,
+                // 54 => Dialog
+                55.. => id -= 2,
+                _ => panic!("{self:?} does not exist in this Minecraft version (< 1.21.6)."),
+            }
+        }
+
+        id
+    }
+
+    #[expect(clippy::match_same_arms)]
+    pub fn write_to_buffer(
+        &self,
+        write: &mut impl Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let id = self.to_id(version);
         write.write_var_int(&(id).into())?;
         match self {
             Self::Float { min, max } => Self::write_number_arg(*min, *max, write),

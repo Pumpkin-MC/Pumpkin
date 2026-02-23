@@ -53,6 +53,7 @@ mod tellraw;
 mod tick;
 mod time;
 mod title;
+mod tps;
 mod transfer;
 mod weather;
 mod whitelist;
@@ -93,6 +94,7 @@ pub async fn default_dispatcher(
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
     dispatcher.register(setblock::init_command_tree(), "minecraft:command.setblock");
     dispatcher.register(seed::init_command_tree(), "minecraft:command.seed");
+    dispatcher.register(tps::init_command_tree(), "pumpkin:command.tps");
     dispatcher.register(fill::init_command_tree(), "minecraft:command.fill");
     dispatcher.register(
         playsound::init_command_tree(),
@@ -417,6 +419,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.spawnpoint",
             "Sets the spawn point for a player",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "pumpkin:command.tps",
+            "Displays the server TPS and MSPT",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();

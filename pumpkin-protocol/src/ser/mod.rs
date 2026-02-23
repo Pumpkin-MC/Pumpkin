@@ -101,8 +101,14 @@ impl<R: Read> NetworkReadExt for R {
     get_number_be!(get_f32_be, f32);
     get_number_be!(get_f64_be, f64);
 
-    fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>, ReadingError> {
-        let mut buf = vec![0u8; count];
+    fn read_boxed_slice(&mut self, length: usize) -> Result<Box<[u8]>, ReadingError> {
+        const MAX_SLICE_LENGTH: usize = 2 * 1024 * 64; // 64KB, largest valid MC packet
+        if !(1..=MAX_SLICE_LENGTH).contains(&length) {
+            return Err(ReadingError::Message(format!(
+                "read_boxed_slice: length {length} out of bounds"
+            )));
+        }
+        let mut buf = vec![0u8; length];
         self.read_exact(&mut buf)
             .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
 
@@ -187,7 +193,14 @@ impl<R: Read> NetworkReadExt for R {
         &mut self,
         parse: impl Fn(&mut Self) -> Result<G, ReadingError>,
     ) -> Result<Vec<G>, ReadingError> {
+        const MAX_LIST_SIZE: usize = 65536;
+
         let len = self.get_var_int()?.0 as usize;
+        if len > MAX_LIST_SIZE {
+            return Err(ReadingError::TooLarge(format!(
+                "List length {len} exceeds limit"
+            )));
+        }
         let mut list = Vec::with_capacity(len);
         for _ in 0..len {
             list.push(parse(self)?);
