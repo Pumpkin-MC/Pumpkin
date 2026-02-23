@@ -121,7 +121,7 @@ macro_rules! impl_variant_getter {
 /// `A_MAP_CODEC` is the map codec that will be used for encoding/decoding the specific fields of `A`.
 ///
 /// You don't have to add a branch for every variant, but any left variant `MapCodec`s will be considered `todo!()`,
-/// so if *map* encoding is attempted with an unimplemented variant, it will **panic**.
+/// so if *any encoding* is attempted with an unimplemented variant, it will **panic**.
 ///
 /// # Examples
 ///
