@@ -218,6 +218,23 @@ mod test {
                 .parse(
                     json!(
                         {
+                            "real": -124.6,
+                            "imaginary": 134,
+                        }
+                    ),
+                    &json_ops::INSTANCE
+                )
+                .expect("Decoding should succeed")
+                .expect_left("Expected double map")
+                .len(),
+            2
+        );
+
+        assert_eq!(
+            DOUBLE_MAP_FIRST_EITHER_CODEC
+                .parse(
+                    json!(
+                        {
                             "a": 1,
                             "b": 2,
                             "c": 3,
