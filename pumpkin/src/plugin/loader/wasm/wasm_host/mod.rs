@@ -1,8 +1,7 @@
-use std::{path::Path, sync::Arc};
-
+use std::{fs, path::Path, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;
-use wasmtime::{Engine, Store};
+use wasmtime::{Cache, CacheConfig, Engine, Store, component::Component};
 
 use crate::plugin::{Context, PluginMetadata, loader::wasm::wasm_host::state::PluginHostState};
 
@@ -30,6 +29,7 @@ pub enum PluginInitError {
 
 pub struct PluginRuntime {
     engine: Engine,
+    cache_dir: std::path::PathBuf,
     linker_v0_1_0: wasmtime::component::Linker<PluginHostState>,
 }
 
@@ -43,10 +43,18 @@ pub struct WasmPlugin {
 }
 
 impl PluginRuntime {
-    pub fn new() -> Result<Self, PluginInitError> {
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, PluginInitError> {
         let mut config = wasmtime::Config::new();
         config.async_support(true);
         config.wasm_component_model(true);
+        let mut path = std::path::absolute(path.as_ref()).expect("Failed to get absolute path");
+        path.pop();
+        path.push("cache");
+        let mut cache_config = CacheConfig::new();
+        cache_config.with_directory(&path);
+        config.cache(Some(
+            Cache::new(cache_config).expect("Failed to create cache"),
+        ));
         let engine = Engine::new(&config).map_err(PluginInitError::EngineCreationFailed)?;
 
         let linker_v0_1_0 =
@@ -54,6 +62,7 @@ impl PluginRuntime {
 
         Ok(Self {
             engine,
+            cache_dir: path,
             linker_v0_1_0,
         })
     }
@@ -62,7 +71,7 @@ impl PluginRuntime {
         &self,
         path: P,
     ) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
-        let wasm_bytes = std::fs::read(path)?;
+        let wasm_bytes = std::fs::read(&path)?;
 
         let api_version = probe_api_version_from_bytes(&wasm_bytes)?;
 
@@ -70,7 +79,7 @@ impl PluginRuntime {
             return Err(PluginInitError::ApiVersionMismatch(api_version));
         }
 
-        let component = wasmtime::component::Component::new(&self.engine, &wasm_bytes)?;
+        let component = load_component(&self.engine, &wasm_bytes, path.as_ref(), &self.cache_dir)?;
 
         let (wasm_plugin, metadata) = match api_version.as_str() {
             "0.1.0" => {
@@ -78,12 +87,50 @@ impl PluginRuntime {
             }
             _ => return Err(PluginInitError::ApiVersionMismatch(api_version)),
         };
-
         let wasm_plugin = Arc::new(wasm_plugin);
         wasm_plugin.store.lock().await.data_mut().plugin = Some(Arc::downgrade(&wasm_plugin));
 
         Ok((wasm_plugin, metadata))
     }
+}
+
+fn cache_key(wasm_path: &Path) -> Result<String, std::io::Error> {
+    let metadata = fs::metadata(wasm_path)?;
+    let file_name = wasm_path.file_stem().unwrap().to_string_lossy();
+    let len = metadata.len();
+    let modified = metadata
+        .modified()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    Ok(format!(
+        "{file_name}-{len}-{modified}-{}.cwasm",
+        env!("CARGO_PKG_VERSION"),
+    ))
+}
+
+fn load_component(
+    engine: &Engine,
+    wasm_bytes: &[u8],
+    wasm_path: &Path,
+    cache_dir: &Path,
+) -> Result<Component, PluginInitError> {
+    let cache_name = cache_key(wasm_path)?;
+    let cache_path = cache_dir.join(cache_name);
+
+    if cache_path.exists() {
+        match unsafe { Component::deserialize_file(engine, &cache_path) } {
+            Ok(component) => return Ok(component),
+            Err(_) => {
+                let _ = fs::remove_file(&cache_path);
+            }
+        }
+    }
+
+    let component = Component::new(engine, wasm_bytes)?;
+    fs::write(&cache_path, component.serialize()?)?;
+    Ok(component)
 }
 
 /// Kind of a dumb solution, but in order to get the API version from a component, we define a custom section inside of the wasm binary itself, we then
