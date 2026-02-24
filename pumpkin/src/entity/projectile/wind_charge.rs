@@ -22,7 +22,7 @@ const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
 
 pub struct WindChargeEntity {
     deflect_cooldown: AtomicU8,
-    thrown_item_entity: ThrownItemEntity,
+    pub thrown_item_entity: ThrownItemEntity,
 }
 
 impl WindChargeEntity {

@@ -6,10 +6,14 @@ use crate::block::{
 };
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
+use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::egg::EggEntity;
+use crate::entity::projectile::firework_rocket::FireworkRocketEntity;
 use crate::entity::projectile::snowball::SnowballEntity;
+use crate::entity::projectile::wind_charge::WindChargeEntity;
 use crate::entity::tnt::TNTEntity;
 use crate::entity::vehicle::boat::BoatEntity;
+use std::sync::atomic::AtomicBool;
 
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
@@ -260,6 +264,40 @@ impl DispenserBlock {
             id if Self::is_boat_item(id) => {
                 Self::dispense_boat(world, position, item, facing).await
             }
+            // Firework Rocket
+            id if id == Item::FIREWORK_ROCKET.id => {
+                Self::dispense_firework(world, position, item, facing).await
+            }
+            // Wind Charge
+            id if id == Item::WIND_CHARGE.id => {
+                Self::dispense_wind_charge(world, position, item, facing).await
+            }
+            // Experience Bottle (Bottle o' Enchanting)
+            id if id == Item::EXPERIENCE_BOTTLE.id => {
+                Self::dispense_experience_bottle(world, position, item, facing).await
+            }
+            // Splash Potion
+            id if id == Item::SPLASH_POTION.id => {
+                Self::dispense_thrown_potion(
+                    world,
+                    position,
+                    item,
+                    facing,
+                    &EntityType::SPLASH_POTION,
+                )
+                .await
+            }
+            // Lingering Potion
+            id if id == Item::LINGERING_POTION.id => {
+                Self::dispense_thrown_potion(
+                    world,
+                    position,
+                    item,
+                    facing,
+                    &EntityType::LINGERING_POTION,
+                )
+                .await
+            }
             // Arrows - TODO: implement arrow entity and shooting
             id if id == Item::ARROW.id
                 || id == Item::SPECTRAL_ARROW.id
@@ -335,7 +373,11 @@ impl DispenserBlock {
         facing: Facing,
     ) -> bool {
         let facing_vec = to_normal(facing);
-        let spawn_pos = position.to_f64() + facing_vec * 0.5 + Vector3::new(0.5, 0.0, 0.5);
+        // Vanilla: spawn at the block in front of the dispenser, centered on X/Z
+        // BlockPos lv2 = pointer.pos().offset(facing);
+        // new TntEntity(lv, lv2.getX() + 0.5, lv2.getY(), lv2.getZ() + 0.5, null);
+        let target = position.to_f64() + facing_vec;
+        let spawn_pos = Vector3::new(target.x + 0.5, target.y, target.z + 0.5);
 
         let entity = Entity::new(world.clone(), spawn_pos, &EntityType::TNT);
         let tnt = Arc::new(TNTEntity::new(entity, TNT_POWER, TNT_FUSE));
@@ -381,7 +423,9 @@ impl DispenserBlock {
         let target_state = world.get_block_state(&target_pos).await;
 
         // Try to ignite fire
-        if target_state.is_air() {
+        // Vanilla: places fire at the block the dispenser faces if it's air/replaceable.
+        // Fire on air disappears quickly — that's vanilla behavior, not a bug.
+        if target_state.is_air() || target_state.replaceable() {
             world
                 .set_block_state(
                     &target_pos,
@@ -390,15 +434,19 @@ impl DispenserBlock {
                 )
                 .await;
 
-            // Apply durability damage
-            if item.damage_item(1) {
-                // Item broke
+            // Apply durability damage (1 use per activation, like vanilla)
+            // damage_item returns true even when just damaged (not only on break), so check manually
+            let broke = item
+                .get_max_damage()
+                .is_some_and(|max| item.get_damage() + 1 >= max);
+            item.damage_item(1);
+            if broke {
                 item.clear();
             }
             return true;
         }
 
-        // TODO: Light campfire, candles, TNT, nether portal, etc.
+        // TODO: Light campfire, candles, TNT, nether portal
 
         false
     }
@@ -531,6 +579,106 @@ impl DispenserBlock {
         let boat = Arc::new(BoatEntity::new(entity));
 
         world.spawn_entity(boat).await;
+        item.decrement(1);
+        true
+    }
+
+    async fn dispense_firework(
+        world: &Arc<crate::world::World>,
+        position: &pumpkin_util::math::position::BlockPos,
+        item: &mut tokio::sync::MutexGuard<'_, ItemStack>,
+        facing: Facing,
+    ) -> bool {
+        let facing_vec = to_normal(facing);
+        let spawn_pos = position.to_f64() + facing_vec * 1.2 + Vector3::new(0.5, 0.5, 0.5);
+
+        let entity = Entity::new(world.clone(), spawn_pos, &EntityType::FIREWORK_ROCKET);
+        // Set velocity directly on entity before wrapping
+        let (pitch, yaw) = Self::facing_to_rotation(facing);
+        let yaw_rad = yaw.to_radians();
+        let pitch_rad = pitch.to_radians();
+        let vel = Vector3::new(
+            f64::from(-yaw_rad.sin() * pitch_rad.cos()) * f64::from(PROJECTILE_POWER),
+            f64::from(-pitch_rad.sin()) * f64::from(PROJECTILE_POWER),
+            f64::from(yaw_rad.cos() * pitch_rad.cos()) * f64::from(PROJECTILE_POWER),
+        );
+        entity.set_velocity(vel).await;
+
+        let rocket = Arc::new(FireworkRocketEntity::new(entity).await);
+        world.spawn_entity(rocket).await;
+        item.decrement(1);
+        true
+    }
+
+    async fn dispense_wind_charge(
+        world: &Arc<crate::world::World>,
+        position: &pumpkin_util::math::position::BlockPos,
+        item: &mut tokio::sync::MutexGuard<'_, ItemStack>,
+        facing: Facing,
+    ) -> bool {
+        let facing_vec = to_normal(facing);
+        let spawn_pos = position.to_f64() + facing_vec * 1.2 + Vector3::new(0.5, 0.5, 0.5);
+
+        let entity = Entity::new(world.clone(), spawn_pos, &EntityType::WIND_CHARGE);
+        let thrown = ThrownItemEntity {
+            entity,
+            owner_id: None,
+            collides_with_projectiles: false,
+            has_hit: AtomicBool::new(false),
+        };
+        let wind_charge = Arc::new(WindChargeEntity::new(thrown));
+
+        let (pitch, yaw) = Self::facing_to_rotation(facing);
+        wind_charge.thrown_item_entity.set_velocity_from(
+            &wind_charge.thrown_item_entity.entity,
+            pitch,
+            yaw,
+            0.0,
+            PROJECTILE_POWER,
+            1.0,
+        );
+
+        world.spawn_entity(wind_charge).await;
+        item.decrement(1);
+        true
+    }
+
+    async fn dispense_experience_bottle(
+        world: &Arc<crate::world::World>,
+        position: &pumpkin_util::math::position::BlockPos,
+        item: &mut tokio::sync::MutexGuard<'_, ItemStack>,
+        facing: Facing,
+    ) -> bool {
+        // No dedicated ExperienceBottleEntity struct yet — drop as item
+        // TODO: spawn EXPERIENCE_BOTTLE entity that explodes into xp orbs on impact
+        Self::dispense_as_dropper(world, position, item, facing).await
+    }
+
+    async fn dispense_thrown_potion(
+        world: &Arc<crate::world::World>,
+        position: &pumpkin_util::math::position::BlockPos,
+        item: &mut tokio::sync::MutexGuard<'_, ItemStack>,
+        facing: Facing,
+        entity_type: &'static EntityType,
+    ) -> bool {
+        let facing_vec = to_normal(facing);
+        let spawn_pos = position.to_f64() + facing_vec * 1.2 + Vector3::new(0.5, 0.5, 0.5);
+
+        let entity = Entity::new(world.clone(), spawn_pos, entity_type);
+        let thrown = ThrownItemEntity {
+            entity,
+            owner_id: None,
+            collides_with_projectiles: false,
+            has_hit: AtomicBool::new(false),
+        };
+
+        let (pitch, yaw) = Self::facing_to_rotation(facing);
+        thrown.set_velocity_from(&thrown.entity, pitch, yaw, -20.0, PROJECTILE_POWER, 1.0);
+
+        // TODO: поtion effects not yet implemented — spawns entity without effects
+        world
+            .spawn_entity(Arc::new(SnowballEntity { thrown }))
+            .await;
         item.decrement(1);
         true
     }
