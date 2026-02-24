@@ -269,7 +269,7 @@ impl EndermanEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_ANGRY,
-                MetaDataType::Boolean,
+                MetaDataType::BOOLEAN,
                 angry,
             )])
             .await;
@@ -286,7 +286,7 @@ impl EndermanEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_PROVOKED,
-                MetaDataType::Boolean,
+                MetaDataType::BOOLEAN,
                 provoked,
             )])
             .await;
@@ -300,7 +300,7 @@ impl EndermanEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_CARRIED_BLOCK,
-                MetaDataType::OptionalBlockState,
+                MetaDataType::OPTIONAL_BLOCK_STATE,
                 value,
             )])
             .await;
