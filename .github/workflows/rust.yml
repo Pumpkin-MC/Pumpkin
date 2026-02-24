@@ -97,43 +97,33 @@ jobs:
     needs: [build_and_test]
     strategy:
       matrix:
-        os:
-          [
-            ubuntu-latest,
-            ubuntu-24.04-arm,
-            windows-latest,
-            windows-11-arm,
-            macos-latest,
-            macos-15-intel,
-          ]
         toolchain:
           - stable
         include:
           - os: ubuntu-latest
             cpu_variant: v2
+            arch: X64
           - os: ubuntu-latest
             cpu_variant: v3
+            arch: X64
           - os: windows-latest
             cpu_variant: v2
+            arch: X64
           - os: windows-latest
             cpu_variant: v3
-        exclude:
+            arch: X64
           - os: ubuntu-24.04-arm
-            cpu_variant: v2
-          - os: ubuntu-24.04-arm
-            cpu_variant: v3
+            cpu_variant: ""
+            arch: ARM64
           - os: windows-11-arm
-            cpu_variant: v2
-          - os: windows-11-arm
-            cpu_variant: v3
+            cpu_variant: ""
+            arch: ARM64
           - os: macos-latest
-            cpu_variant: v2
-          - os: macos-latest
-            cpu_variant: v3
+            cpu_variant: ""
+            arch: ARM64
           - os: macos-15-intel
-            cpu_variant: v2
-          - os: macos-15-intel
-            cpu_variant: v3
+            cpu_variant: ""
+            arch: X64
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
@@ -141,29 +131,37 @@ jobs:
       - name: Build Release
         shell: bash
         run: |
-          if [[ "${{ runner.arch }}" == "X64" && ("${{ runner.os }}" == "Linux" || "${{ runner.os }}" == "Windows") ]]; then
+          if [[ -n "${{ matrix.cpu_variant }}" ]]; then
             if [[ "${{ matrix.cpu_variant }}" == "v2" ]]; then
               export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v2"
+              echo "Using RUSTFLAGS: $RUSTFLAGS (x86-64-v2)"
             elif [[ "${{ matrix.cpu_variant }}" == "v3" ]]; then
               export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
+              echo "Using RUSTFLAGS: $RUSTFLAGS (x86-64-v3)"
             fi
-            echo "Using RUSTFLAGS: $RUSTFLAGS"
+          else
+            echo "Using default RUSTFLAGS: $RUSTFLAGS"
           fi
           cargo build --verbose --release
       - name: Prepare artifacts
         shell: bash
         run: |
           mkdir -p dist
-          if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; else EXT=""; fi
-          BASE_NAME="pumpkin-${{ runner.arch }}-${{ runner.os }}"
-          if [[ "${{ runner.arch }}" == "X64" && ("${{ runner.os }}" == "Linux" || "${{ runner.os }}" == "Windows") && -n "${{ matrix.cpu_variant }}" ]]; then
+          if [[ "${{ runner.os }}" == "Windows" ]]; then 
+            EXT=".exe" 
+          else 
+            EXT="" 
+          fi
+          BASE_NAME="pumpkin-${{ matrix.arch }}-${{ runner.os }}"
+          if [[ -n "${{ matrix.cpu_variant }}" ]]; then
             BASE_NAME="$BASE_NAME-${{ matrix.cpu_variant }}"
           fi
+          echo "Copying executable to: dist/$BASE_NAME$EXT"
           cp "target/release/pumpkin$EXT" "dist/$BASE_NAME$EXT"
       - name: Export executable
         uses: actions/upload-artifact@v6
         with:
-          name: pumpkin-${{ runner.arch }}-${{ runner.os }}${{ matrix.cpu_variant && format('-{0}', matrix.cpu_variant) || '' }}
+          name: pumpkin-${{ matrix.arch }}-${{ runner.os }}${{ matrix.cpu_variant != '' && format('-{0}', matrix.cpu_variant) || '' }}
           compression-level: 9
           path: dist/pumpkin-*
   draft_release:
@@ -182,9 +180,13 @@ jobs:
           merge-multiple: true
       - name: Generate release notes
         run: |
-          tree dist/
+          echo "=== Generated binary artifacts ==="
+          find dist/ -type f -name "pumpkin-*" | sort
+          echo ""
           echo "From commit: $(git rev-parse --short HEAD)" > dist/RELEASE.md
           echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
+          echo "Artifacts:" >> dist/RELEASE.md
+          find dist/ -type f -name "pumpkin-*" -exec basename {} \; | sort >> dist/RELEASE.md
           cat dist/RELEASE.md
       - name: Update the nightly tag
         run: |
