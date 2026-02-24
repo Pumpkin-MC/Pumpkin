@@ -98,30 +98,28 @@ impl Goal for TeleportTowardsPlayerGoal {
                 true
             } else if self.target_player.is_some() {
                 false
-            } else {
-                if let Some(target) = &self.committed_target {
-                    if !target.get_entity().is_alive() {
-                        return false;
-                    }
-                    let mob_entity = mob.get_mob_entity();
-                    let dist_sq = mob_entity
-                        .living_entity
-                        .entity
-                        .pos
-                        .load()
-                        .squared_distance_to_vec(&target.get_entity().pos.load());
-                    let follow_range = TrackTargetGoal::get_follow_range(mob_entity);
-                    if dist_sq > follow_range * follow_range {
-                        return false;
-                    }
-                    let needs_reset = mob_entity.target.lock().await.is_none();
-                    if needs_reset {
-                        mob.set_mob_target(Some(target.clone())).await;
-                    }
-                    true
-                } else {
-                    self.track_target_goal.should_continue(mob).await
+            } else if let Some(target) = &self.committed_target {
+                if !target.get_entity().is_alive() {
+                    return false;
                 }
+                let mob_entity = mob.get_mob_entity();
+                let dist_sq = mob_entity
+                    .living_entity
+                    .entity
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(&target.get_entity().pos.load());
+                let follow_range = TrackTargetGoal::get_follow_range(mob_entity);
+                if dist_sq > follow_range * follow_range {
+                    return false;
+                }
+                let needs_reset = mob_entity.target.lock().await.is_none();
+                if needs_reset {
+                    mob.set_mob_target(Some(target.clone())).await;
+                }
+                true
+            } else {
+                self.track_target_goal.should_continue(mob).await
             }
         })
     }
