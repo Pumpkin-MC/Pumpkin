@@ -1,6 +1,6 @@
 {
     "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "讓每個人都能架設高速\n及高效能的 Minecraft 伺服器。\n",
+    "commands.pumpkin.description": "讓每個人都能架設高速及高效能的 Minecraft 伺服器。\n",
     "commands.pumpkin.minecraft_version": "(Minecraft %s，協定 %s)\n",
     "commands.pumpkin.github": "[GitHub 原始碼庫]",
     "commands.pumpkin.website": "[官方網站]",
