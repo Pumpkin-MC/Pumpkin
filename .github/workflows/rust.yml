@@ -23,8 +23,8 @@ jobs:
       - run: rustup component add rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
-  lint:
-    name: Lint and analyze
+  machete:
+    name: Detect unused dependencies
     runs-on: ubuntu-latest
     needs: [format]
     strategy:
@@ -34,28 +34,52 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: bnjbvr/cargo-machete@main
+  clippy_debug:
+    name: Run lints (debug)
+    runs-on: ubuntu-latest
+    needs: [machete]
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Detect unused dependencies
-        uses: bnjbvr/cargo-machete@main
       - name: Clippy (debug)
         run: cargo clippy --all-targets --all-features
+  clippy_release:
+    name: Run lints (release)
+    runs-on: ubuntu-latest
+    needs: [machete]
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add clippy
+      - uses: Swatinem/rust-cache@v2
       - name: Clippy (release)
         run: cargo clippy --release --all-targets --all-features
-
   build_and_test:
     name: Build project and test
     runs-on: ${{ matrix.os }}
-    needs: [lint]
+    needs: [clippy_debug, clippy_release]
     strategy:
       matrix:
         os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-          - windows-latest
-          - windows-11-arm
-          - macos-latest
-          - macos-15-intel
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            windows-latest,
+            windows-11-arm,
+            macos-latest,
+            macos-15-intel,
+          ]
         toolchain:
           - stable
     steps:
@@ -67,87 +91,81 @@ jobs:
         run: cargo nextest run --verbose
       - name: Cargo doctest
         run: cargo test --doc --verbose
-
   build_release:
-    name: Build release artifacts
+    name: Build project in release
     runs-on: ${{ matrix.os }}
     needs: [build_and_test]
     strategy:
       matrix:
         os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-          - windows-latest
-          - windows-11-arm
-          - macos-latest
-          - macos-15-intel
-        cpu_target:
-          - v2
-          - v3
-          - default
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            windows-latest,
+            windows-11-arm,
+            macos-latest,
+            macos-15-intel,
+          ]
         toolchain:
           - stable
+        include:
+          - os: ubuntu-latest
+            cpu_variant: v2
+          - os: ubuntu-latest
+            cpu_variant: v3
+          - os: windows-latest
+            cpu_variant: v2
+          - os: windows-latest
+            cpu_variant: v3
         exclude:
           - os: ubuntu-24.04-arm
-            cpu_target: v2
+            cpu_variant: v2
           - os: ubuntu-24.04-arm
-            cpu_target: v3
+            cpu_variant: v3
           - os: windows-11-arm
-            cpu_target: v2
+            cpu_variant: v2
           - os: windows-11-arm
-            cpu_target: v3
+            cpu_variant: v3
           - os: macos-latest
-            cpu_target: v2
+            cpu_variant: v2
           - os: macos-latest
-            cpu_target: v3
+            cpu_variant: v3
           - os: macos-15-intel
-            cpu_target: v2
+            cpu_variant: v2
           - os: macos-15-intel
-            cpu_target: v3
-          - os: ubuntu-latest
-            cpu_target: default
-          - os: ubuntu-24.04-arm
-            cpu_target: default
-          - os: windows-latest
-            cpu_target: default
-          - os: windows-11-arm
-            cpu_target: default
+            cpu_variant: v3
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
-      - name: Build Release (with conditional CPU target)
+      - name: Build Release
         shell: bash
-        if: ${{ (matrix.cpu_target != 'default' && runner.arch == 'X64') || (matrix.cpu_target == 'default' && runner.arch != 'X64') }}
         run: |
-          if [ "${{ matrix.cpu_target }}" == "v2" ]; then
-            export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v2"
-          elif [ "${{ matrix.cpu_target }}" == "v3" ]; then
-            export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
+          if [[ "${{ runner.arch }}" == "X64" && ("${{ runner.os }}" == "Linux" || "${{ runner.os }}" == "Windows") ]]; then
+            if [[ "${{ matrix.cpu_variant }}" == "v2" ]]; then
+              export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v2"
+            elif [[ "${{ matrix.cpu_variant }}" == "v3" ]]; then
+              export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
+            fi
+            echo "Using RUSTFLAGS: $RUSTFLAGS"
           fi
           cargo build --verbose --release
       - name: Prepare artifacts
         shell: bash
-        if: ${{ (matrix.cpu_target != 'default' && runner.arch == 'X64') || (matrix.cpu_target == 'default' && runner.arch != 'X64') }}
         run: |
           mkdir -p dist
           if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; else EXT=""; fi
-          if [ "${{ matrix.cpu_target }}" == "v2" ]; then
-            TARGET_ARCH="x86-64-v2"
-          elif [ "${{ matrix.cpu_target }}" == "v3" ]; then
-            TARGET_ARCH="x86-64-v3"
-          else
-            TARGET_ARCH="${{ runner.arch }}"
+          BASE_NAME="pumpkin-${{ runner.arch }}-${{ runner.os }}"
+          if [[ "${{ runner.arch }}" == "X64" && ("${{ runner.os }}" == "Linux" || "${{ runner.os }}" == "Windows") && -n "${{ matrix.cpu_variant }}" ]]; then
+            BASE_NAME="$BASE_NAME-${{ matrix.cpu_variant }}"
           fi
-          cp "target/release/pumpkin$EXT" "dist/pumpkin-${TARGET_ARCH}-${{ runner.os }}$EXT"
+          cp "target/release/pumpkin$EXT" "dist/$BASE_NAME$EXT"
       - name: Export executable
         uses: actions/upload-artifact@v6
-        if: ${{ (matrix.cpu_target != 'default' && runner.arch == 'X64') || (matrix.cpu_target == 'default' && runner.arch != 'X64') }}
         with:
-          name: pumpkin-${{ matrix.cpu_target }}-${{ runner.arch }}-${{ runner.os }}
+          name: pumpkin-${{ runner.arch }}-${{ runner.os }}${{ matrix.cpu_variant && format('-{0}', matrix.cpu_variant) || '' }}
           compression-level: 9
           path: dist/pumpkin-*
-
   draft_release:
     permissions:
       contents: write
