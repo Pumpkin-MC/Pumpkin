@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::resource_location::ResourceLocation;
+use pumpkin_util::{resource_location::ResourceLocation, version::MinecraftVersion};
 
 use crate::{
     ServerPacket,
@@ -20,9 +20,7 @@ pub struct SCookieResponse {
 const MAX_COOKIE_LENGTH: usize = 5120;
 
 impl ServerPacket for SCookieResponse {
-    fn read(read: impl Read) -> Result<Self, ReadingError> {
-        let mut read = read;
-
+    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
         let key = read.get_string()?;
         let has_payload = read.get_bool()?;
 

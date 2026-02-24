@@ -148,7 +148,7 @@ impl BreathManager {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_AIR,
-                MetaDataType::Integer,
+                MetaDataType::INTEGER,
                 VarInt(air),
             )])
             .await;
