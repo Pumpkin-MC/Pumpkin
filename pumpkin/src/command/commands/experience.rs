@@ -186,7 +186,11 @@ impl Executor {
             }
             ExpType::Points => {
                 if mode == Mode::Add {
-                    target.add_experience_points(amount).await;
+                    if let Some(player) = target.world().get_player_by_uuid(target.gameprofile.id) {
+                        player.add_experience_points(amount).await;
+                    } else {
+                        return false;
+                    }
                 } else {
                     let current_level = target.experience_level.load(Ordering::Relaxed);
                     let current_max_points = experience::points_in_level(current_level);
