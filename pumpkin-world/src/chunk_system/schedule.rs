@@ -330,25 +330,73 @@ impl GenerationSchedule {
                                 if ano_chunk.current_stage >= req_stage {
                                     continue;
                                 }
-                                let ano_task = &mut ano_chunk.tasks[req_stage as usize];
-                                if ano_task.is_null() {
-                                    *ano_task =
-                                        self.graph.nodes.insert(Node::new(new_pos, req_stage));
 
-                                    // Ensure the implicitly created task is queued
-                                    let node = self.graph.nodes.get_mut(*ano_task).unwrap();
-                                    node.in_queue = true;
+                                // Build the full task chain from the first needed stage up to
+                                // req_stage.
+                                let empty = StagedChunkEnum::Empty as usize;
+                                let start = (ano_chunk.current_stage as usize + 1).max(empty);
+                                let end = req_stage as usize;
+                                let mut newly_created = [false; 10];
+                                for (i, flag) in newly_created[start..=end].iter_mut().enumerate() {
+                                    let stage_i = start + i;
+                                    if ano_chunk.tasks[stage_i].is_null() {
+                                        let new_node = self.graph.nodes.insert(Node::new(
+                                            new_pos,
+                                            StagedChunkEnum::from(stage_i as u8),
+                                        ));
+                                        ano_chunk.tasks[stage_i] = new_node;
+                                        *flag = true;
+                                        if !ano_chunk.occupied.is_null() {
+                                            self.graph.add_edge(ano_chunk.occupied, new_node);
+                                        }
+                                    }
+                                }
+
+                                // Wire newly-created tasks into the dependency chain.
+                                for stage_i in start..=end {
+                                    if !newly_created[stage_i] {
+                                        continue;
+                                    }
+                                    let cur = ano_chunk.tasks[stage_i];
+
+                                    // Predecessor -> this task
+                                    if stage_i > empty {
+                                        let prev = ano_chunk.tasks[stage_i - 1];
+                                        if !prev.is_null() {
+                                            self.graph.add_edge(prev, cur);
+                                        }
+                                    }
+
+                                    // This task -> successor
+                                    if stage_i < end {
+                                        let next = ano_chunk.tasks[stage_i + 1];
+                                        if !next.is_null() && !newly_created[stage_i + 1] {
+                                            self.graph.add_edge(cur, next);
+                                        }
+                                    }
+                                }
+
+                                // Queue the entry task (lowest unblocked stage); the dependency
+                                // graph will unblock higher stages automatically as each completes.
+                                let entry_task = ano_chunk.tasks[start];
+                                if !entry_task.is_null()
+                                    && let Some(n) = self.graph.nodes.get_mut(entry_task)
+                                    && n.in_degree == 0
+                                    && !n.in_queue
+                                {
+                                    n.in_queue = true;
                                     self.queue.push(TaskHeapNode(
                                         Self::calc_priority(
                                             &self.last_level,
                                             &self.last_high_priority,
                                             new_pos,
-                                            req_stage,
+                                            StagedChunkEnum::from(start as u8),
                                         ),
-                                        *ano_task,
+                                        entry_task,
                                     ));
                                 }
-                                self.graph.add_edge(*ano_task, task); // task depend on ano_task
+                                let ano_task = ano_chunk.tasks[end];
+                                self.graph.add_edge(ano_task, task); // task depend on ano_task
                             }
                         }
                     }
