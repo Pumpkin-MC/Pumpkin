@@ -1,12 +1,10 @@
-use crate::serialization::{
-    HasValue,
-    codec::Codec,
-    coders::{Decoder, Encoder},
-    data_result::DataResult,
-    dynamic_ops::DynamicOps,
-    lifecycle::Lifecycle,
-    list_builder::ListBuilder,
-};
+use crate::HasValue;
+use crate::codec::Codec;
+use crate::coders::{Decoder, Encoder};
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::lifecycle::Lifecycle;
+use crate::list_builder::ListBuilder;
 use std::fmt::{Debug, Display};
 
 /// A list codec type. For a type `A`, this codec serializes/deserializes a [`Vec<A>`].
@@ -125,14 +123,12 @@ pub(crate) const fn new_list_codec<C: Codec>(
 
 #[cfg(test)]
 mod test {
-    use crate::serialization::codec::*;
-    use crate::serialization::codecs::list::ListCodec;
-    use crate::serialization::codecs::primitive::{
-        BoolCodec, DoubleCodec, IntCodec, ShortCodec, StringCodec,
-    };
-    use crate::serialization::coders::Decoder;
-    use crate::serialization::coders::Encoder;
-    use crate::serialization::json_ops;
+    use crate::codec::*;
+    use crate::codecs::list::ListCodec;
+    use crate::codecs::primitive::{BoolCodec, DoubleCodec, IntCodec, ShortCodec, StringCodec};
+    use crate::coders::Decoder;
+    use crate::coders::Encoder;
+    use crate::json_ops;
     use crate::{assert_decode, assert_success};
     use serde_json::json;
 

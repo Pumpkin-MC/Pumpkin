@@ -2070,6 +2070,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-codecs"
+version = "0.1.0-dev+1.21.11"
+dependencies = [
+ "dashmap",
+ "serde_json",
+]
+
+[[package]]
 name = "pumpkin-config"
 version = "0.1.0-dev+1.21.11"
 dependencies = [
@@ -2090,14 +2098,6 @@ dependencies = [
  "pumpkin-nbt",
  "pumpkin-util",
  "serde",
-]
-
-[[package]]
-name = "pumpkin-datafixerupper"
-version = "0.1.0-dev+1.21.11"
-dependencies = [
- "dashmap",
- "serde_json",
 ]
 
 [[package]]
@@ -2131,7 +2131,7 @@ dependencies = [
  "bytes",
  "cesu8",
  "flate2",
- "pumpkin-datafixerupper",
+ "pumpkin-codecs",
  "serde",
  "tempfile",
  "thiserror 2.0.18",

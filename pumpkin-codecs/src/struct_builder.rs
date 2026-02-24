@@ -1,6 +1,6 @@
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
-use crate::serialization::lifecycle::Lifecycle;
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::lifecycle::Lifecycle;
 
 /// A trait specifying a builder to add key-value pairs in order to create a composite type.
 ///

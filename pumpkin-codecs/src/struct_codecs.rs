@@ -1,16 +1,16 @@
-use crate::impl_compressor;
-use crate::serialization::HasValue;
+use crate::HasValue;
 #[allow(unused_imports)] // Only used for documentation.
-use crate::serialization::codec::Codec;
-use crate::serialization::codecs::map_codec::MapCodecCodec;
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
-use crate::serialization::key_compressor::KeyCompressor;
-use crate::serialization::keyable::Keyable;
-use crate::serialization::map_codec::MapCodec;
-use crate::serialization::map_coders::{CompressorHolder, MapDecoder, MapEncoder};
-use crate::serialization::map_like::MapLike;
-use crate::serialization::struct_builder::StructBuilder;
+use crate::codec::Codec;
+use crate::codecs::map_codec::MapCodecCodec;
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::impl_compressor;
+use crate::key_compressor::KeyCompressor;
+use crate::keyable::Keyable;
+use crate::map_codec::MapCodec;
+use crate::map_coders::{CompressorHolder, MapDecoder, MapEncoder};
+use crate::map_like::MapLike;
+use crate::struct_builder::StructBuilder;
 use std::fmt::Display;
 
 /// A single field object to build a struct codec, which either takes an *owned* or *borrowed* [`MapCodec`] and a getter.
@@ -491,14 +491,14 @@ impl_struct_map_codec!(
 
 #[cfg(test)]
 mod test {
-    use crate::serialization::codec::*;
-    use crate::serialization::codecs::list::ListCodec;
-    use crate::serialization::codecs::primitive::StringCodec;
-    use crate::serialization::codecs::validated::ValidatedCodec;
-    use crate::serialization::coders::{Decoder, Encoder};
-    use crate::serialization::json_ops;
-    use crate::serialization::map_codec::for_getter;
-    use crate::serialization::struct_codecs::StructCodec3;
+    use crate::codec::*;
+    use crate::codecs::list::ListCodec;
+    use crate::codecs::primitive::StringCodec;
+    use crate::codecs::validated::ValidatedCodec;
+    use crate::coders::{Decoder, Encoder};
+    use crate::json_ops;
+    use crate::map_codec::for_getter;
+    use crate::struct_codecs::StructCodec3;
     use crate::{assert_decode, struct_codec};
     use serde_json::json;
 

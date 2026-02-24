@@ -1,8 +1,8 @@
-use crate::serialization::HasValue;
-use crate::serialization::codec::Codec;
-use crate::serialization::coders::{Decoder, Encoder};
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
+use crate::HasValue;
+use crate::codec::Codec;
+use crate::coders::{Decoder, Encoder};
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
 use std::fmt::Display;
 use std::sync::LazyLock;
 

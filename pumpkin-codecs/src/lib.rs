@@ -1,3 +1,5 @@
+extern crate core;
+
 use core::fmt;
 use std::fmt::{Display, Formatter};
 

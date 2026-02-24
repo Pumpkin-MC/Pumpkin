@@ -1,28 +1,28 @@
-use crate::serialization::HasValue;
-use crate::serialization::codecs::lazy::{LazyCodec, new_lazy_codec};
-use crate::serialization::codecs::list::{ListCodec, new_list_codec};
-use crate::serialization::codecs::primitive::{
+use crate::HasValue;
+use crate::codecs::lazy::{LazyCodec, new_lazy_codec};
+use crate::codecs::list::{ListCodec, new_list_codec};
+use crate::codecs::primitive::{
     BoolCodec, ByteBufferCodec, ByteCodec, DoubleCodec, FloatCodec, IntCodec, IntStreamCodec,
     LongCodec, LongStreamCodec, ShortCodec, StringCodec,
 };
-use crate::serialization::codecs::range::RangeCodec;
-use crate::serialization::codecs::range::new_range_codec;
-use crate::serialization::codecs::unbounded_map::{UnboundedMapCodec, new_unbounded_map_codec};
-use crate::serialization::codecs::validated::{ValidatedCodec, new_validated_codec};
-use crate::serialization::coders::{
+use crate::codecs::range::RangeCodec;
+use crate::codecs::range::new_range_codec;
+use crate::codecs::unbounded_map::{UnboundedMapCodec, new_unbounded_map_codec};
+use crate::codecs::validated::{ValidatedCodec, new_validated_codec};
+use crate::coders::{
     ComappedEncoderImpl, Decoder, Encoder, FlatComappedEncoderImpl, FlatMappedDecoderImpl,
     MappedDecoderImpl, comap, decoder_field, encoder_field, flat_comap, flat_map, map,
 };
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
-use crate::serialization::keyable::Keyable;
-use crate::serialization::map_codec::ComposedMapCodec;
-use crate::serialization::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
-use crate::serialization::map_codecs::optional_field::{
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::keyable::Keyable;
+use crate::map_codec::ComposedMapCodec;
+use crate::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
+use crate::map_codecs::optional_field::{
     DefaultValueProviderMapCodec, OptionalFieldMapCodec, new_default_value_provider_map_codec,
     new_optional_field_map_codec,
 };
-use crate::serialization::map_codecs::simple::{SimpleMapCodec, new_simple_map_codec};
+use crate::map_codecs::simple::{SimpleMapCodec, new_simple_map_codec};
 use std::fmt::Display;
 use std::hash::Hash;
 
@@ -386,11 +386,11 @@ where
 ///
 /// # Example
 /// ```rust
-/// use pumpkin_datafixerupper::serialization::codec::*;
-/// use pumpkin_datafixerupper::serialization::map_codec::*;
-/// use pumpkin_datafixerupper::serialization::codecs::primitive::*;
-/// use pumpkin_datafixerupper::serialization::struct_codecs::*;
-/// use pumpkin_datafixerupper::struct_codec;
+/// use pumpkin_codecs::codec::*;
+/// use pumpkin_codecs::map_codec::*;
+/// use pumpkin_codecs::codecs::primitive::*;
+/// use pumpkin_codecs::struct_codecs::*;
+/// use pumpkin_codecs::struct_codec;
 ///
 /// // An example struct to make a codec for.
 /// pub struct Person {
@@ -411,66 +411,62 @@ where
 #[macro_export]
 macro_rules! struct_codec {
     ($f1:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_1($f1, $f)
+        $crate::struct_codecs::struct_1($f1, $f)
     };
     ($f1:expr, $f2:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_2($f1, $f2, $f)
+        $crate::struct_codecs::struct_2($f1, $f2, $f)
     };
     ($f1:expr, $f2:expr, $f3:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_3($f1, $f2, $f3, $f)
+        $crate::struct_codecs::struct_3($f1, $f2, $f3, $f)
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_4($f1, $f2, $f3, $f4, $f)
+        $crate::struct_codecs::struct_4($f1, $f2, $f3, $f4, $f)
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_5($f1, $f2, $f3, $f4, $f5, $f)
+        $crate::struct_codecs::struct_5($f1, $f2, $f3, $f4, $f5, $f)
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_6($f1, $f2, $f3, $f4, $f5, $f6, $f)
+        $crate::struct_codecs::struct_6($f1, $f2, $f3, $f4, $f5, $f6, $f)
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f7:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_7($f1, $f2, $f3, $f4, $f5, $f6, $f7, $f)
+        $crate::struct_codecs::struct_7($f1, $f2, $f3, $f4, $f5, $f6, $f7, $f)
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f7:expr, $f8:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_8($f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f)
+        $crate::struct_codecs::struct_8($f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f)
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f7:expr, $f8:expr, $f9:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_9(
-            $f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f9, $f,
-        )
+        $crate::struct_codecs::struct_9($f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f9, $f)
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f7:expr, $f8:expr, $f9:expr, $f10:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_10(
-            $f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f9, $f10, $f,
-        )
+        $crate::struct_codecs::struct_10($f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f9, $f10, $f)
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f7:expr, $f8:expr, $f9:expr, $f10:expr, $f11:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_11(
+        $crate::struct_codecs::struct_11(
             $f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f9, $f10, $f11, $f,
         )
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f7:expr, $f8:expr, $f9:expr, $f10:expr, $f11:expr, $f12:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_12(
+        $crate::struct_codecs::struct_12(
             $f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f9, $f10, $f11, $f12, $f,
         )
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f7:expr, $f8:expr, $f9:expr, $f10:expr, $f11:expr, $f12:expr, $f13:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_13(
+        $crate::struct_codecs::struct_13(
             $f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f9, $f10, $f11, $f12, $f13, $f,
         )
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f7:expr, $f8:expr, $f9:expr, $f10:expr, $f11:expr, $f12:expr, $f13:expr, $f14:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_14(
+        $crate::struct_codecs::struct_14(
             $f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f9, $f10, $f11, $f12, $f13, $f14, $f,
         )
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f7:expr, $f8:expr, $f9:expr, $f10:expr, $f11:expr, $f12:expr, $f13:expr, $f14:expr, $f15:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_15(
+        $crate::struct_codecs::struct_15(
             $f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f9, $f10, $f11, $f12, $f13, $f14, $f15, $f,
         )
     };
     ($f1:expr, $f2:expr, $f3:expr, $f4:expr, $f5:expr, $f6:expr, $f7:expr, $f8:expr, $f9:expr, $f10:expr, $f11:expr, $f12:expr, $f13:expr, $f14:expr, $f15:expr, $f16:expr, $f:expr $(,)?) => {
-        $crate::serialization::struct_codecs::struct_16(
+        $crate::struct_codecs::struct_16(
             $f1, $f2, $f3, $f4, $f5, $f6, $f7, $f8, $f9, $f10, $f11, $f12, $f13, $f14, $f15, $f16,
             $f,
         )
@@ -565,11 +561,11 @@ where
 /// Asserts that the decoding of some value by a [`DynamicOps`] via a [`Codec`] is a success/error.
 /// # Example
 /// ```
-/// # use pumpkin_datafixerupper::assert_decode;
+/// # use pumpkin_codecs::assert_decode;
 /// # use serde_json::json;
-/// # use pumpkin_datafixerupper::serialization::json_ops;
-/// # use pumpkin_datafixerupper::serialization::codec;
-/// # use crate::pumpkin_datafixerupper::serialization::coders::Decoder;
+/// # use pumpkin_codecs::json_ops;
+/// # use pumpkin_codecs::codec;
+/// # use pumpkin_codecs::coders::Decoder;
 ///
 /// assert_decode!(codec::INT_CODEC, json!(2), &json_ops::INSTANCE, is_success);
 /// assert_decode!(codec::STRING_CODEC, json!("hello"), &json_ops::INSTANCE, is_success);
