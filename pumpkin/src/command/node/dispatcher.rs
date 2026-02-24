@@ -145,10 +145,10 @@ impl CommandDispatcher {
     /// Note that, at least for now with this system, there is no way to
     /// unregister a command. This is due to redirection to
     /// potentially unregistered (freed) nodes.
-    pub fn register_with_aliases(
+    pub fn register_with_aliases<S: AsRef<str>>(
         &mut self,
         command_node: impl Into<CommandDetachedNode>,
-        aliases: &[impl AsRef<str>],
+        aliases: &[S],
     ) -> CommandNodeId {
         let main_node_id = self.register(command_node);
 
