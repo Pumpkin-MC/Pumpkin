@@ -1,8 +1,8 @@
-use crate::serialization::HasValue;
-use crate::serialization::codec::Codec;
-use crate::serialization::coders::{Decoder, Encoder};
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
+use crate::HasValue;
+use crate::codec::Codec;
+use crate::coders::{Decoder, Encoder};
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
 use std::fmt::Display;
 
 /// A validator codec that validates any values before encoding and after decoding.
@@ -54,12 +54,12 @@ pub(crate) const fn new_validated_codec<C: Codec>(
 #[cfg(test)]
 mod test {
     use crate::assert_decode;
-    use crate::serialization::codec::*;
-    use crate::serialization::codecs::primitive::{IntCodec, StringCodec};
-    use crate::serialization::codecs::validated::ValidatedCodec;
-    use crate::serialization::coders::Decoder;
-    use crate::serialization::coders::Encoder;
-    use crate::serialization::json_ops;
+    use crate::codec::*;
+    use crate::codecs::primitive::{IntCodec, StringCodec};
+    use crate::codecs::validated::ValidatedCodec;
+    use crate::coders::Decoder;
+    use crate::coders::Encoder;
+    use crate::json_ops;
     use serde_json::json;
 
     #[test]

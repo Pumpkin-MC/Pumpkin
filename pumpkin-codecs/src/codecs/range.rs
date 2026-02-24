@@ -1,8 +1,8 @@
-use crate::serialization::HasValue;
-use crate::serialization::codec::Codec;
-use crate::serialization::coders::{Decoder, Encoder};
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
+use crate::HasValue;
+use crate::codec::Codec;
+use crate::coders::{Decoder, Encoder};
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
 use std::fmt::Display;
 
 /// A codec for a specific number range.
@@ -72,9 +72,9 @@ pub(crate) const fn new_range_codec<A: Display + PartialOrd + Clone, C: Codec<Va
 
 #[cfg(test)]
 mod test {
-    use crate::serialization::codec::*;
-    use crate::serialization::coders::*;
-    use crate::serialization::json_ops;
+    use crate::codec::*;
+    use crate::coders::*;
+    use crate::json_ops;
     use crate::{assert_decode, assert_success};
     use serde_json::json;
 

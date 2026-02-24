@@ -1,11 +1,9 @@
 use std::fmt::{Debug, Display};
 
-use crate::serialization::{data_result::DataResult, dynamic_ops::DynamicOps, map_like::MapLike};
+use crate::{Number, data_result::DataResult, dynamic_ops::DynamicOps, map_like::MapLike};
 
-use crate::serialization::lifecycle::Lifecycle;
-use crate::serialization::struct_builder::{
-    ResultStructBuilder, StringStructBuilder, StructBuilder,
-};
+use crate::lifecycle::Lifecycle;
+use crate::struct_builder::{ResultStructBuilder, StringStructBuilder, StructBuilder};
 use crate::{impl_string_struct_builder, impl_struct_builder};
 use serde_json::{Map, Value};
 
@@ -73,7 +71,7 @@ impl DynamicOps for JsonOps {
         Value::Null
     }
 
-    fn create_number(&self, n: super::Number) -> Self::Value {
+    fn create_number(&self, n: Number) -> Self::Value {
         n.into()
     }
 
@@ -112,7 +110,7 @@ impl DynamicOps for JsonOps {
         }
     }
 
-    fn get_number(&self, input: &Self::Value) -> DataResult<super::Number> {
+    fn get_number(&self, input: &Self::Value) -> DataResult<Number> {
         match input {
             Value::Number(_) => {
                 return input.try_into().map_or_else(
@@ -124,7 +122,7 @@ impl DynamicOps for JsonOps {
                 if self.compressed
                     && let Ok(r) = string.parse::<i32>()
                 {
-                    return DataResult::success(super::Number::Int(r));
+                    return DataResult::success(Number::Int(r));
                 }
             }
             _ => {}

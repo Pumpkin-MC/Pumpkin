@@ -1,17 +1,17 @@
-use crate::serialization::HasValue;
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
-use crate::serialization::key_compressor::KeyCompressor;
-use crate::serialization::keyable::Keyable;
-use crate::serialization::lifecycle::Lifecycle;
-use crate::serialization::map_codecs::validated::{ValidatedMapCodec, new_validated_map_codec};
-use crate::serialization::map_coders::{
+use crate::HasValue;
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::key_compressor::KeyCompressor;
+use crate::keyable::Keyable;
+use crate::lifecycle::Lifecycle;
+use crate::map_codecs::validated::{ValidatedMapCodec, new_validated_map_codec};
+use crate::map_coders::{
     ComappedMapEncoderImpl, CompressorHolder, FlatComappedMapEncoderImpl, FlatMappedMapDecoderImpl,
     MapDecoder, MapEncoder, MappedMapDecoderImpl, comap, flat_comap, flat_map, map,
 };
-use crate::serialization::map_like::MapLike;
-use crate::serialization::struct_builder::StructBuilder;
-use crate::serialization::struct_codecs::Field;
+use crate::map_like::MapLike;
+use crate::struct_builder::StructBuilder;
+use crate::struct_codecs::Field;
 use std::fmt::Display;
 use std::sync::Arc;
 

@@ -1,4 +1,5 @@
-use crate::serialization::{data_result::DataResult, dynamic_ops::DynamicOps};
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
 
 /// A trait for building lists.
 #[must_use]

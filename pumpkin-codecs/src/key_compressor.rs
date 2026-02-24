@@ -1,9 +1,9 @@
-use crate::serialization::dynamic_ops::DynamicOps;
+use crate::dynamic_ops::DynamicOps;
 use dashmap::DashMap;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
-/// A cache for all [`crate::serialization::map_coders::CompressorHolder`] structs.
+/// A cache for all [`crate::map_coders::CompressorHolder`] structs.
 ///
 /// This `HashMap` stores a `KeyCompressor` for each `MapCodec` instance.
 /// This way, we don't have to use `OnceLock` in every `MapCodec`, so we can easily

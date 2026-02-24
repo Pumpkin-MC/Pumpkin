@@ -1,10 +1,8 @@
-use crate::serialization::{
-    HasValue,
-    codec::Codec,
-    coders::{Decoder, Encoder},
-    data_result::DataResult,
-    dynamic_ops::DynamicOps,
-};
+use crate::HasValue;
+use crate::codec::Codec;
+use crate::coders::{Decoder, Encoder};
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
 
 // DFU types
 
@@ -141,9 +139,9 @@ impl_primitive_list_codec!(LongStreamCodec, i64, get_long_list, create_long_list
 
 #[cfg(test)]
 mod test {
-    use crate::serialization::codec::*;
-    use crate::serialization::coders::*;
-    use crate::serialization::json_ops;
+    use crate::codec::*;
+    use crate::coders::*;
+    use crate::json_ops;
     use crate::{assert_decode, assert_success};
     use serde_json::json;
 
