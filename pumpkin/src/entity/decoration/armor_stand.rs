@@ -355,7 +355,7 @@ impl EntityBase for ArmorStandEntity {
                 damage_type == DamageType::OUT_OF_WORLD || damage_type == DamageType::GENERIC_KILL;
 
             if bypasses_invulnerability {
-                entity.kill(caller).await;
+                self.kill(caller).await;
                 return false;
             }
 
@@ -370,7 +370,7 @@ impl EntityBase for ArmorStandEntity {
 
             if is_explosion {
                 self.on_break(entity).await;
-                entity.kill(caller).await;
+                self.kill(caller).await;
                 return false;
             }
 
@@ -400,7 +400,7 @@ impl EntityBase for ArmorStandEntity {
                     return false;
                 } else if player.is_creative() {
                     self.spawn_break_particles(entity).await;
-                    entity.kill(caller).await;
+                    self.kill(caller).await;
                     return true;
                 }
             }
@@ -429,7 +429,7 @@ impl EntityBase for ArmorStandEntity {
                     )
                     .await;
                 self.break_and_drop_items().await;
-                entity.kill(caller).await;
+                self.kill(caller).await;
             }
 
             true

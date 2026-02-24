@@ -103,10 +103,13 @@ impl<R: Read> NetworkReadExt for R {
 
     fn read_boxed_slice(&mut self, length: usize) -> Result<Box<[u8]>, ReadingError> {
         const MAX_SLICE_LENGTH: usize = 2 * 1024 * 64; // 64KB, largest valid MC packet
-        if !(1..=MAX_SLICE_LENGTH).contains(&length) {
+        if length > MAX_SLICE_LENGTH {
             return Err(ReadingError::Message(format!(
                 "read_boxed_slice: length {length} out of bounds"
             )));
+        }
+        if length == 0 {
+            return Ok(Box::new([]));
         }
         let mut buf = vec![0u8; length];
         self.read_exact(&mut buf)
