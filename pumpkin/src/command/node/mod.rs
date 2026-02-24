@@ -14,6 +14,19 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 /// Represents a [`CommandExecutor`]'s result.
+///
+/// If the command **ran successfully**, an [`Ok`] is returned containing an [`i32`].
+/// This represents the 'output value' of the command, which is *homologous* to the
+/// `int` that command executors in vanilla return **upon success**.
+///
+/// **You should choose the successful result as `1` if**:
+/// - you don't know what value to use for a success for your
+///   own commands, or
+/// - you don't understand what this value means, or
+/// - you just simply don't care about this value at all
+///
+/// If the command **fails**, an [`Err`] is returned, containing the [`CommandSyntaxError`]
+/// that led to this result.
 pub type CommandExecutorResult<'a> =
     Pin<Box<dyn Future<Output = Result<i32, CommandSyntaxError>> + Send + 'a>>;
 

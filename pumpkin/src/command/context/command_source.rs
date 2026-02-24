@@ -454,7 +454,6 @@ impl CommandSource {
     /// without reporting command failure directly.
     pub async fn send_error(&self, error: TextComponent) {
         if !self.silent && self.output.should_track_output() {
-            // TODO: Use `TextComponent::empty` instead of `TextComponent::text` when implemented
             self.output
                 .send_message(
                     TextComponent::empty()
