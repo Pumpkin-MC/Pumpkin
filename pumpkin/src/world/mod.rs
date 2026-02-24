@@ -2923,6 +2923,9 @@ impl World {
         flags: BlockFlags,
     ) -> Option<u16> {
         let (broken_block, broken_block_state) = self.get_block_and_state_id(position).await;
+        if is_air(broken_block_state) {
+            return None;
+        }
         let event = BlockBreakEvent::new(
             cause.clone(),
             broken_block,
