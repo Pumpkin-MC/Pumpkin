@@ -1,13 +1,13 @@
+use crate::HasValue;
+use crate::coders::{Decoder, Encoder};
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
 use crate::impl_compressor;
-use crate::serialization::HasValue;
-use crate::serialization::coders::{Decoder, Encoder};
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
-use crate::serialization::key_compressor::KeyCompressor;
-use crate::serialization::keyable::Keyable;
-use crate::serialization::map_coders::{CompressorHolder, MapDecoder, MapEncoder};
-use crate::serialization::map_like::MapLike;
-use crate::serialization::struct_builder::StructBuilder;
+use crate::key_compressor::KeyCompressor;
+use crate::keyable::Keyable;
+use crate::map_coders::{CompressorHolder, MapDecoder, MapEncoder};
+use crate::map_like::MapLike;
+use crate::struct_builder::StructBuilder;
 use std::fmt::Display;
 
 /// A [`MapEncoder`] that knows how to encode an entire field (key + value), where the value is encoded by an [`Encoder`].

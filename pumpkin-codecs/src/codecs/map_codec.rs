@@ -1,9 +1,9 @@
-use crate::serialization::HasValue;
-use crate::serialization::coders::{Decoder, Encoder};
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
-use crate::serialization::map_codec::MapCodec;
-use crate::serialization::struct_builder::StructBuilder;
+use crate::HasValue;
+use crate::coders::{Decoder, Encoder};
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::map_codec::MapCodec;
+use crate::struct_builder::StructBuilder;
 use std::fmt::Display;
 
 /// A [`Codec`] implementation for a [`MapCodec`].

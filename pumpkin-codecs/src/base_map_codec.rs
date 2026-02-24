@@ -1,10 +1,10 @@
-use crate::serialization::codec::Codec;
-use crate::serialization::coders::{Decoder, Encoder};
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
-use crate::serialization::lifecycle::Lifecycle;
-use crate::serialization::map_like::MapLike;
-use crate::serialization::struct_builder::StructBuilder;
+use crate::codec::Codec;
+use crate::coders::{Decoder, Encoder};
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::lifecycle::Lifecycle;
+use crate::map_like::MapLike;
+use crate::struct_builder::StructBuilder;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;

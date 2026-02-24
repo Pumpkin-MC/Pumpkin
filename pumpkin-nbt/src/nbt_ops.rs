@@ -1,15 +1,13 @@
 use crate::compound::NbtCompound;
 use crate::tag::NbtTag;
 use crate::{COMPOUND_ID, END_ID};
-use pumpkin_datafixerupper::serialization::Number;
-use pumpkin_datafixerupper::serialization::data_result::DataResult;
-use pumpkin_datafixerupper::serialization::dynamic_ops::DynamicOps;
-use pumpkin_datafixerupper::serialization::lifecycle::Lifecycle;
-use pumpkin_datafixerupper::serialization::map_like::MapLike;
-use pumpkin_datafixerupper::serialization::struct_builder::{
-    ResultStructBuilder, StringStructBuilder, StructBuilder,
-};
-use pumpkin_datafixerupper::{impl_get_list, impl_string_struct_builder, impl_struct_builder};
+use pumpkin_codecs::Number;
+use pumpkin_codecs::data_result::DataResult;
+use pumpkin_codecs::dynamic_ops::DynamicOps;
+use pumpkin_codecs::lifecycle::Lifecycle;
+use pumpkin_codecs::map_like::MapLike;
+use pumpkin_codecs::struct_builder::{ResultStructBuilder, StringStructBuilder, StructBuilder};
+use pumpkin_codecs::{impl_get_list, impl_string_struct_builder, impl_struct_builder};
 use std::iter::Map;
 use std::vec::IntoIter;
 use tracing::warn;
@@ -782,22 +780,22 @@ mod test {
     use crate::compound::NbtCompound;
     use crate::nbt_ops::{INSTANCE, ListCollector};
     use crate::tag::NbtTag;
-    use pumpkin_datafixerupper::serialization::codec::{
+    use pumpkin_codecs::codec::{
         BOOL_CODEC, BYTE_BUFFER_CODEC, BYTE_CODEC, ComapFlatMapCodec, DOUBLE_CODEC,
         DefaultedFieldCodec, FieldMapCodec, INT_CODEC, INT_STREAM_CODEC, LONG_CODEC,
         LONG_STREAM_CODEC, SHORT_CODEC, STRING_CODEC, UBYTE_CODEC, UINT_CODEC, UbyteCodec,
         UintCodec, comap_flat_map, field, optional_field_with_default, unbounded_list,
         unbounded_map, validate,
     };
-    use pumpkin_datafixerupper::serialization::codecs::list::ListCodec;
-    use pumpkin_datafixerupper::serialization::codecs::primitive::{ByteBufferCodec, StringCodec};
-    use pumpkin_datafixerupper::serialization::codecs::unbounded_map::UnboundedMapCodec;
-    use pumpkin_datafixerupper::serialization::codecs::validated::ValidatedCodec;
-    use pumpkin_datafixerupper::serialization::coders::{Decoder, Encoder};
-    use pumpkin_datafixerupper::serialization::data_result::DataResult;
-    use pumpkin_datafixerupper::serialization::map_codec::for_getter;
-    use pumpkin_datafixerupper::serialization::struct_codecs::{StructCodec2, StructCodec3};
-    use pumpkin_datafixerupper::struct_codec;
+    use pumpkin_codecs::codecs::list::ListCodec;
+    use pumpkin_codecs::codecs::primitive::{ByteBufferCodec, StringCodec};
+    use pumpkin_codecs::codecs::unbounded_map::UnboundedMapCodec;
+    use pumpkin_codecs::codecs::validated::ValidatedCodec;
+    use pumpkin_codecs::coders::{Decoder, Encoder};
+    use pumpkin_codecs::data_result::DataResult;
+    use pumpkin_codecs::map_codec::for_getter;
+    use pumpkin_codecs::struct_codec;
+    use pumpkin_codecs::struct_codecs::{StructCodec2, StructCodec3};
     use std::collections::HashMap;
 
     /// Convenience function to easily create an [`NbtTag::Compound`].

@@ -1,11 +1,11 @@
-use crate::serialization::HasValue;
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
-use crate::serialization::key_compressor::KeyCompressor;
-use crate::serialization::keyable::Keyable;
-use crate::serialization::lifecycle::Lifecycle;
-use crate::serialization::map_like::MapLike;
-use crate::serialization::struct_builder::{
+use crate::HasValue;
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::key_compressor::KeyCompressor;
+use crate::keyable::Keyable;
+use crate::lifecycle::Lifecycle;
+use crate::map_like::MapLike;
+use crate::struct_builder::{
     MapBuilder, ResultStructBuilder, StructBuilder, UniversalStructBuilder,
 };
 use crate::{impl_struct_builder, impl_universal_struct_builder};
@@ -236,7 +236,7 @@ macro_rules! impl_compressor {
             // We get the unique pointer of this holder.
             let key = std::ptr::from_ref::<Self>(self) as usize;
             // Then, we get the cache or store it.
-            $crate::serialization::key_compressor::KEY_COMPRESSOR_CACHE
+            $crate::key_compressor::KEY_COMPRESSOR_CACHE
                 .entry(key)
                 .or_insert_with(|| {
                     let mut c = KeyCompressor::new();

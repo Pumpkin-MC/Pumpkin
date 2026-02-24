@@ -1,12 +1,9 @@
+use crate::Number;
+use crate::data_result::DataResult;
+use crate::list_builder::{ListBuilder, new_list_builder_impl};
+use crate::map_like::MapLike;
+use crate::struct_builder::ResultStructBuilder;
 use std::{collections::HashMap, fmt::Display};
-
-use crate::serialization::struct_builder::ResultStructBuilder;
-use crate::serialization::{
-    Number,
-    data_result::DataResult,
-    list_builder::{ListBuilder, new_list_builder_impl},
-    map_like::MapLike,
-};
 
 /// Generates a default implementation for a create_*number* function.
 macro_rules! create_number_impl {

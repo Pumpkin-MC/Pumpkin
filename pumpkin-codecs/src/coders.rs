@@ -1,8 +1,7 @@
-use crate::serialization::map_codecs::field_coders::FieldDecoder;
-use crate::serialization::{
-    HasValue, data_result::DataResult, dynamic_ops::DynamicOps,
-    map_codecs::field_coders::FieldEncoder,
-};
+use crate::HasValue;
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::map_codecs::field_coders::{FieldDecoder, FieldEncoder};
 use std::fmt::Display;
 
 /// A trait describing the way to encode something of a type `Value` into something else  (`Value -> ?`).

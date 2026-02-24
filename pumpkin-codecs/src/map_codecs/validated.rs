@@ -1,12 +1,12 @@
-use crate::serialization::HasValue;
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
-use crate::serialization::key_compressor::KeyCompressor;
-use crate::serialization::keyable::Keyable;
-use crate::serialization::map_codec::MapCodec;
-use crate::serialization::map_coders::{CompressorHolder, MapDecoder, MapEncoder};
-use crate::serialization::map_like::MapLike;
-use crate::serialization::struct_builder::StructBuilder;
+use crate::HasValue;
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::key_compressor::KeyCompressor;
+use crate::keyable::Keyable;
+use crate::map_codec::MapCodec;
+use crate::map_coders::{CompressorHolder, MapDecoder, MapEncoder};
+use crate::map_like::MapLike;
+use crate::struct_builder::StructBuilder;
 use std::fmt::Display;
 use std::sync::Arc;
 

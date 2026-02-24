@@ -1,9 +1,10 @@
-use crate::serialization::base_map_codec::BaseMapCodec;
-use crate::serialization::codec::Codec;
-use crate::serialization::key_compressor::KeyCompressor;
-use crate::serialization::keyable::Keyable;
-use crate::serialization::map_coders::CompressorHolder;
-use crate::serialization::{Display, HasValue};
+use crate::HasValue;
+use crate::base_map_codec::BaseMapCodec;
+use crate::codec::Codec;
+use crate::key_compressor::KeyCompressor;
+use crate::keyable::Keyable;
+use crate::map_coders::CompressorHolder;
+use std::fmt::Display;
 
 use crate::impl_compressor;
 

@@ -1,11 +1,11 @@
-use crate::serialization::HasValue;
-use crate::serialization::base_map_codec::BaseMapCodec;
-use crate::serialization::codec::Codec;
-use crate::serialization::coders::{Decoder, Encoder};
-use crate::serialization::data_result::DataResult;
-use crate::serialization::dynamic_ops::DynamicOps;
-use crate::serialization::lifecycle::Lifecycle;
-use crate::serialization::struct_builder::StructBuilder;
+use crate::HasValue;
+use crate::base_map_codec::BaseMapCodec;
+use crate::codec::Codec;
+use crate::coders::{Decoder, Encoder};
+use crate::data_result::DataResult;
+use crate::dynamic_ops::DynamicOps;
+use crate::lifecycle::Lifecycle;
+use crate::struct_builder::StructBuilder;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -91,13 +91,13 @@ where
 #[cfg(test)]
 mod test {
     use crate::assert_decode;
-    use crate::serialization::codec::*;
-    use crate::serialization::codecs::primitive::{BoolCodec, IntCodec, StringCodec};
-    use crate::serialization::codecs::unbounded_map::UnboundedMapCodec;
-    use crate::serialization::codecs::validated::ValidatedCodec;
-    use crate::serialization::coders::Decoder;
-    use crate::serialization::coders::Encoder;
-    use crate::serialization::json_ops;
+    use crate::codec::*;
+    use crate::codecs::primitive::{BoolCodec, IntCodec, StringCodec};
+    use crate::codecs::unbounded_map::UnboundedMapCodec;
+    use crate::codecs::validated::ValidatedCodec;
+    use crate::coders::Decoder;
+    use crate::coders::Encoder;
+    use crate::json_ops;
     use serde_json::json;
     use std::collections::HashMap;
 

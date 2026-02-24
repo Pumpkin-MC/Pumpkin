@@ -42,7 +42,7 @@ impl Lifecycle {
 
 #[cfg(test)]
 mod test {
-    use crate::serialization::lifecycle::Lifecycle;
+    use crate::lifecycle::Lifecycle;
 
     #[test]
     fn add_lifecycles() {

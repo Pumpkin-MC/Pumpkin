@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-pumpkin-datafixerupper.workspace = true
+pumpkin-codecs.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 bytes.workspace = true

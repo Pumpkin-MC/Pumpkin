@@ -1,4 +1,4 @@
-use crate::serialization::lifecycle::Lifecycle;
+use crate::lifecycle::Lifecycle;
 
 /// Collects the partial value and message from a `DataResult` if it is an error.
 /// Returns an [`Option`] of the provided `DataResult`.
