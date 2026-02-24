@@ -2496,13 +2496,9 @@ impl Player {
     }
 
     /// Add experience points to the player.
-    pub async fn add_experience_points(&self, added_points: i32) {
-        let mut added_points = added_points;
+    pub async fn add_experience_points(self: &Arc<Self>, mut added_points: i32) {
         if let Some(server) = self.world().server.upgrade() {
-            let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) else {
-                return;
-            };
-            let event = PlayerExpChangeEvent::new(player, added_points);
+            let event = PlayerExpChangeEvent::new(self.clone(), added_points);
             let event = server.plugin_manager.fire(event).await;
             added_points = event.amount;
         }
@@ -3632,7 +3628,9 @@ impl InventoryPlayer for Player {
             debug!("Player::award_experience called with amount={amount}");
             if amount > 0 {
                 debug!("Player: adding {amount} experience points");
-                self.add_experience_points(amount).await;
+                if let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) {
+                    player.add_experience_points(amount).await;
+                }
             }
         })
     }
