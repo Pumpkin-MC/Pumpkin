@@ -30,7 +30,11 @@ use crate::{
     net::{ClientPlatform, java::JavaClient},
     plugin::{
         block::block_break::BlockBreakEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
+        player::{
+            player_join::PlayerJoinEvent,
+            player_leave::PlayerLeaveEvent,
+            player_respawn::PlayerRespawnEvent,
+        },
     },
     server::Server,
 };
@@ -2178,6 +2182,12 @@ impl World {
 
         // Send teleport packet after at least the center chunk was delivered
         player.request_teleport(position, yaw, pitch).await;
+
+        // Fire the PlayerRespawnEvent
+        if let Some(server) = self.server.upgrade() {
+            let event = PlayerRespawnEvent::new(player.clone());
+            server.plugin_manager.fire(event).await;
+        }
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.
