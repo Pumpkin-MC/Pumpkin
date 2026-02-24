@@ -21,6 +21,7 @@ pub mod segmented;
 pub mod short_plant;
 pub mod sugar_cane;
 pub mod tall_plant;
+pub mod wither_rose;
 
 trait PlantBlockBase {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
