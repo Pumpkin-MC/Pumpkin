@@ -410,7 +410,7 @@ impl CommandDispatcher {
         if let Some(context) = error.context {
             let i = context.input.len().min(context.cursor);
 
-            let mut error_text = TextComponent::text("")
+            let mut error_text = TextComponent::empty()
                 .color(Color::Named(NamedColor::Gray))
                 .click_event(ClickEvent::SuggestCommand {
                     command: format!("/{command}").into(),

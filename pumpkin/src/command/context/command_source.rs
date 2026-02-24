@@ -120,7 +120,7 @@ impl CommandSource {
             position: Vector3::default(),
             rotation: Vector2::default(),
             name: String::new(),
-            display_name: TextComponent::text(""),
+            display_name: TextComponent::empty(),
             server: None,
             silent: false,
             command_result_taker: ResultValueTaker::new(),
@@ -457,7 +457,7 @@ impl CommandSource {
             // TODO: Use `TextComponent::empty` instead of `TextComponent::text` when implemented
             self.output
                 .send_message(
-                    TextComponent::text("")
+                    TextComponent::empty()
                         .add_child(error)
                         .color(Color::Named(NamedColor::Red)),
                 )

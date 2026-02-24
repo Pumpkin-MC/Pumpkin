@@ -138,7 +138,7 @@ impl HelpCommandExecutor {
 
             let header_text = format!(" Help - Page {page}/{total_pages} ");
 
-            let mut message = TextComponent::text("")
+            let mut message = TextComponent::empty()
                 .add_child(
                     TextComponent::text("-".repeat((52 - header_text.len() - 3) / 2) + " ")
                         .color_named(NamedColor::Yellow),
@@ -212,7 +212,7 @@ impl HelpCommandExecutor {
             let command_with_slash = format!("/{command}");
             let header_text = format!(" Help - /{command} ");
 
-            let mut message = TextComponent::text("")
+            let mut message = TextComponent::empty()
                 .add_child(
                     TextComponent::text("-".repeat((52 - header_text.len()) / 2) + " ")
                         .color_named(NamedColor::Yellow),

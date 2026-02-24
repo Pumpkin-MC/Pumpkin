@@ -310,7 +310,7 @@ impl CommandSender {
                     spawn_point,
                     Vector2::new(0.0, 0.0),
                     String::new(),
-                    TextComponent::text(""),
+                    TextComponent::empty(),
                     server.clone(),
                 )
             }
