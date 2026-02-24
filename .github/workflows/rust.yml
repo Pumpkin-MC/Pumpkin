@@ -112,6 +112,23 @@ jobs:
           - v3
         toolchain:
           - stable
+        exclude:
+          - os: ubuntu-24.04-arm
+            cpu_target: v2
+          - os: ubuntu-24.04-arm
+            cpu_target: v3
+          - os: windows-11-arm
+            cpu_target: v2
+          - os: windows-11-arm
+            cpu_target: v3
+          - os: macos-latest
+            cpu_target: v2
+          - os: macos-latest
+            cpu_target: v3
+          - os: macos-15-intel
+            cpu_target: v2
+          - os: macos-15-intel
+            cpu_target: v3
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
@@ -121,10 +138,16 @@ jobs:
         if: ${{ (matrix.cpu_target != 'default' && runner.arch == 'X64') || (matrix.cpu_target == 'default' && runner.arch != 'X64') }}
         run: |
           if [ "${{ matrix.cpu_target }}" == "v2" ]; then
-            export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v2"
+            export TARGET_CPU_FLAG="-C target-cpu=x86-64-v2"
+            export TARGET_ARCH_NAME="x86-64-v2"
           elif [ "${{ matrix.cpu_target }}" == "v3" ]; then
-            export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
+            export TARGET_CPU_FLAG="-C target-cpu=x86-64-v3"
+            export TARGET_ARCH_NAME="x86-64-v3"
+          else
+            export TARGET_CPU_FLAG=""
+            export TARGET_ARCH_NAME="${{ runner.arch }}"
           fi
+          export RUSTFLAGS="$RUSTFLAGS $TARGET_CPU_FLAG"
           cargo build --verbose --release
       - name: Prepare artifacts
         shell: bash
@@ -132,15 +155,9 @@ jobs:
         run: |
           mkdir -p dist
           if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; else EXT=""; fi
-          if [ "${{ matrix.cpu_target }}" == "v2" ]; then
-            target_arch="x86-64-v2"
-          elif [ "${{ matrix.cpu_target }}" == "v3" ]; then
-            target_arch="x86-64-v3"
-          else
-            target_arch="${{ runner.arch }}"
-          fi
-          cp "target/release/pumpkin$EXT" "dist/pumpkin-${target_arch}-${{ runner.os }}$EXT"
+          cp "target/release/pumpkin$EXT" "dist/pumpkin-${TARGET_ARCH_NAME}-${{ runner.os }}$EXT"
       - name: Export executable
+        if: ${{ (matrix.cpu_target != 'default' && runner.arch == 'X64') || (matrix.cpu_target == 'default' && runner.arch != 'X64') }}
         uses: actions/upload-artifact@v6
         with:
           name: pumpkin-${{ matrix.cpu_target }}-${{ runner.arch }}-${{ runner.os }}
@@ -160,22 +177,3 @@ jobs:
           pattern: "**/pumpkin-*"
           path: dist/
           merge-multiple: true
-      - name: Generate release notes
-        run: |
-          tree dist/
-          echo "From commit: $(git rev-parse --short HEAD)" > dist/RELEASE.md
-          echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
-          cat dist/RELEASE.md
-      - name: Update the nightly tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag --force nightly && git push --force origin tag nightly
-      - name: Draft a nightly github release
-        uses: softprops/action-gh-release@v2
-        with:
-          prerelease: true
-          files: dist/pumpkin*
-          tag_name: nightly
-          name: Nightly Build
-          body_path: dist/RELEASE.md
