@@ -167,6 +167,14 @@ impl CommandDispatcher {
             // If the reference contains an executor, we clone that over.
             if let Some(executor) = &reference.command {
                 alias = alias.executes_arc(executor.clone());
+
+                // We must add the appropriate requirements as well.
+                // This is because if we just simply set an executor, then
+                // any player can execute it without any requirements (including permissions)!
+                //
+                // For example, if an alias `/s` was added for `/stop` (hypothetically),
+                // any player can stop the server with `/s`!
+                alias = alias.overwrite_requirements(reference.requirements.clone());
             }
 
             // And we redirect to the node.

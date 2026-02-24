@@ -61,7 +61,7 @@ impl ArgumentType for HelpArgumentType {
                 // We use greedy phrases for now
                 // as the `?` command as the argument
                 // doesn't work for the unquoted word one.
-                let text = StringArgumentType::GreedyPhrase.parse(reader)?;
+                let mut text = StringArgumentType::GreedyPhrase.parse(reader)?;
 
                 {
                     let mut integer_text = text.as_str();
@@ -76,6 +76,10 @@ impl ArgumentType for HelpArgumentType {
                         reader.set_cursor(reader_start);
                         return Err(error);
                     }
+                }
+
+                if text.starts_with('/') {
+                    text.remove(0);
                 }
 
                 Ok(HelpArgument::Command(text))

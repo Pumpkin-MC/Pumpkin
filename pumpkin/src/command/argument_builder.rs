@@ -195,6 +195,10 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
     #[must_use]
     fn requires(self, requirement: impl Into<Requirement>) -> Self;
 
+    /// Overwrites the current requirements of this node to a new value.
+    #[must_use]
+    fn overwrite_requirements(self, requirements: Requirements) -> Self;
+
     /// Gets the redirect modifier of the node this [`ArgumentBuilder`] is building.
     #[must_use]
     fn redirect_modifier(&self) -> RedirectModifier;
@@ -247,6 +251,11 @@ macro_rules! impl_boilerplate_argument_builder {
 
         fn requires(mut self, requirement: impl Into<Requirement>) -> Self {
             self.common.requirements.0.push(requirement.into());
+            self
+        }
+
+        fn overwrite_requirements(mut self, requirements: Requirements) -> Self {
+            self.common.requirements = requirements;
             self
         }
 
