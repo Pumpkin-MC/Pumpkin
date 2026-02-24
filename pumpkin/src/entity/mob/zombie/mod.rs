@@ -7,7 +7,7 @@ use crate::entity::ai::goal::step_and_destroy_block::{
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
 use crate::world::World;
@@ -65,6 +65,12 @@ impl NBTStorage for ZombieEntity {}
 impl Mob for ZombieEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.tick_sunburn().await;
+        })
     }
 }
 

@@ -733,6 +733,13 @@ impl Player {
 
         player_attack_sound(&pos, &world, attack_type).await;
 
+        // Send crit particles to clients
+        if matches!(attack_type, AttackType::Critical) {
+            world
+                .send_entity_status(victim_entity, EntityStatus::KineticAttack)
+                .await;
+        }
+
         self.living_entity.last_attacking_id.store(
             victim_entity.entity_id,
             std::sync::atomic::Ordering::Relaxed,

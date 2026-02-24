@@ -7,6 +7,7 @@ use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
@@ -237,6 +238,53 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
+    }
+
+    /// Applies sunburn damage to undead mobs exposed to daylight.
+    /// Call from `mob_tick` for zombies, skeletons, and similar undead.
+    fn tick_sunburn(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let entity = &mob.living_entity.entity;
+            let world = entity.world.load();
+
+            // Only during daytime (ticks 0-12000 of the 24000-tick cycle)
+            let time = world.level_time.lock().await.query_daytime();
+            if time >= 12000 {
+                return;
+            }
+
+            // Not in water
+            if entity.touching_water.load(Relaxed) {
+                return;
+            }
+
+            // Check if mob has a helmet (any item in head slot)
+            let head_slot = EquipmentSlot::HEAD;
+            let has_helmet = {
+                let equipment = mob.living_entity.entity_equipment.lock().await;
+                let head_item = equipment.get(&head_slot);
+                !head_item.lock().await.is_empty()
+            };
+            if has_helmet {
+                return;
+            }
+
+            // Check if mob is exposed to sky (top block at this X,Z is at or below mob's feet)
+            let pos = entity.pos.load();
+            let top_y = world
+                .get_top_block(pumpkin_util::math::vector2::Vector2::new(
+                    pos.x.floor() as i32,
+                    pos.z.floor() as i32,
+                ))
+                .await;
+            if pos.y < top_y as f64 {
+                return;
+            }
+
+            // Set on fire
+            entity.set_on_fire_for(8.0);
+        })
     }
 
     fn post_tick(&self) -> EntityBaseFuture<'_, ()> {
