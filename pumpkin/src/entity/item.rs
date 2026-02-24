@@ -441,11 +441,8 @@ impl EntityBase for ItemEntity {
         Box::pin(async {
             if self.pickup_delay.load(Ordering::Relaxed) > 0
                 || player.living_entity.health.load() <= 0.0
+                || player.is_spectator()
             {
-                return;
-            }
-
-            if player.is_spectator() {
                 return;
             }
 
