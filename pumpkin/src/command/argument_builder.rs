@@ -23,7 +23,6 @@ struct CommonArgumentBuilder {
     pub requirements: Requirements,
     pub target: Option<Redirection>,
     pub modifier: RedirectModifier,
-    pub permission: Option<Cow<'static, str>>,
     pub forks: bool,
 }
 
@@ -36,7 +35,6 @@ impl CommonArgumentBuilder {
             requirements: Requirements::new(),
             target: None,
             modifier: RedirectModifier::KeepSource,
-            permission: None,
             forks: false,
         }
     }
@@ -146,7 +144,13 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
 
     /// Sets the command to execute for the node being built.
     #[must_use]
-    fn executes(self, command: impl CommandExecutor + 'static) -> Self;
+    fn executes(self, command: impl CommandExecutor + 'static) -> Self {
+        self.executes_arc(Arc::new(command))
+    }
+
+    /// Sets the command to execute for the node being built.
+    #[must_use]
+    fn executes_arc(self, command: Arc<dyn CommandExecutor + 'static>) -> Self;
 
     /// Sets the redirect target of the node being built to another, without a modifier.
     #[must_use]
@@ -236,8 +240,8 @@ macro_rules! impl_boilerplate_argument_builder {
             self.common.command.clone()
         }
 
-        fn executes(mut self, command: impl CommandExecutor + 'static) -> Self {
-            self.common.command = Some(Arc::new(command));
+        fn executes_arc(mut self, command: Arc<dyn CommandExecutor + 'static>) -> Self {
+            self.common.command = Some(command);
             self
         }
 
@@ -358,7 +362,6 @@ impl ArgumentBuilder<LiteralDetachedNode> for LiteralArgumentBuilder {
             self.common.requirements,
             self.common.target,
             self.common.modifier,
-            self.common.permission,
             self.common.forks,
         );
         node.children = self.common.arguments;
@@ -378,7 +381,6 @@ impl ArgumentBuilder<CommandDetachedNode> for CommandArgumentBuilder {
             self.common.requirements,
             self.common.target,
             self.common.modifier,
-            self.common.permission,
             self.common.forks,
         );
         node.children = self.common.arguments;
@@ -398,7 +400,6 @@ impl ArgumentBuilder<ArgumentDetachedNode> for RequiredArgumentBuilder {
             self.common.requirements,
             self.common.target,
             self.common.modifier,
-            self.common.permission,
             self.common.forks,
         );
         node.children = self.common.arguments;

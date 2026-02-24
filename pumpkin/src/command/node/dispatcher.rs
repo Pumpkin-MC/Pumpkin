@@ -1,3 +1,4 @@
+use crate::command::argument_builder::{ArgumentBuilder, CommandArgumentBuilder};
 use crate::command::context::command_context::{
     CommandContext, CommandContextBuilder, ContextChain,
 };
@@ -7,6 +8,7 @@ use crate::command::errors::error_types::{
     DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR, DISPATCHER_UNKNOWN_ARGUMENT,
     DISPATCHER_UNKNOWN_COMMAND, LiteralCommandErrorType,
 };
+use crate::command::node::Redirection;
 use crate::command::node::attached::{CommandNodeId, NodeId};
 use crate::command::node::detached::CommandDetachedNode;
 use crate::command::node::tree::{NodeIdClassification, ROOT_NODE_ID, Tree};
@@ -132,6 +134,53 @@ impl CommandDispatcher {
     /// potentially unregistered (freed) nodes.
     pub fn register(&mut self, command_node: impl Into<CommandDetachedNode>) -> CommandNodeId {
         self.tree.add_child_to_root(command_node)
+    }
+
+    /// Registers a command which can then be dispatched, along with its
+    /// aliases as the second argument. Returns the local ID of the node attached to the tree.
+    ///
+    /// Behind the scenes, `redirect` and `executes_arc` calls are made
+    /// for each provided alias. This method is for convenience.
+    ///
+    /// Note that, at least for now with this system, there is no way to
+    /// unregister a command. This is due to redirection to
+    /// potentially unregistered (freed) nodes.
+    pub fn register_with_aliases(
+        &mut self,
+        command_node: impl Into<CommandDetachedNode>,
+        aliases: &[impl AsRef<str>],
+    ) -> CommandNodeId {
+        let main_node_id = self.register(command_node);
+
+        let main_node = &self.tree[main_node_id];
+        let description = &main_node.meta.description;
+
+        let mut built_nodes = Vec::with_capacity(aliases.len());
+
+        for alias in aliases {
+            let mut alias =
+                CommandArgumentBuilder::new(alias.as_ref().to_string(), description.clone());
+
+            // We take a look at the original node's owned data.
+            let reference = &main_node.owned;
+
+            // If the reference contains an executor, we clone that over.
+            if let Some(executor) = &reference.command {
+                alias = alias.executes_arc(executor.clone());
+            }
+
+            // And we redirect to the node.
+            alias = alias.redirect(Redirection::Local(main_node_id.into()));
+
+            // Build the nodes.
+            built_nodes.push(alias.build());
+        }
+
+        for alias in built_nodes {
+            self.register(alias);
+        }
+
+        main_node_id
     }
 
     /// Executes the given command with the provided source, returning a result of execution.
@@ -572,11 +621,10 @@ impl CommandDispatcher {
     ) -> BTreeMap<&str, (&str, Box<str>)> {
         let mut commands: BTreeMap<&str, (&str, Box<str>)> = BTreeMap::new();
 
-        for (command_node_id, mut usage) in self.get_usage_of_commands(source).await {
+        for (command_node_id, usage) in self.get_usage_of_commands(source).await {
             let meta = &self.tree[command_node_id].meta;
             let command_name = meta.literal.as_ref();
             let command_description = meta.description.as_ref();
-            usage = format!("/{usage}");
             commands.insert(command_name, (command_description, usage.into_boxed_str()));
         }
 
@@ -655,6 +703,11 @@ impl CommandDispatcher {
         // We know the root DOES NOT have an executor, so we pass false to `is_optional`.
         self.get_usage_recursive(command_node.into(), source, false, false, None)
             .await
+            .map(|mut usage| {
+                // We add a slash as the prefix.
+                usage.insert(0, '/');
+                usage
+            })
     }
 
     /// Returns the usage of each child of the given node (permitted for the given source).
@@ -687,7 +740,11 @@ impl CommandDispatcher {
             .await
             .into_iter()
             // This is safe because every child of the root child is a command node.
-            .map(|(k, v)| (CommandNodeId(k.0), v))
+            .map(|(k, mut v)| {
+                // We add a slash at the beginning for command usage.
+                v.insert(0, '/');
+                (CommandNodeId(k.0), v)
+            })
             .collect()
     }
 

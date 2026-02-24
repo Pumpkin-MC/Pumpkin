@@ -89,7 +89,6 @@ impl RootAttachedNode {
                 global_id: GlobalNodeId::new(),
                 requirements: Requirements::new(),
                 modifier: RedirectModifier::KeepSource,
-                permission: None,
                 forks: false,
                 command: None,
             },

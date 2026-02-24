@@ -5,7 +5,7 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::{CommandErrorType, INTEGER_TOO_HIGH, INTEGER_TOO_LOW};
 use crate::command::node::dispatcher::CommandDispatcher;
-use crate::command::node::{CommandExecutor, CommandExecutorResult, Redirection};
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::string_reader::StringReader;
 use pumpkin_protocol::java::client::play::StringProtoArgBehavior;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
@@ -198,13 +198,14 @@ impl HelpCommandExecutor {
         Box::pin(async move {
             let dispatcher = context.server().command_dispatcher.read().await;
 
-            let Some((usage, description)) = dispatcher
+            let Some((description, usage)) = dispatcher
                 .get_permitted_command_usage(&context.source, command)
                 .await
             else {
                 return Err(FAILED_ERROR_TYPE.create_without_context());
             };
 
+            let command_with_slash = format!("/{command}");
             let header_text = format!(" Help - /{command} ");
 
             let mut message = TextComponent::text("")
@@ -223,13 +224,13 @@ impl HelpCommandExecutor {
                     TextComponent::text("Command: ")
                         .color_named(NamedColor::Aqua)
                         .add_child(
-                            TextComponent::text(format!("/{command}"))
+                            TextComponent::text(command_with_slash.clone())
                                 .color_named(NamedColor::Gold)
                                 .bold(),
                         )
                         .add_child(TextComponent::text("\n").color_named(NamedColor::White))
                         .click_event(ClickEvent::SuggestCommand {
-                            command: format!("/{command}").into(),
+                            command: command_with_slash.clone().into(),
                         }),
                 )
                 .add_child(
@@ -248,7 +249,7 @@ impl HelpCommandExecutor {
                                 .color_named(NamedColor::White),
                         )
                         .click_event(ClickEvent::SuggestCommand {
-                            command: command.to_string().into(),
+                            command: command_with_slash.into(),
                         }),
                 );
 
@@ -283,26 +284,11 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
         ))
         .expect("Permission should have registered successfully");
 
-    let node = dispatcher.register(
+    dispatcher.register_with_aliases(
         command("help", DESCRIPTION)
             .requires(PERMISSION)
             .then(argument(ARG, HelpArgumentType).executes(HelpCommandExecutor))
             .executes(HelpCommandExecutor),
-    );
-    dispatcher.register(
-        command("h", DESCRIPTION)
-            .requires(PERMISSION)
-            // This redirects to the .then() calls in the above node.
-            .redirect(Redirection::Local(node.into()))
-            // This is for the no-argument execution.
-            .executes(HelpCommandExecutor),
-    );
-    dispatcher.register(
-        command("?", DESCRIPTION)
-            .requires(PERMISSION)
-            // This redirects to the .then() calls in the above node.
-            .redirect(Redirection::Local(node.into()))
-            // This is for the no-argument execution.
-            .executes(HelpCommandExecutor),
+        &["h", "?"],
     );
 }

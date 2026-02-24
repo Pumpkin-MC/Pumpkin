@@ -158,7 +158,6 @@ pub struct OwnedNodeData {
     pub modifier: RedirectModifier,
     pub forks: bool,
     pub command: Option<Command>,
-    pub permission: Option<Cow<'static, str>>,
 }
 
 /// Represents the extra metadata of a node storing a literal.
