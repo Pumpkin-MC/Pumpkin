@@ -285,13 +285,13 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
 
     let node = dispatcher.register(
         command("help", DESCRIPTION)
-            .requires_permission(PERMISSION)
+            .requires(PERMISSION)
             .then(argument(ARG, HelpArgumentType).executes(HelpCommandExecutor))
             .executes(HelpCommandExecutor),
     );
     dispatcher.register(
         command("h", DESCRIPTION)
-            .requires_permission(PERMISSION)
+            .requires(PERMISSION)
             // This redirects to the .then() calls in the above node.
             .redirect(Redirection::Local(node.into()))
             // This is for the no-argument execution.
@@ -299,7 +299,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
     );
     dispatcher.register(
         command("?", DESCRIPTION)
-            .requires_permission(PERMISSION)
+            .requires(PERMISSION)
             // This redirects to the .then() calls in the above node.
             .redirect(Redirection::Local(node.into()))
             // This is for the no-argument execution.

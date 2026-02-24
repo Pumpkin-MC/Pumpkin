@@ -249,10 +249,7 @@ impl Tree {
     /// Returns whether the given node is able to be used by a given source.
     #[must_use]
     pub async fn can_use(&self, node: NodeId, source: &CommandSource) -> bool {
-        source
-            .has_permission_from_option(self[node].permission())
-            .await
-            && self[node].requirement().evaluate(source).await
+        self[node].requirements().evaluate(source).await
     }
 
     /// Finds ambiguities of input and gives them to the [`AmbiguityConsumer`].

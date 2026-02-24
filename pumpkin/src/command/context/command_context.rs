@@ -240,7 +240,7 @@ impl<'a> ContextChain<'a> {
     ) -> Result<Vec<Arc<CommandSource>>, CommandSyntaxError> {
         let source_modifier = &modifier.modifier;
 
-        if matches!(source_modifier, RedirectModifier::OneSource) {
+        if matches!(source_modifier, RedirectModifier::KeepSource) {
             return Ok(vec![source.clone()]);
         }
 
@@ -436,7 +436,7 @@ impl<'a> CommandContextBuilder<'a> {
             nodes: Vec::new(),
             range: StringRange::at(start),
             child: None,
-            modifier: RedirectModifier::OneSource,
+            modifier: RedirectModifier::KeepSource,
             forks: false,
             command: None,
         }

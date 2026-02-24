@@ -5,12 +5,11 @@ use crate::command::node::detached::GlobalNodeId;
 use crate::command::node::tree::ROOT_NODE_ID;
 use crate::command::node::{
     ArgumentNodeMetadata, Command, CommandNodeMetadata, LiteralNodeMetadata, NodeMetadata,
-    OwnedNodeData, RedirectModifier, Redirection, Requirement,
+    OwnedNodeData, RedirectModifier, Redirection, Requirements,
 };
 use crate::command::string_reader::StringReader;
 use pumpkin_util::text::TextComponent;
 use rustc_hash::FxHashMap;
-use std::borrow::Cow;
 use std::num::NonZero;
 
 /// Represents the unique integral number
@@ -88,8 +87,8 @@ impl RootAttachedNode {
         Self {
             owned: OwnedNodeData {
                 global_id: GlobalNodeId::new(),
-                requirement: Requirement::AlwaysQualified,
-                modifier: RedirectModifier::OneSource,
+                requirements: Requirements::new(),
+                modifier: RedirectModifier::KeepSource,
                 permission: None,
                 forks: false,
                 command: None,
@@ -275,49 +274,15 @@ impl AttachedNode {
         }
     }
 
-    /// Gets the requirement for this node to be run.
-    ///
-    /// Note that this does not account for the permission required; that is separately
-    /// stored. Use the [`permission`] method to index it.
-    ///
-    /// [`permission`]: AttachedNode::permission
+    /// Gets all the requirements required for this node to be run.
     #[must_use]
-    pub const fn requirement(&self) -> &Requirement {
-        &self.owned_node_data_ref().requirement
+    pub const fn requirements(&self) -> &Requirements {
+        &self.owned_node_data_ref().requirements
     }
 
-    /// Sets the requirement for this node to be run to a value.
-    ///
-    /// Note that this does not account for the permission required; that is separately
-    /// stored. Use the [`set_permission`] method to set that field's value instead.
-    ///
-    /// [`set_permission`]: AttachedNode::set_permission
-    pub fn set_requirement(&mut self, requirement: Requirement) {
-        self.owned_node_data_mut_ref().requirement = requirement;
-    }
-
-    /// Gets the permission required for this node to be run.
-    ///
-    /// Note that this does not account for the extra requirement required; that is separately
-    /// stored. Use the [`requirement`] method to index it.
-    ///
-    /// [`requirement`]: AttachedNode::requirement
-    #[must_use]
-    pub fn permission(&self) -> Option<&str> {
-        self.owned_node_data_ref().permission.as_deref()
-    }
-
-    /// Sets the permission required for this node to be run to a value.
-    ///
-    /// Note that this does not account for the extra requirement required; that is separately
-    /// stored. Use the [`set_requirement`] method to set that field's value instead.
-    ///
-    /// [`set_requirement`]: AttachedNode::set_requirement
-    pub fn set_permission<P>(&mut self, permission: Option<P>)
-    where
-        P: Into<Cow<'static, str>>,
-    {
-        self.owned_node_data_mut_ref().permission = permission.map(Into::into);
+    /// Overrides all the requirements for this node to be run to a value.
+    pub fn set_requirement(&mut self, requirements: Requirements) {
+        self.owned_node_data_mut_ref().requirements = requirements;
     }
 
     /// Gets the modifier for this node to be run.

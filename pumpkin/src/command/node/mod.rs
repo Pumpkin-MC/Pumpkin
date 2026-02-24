@@ -47,7 +47,7 @@ pub type RedirectModifierExecutor =
 #[derive(Clone)]
 pub enum RedirectModifier {
     /// Always returns only the source from the given context.
-    OneSource,
+    KeepSource,
 
     /// Returns multiple [`CommandSource`]s from one context via
     /// custom behavior.
@@ -60,7 +60,7 @@ impl RedirectModifier {
     #[must_use]
     pub fn sources<'c>(&self, command_context: &'c CommandContext) -> RedirectModifierResult<'c> {
         match self {
-            Self::OneSource => Box::pin(async move { Ok(vec![command_context.source.clone()]) }),
+            Self::KeepSource => Box::pin(async move { Ok(vec![command_context.source.clone()]) }),
             Self::Custom(function) => function(command_context),
         }
     }
@@ -69,28 +69,16 @@ impl RedirectModifier {
 /// Represents the result of a node requirement as a pinned boxed [`Future`].
 pub type RequirementResult<'a> = Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
 
-/// A structure that returns if the source is qualified enough to run the command.
+/// A predicate that returns if the provided source satisfies it.
 #[derive(Clone)]
-pub enum Requirement {
-    /// Always returns `true`, i.e. no matter the source,
-    /// it will always be qualified enough to run the command,
-    /// according to this requirement.
-    AlwaysQualified,
-
-    /// The given source must satisfy the condition to
-    /// be allowed to run the command.
-    Condition(Arc<dyn Fn(&CommandSource) -> RequirementResult<'_> + Send + Sync>),
-}
+pub struct Requirement(pub Arc<dyn Fn(&CommandSource) -> RequirementResult<'_> + Send + Sync>);
 
 impl Requirement {
     /// Evaluates the given condition, returning whether the
     /// given [`CommandSource`] satisfies this requirement.
     #[must_use]
     pub fn evaluate<'a>(&'a self, command_source: &'a CommandSource) -> RequirementResult<'a> {
-        match self {
-            Self::AlwaysQualified => Box::pin(async { true }),
-            Self::Condition(condition) => condition(command_source),
-        }
+        self.0(command_source)
     }
 }
 
@@ -99,7 +87,66 @@ where
     F: Fn(&CommandSource) -> RequirementResult<'_> + Send + Sync + 'static,
 {
     fn from(value: F) -> Self {
-        Self::Condition(Arc::new(value))
+        Self(Arc::new(value))
+    }
+}
+
+// Permissions
+impl From<String> for Requirement {
+    fn from(value: String) -> Self {
+        Self(Arc::new({
+            let permission = Arc::new(value);
+
+            move |source| {
+                let cloned_permission = permission.clone();
+                Box::pin(async move { source.has_permission(&cloned_permission).await })
+            }
+        }))
+    }
+}
+
+impl From<&'static str> for Requirement {
+    fn from(value: &'static str) -> Self {
+        Self(Arc::new(move |source| {
+            Box::pin(async move { source.has_permission(value).await })
+        }))
+    }
+}
+
+/// A structure that returns if the source is qualified enough to run the command.
+#[derive(Clone)]
+pub struct Requirements(pub Vec<Requirement>);
+
+impl Requirements {
+    /// Creates a new `Requirements` with no requirements in it.
+    /// If used, this will always return `true` when evaluated.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    /// Evaluates the given condition, returning whether the
+    /// given [`CommandSource`] satisfies all contained requirements.
+    #[must_use]
+    pub fn evaluate<'a>(&'a self, command_source: &'a CommandSource) -> RequirementResult<'a> {
+        let futures = self
+            .0
+            .iter()
+            .map(|predicate| predicate.evaluate(command_source));
+        Box::pin(async move {
+            for future in futures {
+                if !future.await {
+                    return false;
+                }
+            }
+            true
+        })
+    }
+}
+
+impl Default for Requirements {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -107,7 +154,7 @@ where
 #[derive(Clone)]
 pub struct OwnedNodeData {
     pub global_id: GlobalNodeId,
-    pub requirement: Requirement,
+    pub requirements: Requirements,
     pub modifier: RedirectModifier,
     pub forks: bool,
     pub command: Option<Command>,

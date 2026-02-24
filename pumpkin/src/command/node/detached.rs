@@ -1,7 +1,7 @@
 use crate::command::argument_types::argument_type::AnyArgumentType;
 use crate::command::node::{
     ArgumentNodeMetadata, Command, CommandNodeMetadata, LiteralNodeMetadata, NodeMetadata,
-    OwnedNodeData, RedirectModifier, Redirection, Requirement,
+    OwnedNodeData, RedirectModifier, Redirection, Requirements,
 };
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
@@ -60,7 +60,7 @@ impl LiteralDetachedNode {
         global_id: GlobalNodeId,
         literal: impl Into<Cow<'static, str>>,
         command: Option<Command>,
-        requirement: Requirement,
+        requirements: Requirements,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
         permission: Option<P>,
@@ -72,7 +72,7 @@ impl LiteralDetachedNode {
         Self {
             owned: OwnedNodeData {
                 global_id,
-                requirement,
+                requirements,
                 modifier,
                 forks,
                 command,
@@ -110,7 +110,7 @@ impl CommandDetachedNode {
         literal: impl Into<Cow<'static, str>>,
         description: impl Into<Cow<'static, str>>,
         command: Option<Command>,
-        requirement: Requirement,
+        requirements: Requirements,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
         permission: Option<P>,
@@ -122,7 +122,7 @@ impl CommandDetachedNode {
         Self {
             owned: OwnedNodeData {
                 global_id,
-                requirement,
+                requirements,
                 modifier,
                 forks,
                 command,
@@ -157,7 +157,7 @@ impl ArgumentDetachedNode {
         name: impl Into<Cow<'static, str>>,
         argument_type: Arc<dyn AnyArgumentType>,
         command: Option<Command>,
-        requirement: Requirement,
+        requirements: Requirements,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
         permission: Option<P>,
@@ -169,7 +169,7 @@ impl ArgumentDetachedNode {
         Self {
             owned: OwnedNodeData {
                 global_id,
-                requirement,
+                requirements,
                 modifier,
                 forks,
                 command,
