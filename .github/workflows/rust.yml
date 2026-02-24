@@ -106,15 +106,11 @@ jobs:
             arch_variant: x86-64-v2
           - os: macos-latest
             arch_variant: x86-64-v3
+          # Exclude x86-64-v2 variant from macOS Intel as we want x86-64-v3
+          - os: macos-15-intel
+            arch_variant: standard
           - os: macos-15-intel
             arch_variant: x86-64-v2
-          - os: macos-15-intel
-            arch_variant: x86-64-v3
-          # Exclude x86-64-v2/v3 variants from non-x86_64 runners when not needed
-          - os: ubuntu-latest
-            arch_variant: standard
-          - os: windows-latest
-            arch_variant: standard
 
     steps:
       - uses: actions/checkout@v6
@@ -146,7 +142,6 @@ jobs:
             windows-latest,
             windows-11-arm,
             macos-latest,
-            macos-15-intel,
           ]
         toolchain:
           - stable
@@ -166,6 +161,37 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: pumpkin-standard-${{ runner.os }}-${{ runner.arch }}
+          compression-level: 9
+          path: dist/pumpkin-*
+
+  build_release_macos_intel_v3:
+    name: Build project in release (macOS Intel x86-64-v3)
+    runs-on: macos-15-intel
+    needs: [build_and_test]
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Set CPU flags for x86-64-v3
+        shell: bash
+        run: |
+          export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
+          echo "RUSTFLAGS=$RUSTFLAGS" >> $GITHUB_ENV
+      - name: Build Release (x86-64-v3)
+        run: cargo build --verbose --release
+      - name: Prepare artifacts (x86-64-v3)
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/release/pumpkin" "dist/pumpkin-x86-64-v3-macOS-X64"
+      - name: Export executable (x86-64-v3)
+        uses: actions/upload-artifact@v6
+        with:
+          name: pumpkin-x86-64-v3-macOS-X64
           compression-level: 9
           path: dist/pumpkin-*
 
@@ -246,7 +272,7 @@ jobs:
   draft_release:
     permissions:
       contents: write
-    needs: [build_release_standard, build_release_x86_64_v2, build_release_x86_64_v3]
+    needs: [build_release_standard, build_release_x86_64_v2, build_release_x86_64_v3, build_release_macos_intel_v3]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:
