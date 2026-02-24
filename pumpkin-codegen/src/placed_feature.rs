@@ -217,6 +217,20 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
 }
 
 pub fn value_to_block_predicate(v: &Value) -> TokenStream {
+    // Handle bare string values: "#minecraft:some_tag" is a block-tag predicate,
+    // "true" (or any non-# string) is AlwaysTrue.
+    if let Some(s) = v.as_str() {
+        if let Some(tag) = s.strip_prefix('#') {
+            return quote! {
+                BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                    offset: OffsetBlocksBlockPredicate { offset: None },
+                    tag: #tag.to_string(),
+                })
+            };
+        }
+        return quote! { BlockPredicate::AlwaysTrue };
+    }
+
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
         "minecraft:true" | "" => quote! { BlockPredicate::AlwaysTrue },

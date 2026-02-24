@@ -90,6 +90,8 @@ pub fn build() -> TokenStream {
                 simple_random_selector::SimpleRandomFeature,
                 spring_feature::{BlockWrapper, SpringFeatureFeature},
                 tree::TreeFeature,
+                vegetation_patch::VegetationPatchFeature,
+                waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature,
                 tree::trunk::{TrunkPlacer, TrunkType,
                     bending::BendingTrunkPlacer,
                     cherry::CherryTrunkPlacer,
@@ -376,8 +378,55 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:glowstone_blob" => quote! { ConfiguredFeature::GlowstoneBlob(crate::generation::feature::features::glowstone_blob::GlowstoneBlobFeature {}) },
         "minecraft:freeze_top_layer" => quote! { ConfiguredFeature::FreezeTopLayer(crate::generation::feature::features::freeze_top_layer::FreezeTopLayerFeature {}) },
         "minecraft:vines" => quote! { ConfiguredFeature::Vines(crate::generation::feature::features::vines::VinesFeature) },
-        "minecraft:vegetation_patch" => quote! { ConfiguredFeature::VegetationPatch(crate::generation::feature::features::vegetation_patch::VegetationPatchFeature {}) },
-        "minecraft:waterlogged_vegetation_patch" => quote! { ConfiguredFeature::WaterloggedVegetationPatch(crate::generation::feature::features::waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature {}) },
+        "minecraft:vegetation_patch" | "minecraft:waterlogged_vegetation_patch" => {
+            let replaceable = value_to_block_predicate(&config["replaceable"]);
+            let ground_state = value_to_block_state_provider(&config["ground_state"]);
+            let vegetation_feature = value_to_inline_placed_feature(&config["vegetation_feature"]);
+            let surface = match config["surface"].as_str().unwrap_or("floor") {
+                "ceiling" => quote! { pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Ceiling },
+                _ => quote! { pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor },
+            };
+            let depth = value_to_int_provider(&config["depth"]);
+            let extra_bottom = config["extra_bottom_block_chance"].as_f64().unwrap_or(0.0) as f32;
+            let vert_range = config["vertical_range"].as_i64().unwrap_or(0) as i32;
+            let veg_chance = config["vegetation_chance"].as_f64().unwrap_or(0.0) as f32;
+            let xz = value_to_int_provider(&config["xz_radius"]);
+            let extra_edge = config["extra_edge_column_chance"].as_f64().unwrap_or(0.0) as f32;
+
+            if type_str == "minecraft:vegetation_patch" {
+                quote! {
+                    ConfiguredFeature::VegetationPatch(vegetation_patch::VegetationPatchFeature {
+                        replaceable: #replaceable,
+                        ground_state: #ground_state,
+                        vegetation_feature: Box::new(#vegetation_feature),
+                        surface: #surface,
+                        depth: #depth,
+                        extra_bottom_block_chance: #extra_bottom,
+                        vertical_range: #vert_range,
+                        vegetation_chance: #veg_chance,
+                        xz_radius: #xz,
+                        extra_edge_column_chance: #extra_edge,
+                    })
+                }
+            } else {
+                quote! {
+                    ConfiguredFeature::WaterloggedVegetationPatch(waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature {
+                        base: vegetation_patch::VegetationPatchFeature {
+                            replaceable: #replaceable,
+                            ground_state: #ground_state,
+                            vegetation_feature: Box::new(#vegetation_feature),
+                            surface: #surface,
+                            depth: #depth,
+                            extra_bottom_block_chance: #extra_bottom,
+                            vertical_range: #vert_range,
+                            vegetation_chance: #veg_chance,
+                            xz_radius: #xz,
+                            extra_edge_column_chance: #extra_edge,
+                        }
+                    })
+                }
+            }
+        },
         "minecraft:root_system" => quote! { ConfiguredFeature::RootSystem(crate::generation::feature::features::root_system::RootSystemFeature {}) },
         "minecraft:multiface_growth" => quote! { ConfiguredFeature::MultifaceGrowth(crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {}) },
         "minecraft:underwater_magma" => quote! { ConfiguredFeature::UnderwaterMagma(crate::generation::feature::features::underwater_magma::UnderwaterMagmaFeature {}) },
