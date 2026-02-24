@@ -21,7 +21,6 @@ impl PickUpBlockGoal {
 impl Goal for PickUpBlockGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            // Vanilla check order: carried_block → mob_griefing → random(toGoalTicks(20))
             if self.enderman.get_carried_block().is_some() {
                 return false;
             }
@@ -32,7 +31,6 @@ impl Goal for PickUpBlockGoal {
                 return false;
             }
 
-            // Vanilla: nextInt(toGoalTicks(20)) == 0 → toGoalTicks(20) = 10
             if mob.get_random().random_range(0..to_goal_ticks(20)) != 0 {
                 return false;
             }
@@ -46,7 +44,6 @@ impl Goal for PickUpBlockGoal {
             let entity = &mob.get_mob_entity().living_entity.entity;
             let pos = entity.pos.load();
 
-            // Vanilla: one random candidate per tick (not a loop)
             let (bx, by, bz) = {
                 let mut rng = mob.get_random();
                 (
@@ -83,11 +80,9 @@ impl Goal for PickUpBlockGoal {
                 return;
             }
 
-            // Vanilla stores the block's DEFAULT state, not the in-world state
             let default_state_id = block.default_state.id;
 
-            // Pick up the block: set air at position, carry the block
-            // TODO: Emit game event (BLOCK_DESTROY) — needs game event system
+            // TODO: Emit game event (BLOCK_DESTROY)
             world
                 .set_block_state(&target_pos, 0, BlockFlags::NOTIFY_ALL)
                 .await;

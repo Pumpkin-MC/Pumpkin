@@ -42,6 +42,10 @@ use crate::entity::{
 
 const SPEED_BOOST: f64 = 0.15;
 
+pub const ENDERMAN_EYE_HEIGHT: f64 = 2.55;
+pub const ENDERMAN_BODY_Y_OFFSET: f64 = 1.45;
+pub const PLAYER_EYE_HEIGHT: f64 = 1.62;
+
 fn is_projectile_damage(dt: DamageType) -> bool {
     let (names, _) = pumpkin_data::tag::DamageType::MINECRAFT_IS_PROJECTILE;
     names.contains(&dt.message_id)
@@ -108,13 +112,11 @@ impl EndermanEntity {
         mob_arc
     }
 
-    /// Teleport to a random position within +/-32 horizontal, [-32,+31] vertical.
-    /// Vanilla: `(nextDouble() - 0.5) * 64.0` for X/Z, `nextInt(64) - 32` for Y.
     pub async fn teleport_randomly(&self) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let pos = entity.pos.load();
         let (x, y, z) = {
-            let mut rng = rand::rng();
+            let mut rng = self.get_random();
             (
                 pos.x + (rng.random_range(0.0..1.0) - 0.5) * 64.0,
                 pos.y + (rng.random_range(0i32..64) - 32) as f64,
@@ -125,17 +127,13 @@ impl EndermanEntity {
         self.teleport_to(x, y, z).await
     }
 
-    /// Teleport towards a target entity (matching vanilla `teleportTo(Entity)`).
-    /// Vanilla: direction = (enderman - entity), then pos + random - dir*16 (towards target).
     pub async fn teleport_towards(&self, target: &dyn EntityBase) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let pos = entity.pos.load();
         let target_pos = target.get_entity().pos.load();
 
-        // Direction from target TO enderman (vanilla: this - entity)
         let dx = pos.x - target_pos.x;
-        // Vanilla: getBodyY(0.5) for enderman, getEyeY() for target
-        let dy = (pos.y + 1.45) - (target_pos.y + 1.62);
+        let dy = (pos.y + ENDERMAN_BODY_Y_OFFSET) - (target_pos.y + PLAYER_EYE_HEIGHT);
         let dz = pos.z - target_pos.z;
         let dist = (dx * dx + dy * dy + dz * dz).sqrt();
 
@@ -146,9 +144,8 @@ impl EndermanEntity {
         let nx = dx / dist;
         let ny = dy / dist;
         let nz = dz / dist;
-        // Vanilla: pos + random_offset - normalized_dir * 16 (SUBTRACT = towards target)
         let (x, y, z) = {
-            let mut rng = rand::rng();
+            let mut rng = self.get_random();
             (
                 pos.x + (rng.random_range(0.0..1.0) - 0.5) * 8.0 - nx * 16.0,
                 pos.y + (rng.random_range(0i32..16) - 8) as f64 - ny * 16.0,
@@ -168,8 +165,6 @@ impl EndermanEntity {
         let max_y = f64::from(world.dimension.min_y + world.dimension.height - 1);
         let mut target_y = y.clamp(min_y, max_y);
 
-        // TODO: Use BlockView.findSupportingBlockPos instead of only scanning downward.
-        // Current approach teleports into caves if target Y is inside terrain.
         let block_x = x.floor() as i32;
         let mut block_y = target_y.floor() as i32;
         let block_z = z.floor() as i32;
@@ -192,7 +187,6 @@ impl EndermanEntity {
             return false;
         }
 
-        // Vanilla: check if fluid is water (endermen CAN teleport to lava)
         let dest_pos = BlockPos::new(block_x, block_y, block_z);
         let dest_fluid = world.get_fluid(&dest_pos).await;
         if dest_fluid.has_tag(&tag::Fluid::MINECRAFT_WATER) {
@@ -251,8 +245,7 @@ impl EndermanEntity {
 
         if target.is_some() {
             self.set_angry(true).await;
-            // TODO: Use attribute modifiers instead of direct arithmetic on movement_speed.
-            // If base speed is modified between add/remove, the speed will drift.
+            // TODO: use attribute modifiers instead of direct speed arithmetic
             if !self.speed_boosted.swap(true, Ordering::Relaxed) {
                 let living = &self.mob_entity.living_entity;
                 let current = living.movement_speed.load();
@@ -318,7 +311,6 @@ impl EndermanEntity {
     }
 
     pub async fn is_player_staring(&self, player: &Player) -> bool {
-        // Carved pumpkin on head prevents aggro
         let equipment = player.living_entity.entity_equipment.lock().await;
         let head_item = equipment.get(&EquipmentSlot::HEAD);
         let head_stack = head_item.lock().await;
@@ -330,12 +322,11 @@ impl EndermanEntity {
 
         let entity = &self.mob_entity.living_entity.entity;
         let enderman_pos = entity.pos.load();
-        // Enderman eye height: standing height is 2.9, eye height offset ~2.55
-        let enderman_eye_y = enderman_pos.y + 2.55;
+        let enderman_eye_y = enderman_pos.y + ENDERMAN_EYE_HEIGHT;
 
         let player_entity = player.get_entity();
         let player_pos = player_entity.pos.load();
-        let player_eye_y = player_pos.y + 1.62;
+        let player_eye_y = player_pos.y + PLAYER_EYE_HEIGHT;
 
         let pitch = player_entity.pitch.load().to_radians();
         let yaw = -player_entity.yaw.load().to_radians();
@@ -362,7 +353,6 @@ impl EndermanEntity {
 
         let dot = look_dir.x * dir_x + look_dir.y * dir_y + look_dir.z * dir_z;
 
-        // Vanilla angle tolerance: dot > 1 - 0.025 / distance
         if dot <= 1.0 - 0.025 / distance {
             return false;
         }
@@ -409,12 +399,7 @@ impl Mob for EndermanEntity {
         })
     }
 
-    // TODO: Daytime sunlight avoidance teleport — needs brightness at eyes API & sky visibility check
-    // TODO: Carried block drop on death — needs death/loot drop system
-    // TODO: Angerable system (anger decay, persistence) — needs full Angerable trait
-    // TODO: UniversalAngerGoal — needs Angerable trait
-    // TODO: Ambient sound override (scream when angry) — needs ambient sound hook on Mob trait
-    // TODO: Despawn rules — needs despawn system
+    // TODO: sunlight avoidance, carried block drop on death, angerable system, ambient sound override
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.mob_entity.living_entity.entity;
@@ -422,7 +407,7 @@ impl Mob for EndermanEntity {
                 return;
             }
 
-            // TODO: Also check rain (isTouchingWaterOrRain)
+            // TODO: also check rain
             if entity.touching_water.load(Ordering::SeqCst) {
                 self.mob_entity
                     .living_entity
@@ -433,7 +418,7 @@ impl Mob for EndermanEntity {
             let pos = entity.pos.load();
             let world = entity.world.load();
             let particles = {
-                let mut rng = rand::rng();
+                let mut rng = self.get_random();
                 std::array::from_fn::<_, 2, _>(|_| {
                     (
                         Vector3::new(
@@ -471,7 +456,6 @@ impl Mob for EndermanEntity {
                     }
                 }
             }
-            // TODO: Handle water potion damage (damageFromPotion) — potions need special handling
             true
         })
     }

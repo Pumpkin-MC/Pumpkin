@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::{Controls, Goal, GoalFuture};
 use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
-use crate::entity::mob::enderman::EndermanEntity;
+use crate::entity::mob::enderman::{EndermanEntity, PLAYER_EYE_HEIGHT};
 use crate::entity::player::Player;
 
 pub struct ChasePlayerGoal {
@@ -31,13 +31,11 @@ impl Goal for ChasePlayerGoal {
                 return false;
             };
 
-            // Check if target is a player
             let Some(player) = target.get_player() else {
                 self.target = None;
                 return false;
             };
 
-            // Vanilla: squaredDistanceTo > 256.0 means > 16 blocks — too far
             let entity = &mob_entity.living_entity.entity;
             let mob_pos = entity.pos.load();
             let target_pos = target.get_entity().pos.load();
@@ -51,7 +49,6 @@ impl Goal for ChasePlayerGoal {
                 return false;
             }
 
-            // Get an Arc<Player> from the world
             let world = entity.world.load();
             let closest = world.get_closest_player(mob_pos, 256.0);
             if let Some(p) = closest
@@ -66,7 +63,6 @@ impl Goal for ChasePlayerGoal {
         })
     }
 
-    // Vanilla default shouldContinue() calls canStart() — re-check stare conditions
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let Some(player) = &self.target else {
@@ -87,7 +83,6 @@ impl Goal for ChasePlayerGoal {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            // Stop moving - freeze in place
             let mut navigator = mob.get_mob_entity().navigator.lock().await;
             navigator.stop();
         })
@@ -97,15 +92,12 @@ impl Goal for ChasePlayerGoal {
         Box::pin(async move {
             if let Some(player) = &self.target {
                 let player_pos = player.get_entity().pos.load();
-                let eye_y = player_pos.y + 1.62;
-                // Use LookControl for smooth rotation (vanilla: getLookControl().lookAt())
+                let eye_y = player_pos.y + PLAYER_EYE_HEIGHT;
                 let mut look_control = mob.get_mob_entity().look_control.lock().await;
                 look_control.look_at(mob, player_pos.x, eye_y, player_pos.z);
             }
         })
     }
-
-    // Vanilla does NOT override should_run_every_tick — defaults to false
 
     fn controls(&self) -> Controls {
         Controls::JUMP | Controls::MOVE

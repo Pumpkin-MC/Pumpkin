@@ -22,7 +22,6 @@ impl PlaceBlockGoal {
 impl Goal for PlaceBlockGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            // Vanilla check order: carried_block → mob_griefing → random(toGoalTicks(2000))
             if self.enderman.get_carried_block().is_none() {
                 return false;
             }
@@ -33,7 +32,6 @@ impl Goal for PlaceBlockGoal {
                 return false;
             }
 
-            // Vanilla: nextInt(toGoalTicks(2000)) == 0 → toGoalTicks(2000) = 1000
             if mob.get_random().random_range(0..to_goal_ticks(2000)) != 0 {
                 return false;
             }
@@ -51,7 +49,6 @@ impl Goal for PlaceBlockGoal {
             let entity = &mob.get_mob_entity().living_entity.entity;
             let pos = entity.pos.load();
 
-            // Vanilla: one random candidate per tick (not a loop)
             let (bx, by, bz) = {
                 let mut rng = mob.get_random();
                 (
@@ -72,7 +69,6 @@ impl Goal for PlaceBlockGoal {
             let below_pos = BlockPos::new(bx, by - 1, bz);
             let below_block = world.get_block(&below_pos).await;
             let below_state = world.get_block_state(&below_pos).await;
-            // Vanilla: below must be solid, full cube, and not bedrock
             if !below_state.is_solid()
                 || !below_state.is_full_cube()
                 || below_block == &Block::BEDROCK
@@ -80,8 +76,7 @@ impl Goal for PlaceBlockGoal {
                 return;
             }
 
-            // TODO: Validate canPlaceAt for the carried block — needs block placement API
-            // TODO: Check for entity collisions at target position — needs entity query in bounding box
+            // TODO: Validate canPlaceAt and check entity collisions at target position
             world
                 .set_block_state(&target_pos, block_state_id, BlockFlags::NOTIFY_ALL)
                 .await;
