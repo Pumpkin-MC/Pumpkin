@@ -13,7 +13,6 @@ mod attributes;
 mod biome;
 mod bitsets;
 mod block;
-mod block_state_remap;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
@@ -32,7 +31,6 @@ mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
-mod item_id_remap;
 mod jukebox_song;
 pub mod loot;
 mod message_type;
@@ -47,6 +45,7 @@ mod potion_brewing;
 mod recipe_remainder;
 mod recipes;
 mod registry;
+mod remap;
 mod scoreboard_slot;
 mod screen;
 mod sound;
@@ -56,6 +55,7 @@ mod structures;
 mod tag;
 mod tracked_data;
 mod translations;
+mod version;
 mod world_event;
 
 pub const OUT_DIR: &str = "../pumpkin-data/src/generated";
@@ -65,7 +65,7 @@ pub fn main() {
 
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
 
-    let build_functions: Vec<(BuilderFn, &str)> = vec![
+    let mut build_functions: Vec<(BuilderFn, &str)> = vec![
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),
@@ -90,9 +90,7 @@ pub fn main() {
         (message_type::build, "message_type.rs"),
         (spawn_egg::build, "spawn_egg.rs"),
         (block::build, "block.rs"),
-        (block_state_remap::build, "block_state_remap.rs"),
         (item::build, "item.rs"),
-        (item_id_remap::build, "item_id_remap.rs"),
         (structures::build, "structures.rs"),
         (chunk_gen_settings::build, "chunk_gen_settings.rs"),
         (fluid::build, "fluid.rs"),
@@ -119,6 +117,7 @@ pub fn main() {
         (placed_feature::build, "placed_features_generated.rs"),
         (configured_feature::build, "configured_features_generated.rs"),
     ];
+    build_functions.extend(remap::build());
 
     build_functions.par_iter().for_each(|(build_fn, file)| {
         println!("Parsing {}", file);

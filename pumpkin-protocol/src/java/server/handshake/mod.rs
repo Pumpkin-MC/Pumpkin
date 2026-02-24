@@ -25,8 +25,7 @@ pub struct SHandShake {
 }
 
 impl ServerPacket for SHandShake {
-    fn read(read: impl Read) -> Result<Self, ReadingError> {
-        let mut read = read;
+    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             protocol_version: read.get_var_int()?,
             server_address: read.get_string_bounded(255)?,

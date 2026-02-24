@@ -3,64 +3,56 @@ use quote::{format_ident, quote};
 use serde::Deserialize;
 use std::{collections::BTreeMap, fs};
 
+use crate::version::MinecraftVersion;
+
+const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
+
 #[derive(Deserialize)]
 pub struct Packets {
+    #[allow(dead_code)]
     version: u32,
     serverbound: BTreeMap<String, BTreeMap<String, i32>>,
     clientbound: BTreeMap<String, BTreeMap<String, i32>>,
 }
 
-pub fn build() -> TokenStream {
-    // 2. Parse the protocol files
-    let packets_7: Packets = serde_json::from_str(
-        &fs::read_to_string("../assets/packet/1_21_7_packets.json").expect("1.21.7 file missing"),
-    )
-    .unwrap();
+pub(crate) fn build() -> TokenStream {
+    let assets = [
+        (MinecraftVersion::V_1_21, "1_21_packets.json"),
+        (MinecraftVersion::V_1_21_2, "1_21_2_packets.json"),
+        (MinecraftVersion::V_1_21_4, "1_21_4_packets.json"),
+        (MinecraftVersion::V_1_21_5, "1_21_5_packets.json"),
+        (MinecraftVersion::V_1_21_6, "1_21_6_packets.json"),
+        (MinecraftVersion::V_1_21_7, "1_21_7_packets.json"),
+        (MinecraftVersion::V_1_21_9, "1_21_9_packets.json"),
+        (MinecraftVersion::V_1_21_11, "1_21_11_packets.json"),
+    ];
 
-    let packets_11: Packets = serde_json::from_str(
-        &fs::read_to_string("../assets/packet/1_21_11_packets.json").expect("1.21.11 file missing"),
-    )
-    .unwrap();
+    // Parse available packet files into a BTreeMap keyed by MinecraftVersion
+    let mut versions = BTreeMap::new();
+    for (ver, file) in assets {
+        let path = format!("../assets/packet/{file}");
+        println!("cargo:rerun-if-changed={path}");
 
-    let latest_version = packets_11.version;
-    // 3. Generate mapped constants for both directions
-    let serverbound_consts = generate_mapped_consts(&packets_11, &packets_7, true);
-    let clientbound_consts = generate_mapped_consts(&packets_11, &packets_7, false);
+        let content = fs::read_to_string(&path)
+            .unwrap_or_else(|_| panic!("Failed to read packet JSON file: {path}"));
+        let parsed: Packets = serde_json::from_str(&content)
+            .unwrap_or_else(|e| panic!("Failed to parse {path}: {e}"));
+
+        versions.insert(ver, parsed);
+    }
+
+    // Generate PacketId struct definition and impl blocks dynamically based on versions
+    let packet_id_struct = generate_struct(&versions);
+    let serverbound_consts = generate_mapped_consts(&versions, true);
+    let clientbound_consts = generate_mapped_consts(&versions, false);
 
     quote!(
         use pumpkin_util::version::MinecraftVersion;
 
-        pub const CURRENT_MC_PROTOCOL: u32 = #latest_version;
+        pub const CURRENT_MC_VERSION: MinecraftVersion = #LATEST_VERSION;
+        pub const LOWEST_SUPPORTED_MC_VERSION: MinecraftVersion = MinecraftVersion::V_1_21;
 
-        pub struct PacketId {
-            pub latest_id: i32,
-            pub v1_21_7_id: i32,
-        }
-
-        impl PacketId {
-            /// Converts the latest packet ID to the ID used in the requested version.
-            /// Returns -1 if the packet does not exist in that version.
-            pub fn to_id(&self, version: MinecraftVersion) -> i32 {
-                match version {
-                    MinecraftVersion::V_1_21_11 => self.latest_id,
-                    MinecraftVersion::V_1_21_7 => self.v1_21_7_id,
-                    // Default to latest for unrecognized/unmapped versions
-                    _ => self.latest_id,
-                }
-            }
-        }
-
-        impl PartialEq<i32> for PacketId {
-            fn eq(&self, other: &i32) -> bool {
-                self.latest_id == *other
-            }
-        }
-
-        impl PartialEq<PacketId> for i32 {
-            fn eq(&self, other: &PacketId) -> bool {
-                *self == other.latest_id
-            }
-        }
+        #packet_id_struct
 
         // We place the constants directly into these modules
         pub mod serverbound {
@@ -73,39 +65,97 @@ pub fn build() -> TokenStream {
     )
 }
 
-fn generate_mapped_consts(latest: &Packets, v7: &Packets, is_serverbound: bool) -> TokenStream {
-    let mut output = TokenStream::new();
-    let latest_phases = if is_serverbound {
-        &latest.serverbound
-    } else {
-        &latest.clientbound
-    };
-    let v7_phases = if is_serverbound {
-        &v7.serverbound
-    } else {
-        &v7.clientbound
-    };
+/// Generate the `PacketId` struct and impls (including `to_id`) dynamically based on available versions.
+fn generate_struct<T>(versions: &BTreeMap<MinecraftVersion, T>) -> TokenStream {
+    // Build struct fields
+    let mut struct_fields = TokenStream::new();
+    for ver in versions.keys() {
+        let ident = ver.to_field_ident();
+        struct_fields.extend(quote! {
+            pub #ident: i32,
+        });
+    }
 
-    for (phase, packets) in latest_phases {
-        for (name, id_11) in packets {
-            let sanitized = name.replace(['/', '-'], "_").to_uppercase();
-            let const_name = format_ident!("{}_{}", phase.to_uppercase(), sanitized);
+    let latest_field_ident = LATEST_VERSION.to_field_ident();
 
-            // Check if the packet exists in 1.21.7 to get the alternate ID
-            let id_7 = v7_phases
-                .get(phase)
-                .and_then(|p| p.get(name))
-                .copied()
-                .unwrap_or(-1);
+    // Build match arms
+    let mut match_arms = TokenStream::new();
+    for ver in versions.keys() {
+        let ident = ver.to_field_ident();
+        match_arms.extend(quote! {
+            #ver => self.#ident,
+        });
+    }
 
-            // Since serverbound/clientbound are modules, we reference the PacketId in the parent scope
-            output.extend(quote! {
-                pub const #const_name: super::PacketId = super::PacketId {
-                    latest_id: #id_11,
-                    v1_21_7_id: #id_7,
-                };
-            });
+    quote! {
+        #[derive(Clone, Copy, Debug)]
+        pub struct PacketId {
+            #struct_fields
+        }
+
+        impl PacketId {
+            /// Converts the requested protocol version into the corresponding packet ID.
+            /// Returns -1 if the packet does not exist in that version.
+            pub fn to_id(&self, version: MinecraftVersion) -> i32 {
+                match version {
+                    #match_arms
+                    _ => self.#latest_field_ident,
+                }
+            }
+        }
+
+        impl PartialEq<i32> for PacketId {
+            fn eq(&self, other: &i32) -> bool {
+                self.#latest_field_ident == *other
+            }
+        }
+
+        impl PartialEq<PacketId> for i32 {
+            fn eq(&self, other: &PacketId) -> bool {
+                *self == other.#latest_field_ident
+            }
         }
     }
+}
+
+fn generate_mapped_consts(
+    versions: &BTreeMap<MinecraftVersion, Packets>,
+    is_serverbound: bool,
+) -> TokenStream {
+    let mut conv_packets = BTreeMap::<_, BTreeMap<_, _>>::new();
+
+    for (ver, packets) in versions {
+        let phases = if is_serverbound {
+            &packets.serverbound
+        } else {
+            &packets.clientbound
+        };
+        for (phase, packets) in phases {
+            for (name, &id) in packets {
+                let sanitized_name = name.replace(['/', '-'], "_").to_uppercase();
+                let const_name = format!("{}_{}", phase.to_uppercase(), sanitized_name);
+                conv_packets.entry(const_name).or_default().insert(ver, id);
+            }
+        }
+    }
+
+    let mut output = TokenStream::new();
+    for (name, values) in conv_packets {
+        let mut init_pairs = TokenStream::new();
+        for ver in versions.keys() {
+            let id = values.get(ver).copied().unwrap_or(-1);
+            let field_ident = ver.to_field_ident();
+            init_pairs.extend(quote! {
+                #field_ident: #id,
+            });
+        }
+        let const_name = format_ident!("{}", name);
+        output.extend(quote! {
+            pub const #const_name: super::PacketId = super::PacketId {
+                #init_pairs
+            };
+        });
+    }
+
     output
 }

@@ -1570,8 +1570,7 @@ impl World {
                 false,
                 true,
                 false,
-                (self.dimension.id).into(),
-                ResourceLocation::from(self.dimension.minecraft_name),
+                self.dimension,
                 biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
                 player
@@ -1758,7 +1757,7 @@ impl World {
                 {
                     let meta = Metadata::new(
                         TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
-                        MetaDataType::Byte,
+                        MetaDataType::BYTE,
                         config.skin_parts,
                     );
                     meta.write(&mut buf, &client.version.load()).unwrap();

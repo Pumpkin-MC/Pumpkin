@@ -320,7 +320,7 @@ pub trait ClientPacket: MultiVersionJavaPacket {
 }
 
 pub trait ServerPacket: MultiVersionJavaPacket + Sized {
-    fn read(read: impl Read) -> Result<Self, ReadingError>;
+    fn read(read: impl Read, version: &MinecraftVersion) -> Result<Self, ReadingError>;
 }
 
 pub trait BClientPacket: Packet {

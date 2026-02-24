@@ -55,7 +55,7 @@ impl BegGoal {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_BEGGING,
-                MetaDataType::Boolean,
+                MetaDataType::BOOLEAN,
                 begging,
             )])
             .await;
