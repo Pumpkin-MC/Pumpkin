@@ -23,6 +23,7 @@ jobs:
       - run: rustup component add rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
+
   machete:
     name: Detect unused dependencies
     runs-on: ubuntu-latest
@@ -35,6 +36,7 @@ jobs:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: bnjbvr/cargo-machete@main
+
   clippy_debug:
     name: Run lints (debug)
     runs-on: ubuntu-latest
@@ -50,6 +52,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Clippy (debug)
         run: cargo clippy --all-targets --all-features
+
   clippy_release:
     name: Run lints (release)
     runs-on: ubuntu-latest
@@ -65,6 +68,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Clippy (release)
         run: cargo clippy --release --all-targets --all-features
+
   build_and_test:
     name: Build project and test
     runs-on: ${{ matrix.os }}
@@ -73,51 +77,73 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-latest-x86-64-v2,
-            ubuntu-latest-x86-64-v3,
+            ubuntu-latest,
             ubuntu-24.04-arm,
-            windows-latest-x86-64-v2,
-            windows-latest-x86-64-v3,
+            windows-latest,
             windows-11-arm,
             macos-latest,
             macos-15-intel,
           ]
+        arch_variant:
+          [
+            standard,
+            x86-64-v2,
+            x86-64-v3
+          ]
         toolchain:
           - stable
+        exclude:
+          # Exclude non-x86_64 architectures from x86-64-v2/v3 variants
+          - os: ubuntu-24.04-arm
+            arch_variant: x86-64-v2
+          - os: ubuntu-24.04-arm
+            arch_variant: x86-64-v3
+          - os: windows-11-arm
+            arch_variant: x86-64-v2
+          - os: windows-11-arm
+            arch_variant: x86-64-v3
+          - os: macos-latest
+            arch_variant: x86-64-v2
+          - os: macos-latest
+            arch_variant: x86-64-v3
+          - os: macos-15-intel
+            arch_variant: x86-64-v2
+          - os: macos-15-intel
+            arch_variant: x86-64-v3
+          # Exclude x86-64-v2/v3 variants from non-x86_64 runners when not needed
+          - os: ubuntu-latest
+            arch_variant: standard
+          - os: windows-latest
+            arch_variant: standard
+
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
       - name: Set CPU flags for x86-64-v2 and x86-64-v3
+        if: matrix.arch_variant != 'standard'
         shell: bash
         run: |
-          case "${{ matrix.os }}" in
-            *x86-64-v2*)
-              export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v2"
-              ;;
-            *x86-64-v3*)
-              export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
-              ;;
-          esac
+          export RUSTFLAGS="$RUSTFLAGS -C target-cpu=${{ matrix.arch_variant }}"
           echo "RUSTFLAGS=$RUSTFLAGS" >> $GITHUB_ENV
+          echo "Using target CPU: ${{ matrix.arch_variant }}"
       - name: Cargo nextest
         run: cargo nextest run --verbose
       - name: Cargo doctest
         run: cargo test --doc --verbose
-  build_release:
-    name: Build project in release
+
+  build_release_standard:
+    name: Build project in release (Standard)
     runs-on: ${{ matrix.os }}
     needs: [build_and_test]
     strategy:
       matrix:
         os:
           [
-            ubuntu-latest-x86-64-v2,
-            ubuntu-latest-x86-64-v3,
+            ubuntu-latest,
             ubuntu-24.04-arm,
-            windows-latest-x86-64-v2,
-            windows-latest-x86-64-v3,
+            windows-latest,
             windows-11-arm,
             macos-latest,
             macos-15-intel,
@@ -128,50 +154,99 @@ jobs:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
-      - name: Set CPU flags for x86-64-v2 and x86-64-v3
-        shell: bash
-        run: |
-          case "${{ matrix.os }}" in
-            *x86-64-v2*)
-              export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v2"
-              ;;
-            *x86-64-v3*)
-              export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
-              ;;
-          esac
-          echo "RUSTFLAGS=$RUSTFLAGS" >> $GITHUB_ENV
-      - name: Build Release
-        shell: bash
-        run: |
-          cargo build --verbose --release
-      - name: Prepare artifacts
+      - name: Build Release (Standard)
+        run: cargo build --verbose --release
+      - name: Prepare artifacts (Standard)
         shell: bash
         run: |
           mkdir -p dist
           if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
-          case "${{ matrix.os }}" in
-            *x86-64-v2*)
-              cpu_variant="x86-64-v2"
-              ;;
-            *x86-64-v3*)
-              cpu_variant="x86-64-v3"
-              ;;
-            *)
-              cpu_variant="${{ runner.arch }}"
-              ;;
-          esac
-          cp "target/release/pumpkin$EXT" "dist/pumpkin-${cpu_variant}-${{ runner.os }}$EXT"
-      - name: Export executable
+          cp "target/release/pumpkin$EXT" "dist/pumpkin-standard-${{ runner.os }}-${{ runner.arch }}$EXT"
+      - name: Export executable (Standard)
         uses: actions/upload-artifact@v6
         with:
-          name: pumpkin-${{ runner.arch }}-${{ runner.os }}-${{ matrix.os }}
+          name: pumpkin-standard-${{ runner.os }}-${{ runner.arch }}
+          compression-level: 9
+          path: dist/pumpkin-*
+
+  build_release_x86_64_v2:
+    name: Build project in release (x86-64-v2)
+    runs-on: ${{ matrix.os }}
+    needs: [build_and_test]
+    strategy:
+      matrix:
+        os:
+          [
+            ubuntu-latest,
+            windows-latest,
+          ]
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Set CPU flags for x86-64-v2
+        shell: bash
+        run: |
+          export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v2"
+          echo "RUSTFLAGS=$RUSTFLAGS" >> $GITHUB_ENV
+      - name: Build Release (x86-64-v2)
+        run: cargo build --verbose --release
+      - name: Prepare artifacts (x86-64-v2)
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
+          cp "target/release/pumpkin$EXT" "dist/pumpkin-x86-64-v2-${{ runner.os }}-${{ runner.arch }}$EXT"
+      - name: Export executable (x86-64-v2)
+        uses: actions/upload-artifact@v6
+        with:
+          name: pumpkin-x86-64-v2-${{ runner.os }}-${{ runner.arch }}
+          compression-level: 9
+          path: dist/pumpkin-*
+
+  build_release_x86_64_v3:
+    name: Build project in release (x86-64-v3)
+    runs-on: ${{ matrix.os }}
+    needs: [build_and_test]
+    strategy:
+      matrix:
+        os:
+          [
+            ubuntu-latest,
+            windows-latest,
+          ]
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Set CPU flags for x86-64-v3
+        shell: bash
+        run: |
+          export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
+          echo "RUSTFLAGS=$RUSTFLAGS" >> $GITHUB_ENV
+      - name: Build Release (x86-64-v3)
+        run: cargo build --verbose --release
+      - name: Prepare artifacts (x86-64-v3)
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
+          cp "target/release/pumpkin$EXT" "dist/pumpkin-x86-64-v3-${{ runner.os }}-${{ runner.arch }}$EXT"
+      - name: Export executable (x86-64-v3)
+        uses: actions/upload-artifact@v6
+        with:
+          name: pumpkin-x86-64-v3-${{ runner.os }}-${{ runner.arch }}
           compression-level: 9
           path: dist/pumpkin-*
 
   draft_release:
     permissions:
       contents: write
-    needs: [build_release]
+    needs: [build_release_standard, build_release_x86_64_v2, build_release_x86_64_v3]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:
@@ -188,11 +263,13 @@ jobs:
           echo "From commit: $(git rev-parse --short HEAD)" > dist/RELEASE.md
           echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
           cat dist/RELEASE.md
+
       - name: Update the nightly tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag --force nightly && git push --force origin tag nightly
+
       - name: Draft a nightly github release
         uses: softprops/action-gh-release@v2
         with:
