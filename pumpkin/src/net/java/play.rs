@@ -22,6 +22,7 @@ use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::changed_main_hand::PlayerChangedMainHandEvent;
+use crate::plugin::player::fish::PlayerFishEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
@@ -1898,6 +1899,27 @@ impl JavaClient {
             let held = item_in_hand.lock().await;
             held.item
         };
+
+        if item_for_use.id == Item::FISHING_ROD.id {
+            let hand_name = match hand {
+                Hand::Left => "left",
+                Hand::Right => "right",
+            }
+            .to_string();
+            let fish_event = PlayerFishEvent::new(
+                player.clone(),
+                None,
+                uuid::Uuid::nil(),
+                String::new(),
+                "cast".to_string(),
+                hand_name,
+                0,
+            );
+            let fish_event = server.plugin_manager.fire(fish_event).await;
+            if fish_event.cancelled {
+                return;
+            }
+        }
 
         send_cancellable! {{
             server;
