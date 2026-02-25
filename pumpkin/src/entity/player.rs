@@ -10,34 +10,20 @@ use std::time::{Duration, Instant};
 use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
-use pumpkin_data::dimension::Dimension;
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
-use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
-use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
-use pumpkin_protocol::bedrock::client::set_time::CSetTime;
-use pumpkin_protocol::bedrock::client::update_abilities::{
-    Ability, AbilityLayer, CUpdateAbilities,
-};
-use pumpkin_protocol::bedrock::server::text::SText;
-use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
-use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
-use pumpkin_world::inventory::Inventory;
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
-use tracing::{debug, warn};
-use uuid::Uuid;
-
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{Block, BlockState, Enchantment, tag, translation};
+use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -49,6 +35,13 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
+use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
+use pumpkin_protocol::bedrock::client::set_time::CSetTime;
+use pumpkin_protocol::bedrock::client::update_abilities::{
+    Ability, AbilityLayer, CUpdateAbilities,
+};
+use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
@@ -72,9 +65,15 @@ use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::biome;
+use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tracing::{debug, warn};
+use uuid::Uuid;
 
 use crate::block;
 use crate::block::blocks::bed::BedBlock;
@@ -83,6 +82,7 @@ use crate::command::dispatcher::CommandDispatcher;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
+use crate::plugin::player::inventory::inventory_click_event::PlayerInventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
@@ -96,8 +96,11 @@ use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
+use crate::plugin::player::inventory::inventory_close_event::InventoryCloseEvent;
+use crate::plugin::player::inventory::inventory_open_event::InventoryOpenEvent;
 use pumpkin_data::potion::Effect;
 use pumpkin_world::chunk_system::ChunkLoading;
+
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
@@ -2614,6 +2617,12 @@ impl Player {
         let current_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
             self.current_screen_handler.lock().await.clone();
 
+        let guard = current_screen_handler.lock().await;
+        let identifier = guard.get_behaviour().identifier.clone();
+        let window_type = guard.window_type();
+        let sync_id = guard.sync_id();
+        drop(guard);
+
         if !Arc::ptr_eq(&player_screen_handler, &current_screen_handler) {
             player_screen_handler
                 .lock()
@@ -2624,6 +2633,13 @@ impl Player {
 
         *self.current_screen_handler.lock().await = self.player_screen_handler.clone();
         self.open_container_pos.store(None);
+
+        let server = self.world().server.upgrade().unwrap();
+        let Some(player) = server.get_player_by_uuid(self.gameprofile.id) else {
+            return;
+        };
+        let event = InventoryCloseEvent::new(player, identifier, window_type, sync_id);
+        server.plugin_manager.fire(event).await;
     }
 
     pub async fn on_screen_handler_opened(&self, screen_handler: Arc<Mutex<dyn ScreenHandler>>) {
@@ -2643,55 +2659,69 @@ impl Player {
         screen_handler_factory: &dyn ScreenHandlerFactory,
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
-        if !self
-            .current_screen_handler
-            .lock()
-            .await
-            .lock()
-            .await
-            .as_any()
-            .is::<PlayerScreenHandler>()
-        {
-            self.close_handled_screen().await;
-        }
+        let server = self.world().server.upgrade().unwrap();
 
-        self.increment_screen_handler_sync_id();
-
+        let inferred_sync_id = self.screen_handler_sync_id.load(Ordering::Relaxed) + 1;
         if let Some(screen_handler) = screen_handler_factory
-            .create_screen_handler(
-                self.screen_handler_sync_id.load(Ordering::Relaxed),
-                &self.inventory,
-                self,
-            )
+            .create_screen_handler(inferred_sync_id, &self.inventory, self)
             .await
         {
             let screen_handler_temp = screen_handler.lock().await;
-            self.client
-                .enqueue_packet(&COpenScreen::new(
-                    screen_handler_temp.sync_id().into(),
-                    (screen_handler_temp
-                        .window_type()
-                        .expect("Can't open PlayerScreenHandler") as i32)
-                        .into(),
-                    &screen_handler_factory.get_display_name(),
-                ))
-                .await;
-            drop(screen_handler_temp);
-            self.on_screen_handler_opened(screen_handler.clone()).await;
-            *self.current_screen_handler.lock().await = screen_handler;
-            self.open_container_pos.store(block_pos);
-            Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
+            let window_type = screen_handler_temp.window_type();
+
+            // i need a Arc<Player> not Arc<&Player>
+            let player = server.get_player_by_uuid(self.gameprofile.id).unwrap();
+            let event = InventoryOpenEvent::new(player, window_type, inferred_sync_id);
+
+            send_cancellable! {{
+                server;
+                event;
+                'after: {
+                    if !self
+                        .current_screen_handler
+                        .lock()
+                        .await
+                        .lock()
+                        .await
+                        .as_any()
+                        .is::<PlayerScreenHandler>()
+                    {
+                        self.close_handled_screen().await;
+                    }
+                    // officially do it since the event wasn't canceled
+                    self.increment_screen_handler_sync_id();
+                    self.client
+                        .enqueue_packet(&COpenScreen::new(
+                            screen_handler_temp.sync_id().into(),
+                            (screen_handler_temp
+                                .window_type()
+                                .expect("Can't open PlayerScreenHandler") as i32)
+                                .into(),
+                            &screen_handler_factory.get_display_name(),
+                        ))
+                        .await;
+                    drop(screen_handler_temp);
+                    self.on_screen_handler_opened(screen_handler.clone()).await;
+                    *self.current_screen_handler.lock().await = screen_handler;
+                    self.open_container_pos.store(block_pos);
+                    Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
+
+                };
+                'cancelled: {
+                    None
+                };
+            }}
         } else {
             //TODO: Send message if spectator
-
             None
         }
     }
 
-    pub async fn on_slot_click(&self, packet: SClickSlot) {
+    #[allow(clippy::too_many_lines)] // its 101, it wants 100
+    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot) {
         self.update_last_action_time();
-        let screen_handler = self.current_screen_handler.lock().await;
-        let mut screen_handler = screen_handler.lock().await;
+        let screen_handler_init = self.current_screen_handler.lock().await;
+        let mut screen_handler = screen_handler_init.lock().await;
         let behaviour = screen_handler.get_behaviour();
 
         // behaviour is dropped here
@@ -2704,7 +2734,7 @@ impl Player {
             return;
         }
 
-        if !screen_handler.can_use(self) {
+        if !screen_handler.can_use(&**self) {
             warn!(
                 "Player {} interacted with invalid menu {:?}",
                 self.gameprofile.name,
@@ -2727,29 +2757,83 @@ impl Player {
 
         let not_in_sync = packet.revision.0 != (behaviour.revision.load(Ordering::Relaxed) as i32);
 
-        screen_handler.disable_sync();
-        screen_handler
-            .on_slot_click(
-                i32::from(slot),
-                i32::from(packet.button),
-                packet.mode.clone(),
-                self,
-            )
-            .await;
-
-        for (key, value) in packet.array_of_changed_slots {
-            screen_handler.set_received_hash(key as usize, value);
-        }
-
-        screen_handler.set_received_cursor_hash(packet.carried_item);
-        screen_handler.enable_sync();
-
-        if not_in_sync {
-            screen_handler.update_to_client().await;
+        let server = self.world().server.upgrade().unwrap();
+        let cursor_stack = screen_handler
+            .get_behaviour()
+            .cursor_stack
+            .lock()
+            .await
+            .clone();
+        let clicked_slot_stack = if i32::from(slot) >= 0
+            && (slot as usize) < screen_handler.get_behaviour().slots.len()
+        {
+            screen_handler.get_behaviour().slots[slot as usize]
+                .get_cloned_stack()
+                .await
         } else {
-            screen_handler.send_content_updates().await;
-            drop(screen_handler);
-        }
+            ItemStack::EMPTY.clone()
+        };
+
+        let screen_handler_identifier = screen_handler.get_behaviour().get_identifier().to_string();
+        let screen_handler_window_type = screen_handler.window_type();
+        let screen_handler_sync_id = screen_handler.sync_id();
+        let is_player_inventory_click = screen_handler.window_type().is_none();
+        let event = PlayerInventoryClickEvent::new(
+            self.clone(),
+            screen_handler_identifier,
+            i32::from(slot),
+            i32::from(packet.button),
+            packet.mode.clone(),
+            cursor_stack,
+            clicked_slot_stack,
+            screen_handler_window_type,
+            screen_handler_sync_id,
+            is_player_inventory_click,
+        );
+        drop(screen_handler);
+        drop(screen_handler_init);
+
+        send_cancellable! {{
+            server;
+            event;
+            'after: {
+                let screen_handler_init = self.current_screen_handler.lock().await;
+                let mut screen_handler = screen_handler_init.lock().await;
+
+                screen_handler.disable_sync();
+                screen_handler
+                    .on_slot_click(
+                        i32::from(slot),
+                        i32::from(packet.button),
+                        packet.mode.clone(),
+                        &**self,
+                    )
+                    .await;
+
+                for (key, value) in packet.array_of_changed_slots {
+                    screen_handler.set_received_hash(key as usize, value);
+                }
+
+                screen_handler.set_received_cursor_hash(packet.carried_item);
+                screen_handler.enable_sync();
+
+                if not_in_sync {
+                    screen_handler.update_to_client().await;
+                } else {
+                    screen_handler.send_content_updates().await;
+                    drop(screen_handler);
+                    drop(screen_handler_init);
+                }
+            };
+            'cancelled: {
+                let screen_handler_init = self.current_screen_handler.lock().await;
+                let mut screen_handler = screen_handler_init.lock().await;
+
+                screen_handler.sync_state().await;
+                drop(screen_handler);
+                drop(screen_handler_init);
+            }
+        }}
     }
 
     /// Check if the player has a specific permission
