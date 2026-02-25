@@ -239,7 +239,7 @@ impl UniformFloatProvider {
     /// - `random` – The random number generator to use.
     ///
     /// # Returns
-    /// A random float in the range [min_inclusive, max_exclusive).
+    /// A random float in the range [`min_inclusive`, `max_exclusive`].
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
         // NOTE: Use the random range in [min_inclusive, max_exclusive)
         let range = self.max_exclusive - self.min_inclusive;

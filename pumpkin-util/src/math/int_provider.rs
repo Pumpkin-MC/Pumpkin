@@ -261,7 +261,7 @@ impl BiasedToBottomIntProvider {
     /// - `random` – The random number generator to use.
     ///
     /// # Returns
-    /// A random integer in the range [min_inclusive, max_inclusive], with lower values more likely.
+    /// A random integer in the range [`min_inclusive`, `max_inclusive`], with lower values more likely.
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
         // Similar to uniform but biased toward lower values
         // Uses triangular distribution with mode at min
@@ -340,7 +340,7 @@ impl ClampedIntProvider {
     /// - `random` – The random number generator to use.
     ///
     /// # Returns
-    /// A random integer from the source provider, clamped to [min_inclusive, max_inclusive].
+    /// A random integer from the source provider, clamped to [`min_inclusive`, `max_inclusive`].
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
         self.source
             .get(random)
