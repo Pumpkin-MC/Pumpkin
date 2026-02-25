@@ -3,7 +3,7 @@ use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgu
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::{CommandErrorType, INTEGER_TOO_HIGH, INTEGER_TOO_LOW};
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType, INTEGER_TOO_HIGH, INTEGER_TOO_LOW};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::string_reader::StringReader;
@@ -13,6 +13,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
 
+const NO_COMMANDS_ERROR_TYPE: LiteralCommandErrorType = LiteralCommandErrorType::new("No commands are available to show help for");
 const FAILED_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new("commands.help.failed");
 
 const DESCRIPTION: &str = "Print a help message.";
@@ -115,12 +116,17 @@ impl HelpCommandExecutor {
                 .await;
 
             let commands_available = commands.len();
+            if commands_available == 0 {
+                return Err(
+                    NO_COMMANDS_ERROR_TYPE.create_without_context()
+                );
+            }
 
-            let total_pages = commands.len().div_ceil(COMMANDS_PER_PAGE);
+            let total_pages = commands_available.div_ceil(COMMANDS_PER_PAGE);
             let page = page_number.min(total_pages);
 
             let start = (page - 1) * COMMANDS_PER_PAGE;
-            let end = (start + COMMANDS_PER_PAGE).min(commands.len());
+            let end = (start + COMMANDS_PER_PAGE).min(commands_available);
 
             let page_commands = commands.into_iter().skip(start).take(end - start);
 
@@ -138,9 +144,11 @@ impl HelpCommandExecutor {
 
             let header_text = format!(" Help - Page {page}/{total_pages} ");
 
+            let dashes = 52usize.saturating_sub(header_text.len() + 3) / 2;
+
             let mut message = TextComponent::empty()
                 .add_child(
-                    TextComponent::text("-".repeat((52 - header_text.len() - 3) / 2) + " ")
+                    TextComponent::text("-".repeat(dashes) + " ")
                         .color_named(NamedColor::Yellow),
                 )
                 .add_child(arrow_left.clone())
@@ -148,7 +156,7 @@ impl HelpCommandExecutor {
                 .add_child(arrow_right.clone())
                 .add_child(
                     TextComponent::text(
-                        " ".to_owned() + &"-".repeat((52 - header_text.len() - 3) / 2) + "\n",
+                        " ".to_owned() + &"-".repeat(dashes) + "\n",
                     )
                     .color_named(NamedColor::Yellow),
                 );
@@ -179,7 +187,7 @@ impl HelpCommandExecutor {
             let footer_text = format!(" Page {page}/{total_pages} ");
             message = message
                 .add_child(
-                    TextComponent::text("-".repeat((52 - footer_text.len() - 3) / 2) + " ")
+                    TextComponent::text("-".repeat(dashes) + " ")
                         .color_named(NamedColor::Yellow),
                 )
                 .add_child(arrow_left)
@@ -187,7 +195,7 @@ impl HelpCommandExecutor {
                 .add_child(arrow_right)
                 .add_child(
                     TextComponent::text(
-                        " ".to_owned() + &"-".repeat((52 - footer_text.len() - 3) / 2),
+                        " ".to_owned() + &"-".repeat(dashes),
                     )
                     .color_named(NamedColor::Yellow),
                 );
@@ -212,15 +220,17 @@ impl HelpCommandExecutor {
             let command_with_slash = format!("/{command}");
             let header_text = format!(" Help - /{command} ");
 
+            let dashes = 52usize.saturating_sub(header_text.len()) / 2;
+
             let mut message = TextComponent::empty()
                 .add_child(
-                    TextComponent::text("-".repeat((52 - header_text.len()) / 2) + " ")
+                    TextComponent::text("-".repeat(dashes) + " ")
                         .color_named(NamedColor::Yellow),
                 )
                 .add_child(TextComponent::text(header_text.clone()))
                 .add_child(
                     TextComponent::text(
-                        " ".to_owned() + &"-".repeat((52 - header_text.len()) / 2) + "\n",
+                        " ".to_owned() + &"-".repeat(dashes) + "\n",
                     )
                     .color_named(NamedColor::Yellow),
                 )

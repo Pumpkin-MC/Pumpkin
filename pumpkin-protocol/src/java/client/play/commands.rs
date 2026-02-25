@@ -57,6 +57,7 @@ pub enum ProtoNodeType<'a> {
         name: &'a str,
         is_executable: bool,
         redirect_target: Option<i32>,
+        restricted: bool,
     },
     Argument {
         name: &'a str,
@@ -64,6 +65,7 @@ pub enum ProtoNodeType<'a> {
         redirect_target: Option<i32>,
         parser: ArgumentType<'a>,
         override_suggestion_type: Option<SuggestionProviders>,
+        restricted: bool,
     },
 }
 
@@ -71,6 +73,7 @@ impl ProtoNode<'_> {
     const FLAG_IS_EXECUTABLE: u8 = 4;
     const FLAG_HAS_REDIRECT: u8 = 8;
     const FLAG_HAS_SUGGESTION_TYPE: u8 = 16;
+    const FLAG_IS_RESTRICTED: u8 = 32;
 
     pub fn write_to(
         &self,
@@ -86,8 +89,12 @@ impl ProtoNode<'_> {
                 name: _,
                 is_executable,
                 redirect_target,
+                restricted
             } => {
                 let mut n = 1;
+                if restricted {
+                    n |= Self::FLAG_IS_RESTRICTED;
+                }
                 if is_executable {
                     n |= Self::FLAG_IS_EXECUTABLE;
                 }
@@ -103,8 +110,12 @@ impl ProtoNode<'_> {
                 parser: _,
                 override_suggestion_type,
                 redirect_target,
+                restricted
             } => {
                 let mut n = 2;
+                if restricted {
+                    n |= Self::FLAG_IS_RESTRICTED;
+                }
                 if override_suggestion_type.is_some() {
                     n |= Self::FLAG_HAS_SUGGESTION_TYPE;
                 }

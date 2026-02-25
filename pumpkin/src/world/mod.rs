@@ -1541,7 +1541,7 @@ impl World {
         &self,
         base_config: &BasicConfiguration,
         player: &Arc<Player>,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         let dimensions: Vec<ResourceLocation> = server
             .dimensions

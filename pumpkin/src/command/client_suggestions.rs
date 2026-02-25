@@ -12,12 +12,12 @@ use crate::{
     },
     entity::player::Player,
 };
-
+use crate::server::Server;
 use super::tree::{Node, NodeType};
 
 pub async fn send_c_commands_packet(
     player: &Arc<Player>,
-    server: &crate::server::Server,
+    server: &Arc<Server>,
     dispatcher: &CommandDispatcher,
 ) {
     let cmd_src = super::CommandSender::Player(player.clone());
@@ -47,6 +47,7 @@ pub async fn send_c_commands_packet(
                 name: key,
                 is_executable,
                 redirect_target: None,
+                restricted: false
             },
         };
 
@@ -68,6 +69,8 @@ pub async fn send_c_commands_packet(
     // ID = 3: node_id_offset + 1
     // ID = 4: node_id_offset + 2 ...
     let mut root_node_children_second: Box<[VarInt]> = Box::new([]);
+    let source = player.get_command_source(server).await;
+
     for node in &dispatcher.tree {
         // We map IDs to the indexes:
         let children: Box<[VarInt]> = node
@@ -84,6 +87,8 @@ pub async fn send_c_commands_packet(
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
             .map(|i| i.try_into().expect("i32 limit reached for ids"));
 
+        let satisfies_requirements = node.requirements().evaluate(&source).await;
+
         match node {
             AttachedNode::Root(_) => {
                 // We skip the root node because we already have a root node.
@@ -97,6 +102,7 @@ pub async fn send_c_commands_packet(
                         name: &literal_attached_node.meta.literal,
                         is_executable: literal_attached_node.owned.command.is_some(),
                         redirect_target,
+                        restricted: !satisfies_requirements
                     },
                 };
                 proto_nodes.push(node);
@@ -108,6 +114,7 @@ pub async fn send_c_commands_packet(
                         name: &command_attached_node.meta.literal,
                         is_executable: command_attached_node.owned.command.is_some(),
                         redirect_target,
+                        restricted: !satisfies_requirements
                     },
                 };
                 proto_nodes.push(node);
@@ -123,6 +130,7 @@ pub async fn send_c_commands_packet(
                         parser: arg_type.client_side_parser(),
                         override_suggestion_type: arg_type.override_suggestion_providers(),
                         redirect_target,
+                        restricted: !satisfies_requirements
                     },
                 };
                 proto_nodes.push(node);
@@ -200,6 +208,7 @@ fn nodes_to_proto_node_builders<'a>(
                         parser: consumer.get_client_side_parser(),
                         override_suggestion_type: consumer
                             .get_client_side_suggestion_type_override(),
+                        restricted: false
                     },
                 });
             }
@@ -213,6 +222,7 @@ fn nodes_to_proto_node_builders<'a>(
                         name: string,
                         is_executable: node_is_executable,
                         redirect_target: None,
+                        restricted: false
                     },
                 });
             }

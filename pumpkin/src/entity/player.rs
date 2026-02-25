@@ -1764,12 +1764,13 @@ impl Player {
     /// Sets the player's permission level and notifies the client.
     pub async fn set_permission_lvl(
         self: &Arc<Self>,
-        server: &Server,
+        server: &Arc<Server>,
         lvl: PermissionLvl,
         command_dispatcher: &CommandDispatcher,
     ) {
         self.permission_lvl.store(lvl);
         self.send_permission_lvl_update().await;
+
         client_suggestions::send_c_commands_packet(self, server, command_dispatcher).await;
     }
 

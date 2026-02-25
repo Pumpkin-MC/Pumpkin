@@ -25,6 +25,7 @@ use rustc_hash::FxHashMap;
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock};
+use tracing::warn;
 
 pub const ARG_SEPARATOR: &str = " ";
 pub const ARG_SEPARATOR_CHAR: char = ' ';
@@ -165,6 +166,8 @@ impl CommandDispatcher {
             let reference = &main_node.owned;
 
             // If the reference contains an executor, we clone that over.
+            // If not, we need not check for the permission, as it
+            // will be done by the target node.
             if let Some(executor) = &reference.command {
                 alias = alias.executes_arc(executor.clone());
 
@@ -382,6 +385,8 @@ impl CommandDispatcher {
 
         if let Err(error) = output {
             // We check if the error came because a command could not be found.
+            // Note: 'Permission denied' also falls under this error as
+            //       no executable node could be found.
             if error.is(&DISPATCHER_UNKNOWN_COMMAND) {
                 // Run the fallback dispatcher instead.
                 // It might have the command we're looking for.
@@ -602,15 +607,18 @@ impl CommandDispatcher {
         }
 
         for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command
-                && let Some(permission) = self
+            if let Command::Tree(command_tree) = fallback_command {
+                if let Some(permission) = self
                     .fallback_dispatcher
                     .permissions
                     .get(&command_tree.names[0])
-                && source.has_permission(permission).await
-            {
-                for name in &command_tree.names {
-                    commands.insert(name, &command_tree.description);
+                    && source.has_permission(permission).await
+                {
+                    for name in &command_tree.names {
+                        commands.insert(name, &command_tree.description);
+                    }
+                } else {
+                    warn!("Command /{} does not have a permission set up", &command_tree.names[0]);
                 }
             }
         }
