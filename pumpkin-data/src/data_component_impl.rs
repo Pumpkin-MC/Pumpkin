@@ -4,8 +4,8 @@ use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
-    DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemName,
-    JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable,
+    DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel,
+    ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable,
 };
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
@@ -46,6 +46,8 @@ pub trait DataComponentImpl: Send + Sync {
 pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataComponentImpl>> {
     match id {
         MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
+        ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
+        CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
@@ -174,12 +176,25 @@ impl DataComponentImpl for UnbreakableImpl {
     }
     default_impl!(Unbreakable);
 }
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CustomNameImpl {
-    // TODO make TextComponent const
-    pub name: &'static str,
+    pub name: String,
+}
+impl CustomNameImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string()
+            .map(|s| Self {
+                name: s.to_string(),
+            })
+    }
 }
 impl DataComponentImpl for CustomNameImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.name.clone())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.name) as i32
+    }
     default_impl!(CustomName);
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -190,8 +205,24 @@ pub struct ItemNameImpl {
 impl DataComponentImpl for ItemNameImpl {
     default_impl!(ItemName);
 }
-#[derive(Clone, Hash, PartialEq, Eq)]
-pub struct ItemModelImpl;
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct ItemModelImpl {
+    pub model: String,
+}
+impl ItemModelImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|s| Self { model: s.to_string() })
+    }
+}
+impl DataComponentImpl for ItemModelImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.model.clone())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.model) as i32
+    }
+    default_impl!(ItemModel);
+}
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct LoreImpl;
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -243,6 +274,101 @@ fn hash() {
         -1580618251i32
     );
     assert_eq!(MaxStackSizeImpl { size: 99 }.get_hash(), -1632321551i32);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn item_model_read_data_from_string_tag() {
+        let tag = NbtTag::String("minecraft:diamond_sword".to_string());
+        let result = ItemModelImpl::read_data(&tag).unwrap();
+        assert_eq!(result.model, "minecraft:diamond_sword");
+    }
+
+    #[test]
+    fn item_model_read_data_from_non_string_returns_none() {
+        let tag = NbtTag::Int(42);
+        assert!(ItemModelImpl::read_data(&tag).is_none());
+    }
+
+    #[test]
+    fn item_model_write_data_roundtrip() {
+        let original = ItemModelImpl {
+            model: "minecraft:stick".to_string(),
+        };
+        let tag = original.write_data();
+        let restored = ItemModelImpl::read_data(&tag).unwrap();
+        assert_eq!(original, restored);
+    }
+
+    #[test]
+    fn item_model_get_hash_matches_str_hash() {
+        let model = ItemModelImpl {
+            model: "minecraft:diamond_sword".to_string(),
+        };
+        let expected = get_str_hash("minecraft:diamond_sword") as i32;
+        assert_eq!(model.get_hash(), expected);
+    }
+
+    #[test]
+    fn custom_name_read_data_from_string_tag() {
+        let tag = NbtTag::String("My Custom Sword".to_string());
+        let result = CustomNameImpl::read_data(&tag).unwrap();
+        assert_eq!(result.name, "My Custom Sword");
+    }
+
+    #[test]
+    fn custom_name_read_data_from_non_string_returns_none() {
+        let tag = NbtTag::Int(42);
+        assert!(CustomNameImpl::read_data(&tag).is_none());
+    }
+
+    #[test]
+    fn custom_name_write_data_roundtrip() {
+        let original = CustomNameImpl {
+            name: "Excalibur".to_string(),
+        };
+        let tag = original.write_data();
+        let restored = CustomNameImpl::read_data(&tag).unwrap();
+        assert_eq!(original, restored);
+    }
+
+    #[test]
+    fn custom_name_get_hash_matches_str_hash() {
+        let name = CustomNameImpl {
+            name: "Excalibur".to_string(),
+        };
+        let expected = get_str_hash("Excalibur") as i32;
+        assert_eq!(name.get_hash(), expected);
+    }
+
+    #[test]
+    fn read_data_dispatches_item_model() {
+        let tag = NbtTag::String("minecraft:bow".to_string());
+        let result = read_data(DataComponent::ItemModel, &tag);
+        assert!(result.is_some());
+        let component = result.unwrap();
+        assert_eq!(component.get_self_enum(), DataComponent::ItemModel);
+        assert_eq!(
+            component.write_data(),
+            NbtTag::String("minecraft:bow".to_string())
+        );
+    }
+
+    #[test]
+    fn read_data_dispatches_custom_name() {
+        let tag = NbtTag::String("Named Item".to_string());
+        let result = read_data(DataComponent::CustomName, &tag);
+        assert!(result.is_some());
+        let component = result.unwrap();
+        assert_eq!(component.get_self_enum(), DataComponent::CustomName);
+        assert_eq!(
+            component.write_data(),
+            NbtTag::String("Named Item".to_string())
+        );
+    }
 }
 
 impl DataComponentImpl for EnchantmentsImpl {

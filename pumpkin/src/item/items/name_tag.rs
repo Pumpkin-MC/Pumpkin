@@ -30,7 +30,7 @@ impl ItemBehaviour for NameTagItem {
                 && let Some(name) = item.get_data_component::<CustomNameImpl>()
             {
                 // TODO
-                entity.set_custom_name(TextComponent::text(name.name)).await;
+                entity.set_custom_name(TextComponent::text(name.name.clone())).await;
                 item.decrement_unless_creative(player.gamemode.load(), 1);
             }
         })

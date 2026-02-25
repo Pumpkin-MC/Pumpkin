@@ -2,7 +2,7 @@ use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component::DataComponent::Enchantments;
 use pumpkin_data::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
-    MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, get, get_mut, read_data,
+    MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, read_data,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
@@ -67,12 +67,25 @@ impl ItemStack {
             if id == to_get_id {
                 return component
                     .as_ref()
-                    .map(|component| get::<T>(component.as_ref()));
+                    .and_then(|component| component.as_any().downcast_ref::<T>());
             }
         }
         for (id, component) in self.item.components {
             if id == to_get_id {
-                return Some(get::<T>(*component));
+                if let Some(v) = component.as_any().downcast_ref::<T>() {
+                    return Some(v);
+                }
+                // cdylib TypeId mismatch: the Item was created in a plugin with
+                // separate statics. Resolve the equivalent Item from the local
+                // registry (host-side) where TypeIds match.
+                if let Some(local_item) = Item::from_id(self.item.id) {
+                    for (local_id, local_comp) in local_item.components {
+                        if local_id == to_get_id {
+                            return local_comp.as_any().downcast_ref::<T>();
+                        }
+                    }
+                }
+                return None;
             }
         }
         None
@@ -83,7 +96,7 @@ impl ItemStack {
             if id == to_get_id {
                 return component
                     .as_mut()
-                    .map(|component| get_mut::<T>(component.as_mut()));
+                    .and_then(|component| component.as_mut_any().downcast_mut::<T>());
             }
         }
         None

@@ -2,10 +2,12 @@ use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    DamageImpl, DataComponentImpl, EnchantmentsImpl, FireworkExplosionImpl, FireworkExplosionShape,
-    FireworksImpl, MaxStackSizeImpl, PotionContentsImpl, StatusEffectInstance, UnbreakableImpl,
-    get,
+    CustomNameImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, FireworkExplosionImpl,
+    FireworkExplosionShape, FireworksImpl, ItemModelImpl, MaxStackSizeImpl, PotionContentsImpl,
+    StatusEffectInstance, UnbreakableImpl, get,
 };
+use pumpkin_util::text::TextComponent;
+use pumpkin_nbt::tag::NbtTag;
 use serde::de;
 use serde::de::SeqAccess;
 use serde::ser::SerializeStruct;
@@ -86,12 +88,36 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
     }
 }
 
+impl DataComponentCodec<Self> for ItemModelImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<String>("", &self.model)
+    }
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let model = seq
+            .next_element::<String>()?
+            .ok_or(de::Error::custom("No ItemModel string!"))?;
+        Ok(Self { model })
+    }
+}
+
 impl DataComponentCodec<Self> for UnbreakableImpl {
     fn serialize<T: SerializeStruct>(&self, _seq: &mut T) -> Result<(), T::Error> {
         Ok(())
     }
     fn deserialize<'a, A: SeqAccess<'a>>(_seq: &mut A) -> Result<Self, A::Error> {
         Ok(Self)
+    }
+}
+
+impl DataComponentCodec<Self> for CustomNameImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<TextComponent>("", &TextComponent::text(self.name.clone()))
+    }
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let text = seq
+            .next_element::<String>()?
+            .ok_or(de::Error::custom("No CustomName string!"))?;
+        Ok(Self { name: text })
     }
 }
 
@@ -426,6 +452,8 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
 ) -> Result<Box<dyn DataComponentImpl>, A::Error> {
     match id {
         DataComponent::MaxStackSize => Ok(MaxStackSizeImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::CustomName => Ok(CustomNameImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Enchantments => Ok(EnchantmentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Damage => Ok(DamageImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Unbreakable => Ok(UnbreakableImpl::deserialize(seq)?.to_dyn()),
@@ -442,6 +470,27 @@ pub fn serialize<T: SerializeStruct>(
 ) -> Result<(), T::Error> {
     match id {
         DataComponent::MaxStackSize => get::<MaxStackSizeImpl>(value).serialize(seq),
+        DataComponent::CustomName => {
+            if let Some(v) = value.as_any().downcast_ref::<CustomNameImpl>() {
+                v.serialize(seq)
+            } else if let NbtTag::String(name) = value.write_data() {
+                let text = TextComponent::text(name);
+                seq.serialize_field::<TextComponent>("", &text)
+            } else {
+                panic!("CustomName write_data() did not return NbtTag::String")
+            }
+        }
+        DataComponent::ItemModel => {
+            // Try downcast first (works when created in the same binary).
+            // Fall back to write_data() for cdylib plugins where TypeId differs.
+            if let Some(v) = value.as_any().downcast_ref::<ItemModelImpl>() {
+                v.serialize(seq)
+            } else if let NbtTag::String(model) = value.write_data() {
+                seq.serialize_field::<String>("", &model)
+            } else {
+                panic!("ItemModel write_data() did not return NbtTag::String")
+            }
+        }
         DataComponent::Enchantments => get::<EnchantmentsImpl>(value).serialize(seq),
         DataComponent::Damage => get::<DamageImpl>(value).serialize(seq),
         DataComponent::Unbreakable => get::<UnbreakableImpl>(value).serialize(seq),
