@@ -13,9 +13,9 @@ pub struct EulerAngle {
 }
 
 impl EulerAngle {
-    /// Creates a new EulerAngle with the given pitch, yaw, and roll in degrees.
+    /// Creates a new `EulerAngle` with the given pitch, yaw, and roll in degrees.
     ///
-    /// Values are normalized to the range [0, 360).
+    /// Values are normalized to the range [0, 360].
     ///
     /// # Arguments
     /// * `pitch` – Rotation around the X-axis.

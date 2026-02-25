@@ -275,7 +275,7 @@ pub fn clamped_lerp(start: f64, end: f64, delta: f64) -> f64 {
 /// - `new_end` – End of new range.
 ///
 /// # Returns
-/// Value in a new range, clamped to [new_start, new_end].
+/// Value in a new range, clamped to [`new_start`, `new_end`].
 #[inline]
 #[must_use]
 pub fn clamped_map(value: f64, old_start: f64, old_end: f64, new_start: f64, new_end: f64) -> f64 {

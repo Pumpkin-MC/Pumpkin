@@ -21,8 +21,6 @@ pub struct BlockPosIterator {
     end_x: i32,
     /// The maximum Y coordinate (inclusive).
     end_y: i32,
-    /// The maximum Z coordinate (inclusive).
-    end_z: i32,
     /// The current iteration index.
     index: usize,
     /// The total number of positions to iterate.
