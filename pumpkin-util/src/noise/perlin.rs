@@ -5,15 +5,34 @@ use crate::{
 
 use super::GRADIENTS;
 
+/// A 3D Perlin noise sampler implementation.
+///
+/// Perlin noise is a gradient noise function commonly used for procedural generation
+/// of natural-looking textures, terrain, and other organic patterns. This implementation
+/// provides 3D noise with optional vertical scaling.
+///
+/// The sampler uses a permutation table to hash coordinates and interpolates between
+/// gradient vectors at integer lattice points to produce smooth, continuous noise.
 #[derive(Clone)]
 pub struct PerlinNoiseSampler {
+    /// Permutation table for hashing coordinates (size 256, duplicated for easy wrapping).
     permutation: [u8; 256],
+    /// X-coordinate origin offset (randomized to avoid symmetry).
     x_origin: f64,
+    /// Y-coordinate origin offset (randomized to avoid symmetry).
     y_origin: f64,
+    /// Z-coordinate origin offset (randomized to avoid symmetry).
     z_origin: f64,
 }
 
 impl PerlinNoiseSampler {
+    /// Creates a new Perlin noise sampler with randomized origin and permutation table.
+    ///
+    /// # Arguments
+    /// - `random` – The random number generator to use for initialization.
+    ///
+    /// # Returns
+    /// A new `PerlinNoiseSampler` instance.
     pub fn new(random: &mut impl RandomImpl) -> Self {
         let x_origin = random.next_f64() * 256.0;
         let y_origin = random.next_f64() * 256.0;
@@ -39,12 +58,38 @@ impl PerlinNoiseSampler {
         }
     }
 
+    /// Samples noise at the given coordinates with no vertical scaling.
+    ///
+    /// This is a convenience method that calls `sample_no_fade` with a zero vertical
+    /// scale and maximum Y.
+    ///
+    /// # Arguments
+    /// - `x` – The X coordinate.
+    /// - `y` – The Y coordinate.
+    /// - `z` – The Z coordinate.
+    ///
+    /// # Returns
+    /// The noise value at the given coordinates, typically in the range [-1, 1].
     #[inline]
     #[must_use]
     pub fn sample_flat_y(&self, x: f64, y: f64, z: f64) -> f64 {
         self.sample_no_fade(x, y, z, 0.0, 0.0)
     }
 
+    /// Samples noise with optional vertical scaling and clamping.
+    ///
+    /// This method applies the origin offsets, computes the integer lattice points,
+    /// and interpolates between gradient values.
+    ///
+    /// # Arguments
+    /// - `x` – The X coordinate.
+    /// - `y` – The Y coordinate.
+    /// - `z` – The Z coordinate.
+    /// - `y_scale` – The vertical scale factor (if 0, vertical noise is not scaled).
+    /// - `y_max` – The maximum Y value to clamp to.
+    ///
+    /// # Returns
+    /// The noise value at the given coordinates, typically in the range [-1, 1].
     #[must_use]
     pub fn sample_no_fade(&self, x: f64, y: f64, z: f64, y_scale: f64, y_max: f64) -> f64 {
         let true_x = x + self.x_origin;
@@ -81,22 +126,65 @@ impl PerlinNoiseSampler {
         )
     }
 
+    /// Computes the dot product of a gradient vector with the given coordinates.
+    ///
+    /// # Arguments
+    /// - `hash` – The hash value used to select a gradient (lower 4 bits).
+    /// - `x` – The X coordinate.
+    /// - `y` – The Y coordinate.
+    /// - `z` – The Z coordinate.
+    ///
+    /// # Returns
+    /// The dot product of the selected gradient with (x, y, z).
     #[inline]
     fn grad(hash: i32, x: f64, y: f64, z: f64) -> f64 {
         GRADIENTS[(hash & 15) as usize].dot(x, y, z)
     }
 
+    /// Applies the Perlin fade curve to an interpolant.
+    ///
+    /// The fade function is 6t⁵ - 15t⁴ + 10t³, which has zero-first and second derivatives
+    /// at t=0 and t=1, ensuring smooth interpolation.
+    ///
+    /// # Arguments
+    /// - `value` – The interpolant (typically in [0, 1]).
+    ///
+    /// # Returns
+    /// The faded value.
     #[inline]
     #[expect(clippy::suboptimal_flops)]
     fn perlin_fade(value: f64) -> f64 {
         value * value * value * (value * (value * 6.0 - 15.0) + 10.0)
     }
 
+    /// Maps an integer coordinate through the permutation table.
+    ///
+    /// # Arguments
+    /// - `input` – The input coordinate.
+    ///
+    /// # Returns
+    /// A hashed value in the range [0, 255].
     #[inline]
     fn map(&self, input: i32) -> i32 {
         i32::from(self.permutation[(input & 0xFF) as usize])
     }
 
+    /// Core sampling function that computes noise at a lattice point.
+    ///
+    /// This method computes the eight corner gradients of the unit cube surrounding
+    /// the sample point and interpolates between them using the fade curves.
+    ///
+    /// # Arguments
+    /// - `x` – The integer X coordinate of the lattice cube corner.
+    /// - `y` – The integer Y coordinate of the lattice cube corner.
+    /// - `z` – The integer Z coordinate of the lattice cube corner.
+    /// - `local_x` – The fractional X offset within the cube [0, 1).
+    /// - `local_y` – The fractional Y offset within the cube [0, 1).
+    /// - `local_z` – The fractional Z offset within the cube [0, 1).
+    /// - `fade_local_y` – The Y value to use for fading (may differ from `local_y` for vertical scaling).
+    ///
+    /// # Returns
+    /// The interpolated noise value.
     #[expect(clippy::too_many_arguments)]
     #[expect(clippy::many_single_char_names)]
     fn sample(
@@ -138,24 +226,51 @@ impl PerlinNoiseSampler {
     }
 }
 
+/// Data for a single octave in an octave Perlin noise sampler.
 pub struct SamplerData {
+    /// The Perlin noise sampler for this octave.
     pub sampler: PerlinNoiseSampler,
+    /// The amplitude multiplier for this octave.
     pub amplitude: f64,
+    /// The persistence factor (amplitude scaling between octaves).
     pub persistence: f64,
+    /// The lacunarity factor (frequency scaling between octaves).
     pub lacunarity: f64,
 }
 
+/// A multi-octave Perlin noise sampler that combines multiple noise layers.
+///
+/// Octave noise, also known as fractal noise, combines multiple octaves of Perlin noise
+/// with different frequencies and amplitudes to create more complex, natural-looking patterns.
+/// Each octave adds finer detail to the overall noise.
 pub struct OctavePerlinNoiseSampler {
+    /// The list of samplers for each octave, with their associated parameters.
     pub samplers: Box<[SamplerData]>,
+    /// The maximum possible absolute value this sampler can return.
     max_value: f64,
 }
 
 impl OctavePerlinNoiseSampler {
     #[must_use]
+    /// Returns the maximum possible absolute value this sampler can return.
+    ///
+    /// This is useful for normalizing the output to a specific range.
+    ///
+    /// # Returns
+    /// The maximum absolute value.
     pub const fn max_value(&self) -> f64 {
         self.max_value
     }
 
+    /// Calculates the total amplitude for a given scale and set of persistences and amplitudes.
+    ///
+    /// # Arguments
+    /// - `scale` – The overall scale factor.
+    /// - `persistences` – The persistence values for each octave.
+    /// - `amplitudes` – The amplitude values for each octave.
+    ///
+    /// # Returns
+    /// The sum of scaled amplitudes.
     fn get_total_amplitude_generic(scale: f64, persistences: &[f64], amplitudes: &[f64]) -> f64 {
         amplitudes
             .iter()
@@ -170,6 +285,16 @@ impl OctavePerlinNoiseSampler {
             .sum()
     }
 
+    /// Maintains precision by wrapping large values to avoid floating-point artifacts.
+    ///
+    /// This method subtracts multiples of 2²⁵ to keep values in a manageable range
+    /// while preserving the noise pattern.
+    ///
+    /// # Arguments
+    /// - `value` – The value to wrap.
+    ///
+    /// # Returns
+    /// The wrapped value.
     #[inline]
     #[must_use]
     #[expect(clippy::suboptimal_flops)]
@@ -177,6 +302,18 @@ impl OctavePerlinNoiseSampler {
         value - (value / 3.355_443_2E7 + 0.5).floor() * 3.355_443_2E7
     }
 
+    /// Calculates the starting octave and amplitude array from a list of octaves.
+    ///
+    /// This method sorts the octaves and creates an amplitude array where indices
+    /// corresponding to present octaves have amplitude 1.0.
+    ///
+    /// # Arguments
+    /// - `octaves` – The list of octave indices.
+    ///
+    /// # Returns
+    /// A tuple containing:
+    /// - The negative of the smallest octave (starting offset).
+    /// - A vector of amplitudes for each octave in the range.
     #[must_use]
     pub fn calculate_amplitudes(octaves: &[i32]) -> (i32, Vec<f64>) {
         let mut octaves = Vec::from_iter(octaves);
@@ -195,6 +332,16 @@ impl OctavePerlinNoiseSampler {
         (-i, double_list)
     }
 
+    /// Creates a new octave Perlin noise sampler.
+    ///
+    /// # Arguments
+    /// - `random` – The random number generator to use.
+    /// - `first_octave` – The index of the first octave (can be negative).
+    /// - `amplitudes` – The amplitude for each octave (starting from `first_octave`).
+    /// - `legacy` – Whether to use legacy initialization (compatible with older Minecraft versions).
+    ///
+    /// # Returns
+    /// A new `OctavePerlinNoiseSampler` instance.
     pub fn new(
         random: &mut impl RandomImpl,
         first_octave: i32,
@@ -278,6 +425,13 @@ impl OctavePerlinNoiseSampler {
         }
     }
 
+    /// Calculates the total amplitude for a given scale.
+    ///
+    /// # Arguments
+    /// - `scale` – The scale factor to apply.
+    ///
+    /// # Returns
+    /// The sum of amplitudes times scale times persistence for all octaves.
     #[inline]
     #[must_use]
     pub fn get_total_amplitude(&self, scale: f64) -> f64 {
@@ -287,6 +441,18 @@ impl OctavePerlinNoiseSampler {
             .sum()
     }
 
+    /// Samples the noise at the given coordinates.
+    ///
+    /// This method combines all octaves by sampling each at its respective frequency
+    /// and summing the results with appropriate amplitudes.
+    ///
+    /// # Arguments
+    /// - `x` – The X coordinate.
+    /// - `y` – The Y coordinate.
+    /// - `z` – The Z coordinate.
+    ///
+    /// # Returns
+    /// The combined noise value from all octaves.
     #[inline]
     #[must_use]
     pub fn sample(&self, x: f64, y: f64, z: f64) -> f64 {
@@ -307,6 +473,7 @@ impl OctavePerlinNoiseSampler {
     }
 }
 
+/// Tests for the perlin noise implementations.
 #[cfg(test)]
 mod tests {
     use crate::{

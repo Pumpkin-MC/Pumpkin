@@ -672,12 +672,20 @@ impl TextComponent {
         })
     }
 
-    //TODO
+    /// Applies a per-character color effect to the text content.
+    ///
+    /// # Arguments
+    /// - `color_gen` – A function that takes the character index and total length
+    ///   and returns an RGB color for that character.
+    ///
+    /// # Returns
+    /// A new text component where each character is individually colored according
+    /// to the generator function. The original component's content becomes empty,
+    /// and the colored characters are placed in the `extra` field.
     fn apply_color_effect<F>(mut self, color_gen: F) -> Self
     where
         F: Fn(usize, usize) -> color::RGBColor,
     {
-        // TODO
         let raw_text = self.0.clone().get_text(Locale::EnUs);
         let chars: Vec<char> = raw_text.chars().collect();
         let len = chars.len();
