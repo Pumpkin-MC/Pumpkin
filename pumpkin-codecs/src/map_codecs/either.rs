@@ -8,8 +8,8 @@ use crate::map_codec::MapCodec;
 use crate::map_coders::{CompressorHolder, MapDecoder, MapEncoder};
 use crate::map_like::MapLike;
 use crate::struct_builder::StructBuilder;
-use crate::util::either::Either;
 use std::fmt::Display;
+use either::Either;
 
 /// A [`MapCodec`] that can serialize/deserialize one of two types, with a map codec for each one.
 ///

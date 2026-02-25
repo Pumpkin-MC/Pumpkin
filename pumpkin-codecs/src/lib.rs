@@ -18,7 +18,6 @@ pub mod map_codec;
 pub mod map_codecs;
 pub mod map_coders;
 pub mod map_like;
-pub mod util;
 pub mod struct_builder;
 pub mod struct_codecs;
 

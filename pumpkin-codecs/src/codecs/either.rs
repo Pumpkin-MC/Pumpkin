@@ -3,7 +3,7 @@ use crate::coders::{Decoder, Encoder};
 use crate::data_result::DataResult;
 use crate::dynamic_ops::DynamicOps;
 use crate::HasValue;
-use crate::util::either::Either;
+use either::Either;
 use std::fmt::Display;
 
 /// A codec that can serialize/deserialize one of two types, with a codec for each one.
@@ -90,6 +90,7 @@ pub(crate) const fn new_either_codec<L: Codec, R: Codec>(
 
 #[cfg(test)]
 mod test {
+    use either::Either;
     use crate::codec::{
         DOUBLE_CODEC, FieldMapCodec, INT_CODEC, STRING_CODEC, either, field, unbounded_map,
     };
@@ -101,7 +102,6 @@ mod test {
     use crate::map_codec::for_getter;
     use crate::struct_codecs::StructCodec2;
     use crate::struct_codec;
-    use crate::util::either::Either;
     use serde_json::json;
 
     #[test]
