@@ -43,7 +43,7 @@ pub fn event(item: TokenStream) -> TokenStream {
 /// implementing the `Cancellable` trait.
 ///
 /// # Arguments
-/// - `_args` – TokenStream of arguments passed to the attribute (unused).
+/// - `_args` – `TokenStream` of arguments passed to the attribute (unused).
 /// - `input` – The input `TokenStream` representing the struct to modify.
 #[proc_macro_attribute]
 pub fn cancellable(_args: TokenStream, input: TokenStream) -> TokenStream {
