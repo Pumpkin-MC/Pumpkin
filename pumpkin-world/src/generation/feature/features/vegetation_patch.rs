@@ -24,6 +24,19 @@ pub struct VegetationPatchFeature {
 }
 
 impl VegetationPatchFeature {
+    /// Returns the block direction that points "into" the surface (down for floor, up for ceiling).
+    fn surface_direction(&self) -> pumpkin_data::BlockDirection {
+        match self.surface {
+            VerticalSurfaceType::Floor => pumpkin_data::BlockDirection::Down,
+            VerticalSurfaceType::Ceiling => pumpkin_data::BlockDirection::Up,
+        }
+    }
+
+    /// Shortcut for `self.surface_direction().to_offset()`.
+    fn surface_offset(&self) -> Vector3<i32> {
+        self.surface_direction().to_offset()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
@@ -76,10 +89,7 @@ impl VegetationPatchFeature {
         let mut surface = HashSet::new();
 
         // Determine "inwards" and "outwards" directions based on the surface
-        let inwards = match self.surface {
-            VerticalSurfaceType::Floor => pumpkin_data::BlockDirection::Down,
-            VerticalSurfaceType::Ceiling => pumpkin_data::BlockDirection::Up,
-        };
+        let inwards = self.surface_direction();
         let outwards = inwards.opposite();
 
         for dx in -x_radius..=x_radius {
@@ -119,20 +129,13 @@ impl VegetationPatchFeature {
                     pos = pos.offset(outwards.to_offset());
                 }
 
-                let below_pos = pos.offset(match self.surface {
-                    VerticalSurfaceType::Floor => pumpkin_data::BlockDirection::Down.to_offset(),
-                    VerticalSurfaceType::Ceiling => pumpkin_data::BlockDirection::Up.to_offset(),
-                });
+                let below_pos = pos.offset(self.surface_offset());
 
                 let below_state_raw = GenerationCache::get_block_state(chunk, &below_pos.0);
                 if chunk.is_air(&pos.0)
-                    && below_state_raw.to_state().is_side_solid(
-                        (match self.surface {
-                            VerticalSurfaceType::Floor => pumpkin_data::BlockDirection::Down,
-                            VerticalSurfaceType::Ceiling => pumpkin_data::BlockDirection::Up,
-                        })
-                        .opposite(),
-                    )
+                    && below_state_raw
+                        .to_state()
+                        .is_side_solid(self.surface_direction().opposite())
                 {
                     // Compute depth variation
                     let mut depth = self.depth.get(random);
@@ -180,10 +183,7 @@ impl VegetationPatchFeature {
 
                 chunk.set_block_state(&below_pos.0, state_to_place);
                 // Move in direction of surface
-                below_pos = below_pos.offset(match self.surface {
-                    VerticalSurfaceType::Floor => pumpkin_data::BlockDirection::Down.to_offset(),
-                    VerticalSurfaceType::Ceiling => pumpkin_data::BlockDirection::Up.to_offset(),
-                });
+                below_pos = below_pos.offset(self.surface_offset());
             }
         }
         true
@@ -200,11 +200,7 @@ impl VegetationPatchFeature {
         feature_name: &str,
         surface: HashSet<BlockPos>,
     ) {
-        let opposite_dir = (match self.surface {
-            VerticalSurfaceType::Floor => pumpkin_data::BlockDirection::Down,
-            VerticalSurfaceType::Ceiling => pumpkin_data::BlockDirection::Up,
-        })
-        .opposite();
+        let opposite_dir = self.surface_direction().opposite();
 
         for surface_pos in surface {
             if self.vegetation_chance > 0.0 && random.next_f32() < self.vegetation_chance {
