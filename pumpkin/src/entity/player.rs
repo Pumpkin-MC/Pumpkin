@@ -1176,7 +1176,7 @@ impl Player {
         self.get_entity()
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_SLEEPING_POSITION,
-                MetaDataType::OptionalBlockPos,
+                MetaDataType::OPTIONAL_BLOCK_POS,
                 Some(bed_head_pos),
             )])
             .await;
@@ -1300,7 +1300,7 @@ impl Player {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_SLEEPING_POSITION,
-                MetaDataType::OptionalBlockPos,
+                MetaDataType::OPTIONAL_BLOCK_POS,
                 None::<BlockPos>,
             )])
             .await;
@@ -2148,12 +2148,12 @@ impl Player {
             .send_meta_data(&[
                 Metadata::new(
                     TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
-                    MetaDataType::Byte,
+                    MetaDataType::BYTE,
                     config.skin_parts,
                 ),
                 // Metadata::new(
                 //     TrackedData::DATA_MAIN_ARM_ID,
-                //     MetaDataType::Arm,
+                //     MetaDataType::ARM,
                 //     VarInt(config.main_hand as u8 as i32),
                 // ),
             ])

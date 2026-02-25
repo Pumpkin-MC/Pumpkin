@@ -1,4 +1,5 @@
 pub mod inventory;
+pub mod changed_main_hand;
 pub mod player_change_world;
 pub mod player_chat;
 pub mod player_command_send;

@@ -12,6 +12,10 @@ pub struct Dimension {
     pub logical_height: i32,
     pub infiniburn: &'static str,
     pub ambient_light: f32,
+    pub sky_color: Option<i32>,
+    pub fog_color: Option<i32>,
+    pub cloud_color: Option<i32>,
+    pub timelines: Option<&'static str>,
 }
 impl Dimension {
     pub const OVERWORLD: Self = Self {
@@ -26,6 +30,10 @@ impl Dimension {
         logical_height: 384i32,
         infiniburn: "#minecraft:infiniburn_overworld",
         ambient_light: 0f32,
+        sky_color: Some(7907327i32),
+        fog_color: Some(12638463i32),
+        cloud_color: None,
+        timelines: Some("#minecraft:in_overworld"),
     };
     pub const OVERWORLD_CAVES: Self = Self {
         id: 1u8,
@@ -39,6 +47,10 @@ impl Dimension {
         logical_height: 384i32,
         infiniburn: "#minecraft:infiniburn_overworld",
         ambient_light: 0f32,
+        sky_color: Some(7907327i32),
+        fog_color: Some(12638463i32),
+        cloud_color: None,
+        timelines: Some("#minecraft:in_overworld"),
     };
     pub const THE_END: Self = Self {
         id: 2u8,
@@ -52,6 +64,10 @@ impl Dimension {
         logical_height: 256i32,
         infiniburn: "#minecraft:infiniburn_end",
         ambient_light: 0.25f32,
+        sky_color: Some(0i32),
+        fog_color: Some(1577752i32),
+        cloud_color: None,
+        timelines: Some("#minecraft:in_end"),
     };
     pub const THE_NETHER: Self = Self {
         id: 3u8,
@@ -65,6 +81,10 @@ impl Dimension {
         logical_height: 128i32,
         infiniburn: "#minecraft:infiniburn_nether",
         ambient_light: 0.1f32,
+        sky_color: None,
+        fog_color: None,
+        cloud_color: None,
+        timelines: Some("#minecraft:in_nether"),
     };
     pub fn from_name(name: &str) -> Option<&'static Self> {
         match name {
