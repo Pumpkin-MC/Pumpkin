@@ -4,6 +4,8 @@ use pumpkin_protocol::{
 };
 use std::sync::Arc;
 
+use super::tree::{Node, NodeType};
+use crate::server::Server;
 use crate::{
     command::node::{
         attached::{AttachedNode, NodeId},
@@ -12,12 +14,11 @@ use crate::{
     },
     entity::player::Player,
 };
-use crate::server::Server;
-use super::tree::{Node, NodeType};
 
+#[expect(clippy::too_many_lines)]
 pub async fn send_c_commands_packet(
     player: &Arc<Player>,
-    server: &Arc<Server>,
+    server: &Server,
     dispatcher: &CommandDispatcher,
 ) {
     let cmd_src = super::CommandSender::Player(player.clone());
@@ -47,7 +48,7 @@ pub async fn send_c_commands_packet(
                 name: key,
                 is_executable,
                 redirect_target: None,
-                restricted: false
+                restricted: false,
             },
         };
 
@@ -67,9 +68,18 @@ pub async fn send_c_commands_packet(
     // We can finally assign indices from our tree:
     // ID = 2: node_id_offset
     // ID = 3: node_id_offset + 1
-    // ID = 4: node_id_offset + 2 ...
+    // ID = 4: node_id_offset + 2      and so on...
     let mut root_node_children_second: Box<[VarInt]> = Box::new([]);
-    let source = player.get_command_source(server).await;
+
+    // TODO:
+    // Once the /op and /deop commands are ported to the new dispatcher,
+    // we'll be able to make this function take an &Arc<Server> instead of &Server.
+    // With that permissions can be evaluated.
+    //
+    // &Arc<Server> ----------------------------,
+    //                                          |
+    //                                          v
+    // let source = player.get_command_source(server).await;
 
     for node in &dispatcher.tree {
         // We map IDs to the indexes:
@@ -87,7 +97,16 @@ pub async fn send_c_commands_packet(
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
             .map(|i| i.try_into().expect("i32 limit reached for ids"));
 
-        let satisfies_requirements = node.requirements().evaluate(&source).await;
+        // TODO:
+        // As stated in the previous TODO, after
+        // we can get a reference to an Arc of Server,
+        // we can add the permission checking.
+        //
+        // Luckily, for now the new dispatcher
+        // only has the /help commands which
+        // is accessible to everyone by default.
+        let satisfies_requirements = true;
+        // let satisfies_requirements = node.requirements().evaluate(&source).await;
 
         match node {
             AttachedNode::Root(_) => {
@@ -102,7 +121,7 @@ pub async fn send_c_commands_packet(
                         name: &literal_attached_node.meta.literal,
                         is_executable: literal_attached_node.owned.command.is_some(),
                         redirect_target,
-                        restricted: !satisfies_requirements
+                        restricted: !satisfies_requirements,
                     },
                 };
                 proto_nodes.push(node);
@@ -114,7 +133,7 @@ pub async fn send_c_commands_packet(
                         name: &command_attached_node.meta.literal,
                         is_executable: command_attached_node.owned.command.is_some(),
                         redirect_target,
-                        restricted: !satisfies_requirements
+                        restricted: !satisfies_requirements,
                     },
                 };
                 proto_nodes.push(node);
@@ -130,7 +149,7 @@ pub async fn send_c_commands_packet(
                         parser: arg_type.client_side_parser(),
                         override_suggestion_type: arg_type.override_suggestion_providers(),
                         redirect_target,
-                        restricted: !satisfies_requirements
+                        restricted: !satisfies_requirements,
                     },
                 };
                 proto_nodes.push(node);
@@ -156,10 +175,24 @@ pub async fn send_c_commands_packet(
 }
 
 fn resolve_node_id(node_id: NodeId, node_id_offset: usize, root_node_index: usize) -> usize {
+    // ASSUMPTION:
+    // We assume, in all Trees, that
+    // their root node always has a local ID of 1.
+    // Other nodes will ALWAYS have an ID greater than 1.
+    // (No node, not even the root node, can have an ID of 0
+    // as it is wrapped in a `NonZero<usize>`)
+    //
+    // If this is violated, then logic errors arise!
+    // See the `Tree` documentation for more information.
     if node_id == ROOT_NODE_ID {
         root_node_index
     } else {
-        node_id_offset + node_id.0.get() - 2
+        const FIRST_NONROOT_ID: usize = 2; // ROOT_NODE_ID.0.get() + 1
+        debug_assert!(
+            node_id.0.get() >= FIRST_NONROOT_ID,
+            "Root node should have been handled in the if body"
+        );
+        node_id_offset + node_id.0.get() - FIRST_NONROOT_ID
     }
 }
 
@@ -208,7 +241,7 @@ fn nodes_to_proto_node_builders<'a>(
                         parser: consumer.get_client_side_parser(),
                         override_suggestion_type: consumer
                             .get_client_side_suggestion_type_override(),
-                        restricted: false
+                        restricted: false,
                     },
                 });
             }
@@ -222,7 +255,7 @@ fn nodes_to_proto_node_builders<'a>(
                         name: string,
                         is_executable: node_is_executable,
                         redirect_target: None,
-                        restricted: false
+                        restricted: false,
                     },
                 });
             }

@@ -56,7 +56,15 @@ pub enum NodeIdClassification {
 ///
 /// - **Root**:
 ///   Does not have a parent. Exactly one instance of this type of node
-///   exists per [`Tree`]. Always identifiable by [`ROOT_NODE_ID`].
+///   exists per [`Tree`]. Always identifiable by [`ROOT_NODE_ID`] (= 1).
+///   Only command nodes can be the children of this node.
+///
+///   **In any `Tree`**, the root node always has the ID of 1.
+///
+///   **Violating this constraint is a logic error** and breaks the assumptions
+///   made in this structure's functionality and that of outside as well.
+///
+///   In other words, a non-root node CANNOT HAVE an ID of 1!
 ///
 /// - **Command**:
 ///   Its parent must be the root node, and specifies the start of a

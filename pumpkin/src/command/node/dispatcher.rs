@@ -618,7 +618,10 @@ impl CommandDispatcher {
                         commands.insert(name, &command_tree.description);
                     }
                 } else {
-                    warn!("Command /{} does not have a permission set up", &command_tree.names[0]);
+                    warn!(
+                        "Command /{} does not have a permission set up",
+                        &command_tree.names[0]
+                    );
                 }
             }
         }
@@ -831,47 +834,47 @@ impl CommandDispatcher {
                             .await
                         {
                             return Some(format!("{usage_text}{ARG_SEPARATOR}{child_usage_text}"));
-                        } else if !children.is_empty() {
-                            let mut child_usages = Vec::new();
-                            // TODO: Optimize this set algorithm while keeping insertion order.
-                            for child in children {
-                                if let Some(child_usage_text) = self
-                                    .get_usage_recursive(child, source, child_optional, true, None)
-                                    .await
-                                    && !child_usages.contains(&child_usage_text)
-                                {
-                                    child_usages.push(child_usage_text);
-                                }
+                        }
+                    } else if !children.is_empty() {
+                        let mut child_usages = Vec::new();
+                        // TODO: Optimize this set algorithm while keeping insertion order.
+                        for child in children {
+                            if let Some(child_usage_text) = self
+                                .get_usage_recursive(child, source, child_optional, true, None)
+                                .await
+                                && !child_usages.contains(&child_usage_text)
+                            {
+                                child_usages.push(child_usage_text);
                             }
-                            if child_usages.len() == 1 {
-                                let mut child_usage = child_usages.into_iter().next().unwrap();
-                                if is_optional {
-                                    child_usage = format!(
-                                        "{USAGE_OPTIONAL_OPEN}{child_usage}{USAGE_OPTIONAL_CLOSE}"
-                                    );
-                                }
-                                return Some(format!("{usage_text}{ARG_SEPARATOR}{child_usage}"));
-                            } else if !child_usages.is_empty() {
-                                let (open, close) = if child_optional {
-                                    (USAGE_OPTIONAL_OPEN, USAGE_OPTIONAL_CLOSE)
-                                } else {
-                                    (USAGE_REQUIRED_OPEN, USAGE_REQUIRED_CLOSE)
-                                };
+                        }
+                        if child_usages.len() == 1 {
+                            let mut child_usage = child_usages.into_iter().next().unwrap();
+                            if is_optional {
+                                child_usage = format!(
+                                    "{USAGE_OPTIONAL_OPEN}{child_usage}{USAGE_OPTIONAL_CLOSE}"
+                                );
+                            }
+                            return Some(format!("{usage_text}{ARG_SEPARATOR}{child_usage}"));
+                        } else if !child_usages.is_empty() {
+                            let (open, close) = if child_optional {
+                                (USAGE_OPTIONAL_OPEN, USAGE_OPTIONAL_CLOSE)
+                            } else {
+                                (USAGE_REQUIRED_OPEN, USAGE_REQUIRED_CLOSE)
+                            };
 
-                                let mut result_usage = usage_text;
-                                result_usage += ARG_SEPARATOR;
-                                result_usage += open;
-                                let mut first = true;
-                                for child_usage in child_usages {
-                                    if !first {
-                                        result_usage += USAGE_OR;
-                                    }
-                                    result_usage += &*child_usage;
-                                    first = false;
+                            let mut result_usage = usage_text;
+                            result_usage += ARG_SEPARATOR;
+                            result_usage += open;
+                            let mut first = true;
+                            for child_usage in child_usages {
+                                if !first {
+                                    result_usage += USAGE_OR;
                                 }
-                                result_usage += close;
-                                return Some(result_usage);
+                                result_usage += &*child_usage;
+                                first = false;
                             }
+                            result_usage += close;
+                            return Some(result_usage);
                         }
                     }
                 }

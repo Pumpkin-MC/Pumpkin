@@ -3,7 +3,9 @@ use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgu
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType, INTEGER_TOO_HIGH, INTEGER_TOO_LOW};
+use crate::command::errors::error_types::{
+    CommandErrorType, INTEGER_TOO_HIGH, INTEGER_TOO_LOW, LiteralCommandErrorType,
+};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::string_reader::StringReader;
@@ -13,11 +15,12 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
 
-const NO_COMMANDS_ERROR_TYPE: LiteralCommandErrorType = LiteralCommandErrorType::new("No commands are available to show help for");
+const NO_COMMANDS_ERROR_TYPE: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("No commands are available to show help for");
 const FAILED_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new("commands.help.failed");
 
 const DESCRIPTION: &str = "Print a help message.";
-const PERMISSION: &str = "pumpkin:command.help";
+const PERMISSION: &str = "minecraft:command.help";
 
 const ARG: &str = "commandOrPage";
 
@@ -117,9 +120,7 @@ impl HelpCommandExecutor {
 
             let commands_available = commands.len();
             if commands_available == 0 {
-                return Err(
-                    NO_COMMANDS_ERROR_TYPE.create_without_context()
-                );
+                return Err(NO_COMMANDS_ERROR_TYPE.create_without_context());
             }
 
             let total_pages = commands_available.div_ceil(COMMANDS_PER_PAGE);
@@ -148,17 +149,14 @@ impl HelpCommandExecutor {
 
             let mut message = TextComponent::empty()
                 .add_child(
-                    TextComponent::text("-".repeat(dashes) + " ")
-                        .color_named(NamedColor::Yellow),
+                    TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
                 )
                 .add_child(arrow_left.clone())
                 .add_child(TextComponent::text(header_text.clone()))
                 .add_child(arrow_right.clone())
                 .add_child(
-                    TextComponent::text(
-                        " ".to_owned() + &"-".repeat(dashes) + "\n",
-                    )
-                    .color_named(NamedColor::Yellow),
+                    TextComponent::text(" ".to_owned() + &"-".repeat(dashes) + "\n")
+                        .color_named(NamedColor::Yellow),
                 );
 
             for (command, (description, usage)) in page_commands {
@@ -187,17 +185,14 @@ impl HelpCommandExecutor {
             let footer_text = format!(" Page {page}/{total_pages} ");
             message = message
                 .add_child(
-                    TextComponent::text("-".repeat(dashes) + " ")
-                        .color_named(NamedColor::Yellow),
+                    TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
                 )
                 .add_child(arrow_left)
                 .add_child(TextComponent::text(footer_text.clone()))
                 .add_child(arrow_right)
                 .add_child(
-                    TextComponent::text(
-                        " ".to_owned() + &"-".repeat(dashes),
-                    )
-                    .color_named(NamedColor::Yellow),
+                    TextComponent::text(" ".to_owned() + &"-".repeat(dashes))
+                        .color_named(NamedColor::Yellow),
                 );
 
             context.source.send_message(message).await;
@@ -224,15 +219,12 @@ impl HelpCommandExecutor {
 
             let mut message = TextComponent::empty()
                 .add_child(
-                    TextComponent::text("-".repeat(dashes) + " ")
-                        .color_named(NamedColor::Yellow),
+                    TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
                 )
                 .add_child(TextComponent::text(header_text.clone()))
                 .add_child(
-                    TextComponent::text(
-                        " ".to_owned() + &"-".repeat(dashes) + "\n",
-                    )
-                    .color_named(NamedColor::Yellow),
+                    TextComponent::text(" ".to_owned() + &"-".repeat(dashes) + "\n")
+                        .color_named(NamedColor::Yellow),
                 )
                 .add_child(
                     TextComponent::text("Command: ")

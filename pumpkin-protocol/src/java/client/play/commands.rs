@@ -89,7 +89,7 @@ impl ProtoNode<'_> {
                 name: _,
                 is_executable,
                 redirect_target,
-                restricted
+                restricted,
             } => {
                 let mut n = 1;
                 if restricted {
@@ -110,7 +110,7 @@ impl ProtoNode<'_> {
                 parser: _,
                 override_suggestion_type,
                 redirect_target,
-                restricted
+                restricted,
             } => {
                 let mut n = 2;
                 if restricted {
