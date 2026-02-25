@@ -122,12 +122,12 @@ macro_rules! impl_struct_builder {
 macro_rules! impl_string_struct_builder {
     (@internal $builder:ident) => {
         fn add_string_key_value(mut self, key: &str, value: Self::Value) -> Self {
-            self.$builder = self.$builder.clone().map(|r| self.append(key, value, r));
+            self.$builder = std::mem::take(&mut self.$builder).map(|r| self.append(key, value, r));
             self
         }
 
         fn add_string_key_value_result(mut self, key: &str, value: DataResult<Self::Value>) -> Self {
-            self.$builder = self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(key, v, r), value);
+            self.$builder = std::mem::take(&mut self.$builder).apply_2_and_make_stable(|r, v| self.append(key, v, r), value);
             self
         }
     };
@@ -139,14 +139,14 @@ macro_rules! impl_string_struct_builder {
 
         fn add_key_value(mut self, key: Self::Value, value: Self::Value) -> Self {
             self.$builder = $ops.get_string(&key).flat_map(
-                |s| self.$builder.clone().map(|r| self.append(&s, value, r))
+                |s| std::mem::take(&mut self.$builder).map(|r| self.append(&s, value, r))
             );
             self
         }
 
         fn add_key_value_result(mut self, key: Self::Value, value: DataResult<Self::Value>) -> Self {
             self.$builder = $ops.get_string(&key).flat_map(
-                |s| self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
+                |s| std::mem::take(&mut self.$builder).apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
             );
             self
         }
@@ -157,7 +157,7 @@ macro_rules! impl_string_struct_builder {
             value: DataResult<Self::Value>,
         ) -> Self {
             self.$builder = key.flat_map(|v| $ops.get_string(&v)).flat_map(|s| {
-                self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
+                std::mem::take(&mut self.$builder).apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
             });
             self
         }
@@ -170,14 +170,14 @@ macro_rules! impl_string_struct_builder {
 
         fn add_key_value(mut self, key: Self::Value, value: Self::Value) -> Self {
             self.$builder = self.$ops.get_string(&key).flat_map(
-                |s| self.$builder.clone().map(|r| self.append(&s, value, r))
+                |s| std::mem::take(&mut self.$builder).map(|r| self.append(&s, value, r))
             );
             self
         }
 
         fn add_key_value_result(mut self, key: Self::Value, value: DataResult<Self::Value>) -> Self {
             self.$builder = self.$ops.get_string(&key).flat_map(
-                |s| self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
+                |s| std::mem::take(&mut self.$builder).apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
             );
             self
         }
@@ -188,7 +188,7 @@ macro_rules! impl_string_struct_builder {
             value: DataResult<Self::Value>,
         ) -> Self {
             self.$builder = key.flat_map(|v| self.$ops.get_string(&v)).flat_map(|s| {
-                self.$builder.clone().apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
+                std::mem::take(&mut self.$builder).apply_2_and_make_stable(|r, v| self.append(&s, v, r), value)
             });
             self
         }
@@ -203,12 +203,12 @@ macro_rules! impl_string_struct_builder {
 macro_rules! impl_universal_struct_builder {
     (@internal $builder:ident) => {
         fn add_key_value(mut self, key: Self::Value, value: Self::Value) -> Self {
-            self.$builder = self.$builder.clone().map(|b| self.append(key, value, b));
+            self.$builder = std::mem::take(&mut self.$builder).map(|b| self.append(key, value, b));
             self
         }
 
         fn add_key_value_result(mut self, key: Self::Value, value: DataResult<Self::Value>) -> Self {
-            self.$builder = self.$builder.clone()
+            self.$builder = std::mem::take(&mut self.$builder)
                 .apply_2_and_make_stable(|b, v| self.append(key, v, b), value);
             self
         }

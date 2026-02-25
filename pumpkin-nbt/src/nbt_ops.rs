@@ -1,6 +1,5 @@
 use crate::compound::NbtCompound;
 use crate::tag::NbtTag;
-use crate::{COMPOUND_ID, END_ID};
 use pumpkin_codecs::Number;
 use pumpkin_codecs::data_result::DataResult;
 use pumpkin_codecs::dynamic_ops::DynamicOps;
@@ -66,9 +65,7 @@ impl DynamicOps for NbtOps {
     where
         I: IntoIterator<Item = Self::Value>,
     {
-        ListCollector::new_initial_collector()
-            .accept_all(values)
-            .result()
+        ListCollector::new_collector().accept_all(values).result()
     }
 
     fn create_map<I>(&self, entries: I) -> Self::Value
@@ -413,7 +410,12 @@ impl ResultStructBuilder for NbtStructBuilder {
                             compound.put(&k, v);
                         }
                     }
-                    _ => unreachable!(),
+                    // This shouldn't happen, but just in case.
+                    _ => {
+                        return DataResult::error(format!(
+                            "Expected compound in builder, found {builder}"
+                        ));
+                    }
                 }
                 DataResult::success(compound.into())
             }
@@ -446,9 +448,7 @@ impl StringStructBuilder for NbtStructBuilder {
 ///
 /// The variants of this object should not be used as that is an implementation detail.
 enum ListCollector {
-    Heterogeneous(InnerHeterogeneousListCollector),
-    Homogeneous(InnerHomogeneousListCollector),
-    Initial(InnerInitialListCollector),
+    Generic(InnerGenericListCollector),
 
     Byte(InnerByteListCollector),
     Int(InnerIntListCollector),
@@ -461,7 +461,7 @@ impl ListCollector {
     /// This only returns an actual collector for [`NbtTag::End`] and all list [`NbtTag`]s.
     fn new(tag: NbtTag) -> Option<Self> {
         match tag {
-            NbtTag::End => Some(Self::new_initial_collector()),
+            NbtTag::End => Some(Self::new_collector()),
 
             NbtTag::List(_) | NbtTag::ByteArray(_) | NbtTag::IntArray(_) | NbtTag::LongArray(_) => {
                 // Try to get the length of the tag.
@@ -476,22 +476,12 @@ impl ListCollector {
                 };
 
                 if len == 0 {
-                    return Some(Self::new_initial_collector());
+                    return Some(Self::new_collector());
                 }
 
                 // From this point onwards, we know that the list is not empty.
                 match tag {
-                    NbtTag::List(list) => {
-                        // Check the type of element this list has.
-                        match list.first().unwrap().get_type_id() {
-                            END_ID => Some(Self::new_initial_collector()),
-                            COMPOUND_ID => Some(Self::Heterogeneous(
-                                InnerHeterogeneousListCollector::new(list),
-                            )),
-                            _ => Some(Self::Homogeneous(InnerHomogeneousListCollector::new(list))),
-                        }
-                    }
-
+                    NbtTag::List(list) => Some(Self::Generic(InnerGenericListCollector::new(list))),
                     NbtTag::ByteArray(list) => Some(Self::Byte(InnerByteListCollector::new(list))),
                     NbtTag::IntArray(list) => Some(Self::Int(InnerIntListCollector::new(list))),
                     NbtTag::LongArray(list) => Some(Self::Long(InnerLongListCollector::new(list))),
@@ -506,17 +496,14 @@ impl ListCollector {
 
     /// Creates a new initial collector.
     /// [`NbtTag`]s can directly be added to this collector without any type worries.
-    const fn new_initial_collector() -> Self {
-        Self::Initial(InnerInitialListCollector)
+    const fn new_collector() -> Self {
+        Self::Generic(InnerGenericListCollector { list: vec![] })
     }
 
     /// Accepts an [`NbtTag`].
     fn accept(self, tag: NbtTag) -> Self {
         match self {
-            Self::Heterogeneous(c) => c.accept(tag),
-            Self::Homogeneous(c) => c.accept(tag),
-            Self::Initial(c) => c.accept(tag),
-
+            Self::Generic(c) => c.accept(tag),
             Self::Byte(c) => c.accept(tag),
             Self::Int(c) => c.accept(tag),
             Self::Long(c) => c.accept(tag),
@@ -535,10 +522,7 @@ impl ListCollector {
     /// Provides the final result.
     fn result(self) -> NbtTag {
         match self {
-            Self::Heterogeneous(c) => c.result(),
-            Self::Homogeneous(c) => c.result(),
-            Self::Initial(c) => c.result(),
-
+            Self::Generic(c) => c.result(),
             Self::Byte(c) => c.result(),
             Self::Int(c) => c.result(),
             Self::Long(c) => c.result(),
@@ -555,114 +539,36 @@ trait InnerListCollector {
     fn result(self) -> NbtTag;
 }
 
-/// An implementation of [`InnerListCollector`] for a list with more than 1 type of element.
-///
-/// Internally, each element is wrapped in a [`NbtTag::Compound`] to preserve the same type for the
-/// underlying list.
-struct InnerHeterogeneousListCollector {
-    result: Vec<NbtTag>,
+/// An implementation of [`InnerListCollector`] for a generic list (of any type).
+struct InnerGenericListCollector {
+    list: Vec<NbtTag>,
 }
 
-impl InnerListCollector for InnerHeterogeneousListCollector {
+impl InnerListCollector for InnerGenericListCollector {
     fn accept(mut self, tag: NbtTag) -> ListCollector
     where
         Self: Sized,
     {
-        self.result.push(Self::wrap_if_required(tag));
-        ListCollector::Heterogeneous(self)
+        self.list.push(tag);
+        ListCollector::Generic(self)
     }
 
     fn result(self) -> NbtTag {
-        NbtTag::List(self.result)
+        NbtTag::List(self.list)
     }
 }
 
-impl InnerHeterogeneousListCollector {
-    const fn new(list: Vec<NbtTag>) -> Self {
-        Self { result: list }
-    }
-
-    const fn is_wrapper(tag: &NbtTag) -> bool {
-        if let NbtTag::Compound(compound) = tag {
-            compound.child_tags.len() == 1
-        } else {
-            false
-        }
-    }
-    fn wrap_if_required(tag: NbtTag) -> NbtTag {
-        if !Self::is_wrapper(&tag)
-            && let NbtTag::Compound(compound) = tag
-        {
-            compound.into()
-        } else {
-            Self::wrap_element(tag)
-        }
-    }
-    fn wrap_element(tag: NbtTag) -> NbtTag {
-        let mut compound = NbtCompound::new();
-        compound.put("", tag);
-        compound.into()
-    }
-}
-
-impl From<InnerHomogeneousListCollector> for InnerHeterogeneousListCollector {
-    fn from(collector: InnerHomogeneousListCollector) -> Self {
-        Self {
-            result: collector.result,
-        }
-    }
-}
-
-impl From<InnerByteListCollector> for InnerHeterogeneousListCollector {
+impl From<InnerByteListCollector> for InnerGenericListCollector {
     fn from(value: InnerByteListCollector) -> Self {
         Self {
-            result: value
-                .list
-                .into_iter()
-                .map(|b| Self::wrap_element(NbtTag::Byte(b)))
-                .collect(),
+            list: value.list.into_iter().map(NbtTag::Byte).collect(),
         }
     }
 }
 
-/// An implementation of [`InnerListCollector`] for a list with exactly 1 type of element.
-struct InnerHomogeneousListCollector {
-    result: Vec<NbtTag>,
-}
-
-impl InnerListCollector for InnerHomogeneousListCollector {
-    fn accept(mut self, tag: NbtTag) -> ListCollector
-    where
-        Self: Sized,
-    {
-        if tag.get_type_id() == self.element_type() {
-            self.result.push(tag);
-            ListCollector::Homogeneous(self)
-        } else {
-            // Switch to a heterogeneous collector.
-            self.result.push(tag);
-            ListCollector::Heterogeneous(self.into())
-        }
-    }
-
-    fn result(self) -> NbtTag {
-        NbtTag::List(self.result)
-    }
-}
-
-impl InnerHomogeneousListCollector {
-    /// Returns the element type of list of this collector.
-    fn element_type(&self) -> u8 {
-        if self.result.is_empty() {
-            END_ID
-        } else {
-            // Check the first element's type.
-            self.result[0].get_type_id()
-        }
-    }
-
+impl InnerGenericListCollector {
     const fn new(list: Vec<NbtTag>) -> Self {
-        Self { result: list }
+        Self { list }
     }
 }
 
@@ -680,7 +586,7 @@ impl InnerListCollector for InnerByteListCollector {
             self.list.push(byte);
             ListCollector::Byte(self)
         } else {
-            <Self as Into<InnerHeterogeneousListCollector>>::into(self).accept(tag)
+            <Self as Into<InnerGenericListCollector>>::into(self).accept(tag)
         }
     }
 
@@ -719,7 +625,7 @@ macro_rules! add_inner_specific_array_collector_impl {
                     self.list.push(v);
                     ListCollector::$single_type(self)
                 } else {
-                    <Self as Into<InnerHeterogeneousListCollector>>::into(self)
+                    <Self as Into<InnerGenericListCollector>>::into(self)
                         .accept(tag)
                 }
             }
@@ -737,10 +643,10 @@ macro_rules! add_inner_specific_array_collector_impl {
             }
         }
 
-        impl From<$name> for InnerHeterogeneousListCollector {
+        impl From<$name> for InnerGenericListCollector {
             fn from(value: $name) -> Self {
-                InnerHeterogeneousListCollector {
-                    result: value.list.into_iter().map(|b| Self::wrap_element(NbtTag::$single_type(b))).collect()
+                InnerGenericListCollector {
+                    list: value.list.into_iter().map(|b| NbtTag::$single_type(b)).collect()
                 }
             }
         }
@@ -749,31 +655,6 @@ macro_rules! add_inner_specific_array_collector_impl {
 
 add_inner_specific_array_collector_impl!(InnerIntListCollector, Int, IntArray, i32);
 add_inner_specific_array_collector_impl!(InnerLongListCollector, Long, LongArray, i64);
-
-/// An implementation of [`InnerListCollector`] to start with.
-/// This list collector turns into another collector depending on the type of tag given to it.
-struct InnerInitialListCollector;
-
-impl InnerListCollector for InnerInitialListCollector {
-    fn accept(self, tag: NbtTag) -> ListCollector
-    where
-        Self: Sized,
-    {
-        match tag {
-            NbtTag::Compound(_) => {
-                ListCollector::Heterogeneous(InnerHeterogeneousListCollector { result: vec![tag] })
-            }
-            NbtTag::Byte(b) => ListCollector::Byte(InnerByteListCollector { list: vec![b] }),
-            NbtTag::Int(i) => ListCollector::Int(InnerIntListCollector { list: vec![i] }),
-            NbtTag::Long(l) => ListCollector::Long(InnerLongListCollector { list: vec![l] }),
-            _ => ListCollector::Homogeneous(InnerHomogeneousListCollector { result: vec![tag] }),
-        }
-    }
-
-    fn result(self) -> NbtTag {
-        NbtTag::List(vec![])
-    }
-}
 
 #[cfg(test)]
 mod test {
@@ -942,41 +823,38 @@ mod test {
     #[test]
     fn list_collecting() {
         // Int list collector
-        let mut collector = ListCollector::new_initial_collector();
-
-        collector = collector.accept(NbtTag::Int(10));
-        collector = collector.accept(NbtTag::Int(15));
-        collector = collector.accept(NbtTag::Int(20));
-
-        assert_eq!(collector.result(), NbtTag::IntArray(vec![10, 15, 20]));
-
-        // Byte list collector
-        let mut collector = ListCollector::new_initial_collector();
-
-        collector = collector.accept(NbtTag::Byte(-1));
-        collector = collector.accept(NbtTag::Byte(5));
-        collector = collector.accept(NbtTag::Byte(10));
+        let tag = NbtTag::IntArray(vec![10, 15, 20]);
 
         assert_eq!(
-            collector.result(),
-            NbtTag::ByteArray(Box::new([-1i8 as u8, 5i8 as u8, 10i8 as u8]))
+            ListCollector::new(tag)
+                .expect("List collector should exist")
+                .result(),
+            NbtTag::IntArray(vec![10, 15, 20])
         );
 
-        // Long list collector
-        let mut collector = ListCollector::new_initial_collector();
-
-        collector = collector.accept(NbtTag::Long(11_234_567_890));
-        collector = collector.accept(NbtTag::Long(-986));
-        collector = collector.accept(NbtTag::Long(1));
-        collector = collector.accept(NbtTag::Long(-937_238_122));
+        // Byte list collector
+        let tag = NbtTag::ByteArray(Box::new([255, 45, 100]));
 
         assert_eq!(
-            collector.result(),
+            ListCollector::new(tag)
+                .expect("List collector should exist")
+                .result(),
+            NbtTag::ByteArray(Box::new([255, 45, 100]))
+        );
+
+        // Long list
+        let tag = NbtTag::LongArray(vec![11_234_567_890, -986, 1, -937_238_122]);
+
+        assert_eq!(
+            ListCollector::new(tag)
+                .expect("List collector should exist")
+                .result(),
             NbtTag::LongArray(vec![11_234_567_890, -986, 1, -937_238_122])
         );
 
-        // Homogeneous list collector
-        let mut collector = ListCollector::new_initial_collector();
+        // Generic list collector
+        // Homogeneous elements
+        let mut collector = ListCollector::new_collector();
 
         collector = collector.accept(NbtTag::Float(-123.4));
         collector = collector.accept(NbtTag::Float(12.5));
@@ -986,29 +864,21 @@ mod test {
             NbtTag::List(vec![NbtTag::Float(-123.4), NbtTag::Float(12.5)])
         );
 
-        // Heterogeneous list collector
-        let mut collector = ListCollector::new_initial_collector();
+        // Heterogeneous elements
+        let mut collector = ListCollector::new_collector();
 
         collector = collector.accept(NbtTag::Byte(99));
-
-        // The list collector should change its type after accepting this string.
         collector = collector.accept(NbtTag::String("99".to_string()));
         collector = collector.accept(NbtTag::LongArray(vec![1, 2, 3]));
 
-        let result = collector.result();
-
-        if let NbtTag::List(list) = result {
-            for tag in list {
-                // We expect each element to be wrapped in a compound tag with only 1 key, an empty string with our value.
-                let compound = tag.extract_compound().expect("Expected NBT compound");
-
-                assert_eq!(compound.child_tags.len(), 1);
-
-                assert_eq!(compound.child_tags[0].0, "");
-            }
-        } else {
-            panic!("Expected an NBT list, got {result:?}");
-        }
+        assert_eq!(
+            collector.result(),
+            NbtTag::List(vec![
+                NbtTag::Byte(99),
+                NbtTag::String("99".to_string()),
+                NbtTag::LongArray(vec![1, 2, 3])
+            ])
+        );
     }
 
     // Specific codec tests
