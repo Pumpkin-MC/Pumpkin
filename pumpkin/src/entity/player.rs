@@ -2635,7 +2635,9 @@ impl Player {
         self.open_container_pos.store(None);
 
         let server = self.world().server.upgrade().unwrap();
-        let player = server.get_player_by_uuid(self.gameprofile.id).unwrap();
+        let Some(player) = server.get_player_by_uuid(self.gameprofile.id) else {
+            return;
+        };
         let event = InventoryCloseEvent::new(player, identifier, window_type, sync_id);
         server.plugin_manager.fire(event).await;
     }
