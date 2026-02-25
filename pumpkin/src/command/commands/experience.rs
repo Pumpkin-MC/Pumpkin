@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use pumpkin_util::math::experience;
@@ -171,7 +172,7 @@ impl Executor {
     /// Returns `true` if successful. Otherwise, there was a problem setting the points of a player.
     async fn handle_modify(
         &self,
-        target: &Player,
+        target: &Arc<Player>,
         amount: i32,
         exp_type: ExpType,
         mode: Mode,
@@ -186,11 +187,7 @@ impl Executor {
             }
             ExpType::Points => {
                 if mode == Mode::Add {
-                    if let Some(player) = target.world().get_player_by_uuid(target.gameprofile.id) {
-                        player.add_experience_points(amount).await;
-                    } else {
-                        return false;
-                    }
+                    target.add_experience_points(amount).await;
                 } else {
                     let current_level = target.experience_level.load(Ordering::Relaxed);
                     let current_max_points = experience::points_in_level(current_level);
