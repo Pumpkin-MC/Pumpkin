@@ -497,7 +497,9 @@ impl ListCollector {
     /// Creates a new initial collector.
     /// [`NbtTag`]s can directly be added to this collector without any type worries.
     const fn new_collector() -> Self {
-        Self::Generic(InnerGenericListCollector { list: vec![] })
+        Self::Generic(InnerGenericListCollector {
+            result: NbtTag::List(vec![]),
+        })
     }
 
     /// Accepts an [`NbtTag`].
@@ -541,7 +543,7 @@ trait InnerListCollector {
 
 /// An implementation of [`InnerListCollector`] for a generic list (of any type).
 struct InnerGenericListCollector {
-    list: Vec<NbtTag>,
+    result: NbtTag,
 }
 
 impl InnerListCollector for InnerGenericListCollector {
@@ -549,26 +551,31 @@ impl InnerListCollector for InnerGenericListCollector {
     where
         Self: Sized,
     {
-        self.list.push(tag);
+        match &mut self.result {
+            NbtTag::List(list) => list.push(tag),
+            _ => unreachable!(),
+        }
         ListCollector::Generic(self)
     }
 
     fn result(self) -> NbtTag {
-        NbtTag::List(self.list)
+        self.result
     }
 }
 
 impl From<InnerByteListCollector> for InnerGenericListCollector {
     fn from(value: InnerByteListCollector) -> Self {
         Self {
-            list: value.list.into_iter().map(NbtTag::Byte).collect(),
+            result: NbtTag::List(value.list.into_iter().map(NbtTag::Byte).collect()),
         }
     }
 }
 
 impl InnerGenericListCollector {
     const fn new(list: Vec<NbtTag>) -> Self {
-        Self { list }
+        Self {
+            result: NbtTag::List(list),
+        }
     }
 }
 
@@ -646,7 +653,9 @@ macro_rules! add_inner_specific_array_collector_impl {
         impl From<$name> for InnerGenericListCollector {
             fn from(value: $name) -> Self {
                 InnerGenericListCollector {
-                    list: value.list.into_iter().map(|b| NbtTag::$single_type(b)).collect()
+                    result: NbtTag::List(
+                        value.list.into_iter().map(|b| NbtTag::$single_type(b)).collect()
+                    )
                 }
             }
         }
@@ -681,6 +690,7 @@ mod test {
 
     /// Convenience function to easily create an [`NbtTag::Compound`].
     macro_rules! nbt_compound_tag {
+
         ( { $($key:literal : $tag:expr),+ $(,)* } ) => {
             {
                 let mut compound = NbtCompound::new();
@@ -867,16 +877,16 @@ mod test {
         // Heterogeneous elements
         let mut collector = ListCollector::new_collector();
 
-        collector = collector.accept(NbtTag::Byte(99));
-        collector = collector.accept(NbtTag::String("99".to_string()));
-        collector = collector.accept(NbtTag::LongArray(vec![1, 2, 3]));
+        collector = collector.accept(nbt_compound_tag!({"": NbtTag::Byte(99)}));
+        collector = collector.accept(nbt_compound_tag!({"": NbtTag::String("99".to_string())}));
+        collector = collector.accept(nbt_compound_tag!({"": NbtTag::LongArray(vec![1, 2, 3])}));
 
         assert_eq!(
             collector.result(),
             NbtTag::List(vec![
-                NbtTag::Byte(99),
-                NbtTag::String("99".to_string()),
-                NbtTag::LongArray(vec![1, 2, 3])
+                nbt_compound_tag!({"": NbtTag::Byte(99)}),
+                nbt_compound_tag!({"": NbtTag::String("99".to_string())}),
+                nbt_compound_tag!({"": NbtTag::LongArray(vec![1, 2, 3])})
             ])
         );
     }
