@@ -5,32 +5,137 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-/// TODO List
-/// - Add server locale support
-/// - Use translations in the logs
-/// - Open a public translation system, maybe a Crowdin like Minecraft?
-/// - Add support for translations on commands descriptions
-/// - Integrate custom translations with the plugins API
-/// - Try to optimize code of '`to_translated`'
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../assets/en_us.json");
+static PUMPKIN_AF_ZA_JSON: &str = include_str!("../../assets/translations/af_za.json");
+static PUMPKIN_AR_SA_JSON: &str = include_str!("../../assets/translations/ar_sa.json");
+static PUMPKIN_AST_ES_JSON: &str = include_str!("../../assets/translations/ast_es.json");
+static PUMPKIN_AZ_AZ_JSON: &str = include_str!("../../assets/translations/az_az.json");
+static PUMPKIN_BA_RU_JSON: &str = include_str!("../../assets/translations/ba_ru.json");
+static PUMPKIN_BAR_JSON: &str = include_str!("../../assets/translations/bar.json");
+static PUMPKIN_BE_BY_JSON: &str = include_str!("../../assets/translations/be_by.json");
+static PUMPKIN_BG_BG_JSON: &str = include_str!("../../assets/translations/bg_bg.json");
+static PUMPKIN_BR_FR_JSON: &str = include_str!("../../assets/translations/br_fr.json");
+static PUMPKIN_BRB_JSON: &str = include_str!("../../assets/translations/brb.json");
+static PUMPKIN_BS_BA_JSON: &str = include_str!("../../assets/translations/bs_ba.json");
+static PUMPKIN_CA_ES_JSON: &str = include_str!("../../assets/translations/ca_es.json");
+static PUMPKIN_CS_CZ_JSON: &str = include_str!("../../assets/translations/cs_cz.json");
+static PUMPKIN_CY_GB_JSON: &str = include_str!("../../assets/translations/cy_gb.json");
+static PUMPKIN_DA_DK_JSON: &str = include_str!("../../assets/translations/da_dk.json");
+static PUMPKIN_DE_AT_JSON: &str = include_str!("../../assets/translations/de_at.json");
+static PUMPKIN_DE_CH_JSON: &str = include_str!("../../assets/translations/de_ch.json");
 static PUMPKIN_DE_DE_JSON: &str = include_str!("../../assets/translations/de_de.json");
+static PUMPKIN_EL_GR_JSON: &str = include_str!("../../assets/translations/el_gr.json");
+static PUMPKIN_EN_AU_JSON: &str = include_str!("../../assets/translations/en_au.json");
+static PUMPKIN_EN_CA_JSON: &str = include_str!("../../assets/translations/en_ca.json");
+static PUMPKIN_EN_GB_JSON: &str = include_str!("../../assets/translations/en_gb.json");
+static PUMPKIN_EN_NZ_JSON: &str = include_str!("../../assets/translations/en_nz.json");
+static PUMPKIN_EN_PT_JSON: &str = include_str!("../../assets/translations/en_pt.json");
+static PUMPKIN_EN_UD_JSON: &str = include_str!("../../assets/translations/en_ud.json");
 static PUMPKIN_EN_US_JSON: &str = include_str!("../../assets/translations/en_us.json");
+static PUMPKIN_ENP_JSON: &str = include_str!("../../assets/translations/enp.json");
+static PUMPKIN_ENWS_JSON: &str = include_str!("../../assets/translations/enws.json");
+static PUMPKIN_EO_UY_JSON: &str = include_str!("../../assets/translations/eo_uy.json");
+static PUMPKIN_ES_AR_JSON: &str = include_str!("../../assets/translations/es_ar.json");
+static PUMPKIN_ES_CL_JSON: &str = include_str!("../../assets/translations/es_cl.json");
+static PUMPKIN_ES_EC_JSON: &str = include_str!("../../assets/translations/es_ec.json");
 static PUMPKIN_ES_ES_JSON: &str = include_str!("../../assets/translations/es_es.json");
+static PUMPKIN_ES_MX_JSON: &str = include_str!("../../assets/translations/es_mx.json");
+static PUMPKIN_ES_UY_JSON: &str = include_str!("../../assets/translations/es_uy.json");
+static PUMPKIN_ES_VE_JSON: &str = include_str!("../../assets/translations/es_ve.json");
+static PUMPKIN_ESAN_JSON: &str = include_str!("../../assets/translations/esan.json");
+static PUMPKIN_ET_EE_JSON: &str = include_str!("../../assets/translations/et_ee.json");
+static PUMPKIN_EU_ES_JSON: &str = include_str!("../../assets/translations/eu_es.json");
+static PUMPKIN_FA_IR_JSON: &str = include_str!("../../assets/translations/fa_ir.json");
+static PUMPKIN_FI_FI_JSON: &str = include_str!("../../assets/translations/fi_fi.json");
+static PUMPKIN_FIL_PH_JSON: &str = include_str!("../../assets/translations/fil_ph.json");
+static PUMPKIN_FO_FO_JSON: &str = include_str!("../../assets/translations/fo_fo.json");
+static PUMPKIN_FR_CA_JSON: &str = include_str!("../../assets/translations/fr_ca.json");
 static PUMPKIN_FR_FR_JSON: &str = include_str!("../../assets/translations/fr_fr.json");
+static PUMPKIN_FRA_DE_JSON: &str = include_str!("../../assets/translations/fra_de.json");
+static PUMPKIN_FUR_IT_JSON: &str = include_str!("../../assets/translations/fur_it.json");
+static PUMPKIN_FY_NL_JSON: &str = include_str!("../../assets/translations/fy_nl.json");
+static PUMPKIN_GA_IE_JSON: &str = include_str!("../../assets/translations/ga_ie.json");
+static PUMPKIN_GD_GB_JSON: &str = include_str!("../../assets/translations/gd_gb.json");
+static PUMPKIN_GL_ES_JSON: &str = include_str!("../../assets/translations/gl_es.json");
+static PUMPKIN_HAW_US_JSON: &str = include_str!("../../assets/translations/haw_us.json");
+static PUMPKIN_HE_IL_JSON: &str = include_str!("../../assets/translations/he_il.json");
+static PUMPKIN_HI_IN_JSON: &str = include_str!("../../assets/translations/hi_in.json");
+static PUMPKIN_HR_HR_JSON: &str = include_str!("../../assets/translations/hr_hr.json");
+static PUMPKIN_HU_HU_JSON: &str = include_str!("../../assets/translations/hu_hu.json");
+static PUMPKIN_HY_AM_JSON: &str = include_str!("../../assets/translations/hy_am.json");
+static PUMPKIN_ID_ID_JSON: &str = include_str!("../../assets/translations/id_id.json");
+static PUMPKIN_IG_NG_JSON: &str = include_str!("../../assets/translations/ig_ng.json");
+static PUMPKIN_IO_EN_JSON: &str = include_str!("../../assets/translations/io_en.json");
+static PUMPKIN_IS_IS_JSON: &str = include_str!("../../assets/translations/is_is.json");
+static PUMPKIN_ISV_JSON: &str = include_str!("../../assets/translations/isv.json");
+static PUMPKIN_IT_IT_JSON: &str = include_str!("../../assets/translations/it_it.json");
 static PUMPKIN_JA_JP_JSON: &str = include_str!("../../assets/translations/ja_jp.json");
+static PUMPKIN_JBO_EN_JSON: &str = include_str!("../../assets/translations/jbo_en.json");
+static PUMPKIN_KA_GE_JSON: &str = include_str!("../../assets/translations/ka_ge.json");
+static PUMPKIN_KK_KZ_JSON: &str = include_str!("../../assets/translations/kk_kz.json");
+static PUMPKIN_KN_IN_JSON: &str = include_str!("../../assets/translations/kn_in.json");
+static PUMPKIN_KO_KR_JSON: &str = include_str!("../../assets/translations/ko_kr.json");
+static PUMPKIN_KSH_JSON: &str = include_str!("../../assets/translations/ksh.json");
+static PUMPKIN_KW_GB_JSON: &str = include_str!("../../assets/translations/kw_gb.json");
+static PUMPKIN_LA_LA_JSON: &str = include_str!("../../assets/translations/la_la.json");
+static PUMPKIN_LB_LU_JSON: &str = include_str!("../../assets/translations/lb_lu.json");
+static PUMPKIN_LI_LI_JSON: &str = include_str!("../../assets/translations/li_li.json");
+static PUMPKIN_LMO_JSON: &str = include_str!("../../assets/translations/lmo.json");
+static PUMPKIN_LO_LA_JSON: &str = include_str!("../../assets/translations/lo_la.json");
+static PUMPKIN_LOL_US_JSON: &str = include_str!("../../assets/translations/lol_us.json");
+static PUMPKIN_LT_LT_JSON: &str = include_str!("../../assets/translations/lt_lt.json");
+static PUMPKIN_LV_LV_JSON: &str = include_str!("../../assets/translations/lv_lv.json");
+static PUMPKIN_LZH_JSON: &str = include_str!("../../assets/translations/lzh.json");
+static PUMPKIN_MK_MK_JSON: &str = include_str!("../../assets/translations/mk_mk.json");
+static PUMPKIN_MN_MN_JSON: &str = include_str!("../../assets/translations/mn_mn.json");
+static PUMPKIN_MS_MY_JSON: &str = include_str!("../../assets/translations/ms_my.json");
+static PUMPKIN_MT_MT_JSON: &str = include_str!("../../assets/translations/mt_mt.json");
+static PUMPKIN_NAH_JSON: &str = include_str!("../../assets/translations/nah.json");
+static PUMPKIN_NDS_DE_JSON: &str = include_str!("../../assets/translations/nds_de.json");
 static PUMPKIN_NL_BE_JSON: &str = include_str!("../../assets/translations/nl_be.json");
 static PUMPKIN_NL_NL_JSON: &str = include_str!("../../assets/translations/nl_nl.json");
+static PUMPKIN_NN_NO_JSON: &str = include_str!("../../assets/translations/nn_no.json");
+static PUMPKIN_NO_NO_JSON: &str = include_str!("../../assets/translations/no_no.json");
+static PUMPKIN_OC_FR_JSON: &str = include_str!("../../assets/translations/oc_fr.json");
+static PUMPKIN_OVD_JSON: &str = include_str!("../../assets/translations/ovd.json");
+static PUMPKIN_PL_PL_JSON: &str = include_str!("../../assets/translations/pl_pl.json");
+static PUMPKIN_PT_BR_JSON: &str = include_str!("../../assets/translations/pt_br.json");
+static PUMPKIN_PT_PT_JSON: &str = include_str!("../../assets/translations/pt_pt.json");
+static PUMPKIN_QYA_AA_JSON: &str = include_str!("../../assets/translations/qya_aa.json");
+static PUMPKIN_RO_RO_JSON: &str = include_str!("../../assets/translations/ro_ro.json");
+static PUMPKIN_RPR_JSON: &str = include_str!("../../assets/translations/rpr.json");
 static PUMPKIN_RU_RU_JSON: &str = include_str!("../../assets/translations/ru_ru.json");
+static PUMPKIN_RY_UA_JSON: &str = include_str!("../../assets/translations/ry_ua.json");
+static PUMPKIN_SAH_SAH_JSON: &str = include_str!("../../assets/translations/sah_sah.json");
+static PUMPKIN_SE_NO_JSON: &str = include_str!("../../assets/translations/se_no.json");
+static PUMPKIN_SK_SK_JSON: &str = include_str!("../../assets/translations/sk_sk.json");
+static PUMPKIN_SL_SI_JSON: &str = include_str!("../../assets/translations/sl_si.json");
+static PUMPKIN_SO_SO_JSON: &str = include_str!("../../assets/translations/so_so.json");
 static PUMPKIN_SQ_AL_JSON: &str = include_str!("../../assets/translations/sq_al.json");
+static PUMPKIN_SR_CS_JSON: &str = include_str!("../../assets/translations/sr_cs.json");
+static PUMPKIN_SR_SP_JSON: &str = include_str!("../../assets/translations/sr_sp.json");
+static PUMPKIN_SV_SE_JSON: &str = include_str!("../../assets/translations/sv_se.json");
+static PUMPKIN_SXU_JSON: &str = include_str!("../../assets/translations/sxu.json");
+static PUMPKIN_SZL_JSON: &str = include_str!("../../assets/translations/szl.json");
+static PUMPKIN_TA_IN_JSON: &str = include_str!("../../assets/translations/ta_in.json");
+static PUMPKIN_TH_TH_JSON: &str = include_str!("../../assets/translations/th_th.json");
+static PUMPKIN_TL_PH_JSON: &str = include_str!("../../assets/translations/tl_ph.json");
+static PUMPKIN_TLH_AA_JSON: &str = include_str!("../../assets/translations/tlh_aa.json");
+static PUMPKIN_TOK_JSON: &str = include_str!("../../assets/translations/tok.json");
+static PUMPKIN_TR_TR_JSON: &str = include_str!("../../assets/translations/tr_tr.json");
+static PUMPKIN_TT_RU_JSON: &str = include_str!("../../assets/translations/tt_ru.json");
+static PUMPKIN_UK_UA_JSON: &str = include_str!("../../assets/translations/uk_ua.json");
+static PUMPKIN_VAL_ES_JSON: &str = include_str!("../../assets/translations/val_es.json");
+static PUMPKIN_VEC_IT_JSON: &str = include_str!("../../assets/translations/vec_it.json");
+static PUMPKIN_VI_VN_JSON: &str = include_str!("../../assets/translations/vi_vn.json");
+static PUMPKIN_YI_DE_JSON: &str = include_str!("../../assets/translations/yi_de.json");
+static PUMPKIN_YO_NG_JSON: &str = include_str!("../../assets/translations/yo_ng.json");
 static PUMPKIN_ZH_CN_JSON: &str = include_str!("../../assets/translations/zh_cn.json");
 static PUMPKIN_ZH_HK_JSON: &str = include_str!("../../assets/translations/zh_hk.json");
 static PUMPKIN_ZH_TW_JSON: &str = include_str!("../../assets/translations/zh_tw.json");
-static PUMPKIN_TR_TR_JSON: &str = include_str!("../../assets/translations/tr_tr.json");
-static PUMPKIN_UK_UA_JSON: &str = include_str!("../../assets/translations/uk_ua.json");
-static PUMPKIN_VI_VN_JSON: &str = include_str!("../../assets/translations/vi_vn.json");
-static PUMPKIN_PT_BR_JSON: &str = include_str!("../../assets/translations/pt_br.json");
+static PUMPKIN_ZLM_ARAB_JSON: &str = include_str!("../../assets/translations/zlm_arab.json");
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct SubstitutionRange {
@@ -201,62 +306,529 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     result
 }
 
-pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last() as usize]>> =
+pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last() as usize + 1]>> =
     LazyLock::new(|| {
-        let mut array: [HashMap<String, String>; Locale::last() as usize] =
+        let mut array: [HashMap<String, String>; Locale::last() as usize + 1] =
             std::array::from_fn(|_| HashMap::new());
         let vanilla_en_us: HashMap<String, String> =
             serde_json::from_str(VANILLA_EN_US_JSON).expect("Could not parse en_us.json.");
+        let pumpkin_af_za: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_AF_ZA_JSON).expect("Could not parse af_za.json.");
+        let pumpkin_ar_sa: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_AR_SA_JSON).expect("Could not parse ar_sa.json.");
+        let pumpkin_ast_es: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_AST_ES_JSON).expect("Could not parse ast_es.json.");
+        let pumpkin_az_az: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_AZ_AZ_JSON).expect("Could not parse az_az.json.");
+        let pumpkin_ba_ru: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_BA_RU_JSON).expect("Could not parse ba_ru.json.");
+        let pumpkin_bar: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_BAR_JSON).expect("Could not parse bar.json.");
+        let pumpkin_be_by: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_BE_BY_JSON).expect("Could not parse be_by.json.");
+        let pumpkin_bg_bg: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_BG_BG_JSON).expect("Could not parse bg_bg.json.");
+        let pumpkin_br_fr: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_BR_FR_JSON).expect("Could not parse br_fr.json.");
+        let pumpkin_brb: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_BRB_JSON).expect("Could not parse brb.json.");
+        let pumpkin_bs_ba: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_BS_BA_JSON).expect("Could not parse bs_ba.json.");
+        let pumpkin_ca_es: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_CA_ES_JSON).expect("Could not parse ca_es.json.");
+        let pumpkin_cs_cz: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_CS_CZ_JSON).expect("Could not parse cs_cz.json.");
+        let pumpkin_cy_gb: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_CY_GB_JSON).expect("Could not parse cy_gb.json.");
+        let pumpkin_da_dk: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_DA_DK_JSON).expect("Could not parse da_dk.json.");
+        let pumpkin_de_at: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_DE_AT_JSON).expect("Could not parse de_at.json.");
+        let pumpkin_de_ch: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_DE_CH_JSON).expect("Could not parse de_ch.json.");
         let pumpkin_de_de: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_DE_DE_JSON).expect("Could not parse de_de.json.");
+        let pumpkin_el_gr: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_EL_GR_JSON).expect("Could not parse el_gr.json.");
+        let pumpkin_en_au: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_EN_AU_JSON).expect("Could not parse en_au.json.");
+        let pumpkin_en_ca: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_EN_CA_JSON).expect("Could not parse en_ca.json.");
+        let pumpkin_en_gb: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_EN_GB_JSON).expect("Could not parse en_gb.json.");
+        let pumpkin_en_nz: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_EN_NZ_JSON).expect("Could not parse en_nz.json.");
+        let pumpkin_en_pt: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_EN_PT_JSON).expect("Could not parse en_pt.json.");
+        let pumpkin_en_ud: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_EN_UD_JSON).expect("Could not parse en_ud.json.");
         let pumpkin_en_us: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_EN_US_JSON).expect("Could not parse en_us.json.");
+        let pumpkin_enp: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ENP_JSON).expect("Could not parse enp.json.");
+        let pumpkin_enws: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ENWS_JSON).expect("Could not parse enws.json.");
+        let pumpkin_eo_uy: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_EO_UY_JSON).expect("Could not parse eo_uy.json.");
+        let pumpkin_es_ar: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ES_AR_JSON).expect("Could not parse es_ar.json.");
+        let pumpkin_es_cl: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ES_CL_JSON).expect("Could not parse es_cl.json.");
+        let pumpkin_es_ec: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ES_EC_JSON).expect("Could not parse es_ec.json.");
         let pumpkin_es_es: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_ES_ES_JSON).expect("Could not parse es_es.json.");
+        let pumpkin_es_mx: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ES_MX_JSON).expect("Could not parse es_mx.json.");
+        let pumpkin_es_uy: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ES_UY_JSON).expect("Could not parse es_uy.json.");
+        let pumpkin_es_ve: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ES_VE_JSON).expect("Could not parse es_ve.json.");
+        let pumpkin_esan: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ESAN_JSON).expect("Could not parse esan.json.");
+        let pumpkin_et_ee: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ET_EE_JSON).expect("Could not parse et_ee.json.");
+        let pumpkin_eu_es: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_EU_ES_JSON).expect("Could not parse eu_es.json.");
+        let pumpkin_fa_ir: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_FA_IR_JSON).expect("Could not parse fa_ir.json.");
+        let pumpkin_fi_fi: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_FI_FI_JSON).expect("Could not parse fi_fi.json.");
+        let pumpkin_fil_ph: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_FIL_PH_JSON).expect("Could not parse fil_ph.json.");
+        let pumpkin_fo_fo: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_FO_FO_JSON).expect("Could not parse fo_fo.json.");
+        let pumpkin_fr_ca: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_FR_CA_JSON).expect("Could not parse fr_ca.json.");
         let pumpkin_fr_fr: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_FR_FR_JSON).expect("Could not parse fr_fr.json.");
+        let pumpkin_fra_de: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_FRA_DE_JSON).expect("Could not parse fra_de.json.");
+        let pumpkin_fur_it: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_FUR_IT_JSON).expect("Could not parse fur_it.json.");
+        let pumpkin_fy_nl: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_FY_NL_JSON).expect("Could not parse fy_nl.json.");
+        let pumpkin_ga_ie: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_GA_IE_JSON).expect("Could not parse ga_ie.json.");
+        let pumpkin_gd_gb: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_GD_GB_JSON).expect("Could not parse gd_gb.json.");
+        let pumpkin_gl_es: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_GL_ES_JSON).expect("Could not parse gl_es.json.");
+        let pumpkin_haw_us: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_HAW_US_JSON).expect("Could not parse haw_us.json.");
+        let pumpkin_he_il: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_HE_IL_JSON).expect("Could not parse he_il.json.");
+        let pumpkin_hi_in: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_HI_IN_JSON).expect("Could not parse hi_in.json.");
+        let pumpkin_hr_hr: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_HR_HR_JSON).expect("Could not parse hr_hr.json.");
+        let pumpkin_hu_hu: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_HU_HU_JSON).expect("Could not parse hu_hu.json.");
+        let pumpkin_hy_am: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_HY_AM_JSON).expect("Could not parse hy_am.json.");
+        let pumpkin_id_id: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ID_ID_JSON).expect("Could not parse id_id.json.");
+        let pumpkin_ig_ng: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_IG_NG_JSON).expect("Could not parse ig_ng.json.");
+        let pumpkin_io_en: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_IO_EN_JSON).expect("Could not parse io_en.json.");
+        let pumpkin_is_is: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_IS_IS_JSON).expect("Could not parse is_is.json.");
+        let pumpkin_isv: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ISV_JSON).expect("Could not parse isv.json.");
+        let pumpkin_it_it: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_IT_IT_JSON).expect("Could not parse it_it.json.");
         let pumpkin_ja_jp: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_JA_JP_JSON).expect("Could not parse ja_jp.json.");
+        let pumpkin_jbo_en: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_JBO_EN_JSON).expect("Could not parse jbo_en.json.");
+        let pumpkin_ka_ge: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_KA_GE_JSON).expect("Could not parse ka_ge.json.");
+        let pumpkin_kk_kz: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_KK_KZ_JSON).expect("Could not parse kk_kz.json.");
+        let pumpkin_kn_in: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_KN_IN_JSON).expect("Could not parse kn_in.json.");
+        let pumpkin_ko_kr: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_KO_KR_JSON).expect("Could not parse ko_kr.json.");
+        let pumpkin_ksh: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_KSH_JSON).expect("Could not parse ksh.json.");
+        let pumpkin_kw_gb: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_KW_GB_JSON).expect("Could not parse kw_gb.json.");
+        let pumpkin_la_la: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_LA_LA_JSON).expect("Could not parse la_la.json.");
+        let pumpkin_lb_lu: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_LB_LU_JSON).expect("Could not parse lb_lu.json.");
+        let pumpkin_li_li: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_LI_LI_JSON).expect("Could not parse li_li.json.");
+        let pumpkin_lmo: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_LMO_JSON).expect("Could not parse lmo.json.");
+        let pumpkin_lo_la: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_LO_LA_JSON).expect("Could not parse lo_la.json.");
+        let pumpkin_lol_us: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_LOL_US_JSON).expect("Could not parse lol_us.json.");
+        let pumpkin_lt_lt: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_LT_LT_JSON).expect("Could not parse lt_lt.json.");
+        let pumpkin_lv_lv: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_LV_LV_JSON).expect("Could not parse lv_lv.json.");
+        let pumpkin_lzh: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_LZH_JSON).expect("Could not parse lzh.json.");
+        let pumpkin_mk_mk: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_MK_MK_JSON).expect("Could not parse mk_mk.json.");
+        let pumpkin_mn_mn: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_MN_MN_JSON).expect("Could not parse mn_mn.json.");
+        let pumpkin_ms_my: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_MS_MY_JSON).expect("Could not parse ms_my.json.");
+        let pumpkin_mt_mt: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_MT_MT_JSON).expect("Could not parse mt_mt.json.");
+        let pumpkin_nah: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_NAH_JSON).expect("Could not parse nah.json.");
+        let pumpkin_nds_de: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_NDS_DE_JSON).expect("Could not parse nds_de.json.");
         let pumpkin_nl_be: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_NL_BE_JSON).expect("Could not parse nl_be.json.");
         let pumpkin_nl_nl: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_NL_NL_JSON).expect("Could not parse nl_nl.json.");
+        let pumpkin_nn_no: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_NN_NO_JSON).expect("Could not parse nn_no.json.");
+        let pumpkin_no_no: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_NO_NO_JSON).expect("Could not parse no_no.json.");
+        let pumpkin_oc_fr: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_OC_FR_JSON).expect("Could not parse oc_fr.json.");
+        let pumpkin_ovd: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_OVD_JSON).expect("Could not parse ovd.json.");
+        let pumpkin_pl_pl: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_PL_PL_JSON).expect("Could not parse pl_pl.json.");
+        let pumpkin_pt_br: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_PT_BR_JSON).expect("Could not parse pt_br.json.");
+        let pumpkin_pt_pt: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_PT_PT_JSON).expect("Could not parse pt_pt.json.");
+        let pumpkin_qya_aa: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_QYA_AA_JSON).expect("Could not parse qya_aa.json.");
+        let pumpkin_ro_ro: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_RO_RO_JSON).expect("Could not parse ro_ro.json.");
+        let pumpkin_rpr: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_RPR_JSON).expect("Could not parse rpr.json.");
         let pumpkin_ru_ru: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_RU_RU_JSON).expect("Could not parse ru_ru.json.");
+        let pumpkin_ry_ua: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_RY_UA_JSON).expect("Could not parse ry_ua.json.");
+        let pumpkin_sah_sah: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_SAH_SAH_JSON).expect("Could not parse sah_sah.json.");
+        let pumpkin_se_no: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_SE_NO_JSON).expect("Could not parse se_no.json.");
+        let pumpkin_sk_sk: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_SK_SK_JSON).expect("Could not parse sk_sk.json.");
+        let pumpkin_sl_si: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_SL_SI_JSON).expect("Could not parse sl_si.json.");
+        let pumpkin_so_so: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_SO_SO_JSON).expect("Could not parse so_so.json.");
         let pumpkin_sq_al: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_SQ_AL_JSON).expect("Could not parse sq_al.json.");
+        let pumpkin_sr_cs: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_SR_CS_JSON).expect("Could not parse sr_cs.json.");
+        let pumpkin_sr_sp: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_SR_SP_JSON).expect("Could not parse sr_sp.json.");
+        let pumpkin_sv_se: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_SV_SE_JSON).expect("Could not parse sv_se.json.");
+        let pumpkin_sxu: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_SXU_JSON).expect("Could not parse sxu.json.");
+        let pumpkin_szl: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_SZL_JSON).expect("Could not parse szl.json.");
+        let pumpkin_ta_in: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_TA_IN_JSON).expect("Could not parse ta_in.json.");
+        let pumpkin_th_th: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_TH_TH_JSON).expect("Could not parse th_th.json.");
+        let pumpkin_tl_ph: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_TL_PH_JSON).expect("Could not parse tl_ph.json.");
+        let pumpkin_tlh_aa: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_TLH_AA_JSON).expect("Could not parse tlh_aa.json.");
+        let pumpkin_tok: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_TOK_JSON).expect("Could not parse tok.json.");
+        let pumpkin_tr_tr: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_TR_TR_JSON).expect("Could not parse tr_tr.json.");
+        let pumpkin_tt_ru: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_TT_RU_JSON).expect("Could not parse tt_ru.json.");
+        let pumpkin_uk_ua: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_UK_UA_JSON).expect("Could not parse uk_ua.json.");
+        let pumpkin_val_es: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_VAL_ES_JSON).expect("Could not parse val_es.json.");
+        let pumpkin_vec_it: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_VEC_IT_JSON).expect("Could not parse vec_it.json.");
+        let pumpkin_vi_vn: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_VI_VN_JSON).expect("Could not parse vi_vn.json.");
+        let pumpkin_yi_de: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_YI_DE_JSON).expect("Could not parse yi_de.json.");
+        let pumpkin_yo_ng: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_YO_NG_JSON).expect("Could not parse yo_ng.json.");
         let pumpkin_zh_cn: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_ZH_CN_JSON).expect("Could not parse zh_cn.json.");
         let pumpkin_zh_hk: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_ZH_HK_JSON).expect("Could not parse zh_hk.json.");
         let pumpkin_zh_tw: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_ZH_TW_JSON).expect("Could not parse zh_tw.json.");
-        let pumpkin_tr_tr: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_TR_TR_JSON).expect("Could not parse tr_tr.json.");
-        let pumpkin_uk_ua: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_UK_UA_JSON).expect("Could not parse uk_ua.json.");
-        let pumpkin_vi_vn: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_VI_VN_JSON).expect("Could not parse vi_vn.json.");
-        let pumpkin_pt_br: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_PT_BR_JSON).expect("Could not parse pt_br.json.");
+        let pumpkin_zlm_arab: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_ZLM_ARAB_JSON).expect("Could not parse zlm_arab.json.");
 
         for (key, value) in vanilla_en_us {
             array[Locale::EnUs as usize].insert(format!("minecraft:{key}"), value);
         }
+        for (key, value) in pumpkin_af_za {
+            array[Locale::AfZa as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ar_sa {
+            array[Locale::ArSa as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ast_es {
+            array[Locale::AstEs as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_az_az {
+            array[Locale::AzAz as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ba_ru {
+            array[Locale::BaRu as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_bar {
+            array[Locale::Bar as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_be_by {
+            array[Locale::BeBy as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_bg_bg {
+            array[Locale::BgBg as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_br_fr {
+            array[Locale::BrFr as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_brb {
+            array[Locale::Brb as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_bs_ba {
+            array[Locale::BsBa as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ca_es {
+            array[Locale::CaEs as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_cs_cz {
+            array[Locale::CsCz as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_cy_gb {
+            array[Locale::CyGb as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_da_dk {
+            array[Locale::DaDk as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_de_at {
+            array[Locale::DeAt as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_de_ch {
+            array[Locale::DeCh as usize].insert(format!("pumpkin:{key}"), value);
+        }
         for (key, value) in pumpkin_de_de {
             array[Locale::DeDe as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_el_gr {
+            array[Locale::ElGr as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_en_au {
+            array[Locale::EnAu as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_en_ca {
+            array[Locale::EnCa as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_en_gb {
+            array[Locale::EnGb as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_en_nz {
+            array[Locale::EnNz as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_en_pt {
+            array[Locale::EnPt as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_en_ud {
+            array[Locale::EnUd as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_en_us {
             array[Locale::EnUs as usize].insert(format!("pumpkin:{key}"), value);
         }
+        for (key, value) in pumpkin_enp {
+            array[Locale::Enp as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_enws {
+            array[Locale::Enws as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_eo_uy {
+            array[Locale::EoUy as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_es_ar {
+            array[Locale::EsAr as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_es_cl {
+            array[Locale::EsCl as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_es_ec {
+            array[Locale::EsEc as usize].insert(format!("pumpkin:{key}"), value);
+        }
         for (key, value) in pumpkin_es_es {
             array[Locale::EsEs as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_es_mx {
+            array[Locale::EsMx as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_es_uy {
+            array[Locale::EsUy as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_es_ve {
+            array[Locale::EsVe as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_esan {
+            array[Locale::Esan as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_et_ee {
+            array[Locale::EtEe as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_eu_es {
+            array[Locale::EuEs as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_fa_ir {
+            array[Locale::FaIr as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_fi_fi {
+            array[Locale::FiFi as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_fil_ph {
+            array[Locale::FilPh as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_fo_fo {
+            array[Locale::FoFo as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_fr_ca {
+            array[Locale::FrCa as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_fr_fr {
             array[Locale::FrFr as usize].insert(format!("pumpkin:{key}"), value);
         }
+        for (key, value) in pumpkin_fra_de {
+            array[Locale::FraDe as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_fur_it {
+            array[Locale::FurIt as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_fy_nl {
+            array[Locale::FyNl as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ga_ie {
+            array[Locale::GaIe as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_gd_gb {
+            array[Locale::GdGb as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_gl_es {
+            array[Locale::GlEs as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_haw_us {
+            array[Locale::HawUs as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_he_il {
+            array[Locale::HeIl as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_hi_in {
+            array[Locale::HiIn as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_hr_hr {
+            array[Locale::HrHr as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_hu_hu {
+            array[Locale::HuHu as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_hy_am {
+            array[Locale::HyAm as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_id_id {
+            array[Locale::IdId as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ig_ng {
+            array[Locale::IgNg as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_io_en {
+            array[Locale::IoEn as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_is_is {
+            array[Locale::IsIs as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_isv {
+            array[Locale::Isv as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_it_it {
+            array[Locale::ItIt as usize].insert(format!("pumpkin:{key}"), value);
+        }
         for (key, value) in pumpkin_ja_jp {
             array[Locale::JaJp as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_jbo_en {
+            array[Locale::JboEn as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ka_ge {
+            array[Locale::KaGe as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_kk_kz {
+            array[Locale::KkKz as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_kn_in {
+            array[Locale::KnIn as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ko_kr {
+            array[Locale::KoKr as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ksh {
+            array[Locale::Ksh as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_kw_gb {
+            array[Locale::KwGb as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_la_la {
+            array[Locale::LaLa as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_lb_lu {
+            array[Locale::LbLu as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_li_li {
+            array[Locale::LiLi as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_lmo {
+            array[Locale::Lmo as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_lo_la {
+            array[Locale::LoLa as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_lol_us {
+            array[Locale::LolUs as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_lt_lt {
+            array[Locale::LtLt as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_lv_lv {
+            array[Locale::LvLv as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_lzh {
+            array[Locale::Lzh as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_mk_mk {
+            array[Locale::MkMk as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_mn_mn {
+            array[Locale::MnMn as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ms_my {
+            array[Locale::MsMy as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_mt_mt {
+            array[Locale::MtMt as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_nah {
+            array[Locale::Nah as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_nds_de {
+            array[Locale::NdsDe as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_nl_be {
             array[Locale::NlBe as usize].insert(format!("pumpkin:{key}"), value);
@@ -264,11 +836,113 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
         for (key, value) in pumpkin_nl_nl {
             array[Locale::NlNl as usize].insert(format!("pumpkin:{key}"), value);
         }
+        for (key, value) in pumpkin_nn_no {
+            array[Locale::NnNo as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_no_no {
+            array[Locale::NoNo as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_oc_fr {
+            array[Locale::OcFr as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ovd {
+            array[Locale::Ovd as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_pl_pl {
+            array[Locale::PlPl as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_pt_br {
+            array[Locale::PtBr as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_pt_pt {
+            array[Locale::PtPt as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_qya_aa {
+            array[Locale::QyaAa as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ro_ro {
+            array[Locale::RoRo as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_rpr {
+            array[Locale::Rpr as usize].insert(format!("pumpkin:{key}"), value);
+        }
         for (key, value) in pumpkin_ru_ru {
             array[Locale::RuRu as usize].insert(format!("pumpkin:{key}"), value);
         }
+        for (key, value) in pumpkin_ry_ua {
+            array[Locale::RyUa as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_sah_sah {
+            array[Locale::SahSah as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_se_no {
+            array[Locale::SeNo as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_sk_sk {
+            array[Locale::SkSk as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_sl_si {
+            array[Locale::SlSi as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_so_so {
+            array[Locale::SoSo as usize].insert(format!("pumpkin:{key}"), value);
+        }
         for (key, value) in pumpkin_sq_al {
             array[Locale::SqAl as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_sr_cs {
+            array[Locale::SrCs as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_sr_sp {
+            array[Locale::SrSp as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_sv_se {
+            array[Locale::SvSe as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_sxu {
+            array[Locale::Sxu as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_szl {
+            array[Locale::Szl as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ta_in {
+            array[Locale::TaIn as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_th_th {
+            array[Locale::ThTh as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_tl_ph {
+            array[Locale::TlPh as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_tlh_aa {
+            array[Locale::TlhAa as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_tok {
+            array[Locale::Tok as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_tr_tr {
+            array[Locale::TrTr as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_tt_ru {
+            array[Locale::TtRu as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_uk_ua {
+            array[Locale::UkUa as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_val_es {
+            array[Locale::ValEs as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_vec_it {
+            array[Locale::VecIt as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_vi_vn {
+            array[Locale::ViVn as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_yi_de {
+            array[Locale::YiDe as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_yo_ng {
+            array[Locale::YoNg as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_zh_cn {
             array[Locale::ZhCn as usize].insert(format!("pumpkin:{key}"), value);
@@ -279,17 +953,8 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
         for (key, value) in pumpkin_zh_tw {
             array[Locale::ZhTw as usize].insert(format!("pumpkin:{key}"), value);
         }
-        for (key, value) in pumpkin_tr_tr {
-            array[Locale::TrTr as usize].insert(format!("pumpkin:{key}"), value);
-        }
-        for (key, value) in pumpkin_uk_ua {
-            array[Locale::UkUa as usize].insert(format!("pumpkin:{key}"), value);
-        }
-        for (key, value) in pumpkin_vi_vn {
-            array[Locale::ViVn as usize].insert(format!("pumpkin:{key}"), value);
-        }
-        for (key, value) in pumpkin_pt_br {
-            array[Locale::PtBr as usize].insert(format!("pumpkin:{key}"), value);
+        for (key, value) in pumpkin_zlm_arab {
+            array[Locale::ZlmArab as usize].insert(format!("pumpkin:{key}"), value);
         }
         Mutex::new(array)
     });
