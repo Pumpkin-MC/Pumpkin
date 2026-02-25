@@ -150,6 +150,12 @@ impl BlockBehaviour for BedBlock {
                 args.position.offset(bed_props.facing.to_offset())
             };
 
+            let neighbor_block_id = args.world.get_block_state_id(&other_half_pos).await;
+            if neighbor_block_id != args.block.id {
+                args.world.update_neighbors(&other_half_pos, None).await;
+                return;
+            }
+
             let is_creative = args.player.gamemode.load() == GameMode::Creative;
             let flags = if bed_props.part == BedPart::Foot && !is_creative {
                 // Breaking foot in survival -> allow head to drop
@@ -247,7 +253,7 @@ impl BlockBehaviour for BedBlock {
                 .is_solid()
                 || args
                     .world
-                    .get_block_state(&bed_head_pos.up())
+                    .get_block_state(&bed_foot_pos.up())
                     .await
                     .is_solid()
             {
