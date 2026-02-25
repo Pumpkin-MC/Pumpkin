@@ -1,5 +1,6 @@
 pub mod changed_main_hand;
 pub mod exp_change;
+pub mod fish;
 pub mod player_change_world;
 pub mod player_chat;
 pub mod player_command_send;
