@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Dà a tucc la possibilità de ospità di server Minecraft svelt e eficient.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocoll %s)\n",
+    "commands.pumpkin.github": "[Repository GitHub]",
+    "commands.pumpkin.website": "[Sit web]",
+    "commands.pumpkin.version.hover": "Clica per copià la version",
+    "commands.pumpkin.description.hover": "Clica per copià la descrizion",
+    "commands.pumpkin.minecraft_version.hover": "Clica per copià la version de Minecraft",
+    "commands.pumpkin.github.hover": "Clica per dervì el repository.",
+    "commands.pumpkin.website.hover": "Clica per dervì el sit web."
+}

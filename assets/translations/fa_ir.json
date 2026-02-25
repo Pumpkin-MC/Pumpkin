@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "توانمندسازی همه برای میزبانی سرورهای سریع و کارآمد ماینکرفت.\n",
+    "commands.pumpkin.minecraft_version": "(ماینکرفت %s، پروتکل %s)\n",
+    "commands.pumpkin.github": "[مخزن گیت‌هاب]",
+    "commands.pumpkin.website": "[وبسایت]",
+    "commands.pumpkin.version.hover": "برای کپی کردن نسخه کلیک کنید",
+    "commands.pumpkin.description.hover": "برای کپی کردن توضیحات کلیک کنید",
+    "commands.pumpkin.minecraft_version.hover": "برای کپی کردن نسخه ماینکرفت کلیک کنید",
+    "commands.pumpkin.github.hover": "برای باز کردن مخزن کلیک کنید.",
+    "commands.pumpkin.website.hover": "برای باز کردن وبسایت کلیک کنید."
+}

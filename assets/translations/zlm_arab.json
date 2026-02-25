@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "ممڤركاسakan سموا اورڠ اونتوق منجادي توهان ڤلين Minecraft يڠ ڤنتس دان چکڤ.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s، ڤروتوكول %s)\n",
+    "commands.pumpkin.github": "[ريڤوسيتوري Github]",
+    "commands.pumpkin.website": "[لامن وب]",
+    "commands.pumpkin.version.hover": "کليک اونتوق سالين ڤرسي",
+    "commands.pumpkin.description.hover": "کليک اونتوق سالين ڤنرڠن",
+    "commands.pumpkin.minecraft_version.hover": "کليک اونتوق سالين ڤرسي Minecraft",
+    "commands.pumpkin.github.hover": "کليک اونتوق ممبوکا ريڤوسيتوري.",
+    "commands.pumpkin.website.hover": "کليک اونتوق ممبوکا لامن وب."
+}

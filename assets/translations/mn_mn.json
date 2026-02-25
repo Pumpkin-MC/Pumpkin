@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Хүн бүрт хурдан бөгөөд үр дүнтэй Minecraft серверүүдийг байршуулах боломжийг олгоно.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Протокол %s)\n",
+    "commands.pumpkin.github": "[GitHub агуулах]",
+    "commands.pumpkin.website": "[Вэб сайт]",
+    "commands.pumpkin.version.hover": "Хувилбарыг хуулахын тулд дарна уу",
+    "commands.pumpkin.description.hover": "Тайлбарыг хуулахын тулд дарна уу",
+    "commands.pumpkin.minecraft_version.hover": "Minecraft хувилбарыг хуулахын тулд дарна уу",
+    "commands.pumpkin.github.hover": "Агуулахыг нээхийн тулд дарна уу.",
+    "commands.pumpkin.website.hover": "Вэб сайтыг нээхийн тулд дарна уу."
+}

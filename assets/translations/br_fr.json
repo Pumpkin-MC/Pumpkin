@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Reiñ an tu da bep hini da herberc'hiañ servijeroù Minecraft buan hag efedus.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
+    "commands.pumpkin.github": "[GitHub kav]",
+    "commands.pumpkin.website": "[Lec'hienn]",
+    "commands.pumpkin.version.hover": "Klikañ evit eilañ ar stumm",
+    "commands.pumpkin.description.hover": "Klikañ evit eilañ an deskrivadur",
+    "commands.pumpkin.minecraft_version.hover": "Klikañ evit eilañ stumm Minecraft",
+    "commands.pumpkin.github.hover": "Klikañ evit digeriñ ar c'hav.",
+    "commands.pumpkin.website.hover": "Klikañ evit digeriñ al lec'hienn."
+}

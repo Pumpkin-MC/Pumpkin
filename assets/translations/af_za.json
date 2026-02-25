@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Bemagtig almal om vinnige en doeltreffende Minecraft-bediener te huisves.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
+    "commands.pumpkin.github": "[GitHub-bewaarplek]",
+    "commands.pumpkin.website": "[Webwerf]",
+    "commands.pumpkin.version.hover": "Klik om weergawe te kopieer",
+    "commands.pumpkin.description.hover": "Klik om beskrywing te kopieer",
+    "commands.pumpkin.minecraft_version.hover": "Klik om Minecraft-weergawe te kopieer",
+    "commands.pumpkin.github.hover": "Klik om bewaarplek oop te maak.",
+    "commands.pumpkin.website.hover": "Klik om webwerf oop te maak."
+}

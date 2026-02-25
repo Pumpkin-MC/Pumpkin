@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Inye onye ọ bụla ike ịkwado sava Minecraft ngwa ngwa na nke ọma.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocol %s)\n",
+    "commands.pumpkin.github": "[Github Ebe Nchekwa]",
+    "commands.pumpkin.website": "[Weebụsaịtị]",
+    "commands.pumpkin.version.hover": "Pị iji detuo mbipute",
+    "commands.pumpkin.description.hover": "Pị iji detuo nkọwa",
+    "commands.pumpkin.minecraft_version.hover": "Pị iji detuo mbipute Minecraft",
+    "commands.pumpkin.github.hover": "Pị imeghe ebe nchekwa.",
+    "commands.pumpkin.website.hover": "Pị imeghe weebụsaịtị."
+}

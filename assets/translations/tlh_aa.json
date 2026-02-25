@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "rapID 'ej QaQ Minecraft servers chu' choHmoHlaH Hoch.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, protocol %s)\n",
+    "commands.pumpkin.github": "[Github chaw']",
+    "commands.pumpkin.website": "[websayt]",
+    "commands.pumpkin.version.hover": "version copy 'e' QIH",
+    "commands.pumpkin.description.hover": "description copy 'e' QIH",
+    "commands.pumpkin.minecraft_version.hover": "Minecraft version copy 'e' QIH",
+    "commands.pumpkin.github.hover": "chaw' poSmoH 'e' QIH.",
+    "commands.pumpkin.website.hover": "websayt poSmoH 'e' QIH."
+}

@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Gjev alle moglegheita til å verte vert for raske og effektive Minecraft-tenarar.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokoll %s)\n",
+    "commands.pumpkin.github": "[GitHub-repositorium]",
+    "commands.pumpkin.website": "[Nettstad]",
+    "commands.pumpkin.version.hover": "Klikk for å kopiere versjon",
+    "commands.pumpkin.description.hover": "Klikk for å kopiere skildring",
+    "commands.pumpkin.minecraft_version.hover": "Klikk for å kopiere Minecraft-versjon",
+    "commands.pumpkin.github.hover": "Klikk for å opne repositoriet.",
+    "commands.pumpkin.website.hover": "Klikk for å opne nettstaden."
+}

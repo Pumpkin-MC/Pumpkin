@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Օգնում ենք բոլորին գործարկել արագ և արդյունավետ Minecraft սերվերներ։\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Պրոտոկոլ %s)\n",
+    "commands.pumpkin.github": "[GitHub պահոց]",
+    "commands.pumpkin.website": "[Կայք]",
+    "commands.pumpkin.version.hover": "Սեղմեք տարբերակը պատճենելու համար",
+    "commands.pumpkin.description.hover": "Սեղմեք նկարագրությունը պատճենելու համար",
+    "commands.pumpkin.minecraft_version.hover": "Սեղմեք Minecraft-ի տարբերակը պատճենելու համար",
+    "commands.pumpkin.github.hover": "Սեղմեք պահոցը բացելու համար։",
+    "commands.pumpkin.website.hover": "Սեղմեք կայքը բացելու համար։"
+}

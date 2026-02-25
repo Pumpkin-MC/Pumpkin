@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Lehetővé teszi mindenki számára gyors és hatékony Minecraft szerverek üzemeltetését.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokoll %s)\n",
+    "commands.pumpkin.github": "[GitHub adattár]",
+    "commands.pumpkin.website": "[Weboldal]",
+    "commands.pumpkin.version.hover": "Kattints a verzió másolásához",
+    "commands.pumpkin.description.hover": "Kattints a leírás másolásához",
+    "commands.pumpkin.minecraft_version.hover": "Kattints a Minecraft verzió másolásához",
+    "commands.pumpkin.github.hover": "Kattints az adattár megnyitásához.",
+    "commands.pumpkin.website.hover": "Kattints a weboldal megnyitásához."
+}

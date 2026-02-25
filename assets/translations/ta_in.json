@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "வேகமான மற்றும் திறமையான Minecraft சேவையகங்களை ஹோஸ்ட் செய்ய அனைவருக்கும் அதிகாரம் அளிக்கிறது.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, நெறிமுறை %s)\n",
+    "commands.pumpkin.github": "[Github களஞ்சியம்]",
+    "commands.pumpkin.website": "[இணையதளம்]",
+    "commands.pumpkin.version.hover": "பதிப்பை நகலெடுக்க கிளிக் செய்யவும்",
+    "commands.pumpkin.description.hover": "விளக்கத்தை நகலெடுக்க கிளிக் செய்யவும்",
+    "commands.pumpkin.minecraft_version.hover": "Minecraft பதிப்பை நகலெடுக்க கிளிக் செய்யவும்",
+    "commands.pumpkin.github.hover": "களஞ்சியத்தைத் திறக்க கிளிக் செய்யவும்.",
+    "commands.pumpkin.website.hover": "இணையதளத்தைத் திறக்க கிளிக் செய்யவும்."
+}

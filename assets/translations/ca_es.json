@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Donant a tothom el poder d'allotjar servidors de Minecraft ràpids i eficients.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocol %s)\n",
+    "commands.pumpkin.github": "[Repositori de GitHub]",
+    "commands.pumpkin.website": "[Lloc web]",
+    "commands.pumpkin.version.hover": "Fes clic per copiar la versió",
+    "commands.pumpkin.description.hover": "Fes clic per copiar la descripció",
+    "commands.pumpkin.minecraft_version.hover": "Fes clic per copiar la versió de Minecraft",
+    "commands.pumpkin.github.hover": "Fes clic per obrir el repositori.",
+    "commands.pumpkin.website.hover": "Fes clic per obrir el lloc web."
+}

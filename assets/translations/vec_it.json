@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Dà a tuti ła posibiłità de ospitar server Minecraft svelti e eficienti.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protooło %s)\n",
+    "commands.pumpkin.github": "[Repository GitHub]",
+    "commands.pumpkin.website": "[Sito web]",
+    "commands.pumpkin.version.hover": "Clica par copiar ła version",
+    "commands.pumpkin.description.hover": "Clica par copiar ła descrision",
+    "commands.pumpkin.minecraft_version.hover": "Clica par copiar ła version de Minecraft",
+    "commands.pumpkin.github.hover": "Clica par verxar el repository.",
+    "commands.pumpkin.website.hover": "Clica par verxar el sito web."
+}

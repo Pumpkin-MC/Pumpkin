@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "ให้ทุกคนสามารถโฮสต์เซิร์ฟเวอร์ Minecraft ที่รวดเร็วและมีประสิทธิภาพ\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, โปรโตคอล %s)\n",
+    "commands.pumpkin.github": "[คลังเก็บ Github]",
+    "commands.pumpkin.website": "[เว็บไซต์]",
+    "commands.pumpkin.version.hover": "คลิกเพื่อคัดลอกเวอร์ชัน",
+    "commands.pumpkin.description.hover": "คลิกเพื่อคัดลอกคำอธิบาย",
+    "commands.pumpkin.minecraft_version.hover": "คลิกเพื่อคัดลอกเวอร์ชัน Minecraft",
+    "commands.pumpkin.github.hover": "คลิกเพื่อเปิดคลังเก็บ",
+    "commands.pumpkin.website.hover": "คลิกเพื่อเปิดเว็บไซต์"
+}

@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Antaa kaikille mahdollisuuden isännöidä nopeita ja tehokkaita Minecraft-palvelimia.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokolla %s)\n",
+    "commands.pumpkin.github": "[GitHub-arkisto]",
+    "commands.pumpkin.website": "[Verkkosivusto]",
+    "commands.pumpkin.version.hover": "Kopioi versio napsauttamalla",
+    "commands.pumpkin.description.hover": "Kopioi kuvaus napsauttamalla",
+    "commands.pumpkin.minecraft_version.hover": "Kopioi Minecraft-versio napsauttamalla",
+    "commands.pumpkin.github.hover": "Avaa arkisto napsauttamalla.",
+    "commands.pumpkin.website.hover": "Avaa verkkosivusto napsauttamalla."
+}

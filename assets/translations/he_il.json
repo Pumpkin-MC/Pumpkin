@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "מאפשר לכולם לארח שרתי Minecraft מהירים ויעילים.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, פרוטוקול %s)\n",
+    "commands.pumpkin.github": "[מאגר GitHub]",
+    "commands.pumpkin.website": "[אתר אינטרנט]",
+    "commands.pumpkin.version.hover": "לחץ להעתקת גרסה",
+    "commands.pumpkin.description.hover": "לחץ להעתקת תיאור",
+    "commands.pumpkin.minecraft_version.hover": "לחץ להעתקת גרסת Minecraft",
+    "commands.pumpkin.github.hover": "לחץ לפתיחת המאגר.",
+    "commands.pumpkin.website.hover": "לחץ לפתיחת האתר."
+}

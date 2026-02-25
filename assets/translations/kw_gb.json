@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Ri galloes dhe bub den dhe ostya servors Minecraft skav hag effeyth.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
+    "commands.pumpkin.github": "[Gwithva Github]",
+    "commands.pumpkin.website": "[Gwiasva]",
+    "commands.pumpkin.version.hover": "Klyck rag kopya versyon",
+    "commands.pumpkin.description.hover": "Klyck rag kopya deskrivans",
+    "commands.pumpkin.minecraft_version.hover": "Klyck rag kopya versyon Minecraft",
+    "commands.pumpkin.github.hover": "Klyck rag ygeri an withva.",
+    "commands.pumpkin.website.hover": "Klyck rag ygeri an wiasva."
+}

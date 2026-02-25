@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Givs evrywun teh pawa 2 host fast an gud Minecraft serverz.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
+    "commands.pumpkin.github": "[Github Repozitorie]",
+    "commands.pumpkin.website": "[Websaietz]",
+    "commands.pumpkin.version.hover": "Klik 2 kopy vershun",
+    "commands.pumpkin.description.hover": "Klik 2 kopy descripshun",
+    "commands.pumpkin.minecraft_version.hover": "Klik 2 kopy Minecraft vershun",
+    "commands.pumpkin.github.hover": "Klik 2 open repozitorie.",
+    "commands.pumpkin.website.hover": "Klik 2 open websites."
+}

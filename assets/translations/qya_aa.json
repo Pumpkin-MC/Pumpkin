@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Anta ilquen an i·tur hosta linta ar maite Minecraft-serveri.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocol %s)\n",
+    "commands.pumpkin.github": "[Github Cófema]",
+    "commands.pumpkin.website": "[Websaite]",
+    "commands.pumpkin.version.hover": "Apsa sana kopiorë version",
+    "commands.pumpkin.description.hover": "Apsa sana kopiorë quetil",
+    "commands.pumpkin.minecraft_version.hover": "Apsa sana kopiorë Minecraft-version",
+    "commands.pumpkin.github.hover": "Apsa sana pahta cófema.",
+    "commands.pumpkin.website.hover": "Apsa sana pahta websaite."
+}

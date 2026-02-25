@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "हर किसी को तेज़ और कुशल Minecraft सर्वर होस्ट करने में सक्षम बनाना।\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, प्रोटोकॉल %s)\n",
+    "commands.pumpkin.github": "[Github रिपॉजिटरी]",
+    "commands.pumpkin.website": "[वेबसाइट]",
+    "commands.pumpkin.version.hover": "संस्करण कॉपी करने के लिए क्लिक करें",
+    "commands.pumpkin.description.hover": "विवरण कॉपी करने के लिए क्लिक करें",
+    "commands.pumpkin.minecraft_version.hover": "Minecraft संस्करण कॉपी करने के लिए क्लिक करें",
+    "commands.pumpkin.github.hover": "रिपॉजिटरी खोलने के लिए क्लिक करें।",
+    "commands.pumpkin.website.hover": "वेबसाइट खोलने के लिए क्लिक करें।"
+}

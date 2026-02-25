@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Suteikia visiems galimybę hostinti greitus ir efektyvius Minecraft serverius.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokolas %s)\n",
+    "commands.pumpkin.github": "[GitHub saugykla]",
+    "commands.pumpkin.website": "[Svetainė]",
+    "commands.pumpkin.version.hover": "Spustelėkite norėdami nukopijuoti versiją",
+    "commands.pumpkin.description.hover": "Spustelėkite norėdami nukopijuoti aprašymą",
+    "commands.pumpkin.minecraft_version.hover": "Spustelėkite norėdami nukopijuoti Minecraft versiją",
+    "commands.pumpkin.github.hover": "Spustelėkite norėdami atidaryti saugyklą.",
+    "commands.pumpkin.website.hover": "Spustelėkite norėdami atidaryti svetainę."
+}

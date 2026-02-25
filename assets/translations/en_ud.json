@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "ˈpʌmpkɪn %s\n",
+    "commands.pumpkin.description": "Ǝɯdouǝɹıun ƃuıɹǝʍodɯƎ\nsɹǝʌɹǝs ʇɟɐɹɔǝuıW ʇuǝıɔıɟɟǝ puɐ ʇsɐɟ ʇsoɥ oʇ ǝuoʎɹǝʌǝ\n",
+    "commands.pumpkin.minecraft_version": "(lɔoʇoɹԀ %s, ʇɟɐɹɔǝuıW %s)\n",
+    "commands.pumpkin.github": "[ʎɹoʇsıdǝᴚ qnɥʇı⅁]",
+    "commands.pumpkin.website": "[ǝʇısqǝM]",
+    "commands.pumpkin.version.hover": "uosıɹǝΛ ʎdoƆ oʇ ʞɔılϽ",
+    "commands.pumpkin.description.hover": "uoıʇdıɹɔsǝᗡ ʎdoƆ oʇ ʞɔılϽ",
+    "commands.pumpkin.minecraft_version.hover": "uosıɹǝΛ ʇɟɐɹɔǝuıW ʎdoƆ oʇ ʞɔılϽ",
+    "commands.pumpkin.github.hover": ".ʎɹoʇsıdǝɹ uǝdo oʇ ʞɔılϽ",
+    "commands.pumpkin.website.hover": ".ǝʇısqǝʍ uǝdo oʇ ʞɔılϽ"
+}

@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Барығына ла тиҙ һәм һөҙөмтәле Minecraft серверҙарын булдырырға ярҙам итәбеҙ.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Протокол %s)\n",
+    "commands.pumpkin.github": "[Github репозиторийы]",
+    "commands.pumpkin.website": "[Сайт]",
+    "commands.pumpkin.version.hover": "Версияны күсерер өсөн баҫығыҙ",
+    "commands.pumpkin.description.hover": "Тасуирламаны күсерер өсөн баҫығыҙ",
+    "commands.pumpkin.minecraft_version.hover": "Minecraft версияһын күсерер өсөн баҫығыҙ",
+    "commands.pumpkin.github.hover": "Репозиторийҙы асыр өсөн баҫығыҙ.",
+    "commands.pumpkin.website.hover": "Сайтты асыр өсөн баҫығыҙ."
+}

@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Omnibus potestatem dat celeres et efficaces Minecraft servatores hospitandi.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocollum %s)\n",
+    "commands.pumpkin.github": "[Github repositorium]",
+    "commands.pumpkin.website": "[Situs interretialis]",
+    "commands.pumpkin.version.hover": "Preme ad versionem exscribendam",
+    "commands.pumpkin.description.hover": "Preme ad descriptionem exscribendam",
+    "commands.pumpkin.minecraft_version.hover": "Preme ad versionem Minecraft exscribendam",
+    "commands.pumpkin.github.hover": "Preme ad repositorium aperiendum.",
+    "commands.pumpkin.website.hover": "Preme ad situm interretialem aperiendum."
+}

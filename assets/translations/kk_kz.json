@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Барлығына жылдам әрі тиімді Minecraft серверлерін орнатуға мүмкіндік береді.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Протокол %s)\n",
+    "commands.pumpkin.github": "[Github репозиторийі]",
+    "commands.pumpkin.website": "[Сайт]",
+    "commands.pumpkin.version.hover": "Нұсқаны көшіру үшін басыңыз",
+    "commands.pumpkin.description.hover": "Сипаттаманы көшіру үшін басыңыз",
+    "commands.pumpkin.minecraft_version.hover": "Minecraft нұсқасын көшіру үшін басыңыз",
+    "commands.pumpkin.github.hover": "Репозиторийді ашу үшін басыңыз.",
+    "commands.pumpkin.website.hover": "Сайтты ашу үшін басыңыз."
+}

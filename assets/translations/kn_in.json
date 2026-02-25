@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "ಪ್ರತಿಯೊಬ್ಬರೂ ವೇಗವಾದ ಮತ್ತು ಪರಿಣಾಮಕಾರಿ Minecraft ಸರ್ವರ್ಗಳನ್ನು ಹೋಸ್ಟ್ ಮಾಡಲು ಸಬಲರನ್ನಾಗಿ ಮಾಡುವುದು.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, ಪ್ರೋಟೋಕಾಲ್ %s)\n",
+    "commands.pumpkin.github": "[Github ಭಂಡಾರ]",
+    "commands.pumpkin.website": "[ಜಾಲತಾಣ]",
+    "commands.pumpkin.version.hover": "ಆವೃತ್ತಿಯನ್ನು ನಕಲಿಸಲು ಕ್ಲಿಕ್ ಮಾಡಿ",
+    "commands.pumpkin.description.hover": "ವಿವರಣೆಯನ್ನು ನಕಲಿಸಲು ಕ್ಲಿಕ್ ಮಾಡಿ",
+    "commands.pumpkin.minecraft_version.hover": "Minecraft ಆವೃತ್ತಿಯನ್ನು ನಕಲಿಸಲು ಕ್ಲಿಕ್ ಮಾಡಿ",
+    "commands.pumpkin.github.hover": "ಭಂಡಾರವನ್ನು ತೆರೆಯಲು ಕ್ಲಿಕ್ ಮಾಡಿ.",
+    "commands.pumpkin.website.hover": "ಜಾಲತಾಣವನ್ನು ತೆರೆಯಲು ಕ್ಲಿಕ್ ಮಾಡಿ."
+}

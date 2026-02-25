@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Rajtigi ĉiujn gastigi rapidajn kaj efikajn Minecraft-servilojn.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokolo %s)\n",
+    "commands.pumpkin.github": "[GitHub-deponejo]",
+    "commands.pumpkin.website": "[Retejo]",
+    "commands.pumpkin.version.hover": "Klaku por kopii version",
+    "commands.pumpkin.description.hover": "Klaku por kopii priskribon",
+    "commands.pumpkin.minecraft_version.hover": "Klaku por kopii Minecraft-version",
+    "commands.pumpkin.github.hover": "Klaku por malfermi deponejon.",
+    "commands.pumpkin.website.hover": "Klaku por malfermi retejon."
+}

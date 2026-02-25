@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Δίνει τη δυνατότητα σε όλους να φιλοξενούν γρήγορους και αποδοτικούς διακομιστές Minecraft.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Πρωτόκολλο %s)\n",
+    "commands.pumpkin.github": "[Αποθετήριο GitHub]",
+    "commands.pumpkin.website": "[Ιστοσελίδα]",
+    "commands.pumpkin.version.hover": "Κλικ για αντιγραφή έκδοσης",
+    "commands.pumpkin.description.hover": "Κλικ για αντιγραφή περιγραφής",
+    "commands.pumpkin.minecraft_version.hover": "Κλικ για αντιγραφή έκδοσης Minecraft",
+    "commands.pumpkin.github.hover": "Κλικ για άνοιγμα αποθετηρίου.",
+    "commands.pumpkin.website.hover": "Κλικ για άνοιγμα ιστοσελίδας."
+}

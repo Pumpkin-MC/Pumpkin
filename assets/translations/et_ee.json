@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Võimaldab kõigil majutada kiireid ja tõhusaid Minecrafti servereid.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokoll %s)\n",
+    "commands.pumpkin.github": "[GitHubi hoidla]",
+    "commands.pumpkin.website": "[Veebisait]",
+    "commands.pumpkin.version.hover": "Kliki versiooni kopeerimiseks",
+    "commands.pumpkin.description.hover": "Kliki kirjelduse kopeerimiseks",
+    "commands.pumpkin.minecraft_version.hover": "Kliki Minecrafti versiooni kopeerimiseks",
+    "commands.pumpkin.github.hover": "Kliki hoidla avamiseks.",
+    "commands.pumpkin.website.hover": "Kliki veebisaidi avamiseks."
+}

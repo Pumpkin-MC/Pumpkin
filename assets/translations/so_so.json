@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Awood siinta qof kasta inuu martigeliyo adeegayaasha Minecraft ee degdega ah ee hufan.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Borotokool %s)\n",
+    "commands.pumpkin.github": "[Kaydka Github]",
+    "commands.pumpkin.website": "[Mareegta]",
+    "commands.pumpkin.version.hover": "Guji si aad u koobiyayso nooca",
+    "commands.pumpkin.description.hover": "Guji si aad u koobiyayso sharraxaadda",
+    "commands.pumpkin.minecraft_version.hover": "Guji si aad u koobiyayso nooca Minecraft",
+    "commands.pumpkin.github.hover": "Guji si aad u furto kaydka.",
+    "commands.pumpkin.website.hover": "Guji si aad u furto mareegta."
+}

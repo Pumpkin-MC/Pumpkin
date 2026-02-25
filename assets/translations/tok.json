@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "jan ali li ken lawa e ilo Minecraft pi wawa mute.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, nasin toki %s)\n",
+    "commands.pumpkin.github": "[lipu Github]",
+    "commands.pumpkin.website": "[lipu]",
+    "commands.pumpkin.version.hover": "o luka e ni tan nanpa",
+    "commands.pumpkin.description.hover": "o luka e ni tan lipu",
+    "commands.pumpkin.minecraft_version.hover": "o luka e ni tan nanpa Minecraft",
+    "commands.pumpkin.github.hover": "o luka e ni tawa lipu Github.",
+    "commands.pumpkin.website.hover": "o luka e ni tawa lipu."
+}

@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Giving everyone the might to host swift and skillful Minecraft servers.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Speechcraft %s)\n",
+    "commands.pumpkin.github": "[Github Hold]",
+    "commands.pumpkin.website": "[Webstead]",
+    "commands.pumpkin.version.hover": "Click to Copy Version",
+    "commands.pumpkin.description.hover": "Click to Copy Description",
+    "commands.pumpkin.minecraft_version.hover": "Click to Copy Minecraft Version",
+    "commands.pumpkin.github.hover": "Click to open hold.",
+    "commands.pumpkin.website.hover": "Click to open webstead."
+}

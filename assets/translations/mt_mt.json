@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Jagħti s-setgħa lil kulħadd biex jospita servers tal-Minecraft veloċi u effiċjenti.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokoll %s)\n",
+    "commands.pumpkin.github": "[Repożitorju Github]",
+    "commands.pumpkin.website": "[Websajt]",
+    "commands.pumpkin.version.hover": "Ikklikkja biex Tikkopja l-Verżjoni",
+    "commands.pumpkin.description.hover": "Ikklikkja biex Tikkopja d-Deskrizzjoni",
+    "commands.pumpkin.minecraft_version.hover": "Ikklikkja biex Tikkopja l-Verżjoni tal-Minecraft",
+    "commands.pumpkin.github.hover": "Ikklikkja biex tiftaħ ir-repożitorju.",
+    "commands.pumpkin.website.hover": "Ikklikkja biex tiftaħ il-websajt."
+}
