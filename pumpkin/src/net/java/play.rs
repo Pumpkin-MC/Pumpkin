@@ -22,6 +22,7 @@ use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::changed_main_hand::PlayerChangedMainHandEvent;
+use crate::plugin::player::fish::{PlayerFishEvent, PlayerFishState};
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
@@ -1855,6 +1856,37 @@ impl JavaClient {
                 None,
             )
         };
+        self.prepare_hand_item_for_use(player, hand, &item_in_hand)
+            .await;
+
+        let item_for_use = {
+            let held = item_in_hand.lock().await;
+            held.item
+        };
+
+        if !self
+            .should_continue_use_after_fish_event(server, player, hand, item_for_use)
+            .await
+        {
+            return;
+        }
+
+        send_cancellable! {{
+            server;
+            event;
+            'after: {
+                server.item_registry.on_use(item_for_use, player).await;
+            }
+        }}
+    }
+
+    async fn prepare_hand_item_for_use(
+        &self,
+        player: &Arc<Player>,
+        hand: Hand,
+        item_in_hand: &Arc<Mutex<ItemStack>>,
+    ) {
+        let inventory = player.inventory();
         let mut held = item_in_hand.lock().await;
         if held.get_data_component::<ConsumableImpl>().is_some() {
             // If its food we want to make sure we can actually consume it
@@ -1892,20 +1924,30 @@ impl JavaClient {
                 *equip_item = binding;
             }
         }
-        drop(held);
+    }
 
-        let item_for_use = {
-            let held = item_in_hand.lock().await;
-            held.item
-        };
+    async fn should_continue_use_after_fish_event(
+        &self,
+        server: &Server,
+        player: &Arc<Player>,
+        hand: Hand,
+        item_for_use: &Item,
+    ) -> bool {
+        if item_for_use.id != Item::FISHING_ROD.id {
+            return true;
+        }
 
-        send_cancellable! {{
-            server;
-            event;
-            'after: {
-                server.item_registry.on_use(item_for_use, player).await;
-            }
-        }}
+        let fish_event = PlayerFishEvent::new(
+            player.clone(),
+            None,
+            uuid::Uuid::nil(),
+            String::new(),
+            PlayerFishState::Fishing,
+            hand,
+            0,
+        );
+        let fish_event = server.plugin_manager.fire(fish_event).await;
+        !fish_event.cancelled
     }
 
     pub async fn handle_set_held_item(&self, player: &Player, held: SSetHeldItem) {
