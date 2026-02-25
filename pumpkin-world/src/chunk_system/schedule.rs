@@ -285,7 +285,6 @@ impl GenerationSchedule {
                                 let new_pos = pos.add_raw(dx, dz);
                                 let req_stage = dependency[dx.abs().max(dz.abs()) as usize];
                                 if new_pos == pos {
-                                    // TODO
                                     holder.occupied_by = self.graph.edges.insert(
                                         crate::chunk_system::dag::Edge::new(
                                             task,
@@ -295,27 +294,73 @@ impl GenerationSchedule {
                                     if holder.current_stage >= req_stage {
                                         continue;
                                     }
-                                    let ano_task = &mut holder.tasks[req_stage as usize];
-                                    if ano_task.is_null() {
-                                        *ano_task =
-                                            self.graph.nodes.insert(Node::new(new_pos, req_stage));
 
-                                        // Ensure the implicitly created task is queued
-                                        let node = self.graph.nodes.get_mut(*ano_task).unwrap();
-                                        node.in_queue = true;
+                                    // Build the full task chain for the self-chunk from the first needed stage up to req_stage
+                                    let empty = StagedChunkEnum::Empty as usize;
+                                    let self_start = (holder.current_stage as usize + 1).max(empty);
+                                    let self_end = req_stage as usize;
+                                    let mut self_newly_created = [false; StagedChunkEnum::COUNT];
+
+                                    for (j, flag) in self_newly_created[self_start..=self_end]
+                                        .iter_mut()
+                                        .enumerate()
+                                    {
+                                        let stage_j = self_start + j;
+                                        if holder.tasks[stage_j].is_null() {
+                                            let new_node = self.graph.nodes.insert(Node::new(
+                                                new_pos,
+                                                StagedChunkEnum::from(stage_j as u8),
+                                            ));
+                                            holder.tasks[stage_j] = new_node;
+                                            *flag = true;
+                                            if !holder.occupied.is_null() {
+                                                self.graph.add_edge(holder.occupied, new_node);
+                                            }
+                                        }
+                                    }
+
+                                    for stage_j in self_start..=self_end {
+                                        if !self_newly_created[stage_j] {
+                                            continue;
+                                        }
+                                        let cur = holder.tasks[stage_j];
+                                        if stage_j > empty {
+                                            let prev = holder.tasks[stage_j - 1];
+                                            if !prev.is_null() {
+                                                self.graph.add_edge(prev, cur);
+                                            }
+                                        }
+                                        if stage_j < self_end {
+                                            let next = holder.tasks[stage_j + 1];
+                                            if !next.is_null() && !self_newly_created[stage_j + 1] {
+                                                self.graph.add_edge(cur, next);
+                                            }
+                                        }
+                                    }
+
+                                    let entry_task = holder.tasks[self_start];
+                                    if !entry_task.is_null()
+                                        && let Some(n) = self.graph.nodes.get_mut(entry_task)
+                                        && n.in_degree == 0
+                                        && !n.in_queue
+                                    {
+                                        n.in_queue = true;
                                         self.queue.push(TaskHeapNode(
                                             Self::calc_priority(
                                                 &self.last_level,
                                                 &self.last_high_priority,
                                                 new_pos,
-                                                req_stage,
+                                                StagedChunkEnum::from(self_start as u8),
                                             ),
-                                            *ano_task,
+                                            entry_task,
                                         ));
                                     }
-                                    self.graph.add_edge(*ano_task, task); // task depend on ano_task
+
+                                    let ano_task = holder.tasks[self_end];
+                                    self.graph.add_edge(ano_task, task);
                                     continue;
                                 }
+
                                 let ano_chunk = self.chunk_map.entry(new_pos).or_default();
                                 ano_chunk.occupied_by =
                                     self.graph.edges.insert(crate::chunk_system::dag::Edge::new(
@@ -336,7 +381,7 @@ impl GenerationSchedule {
                                 let empty = StagedChunkEnum::Empty as usize;
                                 let start = (ano_chunk.current_stage as usize + 1).max(empty);
                                 let end = req_stage as usize;
-                                let mut newly_created = [false; 10];
+                                let mut newly_created = [false; StagedChunkEnum::COUNT];
                                 for (i, flag) in newly_created[start..=end].iter_mut().enumerate() {
                                     let stage_i = start + i;
                                     if ano_chunk.tasks[stage_i].is_null() {
@@ -893,10 +938,28 @@ impl GenerationSchedule {
                                 swap(&mut tmp, &mut holder.chunk);
                                 let tmp = match tmp {
                                     Some(v) => v,
-                                    None => panic!(
-                                        "Missing chunk for position {:?} while processing generation task for {:?} stage {:?}",
-                                        new_pos, node.pos, node.stage
-                                    ),
+                                    None => {
+                                        // If a neighbor is missing, create a placeholder ProtoChunk (instead of panicking).
+                                        warn!(
+                                            "Missing chunk for position {:?} during generation of {:?}. Creating placeholder.",
+                                            new_pos, node.pos
+                                        );
+
+                                        let biome_mixer_seed = crate::biome::hash_seed(
+                                            level.world_gen.random_config.seed,
+                                        );
+                                        let mut proto = crate::ProtoChunk::new(
+                                            new_pos.x,
+                                            new_pos.y,
+                                            &level.world_gen.dimension,
+                                            level.world_gen.default_block,
+                                            biome_mixer_seed,
+                                        );
+
+                                        // Align the placeholder's stage so the generator doesn't reject it.
+                                        proto.stage = holder.current_stage;
+                                        Chunk::Proto(Box::new(proto))
+                                    }
                                 };
                                 match tmp {
                                     Chunk::Level(chunk) => {
