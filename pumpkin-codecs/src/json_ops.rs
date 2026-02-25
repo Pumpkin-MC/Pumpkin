@@ -6,6 +6,7 @@ use crate::lifecycle::Lifecycle;
 use crate::struct_builder::{ResultStructBuilder, StringStructBuilder, StructBuilder};
 use crate::{impl_string_struct_builder, impl_struct_builder};
 use serde_json::{Map, Value};
+use tracing::warn;
 
 /// A [`DynamicOps`] to serialize to/deserialize from JSON data.
 pub struct JsonOps {
@@ -119,10 +120,11 @@ impl DynamicOps for JsonOps {
                 );
             }
             Value::String(string) => {
-                if self.compressed
-                    && let Ok(r) = string.parse::<i32>()
-                {
-                    return DataResult::success(Number::Int(r));
+                if self.compressed {
+                    return string.parse::<i32>().map_or_else(
+                        |_| DataResult::error(format!("Number cannot be parsed as i32: {string}")),
+                        |r| DataResult::success(Number::Int(r)),
+                    );
                 }
             }
             _ => {}
@@ -316,6 +318,7 @@ impl DynamicOps for JsonOps {
                     out_ops.create_double(f)
                 } else {
                     // Just in case.
+                    warn!("Number could not be placed in JSON while converting: {n}");
                     out_ops.create_double(0.0)
                 }
             }
@@ -379,10 +382,15 @@ impl ResultStructBuilder for JsonStructBuilder {
                 match builder {
                     Value::Object(builder_map) => {
                         for (k, v) in builder_map {
-                            map.insert(k.clone(), v.clone());
+                            map.insert(k, v);
                         }
                     }
-                    _ => unreachable!(),
+                    // This shouldn't happen, but just in case.
+                    _ => {
+                        return DataResult::error(format!(
+                            "Expected object in builder, found {builder}"
+                        ));
+                    }
                 }
                 DataResult::success(Value::Object(map))
             }

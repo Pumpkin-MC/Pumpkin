@@ -33,7 +33,7 @@ macro_rules! impl_get_list {
             iter.map(|e| $target.get_number(&e).into_result().map(Into::into))
                 .collect::<Option<Vec<_>>>()
                 .map_or_else(
-                    || DataResult::error(concat!("Some elements are not ", $ty).to_string()),
+                    || DataResult::error(concat!("Some elements are not ", $ty)),
                     |v| DataResult::success(v.into_boxed_slice()),
                 )
         })
@@ -44,7 +44,7 @@ macro_rules! impl_get_list {
             iter.map(|e| $target.get_number(&e).into_result().map(Into::into))
                 .collect::<Option<Vec<_>>>()
                 .map_or_else(
-                    || DataResult::error(concat!("Some elements are not ", $ty).to_string()),
+                    || DataResult::error(concat!("Some elements are not ", $ty)),
                     DataResult::success,
                 )
         })

@@ -174,7 +174,7 @@ pub trait MapDecoder: HasValue + Keyable + CompressorHolder {
         if ops.compress_maps() {
             // Since compressed maps are really just lists, we parse a list instead.
             return ops.get_iter(input).into_result().map_or_else(
-                || DataResult::error("Input is not a list".to_string()),
+                || DataResult::error("Input is not a list"),
                 |iter| {
                     /// A [`MapLike`] for handling [`KeyCompressor`] methods.
                     struct CompressorMapLikeImpl<T, O: DynamicOps<Value = T> + 'static> {
