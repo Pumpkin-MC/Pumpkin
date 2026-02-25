@@ -1,5 +1,7 @@
 use std::sync::{Arc, Weak};
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::{entity::EntityType, item::Item};
 
 use crate::entity::{
@@ -41,6 +43,14 @@ impl CatEntity {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::MOVEMENT_SPEED, 0.3)
+            .add(Attributes::ATTACK_DAMAGE, 3.0)
+            .add(Attributes::MAX_HEALTH, 10.0)
     }
 }
 

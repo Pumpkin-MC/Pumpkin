@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::{
     entity::EntityType, item::Item, meta_data_type::MetaDataType, tracked_data::TrackedData,
 };
@@ -94,6 +96,13 @@ impl SheepEntity {
             self.get_packed_byte() & !0x10
         };
         self.set_packed_and_sync(byte).await;
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::MOVEMENT_SPEED, 0.23)
+            .add(Attributes::MAX_HEALTH, 8.0)
     }
 }
 

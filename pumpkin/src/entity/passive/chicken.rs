@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicI32, Ordering, Ordering::Relaxed},
 };
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_world::item::ItemStack;
 use rand::RngExt;
@@ -60,6 +62,13 @@ impl ChickenEntity {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::MOVEMENT_SPEED, 0.25)
+            .add(Attributes::MAX_HEALTH, 4.0)
     }
 }
 
