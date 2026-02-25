@@ -5,4 +5,6 @@ interface common {
     // doing a v1.0.0 official release
     /// This is a serialized text component as a postcard byte array
     type raw-text-component = list<u8>;
+    type block-position = tuple<s32, s32, s32>;
+    type position = tuple<f64, f64, f64>;
 }
