@@ -95,8 +95,8 @@ where
                 }
             }
 
-            if elements.len() < self.min_size {
-                return self.create_too_short_error(elements.len());
+            if total_count < self.min_size {
+                return self.create_too_short_error(total_count);
             }
 
             let pair = (elements, ops.create_list(failed));

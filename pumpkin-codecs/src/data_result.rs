@@ -147,37 +147,40 @@ impl<R> DataResult<R> {
 
     /// Returns an *errored* `DataResult` with no result and an experimental lifecycle.
     #[inline]
-    pub const fn error(error: String) -> Self {
-        Self::error_with_lifecycle(error, Lifecycle::Experimental)
+    pub fn error(error: impl Into<String>) -> Self {
+        Self::error_with_lifecycle(error.into(), Lifecycle::Experimental)
     }
 
     /// Returns an *errored* `DataResult` with a partial result and an experimental lifecycle.
     #[inline]
-    pub const fn partial_error(error: String, partial_result: R) -> Self {
-        Self::partial_error_with_lifecycle(error, partial_result, Lifecycle::Experimental)
+    pub fn partial_error(error: impl Into<String>, partial_result: R) -> Self {
+        Self::partial_error_with_lifecycle(error.into(), partial_result, Lifecycle::Experimental)
     }
 
     /// Returns an *errored* `DataResult` with no result and a given lifecycle.
     #[inline]
-    pub const fn error_with_lifecycle<T>(message: String, lifecycle: Lifecycle) -> DataResult<T> {
+    pub fn error_with_lifecycle<T>(
+        message: impl Into<String>,
+        lifecycle: Lifecycle,
+    ) -> DataResult<T> {
         DataResult::Error {
             partial_result: None,
             lifecycle,
-            message,
+            message: message.into(),
         }
     }
 
     /// Returns an *errored* `DataResult` with a partial result and a given lifecycle.
     #[inline]
-    pub const fn partial_error_with_lifecycle(
-        message: String,
+    pub fn partial_error_with_lifecycle(
+        message: impl Into<String>,
         partial_result: R,
         lifecycle: Lifecycle,
     ) -> Self {
         Self::Error {
             partial_result: Some(partial_result),
             lifecycle,
-            message,
+            message: message.into(),
         }
     }
 
@@ -383,51 +386,6 @@ impl<R> DataResult<R> {
         }
     }
 
-    /// Applies a function to each result of 2 `DataResult`s of different types.
-    ///
-    /// - If any of the given results is a non-result, the returned result will also be a non-result.
-    /// - Any errors found in error results (non-result or partial result) will be added to the returned result.
-    /// - If both results are at least partial, `f` is called, which should return the final item to be wrapped in the returned result.
-    ///
-    /// The returned result is a *success* **if and only if** both results are successes as well.
-    pub fn apply_2<R2, T>(
-        self,
-        f: impl FnOnce(R, R2) -> T,
-        second_result: DataResult<R2>,
-    ) -> DataResult<T> {
-        match (self, second_result) {
-            // Both results are successful, just apply f.
-            (Self::Success { result: r, .. }, DataResult::Success { result: a, .. }) => {
-                DataResult::success(f(r, a))
-            }
-
-            // Both results are errors, append their messages and apply f if both have a partial result.
-            (
-                Self::Error {
-                    partial_result: p1,
-                    message: m1,
-                    ..
-                },
-                DataResult::Error {
-                    partial_result: p2,
-                    message: m2,
-                    ..
-                },
-            ) => DataResult::error_any_with_lifecycle(
-                Self::append_messages(&m1, &m2),
-                match (p1, p2) {
-                    (Some(p1), Some(p2)) => Some(f(p1, p2)),
-                    _ => None,
-                },
-                Lifecycle::Experimental,
-            ),
-
-            // Exactly one of both results is an error, just return its message without any partial value.
-            (Self::Error { message: m1, .. }, _) => DataResult::error(m1),
-            (_, DataResult::Error { message: m2, .. }) => DataResult::error(m2),
-        }
-    }
-
     /// Similar to [`Self::apply_2`], but this also marks the returned `DataResult` as [`Lifecycle::Stable`].
     pub fn apply_2_and_make_stable<R2, T>(
         self,
@@ -438,6 +396,7 @@ impl<R> DataResult<R> {
             .with_lifecycle(Lifecycle::Stable)
     }
 
+    impl_apply!(apply_2, 2, R2, result_2);
     impl_apply!(apply_3, 3, R2, result_2, R3, result_3);
     impl_apply!(apply_4, 4, R2, result_2, R3, result_3, R4, result_4);
     impl_apply!(
@@ -570,7 +529,7 @@ impl<R> DataResult<R> {
                 },
             ) => Self::error_any_with_lifecycle(
                 Self::append_messages(&m1, m2),
-                if matches!((&p1, &p2), (Some(_), Some(_))) {
+                if p1.is_some() && p2.is_some() {
                     p1
                 } else {
                     None
@@ -579,12 +538,26 @@ impl<R> DataResult<R> {
             ),
 
             // Exactly one of both results is an error.
-            (Self::Error { message: m1, .. }, _) => {
-                Self::error_with_lifecycle(m1, Lifecycle::Stable)
-            }
-            (_, DataResult::Error { message: m2, .. }) => {
-                Self::error_with_lifecycle(m2.clone(), Lifecycle::Stable)
-            }
+            (
+                Self::Error {
+                    message: m1,
+                    partial_result,
+                    ..
+                },
+                _,
+            ) => Self::error_any_with_lifecycle(m1, partial_result, Lifecycle::Stable),
+            (
+                Self::Success { result, .. },
+                DataResult::Error {
+                    message: m2,
+                    partial_result,
+                    ..
+                },
+            ) => Self::error_any_with_lifecycle(
+                m2.clone(),
+                partial_result.is_some().then_some(result),
+                Lifecycle::Stable,
+            ),
         }
     }
 
@@ -647,4 +620,10 @@ macro_rules! assert_success {
             "`DataResult` was successful but the value doesn't match"
         );
     }};
+}
+
+impl<T> Default for DataResult<T> {
+    fn default() -> Self {
+        Self::error("Default DataResult")
+    }
 }
