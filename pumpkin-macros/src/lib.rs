@@ -7,6 +7,10 @@ use syn::spanned::Spanned;
 use syn::{self, Attribute, DeriveInput, LitStr, Type, parse_quote};
 use syn::{Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
 
+/// Derives the `Payload` trait for an event struct, enabling it to be used in the plugin system.
+///
+/// # Arguments
+/// - `item` – The input `TokenStream` representing the struct to derive `Event` for.
 #[proc_macro_derive(Event)]
 pub fn event(item: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(item as DeriveInput);
@@ -35,6 +39,12 @@ pub fn event(item: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Marks a struct as cancellable by adding a `cancelled: bool` field and
+/// implementing the `Cancellable` trait.
+///
+/// # Arguments
+/// - `_args` – TokenStream of arguments passed to the attribute (unused).
+/// - `input` – The input `TokenStream` representing the struct to modify.
 #[proc_macro_attribute]
 pub fn cancellable(_args: TokenStream, input: TokenStream) -> TokenStream {
     let mut item_struct = parse_macro_input!(input as ItemStruct);
@@ -78,6 +88,10 @@ pub fn cancellable(_args: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Sends a cancellable event asynchronously.
+///
+/// # Arguments
+/// - `input` – The input `TokenStream` representing the labelled blocks and event expressions.
 #[proc_macro_error]
 #[proc_macro]
 pub fn send_cancellable(input: TokenStream) -> TokenStream {
@@ -157,6 +171,11 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Attaches a fixed packet ID to a struct implementing `Packet`.
+///
+/// # Arguments
+/// - `args` – The `TokenStream` representing the packet ID expression.
+/// - `item` – The input `TokenStream` representing the struct to implement `Packet` for.
 #[proc_macro_attribute]
 pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
     let packet_id_expr = parse_macro_input!(args as Expr);
@@ -174,6 +193,11 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Attaches a multi-version packet ID to a struct implementing `MultiVersionJavaPacket`.
+///
+/// # Arguments
+/// - `args` – The `TokenStream` representing the packet ID expression.
+/// - `item` – The input `TokenStream` representing the struct to implement the trait for.
 #[proc_macro_attribute]
 pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
     let packet_id_expr = parse_macro_input!(args as Expr);
@@ -195,6 +219,11 @@ pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Marks a struct as representing a specific block by its name.
+///
+/// # Arguments
+/// - `args` – The `TokenStream` representing the block name literal.
+/// - `item` – The input `TokenStream` representing the struct to implement `BlockMetadata` for.
 #[proc_macro_attribute]
 pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     let input_item = item.clone();
@@ -228,6 +257,11 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     output
 }
 
+/// Marks a struct as representing a set of blocks from a given tag.
+///
+/// # Arguments
+/// - `args` – The `TokenStream` representing the block tag literal.
+/// - `item` – The input `TokenStream` representing the struct to implement `BlockMetadata` for.
 #[proc_macro_attribute]
 pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStream {
     let original_item = item.clone();
@@ -407,6 +441,10 @@ pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStre
 //     code.into()
 // }
 
+/// Derives the `PacketWrite` trait for a struct, enabling serialization.
+///
+/// # Arguments
+/// - `input` – The input `TokenStream` representing the struct to derive `PacketWrite` for.
 #[rustfmt::skip]
 #[proc_macro_derive(PacketWrite, attributes(serial))]
 pub fn derive_serialize(input: TokenStream) -> TokenStream {
@@ -461,6 +499,10 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
     expanded.into()
 }
 
+/// Derives the `PacketRead` trait for a struct, enabling deserialization.
+///
+/// # Arguments
+/// - `input` – The input `TokenStream` representing the struct to derive `PacketRead` for.
 #[rustfmt::skip]
 #[proc_macro_derive(PacketRead, attributes(serial))]
 pub fn derive_deserialize(input: TokenStream) -> TokenStream {
@@ -513,6 +555,14 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     expanded.into()
 }
 
+/// Checks a field's `#[serial(...)]` attributes.
+///
+/// # Arguments
+/// - `attrs` – Slice of `Attribute`s to inspect for serial-specific metadata.
+///
+/// # Returns
+/// Tuple `(is_big_endian, no_prefix)` indicating whether the field is big-endian
+/// and/or has no length prefix.
 fn check_serial_attributes(attrs: &[Attribute]) -> (bool, bool) {
     let mut is_big_endian = false;
     let mut no_prefix = false;
@@ -533,6 +583,13 @@ fn check_serial_attributes(attrs: &[Attribute]) -> (bool, bool) {
     (is_big_endian, no_prefix)
 }
 
+/// Returns true if the type is a `Vec<_>`.
+///
+/// # Arguments
+/// - `ty` – The `Type` to check.
+///
+/// # Returns
+/// `true` if the type is a `Vec`, otherwise `false`.
 fn is_vec(ty: &Type) -> bool {
     if let Type::Path(type_path) = ty {
         type_path
