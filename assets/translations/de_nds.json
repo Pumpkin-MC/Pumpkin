@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Mookt dat jedermann mööglich, flinke Minecraft Server to kriegen.",
+    "commands.pumpkin.minecraft_version": "(Minecraft %1$s, Protokoll %2$s)\n",
+    "commands.pumpkin.github": "[GitHub-Repository]",
+    "commands.pumpkin.website": "[Websiet]",
+    "commands.pumpkin.version.hover": "Drück hier, üm de Version to koperen.",
+    "commands.pumpkin.description.hover": "Drück hier, üm de Version to koperen.",
+    "commands.pumpkin.minecraft_version.hover": "Drück hier, üm de Minecraft-Version to koperen.",
+    "commands.pumpkin.github.hover": "Drück hier, üm de GitHub-Repository to opdoon.",
+    "commands.pumpkin.website.hover": "Drück hier, üm de Websiet to opdoon."
+}
