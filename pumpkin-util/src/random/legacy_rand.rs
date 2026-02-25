@@ -5,14 +5,33 @@ use super::{
 
 use crate::{math::java_string_hash, population_seed_fn};
 
+/// Legacy random number generator compatible with older Minecraft versions.
+///
+/// This implementation uses a 48-bit linear congruential generator (LCG) with the formula:
+/// `seed = (seed * 0x5DEECE66D + 11) & 0xFFFFFFFFFFFF`
+///
+/// It maintains compatibility with Minecraft's original random number generator used in
+/// versions prior to 1.13. This is essential for world generation compatibility with
+/// older worlds and for certain features that still rely on the legacy algorithm.
 pub struct LegacyRand {
+    /// The current 48-bit seed value (stored in lower 48 bits).
     seed: u64,
+    /// Stored Gaussian value for the next Gaussian generation.
     internal_next_gaussian: Option<f64>,
 }
 
 impl LegacyRand {
     population_seed_fn!();
 
+    /// Creates a new legacy random generator from the given seed.
+    ///
+    /// The seed is `XORed` with the constant `0x5DEECE66D` and masked to 48 bits.
+    ///
+    /// # Arguments
+    /// - `seed` – The initial seed value.
+    ///
+    /// # Returns
+    /// A new `LegacyRand` instance.
     #[must_use]
     pub const fn from_seed(seed: u64) -> Self {
         Self {
@@ -21,6 +40,13 @@ impl LegacyRand {
         }
     }
 
+    /// Generates the next random value and advances the internal state.
+    ///
+    /// This implements the core LCG algorithm: `seed = seed * 0x5DEECE66D + 11`
+    /// and returns the new seed.
+    ///
+    /// # Returns
+    /// The new 48-bit seed value.
     const fn next_random(&mut self) -> i64 {
         let l = self.seed as i64;
         let m = l.wrapping_mul(0x0005_DEEC_E66D).wrapping_add(11) & 0xFFFFFFFFFFFF;
@@ -28,6 +54,13 @@ impl LegacyRand {
         m
     }
 
+    /// Generates a random integer with the specified number of bits.
+    ///
+    /// # Arguments
+    /// - `bits` – The number of bits to extract (1-48).
+    ///
+    /// # Returns
+    /// A random value with the given number of bits.
     const fn next(&mut self, bits: u64) -> i32 {
         (self.next_random() >> (48 - bits)) as i32
     }
@@ -96,12 +129,25 @@ impl RandomImpl for LegacyRand {
     }
 }
 
+/// A splitter for creating derived legacy random generators.
+///
+/// This struct allows for deterministic creation of multiple independent
+/// random generators from a single seed, which is essential for
+/// parallelizable world generation.
 #[derive(Clone)]
 pub struct LegacySplitter {
+    /// The base seed for deriving new generators.
     seed: u64,
 }
 
 impl LegacySplitter {
+    /// Creates a new legacy splitter with the given seed.
+    ///
+    /// # Arguments
+    /// - `seed` – The base seed value.
+    ///
+    /// # Returns
+    /// A new `LegacySplitter` instance.
     const fn new(seed: u64) -> Self {
         Self { seed }
     }

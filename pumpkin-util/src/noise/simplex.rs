@@ -285,7 +285,7 @@ impl OctaveSimplexNoiseSampler {
     /// Creates a new octave Simplex noise sampler.
     ///
     /// This constructor follows Minecraft's legacy initialization pattern, using a combination
-    /// of Xoroshiro and LegacyRand to ensure compatibility with existing world generation.
+    /// of Xoroshiro and `LegacyRand` to ensure compatibility with existing world generation.
     ///
     /// # Arguments
     /// - `random` – The random number generator to use.
