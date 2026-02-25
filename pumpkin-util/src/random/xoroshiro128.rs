@@ -54,7 +54,7 @@ impl Xoroshiro {
     const fn next_random(&mut self) -> u64 {
         let l = self.lo;
         let m = self.hi;
-        let n = (l.wrapping_add(m)).rotate_left(17).wrapping_add(l);
+        let n = l.wrapping_add(m).rotate_left(17).wrapping_add(l);
         let m = m ^ l;
         self.lo = l.rotate_left(49) ^ m ^ (m << 21);
         self.hi = m.rotate_left(28);
@@ -99,7 +99,7 @@ impl RandomImpl for Xoroshiro {
         let mut m = l.wrapping_mul(bound as u64);
         let mut n = m & 0xFFFF_FFFF;
         if n < bound as u64 {
-            let i = (((!bound).wrapping_add(1)) as u64) % (bound as u64);
+            let i = ((!bound).wrapping_add(1) as u64) % (bound as u64);
             while n < i {
                 l = (self.next_i32() as u64) & 0xFFFF_FFFF;
                 m = l.wrapping_mul(bound as u64);
@@ -138,24 +138,24 @@ pub struct XoroshiroSplitter {
 }
 
 impl RandomDeriverImpl for XoroshiroSplitter {
-    #[expect(clippy::many_single_char_names)]
-    fn split_pos(&self, x: i32, y: i32, z: i32) -> RandomGenerator {
-        let l = hash_block_pos(x, y, z) as u64;
-        let m = l ^ self.lo;
-
-        RandomGenerator::Xoroshiro(Xoroshiro::new(m, self.hi))
-    }
-
-    fn split_u64(&self, seed: u64) -> RandomGenerator {
-        RandomGenerator::Xoroshiro(Xoroshiro::new(seed ^ self.lo, seed ^ self.hi))
-    }
-
     fn split_string(&self, seed: &str) -> RandomGenerator {
         let bytes = md5::compute(seed.as_bytes());
         let l = u64::from_be_bytes(bytes[0..8].try_into().expect("incorrect length"));
         let m = u64::from_be_bytes(bytes[8..16].try_into().expect("incorrect length"));
 
         RandomGenerator::Xoroshiro(Xoroshiro::new(l ^ self.lo, m ^ self.hi))
+    }
+
+    fn split_u64(&self, seed: u64) -> RandomGenerator {
+        RandomGenerator::Xoroshiro(Xoroshiro::new(seed ^ self.lo, seed ^ self.hi))
+    }
+
+    #[expect(clippy::many_single_char_names)]
+    fn split_pos(&self, x: i32, y: i32, z: i32) -> RandomGenerator {
+        let l = hash_block_pos(x, y, z) as u64;
+        let m = l ^ self.lo;
+
+        RandomGenerator::Xoroshiro(Xoroshiro::new(m, self.hi))
     }
 }
 
@@ -391,7 +391,7 @@ mod tests {
         assert_eq!(new_generator.next_i32(), 542195535);
 
         {
-            // Drop splitter out of scope, so we can mut call new_generator again
+            // Drop splitter out of scope, so we can `mut` call new_generator again
             let splitter = new_generator.next_splitter();
             let mut rand_1 = splitter.split_string("TEST STRING");
             assert_eq!(rand_1.next_i32(), -641435713);

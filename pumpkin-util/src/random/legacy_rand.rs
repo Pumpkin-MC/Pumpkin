@@ -48,37 +48,12 @@ impl RandomImpl for LegacyRand {
         Self::from_seed(self.next_i64() as u64)
     }
 
-    fn next_i32(&mut self) -> i32 {
-        self.next(32)
-    }
-
-    fn next_i64(&mut self) -> i64 {
-        let i = self.next_i32();
-        let j = self.next_i32();
-        (i64::from(i) << 32).wrapping_add(i64::from(j))
-    }
-
-    fn next_f32(&mut self) -> f32 {
-        self.next(24) as f32 * 5.9604645E-8f32
-    }
-
-    fn next_f64(&mut self) -> f64 {
-        let i = self.next(26);
-        let j = self.next(27);
-        let l = (i64::from(i) << 27).wrapping_add(i64::from(j));
-        l as f64 * f64::from(1.110223E-16f32)
-    }
-
-    fn next_bool(&mut self) -> bool {
-        self.next(1) != 0
-    }
-
     fn next_splitter(&mut self) -> RandomDeriver {
         RandomDeriver::Legacy(LegacySplitter::new(self.next_i64() as u64))
     }
 
-    fn next_gaussian(&mut self) -> f64 {
-        self.calculate_gaussian()
+    fn next_i32(&mut self) -> i32 {
+        self.next(32)
     }
 
     fn next_bounded_i32(&mut self, bound: i32) -> i32 {
@@ -94,6 +69,31 @@ impl RandomImpl for LegacyRand {
             }
         }
     }
+
+    fn next_i64(&mut self) -> i64 {
+        let i = self.next_i32();
+        let j = self.next_i32();
+        (i64::from(i) << 32).wrapping_add(i64::from(j))
+    }
+
+    fn next_bool(&mut self) -> bool {
+        self.next(1) != 0
+    }
+
+    fn next_f32(&mut self) -> f32 {
+        self.next(24) as f32 * 5.9604645E-8f32
+    }
+
+    fn next_f64(&mut self) -> f64 {
+        let i = self.next(26);
+        let j = self.next(27);
+        let l = (i64::from(i) << 27).wrapping_add(i64::from(j));
+        l as f64 * f64::from(1.110223E-16f32)
+    }
+
+    fn next_gaussian(&mut self) -> f64 {
+        self.calculate_gaussian()
+    }
 }
 
 #[derive(Clone)]
@@ -108,14 +108,14 @@ impl LegacySplitter {
 }
 
 impl RandomDeriverImpl for LegacySplitter {
-    fn split_u64(&self, seed: u64) -> RandomGenerator {
-        RandomGenerator::Legacy(LegacyRand::from_seed(seed))
-    }
-
     fn split_string(&self, seed: &str) -> RandomGenerator {
         let string_hash = java_string_hash(seed);
 
         RandomGenerator::Legacy(LegacyRand::from_seed((string_hash as u64) ^ self.seed))
+    }
+
+    fn split_u64(&self, seed: u64) -> RandomGenerator {
+        RandomGenerator::Legacy(LegacyRand::from_seed(seed))
     }
 
     fn split_pos(&self, x: i32, y: i32, z: i32) -> RandomGenerator {
