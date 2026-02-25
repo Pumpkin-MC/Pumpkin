@@ -22,7 +22,7 @@ use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::changed_main_hand::PlayerChangedMainHandEvent;
-use crate::plugin::player::fish::PlayerFishEvent;
+use crate::plugin::player::fish::{PlayerFishEvent, PlayerFishState};
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
@@ -1937,18 +1937,13 @@ impl JavaClient {
             return true;
         }
 
-        let hand_name = match hand {
-            Hand::Left => "left",
-            Hand::Right => "right",
-        }
-        .to_string();
         let fish_event = PlayerFishEvent::new(
             player.clone(),
             None,
             uuid::Uuid::nil(),
             String::new(),
-            "cast".to_string(),
-            hand_name,
+            PlayerFishState::Fishing,
+            hand,
             0,
         );
         let fish_event = server.plugin_manager.fire(fish_event).await;

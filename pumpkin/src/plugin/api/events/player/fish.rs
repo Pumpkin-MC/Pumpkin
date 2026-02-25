@@ -1,9 +1,35 @@
 use pumpkin_macros::{Event, cancellable};
+use pumpkin_util::Hand;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
 
 use super::PlayerEvent;
+
+/// Enum representing possible fishing event states.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PlayerFishState {
+    /// The player cast the fishing rod.
+    Fishing,
+
+    /// The hook caught a fish.
+    CaughtFish,
+
+    /// The hook caught an entity.
+    CaughtEntity,
+
+    /// The hook landed in the ground.
+    InGround,
+
+    /// The fishing attempt failed.
+    FailedAttempt,
+
+    /// The player reeled in the hook.
+    ReelIn,
+
+    /// A fish bit the hook.
+    Bite,
+}
 
 /// An event that occurs when a player fishes.
 #[cancellable]
@@ -22,10 +48,10 @@ pub struct PlayerFishEvent {
     pub hook_uuid: uuid::Uuid,
 
     /// The fish event state.
-    pub state: String,
+    pub state: PlayerFishState,
 
     /// The hand used for fishing.
-    pub hand: String,
+    pub hand: Hand,
 
     /// Experience to drop.
     pub exp_to_drop: i32,
@@ -38,8 +64,8 @@ impl PlayerFishEvent {
         caught_uuid: Option<uuid::Uuid>,
         hook_uuid: uuid::Uuid,
         caught_type: String,
-        state: String,
-        hand: String,
+        state: PlayerFishState,
+        hand: Hand,
         exp_to_drop: i32,
     ) -> Self {
         Self {
