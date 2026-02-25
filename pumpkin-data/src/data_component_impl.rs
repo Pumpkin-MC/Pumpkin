@@ -140,6 +140,12 @@ pub struct MaxDamageImpl {
     pub max_damage: i32,
 }
 impl DataComponentImpl for MaxDamageImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.max_damage)
+    }
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.max_damage) as i32
+    }
     default_impl!(MaxDamage);
 }
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
