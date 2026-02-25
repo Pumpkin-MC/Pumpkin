@@ -120,7 +120,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
                 entity
                     .send_meta_data(&[Metadata::new(
                         TrackedData::DATA_BABY,
-                        MetaDataType::Boolean,
+                        MetaDataType::BOOLEAN,
                         true,
                     )])
                     .await;
@@ -239,6 +239,22 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     fn set_paddle_state(&self, _left: bool, _right: bool) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {})
+    }
+
+    fn is_in_love(&self) -> bool {
+        false
+    }
+
+    fn is_breeding_ready(&self) -> bool {
+        false
+    }
+
+    fn reset_love(&self) {}
+
+    fn set_breeding_cooldown(&self, _ticks: i32) {}
+
+    fn is_panicking(&self) -> bool {
+        false
     }
 
     fn get_entity(&self) -> &Entity;
@@ -553,7 +569,7 @@ impl Entity {
     pub async fn set_custom_name(&self, name: TextComponent) {
         self.send_meta_data(&[Metadata::new(
             TrackedData::DATA_CUSTOM_NAME,
-            MetaDataType::OptionalTextComponent,
+            MetaDataType::OPTIONAL_TEXT_COMPONENT,
             Some(name),
         )])
         .await;
@@ -1703,7 +1719,7 @@ impl Entity {
             self.frozen_ticks.store(new_frozen_ticks, Ordering::Relaxed);
             self.send_meta_data(&[Metadata::new(
                 TrackedData::DATA_FROZEN_TICKS,
-                MetaDataType::Integer,
+                MetaDataType::INTEGER,
                 VarInt(new_frozen_ticks),
             )])
             .await;
@@ -1963,7 +1979,7 @@ impl Entity {
         self.flags.store(b, Ordering::Relaxed);
         self.send_meta_data(&[Metadata::new(
             TrackedData::DATA_FLAGS,
-            MetaDataType::Byte,
+            MetaDataType::BYTE,
             b,
         )])
         .await;
@@ -2016,7 +2032,7 @@ impl Entity {
             let pose = pose as i32;
             self.send_meta_data(&[Metadata::new(
                 TrackedData::DATA_POSE,
-                MetaDataType::EntityPose,
+                MetaDataType::ENTITY_POSE,
                 VarInt(pose),
             )])
             .await;

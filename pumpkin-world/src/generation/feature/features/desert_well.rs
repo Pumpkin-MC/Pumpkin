@@ -3,11 +3,9 @@ use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::RandomGenerator,
 };
-use serde::Deserialize;
 
 use crate::generation::{noise::WATER_BLOCK, proto_chunk::GenerationCache};
 
-#[derive(Deserialize)]
 pub struct DesertWellFeature;
 
 impl DesertWellFeature {

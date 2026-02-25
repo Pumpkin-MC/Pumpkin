@@ -5,12 +5,14 @@ use crate::entity::living::LivingEntity;
 use crate::entity::ai::pathfinder::binary_heap::BinaryHeap;
 use crate::entity::ai::pathfinder::node::Coordinate;
 use crate::entity::ai::pathfinder::node::Node;
+use crate::entity::ai::pathfinder::node::PathType;
 use crate::entity::ai::pathfinder::node_evaluator::{MobData, NodeEvaluator};
 use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::ai::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_util::math::wrap_degrees;
+use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
 pub mod binary_heap;
@@ -42,7 +44,6 @@ impl NavigatorGoal {
     }
 }
 
-#[derive(Default)]
 pub struct Navigator {
     current_goal: Option<NavigatorGoal>,
     evaluator: WalkNodeEvaluator,
@@ -52,6 +53,26 @@ pub struct Navigator {
     last_node_index: usize,
     total_ticks: u32,
     path_start_pos: Option<Vector3<f64>>,
+    path_type_overrides: HashMap<PathType, f32>,
+    mob_width: f32,
+    mob_height: f32,
+}
+
+impl Default for Navigator {
+    fn default() -> Self {
+        Self {
+            current_goal: None,
+            evaluator: WalkNodeEvaluator::default(),
+            current_path: None,
+            ticks_on_current_node: 0,
+            last_node_index: 0,
+            total_ticks: 0,
+            path_start_pos: None,
+            path_type_overrides: HashMap::new(),
+            mob_width: 0.6,
+            mob_height: 1.95,
+        }
+    }
 }
 
 // If I counted correctly this should be equal to the number of iters that vanilla does for
@@ -59,12 +80,9 @@ pub struct Navigator {
 // other things)
 // TODO: Calculate from mob attributes like in vanilla
 const MAX_ITERS: usize = 560;
-
 const TARGET_DISTANCE_MULTIPLIER: f32 = 1.5;
-
 const NODE_REACH_XZ: f64 = 0.5;
 const NODE_REACH_Y: f64 = 1.0;
-
 const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 
 impl Navigator {
@@ -73,12 +91,27 @@ impl Navigator {
         self.current_path = None;
     }
 
+    pub const fn set_speed(&mut self, speed: f64) {
+        if let Some(goal) = &mut self.current_goal {
+            goal.speed = speed;
+        }
+    }
+
     pub fn stop(&mut self) {
         self.current_goal = None;
         self.current_path = None;
         self.ticks_on_current_node = 0;
         self.total_ticks = 0;
         self.path_start_pos = None;
+    }
+
+    pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
+        self.path_type_overrides.insert(path_type, malus);
+    }
+
+    pub const fn set_mob_dimensions(&mut self, width: f32, height: f32) {
+        self.mob_width = width;
+        self.mob_height = height;
     }
 
     async fn compute_path(
@@ -91,9 +124,18 @@ impl Navigator {
         let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
 
         let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
-        // TODO: Assign based on mob type, or load from mob/entity once implemented
-        let mob_data =
-            MobData::new_zombie(start_pos_f, entity.entity.on_ground.load(Ordering::Relaxed));
+        let mut mob_data = MobData::new(start_pos_f, self.mob_width, self.mob_height, 1.0);
+        mob_data.on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+        mob_data.set_pathfinding_malus(PathType::DangerFire, 16.0);
+        mob_data.set_pathfinding_malus(PathType::DamageFire, -1.0);
+        mob_data.set_pathfinding_malus(PathType::Water, 8.0);
+        mob_data.set_pathfinding_malus(PathType::Lava, -1.0);
+        mob_data.set_pathfinding_malus(PathType::DangerOther, 8.0);
+
+        // Apply per-mob pathfinding malus overrides
+        for (&path_type, &malus) in &self.path_type_overrides {
+            mob_data.set_pathfinding_malus(path_type, malus);
+        }
 
         self.evaluator.prepare(context, mob_data);
 
@@ -141,8 +183,9 @@ impl Navigator {
                 let dz = (current.pos.0.z - start_pos.z) as f32;
                 (dx * dx + dy * dy + dz * dz).sqrt()
             };
-            if euclidean_from_start >= entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32
-            {
+
+            let follow_range = entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32;
+            if euclidean_from_start >= follow_range {
                 continue;
             }
 
@@ -154,8 +197,7 @@ impl Navigator {
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
 
                 let in_heap = open_set.contains(&neighbor);
-                if neighbor.walked_dist
-                    < entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32
+                if neighbor.walked_dist < follow_range
                     && (!in_heap
                         || open_set
                             .get_node(&neighbor)
@@ -323,9 +365,10 @@ impl Navigator {
                 entity.entity.head_yaw.store(target_yaw);
                 entity.entity.body_yaw.store(target_yaw);
 
-                // Vanilla sets both movementSpeed and forwardSpeed to the same value
+                // Get movement speed from goal and mob attributes
                 let mob_speed =
                     goal.speed * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+
                 entity
                     .movement_input
                     .store(Vector3::new(0.0, 0.0, mob_speed));

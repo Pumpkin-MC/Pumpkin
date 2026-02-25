@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Duke i fuqizuar të gjithë të hostojnë serverë Minecraft \ntë shpejtë dhe efikas.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %1$s, Protokolli %2$s)\n",
+    "commands.pumpkin.github": "[Depoja në GitHub]",
+    "commands.pumpkin.website": "[Faqja e internetit]",
+    "commands.pumpkin.version.hover": "Kliko për të kopjuar versionin",
+    "commands.pumpkin.description.hover": "Kliko për të kopjuar përshkrimin",
+    "commands.pumpkin.minecraft_version.hover": "Kliko për të kopjuar versionin e Minecraft",
+    "commands.pumpkin.github.hover": "Kliko për të hapur depon.",
+    "commands.pumpkin.website.hover": "Kliko për të hapur faqen e internetit."
+}

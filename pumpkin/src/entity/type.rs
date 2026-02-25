@@ -24,7 +24,10 @@ use crate::{
             zombie::{ZombieEntity, drowned::DrownedEntity, husk::HuskEntity},
             zombie_villager::ZombieVillagerEntity,
         },
-        passive::{iron_golem::IronGolemEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity},
+        passive::{
+            cat::CatEntity, chicken::ChickenEntity, cow::CowEntity, iron_golem::IronGolemEntity,
+            pig::PigEntity, sheep::SheepEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity,
+        },
     },
     world::World,
 };
@@ -55,8 +58,13 @@ pub async fn from_type(
         id if id == EntityType::CREEPER.id => CreeperEntity::new(entity).await,
         id if id == EntityType::ENDERMAN.id => EndermanEntity::new(entity).await,
 
+        id if id == EntityType::CAT.id => CatEntity::new(entity).await,
+        id if id == EntityType::CHICKEN.id => ChickenEntity::new(entity).await,
+        id if id == EntityType::COW.id => CowEntity::new(entity).await,
+        id if id == EntityType::PIG.id => PigEntity::new(entity).await,
         id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::new(entity).await,
         id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity).await,
+        id if id == EntityType::SHEEP.id => SheepEntity::new(entity).await,
         id if id == EntityType::WOLF.id => WolfEntity::new(entity).await,
         id if id == EntityType::WITHER.id => WitherEntity::new(entity).await,
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),

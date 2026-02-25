@@ -61,7 +61,7 @@ impl BatEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_BAT_FLAGS,
-                MetaDataType::Byte,
+                MetaDataType::BYTE,
                 flags,
             )])
             .await;
@@ -235,7 +235,11 @@ impl Mob for BatEntity {
         Some(0.6)
     }
 
-    fn on_damage(&self, _damage_type: DamageType) -> EntityBaseFuture<'_, ()> {
+    fn on_damage<'a>(
+        &'a self,
+        _damage_type: DamageType,
+        _source: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             if self.is_roosting() {
                 self.set_roosting(false).await;

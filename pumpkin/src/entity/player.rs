@@ -85,8 +85,10 @@ use crate::command::dispatcher::CommandDispatcher;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
+use crate::plugin::player::exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
+use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
@@ -740,6 +742,18 @@ impl Player {
 
         player_attack_sound(&pos, &world, attack_type).await;
 
+        self.living_entity.last_attacking_id.store(
+            victim_entity.entity_id,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        self.living_entity.last_attack_time.store(
+            self.living_entity
+                .entity
+                .age
+                .load(std::sync::atomic::Ordering::Relaxed),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
         if victim.get_living_entity().is_some() {
             let mut knockback_strength = 1.0;
             match attack_type {
@@ -1168,7 +1182,7 @@ impl Player {
         self.get_entity()
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_SLEEPING_POSITION,
-                MetaDataType::OptionalBlockPos,
+                MetaDataType::OPTIONAL_BLOCK_POS,
                 Some(bed_head_pos),
             )])
             .await;
@@ -1292,7 +1306,7 @@ impl Player {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_SLEEPING_POSITION,
-                MetaDataType::OptionalBlockPos,
+                MetaDataType::OPTIONAL_BLOCK_POS,
                 None::<BlockPos>,
             )])
             .await;
@@ -2140,12 +2154,12 @@ impl Player {
             .send_meta_data(&[
                 Metadata::new(
                     TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
-                    MetaDataType::Byte,
+                    MetaDataType::BYTE,
                     config.skin_parts,
                 ),
                 // Metadata::new(
                 //     TrackedData::DATA_MAIN_ARM_ID,
-                //     MetaDataType::Arm,
+                //     MetaDataType::ARM,
                 //     VarInt(config.main_hand as u8 as i32),
                 // ),
             ])
@@ -2490,7 +2504,13 @@ impl Player {
     }
 
     /// Add experience points to the player.
-    pub async fn add_experience_points(&self, added_points: i32) {
+    pub async fn add_experience_points(self: &Arc<Self>, mut added_points: i32) {
+        if let Some(server) = self.world().server.upgrade() {
+            let event = PlayerExpChangeEvent::new(self.clone(), added_points);
+            let event = server.plugin_manager.fire(event).await;
+            added_points = event.amount;
+        }
+
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
         let total_exp = experience::points_to_level(current_level) + current_points;
@@ -2748,11 +2768,22 @@ impl Player {
     }
 
     /// Check if the player has a specific permission
-    pub async fn has_permission(&self, server: &Server, node: &str) -> bool {
+    pub async fn has_permission(self: &Arc<Self>, server: &Server, node: &str) -> bool {
         let perm_manager = server.permission_manager.read().await;
-        perm_manager
+        let result = perm_manager
             .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
-            .await
+            .await;
+        drop(perm_manager);
+
+        let event = server
+            .plugin_manager
+            .fire(PlayerPermissionCheckEvent::new(
+                self.clone(),
+                node.to_string(),
+                result,
+            ))
+            .await;
+        event.result
     }
 
     pub fn is_creative(&self) -> bool {
@@ -3605,7 +3636,9 @@ impl InventoryPlayer for Player {
             debug!("Player::award_experience called with amount={amount}");
             if amount > 0 {
                 debug!("Player: adding {amount} experience points");
-                self.add_experience_points(amount).await;
+                if let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) {
+                    player.add_experience_points(amount).await;
+                }
             }
         })
     }

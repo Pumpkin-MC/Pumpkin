@@ -93,7 +93,7 @@ impl CreeperEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_FUSE_SPEED,
-                MetaDataType::Integer,
+                MetaDataType::INTEGER,
                 VarInt(speed),
             )])
             .await;
@@ -238,7 +238,7 @@ impl Mob for CreeperEntity {
             entity
                 .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_IGNITED,
-                    MetaDataType::Boolean,
+                    MetaDataType::BOOLEAN,
                     true,
                 )])
                 .await;

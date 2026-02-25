@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::CONFIG_COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::resource_location::ResourceLocation;
+use pumpkin_util::{resource_location::ResourceLocation, version::MinecraftVersion};
 
 use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
 
@@ -24,7 +24,7 @@ pub struct SConfigCookieResponse {
 }
 
 impl ServerPacket for SConfigCookieResponse {
-    fn read(read: impl Read) -> Result<Self, ReadingError> {
+    fn read(read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
         let mut read = read;
         let key = read.get_string()?;
         let has_payload = read.get_bool()?;

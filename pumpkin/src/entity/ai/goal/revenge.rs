@@ -73,10 +73,9 @@ impl Goal for RevengeGoal {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
-            let mob_entity = mob.get_mob_entity();
-            let mut mob_target = mob_entity.target.lock().await;
-            (*mob_target).clone_from(&self.target);
+            mob.set_mob_target(self.target.clone()).await;
 
+            let mob_entity = mob.get_mob_entity();
             self.last_attacked_time = mob_entity.living_entity.last_attacked_time.load(Relaxed);
             self.track_target_goal.max_time_without_visibility = 300;
 

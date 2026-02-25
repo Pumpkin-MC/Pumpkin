@@ -394,7 +394,7 @@ impl EntityBase for ItemEntity {
             self.entity
                 .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_STACK,
-                    MetaDataType::ItemStack,
+                    MetaDataType::ITEM_STACK,
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )])
                 .await;
@@ -441,6 +441,7 @@ impl EntityBase for ItemEntity {
         Box::pin(async {
             if self.pickup_delay.load(Ordering::Relaxed) > 0
                 || player.living_entity.health.load() <= 0.0
+                || player.is_spectator()
             {
                 return;
             }

@@ -96,6 +96,11 @@ pub struct LivingEntity {
     /// The tick at which this entity was last attacked (entity age).
     pub last_attacked_time: AtomicI32,
 
+    /// The entity ID of the entity this living entity last attacked.
+    pub last_attacking_id: AtomicI32,
+    /// The tick at which this entity last attacked something (entity age).
+    pub last_attack_time: AtomicI32,
+
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
 
@@ -162,6 +167,8 @@ impl LivingEntity {
             climbing_pos: AtomicCell::new(None),
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
+            last_attacking_id: AtomicI32::new(0),
+            last_attack_time: AtomicI32::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
         }
@@ -223,7 +230,7 @@ impl LivingEntity {
         self.entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_LIVING_FLAGS,
-                MetaDataType::Byte,
+                MetaDataType::BYTE,
                 b,
             )])
             .await;
@@ -251,7 +258,7 @@ impl LivingEntity {
         self.entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_HEALTH,
-                MetaDataType::Float,
+                MetaDataType::FLOAT,
                 clamped,
             )])
             .await;
@@ -305,17 +312,23 @@ impl LivingEntity {
         // Send absorption metadata for players (visual yellow hearts)
         if let Some(tracked_id) = self.player_absorption_id() {
             self.entity
-                .send_meta_data(&[Metadata::new(tracked_id, MetaDataType::Float, new_abs)])
+                .send_meta_data(&[Metadata::new(tracked_id, MetaDataType::FLOAT, new_abs)])
                 .await;
         }
     }
 
     /// Returns the absorption ID for this (player) entity
-    /// TODO: don't hardcode the index
+    /// TODO: don't hardcode these here?
     fn player_absorption_id(&self) -> Option<TrackedId> {
         (self.entity.entity_type == &EntityType::PLAYER).then_some(TrackedId {
-            latest: 17u8,
+            v1_21: 17u8,
+            v1_21_2: 17u8,
+            v1_21_4: 17u8,
+            v1_21_5: 17u8,
+            v1_21_6: 17u8,
             v1_21_7: 17u8,
+            v1_21_9: 17u8,
+            v1_21_11: 17u8,
         })
     }
 
@@ -1582,7 +1595,7 @@ impl LivingEntity {
         self.entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_HEALTH,
-                MetaDataType::Float,
+                MetaDataType::FLOAT,
                 max_health,
             )])
             .await;

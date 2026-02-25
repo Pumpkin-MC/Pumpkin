@@ -10,6 +10,8 @@ pub mod crop;
 pub mod dry_vegetation;
 pub mod flower;
 pub mod flowerbed;
+pub mod fungus;
+pub mod kelp;
 pub mod leaf_litter;
 pub mod lily_pad;
 pub mod mushroom_plant;
@@ -21,6 +23,7 @@ pub mod segmented;
 pub mod short_plant;
 pub mod sugar_cane;
 pub mod tall_plant;
+pub mod wither_rose;
 
 trait PlantBlockBase {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
