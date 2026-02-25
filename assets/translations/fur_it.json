@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Dâ a ducj la pussibilità di ospitâ servidôrs Minecraft svelts e eficients.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocul %s)\n",
-    "commands.pumpkin.github": "[Deposit Github]",
-    "commands.pumpkin.website": "[Sît web]",
-    "commands.pumpkin.version.hover": "Cliche par copiâ la version",
-    "commands.pumpkin.description.hover": "Cliche par copiâ la descrizion",
-    "commands.pumpkin.minecraft_version.hover": "Cliche par copiâ la version di Minecraft",
-    "commands.pumpkin.github.hover": "Cliche par vierzi il deposit.",
-    "commands.pumpkin.website.hover": "Cliche par vierzi il sît web."
 }

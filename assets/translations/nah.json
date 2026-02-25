@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Tequitiuh nochi tlacah hueliti quizazqueh iuhqui ahcihuiyahuan Minecraft servidores.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocolo %s)\n",
-    "commands.pumpkin.github": "[Github Repositorio]",
-    "commands.pumpkin.website": "[Website]",
-    "commands.pumpkin.version.hover": "Tzatzona ticopiaz versión",
-    "commands.pumpkin.description.hover": "Tzatzona ticopiaz descripción",
-    "commands.pumpkin.minecraft_version.hover": "Tzatzona ticopiaz Minecraft versión",
-    "commands.pumpkin.github.hover": "Tzatzona titlapoa repositorio.",
-    "commands.pumpkin.website.hover": "Tzatzona titlapoa website."
 }

@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Gir alle muligheten til å være vert for raske og effektive Minecraft-servere.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokoll %s)\n",
-    "commands.pumpkin.github": "[GitHub-repositorium]",
-    "commands.pumpkin.website": "[Nettsted]",
-    "commands.pumpkin.version.hover": "Klikk for å kopiere versjon",
-    "commands.pumpkin.description.hover": "Klikk for å kopiere beskrivelse",
-    "commands.pumpkin.minecraft_version.hover": "Klikk for å kopiere Minecraft-versjon",
-    "commands.pumpkin.github.hover": "Klikk for å åpne repositoriet.",
-    "commands.pumpkin.website.hover": "Klikk for å åpne nettstedet."
 }

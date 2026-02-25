@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Hər kəsə sürətli və səmərəli Minecraft serverləri yaratmağa imkan verir.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
-    "commands.pumpkin.github": "[GitHub Anbarı]",
-    "commands.pumpkin.website": "[Veb Sayt]",
-    "commands.pumpkin.version.hover": "Versiyanı kopyalamaq üçün klikləyin",
-    "commands.pumpkin.description.hover": "Təsviri kopyalamaq üçün klikləyin",
-    "commands.pumpkin.minecraft_version.hover": "Minecraft versiyasını kopyalamaq üçün klikləyin",
-    "commands.pumpkin.github.hover": "Anbarı açmaq üçün klikləyin.",
-    "commands.pumpkin.website.hover": "Veb saytı açmaq üçün klikləyin."
 }

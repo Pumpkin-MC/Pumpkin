@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Dod iespēju ikvienam hostot ātrus un efektīvus Minecraft serverus.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokols %s)\n",
-    "commands.pumpkin.github": "[GitHub krātuve]",
-    "commands.pumpkin.website": "[Tīmekļa vietne]",
-    "commands.pumpkin.version.hover": "Noklikšķiniet, lai kopētu versiju",
-    "commands.pumpkin.description.hover": "Noklikšķiniet, lai kopētu aprakstu",
-    "commands.pumpkin.minecraft_version.hover": "Noklikšķiniet, lai kopētu Minecraft versiju",
-    "commands.pumpkin.github.hover": "Noklikšķiniet, lai atvērtu krātuvi.",
-    "commands.pumpkin.website.hover": "Noklikšķiniet, lai atvērtu tīmekļa vietni."
 }

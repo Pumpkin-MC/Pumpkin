@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Помагаме на всеки да хоства бързи и ефективни Minecraft сървъри.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Протокол %s)\n",
-    "commands.pumpkin.github": "[Github хранилище]",
-    "commands.pumpkin.website": "[Уебсайт]",
-    "commands.pumpkin.version.hover": "Щракнете за копиране на версията",
-    "commands.pumpkin.description.hover": "Щракнете за копиране на описанието",
-    "commands.pumpkin.minecraft_version.hover": "Щракнете за копиране на версията на Minecraft",
-    "commands.pumpkin.github.hover": "Щракнете за отваряне на хранилището.",
-    "commands.pumpkin.website.hover": "Щракнете за отваряне на уебсайта."
 }

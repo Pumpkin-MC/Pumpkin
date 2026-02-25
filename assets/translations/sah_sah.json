@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Барыларыгар түргэн уонна табыгастаах Minecraft сервердарын тэрийэргэ көмөлөһөбүт.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Протокол %s)\n",
-    "commands.pumpkin.github": "[Github репозиторийа]",
-    "commands.pumpkin.website": "[Саайт]",
-    "commands.pumpkin.version.hover": "Батарыыны көһөрөргө баттаа",
-    "commands.pumpkin.description.hover": "Ойуулааһыны көһөрөргө баттаа",
-    "commands.pumpkin.minecraft_version.hover": "Minecraft батарыытын көһөрөргө баттаа",
-    "commands.pumpkin.github.hover": "Репозиторийы арыйарга баттаа.",
-    "commands.pumpkin.website.hover": "Саайты арыйарга баттаа."
 }

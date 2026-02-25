@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Memberdayakan semua orang untuk hosting server Minecraft yang cepat dan efisien.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
-    "commands.pumpkin.github": "[Repositori Github]",
-    "commands.pumpkin.website": "[Situs Web]",
-    "commands.pumpkin.version.hover": "Klik untuk Salin Versi",
-    "commands.pumpkin.description.hover": "Klik untuk Salin Deskripsi",
-    "commands.pumpkin.minecraft_version.hover": "Klik untuk Salin Versi Minecraft",
-    "commands.pumpkin.github.hover": "Klik untuk membuka repositori.",
-    "commands.pumpkin.website.hover": "Klik untuk membuka situs web."
 }

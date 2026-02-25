@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Jout elkenien de krêft om snelle en effisjinte Minecraft-servers te hosten.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
-    "commands.pumpkin.github": "[GitHub-repository]",
-    "commands.pumpkin.website": "[Webside]",
-    "commands.pumpkin.version.hover": "Klik om de ferzje te kopiearjen",
-    "commands.pumpkin.description.hover": "Klik om de beskriuwing te kopiearjen",
-    "commands.pumpkin.minecraft_version.hover": "Klik om de Minecraft-ferzje te kopiearjen",
-    "commands.pumpkin.github.hover": "Klik om de repository te iepenjen.",
-    "commands.pumpkin.website.hover": "Klik om de webside te iepenjen."
 }

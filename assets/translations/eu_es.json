@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Denoi ahalmena emanez Minecraft zerbitzari azkar eta eraginkorrak ostatzeko.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokoloa %s)\n",
-    "commands.pumpkin.github": "[GitHub biltegia]",
-    "commands.pumpkin.website": "[Webgunea]",
-    "commands.pumpkin.version.hover": "Egin klik bertsioa kopiatzeko",
-    "commands.pumpkin.description.hover": "Egin klik deskribapena kopiatzeko",
-    "commands.pumpkin.minecraft_version.hover": "Egin klik Minecraft bertsioa kopiatzeko",
-    "commands.pumpkin.github.hover": "Egin klik biltegia irekitzeko.",
-    "commands.pumpkin.website.hover": "Egin klik webgunea irekitzeko."
 }

@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Giver alle mulighed for at hoste hurtige og effektive Minecraft-servere.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
-    "commands.pumpkin.github": "[GitHub-depot]",
-    "commands.pumpkin.website": "[Hjemmeside]",
-    "commands.pumpkin.version.hover": "Klik for at kopiere version",
-    "commands.pumpkin.description.hover": "Klik for at kopiere beskrivelse",
-    "commands.pumpkin.minecraft_version.hover": "Klik for at kopiere Minecraft-version",
-    "commands.pumpkin.github.hover": "Klik for at åbne depotet.",
-    "commands.pumpkin.website.hover": "Klik for at åbne hjemmesiden."
 }

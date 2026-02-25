@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Gerir öllum kleift að hýsa hratt og skilvirka Minecraft-þjóna.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Samskiptaregla %s)\n",
-    "commands.pumpkin.github": "[GitHub geymsla]",
-    "commands.pumpkin.website": "[Vefsíða]",
-    "commands.pumpkin.version.hover": "Smelltu til að afrita útgáfu",
-    "commands.pumpkin.description.hover": "Smelltu til að afrita lýsingu",
-    "commands.pumpkin.minecraft_version.hover": "Smelltu til að afrita Minecraft-útgáfu",
-    "commands.pumpkin.github.hover": "Smelltu til að opna geymslu.",
-    "commands.pumpkin.website.hover": "Smelltu til að opna vefsíðu."
 }

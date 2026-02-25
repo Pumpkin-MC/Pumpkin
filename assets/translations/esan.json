@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Mhan nọ re elele nọ ha nọ re khọn Minecraft server ne kpọnlẹn yọle.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocol %s)\n",
-    "commands.pumpkin.github": "[Github Repository]",
-    "commands.pumpkin.website": "[Website]",
-    "commands.pumpkin.version.hover": "Khọnlẹn nọ da kọpia version",
-    "commands.pumpkin.description.hover": "Khọnlẹn nọ da kọpia description",
-    "commands.pumpkin.minecraft_version.hover": "Khọnlẹn nọ da kọpia Minecraft version",
-    "commands.pumpkin.github.hover": "Khọnlẹn nọ da rẹọbhọ repository.",
-    "commands.pumpkin.website.hover": "Khọnlẹn nọ da rẹọbhọ website."
 }

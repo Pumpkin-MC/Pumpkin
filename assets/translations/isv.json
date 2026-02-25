@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Dajemo vsim možnosť hostovati bystre i efektivne servery Minecraft.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
-    "commands.pumpkin.github": "[GitHub repozitorij]",
-    "commands.pumpkin.website": "[Veb-stranica]",
-    "commands.pumpkin.version.hover": "Klikni da skopiruješ versiju",
-    "commands.pumpkin.description.hover": "Klikni da skopiruješ opis",
-    "commands.pumpkin.minecraft_version.hover": "Klikni da skopiruješ Minecraft versiju",
-    "commands.pumpkin.github.hover": "Klikni da otvoriš repozitorij.",
-    "commands.pumpkin.website.hover": "Klikni da otvoriš veb-stranicu."
 }

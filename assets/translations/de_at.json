@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Ermöglicht es jedem, schnelle und effiziente Minecraft-Server zu hosten.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokoll %s)\n",
-    "commands.pumpkin.github": "[GitHub-Repository]",
-    "commands.pumpkin.website": "[Webseite]",
-    "commands.pumpkin.version.hover": "Klicken, um die Version zu kopieren",
-    "commands.pumpkin.description.hover": "Klicken, um die Beschreibung zu kopieren",
-    "commands.pumpkin.minecraft_version.hover": "Klicken, um die Minecraft-Version zu kopieren",
-    "commands.pumpkin.github.hover": "Klicken, um das Repository zu öffnen.",
-    "commands.pumpkin.website.hover": "Klicken, um die Webseite zu öffnen."
 }

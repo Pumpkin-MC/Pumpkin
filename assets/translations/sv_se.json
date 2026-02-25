@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Ger alla möjlighet att vara värd för snabba och effektiva Minecraft-servrar.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokoll %s)\n",
-    "commands.pumpkin.github": "[GitHub-förråd]",
-    "commands.pumpkin.website": "[Webbplats]",
-    "commands.pumpkin.version.hover": "Klicka för att kopiera version",
-    "commands.pumpkin.description.hover": "Klicka för att kopiera beskrivning",
-    "commands.pumpkin.minecraft_version.hover": "Klicka för att kopiera Minecraft-version",
-    "commands.pumpkin.github.hover": "Klicka för att öppna förrådet.",
-    "commands.pumpkin.website.hover": "Klicka för att öppna webbplatsen."
 }

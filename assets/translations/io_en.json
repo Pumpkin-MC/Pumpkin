@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Posibligar omnu hostar rapida ed efikiva Minecraft-servili.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokolo %s)\n",
-    "commands.pumpkin.github": "[GitHub-depozeyo]",
-    "commands.pumpkin.website": "[Retosituo]",
-    "commands.pumpkin.version.hover": "Klikez por kopiar versiono",
-    "commands.pumpkin.description.hover": "Klikez por kopiar deskripto",
-    "commands.pumpkin.minecraft_version.hover": "Klikez por kopiar Minecraft-versiono",
-    "commands.pumpkin.github.hover": "Klikez por apertar depozeyo.",
-    "commands.pumpkin.website.hover": "Klikez por apertar retosituo."
 }

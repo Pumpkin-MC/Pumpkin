@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Donar a totes lo poder d'alotjar de servidors Minecraft rapids e eficaçes.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocòl %s)\n",
-    "commands.pumpkin.github": "[Repositori GitHub]",
-    "commands.pumpkin.website": "[Site web]",
-    "commands.pumpkin.version.hover": "Clicar per copiar la version",
-    "commands.pumpkin.description.hover": "Clicar per copiar la descripcion",
-    "commands.pumpkin.minecraft_version.hover": "Clicar per copiar la version de Minecraft",
-    "commands.pumpkin.github.hover": "Clicar per dobrir lo repositori.",
-    "commands.pumpkin.website.hover": "Clicar per dobrir lo site web."
 }

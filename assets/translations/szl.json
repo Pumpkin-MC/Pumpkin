@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Pozwŏlo kożdemu hostować gibke a wydajne serwery Minecraft.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokōł %s)\n",
-    "commands.pumpkin.github": "[GitHub repozytorium]",
-    "commands.pumpkin.website": "[Internetowo zajta]",
-    "commands.pumpkin.version.hover": "Kliknij, coby skopjować wersyjõ",
-    "commands.pumpkin.description.hover": "Kliknij, coby skopjować ôpis",
-    "commands.pumpkin.minecraft_version.hover": "Kliknij, coby skopjować wersyjõ Minecrafta",
-    "commands.pumpkin.github.hover": "Kliknij, coby ôtworzyć repozytorium.",
-    "commands.pumpkin.website.hover": "Kliknij, coby ôtworzyć internetowo zajtã."
 }

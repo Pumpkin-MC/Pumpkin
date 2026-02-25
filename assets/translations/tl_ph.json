@@ -1,12 +1,3 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Nagbibigay-kapangyarihan sa lahat na mag-host ng mabilis at mahusay na mga server ng Minecraft.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocol %s)\n",
-    "commands.pumpkin.github": "[Github Repository]",
-    "commands.pumpkin.website": "[Website]",
-    "commands.pumpkin.version.hover": "I-click para Kopyahin ang Bersyon",
-    "commands.pumpkin.description.hover": "I-click para Kopyahin ang Paglalarawan",
-    "commands.pumpkin.minecraft_version.hover": "I-click para Kopyahin ang Bersyon ng Minecraft",
-    "commands.pumpkin.github.hover": "I-click upang buksan ang repository.",
-    "commands.pumpkin.website.hover": "I-click upang buksan ang website."
+    "commands.pumpkin.version": "Pumpkin %s\n"
 }

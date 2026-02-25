@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Cumhacht a thabhairt do chách freastalaithe Minecraft tapa agus éifeachtúla a óstáil.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Prótacal %s)\n",
-    "commands.pumpkin.github": "[Stór Github]",
-    "commands.pumpkin.website": "[Suíomh Gréasáin]",
-    "commands.pumpkin.version.hover": "Cliceáil chun Leagan a Chóipeáil",
-    "commands.pumpkin.description.hover": "Cliceáil chun Cur Síos a Chóipeáil",
-    "commands.pumpkin.minecraft_version.hover": "Cliceáil chun Leagan Minecraft a Chóipeáil",
-    "commands.pumpkin.github.hover": "Cliceáil chun an stór a oscailt.",
-    "commands.pumpkin.website.hover": "Cliceáil chun an suíomh gréasáin a oscailt."
 }

@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Kakne ro prenu cu jivna lo sutra je sarcu Minecraft skami judri\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, lo skami cusku be fi lo ka jivna cu pagbu %s)\n",
-    "commands.pumpkin.github": "[lo Github sorcu]",
-    "commands.pumpkin.website": "[lo djine]",
-    "commands.pumpkin.version.hover": "Zukte lo nu fukpi lo te ciste",
-    "commands.pumpkin.description.hover": "Zukte lo nu fukpi lo skicu",
-    "commands.pumpkin.minecraft_version.hover": "Zukte lo nu fukpi lo te ciste be la minecraft",
-    "commands.pumpkin.github.hover": "Zukte lo nu gasnu lo nu lo sorcu cu karbi",
-    "commands.pumpkin.website.hover": "Zukte lo nu gasnu lo nu lo djine cu karbi"
 }

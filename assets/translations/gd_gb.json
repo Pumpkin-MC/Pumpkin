@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "A' toirt comas do chách frithealaichean Minecraft luath is èifeachdach a shuidheachadh.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Pròtacal %s)\n",
-    "commands.pumpkin.github": "[Stòr Github]",
-    "commands.pumpkin.website": "[Làrach-lìn]",
-    "commands.pumpkin.version.hover": "Cliog gus an tionndadh a chopaigeadh",
-    "commands.pumpkin.description.hover": "Cliog gus an tuairisgeul a chopaigeadh",
-    "commands.pumpkin.minecraft_version.hover": "Cliog gus tionndadh Minecraft a chopaigeadh",
-    "commands.pumpkin.github.hover": "Cliog gus an stòr fhosgladh.",
-    "commands.pumpkin.website.hover": "Cliog gus an làrach-lìn fhosgladh."
 }

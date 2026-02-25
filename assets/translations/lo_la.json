@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "ສ້າງຄວາມເຂັ້ມແຂງໃຫ້ທຸກຄົນສາມາດເປັນເຈົ້າພາບເຊີບເວີ Minecraft ທີ່ໄວ ແລະ ມີປະສິດທິພາບ.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, ໂປຣໂຕຄອນ %s)\n",
-    "commands.pumpkin.github": "[ບ່ອນເກັບຂໍ້ມູນ Github]",
-    "commands.pumpkin.website": "[ເວັບໄຊທ໌]",
-    "commands.pumpkin.version.hover": "ຄລິກເພື່ອສຳເນົາເວີຊັນ",
-    "commands.pumpkin.description.hover": "ຄລິກເພື່ອສຳເນົາຄຳອະທິບາຍ",
-    "commands.pumpkin.minecraft_version.hover": "ຄລິກເພື່ອສຳເນົາເວີຊັນ Minecraft",
-    "commands.pumpkin.github.hover": "ຄລິກເພື່ອເປີດບ່ອນເກັບຂໍ້ມູນ.",
-    "commands.pumpkin.website.hover": "ຄລິກເພື່ອເປີດເວັບໄຊທ໌."
 }

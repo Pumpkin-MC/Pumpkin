@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Grymuso pawb i gynnal gweinyddwyr Minecraft cyflym ac effeithlon.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocol %s)\n",
-    "commands.pumpkin.github": "[Ystorfa GitHub]",
-    "commands.pumpkin.website": "[Gwefan]",
-    "commands.pumpkin.version.hover": "Cliciwch i Gopïo Fersiwn",
-    "commands.pumpkin.description.hover": "Cliciwch i Gopïo Disgrifiad",
-    "commands.pumpkin.minecraft_version.hover": "Cliciwch i Gopïo Fersiwn Minecraft",
-    "commands.pumpkin.github.hover": "Cliciwch i agor yr ystorfa.",
-    "commands.pumpkin.website.hover": "Cliciwch i agor y wefan."
 }

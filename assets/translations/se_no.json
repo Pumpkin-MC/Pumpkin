@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Addá buohkaide vejolašvuođa doalvut jođálaš ja čavgadit Minecraft-serveriid.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokolla %s)\n",
-    "commands.pumpkin.github": "[GitHub-vuorku]",
-    "commands.pumpkin.website": "[Neahttasiidu]",
-    "commands.pumpkin.version.hover": "Coahkkal vai kopiereš veršuvnna",
-    "commands.pumpkin.description.hover": "Coahkkal vai kopiereš čilgehusa",
-    "commands.pumpkin.minecraft_version.hover": "Coahkkal vai kopiereš Minecraft-veršuvnna",
-    "commands.pumpkin.github.hover": "Coahkkal vai rabaš vuorkku.",
-    "commands.pumpkin.website.hover": "Coahkkal vai rabaš neahttasiiddu."
 }

@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "تمكين الجميع من استضافة خوادم ماينكرافت سريعة وفعالة.\n",
-    "commands.pumpkin.minecraft_version": "(ماينكرافت %s، بروتوكول %s)\n",
-    "commands.pumpkin.github": "[مستودع جيت هاب]",
-    "commands.pumpkin.website": "[الموقع الإلكتروني]",
-    "commands.pumpkin.version.hover": "انقر لنسخ الإصدار",
-    "commands.pumpkin.description.hover": "انقر لنسخ الوصف",
-    "commands.pumpkin.minecraft_version.hover": "انقر لنسخ إصدار ماينكرافت",
-    "commands.pumpkin.github.hover": "انقر لفتح المستودع.",
-    "commands.pumpkin.website.hover": "انقر لفتح الموقع الإلكتروني."
 }

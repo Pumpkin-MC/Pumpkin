@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Hāʻawi i nā mea a pau e hoʻokipa i nā kikowaena Minecraft wikiwiki a maikaʻi.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocol %s)\n",
-    "commands.pumpkin.github": "[Github Waihona]",
-    "commands.pumpkin.website": "[Pūnaewele]",
-    "commands.pumpkin.version.hover": "Kaomi e kope i ka mana",
-    "commands.pumpkin.description.hover": "Kaomi e kope i ka wehewehena",
-    "commands.pumpkin.minecraft_version.hover": "Kaomi e kope i ka mana Minecraft",
-    "commands.pumpkin.github.hover": "Kaomi e wehe i ka waihona.",
-    "commands.pumpkin.website.hover": "Kaomi e wehe i ka pūnaewele."
 }

@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "גיט יעדערן די כּוח צו האָסטן גיך און עפעקטיוו Minecraft סערווערס.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, פּראָטאָקאָל %s)\n",
-    "commands.pumpkin.github": "[GitHub רעפּאָזיטאָרי]",
-    "commands.pumpkin.website": "[וועבזײַטל]",
-    "commands.pumpkin.version.hover": "קליק צו קאָפּירן ווערסיע",
-    "commands.pumpkin.description.hover": "קליק צו קאָפּירן באַשרײַבונג",
-    "commands.pumpkin.minecraft_version.hover": "קליק צו קאָפּירן Minecraft ווערסיע",
-    "commands.pumpkin.github.hover": "קליק צו עפֿענען רעפּאָזיטאָרי.",
-    "commands.pumpkin.website.hover": "קליק צו עפֿענען וועבזײַטל."
 }

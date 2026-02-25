@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Dando a toos el poder d'agospiar sirvidores de Minecraft rápidos y eficientes.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocolu %s)\n",
-    "commands.pumpkin.github": "[Repositoriu de Github]",
-    "commands.pumpkin.website": "[Páxina Web]",
-    "commands.pumpkin.version.hover": "Fai clic pa copiar la versión",
-    "commands.pumpkin.description.hover": "Fai clic pa copiar la descripción",
-    "commands.pumpkin.minecraft_version.hover": "Fai clic pa copiar la versión de Minecraft",
-    "commands.pumpkin.github.hover": "Fai clic p'abrir el repositoriu.",
-    "commands.pumpkin.website.hover": "Fai clic p'abrir la páxina web."
 }

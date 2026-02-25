@@ -1,12 +1,2 @@
 {
-    "commands.pumpkin.version": "Pumpkin %s\n",
-    "commands.pumpkin.description": "Gevur øllum møguleikan at hýsa skjót og skilagóð Minecraft-tenarar.\n",
-    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokoll %s)\n",
-    "commands.pumpkin.github": "[GitHub goymsla]",
-    "commands.pumpkin.website": "[Heimasíða]",
-    "commands.pumpkin.version.hover": "Trýst fyri at kopiera útgávu",
-    "commands.pumpkin.description.hover": "Trýst fyri at kopiera lýsing",
-    "commands.pumpkin.minecraft_version.hover": "Trýst fyri at kopiera Minecraft útgávu",
-    "commands.pumpkin.github.hover": "Trýst fyri at opna goymslu.",
-    "commands.pumpkin.website.hover": "Trýst fyri at opna heimasíðu."
 }
