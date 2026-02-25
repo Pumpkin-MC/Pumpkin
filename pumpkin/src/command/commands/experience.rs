@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use pumpkin_util::math::experience;
@@ -171,7 +172,7 @@ impl Executor {
     /// Returns `true` if successful. Otherwise, there was a problem setting the points of a player.
     async fn handle_modify(
         &self,
-        target: &Player,
+        target: &Arc<Player>,
         amount: i32,
         exp_type: ExpType,
         mode: Mode,
