@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, iter::repeat_n};
 
 use pumpkin_data::{Block, BlockState, block_properties::is_air, chunk::Biome};
 use pumpkin_util::encompassing_bits;
@@ -245,25 +245,10 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         }
     }
 
-    pub fn for_each<F>(&self, mut f: F)
-    where
-        F: FnMut(V),
-    {
+    pub fn iter(&self) -> Box<dyn Iterator<Item = &V> + '_> {
         match self {
-            Self::Homogeneous(registry_id) => {
-                for _ in 0..Self::VOLUME {
-                    f(*registry_id);
-                }
-            }
-            Self::Heterogeneous(data) => {
-                data.cube
-                    .as_flattened()
-                    .as_flattened()
-                    .iter()
-                    .for_each(|value| {
-                        f(*value);
-                    });
-            }
+            Self::Homogeneous(registry_id) => Box::new(repeat_n(registry_id, Self::VOLUME)),
+            Self::Heterogeneous(data) => Box::new(data.cube.as_flattened().as_flattened().iter()),
         }
     }
 

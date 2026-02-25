@@ -114,27 +114,23 @@ impl ChunkSections {
     #[cfg(test)]
     #[must_use]
     pub fn dump_blocks(&self) -> Vec<u16> {
-        // TODO: this is not optimal, we could use rust iters
-        let mut dump = Vec::new();
-        for section in self.block_sections.read().unwrap().iter() {
-            section.for_each(|raw_id| {
-                dump.push(raw_id);
-            });
-        }
-        dump
+        self.block_sections
+            .read()
+            .unwrap()
+            .iter()
+            .flat_map(|section| section.iter().copied())
+            .collect()
     }
 
     #[cfg(test)]
     #[must_use]
     pub fn dump_biomes(&self) -> Vec<u8> {
-        // TODO: this is not optimal, we could use rust iters
-        let mut dump = Vec::new();
-        for section in self.biome_sections.read().unwrap().iter() {
-            section.for_each(|raw_id| {
-                dump.push(raw_id);
-            });
-        }
-        dump
+        self.biome_sections
+            .read()
+            .unwrap()
+            .iter()
+            .flat_map(|section| section.iter().copied())
+            .collect()
     }
 }
 
