@@ -31,8 +31,7 @@ use crate::{
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{
-            player_join::PlayerJoinEvent,
-            player_leave::PlayerLeaveEvent,
+            player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
             player_respawn::PlayerRespawnEvent,
         },
     },
