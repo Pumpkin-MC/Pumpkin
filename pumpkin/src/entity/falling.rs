@@ -92,7 +92,7 @@ impl EntityBase for FallingEntity {
             self.entity
                 .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_BLOCK_POS,
-                    MetaDataType::BlockPos,
+                    MetaDataType::BLOCK_POS,
                     self.entity.block_pos.load(),
                 )])
                 .await;
