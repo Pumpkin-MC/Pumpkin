@@ -337,31 +337,32 @@ impl Navigator {
                 let dx = target_pos.x - current_pos.x;
                 let dy = target_pos.y - current_pos.y;
                 let dz = target_pos.z - current_pos.z;
-                let horizontal_dist = (dx * dx + dz * dz).sqrt();
+                let horizontal_dist = dx.hypot(dz);
 
                 if !on_ground && current_pos.y > target_pos.y {
-                    let mob_bx = current_pos.x.floor() as i32;
-                    let mob_bz = current_pos.z.floor() as i32;
-                    if mob_bx == next_block.x && mob_bz == next_block.z {
+                    let block_x = current_pos.x.floor() as i32;
+                    let block_z = current_pos.z.floor() as i32;
+                    if block_x == next_block.x && block_z == next_block.z {
                         path.advance();
                     }
-                } else if on_ground && horizontal_dist < 1.0 && dy >= -1.5 && dy < 0.0 {
-                    path.advance();
-                } else if horizontal_dist < NODE_REACH_XZ && dy.abs() < NODE_REACH_Y {
+                } else if (on_ground && horizontal_dist < 1.0 && (-1.5..0.0).contains(&dy))
+                    || (horizontal_dist < NODE_REACH_XZ && dy.abs() < NODE_REACH_Y)
+                {
                     path.advance();
                 } else {
                     let cur_dist_sq = dx * dx + dy * dy + dz * dz;
                     if cur_dist_sq < 4.0 {
                         let next_idx = path.get_next_node_index() + 1;
                         if let Some(nn_pos) = path.get_node_pos(next_idx) {
-                            let nn_dx = f64::from(nn_pos.x) + 0.5 - current_pos.x;
-                            let nn_dy = f64::from(nn_pos.y) - current_pos.y;
-                            let nn_dz = f64::from(nn_pos.z) + 0.5 - current_pos.z;
-                            let nn_dist_sq =
-                                nn_dx * nn_dx + nn_dy * nn_dy + nn_dz * nn_dz;
+                            let lookahead_x = f64::from(nn_pos.x) + 0.5 - current_pos.x;
+                            let lookahead_y = f64::from(nn_pos.y) - current_pos.y;
+                            let lookahead_z = f64::from(nn_pos.z) + 0.5 - current_pos.z;
+                            let nn_dist_sq = lookahead_x * lookahead_x
+                                + lookahead_y * lookahead_y
+                                + lookahead_z * lookahead_z;
 
                             if nn_dist_sq < cur_dist_sq || cur_dist_sq < 0.5 {
-                                let dot = dx * nn_dx + dy * nn_dy + dz * nn_dz;
+                                let dot = dx * lookahead_x + dy * lookahead_y + dz * lookahead_z;
                                 if dot < 0.0 {
                                     path.advance();
                                 }
@@ -381,14 +382,13 @@ impl Navigator {
                 let dx = target_pos.x - current_pos.x;
                 let dy = target_pos.y - current_pos.y;
                 let dz = target_pos.z - current_pos.z;
-                let horizontal_dist = (dx * dx + dz * dz).sqrt();
+                let horizontal_dist = dx.hypot(dz);
 
-                let desired_yaw =
-                    wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
+                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
                 let current_yaw = entity.entity.yaw.load();
                 let yaw_diff = wrap_degrees(desired_yaw - current_yaw);
-                let target_yaw = current_yaw
-                    + yaw_diff.clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
+                let target_yaw =
+                    current_yaw + yaw_diff.clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
                 entity.entity.yaw.store(target_yaw);
                 entity.entity.head_yaw.store(target_yaw);
                 entity.entity.body_yaw.store(target_yaw);

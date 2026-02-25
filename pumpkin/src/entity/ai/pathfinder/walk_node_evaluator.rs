@@ -42,7 +42,7 @@ impl WalkNodeEvaluator {
             let max_y = state
                 .get_block_collision_shapes()
                 .map(|bb| bb.max.y)
-                .fold(0.0_f64, f64::max);
+                .fold(0.0f64, f64::max);
             if max_y > 0.0 {
                 f64::from(pos.y - 1) + max_y
             } else {
