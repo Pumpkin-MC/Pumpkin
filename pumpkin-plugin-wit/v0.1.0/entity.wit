@@ -1,0 +1,36 @@
+interface entity {
+    use common.{block-position};
+
+    resource block-entity {
+        resource-location: func() -> string;
+        get-position: func() -> block-position;
+        get-id: func() -> u32;
+        // write-nbt: func(nbt: nbt-compound);
+        // from-nbt: func(nbt: nbt-compound, position: block-position) -> entity;
+        // tick: func(world: simple-world);
+        // write-internal: func(nbt: nbt-compound);
+        // chunk-data-nbt: func() -> option<nbt-compound;
+        // get-inventory: func() -> option<inventory>;
+        // set-block-state: func(block-state: block-state-id);
+        // on-block-replaced: func(world: simple-world, position: block-position);
+        is-dirty: func() -> bool;
+        clear-dirty: func();
+        // to-property-delegate: func() -> option<property-delegate>;
+        // to-experience-container: func() -> option<experience-container>;
+    }
+
+    resource command-block-entity {
+        get-block-entity: func () -> block-entity;
+        last-output: func() -> string;
+        track-output: func() -> bool;
+        success-count: func() -> u32;
+        command: func() -> string;
+        auto: func() -> bool;
+        condition-met: func() -> bool;
+        powered: func() -> bool;
+    }
+
+    variant entity {
+        command-block-entity(command-block-entity),
+    }
+}
