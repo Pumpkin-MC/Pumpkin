@@ -1,12 +1,12 @@
 {
     "commands.pumpkin.version": "南瓜 %s\n",
-    "commands.pumpkin.description": "使眾人皆能架設迅捷高效之麥塊伺服器。\n",
-    "commands.pumpkin.minecraft_version": "(麥塊 %s，協議 %s)\n",
+    "commands.pumpkin.description": "助眾人皆可架設迅捷高效之麥塊伺服器。\n",
+    "commands.pumpkin.minecraft_version": "(麥塊 %s，協定 %s)\n",
     "commands.pumpkin.github": "[GitHub 源庫]",
-    "commands.pumpkin.website": "[官網]",
-    "commands.pumpkin.version.hover": "點按以複製版本",
-    "commands.pumpkin.description.hover": "點按以複製描述",
-    "commands.pumpkin.minecraft_version.hover": "點按以複製麥塊版本",
-    "commands.pumpkin.github.hover": "點按以開啟源庫。",
-    "commands.pumpkin.website.hover": "點按以開啟官網。"
+    "commands.pumpkin.website": "[網棧]",
+    "commands.pumpkin.version.hover": "擊以複寫版本",
+    "commands.pumpkin.description.hover": "擊以複寫敘述",
+    "commands.pumpkin.minecraft_version.hover": "擊以複寫麥塊版本",
+    "commands.pumpkin.github.hover": "擊以啟源庫。",
+    "commands.pumpkin.website.hover": "擊以觀網棧。"
 }
