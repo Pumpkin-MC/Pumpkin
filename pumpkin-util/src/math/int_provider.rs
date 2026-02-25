@@ -423,7 +423,7 @@ impl ClampedNormalIntProvider {
     /// - `random` – The random number generator to use.
     ///
     /// # Returns
-    /// A random integer from a normal distribution, rounded and clamped to [min_inclusive, max_inclusive].
+    /// A random integer from a normal distribution, rounded and clamped to [`min_inclusive`, `max_inclusive`].
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
         // NOTE: Generate a normal distribution value and clamp to range
         let gaussian = random.next_gaussian() as f32;
@@ -603,7 +603,7 @@ impl UniformIntProvider {
     /// - `random` – The random number generator to use.
     ///
     /// # Returns
-    /// A random integer in the inclusive range [min_inclusive, max_inclusive].
+    /// A random integer in the inclusive range [`min_inclusive`, `max_inclusive`].
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
         random.next_inbetween_i32(self.min_inclusive, self.max_inclusive)
     }
