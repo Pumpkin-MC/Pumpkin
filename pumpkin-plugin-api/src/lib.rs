@@ -18,6 +18,7 @@ mod wit {
     export!(Component);
 }
 
+#[cfg(target_arch = "wasm32")]
 #[unsafe(link_section = "pumpkin:api-version")]
 #[used]
 static API_VERSION: [u8; 5] = *b"0.1.0";
