@@ -54,6 +54,8 @@ use crate::block::blocks::plant::crop::wheat::WheatBlock;
 use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
 use crate::block::blocks::plant::flower::FlowerBlock;
 use crate::block::blocks::plant::flowerbed::FlowerbedBlock;
+use crate::block::blocks::plant::fungus::Fungus;
+use crate::block::blocks::plant::kelp::KelpBlock;
 use crate::block::blocks::plant::leaf_litter::LeafLitterBlock;
 use crate::block::blocks::plant::lily_pad::LilyPadBlock;
 use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
@@ -211,6 +213,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CarrotBlock);
     manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
+    manager.register(KelpBlock);
     manager.register(NetherWartBlock);
     manager.register(WheatBlock);
     manager.register(TorchBlock);
@@ -252,6 +255,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(LayeredSnowBlock);
     manager.register(CobwebBlock);
     manager.register(WitherRose);
+    manager.register(Fungus);
 
     manager.register(FallingBlock);
 

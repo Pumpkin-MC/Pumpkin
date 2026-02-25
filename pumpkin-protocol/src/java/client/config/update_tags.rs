@@ -25,10 +25,9 @@ impl<'a> CUpdateTags<'a> {
 impl ClientPacket for CUpdateTags<'_> {
     fn write_packet_data(
         &self,
-        write: impl Write,
+        mut write: impl Write,
         version: &MinecraftVersion,
     ) -> Result<(), WritingError> {
-        let mut write = write;
         write.write_list(self.tags, |p, registry_key| {
             p.write_string(&format!("minecraft:{}", registry_key.identifier_string(),))?;
 

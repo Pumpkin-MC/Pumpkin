@@ -205,7 +205,7 @@ impl JavaClient {
     }
 
     async fn finish_login(&self, profile: &GameProfile) {
-        let packet = CLoginSuccess::new(&profile.id, &profile.name, &profile.properties);
+        let packet = CLoginSuccess::new(&profile.id, &profile.name, &profile.properties, false);
         self.send_packet_now(&packet).await;
     }
 

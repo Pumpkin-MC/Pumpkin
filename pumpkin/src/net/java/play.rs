@@ -21,6 +21,7 @@ use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
 use crate::plugin::block::block_place::BlockPlaceEvent;
+use crate::plugin::player::changed_main_hand::PlayerChangedMainHandEvent;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
@@ -785,34 +786,39 @@ impl JavaClient {
         }
         player.update_last_action_time();
 
-        if let Ok(action) = Action::try_from(command.action.0) {
-            let entity = &player.living_entity.entity;
-            match action {
-                Action::StartSprinting => {
-                    if !entity.sprinting.load(Ordering::Relaxed) {
-                        entity.set_sprinting(true).await;
-                    }
+        let entity = &player.living_entity.entity;
+        match command.action {
+            Action::StartSprinting => {
+                if !entity.sprinting.load(Ordering::Relaxed) {
+                    entity.set_sprinting(true).await;
                 }
-                Action::StopSprinting => {
-                    if entity.sprinting.load(Ordering::Relaxed) {
-                        entity.set_sprinting(false).await;
-                    }
-                }
-                Action::LeaveBed => player.wake_up().await,
-
-                Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
-                    debug!("todo");
-                }
-                Action::StartFlyingElytra => {
-                    let fall_flying = entity.check_fall_flying();
-                    if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
-                        entity.set_fall_flying(fall_flying).await;
-                    }
-                } // TODO
             }
-        } else {
-            self.kick(TextComponent::text("Invalid player command"))
+            Action::StopSprinting => {
+                if entity.sprinting.load(Ordering::Relaxed) {
+                    entity.set_sprinting(false).await;
+                }
+            }
+            Action::LeaveBed => player.wake_up().await,
+
+            Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
+                debug!("todo");
+            }
+            Action::StartFlyingElytra => {
+                let fall_flying = entity.check_fall_flying();
+                if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
+                    entity.set_fall_flying(fall_flying).await;
+                }
+            }
+            // <= 1.21.5
+            Action::StartSneaking | Action::StopSneaking => {
+                self.handle_player_input(
+                    player,
+                    SPlayerInput {
+                        input: SPlayerInput::SNEAK,
+                    },
+                )
                 .await;
+            }
         }
     }
 
@@ -1140,13 +1146,14 @@ impl JavaClient {
                 return;
             }
 
-            let (update_settings, update_watched) = {
+            let (update_settings, update_watched, main_hand_changed) = {
                 // 1. Load current snapshot
                 let current_config = player.config.load();
 
                 // 2. Calculate if settings changed before we overwrite
-                let update_settings = current_config.main_hand != main_hand
-                    || current_config.skin_parts != client_information.skin_parts;
+                let main_hand_changed = current_config.main_hand != main_hand;
+                let update_settings =
+                    main_hand_changed || current_config.skin_parts != client_information.skin_parts;
 
                 let old_view_distance = current_config.view_distance;
                 let new_view_distance_raw = client_information.view_distance as u8;
@@ -1181,11 +1188,16 @@ impl JavaClient {
                 // 4. Atomically swap the new config into the player
                 player.config.store(std::sync::Arc::new(new_config));
 
-                (update_settings, update_watched)
+                (update_settings, update_watched, main_hand_changed)
             };
 
             if update_watched {
                 chunker::update_position(player).await;
+            }
+
+            if main_hand_changed && let Some(server) = player.world().server.upgrade() {
+                let event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
+                let _ = server.plugin_manager.fire(event).await;
             }
 
             if update_settings {
