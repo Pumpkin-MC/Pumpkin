@@ -3,8 +3,8 @@ use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
     CustomNameImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, FireworkExplosionImpl,
-    FireworkExplosionShape, FireworksImpl, ItemModelImpl, MaxStackSizeImpl, PotionContentsImpl,
-    StatusEffectInstance, UnbreakableImpl, get,
+    FireworkExplosionShape, FoodImpl, FireworksImpl, ItemModelImpl, MaxDamageImpl,
+    MaxStackSizeImpl, PotionContentsImpl, StatusEffectInstance, UnbreakableImpl,
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_nbt::tag::NbtTag;
@@ -43,6 +43,44 @@ impl DataComponentCodec<Self> for DamageImpl {
             .ok_or(de::Error::custom("No damage VarInt!"))?
             .0;
         Ok(Self { damage })
+    }
+}
+
+impl DataComponentCodec<Self> for MaxDamageImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.max_damage))
+    }
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let max_damage = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No max_damage VarInt!"))?
+            .0;
+        Ok(Self { max_damage })
+    }
+}
+
+impl DataComponentCodec<Self> for FoodImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.nutrition))?;
+        seq.serialize_field::<f32>("", &self.saturation)?;
+        seq.serialize_field::<bool>("", &self.can_always_eat)
+    }
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let nutrition = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No Food nutrition VarInt!"))?
+            .0;
+        let saturation = seq
+            .next_element::<f32>()?
+            .ok_or(de::Error::custom("No Food saturation f32!"))?;
+        let can_always_eat = seq
+            .next_element::<bool>()?
+            .ok_or(de::Error::custom("No Food can_always_eat bool!"))?;
+        Ok(Self {
+            nutrition,
+            saturation,
+            can_always_eat,
+        })
     }
 }
 
@@ -456,11 +494,16 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::CustomName => Ok(CustomNameImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Enchantments => Ok(EnchantmentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Damage => Ok(DamageImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::MaxDamage => Ok(MaxDamageImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Food => Ok(FoodImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Unbreakable => Ok(UnbreakableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::PotionContents => Ok(PotionContentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
-        _ => Err(serde::de::Error::custom("TODO")),
+        _ => Err(serde::de::Error::custom(format!(
+            "data component {} not yet implemented",
+            id.to_name()
+        ))),
     }
 }
 pub fn serialize<T: SerializeStruct>(
@@ -469,7 +512,15 @@ pub fn serialize<T: SerializeStruct>(
     seq: &mut T,
 ) -> Result<(), T::Error> {
     match id {
-        DataComponent::MaxStackSize => get::<MaxStackSizeImpl>(value).serialize(seq),
+        DataComponent::MaxStackSize => {
+            if let Some(v) = value.as_any().downcast_ref::<MaxStackSizeImpl>() {
+                v.serialize(seq)
+            } else if let NbtTag::Int(size) = value.write_data() {
+                seq.serialize_field::<VarInt>("", &VarInt::from(size))
+            } else {
+                Err(serde::ser::Error::custom("MaxStackSize: cdylib downcast failed"))
+            }
+        }
         DataComponent::CustomName => {
             if let Some(v) = value.as_any().downcast_ref::<CustomNameImpl>() {
                 v.serialize(seq)
@@ -477,26 +528,82 @@ pub fn serialize<T: SerializeStruct>(
                 let text = TextComponent::text(name);
                 seq.serialize_field::<TextComponent>("", &text)
             } else {
-                panic!("CustomName write_data() did not return NbtTag::String")
+                Err(serde::ser::Error::custom("CustomName: cdylib downcast failed"))
             }
         }
         DataComponent::ItemModel => {
-            // Try downcast first (works when created in the same binary).
-            // Fall back to write_data() for cdylib plugins where TypeId differs.
             if let Some(v) = value.as_any().downcast_ref::<ItemModelImpl>() {
                 v.serialize(seq)
             } else if let NbtTag::String(model) = value.write_data() {
                 seq.serialize_field::<String>("", &model)
             } else {
-                panic!("ItemModel write_data() did not return NbtTag::String")
+                Err(serde::ser::Error::custom("ItemModel: cdylib downcast failed"))
             }
         }
-        DataComponent::Enchantments => get::<EnchantmentsImpl>(value).serialize(seq),
-        DataComponent::Damage => get::<DamageImpl>(value).serialize(seq),
-        DataComponent::Unbreakable => get::<UnbreakableImpl>(value).serialize(seq),
-        DataComponent::PotionContents => get::<PotionContentsImpl>(value).serialize(seq),
-        DataComponent::FireworkExplosion => get::<FireworkExplosionImpl>(value).serialize(seq),
-        DataComponent::Fireworks => get::<FireworksImpl>(value).serialize(seq),
-        _ => todo!("{} not yet implemented", id.to_name()),
+        DataComponent::Enchantments => {
+            if let Some(v) = value.as_any().downcast_ref::<EnchantmentsImpl>() {
+                v.serialize(seq)
+            } else {
+                Err(serde::ser::Error::custom("Enchantments: cdylib downcast failed"))
+            }
+        }
+        DataComponent::Damage => {
+            if let Some(v) = value.as_any().downcast_ref::<DamageImpl>() {
+                v.serialize(seq)
+            } else if let NbtTag::Int(damage) = value.write_data() {
+                seq.serialize_field::<VarInt>("", &VarInt::from(damage))
+            } else {
+                Err(serde::ser::Error::custom("Damage: cdylib downcast failed"))
+            }
+        }
+        DataComponent::MaxDamage => {
+            if let Some(v) = value.as_any().downcast_ref::<MaxDamageImpl>() {
+                v.serialize(seq)
+            } else if let NbtTag::Int(max_damage) = value.write_data() {
+                seq.serialize_field::<VarInt>("", &VarInt::from(max_damage))
+            } else {
+                Err(serde::ser::Error::custom("MaxDamage: cdylib downcast failed"))
+            }
+        }
+        DataComponent::Food => {
+            if let Some(v) = value.as_any().downcast_ref::<FoodImpl>() {
+                v.serialize(seq)
+            } else {
+                Err(serde::ser::Error::custom("Food: cdylib downcast failed"))
+            }
+        }
+        DataComponent::Unbreakable => {
+            if let Some(v) = value.as_any().downcast_ref::<UnbreakableImpl>() {
+                v.serialize(seq)
+            } else {
+                // Unbreakable has no protocol data, just presence
+                Ok(())
+            }
+        }
+        DataComponent::PotionContents => {
+            if let Some(v) = value.as_any().downcast_ref::<PotionContentsImpl>() {
+                v.serialize(seq)
+            } else {
+                Err(serde::ser::Error::custom("PotionContents: cdylib downcast failed"))
+            }
+        }
+        DataComponent::FireworkExplosion => {
+            if let Some(v) = value.as_any().downcast_ref::<FireworkExplosionImpl>() {
+                v.serialize(seq)
+            } else {
+                Err(serde::ser::Error::custom("FireworkExplosion: cdylib downcast failed"))
+            }
+        }
+        DataComponent::Fireworks => {
+            if let Some(v) = value.as_any().downcast_ref::<FireworksImpl>() {
+                v.serialize(seq)
+            } else {
+                Err(serde::ser::Error::custom("Fireworks: cdylib downcast failed"))
+            }
+        }
+        _ => Err(serde::ser::Error::custom(format!(
+            "data component {} not yet implemented",
+            id.to_name()
+        ))),
     }
 }
