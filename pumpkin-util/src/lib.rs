@@ -32,17 +32,17 @@ pub mod jwt;
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum HeightMap {
-    /// Topmost block including plants, snow layers, and surface features (used during world generation)
+    /// Topmost block including plants, snow layers, and surface features (used during world generation).
     WorldSurfaceWg,
-    /// Topmost solid or liquid block counting as surface
+    /// Topmost solid or liquid block counting as surface.
     WorldSurface,
-    /// Lowest solid block in oceans including underwater terrain features (used during world generation)
+    /// Lowest solid block in oceans including underwater terrain features (used during world generation).
     OceanFloorWg,
-    /// Lowest solid block in oceans, ignoring non-solid features like kelp
+    /// Lowest solid block in oceans, ignoring non-solid features like kelp.
     OceanFloor,
-    /// Topmost block that blocks entity motion (ignores leaves)
+    /// Topmost block that blocks entity motion (ignores leaves).
     MotionBlocking,
-    /// Topmost block that blocks entity motion, ignoring leaf blocks
+    /// Topmost block that blocks entity motion, ignoring leaf blocks.
     MotionBlockingNoLeaves,
 }
 
