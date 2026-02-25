@@ -72,12 +72,12 @@ impl CommandDispatcher {
         let result = self.dispatch(sender, server, cmd).await;
         sender.set_success_count(u32::from(result.is_ok()));
 
-        if let Err(e) = result {
-            if let Some(text) = e.into_component(cmd) {
-                sender
-                    .send_message(text.color_named(pumpkin_util::text::color::NamedColor::Red))
-                    .await;
-            }
+        if let Err(e) = result
+            && let Some(text) = e.into_component(cmd)
+        {
+            sender
+                .send_message(text.color_named(pumpkin_util::text::color::NamedColor::Red))
+                .await;
         }
     }
 
