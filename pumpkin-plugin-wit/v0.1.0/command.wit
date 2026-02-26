@@ -90,6 +90,7 @@ interface command {
         effect(string),
         enchantment(string),
         entity-anchor(entity-anchor),
+        // command-tree,
     }
 
     resource consumed-args {
