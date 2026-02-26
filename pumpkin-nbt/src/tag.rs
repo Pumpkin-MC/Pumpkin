@@ -100,13 +100,16 @@ impl NbtTag {
     /// Wraps the provided tag if needed with the provided element type of list
     /// the wrapped tag, if any, would be added to.
     fn wrap_tag_if_needed(element_type: u8, tag: Self) -> Self {
-        if element_type == COMPOUND_ID
-            && let Self::Compound(compound) = &tag
-            && !Self::is_wrapper_compound(compound)
-        {
-            tag
+        if element_type == COMPOUND_ID {
+            if let Self::Compound(compound) = &tag
+                && !Self::is_wrapper_compound(compound)
+            {
+                tag
+            } else {
+                Self::wrap_tag(tag)
+            }
         } else {
-            Self::wrap_tag(tag)
+            tag
         }
     }
 
