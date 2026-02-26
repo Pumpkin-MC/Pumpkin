@@ -157,24 +157,27 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
         let has_potion = seq
             .next_element::<bool>()?
             .ok_or(de::Error::custom("No PotionContents has_potion bool!"))?;
-        let potion_id = has_potion
-            .then(|| {
-                seq.next_element::<VarInt>()?
-                    .ok_or(de::Error::custom("No PotionContents potion_id VarInt!"))
-                    .map(|value| value.0)
-            })
-            .transpose()?;
+        let potion_id = match (has_potion, seq.next_element::<VarInt>()) {
+            (true, Ok(Some(v))) => Some(v.0),
+            (true, Ok(None)) => {
+                return Err(de::Error::custom("No PotionContents potion_id VarInt!"));
+            }
+            (true, Err(e)) => return Err(e),
+            (false, _) => None,
+        };
 
         // Custom color (optional)
         let has_color = seq
             .next_element::<bool>()?
             .ok_or(de::Error::custom("No PotionContents has_color bool!"))?;
-        let custom_color = has_color
-            .then(|| {
-                seq.next_element::<i32>()?
-                    .ok_or(de::Error::custom("No PotionContents custom_color i32!"))
-            })
-            .transpose()?;
+        let custom_color = match (has_color, seq.next_element::<i32>()) {
+            (true, Ok(Some(v))) => Some(v),
+            (true, Ok(None)) => {
+                return Err(de::Error::custom("No PotionContents custom_color i32!"));
+            }
+            (true, Err(e)) => return Err(e),
+            (false, _) => None,
+        };
 
         // Custom effects list
         let effects_len = seq
@@ -233,12 +236,14 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
         let has_name = seq
             .next_element::<bool>()?
             .ok_or(de::Error::custom("No PotionContents has_name bool!"))?;
-        let custom_name = has_name
-            .then(|| {
-                seq.next_element::<String>()?
-                    .ok_or(de::Error::custom("No PotionContents custom_name String!"))
-            })
-            .transpose()?;
+        let custom_name = match (has_name, seq.next_element::<String>()) {
+            (true, Ok(Some(v))) => Some(v),
+            (true, Ok(None)) => {
+                return Err(de::Error::custom("No PotionContents custom_name String!"));
+            }
+            (true, Err(e)) => return Err(e),
+            (false, _) => None,
+        };
 
         Ok(Self {
             potion_id,
@@ -540,28 +545,22 @@ pub fn deserialize_from_bytes(
 
     let mut seq = BytesSeqAccess { bytes, offset: 0 };
     match id {
-        DataComponent::MaxStackSize => {
-            MaxStackSizeImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
-        }
-        DataComponent::Enchantments => {
-            EnchantmentsImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
-        }
-        DataComponent::Damage => DamageImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn()),
-        DataComponent::Unbreakable => {
-            UnbreakableImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
-        }
-        DataComponent::PotionContents => {
-            PotionContentsImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
-        }
-        DataComponent::FireworkExplosion => {
-            FireworkExplosionImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
-        }
-        DataComponent::Fireworks => {
-            FireworksImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
-        }
-        DataComponent::Container => {
-            ContainerImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
-        }
+        DataComponent::MaxStackSize => MaxStackSizeImpl::deserialize(&mut seq)
+            .map(pumpkin_data::data_component_impl::DataComponentImpl::to_dyn),
+        DataComponent::Enchantments => EnchantmentsImpl::deserialize(&mut seq)
+            .map(pumpkin_data::data_component_impl::DataComponentImpl::to_dyn),
+        DataComponent::Damage => DamageImpl::deserialize(&mut seq)
+            .map(pumpkin_data::data_component_impl::DataComponentImpl::to_dyn),
+        DataComponent::Unbreakable => UnbreakableImpl::deserialize(&mut seq)
+            .map(pumpkin_data::data_component_impl::DataComponentImpl::to_dyn),
+        DataComponent::PotionContents => PotionContentsImpl::deserialize(&mut seq)
+            .map(pumpkin_data::data_component_impl::DataComponentImpl::to_dyn),
+        DataComponent::FireworkExplosion => FireworkExplosionImpl::deserialize(&mut seq)
+            .map(pumpkin_data::data_component_impl::DataComponentImpl::to_dyn),
+        DataComponent::Fireworks => FireworksImpl::deserialize(&mut seq)
+            .map(pumpkin_data::data_component_impl::DataComponentImpl::to_dyn),
+        DataComponent::Container => ContainerImpl::deserialize(&mut seq)
+            .map(pumpkin_data::data_component_impl::DataComponentImpl::to_dyn),
         _ => Err(ReadingError::Message("TODO".to_string())),
     }
 }
