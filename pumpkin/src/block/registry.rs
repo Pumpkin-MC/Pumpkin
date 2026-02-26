@@ -59,6 +59,7 @@ use crate::block::blocks::plant::kelp::KelpBlock;
 use crate::block::blocks::plant::leaf_litter::LeafLitterBlock;
 use crate::block::blocks::plant::lily_pad::LilyPadBlock;
 use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
+use crate::block::blocks::plant::nether_sprouts::NetherSproutsBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
@@ -256,6 +257,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CobwebBlock);
     manager.register(WitherRose);
     manager.register(Fungus);
+    manager.register(NetherSproutsBlock);
 
     manager.register(FallingBlock);
 

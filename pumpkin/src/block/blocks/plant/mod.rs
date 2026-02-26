@@ -15,6 +15,7 @@ pub mod kelp;
 pub mod leaf_litter;
 pub mod lily_pad;
 pub mod mushroom_plant;
+pub mod nether_sprouts;
 pub mod roots;
 pub mod sapling;
 pub mod sea_grass;
