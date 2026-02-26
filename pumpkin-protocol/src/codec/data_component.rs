@@ -91,7 +91,8 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
             seq.serialize_field::<VarInt>("", &VarInt::from(enc.id))?;
             seq.serialize_field::<VarInt>("", &VarInt::from(*level))?;
         }
-        Ok(())
+        // show_in_tooltip: vanilla always expects this trailing bool
+        seq.serialize_field::<bool>("", &true)
     }
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
         const MAX_ENCHANTMENTS: usize = 256;
@@ -120,6 +121,10 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
                 level,
             ));
         }
+        // show_in_tooltip: read and discard (not stored in our struct yet)
+        let _show_in_tooltip = seq
+            .next_element::<bool>()?
+            .ok_or(de::Error::custom("No Enchantments show_in_tooltip bool!"))?;
         Ok(Self {
             enchantment: Cow::from(enc),
         })
@@ -191,10 +196,10 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
             seq.serialize_field::<bool>("", &false)?;
         }
 
-        // Custom name (optional)
+        // Custom name (optional) — vanilla encodes as Optional<Component> (NBT-backed)
         if let Some(name) = &self.custom_name {
             seq.serialize_field::<bool>("", &true)?;
-            seq.serialize_field::<&str>("", &name.as_str())?;
+            seq.serialize_field::<TextComponent>("", &TextComponent::text(name.clone()))?;
         } else {
             seq.serialize_field::<bool>("", &false)?;
         }

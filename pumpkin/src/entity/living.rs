@@ -1478,7 +1478,7 @@ impl EntityBase for LivingEntity {
                     }
 
                     // Apply potion effects
-                    let is_potion = if let Some(potion_contents) =
+                    if let Some(potion_contents) =
                         item.get_data_component::<PotionContentsImpl>()
                     {
                         // Apply base potion effects (from potion_id)
@@ -1506,10 +1506,7 @@ impl EntityBase for LivingEntity {
                                 .await;
                             }
                         }
-                        true
-                    } else {
-                        false
-                    };
+                    }
 
                     if let Some(player) = caller.get_player() {
                         let gamemode = player.gamemode.load();
@@ -1520,7 +1517,9 @@ impl EntityBase for LivingEntity {
                             .await
                             .decrement_unless_creative(gamemode, 1);
                         // Replace consumed potion with glass bottle
-                        if is_potion && gamemode != pumpkin_util::GameMode::Creative {
+                        if item.is_potion()
+                            && gamemode != pumpkin_util::GameMode::Creative
+                        {
                             let held_slot = player.inventory.held_item();
                             let mut held = held_slot.lock().await;
                             if held.item_count == 0 {
