@@ -1393,7 +1393,11 @@ impl EntityBase for LivingEntity {
 
             // Only tick movement if the entity is alive. This prevents a dead "corpse"
             // from continuing to be simulated (accumulating fall_distance/velocity).
-            if !self.dead.load(Relaxed) && self.health.load() > 0.0 {
+            // We allow movement during death animation (20 ticks) so knockback is applied.
+            let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
+            let in_death_animation =
+                self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
+            if is_alive || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER) {
                 self.tick_movement(server, caller.clone()).await;
             }
 
