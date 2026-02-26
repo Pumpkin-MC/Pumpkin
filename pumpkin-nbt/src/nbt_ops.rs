@@ -877,16 +877,16 @@ mod test {
         // Heterogeneous elements
         let mut collector = ListCollector::new_collector();
 
-        collector = collector.accept(nbt_compound_tag!({"": NbtTag::Byte(99)}));
-        collector = collector.accept(nbt_compound_tag!({"": NbtTag::String("99".to_string())}));
-        collector = collector.accept(nbt_compound_tag!({"": NbtTag::LongArray(vec![1, 2, 3])}));
+        collector = collector.accept(NbtTag::Byte(99));
+        collector = collector.accept(NbtTag::String("99".to_string()));
+        collector = collector.accept(NbtTag::LongArray(vec![1, 2, 3]));
 
         assert_eq!(
             collector.result(),
             NbtTag::List(vec![
-                nbt_compound_tag!({"": NbtTag::Byte(99)}),
-                nbt_compound_tag!({"": NbtTag::String("99".to_string())}),
-                nbt_compound_tag!({"": NbtTag::LongArray(vec![1, 2, 3])})
+                NbtTag::Byte(99),
+                NbtTag::String("99".to_string()),
+                NbtTag::LongArray(vec![1, 2, 3])
             ])
         );
     }
