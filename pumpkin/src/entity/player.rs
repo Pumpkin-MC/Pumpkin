@@ -756,7 +756,27 @@ impl Player {
                 _ => {}
             }
             if config.knockback {
-                combat::handle_knockback(attacker_entity, victim_entity, knockback_strength);
+                // Armor stands only take knockback when sprint attacking or with knockback enchantment
+                let is_armor_stand = *victim_entity.entity_type == EntityType::ARMOR_STAND;
+                let should_apply_knockback = if is_armor_stand {
+                    // Check for sprint attack or knockback enchantment
+                    let is_sprint_attack = matches!(attack_type, AttackType::Knockback);
+                    let has_knockback_enchant = self
+                        .inventory()
+                        .held_item()
+                        .lock()
+                        .await
+                        .get_enchantment_level(&Enchantment::KNOCKBACK)
+                        > 0;
+
+                    is_sprint_attack || has_knockback_enchant
+                } else {
+                    true // Other entities always get knockback
+                };
+
+                if should_apply_knockback {
+                    combat::handle_knockback(attacker_entity, victim_entity, knockback_strength);
+                }
             }
         }
 
