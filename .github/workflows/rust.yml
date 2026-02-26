@@ -173,37 +173,6 @@ jobs:
           compression-level: 9
           path: dist/pumpkin-*
 
-  build_release_macos_intel_v3:
-    name: Build project in release (macOS Intel x86-64-v3)
-    runs-on: macos-15-intel
-    needs: [build_and_test]
-    strategy:
-      matrix:
-        toolchain:
-          - stable
-    steps:
-      - uses: actions/checkout@v6
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - uses: Swatinem/rust-cache@v2
-      - name: Set CPU flags for x86-64-v3
-        shell: bash
-        run: |
-          export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
-          echo "RUSTFLAGS=$RUSTFLAGS" >> $GITHUB_ENV
-      - name: Build Release (x86-64-v3)
-        run: cargo build --verbose --release
-      - name: Prepare artifacts (x86-64-v3)
-        shell: bash
-        run: |
-          mkdir -p dist
-          cp "target/release/pumpkin" "dist/pumpkin-x86-64-v3-macOS-X64"
-      - name: Export executable (x86-64-v3)
-        uses: actions/upload-artifact@v6
-        with:
-          name: pumpkin-x86-64-v3-macOS-X64
-          compression-level: 9
-          path: dist/pumpkin-*
-
   build_release_x86_64_v2:
     name: Build project in release (x86-64-v2)
     runs-on: ${{ matrix.os }}
@@ -278,6 +247,37 @@ jobs:
           compression-level: 9
           path: dist/pumpkin-*
 
+  build_release_macos_intel_v3:
+    name: Build project in release (macOS Intel x86-64-v3)
+    runs-on: macos-15-intel
+    needs: [build_and_test]
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Set CPU flags for x86-64-v3
+        shell: bash
+        run: |
+          export RUSTFLAGS="$RUSTFLAGS -C target-cpu=x86-64-v3"
+          echo "RUSTFLAGS=$RUSTFLAGS" >> $GITHUB_ENV
+      - name: Build Release (x86-64-v3)
+        run: cargo build --verbose --release
+      - name: Prepare artifacts (x86-64-v3)
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/release/pumpkin" "dist/pumpkin-x86-64-v3-macOS-X64"
+      - name: Export executable (x86-64-v3)
+        uses: actions/upload-artifact@v6
+        with:
+          name: pumpkin-x86-64-v3-macOS-X64
+          compression-level: 9
+          path: dist/pumpkin-*
+
   build_release_x86_64_v4:
     name: Build project in release (x86-64-v4)
     runs-on: ${{ matrix.os }}
@@ -318,7 +318,7 @@ jobs:
   draft_release:
     permissions:
       contents: write
-    needs: [build_release_standard, build_release_x86_64_v2, build_release_x86_64_v3, build_release_x86_64_v4, build_release_macos_intel_v3]
+    needs: [build_release_standard, build_release_x86_64_v2, build_release_x86_64_v3, build_release_macos_intel_v3, build_release_x86_64_v4]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:
