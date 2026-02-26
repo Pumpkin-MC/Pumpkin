@@ -794,8 +794,31 @@ impl Player {
 
         let slot_index = self.inventory.get_selected_slot() as usize;
         let stack_arc = self.inventory.held_item();
+
+        // Use try_lock to avoid deadlocking when a plugin calls this while
+        // already holding the slot lock (tokio Mutex is not re-entrant).
         let updated = {
-            let mut stack = stack_arc.lock().await;
+            let mut stack = match stack_arc.try_lock() {
+                Ok(guard) => guard,
+                Err(_) => {
+                    // Lock is held — yield once to let the holder finish, then retry
+                    tokio::task::yield_now().await;
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(2),
+                        stack_arc.lock(),
+                    )
+                    .await
+                    {
+                        Ok(guard) => guard,
+                        Err(_) => {
+                            tracing::warn!(
+                                "damage_held_item: timed out acquiring held item lock"
+                            );
+                            return false;
+                        }
+                    }
+                }
+            };
             stack
                 .damage_item_with_context(amount, false)
                 .then_some(stack.clone())

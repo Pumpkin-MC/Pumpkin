@@ -72,23 +72,32 @@ pub trait Slot: Send + Sync {
         // Default implementation logic:
         Box::pin(async move {
             let stack = self.get_stack().await;
-            let lock = timeout(Duration::from_secs(5), stack.lock())
-                .await
-                .expect("Timed out while trying to acquire lock");
 
-            lock.clone()
+            // Fast path: lock is uncontended
+            if let Ok(lock) = stack.try_lock() {
+                return lock.clone();
+            }
+
+            // Slow path: wait with timeout — never panic, return EMPTY on timeout
+            match timeout(Duration::from_secs(5), stack.lock()).await {
+                Ok(lock) => lock.clone(),
+                Err(_) => {
+                    tracing::warn!(
+                        slot = self.get_index(),
+                        "Timed out acquiring slot lock in get_cloned_stack; \
+                         returning empty — likely re-entrant lock from a plugin"
+                    );
+                    ItemStack::EMPTY.clone()
+                }
+            }
         })
     }
 
     fn has_stack(&self) -> BoxFuture<'_, bool> {
         // Default implementation logic:
         Box::pin(async move {
-            let inv = self.get_inventory();
-            !inv.get_stack(self.get_index())
-                .await
-                .lock()
-                .await
-                .is_empty()
+            let stack = self.get_cloned_stack().await;
+            !stack.is_empty()
         })
     }
 

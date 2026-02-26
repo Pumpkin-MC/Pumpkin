@@ -3302,6 +3302,13 @@ impl World {
             }
 
             let neighbor_pos = block_pos.offset(direction.to_offset());
+
+            // Skip neighbors in unloaded chunks to avoid force-loading distant chunks
+            // (e.g. during explosions at chunk boundaries)
+            if self.try_get_block_state_id(&neighbor_pos).is_none() {
+                continue;
+            }
+
             let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos).await;
 
             if let Some(neighbor_pumpkin_block) =
@@ -3356,6 +3363,11 @@ impl World {
         direction: BlockDirection,
         flags: BlockFlags,
     ) {
+        // Skip if the chunk at this position isn't loaded
+        if self.try_get_block_state_id(block_pos).is_none() {
+            return;
+        }
+
         let (block, block_state_id) = self.get_block_and_state_id(block_pos).await;
 
         if flags.contains(BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT)
