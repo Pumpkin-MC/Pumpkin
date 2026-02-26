@@ -20,8 +20,10 @@ static PUMPKIN_EN_US_JSON: &str = include_str!("../../assets/translations/en_us.
 static PUMPKIN_ES_ES_JSON: &str = include_str!("../../assets/translations/es_es.json");
 static PUMPKIN_FR_FR_JSON: &str = include_str!("../../assets/translations/fr_fr.json");
 static PUMPKIN_JA_JP_JSON: &str = include_str!("../../assets/translations/ja_jp.json");
+static PUMPKIN_KO_KR_JSON: &str = include_str!("../../assets/translations/ko_kr.json");
 static PUMPKIN_NL_BE_JSON: &str = include_str!("../../assets/translations/nl_be.json");
 static PUMPKIN_NL_NL_JSON: &str = include_str!("../../assets/translations/nl_nl.json");
+static PUMPKIN_RO_RO_JSON: &str = include_str!("../../assets/translations/ro_ro.json");
 static PUMPKIN_RU_RU_JSON: &str = include_str!("../../assets/translations/ru_ru.json");
 static PUMPKIN_SQ_AL_JSON: &str = include_str!("../../assets/translations/sq_al.json");
 static PUMPKIN_ZH_CN_JSON: &str = include_str!("../../assets/translations/zh_cn.json");
@@ -161,7 +163,7 @@ pub fn reorder_substitutions(
     for (idx, &i) in indices.iter().enumerate() {
         let mut num_chars = String::new();
         let mut pos = 1;
-        while bytes[i + pos].is_ascii_digit() {
+        while i + pos < bytes.len() && bytes[i + pos].is_ascii_digit() {
             num_chars.push(bytes[i + pos] as char);
             pos += 1;
         }
@@ -259,13 +261,9 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     result
 }
 
-/// The global translation store.
-///
-/// Contains a hash map of translations per `Locale`.
-/// Populated from built-in vanilla and pumpkin translation JSONs.
-pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last() as usize]>> =
+pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]>> =
     LazyLock::new(|| {
-        let mut array: [HashMap<String, String>; Locale::last() as usize] =
+        let mut array: [HashMap<String, String>; Locale::COUNT] =
             std::array::from_fn(|_| HashMap::new());
         let vanilla_en_us: HashMap<String, String> =
             serde_json::from_str(VANILLA_EN_US_JSON).expect("Could not parse en_us.json.");
@@ -279,10 +277,14 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
             serde_json::from_str(PUMPKIN_FR_FR_JSON).expect("Could not parse fr_fr.json.");
         let pumpkin_ja_jp: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_JA_JP_JSON).expect("Could not parse ja_jp.json.");
+        let pumpkin_ko_kr: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_KO_KR_JSON).expect("Could not parse ko_kr.json.");
         let pumpkin_nl_be: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_NL_BE_JSON).expect("Could not parse nl_be.json.");
         let pumpkin_nl_nl: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_NL_NL_JSON).expect("Could not parse nl_nl.json.");
+        let pumpkin_ro_ro: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_RO_RO_JSON).expect("Could not parse ro_ro.json.");
         let pumpkin_ru_ru: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_RU_RU_JSON).expect("Could not parse ru_ru.json.");
         let pumpkin_sq_al: HashMap<String, String> =
@@ -320,11 +322,17 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
         for (key, value) in pumpkin_ja_jp {
             array[Locale::JaJp as usize].insert(format!("pumpkin:{key}"), value);
         }
+        for (key, value) in pumpkin_ko_kr {
+            array[Locale::KoKr as usize].insert(format!("pumpkin:{key}"), value);
+        }
         for (key, value) in pumpkin_nl_be {
             array[Locale::NlBe as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_nl_nl {
             array[Locale::NlNl as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_ro_ro {
+            array[Locale::RoRo as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_ru_ru {
             array[Locale::RuRu as usize].insert(format!("pumpkin:{key}"), value);
@@ -490,10 +498,7 @@ pub enum Locale {
 }
 
 impl Locale {
-    #[must_use]
-    pub const fn last() -> Self {
-        Self::ZlmArab
-    }
+    pub const COUNT: usize = Self::ZlmArab as usize + 1;
 }
 
 impl FromStr for Locale {
