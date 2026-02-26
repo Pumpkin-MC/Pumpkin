@@ -1,5 +1,5 @@
 use crate::VarInt;
-use crate::codec::data_component::{deserialize, serialize};
+use crate::codec::data_component::{deserialize_from_bytes, serialize};
 use crate::ser::{WritingError, serializer};
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::item::Item;
@@ -87,8 +87,14 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                     .next_element::<VarInt>()?
                     .ok_or_else(|| de::Error::custom("No item id VarInt!"))?;
 
-                let num_to_add = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
-                let num_to_remove = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
+                let num_to_add = seq
+                    .next_element::<VarInt>()?
+                    .ok_or_else(|| de::Error::custom("Missing component add count"))?
+                    .0;
+                let num_to_remove = seq
+                    .next_element::<VarInt>()?
+                    .ok_or_else(|| de::Error::custom("Missing component remove count"))?
+                    .0;
 
                 if num_to_add < 0 || num_to_remove < 0 {
                     return Err(de::Error::custom("Negative component count"));
@@ -114,13 +120,19 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                     })?;
 
                     // Minecraft protocol sends a byte length for the component data here
-                    let _byte_len = seq
+                    let byte_len = seq
                         .next_element::<VarInt>()?
                         .ok_or_else(|| de::Error::custom("No data len VarInt!"))?;
 
-                    let component_impl = deserialize(id, &mut seq)?;
-
-                    patch.push((id, Some(component_impl)));
+                    let mut bytes = vec![0u8; byte_len.0 as usize];
+                    for byte in &mut bytes {
+                        *byte = seq
+                            .next_element::<u8>()?
+                            .ok_or_else(|| de::Error::custom("Missing component byte"))?;
+                    }
+                    if let Ok(component_impl) = deserialize_from_bytes(id, &bytes) {
+                        patch.push((id, Some(component_impl)));
+                    }
                 }
 
                 for _ in 0..num_to_remove {

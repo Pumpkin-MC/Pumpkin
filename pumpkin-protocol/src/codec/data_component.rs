@@ -1,5 +1,7 @@
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
 use crate::codec::var_int::VarInt;
+use crate::ser::ReadingError;
+use crate::ser::deserializer::Deserializer;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
@@ -52,7 +54,7 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
     fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
         seq.serialize_field::<VarInt>("", &VarInt::from(self.enchantment.len() as i32))?;
         for (enc, level) in self.enchantment.iter() {
-            seq.serialize_field::<VarInt>("", &VarInt::from(enc.id))?;
+            seq.serialize_field::<VarInt>("", &VarInt::from(enc.id + 1))?;
             seq.serialize_field::<VarInt>("", &VarInt::from(*level))?;
         }
         Ok(())
@@ -72,11 +74,17 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
             let id = seq
                 .next_element::<VarInt>()?
                 .ok_or(de::Error::custom("No EnchantmentsImpl id VarInt!"))?
-                .0 as u8;
+                .0;
             let level = seq
                 .next_element::<VarInt>()?
                 .ok_or(de::Error::custom("No EnchantmentsImpl level VarInt!"))?
                 .0;
+            if id <= 0 {
+                return Err(de::Error::custom(
+                    "EnchantmentsImpl id VarInt out of bounds",
+                ));
+            }
+            let id = (id - 1) as u8;
             enc.push((
                 Enchantment::from_id(id).ok_or(de::Error::custom(
                     "EnchantmentsImpl Enchantment VarInt Incorrect!",
@@ -505,6 +513,62 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Container => Ok(ContainerImpl::deserialize(seq)?.to_dyn()),
         _ => Err(serde::de::Error::custom("TODO")),
+    }
+}
+
+pub fn deserialize_from_bytes(
+    id: DataComponent,
+    bytes: &[u8],
+) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
+    struct BytesSeqAccess<'a> {
+        bytes: &'a [u8],
+        offset: usize,
+    }
+
+    impl<'de> SeqAccess<'de> for BytesSeqAccess<'_> {
+        type Error = ReadingError;
+
+        fn next_element_seed<T: serde::de::DeserializeSeed<'de>>(
+            &mut self,
+            seed: T,
+        ) -> Result<Option<T::Value>, Self::Error> {
+            if self.offset >= self.bytes.len() {
+                return Ok(None);
+            }
+
+            let mut de = Deserializer::new(std::io::Cursor::new(&self.bytes[self.offset..]));
+            let value = seed.deserialize(&mut de)?;
+            let consumed = de.bytes_read();
+            self.offset = self.offset.saturating_add(consumed);
+            Ok(Some(value))
+        }
+    }
+
+    let mut seq = BytesSeqAccess { bytes, offset: 0 };
+    match id {
+        DataComponent::MaxStackSize => {
+            MaxStackSizeImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
+        }
+        DataComponent::Enchantments => {
+            EnchantmentsImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
+        }
+        DataComponent::Damage => DamageImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn()),
+        DataComponent::Unbreakable => {
+            UnbreakableImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
+        }
+        DataComponent::PotionContents => {
+            PotionContentsImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
+        }
+        DataComponent::FireworkExplosion => {
+            FireworkExplosionImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
+        }
+        DataComponent::Fireworks => {
+            FireworksImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
+        }
+        DataComponent::Container => {
+            ContainerImpl::deserialize(&mut seq).map(|impl_| impl_.to_dyn())
+        }
+        _ => Err(ReadingError::Message("TODO".to_string())),
     }
 }
 pub fn serialize<T: SerializeStruct>(
