@@ -543,6 +543,8 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::Enchantments => {
             if let Some(v) = value.as_any().downcast_ref::<EnchantmentsImpl>() {
                 v.serialize(seq)
+            } else if let Some(v) = EnchantmentsImpl::read_data(&value.write_data()) {
+                v.serialize(seq)
             } else {
                 Err(serde::ser::Error::custom("Enchantments: cdylib downcast failed"))
             }
@@ -568,6 +570,8 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::Food => {
             if let Some(v) = value.as_any().downcast_ref::<FoodImpl>() {
                 v.serialize(seq)
+            } else if let Some(v) = FoodImpl::read_data(&value.write_data()) {
+                v.serialize(seq)
             } else {
                 Err(serde::ser::Error::custom("Food: cdylib downcast failed"))
             }
@@ -583,6 +587,8 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::PotionContents => {
             if let Some(v) = value.as_any().downcast_ref::<PotionContentsImpl>() {
                 v.serialize(seq)
+            } else if let Some(v) = PotionContentsImpl::read_data(&value.write_data()) {
+                v.serialize(seq)
             } else {
                 Err(serde::ser::Error::custom("PotionContents: cdylib downcast failed"))
             }
@@ -590,12 +596,16 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::FireworkExplosion => {
             if let Some(v) = value.as_any().downcast_ref::<FireworkExplosionImpl>() {
                 v.serialize(seq)
+            } else if let Some(v) = FireworkExplosionImpl::read_data(&value.write_data()) {
+                v.serialize(seq)
             } else {
                 Err(serde::ser::Error::custom("FireworkExplosion: cdylib downcast failed"))
             }
         }
         DataComponent::Fireworks => {
             if let Some(v) = value.as_any().downcast_ref::<FireworksImpl>() {
+                v.serialize(seq)
+            } else if let Some(v) = FireworksImpl::read_data(&value.write_data()) {
                 v.serialize(seq)
             } else {
                 Err(serde::ser::Error::custom("Fireworks: cdylib downcast failed"))

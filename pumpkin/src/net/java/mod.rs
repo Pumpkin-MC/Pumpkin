@@ -259,7 +259,10 @@ impl JavaClient {
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
-        self.write_packet(packet, writer).unwrap();
+        if let Err(e) = self.write_packet(packet, writer) {
+            warn!("Failed to serialize packet: {e}");
+            return;
+        }
         self.enqueue_packet_data(buf.into()).await;
     }
 
@@ -335,7 +338,10 @@ impl JavaClient {
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
-        self.write_packet(packet, writer).unwrap();
+        if let Err(e) = self.write_packet(packet, writer) {
+            warn!("Failed to serialize packet: {e}");
+            return;
+        }
         self.send_packet_now_data(packet_buf.into()).await;
     }
 

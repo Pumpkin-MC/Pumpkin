@@ -50,6 +50,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
+        Food => Some(FoodImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
         DamageResistant => Some(DamageResistantImpl::read_data(data)?.to_dyn()),
         PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
@@ -238,7 +239,7 @@ pub struct EnchantmentsImpl {
     pub enchantment: Cow<'static, [(&'static Enchantment, i32)]>,
 }
 impl EnchantmentsImpl {
-    fn read_data(data: &NbtTag) -> Option<Self> {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
         let data = &data.extract_compound()?.child_tags;
         let mut enc = Vec::with_capacity(data.len());
         for (name, level) in data {
@@ -450,7 +451,27 @@ pub struct FoodImpl {
     pub saturation: f32,
     pub can_always_eat: bool,
 }
+impl FoodImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let nutrition = compound.get_int("nutrition")?;
+        let saturation = compound.get_float("saturation")?;
+        let can_always_eat = compound.get_bool("can_always_eat").unwrap_or(false);
+        Some(Self {
+            nutrition,
+            saturation,
+            can_always_eat,
+        })
+    }
+}
 impl DataComponentImpl for FoodImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("nutrition", self.nutrition);
+        compound.put_float("saturation", self.saturation);
+        compound.put_bool("can_always_eat", self.can_always_eat);
+        NbtTag::Compound(compound)
+    }
     default_impl!(Food);
 }
 impl Hash for FoodImpl {
