@@ -1,3 +1,4 @@
+use pumpkin_data::Block;
 use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;
@@ -17,11 +18,14 @@ pub struct PlayerHarvestBlockEvent {
     /// The harvested block position.
     pub block_pos: BlockPos,
 
-    /// The harvested block key (namespace:id).
-    pub block_key: String,
+    /// The harvested block.
+    pub block: &'static Block,
 
     /// The tool used.
     pub item_stack: ItemStack,
+
+    /// The harvested item drops. Handlers may modify this list.
+    pub item_drops: Vec<ItemStack>,
 }
 
 impl PlayerHarvestBlockEvent {
@@ -29,14 +33,16 @@ impl PlayerHarvestBlockEvent {
     pub const fn new(
         player: Arc<Player>,
         block_pos: BlockPos,
-        block_key: String,
+        block: &'static Block,
         item_stack: ItemStack,
+        item_drops: Vec<ItemStack>,
     ) -> Self {
         Self {
             player,
             block_pos,
-            block_key,
+            block,
             item_stack,
+            item_drops,
             cancelled: false,
         }
     }
