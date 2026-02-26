@@ -36,7 +36,7 @@ impl PlantBlockBase for NetherSproutsBlock {
         block_accessor: &dyn pumpkin_world::world::BlockAccessor,
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
-        let block = block_accessor.get_block(&pos).await;
+        let block = block_accessor.get_block(pos).await;
         //shared behaviour. source: https://minecraft.wiki/w/Nether_Sprouts#Usage
         supports_fungus(block)
     }
