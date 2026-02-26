@@ -6,9 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     entity::{
-        Entity, EntityBase,
-        boss::wither::WitherEntity,
-        decoration::{
+        boss::wither::WitherEntity, decoration::{
             armor_stand::ArmorStandEntity, end_crystal::EndCrystalEntity, painting::PaintingEntity,
         },
         living::LivingEntity,
@@ -21,16 +19,18 @@ use crate::{
                 bogged::BoggedSkeletonEntity, parched::ParchedSkeletonEntity,
                 skeleton::SkeletonEntity, stray::StraySkeletonEntity, wither::WitherSkeletonEntity,
             },
-            zombie::{ZombieEntity, drowned::DrownedEntity, husk::HuskEntity},
-            zombie_villager::ZombieVillagerEntity,
+            zombie::{drowned::DrownedEntity, husk::HuskEntity, zombie::ZombieEntity},
         },
         passive::{
             cat::CatEntity, chicken::ChickenEntity, cow::CowEntity, iron_golem::IronGolemEntity,
             sheep::SheepEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity,
         },
+        Entity,
+        EntityBase,
     },
     world::World,
 };
+use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
 
 pub async fn from_type(
     entity_type: &'static EntityType,

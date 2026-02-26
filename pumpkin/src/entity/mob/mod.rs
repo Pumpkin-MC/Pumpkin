@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{ai::pathfinder::Navigator, living::LivingEntity, Entity, EntityBase, NBTStorage};
 use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
@@ -20,6 +20,8 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use tokio::sync::Mutex;
 use uuid::Uuid;
+use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_util::math::vector2::Vector2;
 
 pub mod bat;
 pub mod creeper;
@@ -27,7 +29,6 @@ pub mod enderman;
 pub mod silverfish;
 pub mod skeleton;
 pub mod zombie;
-pub mod zombie_villager;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
@@ -276,6 +277,35 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn is_sitting(&self) -> bool {
         false
+    }
+
+    /// Set mob on fire if it is exposed to sunlight
+    fn sunburn(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {
+            let mob = self.get_mob_entity();
+            let entity = &mob.living_entity.entity;
+
+            if entity.touching_water.load(Relaxed) {
+                return;
+            }
+
+            let world = entity.world.load();
+
+            if world.level_time.lock().await.is_night() {
+                return;
+            }
+
+            let pos = entity.pos.load();
+            let top_y = world.get_top_block(Vector2::new(pos.x as i32, pos.z as i32)).await;
+            if (pos.y as i32) < top_y {
+                return;
+            }
+
+            let equipment = mob.living_entity.entity_equipment.lock().await;
+            if equipment.get(&EquipmentSlot::HEAD).lock().await.is_empty() {
+                entity.set_on_fire_for(8.0);
+            }
+        })
     }
 }
 

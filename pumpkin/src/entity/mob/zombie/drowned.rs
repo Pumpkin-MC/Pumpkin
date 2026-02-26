@@ -1,17 +1,15 @@
 use std::sync::Arc;
 
-use crate::entity::{
-    Entity, NBTStorage,
-    mob::{Mob, MobEntity, zombie::ZombieEntity},
-};
+use crate::entity::mob::zombie::ZombieEntityBase;
+use crate::entity::{mob::{Mob, MobEntity}, Entity, EntityBase, EntityBaseFuture, NBTStorage};
 
 pub struct DrownedEntity {
-    entity: Arc<ZombieEntity>,
+    entity: Arc<ZombieEntityBase>,
 }
 
 impl DrownedEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
-        let entity = ZombieEntity::new(entity).await;
+        let entity = ZombieEntityBase::new(entity).await;
         let zombie = Self { entity };
         let mob_arc = Arc::new(zombie);
         // Fix duplicated since already in ZombieEntity::new()
@@ -38,5 +36,9 @@ impl NBTStorage for DrownedEntity {}
 impl Mob for DrownedEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move { self.sunburn().await })
     }
 }

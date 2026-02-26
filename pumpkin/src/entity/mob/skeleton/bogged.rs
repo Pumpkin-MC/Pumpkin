@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use crate::entity::{
-    Entity, NBTStorage,
-    mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
-};
+use crate::entity::{mob::{skeleton::SkeletonEntityBase, Mob, MobEntity}, Entity, EntityBase, EntityBaseFuture, NBTStorage};
 
 pub struct BoggedSkeletonEntity {
     entity: Arc<SkeletonEntityBase>,
@@ -22,5 +19,9 @@ impl NBTStorage for BoggedSkeletonEntity {}
 impl Mob for BoggedSkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move { self.sunburn().await })
     }
 }

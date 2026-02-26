@@ -2,19 +2,20 @@ use std::sync::Arc;
 
 use pumpkin_data::entity::EntityType;
 
+use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::{
-    Entity, NBTStorage,
-    ai::goal::active_target::ActiveTargetGoal,
-    mob::{Mob, MobEntity, zombie::ZombieEntity},
+    ai::goal::active_target::ActiveTargetGoal, mob::{Mob, MobEntity},
+    Entity,
+    NBTStorage,
 };
 
 pub struct HuskEntity {
-    entity: Arc<ZombieEntity>,
+    entity: Arc<ZombieEntityBase>,
 }
 
 impl HuskEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
-        let entity = ZombieEntity::new(entity).await;
+        let entity = ZombieEntityBase::new(entity).await;
         let zombie = Self { entity };
         let mob_arc = Arc::new(zombie);
 
