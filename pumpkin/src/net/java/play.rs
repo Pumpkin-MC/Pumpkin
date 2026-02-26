@@ -1958,12 +1958,13 @@ impl JavaClient {
             self.kick(TextComponent::text("Invalid held slot")).await;
             return;
         }
-        let previous_slot = player.inventory.get_selected_slot() as i32;
+        let slot = slot as u8;
+        let previous_slot = player.inventory.get_selected_slot();
         if let Some(server) = player.world().server.upgrade() {
             let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id) else {
                 return;
             };
-            let event = PlayerItemHeldEvent::new(player_arc, previous_slot, slot as i32);
+            let event = PlayerItemHeldEvent::new(player_arc, previous_slot, slot);
             let event = server.plugin_manager.fire(event).await;
             if event.cancelled {
                 player
@@ -1975,7 +1976,7 @@ impl JavaClient {
         }
 
         let inv = player.inventory();
-        inv.set_selected_slot(slot as u8);
+        inv.set_selected_slot(slot);
         let stack = inv.held_item().lock().await.clone();
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         player.living_entity.send_equipment_changes(equipment).await;

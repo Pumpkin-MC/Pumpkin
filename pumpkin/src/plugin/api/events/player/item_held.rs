@@ -13,15 +13,15 @@ pub struct PlayerItemHeldEvent {
     pub player: Arc<Player>,
 
     /// The previous hotbar slot.
-    pub previous_slot: i32,
+    pub previous_slot: u8,
 
     /// The new hotbar slot.
-    pub new_slot: i32,
+    pub new_slot: u8,
 }
 
 impl PlayerItemHeldEvent {
     /// Creates a new instance of `PlayerItemHeldEvent`.
-    pub const fn new(player: Arc<Player>, previous_slot: i32, new_slot: i32) -> Self {
+    pub const fn new(player: Arc<Player>, previous_slot: u8, new_slot: u8) -> Self {
         Self {
             player,
             previous_slot,
