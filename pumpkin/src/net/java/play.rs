@@ -1504,36 +1504,37 @@ impl JavaClient {
                     let (block, state) = world.get_block_and_state(&location).await;
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
-                    let mut custom_harvest_drops: Option<Vec<ItemStack>> = None;
-
-                    if block_drop && let Some(server) = world.server.upgrade() {
-                        let tool = player.inventory.held_item().lock().await.clone();
-                        let item_drops =
-                            block
-                                .loot_table
-                                .as_ref()
-                                .map_or_else(Vec::new, |loot_table| {
-                                    loot_table.get_loot(LootContextParameters {
-                                        block_state: Some(state),
-                                        ..Default::default()
-                                    })
-                                });
-                        let event =
-                            crate::plugin::player::harvest_block::PlayerHarvestBlockEvent::new(
-                                player.clone(),
-                                location,
-                                block,
-                                tool,
-                                item_drops,
-                            );
-                        let event = server.plugin_manager.fire(event).await;
-                        if event.cancelled {
-                            world.set_block_breaking(entity, location, -1).await;
-                            self.update_sequence(player, player_action.sequence.0);
-                            return;
-                        }
-                        custom_harvest_drops = Some(event.item_drops);
-                    }
+                    let custom_harvest_drops =
+                        if block_drop && let Some(server) = world.server.upgrade() {
+                            let tool = player.inventory.held_item().lock().await.clone();
+                            let item_drops =
+                                block
+                                    .loot_table
+                                    .as_ref()
+                                    .map_or_else(Vec::new, |loot_table| {
+                                        loot_table.get_loot(LootContextParameters {
+                                            block_state: Some(state),
+                                            ..Default::default()
+                                        })
+                                    });
+                            let event =
+                                crate::plugin::player::harvest_block::PlayerHarvestBlockEvent::new(
+                                    player.clone(),
+                                    location,
+                                    block,
+                                    tool,
+                                    item_drops,
+                                );
+                            let event = server.plugin_manager.fire(event).await;
+                            if event.cancelled {
+                                world.set_block_breaking(entity, location, -1).await;
+                                self.update_sequence(player, player_action.sequence.0);
+                                return;
+                            }
+                            Some(event.item_drops)
+                        } else {
+                            None
+                        };
 
                     let new_state = world
                         .break_block(
