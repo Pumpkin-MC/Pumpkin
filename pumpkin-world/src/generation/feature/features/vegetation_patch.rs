@@ -176,7 +176,10 @@ impl VegetationPatchFeature {
             let state_to_place = self.ground_state.get(random, below_pos);
             let below_state_raw = GenerationCache::get_block_state(chunk, &below_pos.0);
 
-            if state_to_place.id != below_state_raw.0 {
+            let state_block_id = pumpkin_data::Block::from_state_id(state_to_place.id).id;
+            let below_block_id = below_state_raw.to_block_id();
+
+            if state_block_id != below_block_id {
                 if !replaceable.test(block_registry, chunk, &below_pos) {
                     return i != 0;
                 }

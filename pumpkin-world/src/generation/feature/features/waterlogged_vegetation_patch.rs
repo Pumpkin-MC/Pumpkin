@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
-use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+use pumpkin_util::{
+    math::position::BlockPos,
+    random::{RandomGenerator, RandomImpl},
+};
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::BlockRegistryExt;
@@ -36,15 +39,20 @@ impl WaterloggedVegetationPatchFeature {
             z_radius,
         );
 
-        self.base.distribute_vegetation(
-            chunk,
-            block_registry,
-            random,
-            min_y,
-            height,
-            feature_name,
-            surface.clone(),
-        );
+        for &surface_pos in &surface {
+            if self.base.vegetation_chance > 0.0 && random.next_f32() < self.base.vegetation_chance
+            {
+                let _ = self.place_vegetation(
+                    chunk,
+                    block_registry,
+                    min_y,
+                    height,
+                    feature_name,
+                    random,
+                    surface_pos,
+                );
+            }
+        }
 
         !surface.is_empty()
     }
@@ -71,10 +79,9 @@ impl WaterloggedVegetationPatchFeature {
         );
 
         let mut water_surface = HashSet::new();
-        let mut test_pos = BlockPos::ZERO;
 
         for &surface_pos in &surface {
-            if !is_exposed(chunk, &surface, surface_pos, &mut test_pos) {
+            if !is_exposed(chunk, &surface, surface_pos) {
                 water_surface.insert(surface_pos);
             }
         }
@@ -110,16 +117,27 @@ impl WaterloggedVegetationPatchFeature {
             let placed_state = placed_raw.to_state();
             if !placed_state.is_waterlogged() {
                 let block = placed_raw.to_block();
-                let mut props: Vec<(&str, &str)> = block
-                    .properties(placed_raw.0)
-                    .map(|p| p.to_props().iter().map(|(k, v)| (*k, *v)).collect())
-                    .unwrap_or_default();
-                props.push(("waterlogged", "true"));
-                let new_state_id = block.from_properties(&props).to_state_id(block);
-                chunk.set_block_state(
-                    &placement_pos.0,
-                    pumpkin_data::BlockState::from_id(new_state_id),
-                );
+                if let Some(props_source) = block.properties(placed_raw.0) {
+                    let mut props: Vec<(&str, &str)> = props_source
+                        .to_props()
+                        .iter()
+                        .map(|(k, v)| (*k, *v))
+                        .collect();
+
+                    if props.iter().any(|(k, _)| *k == "waterlogged") {
+                        if let Some(idx) = props.iter().position(|(k, _)| *k == "waterlogged") {
+                            props[idx] = ("waterlogged", "true");
+                        } else {
+                            props.push(("waterlogged", "true"));
+                        }
+
+                        let new_state_id = block.from_properties(&props).to_state_id(block);
+                        chunk.set_block_state(
+                            &placement_pos.0,
+                            pumpkin_data::BlockState::from_id(new_state_id),
+                        );
+                    }
+                }
             }
             true
         } else {
@@ -128,53 +146,24 @@ impl WaterloggedVegetationPatchFeature {
     }
 }
 
-fn is_exposed<T: GenerationCache>(
-    chunk: &T,
-    surface: &HashSet<BlockPos>,
-    pos: BlockPos,
-    test_pos: &mut BlockPos,
-) -> bool {
-    is_exposed_direction(
-        chunk,
-        surface,
-        pos,
-        test_pos,
-        pumpkin_data::BlockDirection::North,
-    ) || is_exposed_direction(
-        chunk,
-        surface,
-        pos,
-        test_pos,
-        pumpkin_data::BlockDirection::East,
-    ) || is_exposed_direction(
-        chunk,
-        surface,
-        pos,
-        test_pos,
-        pumpkin_data::BlockDirection::South,
-    ) || is_exposed_direction(
-        chunk,
-        surface,
-        pos,
-        test_pos,
-        pumpkin_data::BlockDirection::West,
-    ) || is_exposed_direction(
-        chunk,
-        surface,
-        pos,
-        test_pos,
-        pumpkin_data::BlockDirection::Down,
-    )
+fn is_exposed<T: GenerationCache>(chunk: &T, surface: &HashSet<BlockPos>, pos: BlockPos) -> bool {
+    is_exposed_direction(chunk, surface, pos, pumpkin_data::BlockDirection::North)
+        || is_exposed_direction(chunk, surface, pos, pumpkin_data::BlockDirection::East)
+        || is_exposed_direction(chunk, surface, pos, pumpkin_data::BlockDirection::South)
+        || is_exposed_direction(chunk, surface, pos, pumpkin_data::BlockDirection::West)
+        || is_exposed_direction(chunk, surface, pos, pumpkin_data::BlockDirection::Down)
 }
 
 fn is_exposed_direction<T: GenerationCache>(
     chunk: &T,
-    _surface: &HashSet<BlockPos>,
+    surface: &HashSet<BlockPos>,
     pos: BlockPos,
-    test_pos: &mut BlockPos,
     direction: pumpkin_data::BlockDirection,
 ) -> bool {
-    *test_pos = pos.offset(direction.to_offset());
+    let test_pos = pos.offset(direction.to_offset());
+    if surface.contains(&test_pos) {
+        return false;
+    }
     !GenerationCache::get_block_state(chunk, &test_pos.0)
         .to_state()
         .is_side_solid(direction.opposite())
