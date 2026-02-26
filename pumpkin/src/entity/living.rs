@@ -25,9 +25,13 @@ use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DeathMessageType;
-use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
+use pumpkin_data::data_component_impl::{
+    DeathProtectionImpl, EquipmentSlot, FoodImpl, PotionContentsImpl,
+};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::item::Item;
+use pumpkin_data::potion::Potion;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
@@ -1463,7 +1467,7 @@ impl EntityBase for LivingEntity {
                 if let Some(item) = item_in_use.as_ref()
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
-                    // Consume item
+                    // Consume item - apply food/hunger effects
                     if let Some(food) = item.get_data_component::<FoodImpl>()
                         && let Some(player) = caller.get_player()
                     {
@@ -1472,13 +1476,64 @@ impl EntityBase for LivingEntity {
                             .eat(player, food.nutrition as u8, food.saturation)
                             .await;
                     }
+
+                    // Apply potion effects
+                    let is_potion = if let Some(potion_contents) =
+                        item.get_data_component::<PotionContentsImpl>()
+                    {
+                        // Apply base potion effects (from potion_id)
+                        if let Some(potion_id) = potion_contents.potion_id {
+                            if let Some(potion) = Potion::from_id(potion_id as u8) {
+                                for effect in potion.effects {
+                                    self.add_effect(effect.clone()).await;
+                                }
+                            }
+                        }
+                        // Apply custom effects
+                        for effect_instance in &potion_contents.custom_effects {
+                            if let Some(status_effect) =
+                                StatusEffect::from_id(effect_instance.effect_id as u8)
+                            {
+                                self.add_effect(Effect {
+                                    effect_type: status_effect,
+                                    duration: effect_instance.duration,
+                                    amplifier: effect_instance.amplifier as u8,
+                                    ambient: effect_instance.ambient,
+                                    show_particles: effect_instance.show_particles,
+                                    show_icon: effect_instance.show_icon,
+                                    blend: false,
+                                })
+                                .await;
+                            }
+                        }
+                        true
+                    } else {
+                        false
+                    };
+
                     if let Some(player) = caller.get_player() {
+                        let gamemode = player.gamemode.load();
                         player
                             .inventory
                             .held_item()
                             .lock()
                             .await
-                            .decrement_unless_creative(player.gamemode.load(), 1);
+                            .decrement_unless_creative(gamemode, 1);
+                        // Replace consumed potion with glass bottle
+                        if is_potion && gamemode != pumpkin_util::GameMode::Creative {
+                            let held_slot = player.inventory.held_item();
+                            let mut held = held_slot.lock().await;
+                            if held.item_count == 0 {
+                                *held = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                            } else {
+                                drop(held);
+                                let mut bottle = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                player
+                                    .inventory
+                                    .insert_stack_anywhere(&mut bottle)
+                                    .await;
+                            }
+                        }
                     }
 
                     self.clear_active_hand().await;
