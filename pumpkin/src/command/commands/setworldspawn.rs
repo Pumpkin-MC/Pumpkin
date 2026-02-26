@@ -121,17 +121,31 @@ async fn setworldspawn(
         current_info.spawn_z,
     );
     let mut new_position = block_pos;
-    let event = SpawnChangeEvent::new(world.clone(), previous_position, new_position);
+    let previous_yaw = current_info.spawn_yaw;
+    let previous_pitch = current_info.spawn_pitch;
+    let mut new_yaw = yaw;
+    let mut new_pitch = pitch;
+    let event = SpawnChangeEvent::new(
+        world.clone(),
+        previous_position,
+        previous_yaw,
+        previous_pitch,
+        new_position,
+        new_yaw,
+        new_pitch,
+    );
     let event = server.plugin_manager.fire(event).await;
     new_position = event.new_position;
+    new_yaw = event.new_yaw;
+    new_pitch = event.new_pitch;
 
     let mut new_info = (**current_info).clone();
 
     new_info.spawn_x = new_position.0.x;
     new_info.spawn_y = new_position.0.y;
     new_info.spawn_z = new_position.0.z;
-    new_info.spawn_yaw = yaw;
-    new_info.spawn_pitch = pitch;
+    new_info.spawn_yaw = new_yaw;
+    new_info.spawn_pitch = new_pitch;
 
     server.level_info.store(Arc::new(new_info));
 
@@ -142,8 +156,8 @@ async fn setworldspawn(
                 TextComponent::text(new_position.0.x.to_string()),
                 TextComponent::text(new_position.0.y.to_string()),
                 TextComponent::text(new_position.0.z.to_string()),
-                TextComponent::text(yaw.to_string()),
-                TextComponent::text(pitch.to_string()),
+                TextComponent::text(new_yaw.to_string()),
+                TextComponent::text(new_pitch.to_string()),
                 TextComponent::text(world.dimension.minecraft_name),
             ],
         ))
