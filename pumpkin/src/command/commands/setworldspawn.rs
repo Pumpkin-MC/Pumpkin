@@ -60,11 +60,9 @@ impl CommandExecutor for DefaultWorldSpawnExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(Arg::BlockPos(block_pos)) = args.get(ARG_BLOCK_POS) else {
-                return Err(InvalidConsumption(Some(ARG_BLOCK_POS.into())));
-            };
+            let block_pos = BlockPosArgumentConsumer::find_spawnable_arg(args, ARG_BLOCK_POS)?;
 
-            setworldspawn(sender, server, *block_pos, 0.0, 0.0).await
+            setworldspawn(sender, server, block_pos, 0.0, 0.0).await
         })
     }
 }
@@ -79,9 +77,7 @@ impl CommandExecutor for AngleWorldSpawnExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(Arg::BlockPos(block_pos)) = args.get(ARG_BLOCK_POS) else {
-                return Err(InvalidConsumption(Some(ARG_BLOCK_POS.into())));
-            };
+            let block_pos = BlockPosArgumentConsumer::find_spawnable_arg(args, ARG_BLOCK_POS)?;
 
             // Note: Rotation argument is (yaw, is_yaw_relative, pitch, is_pitch_relative)
             // For setworldspawn, we use absolute values only (ignore relative flags)
@@ -89,7 +85,7 @@ impl CommandExecutor for AngleWorldSpawnExecutor {
                 return Err(InvalidConsumption(Some(ARG_ANGLE.into())));
             };
 
-            setworldspawn(sender, server, *block_pos, *yaw, *pitch).await
+            setworldspawn(sender, server, block_pos, *yaw, *pitch).await
         })
     }
 }
