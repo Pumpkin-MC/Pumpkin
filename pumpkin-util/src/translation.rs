@@ -122,7 +122,7 @@ pub fn reorder_substitutions(
     for (idx, &i) in indices.iter().enumerate() {
         let mut num_chars = String::new();
         let mut pos = 1;
-        while bytes[i + pos].is_ascii_digit() {
+        while i + pos < bytes.len() && bytes[i + pos].is_ascii_digit() {
             num_chars.push(bytes[i + pos] as char);
             pos += 1;
         }
@@ -201,9 +201,9 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     result
 }
 
-pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last() as usize]>> =
+pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]>> =
     LazyLock::new(|| {
-        let mut array: [HashMap<String, String>; Locale::last() as usize] =
+        let mut array: [HashMap<String, String>; Locale::COUNT] =
             std::array::from_fn(|_| HashMap::new());
         let vanilla_en_us: HashMap<String, String> =
             serde_json::from_str(VANILLA_EN_US_JSON).expect("Could not parse en_us.json.");
@@ -427,10 +427,7 @@ pub enum Locale {
 }
 
 impl Locale {
-    #[must_use]
-    pub const fn last() -> Self {
-        Self::ZlmArab
-    }
+    pub const COUNT: usize = Self::ZlmArab as usize + 1;
 }
 
 impl FromStr for Locale {
