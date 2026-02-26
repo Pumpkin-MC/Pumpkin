@@ -85,6 +85,7 @@ use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
+use crate::plugin::player::player_death::PlayerDeathEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
@@ -3151,7 +3152,37 @@ impl EntityBase for Player {
                 if health <= 0.0 {
                     let death_message =
                         LivingEntity::get_death_message(caller, damage_type, source, cause).await;
-                    self.handle_killed(death_message).await;
+
+                    // Fire PlayerDeathEvent — cancelling prevents death
+                    let mut should_die = true;
+                    let mut final_death_message = death_message;
+                    if let Some(server) = self.world().server.upgrade() {
+                        if let Some(player_arc) =
+                            self.world().get_player_by_id(self.entity_id())
+                        {
+                            let event = PlayerDeathEvent::new(
+                                player_arc,
+                                damage_type,
+                                final_death_message.clone(),
+                            );
+                            let event = server.plugin_manager.fire(event).await;
+                            if event.cancelled {
+                                // Cancelled: restore health, undo death
+                                self.living_entity.set_health(1.0).await;
+                                self.living_entity.dead.store(false, Ordering::Relaxed);
+                                should_die = false;
+                            } else {
+                                final_death_message = event.death_message;
+                            }
+                        }
+                    }
+
+                    if should_die {
+                        self.living_entity
+                            .on_death(damage_type, source, cause)
+                            .await;
+                        self.handle_killed(final_death_message).await;
+                    }
                 }
             }
             result

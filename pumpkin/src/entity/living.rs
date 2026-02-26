@@ -1359,7 +1359,10 @@ impl EntityBase for LivingEntity {
             if new_health <= 0.0
                 && (bypasses_cooldown_protection || !self.try_use_death_protector(caller).await)
             {
-                self.on_death(damage_type, source, cause).await;
+                // Players handle death in Player::damage_with_context after firing PlayerDeathEvent
+                if self.entity.entity_type != &EntityType::PLAYER {
+                    self.on_death(damage_type, source, cause).await;
+                }
             }
 
             if damage_amount > 0.0 {

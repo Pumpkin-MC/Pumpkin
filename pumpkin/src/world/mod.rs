@@ -14,6 +14,7 @@ pub mod portal;
 pub mod time;
 
 use crate::block::RandomTickArgs;
+use crate::plugin::player::player_respawn::PlayerRespawnEvent;
 use crate::world::loot::LootContextParameters;
 use crate::{
     block::BlockEvent, entity::experience_orb::ExperienceOrbEntity, entity::item::ItemEntity,
@@ -2008,13 +2009,14 @@ impl World {
         };
 
         // Get respawn position and dimension
-        let (position, yaw, pitch, respawn_dimension) =
+        let (mut position, mut yaw, mut pitch, respawn_dimension, is_bed_spawn) =
             if let Some(respawn) = player.calculate_respawn_point().await {
                 (
                     respawn.position,
                     respawn.yaw,
                     respawn.pitch,
                     respawn.dimension,
+                    true,
                 )
             } else {
                 // No valid respawn point - send notification and use world spawn
@@ -2037,8 +2039,24 @@ impl World {
                     spawn_yaw,
                     spawn_pitch,
                     self.dimension,
+                    false,
                 )
             };
+
+        // Fire PlayerRespawnEvent — plugins can modify respawn position
+        if let Some(server) = self.server.upgrade() {
+            let event = PlayerRespawnEvent::new(
+                player.clone(),
+                position,
+                yaw,
+                pitch,
+                is_bed_spawn,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            position = event.respawn_position;
+            yaw = event.respawn_yaw;
+            pitch = event.respawn_pitch;
+        }
 
         // Get target world (may be different from current world for cross-dimension respawn)
         let target_world = if respawn_dimension == self.dimension {
