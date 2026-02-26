@@ -435,7 +435,7 @@ mod test {
         // Then on deserialization, we get {"": `tag`}, which matches what we wanted
         // to serialize in the first place.
         //
-        // This compound represents {"": {"": 1L}}.
+        // This compound represents {"": 1L}.
         vec.push(NbtTag::Compound({
             let mut compound = NbtCompound::new();
             compound.put_long("", 1);
