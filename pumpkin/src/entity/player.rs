@@ -1458,6 +1458,7 @@ impl Player {
         }
 
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
+        self.living_entity.entity.age.fetch_add(1, Ordering::Relaxed);
         if let Some(sleeping_since) = self.sleeping_since.load()
             && sleeping_since < 101
         {
