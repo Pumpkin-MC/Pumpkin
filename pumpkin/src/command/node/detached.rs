@@ -54,7 +54,7 @@ impl LiteralDetachedNode {
     /// without any children.
     ///
     /// # Note
-    /// Prefer using the [`LiteralArgumentBuilder`] over this function.=
+    /// Prefer using the [`literal`](crate::command::argument_builder::literal) function over this one.
     pub fn new(
         global_id: GlobalNodeId,
         literal: impl Into<Cow<'static, str>>,
@@ -97,7 +97,7 @@ impl CommandDetachedNode {
     /// without any children.
     ///
     /// # Note
-    /// Prefer using the [`LiteralArgumentBuilder`] over this function.
+    /// Prefer using the [`command`](crate::command::argument_builder::command) function over this one.
     #[expect(clippy::too_many_arguments)]
     pub fn new(
         global_id: GlobalNodeId,
@@ -139,7 +139,7 @@ impl ArgumentDetachedNode {
     /// without any children.
     ///
     /// # Note
-    /// Prefer using the [`RequiredArgumentBuilder`] over this function.
+    /// Prefer using the [`argument`](crate::command::argument_builder::argument) function over this one.
     #[expect(clippy::too_many_arguments)]
     pub fn new(
         global_id: GlobalNodeId,
