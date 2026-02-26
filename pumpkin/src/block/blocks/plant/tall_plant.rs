@@ -1,8 +1,11 @@
+use crate::block::PlacedArgs;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{
     BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
 };
 use pumpkin_world::BlockStateId;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
 use crate::block::{
@@ -65,6 +68,20 @@ impl BlockBehaviour for TallPlantBlock {
                 }
             }
             Block::AIR.default_state.id
+        })
+    }
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let mut tall_plant_props =
+                TallSeagrassLikeProperties::from_state_id(args.state_id, args.block);
+            tall_plant_props.half = DoubleBlockHalf::Upper;
+            args.world
+                .set_block_state(
+                    &args.position.offset(BlockDirection::Up.to_offset()),
+                    tall_plant_props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                )
+                .await;
         })
     }
 }
