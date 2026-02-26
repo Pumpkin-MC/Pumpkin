@@ -130,7 +130,7 @@ impl NbtCompound {
         self.put(name, NbtTag::Double(value));
     }
 
-    pub fn put_component(&mut self, name: &str, value: Self) {
+    pub fn put_compound(&mut self, name: &str, value: Self) {
         self.put(name, NbtTag::Compound(value));
     }
 

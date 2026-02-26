@@ -3004,19 +3004,19 @@ impl NBTStorage for PlayerInventory {
                     drop(stack);
                     match slot {
                         EquipmentSlot::OffHand(_) => {
-                            equipment_compound.put_component("offhand", item_compound);
+                            equipment_compound.put_compound("offhand", item_compound);
                         }
                         EquipmentSlot::Feet(_) => {
-                            equipment_compound.put_component("feet", item_compound);
+                            equipment_compound.put_compound("feet", item_compound);
                         }
                         EquipmentSlot::Legs(_) => {
-                            equipment_compound.put_component("legs", item_compound);
+                            equipment_compound.put_compound("legs", item_compound);
                         }
                         EquipmentSlot::Chest(_) => {
-                            equipment_compound.put_component("chest", item_compound);
+                            equipment_compound.put_compound("chest", item_compound);
                         }
                         EquipmentSlot::Head(_) => {
-                            equipment_compound.put_component("head", item_compound);
+                            equipment_compound.put_compound("head", item_compound);
                         }
                         _ => {
                             warn!("Invalid equipment slot for a player");
@@ -3024,7 +3024,7 @@ impl NBTStorage for PlayerInventory {
                     }
                 }
             }
-            nbt.put_component("equipment", equipment_compound);
+            nbt.put_compound("equipment", equipment_compound);
             nbt.put("Inventory", NbtTag::List(items));
         })
     }
@@ -3287,7 +3287,7 @@ impl NBTStorage for Abilities {
             component.put_bool("mayBuild", self.allow_modify_world);
             component.put_float("flySpeed", self.fly_speed);
             component.put_float("walkSpeed", self.walk_speed);
-            nbt.put_component("abilities", component);
+            nbt.put_compound("abilities", component);
         })
     }
 

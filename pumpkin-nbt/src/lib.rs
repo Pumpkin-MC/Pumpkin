@@ -426,33 +426,64 @@ mod test {
             compound
         }));
 
+        // This wrapper compound will be wrapped because we want to preserve the
+        // original data during deserialization.
+        //
+        // Suppose we had {"": `tag`}. If we didn't wrap this, on deserialization,
+        // we would get `tag`, which doesn't match the serialized compound tag.
+        // Therefore, we must wrap it and serialize {"": {"": `tag`}}.
+        // Then on deserialization, we get {"": `tag`}, which matches what we wanted
+        // to serialize in the first place.
+        //
+        // This compound represents {"": {"": 1L}}.
+        vec.push(NbtTag::Compound({
+            let mut compound = NbtCompound::new();
+            compound.put_long("", 1);
+            compound
+        }));
+
         let expected_bytes = [
             0x09, // List type
             0x0A, // This list is a compound tag list
-            0x00, 0x00, 0x00, 0x05, // This list has 5 elements.
+            0x00, 0x00, 0x00, 0x06, // This list has 5 elements.
+
             // Now for parsing each compound tag:
+
             0x03, // Int type
             0x00, 0x00, // Empty key
-            0xFF, 0xFF, 0xF8, 0xE1, // -1823
+                  0xFF, 0xFF, 0xF8, 0xE1, // -1823
             0x00, // End
+
             0x03, // Int type
             0x00, 0x00, // Empty key
-            0x00, 0x00, 0x00, 0x7B, // 123
+                  0x00, 0x00, 0x00, 0x7B, // 123
             0x00, // End
+
             0x08, // String type
             0x00, 0x00, // Empty key
-            0x00, 0x0A, // The string is 10 characters long.
-            0x4E, 0x6F, 0x74, 0x20, 0x61, 0x6E, 0x20, 0x69, 0x6E, 0x74, // "Not an int"
+                  0x00, 0x0A, // The string is 10 characters long.
+                  0x4E, 0x6F, 0x74, 0x20, 0x61, 0x6E, 0x20, 0x69, 0x6E, 0x74, // "Not an int"
             0x00, // End
+
             0x01, // Byte type
             0x00, 0x00, // Empty key
-            0x02, // 2
+                  0x02, // 2b
             0x00, // End
-            // For the last (unwrapped) compound:
+
+            // For the first (unwrapped) compound:
             0x02, // Short type
             0x00, 0x07, // The key is 7 characters long.
             0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, // "example"
-            0x04, 0xD2, // 1234
+                  0x04, 0xD2, // 1234
+            0x00, // End
+
+            // For the second (wrapped) wrapper compound:
+            0x0A, // Compound type
+            0x00, 0x00, // Empty key
+                  0x04, // Long type
+                  0x00, 0x00, // Empty key
+                  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, // 1L
+                  0x00, // End
             0x00, // End
         ];
 
