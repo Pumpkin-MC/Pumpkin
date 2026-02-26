@@ -14,6 +14,8 @@ pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
     pub block_state: Option<&'static BlockState>,
     pub killed_by_player: Option<bool>,
+    pub shulker_box_inventory: Option<Vec<(usize, ItemStack)>>,
+    pub broken_in_creative: Option<bool>,
 }
 
 pub trait LootTableExt {

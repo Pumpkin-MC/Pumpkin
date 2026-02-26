@@ -60,7 +60,10 @@ pub trait Slot: Send + Sync {
 
     fn can_insert<'a>(&'a self, _stack: &'a ItemStack) -> BoxFuture<'a, bool> {
         // Default implementation logic:
-        Box::pin(async move { true })
+        Box::pin(async move {
+            self.get_inventory()
+                .is_valid_slot_for(self.get_index(), _stack)
+        })
     }
 
     fn get_stack(&self) -> BoxFuture<'_, Arc<Mutex<ItemStack>>> {
