@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Împuternicind tuturor posibilitatea de a găzdui servere de\nMinecraft rapide și eficiente.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protocol %s)\n",
+    "commands.pumpkin.github": "[Repozitoriu Github]",
+    "commands.pumpkin.website": "[Website]",
+    "commands.pumpkin.version.hover": "Click pentru a copia versiunea",
+    "commands.pumpkin.description.hover": "Click pentru a copia descrierea",
+    "commands.pumpkin.minecraft_version.hover": "Click pentru a copia versiunea Minecraft",
+    "commands.pumpkin.github.hover": "Click pentru a deschide repozitoriul.",
+    "commands.pumpkin.website.hover": "Click pentru a deschide website-ul."
+}
