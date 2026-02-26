@@ -20,6 +20,13 @@ impl<R: Read> Deserializer<R> {
     pub const fn new(read: R) -> Self {
         Self { inner: read }
     }
+
+    pub fn bytes_read(&mut self) -> usize
+    where
+        R: std::io::Seek,
+    {
+        self.inner.stream_position().unwrap_or(0) as usize
+    }
 }
 
 impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
