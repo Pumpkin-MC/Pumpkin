@@ -3246,6 +3246,49 @@ impl World {
         (Block::from_state_id(id), id)
     }
 
+    /// Non-blocking: returns `None` if the chunk at `position` is not currently loaded.
+    pub fn try_get_block_state_id(&self, position: &BlockPos) -> Option<BlockStateId> {
+        self.level.try_get_block_state(position).map(|s| s.0)
+    }
+
+    /// Non-blocking: returns `None` if the chunk at `position` is not currently loaded.
+    pub fn try_get_block_and_state(
+        &self,
+        position: &BlockPos,
+    ) -> Option<(&'static Block, &'static BlockState)> {
+        let id = self.try_get_block_state_id(position)?;
+        Some(BlockState::from_id_with_block(id))
+    }
+
+    /// Non-blocking: returns `None` if the chunk at `position` is not currently loaded.
+    pub fn try_get_fluid_and_fluid_state(
+        &self,
+        position: &BlockPos,
+    ) -> Option<(&'static Fluid, &'static FluidState)> {
+        let id = self.try_get_block_state_id(position)?;
+
+        let Some(raw_fluid) = Fluid::from_state_id(id) else {
+            let block = Block::from_state_id(id);
+            if let Some(properties) = block.properties(id) {
+                for (name, value) in properties.to_props() {
+                    if name == "waterlogged" {
+                        if value == "true" {
+                            let state = &Fluid::FLOWING_WATER.states[0];
+                            return Some((&Fluid::FLOWING_WATER, state));
+                        }
+                        break;
+                    }
+                }
+            }
+            let state = &Fluid::EMPTY.states[0];
+            return Some((&Fluid::EMPTY, state));
+        };
+
+        let fluid = raw_fluid.to_flowing();
+        let state = &fluid.states[0];
+        Some((fluid, state))
+    }
+
     /// Updates neighboring blocks of a block
     pub async fn update_neighbors(
         self: &Arc<Self>,

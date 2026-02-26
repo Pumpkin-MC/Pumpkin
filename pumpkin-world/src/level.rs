@@ -686,6 +686,18 @@ impl Level {
 
         RawBlockState(id)
     }
+
+    /// Non-blocking variant — returns `None` if the chunk is not currently loaded.
+    pub fn try_get_block_state(&self, position: &BlockPos) -> Option<RawBlockState> {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.try_get_chunk(&chunk_coordinate)?;
+        let id = chunk.section.get_block_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+        )?;
+        Some(RawBlockState(id))
+    }
     pub async fn get_rough_biome(self: &Arc<Self>, position: &BlockPos) -> &'static Biome {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.get_chunk(chunk_coordinate).await;

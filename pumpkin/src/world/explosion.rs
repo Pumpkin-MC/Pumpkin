@@ -23,7 +23,7 @@ impl Explosion {
         Self { power, pos }
     }
 
-    async fn get_blocks_to_destroy(
+    fn get_blocks_to_destroy(
         &self,
         world: &World,
     ) -> FxHashMap<BlockPos, (&'static Block, &'static BlockState)> {
@@ -53,17 +53,29 @@ impl Explosion {
                     let mut h = self.power * random_val.mul_add(0.6, 0.7);
                     while h > 0.0 {
                         let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
-                        let (block, state) = world.get_block_and_state(&block_pos).await;
-                        let (_, fluid_state) = world.get_fluid_and_fluid_state(&block_pos).await;
 
-                        // if !world.is_in_build_limit(&block_pos) {
-                        //     // Pass by reference
-                        //     continue 'block2;
-                        // }
+                        if !world.is_in_build_limit(block_pos) {
+                            continue 'block2;
+                        }
 
-                        if !state.is_air() || !fluid_state.is_empty {
+                        // Skip blocks in unloaded chunks instead of force-loading them
+                        let Some((block, state)) =
+                            world.try_get_block_and_state(&block_pos)
+                        else {
+                            continue 'block2;
+                        };
+                        let fluid_state = world
+                            .try_get_fluid_and_fluid_state(&block_pos)
+                            .map(|(_, fs)| fs);
+
+                        let is_empty_fluid =
+                            fluid_state.is_none_or(|fs| fs.is_empty);
+
+                        if !state.is_air() || !is_empty_fluid {
+                            let fluid_resistance = fluid_state
+                                .map_or(0.0, |fs| fs.blast_resistance);
                             let resistance =
-                                fluid_state.blast_resistance.max(block.blast_resistance);
+                                fluid_resistance.max(block.blast_resistance);
                             h -= resistance * 0.3;
                             if h > 0.0 {
                                 map.insert(block_pos, (block, state));
@@ -185,7 +197,11 @@ impl Explosion {
 
                     if world
                         .raycast(vec3d, *explosion_pos, async |pos, world_ref| {
-                            let state = world_ref.get_block_state(pos).await;
+                            // Use non-blocking lookup; treat unloaded chunks as transparent
+                            let Some(id) = world_ref.try_get_block_state_id(pos) else {
+                                return false;
+                            };
+                            let state = BlockState::from_id(id);
                             !state.is_air() && !state.collision_shapes.is_empty()
                         })
                         .await
@@ -211,7 +227,7 @@ impl Explosion {
 
     /// Returns the removed block count
     pub async fn explode(&self, world: &Arc<World>) -> u32 {
-        let blocks = self.get_blocks_to_destroy(world).await;
+        let blocks = self.get_blocks_to_destroy(world);
         self.damage_entities(world).await;
         for (pos, (block, state)) in &blocks {
             world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;

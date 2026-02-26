@@ -64,7 +64,13 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
 macro_rules! default_impl {
     ($t: ident) => {
         fn equal(&self, other: &dyn DataComponentImpl) -> bool {
-            self == get::<Self>(other)
+            // Fast path: same binary, TypeId matches
+            if let Some(other) = other.as_any().downcast_ref::<Self>() {
+                return self == other;
+            }
+            // cdylib fallback: TypeId differs across dynamic library boundaries.
+            // Compare via NBT round-trip instead.
+            self.write_data() == other.write_data()
         }
         #[inline]
         fn get_enum() -> DataComponent
