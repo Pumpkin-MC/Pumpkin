@@ -1,11 +1,96 @@
 interface command {
     use player.{player};
     use world.{world};
-    use entity.{command-block-entity};
-    use common.{raw-text-component, position};
+    use entity.{command-block-entity, entity};
+    use common.{raw-text-component, position, block-position};
+    use server.{difficulty};
+
+    enum gamemode {
+        survival,
+        creative,
+        adventure,
+        spectator,
+    }
+
+    enum bossbar-color {
+        pink,
+        blue,
+        red,
+        green,
+        yellow,
+        purple,
+        white,
+    }
+
+    enum bossbar-style {
+        no-division,
+        notches6,
+        notches10,
+        notches12,
+        notches20,
+    }
+
+    enum sound-category {
+        master,
+        music,
+        records,
+        weather,
+        blocks,
+        hostile,
+        neutral,
+        players,
+        ambient,
+        voice,
+        ui,
+    }
+
+    enum entity-anchor {
+        feet,
+        eyes,
+    }
+
+    variant number {
+        float64(f64),
+        float32(f32),
+        int32(s32),
+        int64(s64),
+    }
+
+    variant not-in-bounds {
+        lower-bound(tuple<number, number>),
+        upper-bound(tuple<number, number>),
+    }
 
     variant arg {
-
+        entities(list<entity>),
+        entity(entity),
+        players(list<player>),
+        block-pos(block-position),
+        pos3d(position),
+        pos2d(tuple<f64, f64>),
+        rotation(tuple<f32, bool, f32, bool>),
+        game-mode(gamemode),
+        difficulty(difficulty),
+        item(string),
+        item-predicate(string),
+        resource-location(string),
+        block(string),
+        block-predicate(string),
+        bossbar-color(bossbar-color),
+        bossbar-style(bossbar-style),
+        particle(string),
+        msg(string),
+        text-component(raw-text-component),
+        time(s32),
+        num(result<number, not-in-bounds>),
+        %bool(bool),
+        simple(string),
+        sound-category(sound-category),
+        damage-type(string),
+        effect(string),
+        enchantment(string),
+        entity-anchor(entity-anchor),
+        // command-tree,
     }
 
     resource consumed-args {
