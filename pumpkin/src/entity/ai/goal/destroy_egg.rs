@@ -1,7 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 use rand::{rng, RngExt};
-use pumpkin::entity::projectile::ProjectileHit::Block;
+use pumpkin_data::Block;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
 use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};

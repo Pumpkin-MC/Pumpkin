@@ -1,13 +1,9 @@
 use super::{Mob, MobEntity};
 use crate::entity::ai::goal::destroy_egg::DestroyEggGoal;
 use crate::entity::ai::goal::look_around::LookAroundGoal;
-use crate::entity::ai::goal::move_to_target_pos::MoveToTargetPos;
-use crate::entity::ai::goal::step_and_destroy_block::Stepping;
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
-use crate::entity::ai::goal::Goal;
 use crate::entity::{ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal}, Entity, EntityBase, EntityBaseFuture, NBTStorage};
 use pumpkin_data::entity::EntityType;
-use rand::RngExt;
 use std::sync::{Arc, Weak};
 
 pub mod drowned;
