@@ -14,6 +14,7 @@ use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_nbt::{from_bytes_unnamed, to_bytes_unnamed};
 use pumpkin_util::registry::RegistryEntryList;
 use pumpkin_util::text::TextComponent;
 use serde::de::SeqAccess;
@@ -53,6 +54,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
+        DataComponent::Container => Some(ContainerImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -1244,8 +1246,72 @@ pub struct BannerPatternsImpl;
 pub struct BaseColorImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PotDecorationsImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ContainerImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContainerImpl {
+    pub items: Vec<NbtTag>,
+}
+
+impl ContainerImpl {
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            items: data.extract_list()?.to_vec(),
+        })
+    }
+}
+
+impl DataComponentImpl for ContainerImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::List(self.items.clone())
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[DataComponent::Container.to_id()]);
+        digest.update(&(self.items.len() as u32).to_le_bytes());
+        for item in &self.items {
+            let mut bytes = Vec::new();
+            if to_bytes_unnamed(item, &mut bytes).is_ok() {
+                digest.update(&(bytes.len() as u32).to_le_bytes());
+                digest.update(&bytes);
+            } else {
+                digest.update(&0u32.to_le_bytes());
+            }
+        }
+        digest.finalize() as i32
+    }
+
+    fn equal(&self, other: &dyn DataComponentImpl) -> bool {
+        self.items == get::<Self>(other).items
+    }
+
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        DataComponent::Container
+    }
+
+    fn get_self_enum(&self) -> DataComponent {
+        DataComponent::Container
+    }
+
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
+    }
+
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BlockStateImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

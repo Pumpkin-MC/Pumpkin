@@ -1,4 +1,5 @@
 use pumpkin_data::block_properties::Integer0To15;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
@@ -17,6 +18,7 @@ pub mod blocks;
 pub mod fluid;
 pub mod registry;
 
+use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::server::Server;
@@ -323,6 +325,8 @@ pub struct PlayerPlacedArgs<'a> {
     pub position: &'a BlockPos,
     pub direction: BlockDirection,
     pub player: &'a Player,
+    pub player_placed_item: Option<&'a ItemStack>,
+    pub consumed_item: bool,
 }
 
 pub struct OnLandedUponArgs<'a> {
@@ -426,6 +430,11 @@ pub async fn drop_loot(
     experience: bool,
     params: LootContextParameters,
 ) {
+    if block.has_tag(&tag::Block::MINECRAFT_SHULKER_BOXES) {
+        ShulkerBoxBlock::drop_shulker_loot(world, block, pos, params).await;
+        return;
+    }
+
     if let Some(loot_table) = &block.loot_table {
         for stack in loot_table.get_loot(params) {
             world.drop_stack(pos, stack).await;

@@ -1,4 +1,5 @@
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
@@ -236,6 +237,10 @@ impl Inventory for ShulkerBoxBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn is_valid_slot_for(&self, _slot: usize, stack: &ItemStack) -> bool {
+        !stack.item.has_tag(&tag::Item::MINECRAFT_SHULKER_BOXES)
     }
 
     fn as_any(&self) -> &dyn Any {

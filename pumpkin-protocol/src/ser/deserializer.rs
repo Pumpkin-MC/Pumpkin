@@ -103,12 +103,17 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         visitor.visit_str(&self.inner.get_string()?)
     }
 
-    fn deserialize_bytes<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Self::Error> {
-        unimplemented!()
+    fn deserialize_bytes<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        self.deserialize_byte_buf(visitor)
     }
 
-    fn deserialize_byte_buf<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Self::Error> {
-        unimplemented!()
+    fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        let len = self.inner.get_var_int()?.0 as usize;
+        let mut buf = vec![0u8; len];
+        self.inner
+            .read_exact(&mut buf)
+            .map_err(|err| ReadingError::Message(err.to_string()))?;
+        visitor.visit_byte_buf(buf)
     }
 
     fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
