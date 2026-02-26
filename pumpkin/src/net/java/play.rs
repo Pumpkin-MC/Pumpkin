@@ -1504,7 +1504,7 @@ impl JavaClient {
                     let (block, state) = world.get_block_and_state(&location).await;
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
-                    let custom_harvest_drops =
+                    let custom_harvest_result =
                         if block_drop && let Some(server) = world.server.upgrade() {
                             let tool = player.inventory.held_item().lock().await.clone();
                             let item_drops =
@@ -1517,6 +1517,11 @@ impl JavaClient {
                                             ..Default::default()
                                         })
                                     });
+                            let exp_to_drop = block.experience.as_ref().map_or(0, |experience| {
+                                let mut random =
+                                    RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+                                experience.experience.get(&mut random)
+                            });
                             let event =
                                 crate::plugin::player::harvest_block::PlayerHarvestBlockEvent::new(
                                     player.clone(),
@@ -1524,6 +1529,7 @@ impl JavaClient {
                                     block,
                                     tool,
                                     item_drops,
+                                    exp_to_drop,
                                 );
                             let event = server.plugin_manager.fire(event).await;
                             if event.cancelled {
@@ -1531,7 +1537,7 @@ impl JavaClient {
                                 self.update_sequence(player, player_action.sequence.0);
                                 return;
                             }
-                            Some(event.item_drops)
+                            Some((event.item_drops, event.exp_to_drop))
                         } else {
                             None
                         };
@@ -1540,7 +1546,7 @@ impl JavaClient {
                         .break_block(
                             &location,
                             Some(player.clone()),
-                            if custom_harvest_drops.is_some() {
+                            if custom_harvest_result.is_some() {
                                 BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
                             } else if block_drop {
                                 BlockFlags::NOTIFY_NEIGHBORS
@@ -1555,24 +1561,19 @@ impl JavaClient {
                             .broken(&world, block, player, &location, server, state)
                             .await;
 
-                        if let Some(item_drops) = custom_harvest_drops {
+                        if let Some((item_drops, exp_to_drop)) = custom_harvest_result {
                             for item_drop in item_drops {
                                 if !item_drop.is_empty() {
                                     world.drop_stack(&location, item_drop).await;
                                 }
                             }
-                            if let Some(experience) = &block.experience {
-                                let mut random =
-                                    RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
-                                let amount = experience.experience.get(&mut random);
-                                if amount > 0 {
-                                    ExperienceOrbEntity::spawn(
-                                        &world,
-                                        location.to_f64(),
-                                        amount as u32,
-                                    )
-                                    .await;
-                                }
+                            if exp_to_drop > 0 {
+                                ExperienceOrbEntity::spawn(
+                                    &world,
+                                    location.to_f64(),
+                                    exp_to_drop as u32,
+                                )
+                                .await;
                             }
                         }
                         player.apply_tool_damage_for_block_break(state).await;

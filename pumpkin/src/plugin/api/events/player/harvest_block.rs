@@ -26,6 +26,9 @@ pub struct PlayerHarvestBlockEvent {
 
     /// The harvested item drops. Handlers may modify this list.
     pub item_drops: Vec<ItemStack>,
+
+    /// Experience to drop. Handlers may modify this amount.
+    pub exp_to_drop: i32,
 }
 
 impl PlayerHarvestBlockEvent {
@@ -36,6 +39,7 @@ impl PlayerHarvestBlockEvent {
         block: &'static Block,
         item_stack: ItemStack,
         item_drops: Vec<ItemStack>,
+        exp_to_drop: i32,
     ) -> Self {
         Self {
             player,
@@ -43,6 +47,7 @@ impl PlayerHarvestBlockEvent {
             block,
             item_stack,
             item_drops,
+            exp_to_drop,
             cancelled: false,
         }
     }
