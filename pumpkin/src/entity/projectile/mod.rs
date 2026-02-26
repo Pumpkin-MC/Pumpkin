@@ -1,4 +1,5 @@
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
+use crate::plugin::projectile::projectile_hit::ProjectileHitEvent;
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
@@ -94,7 +95,7 @@ impl NBTStorage for ThrownItemEntity {}
 
 impl ThrownItemEntity {
     /// Process a tick for projectile movement and collisions
-    pub async fn process_tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
+    pub async fn process_tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
 
@@ -194,8 +195,18 @@ impl ThrownItemEntity {
                 return;
             }
 
-            // Just trigger hit effects and remove
-            caller.on_hit(h).await;
+            // Fire ProjectileHitEvent
+            let event = ProjectileHitEvent::new(
+                entity.entity_id,
+                entity.entity_type,
+                self.owner_id,
+                &h,
+            );
+            let event = server.plugin_manager.fire(event).await;
+
+            if !event.cancelled {
+                caller.on_hit(h).await;
+            }
             entity.remove().await;
         }
     }

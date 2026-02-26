@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 pub mod block;
 pub mod player;
+pub mod projectile;
 pub mod server;
 pub mod world;
 
