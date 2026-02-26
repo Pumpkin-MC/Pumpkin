@@ -230,7 +230,18 @@ impl Explosion {
         let blocks = self.get_blocks_to_destroy(world);
         self.damage_entities(world).await;
         for (pos, (block, state)) in &blocks {
-            world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;
+            // Use NOTIFY_LISTENERS (send to clients) | FORCE_STATE (skip neighbor cascade).
+            // This avoids the on_state_replaced → block_registry.update_neighbors chain
+            // which force-loads chunks via get_block_state_id/get_fluid for every neighbor.
+            // The explosion handles drops via its own loot system, and block entity cleanup
+            // at set_block_state line 2802 runs regardless of flags.
+            world
+                .set_block_state(
+                    pos,
+                    0,
+                    BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+                )
+                .await;
             world.close_container_screens_at(pos).await;
 
             let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
