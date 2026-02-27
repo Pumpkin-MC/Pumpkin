@@ -555,8 +555,6 @@ impl LivingEntity {
     async fn travel_in_fluid(&self, caller: Arc<dyn EntityBase>, water: bool) {
         let movement_input = self.movement_input.load();
 
-        let y0 = self.entity.pos.load().y;
-
         let falling = self.entity.velocity.load().y <= 0.0;
 
         let gravity = self.get_effective_gravity(&caller).await;
@@ -629,8 +627,6 @@ impl LivingEntity {
         }
 
         let mut velo = self.entity.velocity.load();
-
-        velo.y += 0.6 - self.entity.pos.load().y + y0;
 
         if self.entity.horizontal_collision.load(SeqCst)
             && !self
