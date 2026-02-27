@@ -628,21 +628,21 @@ impl LivingEntity {
             self.entity.velocity.store(velo);
         }
 
-        let mut velo = self.entity.velocity.load();
-
-        velo.y += 0.6 - self.entity.pos.load().y + y0;
+        let velo = self.entity.velocity.load();
+        let check_y = velo.y + 0.6 - self.entity.pos.load().y + y0;
+        let check_velo = Vector3::new(velo.x, check_y, velo.z);
 
         if self.entity.horizontal_collision.load(SeqCst)
             && !self
                 .entity
                 .world
                 .load()
-                .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
+                .check_fluid_collision(self.entity.bounding_box.load().shift(check_velo))
                 .await
         {
-            velo.y = 0.3;
-
-            self.entity.velocity.store(velo);
+            self.entity
+                .velocity
+                .store(Vector3::new(velo.x, 0.3, velo.z));
         }
     }
 

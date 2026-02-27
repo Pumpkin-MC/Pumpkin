@@ -34,10 +34,23 @@ impl WalkNodeEvaluator {
         self.base.can_float
     }
 
-    // TODO: Check collision shapes for partial blocks (slabs/stairs)
-    #[allow(clippy::unused_self)]
-    fn get_floor_level(&self, pos: Vector3<i32>) -> f64 {
-        f64::from(pos.y)
+    async fn get_floor_level(&mut self, pos: Vector3<i32>) -> f64 {
+        if let Some(ref mut ctx) = self.base.context {
+            let below = Vector3::new(pos.x, pos.y - 1, pos.z);
+            let block_pos = below.as_blockpos();
+            let state = ctx.world.get_block_state(&block_pos).await;
+            let max_y = state
+                .get_block_collision_shapes()
+                .map(|bb| bb.max.y)
+                .fold(0.0f64, f64::max);
+            if max_y > 0.0 {
+                f64::from(pos.y - 1) + max_y
+            } else {
+                f64::from(pos.y - 1)
+            }
+        } else {
+            f64::from(pos.y)
+        }
     }
 
     fn get_mob_jump_height(&self) -> f64 {
@@ -89,7 +102,6 @@ impl WalkNodeEvaluator {
         })
     }
 
-    /// Returns the best path node for the given position, handling step-ups, falls, and blocked nodes.
     async fn find_accepted_node(
         &mut self,
         pos: Vector3<i32>,
@@ -98,7 +110,7 @@ impl WalkNodeEvaluator {
         facing: (i32, i32),
         current_path_type: PathType,
     ) -> Option<Node> {
-        let feet_y = self.get_floor_level(pos);
+        let feet_y = self.get_floor_level(pos).await;
         if feet_y - last_feet_y > self.get_mob_jump_height() {
             return None;
         }
@@ -112,8 +124,6 @@ impl WalkNodeEvaluator {
             n.cost_malus = penalty.max(n.cost_malus);
             n
         });
-
-        // TODO: Add ray-march collision check for blocked types (fence/door)
 
         if path_type != PathType::Walkable
             && !(self.is_amphibious() && path_type == PathType::Water)
@@ -148,7 +158,6 @@ impl WalkNodeEvaluator {
         node
     }
 
-    /// Tries stepping up one block at a time (up to `max_y_step`).
     async fn get_jump_on_top_node(
         &mut self,
         pos: Vector3<i32>,
@@ -161,7 +170,7 @@ impl WalkNodeEvaluator {
             let step_pos = Vector3::new(pos.x, pos.y + dy, pos.z);
             let remaining_steps = max_y_step - dy;
 
-            let feet_y = self.get_floor_level(step_pos);
+            let feet_y = self.get_floor_level(step_pos).await;
             if feet_y - last_feet_y > self.get_mob_jump_height() {
                 return None;
             }
@@ -198,7 +207,6 @@ impl WalkNodeEvaluator {
         None
     }
 
-    /// Searches downward for the first non-OPEN block, respecting safe fall distance.
     async fn get_open_node(&mut self, pos: Vector3<i32>) -> Node {
         let safe_fall_distance = self
             .base
@@ -289,9 +297,6 @@ impl WalkNodeEvaluator {
             return cached;
         }
 
-        // Temporarily take the context out to avoid overlapping borrows when calling
-        // the async helper which requires `&mut self`
-        // Clone mob_data so we can call helper while `self.base.context` is None.
         let path_type = if let Some(mut ctx) = self.base.context.take()
             && let Some(mob_clone) = self.base.mob_data.clone()
         {
@@ -366,7 +371,6 @@ impl NodeEvaluator for WalkNodeEvaluator {
         let mob_z = mob_data.position.z;
         let on_ground = mob_data.on_ground;
 
-        // TODO: add swimming support
         let y = if on_ground {
             (mob_y_f64 + 0.5).floor() as i32
         } else {
@@ -428,7 +432,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
             0
         };
 
-        let floor_level = self.get_floor_level(current.pos.0);
+        let floor_level = self.get_floor_level(current.pos.0).await;
 
         for i in 0..4 {
             self.reusable_neighbors[i] = None;
@@ -536,7 +540,6 @@ impl NodeEvaluator for WalkNodeEvaluator {
             }
         }
 
-        // Sort+dedup to match vanilla's EnumSet ordinal iteration order
         path_types.sort();
         path_types.dedup();
 
