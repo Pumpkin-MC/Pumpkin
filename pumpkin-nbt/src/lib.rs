@@ -418,8 +418,9 @@ mod test {
         vec.push(NbtTag::String("Not an int".to_string()));
         vec.push(NbtTag::Byte(2));
 
-        // This compound will not, since the list will already be a
-        // list of compound tags.
+        // This compound will not, since the list is already a list of compound tags.
+        // This compound cannot be unwrapped in any way, so it is preserved
+        // on deserialization.
         vec.push(NbtTag::Compound({
             let mut compound = NbtCompound::new();
             compound.put_short("example", 1234);
@@ -445,7 +446,7 @@ mod test {
         let expected_bytes = [
             0x09, // List type
             0x0A, // This list is a compound tag list
-            0x00, 0x00, 0x00, 0x06, // This list has 5 elements.
+            0x00, 0x00, 0x00, 0x06, // This list has 6 elements.
             // Now for parsing each compound tag:
             0x03, // Int type
             0x00, 0x00, // Empty key
