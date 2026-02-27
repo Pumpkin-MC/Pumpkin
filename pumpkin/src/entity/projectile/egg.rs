@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity,
@@ -123,10 +124,31 @@ impl EntityBase for EggEntity {
             // r in 1..31 -> spawn 1 (31/256)
             // else -> 0
             let r: u8 = rand::random(); // 0..=255
-            let to_spawn = if r == 0 { 4usize } else { usize::from(r < 32) };
+            let mut to_spawn = if r == 0 { 4usize } else { usize::from(r < 32) };
+            let mut hatching = to_spawn > 0;
+            let mut hatching_type: &'static EntityType = &EntityType::CHICKEN;
+
+            if let Some(owner_id) = self.thrown.owner_id
+                && let Some(player) = world.get_player_by_id(owner_id)
+                && let Some(server) = world.server.upgrade()
+            {
+                let event = PlayerEggThrowEvent::new(
+                    player,
+                    self.get_entity().entity_uuid,
+                    hatching,
+                    to_spawn.min(u8::MAX as usize) as u8,
+                    format!("minecraft:{}", hatching_type.resource_name),
+                );
+                let event = server.plugin_manager.fire(event).await;
+                hatching = event.hatching;
+                to_spawn = event.num_hatches as usize;
+                if let Some(new_type) = EntityType::from_name(&event.hatching_type) {
+                    hatching_type = new_type;
+                }
+            }
 
             // Spawn chickens in a separate task to prevent stack overflow
-            if to_spawn > 0 {
+            if hatching && to_spawn > 0 {
                 let world_clone = world.clone();
                 let spawn_pos_clone = spawn_pos;
 
@@ -142,13 +164,9 @@ impl EntityBase for EggEntity {
 
                 tokio::spawn(async move {
                     for _ in 0..to_spawn {
-                        let mob = from_type(
-                            &EntityType::CHICKEN,
-                            spawn_pos_clone,
-                            &world_clone,
-                            Uuid::new_v4(),
-                        )
-                        .await;
+                        let mob =
+                            from_type(hatching_type, spawn_pos_clone, &world_clone, Uuid::new_v4())
+                                .await;
 
                         let yaw = rand::random::<f32>() * 360.0;
                         let new_entity = mob.get_entity();
