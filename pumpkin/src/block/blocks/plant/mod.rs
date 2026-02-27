@@ -6,6 +6,7 @@ pub mod bamboo;
 pub mod bamboo_sapling;
 pub mod bush;
 pub mod cactus;
+pub mod cactus_flower;
 pub mod crop;
 pub mod dry_vegetation;
 pub mod flower;
