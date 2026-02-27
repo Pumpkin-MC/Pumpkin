@@ -8,12 +8,19 @@ pub struct Potion {
 }
 #[derive(Clone)]
 pub struct Effect {
+    /// The type of the effect.
     pub effect_type: &'static StatusEffect,
+    /// The duration of the effect in ticks.
     pub duration: i32,
+    /// The amplifier/level of the effect.
     pub amplifier: u8,
+    /// Whether the effect is ambient (typically granted by Beacons or Conduits).
     pub ambient: bool,
+    /// Whether the effect should show particles.
     pub show_particles: bool,
+    /// Whether the effect should show an icon.
     pub show_icon: bool,
+    /// Whether the effect should blend (client blends active effect colors).
     pub blend: bool,
 }
 impl Potion {

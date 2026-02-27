@@ -7,6 +7,7 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::{EndermanEntity, PLAYER_EYE_HEIGHT};
 use crate::entity::player::Player;
+use pumpkin_data::attributes::Attributes;
 
 const STARE_CLOSE_DISTANCE_SQ: f64 = 16.0;
 const TELEPORT_FAR_DISTANCE_SQ: f64 = 256.0;
@@ -25,8 +26,10 @@ impl TeleportTowardsPlayerGoal {
     pub fn new(enderman: Arc<EndermanEntity>) -> Self {
         let track_target_goal = TrackTargetGoal::with_default(false);
         let mut target_predicate = TargetPredicate::create_attackable();
-        target_predicate.base_max_distance =
-            TrackTargetGoal::get_follow_range(&enderman.mob_entity);
+        target_predicate.base_max_distance = enderman
+            .mob_entity
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
         Self {
             enderman,
             track_target_goal,
@@ -42,7 +45,11 @@ impl TeleportTowardsPlayerGoal {
         let entity = &self.enderman.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
-        let follow_range = TrackTargetGoal::get_follow_range(&self.enderman.mob_entity);
+        let follow_range = self
+            .enderman
+            .mob_entity
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
 
         let player = world.get_closest_player(pos, follow_range)?;
 
@@ -109,7 +116,9 @@ impl Goal for TeleportTowardsPlayerGoal {
                     .pos
                     .load()
                     .squared_distance_to_vec(&target.get_entity().pos.load());
-                let follow_range = TrackTargetGoal::get_follow_range(mob_entity);
+                let follow_range = mob_entity
+                    .living_entity
+                    .get_attribute_value(&Attributes::FOLLOW_RANGE);
                 if dist_sq > follow_range * follow_range {
                     return false;
                 }
