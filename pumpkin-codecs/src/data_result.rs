@@ -396,7 +396,7 @@ impl<R> DataResult<R> {
             .with_lifecycle(Lifecycle::Stable)
     }
 
-    impl_apply!(apply_2, 2, R2, result_2);
+    impl_apply!(apply_2, 2, R2, second_result);
     impl_apply!(apply_3, 3, R2, result_2, R3, result_3);
     impl_apply!(apply_4, 4, R2, result_2, R3, result_3, R4, result_4);
     impl_apply!(
