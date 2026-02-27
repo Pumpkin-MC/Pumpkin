@@ -21,7 +21,9 @@ use pumpkin_util::{
 use rustc_hash::FxHashMap;
 
 use super::{
-    GlobalRandomConfig, biome_coords, carver,
+    GlobalRandomConfig, biome_coords,
+    blender::{Blender, BlenderImpl},
+    carver,
     feature::placed_features::PLACED_FEATURES,
     noise::router::{
         multi_noise_sampler::MultiNoiseSampler, proto_noise_router::DoublePerlinNoiseBuilder,
@@ -31,6 +33,7 @@ use super::{
     section_coords,
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
+use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
 use crate::chunk::format::LightContainer;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::StagedChunkEnum;
@@ -47,7 +50,6 @@ use crate::generation::structure::try_generate_structure;
 use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
     BlockStateId, ProtoNoiseRouters,
-    biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier},
     block::RawBlockState,
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
@@ -919,6 +921,17 @@ impl ProtoChunk {
         dimension: Dimension,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
+        let overworld_supplier = MultiNoiseBiomeSupplier::OVERWORLD;
+        let nether_supplier = MultiNoiseBiomeSupplier::NETHER;
+        let end_supplier = TheEndBiomeSupplier;
+        let base_supplier: &dyn BiomeSupplier = if dimension == Dimension::THE_END {
+            &end_supplier
+        } else if dimension == Dimension::THE_NETHER {
+            &nether_supplier
+        } else {
+            &overworld_supplier
+        };
+        let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
         let min_y = self.bottom_y();
         let bottom_section = section_coords::block_to_section(min_y as i32);
         let top_section = section_coords::block_to_section(min_y as i32 + self.height() as i32 - 1);
@@ -937,23 +950,12 @@ impl ProtoChunk {
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
-                        let biome = if dimension == Dimension::THE_END {
-                            TheEndBiomeSupplier::biome(
-                                start_biome_x + x,
-                                start_biome_y + y,
-                                start_biome_z + z,
-                                multi_noise_sampler,
-                                dimension,
-                            )
-                        } else {
-                            MultiNoiseBiomeSupplier::biome(
-                                start_biome_x + x,
-                                start_biome_y + y,
-                                start_biome_z + z,
-                                multi_noise_sampler,
-                                dimension,
-                            )
-                        };
+                        let biome = biome_supplier.biome(
+                            start_biome_x + x,
+                            start_biome_y + y,
+                            start_biome_z + z,
+                            multi_noise_sampler,
+                        );
                         let index = self.local_biome_pos_to_biome_index(
                             x,
                             start_biome_y + y - biome_coords::from_block(min_y as i32),

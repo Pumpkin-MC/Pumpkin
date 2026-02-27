@@ -1,14 +1,18 @@
+use std::io::Write;
+
 use pumpkin_data::packet::clientbound::LOGIN_CUSTOM_QUERY;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
+use pumpkin_util::version::MinecraftVersion;
 
-use crate::{VarInt, ser::network_serialize_no_prefix};
+use crate::{
+    ClientPacket, VarInt,
+    ser::{NetworkWriteExt, WritingError},
+};
 
 /// Sent by the server to initiate a custom plugin messaging exchange during login.
 ///
 /// This is used by server software (like proxies or anti-cheats) to request
 /// information from a client-side mod before the player officially joins.
-#[derive(Serialize)]
 #[java_packet(LOGIN_CUSTOM_QUERY)]
 pub struct CLoginPluginRequest<'a> {
     /// A unique ID for this request. The client must include this same ID
@@ -18,7 +22,6 @@ pub struct CLoginPluginRequest<'a> {
     pub channel: &'a str,
     /// The raw payload data. Unlike standard plugin messages, this data
     /// is often serialized without a length prefix at the end of the packet.
-    #[serde(serialize_with = "network_serialize_no_prefix")]
     pub data: &'a [u8],
 }
 
@@ -30,5 +33,21 @@ impl<'a> CLoginPluginRequest<'a> {
             channel,
             data,
         }
+    }
+}
+
+impl ClientPacket for CLoginPluginRequest<'_> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let mut write = write;
+
+        write.write_var_int(&self.message_id)?;
+
+        write.write_string(self.channel)?;
+
+        write.write_all(self.data).map_err(WritingError::IoError)
     }
 }

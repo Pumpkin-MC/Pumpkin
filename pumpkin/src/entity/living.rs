@@ -15,6 +15,7 @@ use std::sync::atomic::{
     Ordering::{Relaxed, SeqCst},
 };
 use std::{collections::HashMap, sync::atomic::AtomicI32};
+use tracing::warn;
 
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
@@ -81,6 +82,16 @@ pub struct LivingEntity {
     /// The position where the entity was last climbing, used for death messages
     pub climbing_pos: AtomicCell<Option<BlockPos>>,
 
+    /// The entity ID of the entity that last attacked this living entity.
+    pub last_attacker_id: AtomicI32,
+    /// The tick at which this entity was last attacked (entity age).
+    pub last_attacked_time: AtomicI32,
+
+    /// The entity ID of the entity this living entity last attacked.
+    pub last_attacking_id: AtomicI32,
+    /// The tick at which this entity last attacked something (entity age).
+    pub last_attack_time: AtomicI32,
+
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
 }
@@ -128,6 +139,10 @@ impl LivingEntity {
             jumping_cooldown: AtomicU8::new(0),
             climbing: AtomicBool::new(false),
             climbing_pos: AtomicCell::new(None),
+            last_attacker_id: AtomicI32::new(0),
+            last_attacked_time: AtomicI32::new(0),
+            last_attacking_id: AtomicI32::new(0),
+            last_attack_time: AtomicI32::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
             movement_speed: AtomicCell::new(default_movement_speed),
             water_movement_speed_multiplier,
@@ -190,7 +205,7 @@ impl LivingEntity {
         self.entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_LIVING_FLAGS,
-                MetaDataType::Byte,
+                MetaDataType::BYTE,
                 b,
             )])
             .await;
@@ -215,7 +230,7 @@ impl LivingEntity {
         self.entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_HEALTH,
-                MetaDataType::Float,
+                MetaDataType::FLOAT,
                 health,
             )])
             .await;
@@ -526,11 +541,13 @@ impl LivingEntity {
 
         velo.z *= friction;
 
-        velo.y *= if caller.is_flutterer() {
-            friction
-        } else {
-            0.98
-        };
+        velo.y *= caller.get_y_velocity_drag().unwrap_or_else(|| {
+            if caller.is_flutterer() {
+                friction
+            } else {
+                0.98
+            }
+        });
 
         self.entity.velocity.store(velo);
     }
@@ -753,10 +770,10 @@ impl LivingEntity {
     }
 
     pub fn get_swim_height(&self) -> f64 {
-        let eye_height = self.entity.entity_dimension.load().eye_height;
+        let eye_height = self.entity.get_eye_height();
 
         if self.entity.entity_type == &EntityType::BREEZE {
-            f64::from(eye_height)
+            eye_height
         } else if eye_height < 0.4 {
             0.0
         } else {
@@ -935,10 +952,6 @@ impl LivingEntity {
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
-            // Immediately clear all movement/velocity so the dead entity stops being
-            // simulated by physics and doesn't accumulate additional fall_distance.
-            self.entity.velocity.store(Vector3::default());
-            self.entity.velocity_dirty.store(true, SeqCst);
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
             // Plays the death sound
@@ -1142,6 +1155,15 @@ impl LivingEntity {
 
         self.dead.store(false, Relaxed);
     }
+
+    pub fn is_player(&self) -> bool {
+        let world = self.entity.world.load();
+        world.get_player_by_id(self.entity.entity_id).is_some()
+    }
+
+    pub fn get_movement(&self) -> Vector3<f64> {
+        self.entity.movement.load()
+    }
 }
 
 impl NBTStorage for LivingEntity {
@@ -1194,7 +1216,7 @@ impl NBTStorage for LivingEntity {
                         if let NbtTag::Compound(effect_nbt) = effect {
                             let effect = Effect::create_from_nbt(&mut effect_nbt.clone()).await;
                             if effect.is_none() {
-                                log::warn!("Unable to read effect from nbt");
+                                warn!("Unable to read effect from nbt");
                                 continue;
                             }
                             let mut effect = effect.unwrap();
@@ -1210,6 +1232,7 @@ impl NBTStorage for LivingEntity {
 }
 
 impl EntityBase for LivingEntity {
+    #[allow(clippy::too_many_lines)]
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,
@@ -1233,13 +1256,26 @@ impl EntityBase for LivingEntity {
                 return false;
             }
 
-            if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
-                && self.has_effect(&StatusEffect::FIRE_RESISTANCE).await
-            {
-                return false; // Fire resistance
-            }
-
             let world = self.entity.world.load();
+            let is_fire_damage = damage_type == DamageType::IN_FIRE
+                || damage_type == DamageType::ON_FIRE
+                || damage_type == DamageType::LAVA
+                || damage_type == DamageType::HOT_FLOOR;
+
+            // Fire damage can be prevented by either game rules or fire resistance
+            if is_fire_damage {
+                // Check game rule for fire damage (only for players)
+                if self.entity.entity_type == &EntityType::PLAYER
+                    && !world.level_info.load().game_rules.fire_damage
+                {
+                    return false;
+                }
+
+                // Check for fire resistance effect
+                if self.has_effect(&StatusEffect::FIRE_RESISTANCE).await {
+                    return false;
+                }
+            }
 
             // These damage types bypass the hurt cooldown and death protection
             let bypasses_cooldown_protection =
@@ -1308,6 +1344,13 @@ impl EntityBase for LivingEntity {
 
             let new_health = self.health.load() - damage_amount;
             if damage_amount > 0.0 {
+                // Track attacker for RevengeGoal (only after confirming damage)
+                if let Some(attacker) = cause.or(source) {
+                    self.last_attacker_id
+                        .store(attacker.get_entity().entity_id, Relaxed);
+                    self.last_attacked_time
+                        .store(self.entity.age.load(Relaxed), Relaxed);
+                }
                 //self.on_actually_hurt(damage_amount, damage_type).await;
                 self.set_health(new_health).await;
             }
@@ -1347,16 +1390,70 @@ impl EntityBase for LivingEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.entity.tick(caller.clone(), server).await;
+
             // Only tick movement if the entity is alive. This prevents a dead "corpse"
             // from continuing to be simulated (accumulating fall_distance/velocity).
             if !self.dead.load(Relaxed) && self.health.load() > 0.0 {
                 self.tick_movement(server, caller.clone()).await;
             }
+
             // TODO
-            if caller.get_player().is_none() {
+            let player = caller.get_player();
+            let is_player = player.is_some();
+
+            if !is_player {
                 self.entity.send_pos_rot().await;
             }
+
+            // Fetch supporting blocks for players or other entities
+            let supporting_pos = if let Some(player) = caller.get_player() {
+                // Handles player movement and detection along block edges
+                player.get_supporting_block_pos().await
+            } else {
+                // Fast physics-based supporting block detection for server entities
+                self.entity.get_supporting_block_pos()
+            };
+
+            // Notify the block under the entity each tick if a supporting block position is found
+            if let Some(supporting) = supporting_pos {
+                let world = self.entity.world.load();
+                let (block, state) = world.get_block_and_state(&supporting).await;
+
+                world
+                    .block_registry
+                    .on_entity_step(
+                        block,
+                        &world,
+                        caller.as_ref() as &dyn EntityBase,
+                        &supporting,
+                        state,
+                        false,
+                    )
+                    .await;
+
+                // Check slightly below supporting_pos for additional supporting blocks (blocks under carpets and the like)
+                if !block.is_solid() {
+                    let below_supporting = supporting.down();
+                    let (below_block, below_state) =
+                        world.get_block_and_state(&below_supporting).await;
+
+                    // If block is not air, notify it as well
+                    world
+                        .block_registry
+                        .on_entity_step(
+                            below_block,
+                            &world,
+                            caller.as_ref() as &dyn EntityBase,
+                            &below_supporting,
+                            below_state,
+                            true, // below supporting block
+                        )
+                        .await;
+                }
+            }
+
             self.tick_effects().await;
+
             // Current active item
             {
                 let item_in_use = self.item_in_use.lock().await.clone();

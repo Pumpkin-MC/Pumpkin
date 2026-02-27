@@ -109,6 +109,14 @@ impl BoundingBox {
     }
 
     #[must_use]
+    pub const fn full_block() -> Self {
+        Self {
+            min: Vector3::new(0f64, 0f64, 0f64),
+            max: Vector3::new(1f64, 1f64, 1f64),
+        }
+    }
+
+    #[must_use]
     pub fn from_block(position: &BlockPos) -> Self {
         let position = position.0;
         Self {
@@ -182,7 +190,16 @@ impl BoundingBox {
 
     #[must_use]
     pub fn max_block_pos(&self) -> BlockPos {
-        BlockPos::ceiled_v(self.max)
+        // Use a tiny epsilon and floor the max coordinates so that a box whose
+        // max is exactly on a block boundary does not include the adjacent
+        // block. This mirrors vanilla behavior where max block is inclusive
+        // only when the entity actually overlaps that block.
+        let eps = 1e-9f64;
+        BlockPos::floored_v(super::vector3::Vector3::new(
+            self.max.x - eps,
+            self.max.y - eps,
+            self.max.z - eps,
+        ))
     }
 
     #[must_use]

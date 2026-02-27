@@ -15,7 +15,6 @@ use crate::{
 };
 use crossbeam::channel::Sender;
 use dashmap::DashMap;
-use log::trace;
 use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
@@ -35,6 +34,7 @@ use std::{
 };
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, trace, warn};
 // use tokio::runtime::Handle;
 use tokio::{
     select,
@@ -278,7 +278,7 @@ impl Level {
 
     pub async fn shutdown(&self) {
         let world_id = self.level_folder.root_folder.display();
-        log::info!("Saving level ({})...", world_id);
+        info!("Saving level ({})...", world_id);
         self.cancel_token.cancel();
         self.shut_down_chunk_system.store(true, Ordering::Relaxed);
         self.level_channel.notify();
@@ -292,7 +292,7 @@ impl Level {
         };
 
         let handle_count = handles.len();
-        log::info!("Joining {} threads for {}...", handle_count, world_id);
+        info!("Joining {} threads for {}...", handle_count, world_id);
         let join_task = tokio::task::spawn_blocking(move || {
             let mut failed_count = 0;
             for handle in handles.into_iter() {
@@ -306,25 +306,24 @@ impl Level {
         match timeout(Duration::from_secs(3), join_task).await {
             Ok(Ok(failed_count)) => {
                 if failed_count > 0 {
-                    log::warn!(
+                    warn!(
                         "{} threads failed to join properly for {}.",
-                        failed_count,
-                        world_id
+                        failed_count, world_id
                     );
                 }
             }
             Ok(Err(_)) => {
-                log::warn!("Thread join task panicked for {}.", world_id);
+                warn!("Thread join task panicked for {}.", world_id);
             }
             Err(_) => {
-                log::warn!("Timed out waiting for threads to join for {}.", world_id);
+                warn!("Timed out waiting for threads to join for {}.", world_id);
             }
         }
 
         self.tasks.wait().await;
         self.chunk_system_tasks.wait().await;
 
-        log::info!("Flushing data to disk for {}...", world_id);
+        info!("Flushing data to disk for {}...", world_id);
         self.chunk_saver.block_and_await_ongoing_tasks().await;
         self.entity_saver.block_and_await_ongoing_tasks().await;
 
@@ -359,7 +358,7 @@ impl Level {
 
     pub fn list_cached(&self) {
         for entry in self.loaded_chunks.iter() {
-            log::debug!("In map: {:?}", entry.key());
+            debug!("In map: {:?}", entry.key());
         }
     }
 
@@ -441,7 +440,7 @@ impl Level {
 
         let level = self.clone();
         self.spawn_task(async move {
-            log::debug!("Writing {} entity chunks to disk", chunks_to_process.len());
+            debug!("Writing {} entity chunks to disk", chunks_to_process.len());
             level.write_entity_chunks(chunks_to_process).await;
         });
     }
@@ -734,7 +733,7 @@ impl Level {
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
-            log::error!("Failed writing Chunk to disk {error}");
+            error!("Failed writing Chunk to disk {error}");
         }
     }
 
@@ -751,7 +750,7 @@ impl Level {
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
-            log::error!("Failed writing Chunk to disk {error}");
+            error!("Failed writing Chunk to disk {error}");
         }
     }
 

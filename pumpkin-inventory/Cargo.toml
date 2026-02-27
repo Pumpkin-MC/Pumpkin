@@ -11,7 +11,7 @@ pumpkin-data = { workspace = true, features = ["default"] }
 pumpkin-world.workspace = true
 pumpkin-util.workspace = true
 
-log.workspace = true
+tracing.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
 crossbeam-utils.workspace = true

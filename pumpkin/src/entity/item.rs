@@ -1,4 +1,17 @@
+use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
+use pumpkin_data::data_component_impl::DamageResistantImpl;
+use pumpkin_data::data_component_impl::DamageResistantType;
+use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_protocol::{
+    codec::item_stack_seralizer::ItemStackSerializer,
+    java::client::play::{CTakeItemEntity, Metadata},
+};
+use pumpkin_util::math::atomic_f32::AtomicF32;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::item::ItemStack;
+use std::sync::atomic::Ordering::{AcqRel, Relaxed};
+
 use std::sync::{
     Arc,
     atomic::{
@@ -6,18 +19,7 @@ use std::sync::{
         Ordering::{self},
     },
 };
-
-use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
-use pumpkin_protocol::{
-    codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CTakeItemEntity, Metadata},
-};
-use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
-
-use crate::{entity::EntityBaseFuture, server::Server};
 
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
@@ -28,7 +30,7 @@ pub struct ItemEntity {
     // into the ABA problem
     item_stack: Mutex<ItemStack>,
     pickup_delay: AtomicU8,
-    health: AtomicCell<f32>,
+    health: AtomicF32,
     never_despawn: AtomicBool,
     never_pickup: AtomicBool,
 }
@@ -43,12 +45,20 @@ impl ItemEntity {
             ))
             .await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
+
+        // Set fire immunity for certain items
+        if let Some(res) = item_stack.get_data_component::<DamageResistantImpl>()
+            && res.res_type == DamageResistantType::Fire
+        {
+            entity.fire_immune.store(true, Ordering::Relaxed);
+        }
+
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(10), // Vanilla pickup delay is 10 ticks
-            health: AtomicCell::new(5.0),
+            health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
         }
@@ -62,12 +72,20 @@ impl ItemEntity {
     ) -> Self {
         entity.set_velocity(velocity).await;
         entity.yaw.store(rand::random::<f32>() * 360.0);
+
+        // Set fire immunity for certain items
+        if let Some(res) = item_stack.get_data_component::<DamageResistantImpl>()
+            && res.res_type == DamageResistantType::Fire
+        {
+            entity.fire_immune.store(true, Ordering::Relaxed);
+        }
+
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(pickup_delay), // Vanilla pickup delay is 10 ticks
-            health: AtomicCell::new(5.0),
+            health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
         }
@@ -180,6 +198,159 @@ impl ItemEntity {
             source.init_data_tracker().await;
         }
     }
+
+    fn decrement_pickup_delay(&self) {
+        self.pickup_delay
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
+                Some(val.saturating_sub(1))
+            })
+            .ok();
+    }
+
+    fn apply_fluid_drag_or_gravity(&self, mut velo: Vector3<f64>) -> Vector3<f64> {
+        let entity = &self.entity;
+
+        if entity.touching_water.load(Ordering::SeqCst) && entity.water_height.load() > 0.1 {
+            velo.x *= 0.99;
+            velo.z *= 0.99;
+            if velo.y < 0.06 {
+                velo.y += 5.0e-4;
+            }
+        } else if entity.touching_lava.load(Ordering::SeqCst) && entity.lava_height.load() > 0.1 {
+            velo.x *= 0.95;
+            velo.z *= 0.95;
+            if velo.y < 0.06 {
+                velo.y += 5.0e-4;
+            }
+        } else {
+            velo.y -= <Self as EntityBase>::get_gravity(self);
+        }
+
+        velo
+    }
+
+    async fn update_no_clip_and_push_out(&self) {
+        let entity = &self.entity;
+        let pos = entity.pos.load();
+        let bounding_box = entity.bounding_box.load();
+
+        let no_clip = !entity
+            .world
+            .load()
+            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
+            .await;
+
+        entity.no_clip.store(no_clip, Ordering::Relaxed);
+
+        if no_clip {
+            entity
+                .push_out_of_blocks(Vector3::new(
+                    pos.x,
+                    f64::midpoint(bounding_box.min.y, bounding_box.max.y),
+                    pos.z,
+                ))
+                .await;
+        }
+    }
+
+    async fn should_tick_move(&self, move_velo: Vector3<f64>) -> Option<bool> {
+        let entity = &self.entity;
+
+        let mut tick_move = !entity.on_ground.load(Ordering::SeqCst)
+            || move_velo.horizontal_length_squared() > 1.0e-5;
+
+        if !tick_move {
+            let Ok(item_age) = i32::try_from(self.item_age.load(Ordering::Relaxed)) else {
+                entity.remove().await;
+                return None;
+            };
+
+            tick_move = (item_age + entity.entity_id) % 4 == 0;
+        }
+
+        Some(tick_move)
+    }
+
+    async fn move_and_apply_friction(
+        &self,
+        caller: &Arc<dyn EntityBase>,
+        server: &Server,
+        move_velo: Vector3<f64>,
+    ) {
+        let entity = &self.entity;
+
+        entity.move_entity(caller.clone(), move_velo).await;
+        entity.tick_block_collisions(caller, server).await;
+
+        let mut friction = 0.98;
+        let on_ground = entity.on_ground.load(Ordering::SeqCst);
+
+        let mut velo = entity.velocity.load();
+        if on_ground {
+            let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).await.1;
+            friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
+        }
+
+        velo = velo.multiply(friction, 0.98, friction);
+
+        if on_ground && velo.y < 0.0 {
+            velo.y = 0.0;
+        }
+
+        entity.velocity.store(velo);
+    }
+
+    async fn process_age_and_merge(&self) -> bool {
+        if self.never_despawn.load(Ordering::Relaxed) {
+            return true;
+        }
+
+        let entity = &self.entity;
+        let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
+
+        if age >= 6000 {
+            entity.remove().await;
+            return false;
+        }
+
+        let n = if entity
+            .last_pos
+            .load()
+            .sub(&entity.pos.load())
+            .length_squared()
+            == 0.0
+        {
+            40
+        } else {
+            2
+        };
+
+        if age.is_multiple_of(n) && self.can_merge().await {
+            self.try_merge().await;
+        }
+
+        true
+    }
+
+    async fn sync_motion_if_dirty(
+        &self,
+        caller: &Arc<dyn EntityBase>,
+        original_velo: Vector3<f64>,
+    ) {
+        let entity = &self.entity;
+
+        entity.update_fluid_state(caller).await;
+
+        let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
+            || entity.touching_water.load(Ordering::SeqCst)
+            || entity.touching_lava.load(Ordering::SeqCst)
+            || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
+
+        if velocity_dirty {
+            entity.send_pos_rot().await;
+            entity.send_velocity().await;
+        }
+    }
 }
 
 impl NBTStorage for ItemEntity {}
@@ -192,138 +363,28 @@ impl EntityBase for ItemEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.entity;
-            self.pickup_delay
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
-                    Some(val.saturating_sub(1))
-                })
-                .ok();
+            self.decrement_pickup_delay();
 
             let original_velo = entity.velocity.load();
+            entity
+                .velocity
+                .store(self.apply_fluid_drag_or_gravity(original_velo));
 
-            let mut velo = original_velo;
+            self.update_no_clip_and_push_out().await;
 
-            if entity.touching_water.load(Ordering::SeqCst) && entity.water_height.load() > 0.1 {
-                velo.x *= 0.99;
+            let move_velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
 
-                velo.z *= 0.99;
+            let Some(tick_move) = self.should_tick_move(move_velo).await else {
+                return;
+            };
 
-                if velo.y < 0.06 {
-                    velo.y += 5.0e-4;
-                }
-            } else if entity.touching_lava.load(Ordering::SeqCst) && entity.lava_height.load() > 0.1
-            {
-                velo.x *= 0.95;
-
-                velo.z *= 0.95;
-
-                if velo.y < 0.06 {
-                    velo.y += 5.0e-4;
-                }
-            } else {
-                velo.y -= self.get_gravity();
-            }
-
-            entity.velocity.store(velo);
-
-            let pos = entity.pos.load();
-
-            let bounding_box = entity.bounding_box.load();
-
-            let no_clip = !self
-                .entity
-                .world
-                .load()
-                .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
-                .await;
-
-            entity.no_clip.store(no_clip, Ordering::Relaxed);
-
-            if no_clip {
-                entity
-                    .push_out_of_blocks(Vector3::new(
-                        pos.x,
-                        f64::midpoint(bounding_box.min.y, bounding_box.max.y),
-                        pos.z,
-                    ))
+            if tick_move {
+                self.move_and_apply_friction(&caller, server, move_velo)
                     .await;
             }
 
-            let mut velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
-
-            let mut tick_move = !entity.on_ground.load(Ordering::SeqCst)
-                || velo.horizontal_length_squared() > 1.0e-5;
-
-            if !tick_move {
-                let Ok(item_age) = i32::try_from(self.item_age.load(Ordering::Relaxed)) else {
-                    entity.remove().await;
-
-                    return;
-                };
-
-                tick_move = (item_age + entity.entity_id) % 4 == 0;
-            }
-
-            if tick_move {
-                entity.move_entity(caller.clone(), velo).await;
-
-                entity.tick_block_collisions(&caller, server).await;
-
-                let mut friction = 0.98;
-
-                let on_ground = entity.on_ground.load(Ordering::SeqCst);
-
-                if on_ground {
-                    let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).await.1;
-
-                    friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
-                }
-
-                velo = velo.multiply(friction, 0.98, friction);
-
-                if on_ground && velo.y < 0.0 {
-                    velo = velo.multiply(1.0, -0.5, 1.0);
-                }
-
-                entity.velocity.store(velo);
-            }
-
-            if !self.never_despawn.load(Ordering::Relaxed) {
-                let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
-
-                if age >= 6000 {
-                    entity.remove().await;
-
-                    return;
-                }
-
-                let n = if entity
-                    .last_pos
-                    .load()
-                    .sub(&entity.pos.load())
-                    .length_squared()
-                    == 0.0
-                {
-                    40
-                } else {
-                    2
-                };
-
-                if age.is_multiple_of(n) && self.can_merge().await {
-                    self.try_merge().await;
-                }
-            }
-
-            entity.update_fluid_state(&caller).await;
-
-            let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
-                || entity.touching_water.load(Ordering::SeqCst)
-                || entity.touching_lava.load(Ordering::SeqCst)
-                || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
-
-            if velocity_dirty {
-                entity.send_pos_rot().await;
-
-                entity.send_velocity().await;
+            if self.process_age_and_merge().await {
+                self.sync_motion_if_dirty(&caller, original_velo).await;
             }
         })
     }
@@ -333,7 +394,7 @@ impl EntityBase for ItemEntity {
             self.entity
                 .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_STACK,
-                    MetaDataType::ItemStack,
+                    MetaDataType::ITEM_STACK,
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )])
                 .await;
@@ -344,34 +405,43 @@ impl EntityBase for ItemEntity {
         &'a self,
         _caller: &'a dyn EntityBase,
         amount: f32,
-        _damage_type: DamageType,
+        damage_type: DamageType,
         _position: Option<Vector3<f64>>,
         _source: Option<&'a dyn EntityBase>,
         _cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            //TODO: invulnerability, e.g. ancient debris
-            self.health.store(self.health.load() - amount);
-            if self.health.load() <= 0.0 {
-                self.entity.remove().await;
+            // Check if entity is fire_immune
+            let is_fire_damage = damage_type == DamageType::IN_FIRE
+                || damage_type == DamageType::ON_FIRE
+                || damage_type == DamageType::LAVA;
+            if is_fire_damage && self.entity.fire_immune.load(Ordering::Relaxed) {
+                return false;
             }
-            true
-        })
-    }
 
-    fn damage<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
-        _amount: f32,
-        _damage_type: DamageType,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async { false })
+            // Thread safe damage application
+            loop {
+                let current = self.health.load(Relaxed);
+                let new = current - amount;
+                if self
+                    .health
+                    .compare_exchange(current, new, AcqRel, Relaxed)
+                    .is_ok()
+                {
+                    if new <= 0.0 {
+                        self.entity.remove().await;
+                    }
+                    return true;
+                }
+            }
+        })
     }
 
     fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {
             if self.pickup_delay.load(Ordering::Relaxed) > 0
                 || player.living_entity.health.load() <= 0.0
+                || player.is_spectator()
             {
                 return;
             }

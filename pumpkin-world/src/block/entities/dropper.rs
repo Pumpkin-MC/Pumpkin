@@ -22,11 +22,7 @@ impl BlockEntity for DropperBlockEntity {
         &'a self,
         nbt: &'a mut NbtCompound,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            self.write_data(nbt, &self.items, true).await;
-        })
-        // Safety precaution
-        //self.clear().await;
+        self.write_inventory_nbt(nbt, true)
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
@@ -58,6 +54,10 @@ impl BlockEntity for DropperBlockEntity {
 
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_dirty(&self) {
+        self.dirty.store(false, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -120,17 +120,23 @@ impl Inventory for DropperBlockEntity {
             let mut removed = ItemStack::EMPTY.clone();
             let mut guard = self.items[slot].lock().await;
             std::mem::swap(&mut removed, &mut *guard);
+            self.mark_dirty();
             removed
         })
     }
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move { split_stack(&self.items, slot, amount).await })
+        Box::pin(async move {
+            let res = split_stack(&self.items, slot, amount).await;
+            self.mark_dirty();
+            res
+        })
     }
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
             *self.items[slot].lock().await = stack;
+            self.mark_dirty();
         })
     }
 
@@ -149,6 +155,7 @@ impl Clearable for DropperBlockEntity {
             for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
+            self.mark_dirty();
         })
     }
 }

@@ -14,8 +14,6 @@ pub type InventoryFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub trait Inventory: Send + Sync + Clearable {
     fn size(&self) -> usize;
 
-    // --- Asynchronous Methods (Using BlockFuture) ---
-
     fn is_empty(&self) -> InventoryFuture<'_, bool>;
 
     fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>>;
@@ -75,23 +73,19 @@ pub trait Inventory: Send + Sync + Clearable {
         })
     }
 
-    // --- Default Implementation: write_data (Using BlockFuture) ---
-    fn write_data(
-        &self,
-        nbt: &mut NbtCompound,
-        stacks: &[Arc<Mutex<ItemStack>>],
+    fn write_inventory_nbt<'a>(
+        &'a self,
+        nbt: &'a mut NbtCompound,
         include_empty: bool,
-    ) -> InventoryFuture<'_, ()> {
-        // Clone for the move block (requires `nbt` and `stacks` to be cloneable/to_owned)
-        let nbt = nbt.to_owned();
-        let stacks = stacks.to_owned();
-
+    ) -> InventoryFuture<'a, ()> {
         Box::pin(async move {
             let mut slots = Vec::new();
-            let mut nbt = nbt;
+            let size = self.size();
 
-            for (i, item) in stacks.iter().enumerate() {
-                let stack = item.lock().await;
+            for i in 0..size {
+                let stack_lock = self.get_stack(i).await;
+                let stack = stack_lock.lock().await;
+
                 if !stack.is_empty() {
                     let mut item_compound = NbtCompound::new();
                     item_compound.put_byte("Slot", i as i8);
@@ -100,15 +94,11 @@ pub trait Inventory: Send + Sync + Clearable {
                 }
             }
 
-            if !include_empty && slots.is_empty() {
-                return;
+            if include_empty || !slots.is_empty() {
+                nbt.put("Items", NbtTag::List(slots));
             }
-
-            nbt.put("Items", NbtTag::List(slots));
         })
     }
-
-    // --- Synchronous Methods (No Change) ---
 
     fn get_max_count_per_stack(&self) -> u8 {
         99

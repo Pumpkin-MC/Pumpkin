@@ -1,7 +1,11 @@
 use std::pin::Pin;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
-use std::{collections::HashMap, sync::atomic::Ordering};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::atomic::Ordering,
+};
+use tracing::{debug, error, info, trace, warn};
 
 pub mod chunker;
 pub mod explosion;
@@ -23,7 +27,7 @@ use crate::{
     command::client_suggestions,
     entity::{Entity, EntityBase, player::Player, r#type::from_type},
     error::PumpkinError,
-    net::ClientPlatform,
+    net::{ClientPlatform, java::JavaClient},
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
@@ -102,6 +106,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::version::MinecraftVersion;
 use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
@@ -146,8 +151,8 @@ impl PumpkinError for GetBlockError {
         false
     }
 
-    fn severity(&self) -> log::Level {
-        log::Level::Warn
+    fn severity(&self) -> tracing::Level {
+        tracing::Level::WARN
     }
 
     fn client_kick_reason(&self) -> Option<String> {
@@ -248,6 +253,17 @@ impl World {
             .unwrap_or_default()
     }
 
+    /// Get the world folder name (e.g., `world`, `world_nether`, `world_the_end`).
+    /// Falls back to "world" if the name cannot be determined.
+    pub fn get_world_name(&self) -> &str {
+        self.level
+            .level_folder
+            .root_folder
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("world")
+    }
+
     pub async fn shutdown(&self) {
         for entity in self.entities.load().iter() {
             self.save_entity(entity).await;
@@ -256,7 +272,7 @@ impl World {
         // Save portal POI to disk
         let save_result = self.portal_poi.lock().await.save_all();
         if let Err(e) = save_result {
-            log::error!("Failed to save portal POI: {e}");
+            error!("Failed to save portal POI: {e}");
         }
 
         self.level.shutdown().await;
@@ -374,6 +390,46 @@ impl World {
         }
     }
 
+    fn collect_java_recipients_by_version<'a>(
+        players: impl Iterator<Item = &'a Arc<Player>>,
+    ) -> BTreeMap<MinecraftVersion, Vec<&'a JavaClient>> {
+        let mut recipients_by_version: BTreeMap<MinecraftVersion, Vec<&'a JavaClient>> =
+            BTreeMap::new();
+        for player in players {
+            if let ClientPlatform::Java(java_client) = &player.client {
+                recipients_by_version
+                    .entry(java_client.version.load())
+                    .or_default()
+                    .push(java_client);
+            }
+        }
+        recipients_by_version
+    }
+
+    async fn broadcast_java_grouped<P: ClientPacket>(
+        packet: &P,
+        recipients_by_version: BTreeMap<MinecraftVersion, Vec<&JavaClient>>,
+    ) {
+        for (version, recipients) in recipients_by_version {
+            let packet_data = match JavaClient::serialize_packet_for_version(packet, version) {
+                Ok(packet_data) => packet_data,
+                Err(err) => {
+                    error!(
+                        "Failed to serialize packet {} for version {:?}: {}",
+                        std::any::type_name::<P>(),
+                        version,
+                        err
+                    );
+                    continue;
+                }
+            };
+
+            for recipient in recipients {
+                recipient.enqueue_packet_data(packet_data.clone()).await;
+            }
+        }
+    }
+
     /// Broadcasts a packet to all connected players within the world.
     /// Please avoid this as we want to replace it with `broadcast_editioned`
     ///
@@ -381,9 +437,9 @@ impl World {
     ///
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
     pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
-        for player in self.players.load().iter() {
-            player.client.enqueue_packet(packet).await;
-        }
+        let players = self.players.load();
+        let recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
+        Self::broadcast_java_grouped(packet, recipients_by_version).await;
     }
 
     pub async fn broadcast_message(
@@ -406,11 +462,20 @@ impl World {
         je_packet: &J,
         be_packet: &B,
     ) {
-        for player in self.players.load().iter() {
-            match &player.client {
-                ClientPlatform::Java(client) => client.enqueue_packet(je_packet).await,
-                ClientPlatform::Bedrock(client) => client.send_game_packet(be_packet).await,
+        let players = self.players.load();
+        let je_recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
+        let mut be_recipients = Vec::new();
+
+        for player in players.iter() {
+            if let ClientPlatform::Bedrock(be_client) = &player.client {
+                be_recipients.push(be_client.clone());
             }
+        }
+
+        Self::broadcast_java_grouped(je_packet, je_recipients_by_version).await;
+
+        for recipient in be_recipients {
+            recipient.send_game_packet(be_packet).await;
         }
     }
 
@@ -475,14 +540,13 @@ impl World {
         except: &[uuid::Uuid],
         packet: &P,
     ) {
-        for player in self
-            .players
-            .load()
-            .iter()
-            .filter(|c| !except.contains(&c.gameprofile.id))
-        {
-            player.client.enqueue_packet(packet).await;
-        }
+        let players = self.players.load();
+        let recipients_by_version = Self::collect_java_recipients_by_version(
+            players
+                .iter()
+                .filter(|candidate| !except.contains(&candidate.gameprofile.id)),
+        );
+        Self::broadcast_java_grouped(packet, recipients_by_version).await;
     }
 
     pub async fn spawn_particle(
@@ -634,7 +698,7 @@ impl World {
 
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
-            log::debug!(
+            debug!(
                 "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?}",
                 total_elapsed.as_millis(),
                 chunk_elapsed,
@@ -647,12 +711,15 @@ impl World {
     }
 
     pub async fn flush_block_updates(&self) {
-        let mut block_state_updates_by_chunk_section = HashMap::new();
+        let mut block_state_updates_by_chunk_section: HashMap<
+            Vector3<i32>,
+            Vec<(BlockPos, BlockStateId)>,
+        > = HashMap::new();
         for (position, block_state_id) in self.unsent_block_changes.lock().await.drain() {
             let chunk_section = chunk_section_from_pos(&position);
             block_state_updates_by_chunk_section
                 .entry(chunk_section)
-                .or_insert(Vec::new())
+                .or_default()
                 .push((position, block_state_id));
         }
 
@@ -902,12 +969,12 @@ impl World {
 
                     let (down_fluid, down_state) = self.get_fluid_and_fluid_state(&down_pos).await;
 
-                    if down_fluid.id == fluid0.id {
+                    if down_fluid.matches_type(fluid0) {
                         amplitude = f64::from(state0.height - down_state.height) + 0.888_888_9;
                     }
                 }
             } else {
-                if fluid.id != fluid0.id {
+                if !fluid.matches_type(fluid0) {
                     continue;
                 }
 
@@ -963,7 +1030,7 @@ impl World {
 
         let fluid = Fluid::from_state_id(id).unwrap_or(&Fluid::EMPTY);
 
-        if fluid.id == fluid0_id {
+        if Fluid::same_fluid_type(fluid.id, fluid0_id) {
             return false;
         }
 
@@ -1101,6 +1168,32 @@ impl World {
             }
         }
         true
+    }
+
+    /// Vanilla's `BlockView.getDismountHeight()`.
+    /// Returns the Y surface height for dismounting at the given block position,
+    /// or `f64::NEG_INFINITY` if no valid surface exists.
+    pub async fn get_dismount_height(&self, pos: &BlockPos) -> f64 {
+        let state = self.get_block_state(pos).await;
+        let max_y = state
+            .get_block_collision_shapes()
+            .map(|s| s.max.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        if max_y != f64::NEG_INFINITY {
+            return max_y;
+        }
+        // No collision at pos — check block below
+        let below = BlockPos(Vector3::new(pos.0.x, pos.0.y - 1, pos.0.z));
+        let below_state = self.get_block_state(&below).await;
+        let below_max_y = below_state
+            .get_block_collision_shapes()
+            .map(|s| s.max.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        if below_max_y >= 1.0 {
+            below_max_y - 1.0
+        } else {
+            f64::NEG_INFINITY
+        }
     }
 
     pub async fn tick_spawning_chunk(
@@ -1459,10 +1552,9 @@ impl World {
         // This code follows the vanilla packet order
         let entity_id = player.entity_id();
         let gamemode = player.gamemode.load();
-        log::debug!(
+        debug!(
             "spawning player {}, entity id {}",
-            player.gameprofile.name,
-            entity_id
+            player.gameprofile.name, entity_id
         );
 
         let client = player.client.java();
@@ -1478,8 +1570,7 @@ impl World {
                 false,
                 true,
                 false,
-                (self.dimension.id).into(),
-                ResourceLocation::from(self.dimension.minecraft_name),
+                self.dimension,
                 biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
                 player
@@ -1537,7 +1628,7 @@ impl World {
 
         let velocity = player.living_entity.entity.velocity.load();
 
-        log::debug!("Sending player teleport to {}", player.gameprofile.name);
+        debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
 
         player.living_entity.entity.last_pos.store(position);
@@ -1545,7 +1636,7 @@ impl World {
         let gameprofile = &player.gameprofile;
         // Firstly, send an info update to our new player, so they can see their skin
         // and also send their info to everyone else.
-        log::debug!("Broadcasting player info for {}", player.gameprofile.name);
+        debug!("Broadcasting player info for {}", player.gameprofile.name);
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
             (PlayerInfoFlags::ADD_PLAYER
                 | PlayerInfoFlags::UPDATE_GAME_MODE
@@ -1608,7 +1699,7 @@ impl World {
                 })
                 .collect::<Vec<_>>();
 
-            log::debug!("Sending player info to {}", player.gameprofile.name);
+            debug!("Sending player info to {}", player.gameprofile.name);
             client
                 .enqueue_packet(&CPlayerInfoUpdate::new(action_flags.bits(), &entries))
                 .await;
@@ -1616,7 +1707,7 @@ impl World {
 
         let gameprofile = &player.gameprofile;
 
-        log::debug!("Broadcasting player spawn for {}", player.gameprofile.name);
+        debug!("Broadcasting player spawn for {}", player.gameprofile.name);
         // Spawn the player for every client.
         self.broadcast_packet_except(
             &[player.gameprofile.id],
@@ -1645,7 +1736,7 @@ impl World {
             let entity = &existing_player.living_entity.entity;
             let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
-            log::debug!("Sending player entities to {}", player.gameprofile.name);
+            debug!("Sending player entities to {}", player.gameprofile.name);
 
             client
                 .enqueue_packet(&CSpawnEntity::new(
@@ -1666,7 +1757,7 @@ impl World {
                 {
                     let meta = Metadata::new(
                         TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
-                        MetaDataType::Byte,
+                        MetaDataType::BYTE,
                         config.skin_parts,
                     );
                     meta.write(&mut buf, &client.version.load()).unwrap();
@@ -1726,7 +1817,7 @@ impl World {
             .await;
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
-        log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
+        debug!("Sending waiting chunks to {}", player.gameprofile.name);
         client
             .send_packet_now(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
             .await;
@@ -1956,7 +2047,7 @@ impl World {
             // Cross-dimension respawn: get target world from server
             self.server.upgrade().map_or_else(
                 || {
-                    log::warn!("Could not get server for cross-dimension respawn");
+                    warn!("Could not get server for cross-dimension respawn");
                     None
                 },
                 |server| {
@@ -1971,10 +2062,9 @@ impl World {
 
         // Handle cross-dimension transfer if we found a different target world
         let (target_world, position) = if let Some(ref new_world) = target_world {
-            log::debug!(
+            debug!(
                 "Cross-dimension respawn: {} -> {}",
-                self.dimension.minecraft_name,
-                new_world.dimension.minecraft_name
+                self.dimension.minecraft_name, new_world.dimension.minecraft_name
             );
 
             // Remove player from current world
@@ -1998,10 +2088,9 @@ impl World {
             (new_world.as_ref(), position)
         } else if respawn_dimension != self.dimension {
             // Cross-dimension failed - fall back to current world's spawn
-            log::warn!(
+            warn!(
                 "Target world {:?} not found, using world spawn in {:?}",
-                respawn_dimension,
-                self.dimension
+                respawn_dimension, self.dimension
             );
             // FIXME: This spawn position calculation is incorrect. Should use vanilla's
             // proper spawn position calculation (see #1381).
@@ -2151,7 +2240,7 @@ impl World {
             'main: loop {
                 let recv_result = tokio::select! {
                     () = player.client.await_close_interrupt() => {
-                        log::debug!("Canceling player packet processing");
+                        debug!("Canceling player packet processing");
                         None
                     },
                     recv_result = entity_receiver.recv() => {
@@ -2167,7 +2256,7 @@ impl World {
                 let chunk = if level.is_chunk_watched(&position) {
                     chunk
                 } else {
-                    log::trace!(
+                    trace!(
                         "Received chunk {:?}, but it is no longer watched... cleaning",
                         &position
                     );
@@ -2175,13 +2264,13 @@ impl World {
 
                     for (uuid, entity_nbt) in chunk.data.lock().await.iter() {
                         let Some(id) = entity_nbt.get_string("id") else {
-                            log::warn!("Entity has no ID");
+                            warn!("Entity has no ID");
                             continue;
                         };
                         let Some(entity_type) =
                             EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
                         else {
-                            log::warn!("Entity has no valid Entity Type {id}");
+                            warn!("Entity has no valid Entity Type {id}");
                             continue;
                         };
                         // Pos is zero since it will read from nbt
@@ -2239,13 +2328,13 @@ impl World {
 
                 for (uuid, entity_nbt) in chunk.data.lock().await.iter() {
                     let Some(id) = entity_nbt.get_string("id") else {
-                        log::debug!("Entity has no ID");
+                        debug!("Entity has no ID");
                         continue;
                     };
                     let Some(entity_type) =
                         EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
                     else {
-                        log::warn!("Entity has no valid Entity Type {id}");
+                        warn!("Entity has no valid Entity Type {id}");
                         continue;
                     };
                     // Pos is zero since it will read from nbt
@@ -2271,7 +2360,7 @@ impl World {
             }
 
             #[cfg(debug_assertions)]
-            log::debug!("Chunks queued after {}ms", inst.elapsed().as_millis());
+            debug!("Chunks queued after {}ms", inst.elapsed().as_millis());
         });
     }
 
@@ -2531,7 +2620,8 @@ impl World {
                 for player in current_players.iter() {
                     player.send_system_message(&event.join_message).await;
                 }
-                log::info!("{}", event.join_message.to_pretty_console());
+                // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
+                info!("{}", event.join_message.to_pretty_console());
             }
         });
         Ok(())
@@ -2601,7 +2691,7 @@ impl World {
                     for player in self.players.load().iter() {
                         player.send_system_message(&event.leave_message).await;
                     }
-                    log::info!("{}", event.leave_message.to_pretty_console());
+                    info!("{}", event.leave_message.to_pretty_console());
                 }
             }
         }
@@ -2832,7 +2922,16 @@ impl World {
         flags: BlockFlags,
     ) -> Option<u16> {
         let (broken_block, broken_block_state) = self.get_block_and_state_id(position).await;
-        let event = BlockBreakEvent::new(cause.clone(), broken_block, *position, 0, false);
+        if is_air(broken_block_state) {
+            return None;
+        }
+        let event = BlockBreakEvent::new(
+            cause.clone(),
+            broken_block,
+            *position,
+            0,
+            !flags.contains(BlockFlags::SKIP_DROPS),
+        );
 
         let event = self
             .server
@@ -2843,6 +2942,12 @@ impl World {
             .await;
 
         if !event.cancelled {
+            let mut flags = flags;
+            if event.drop {
+                flags.remove(BlockFlags::SKIP_DROPS);
+            } else {
+                flags.insert(BlockFlags::SKIP_DROPS);
+            }
             let new_state_id = if broken_block
                 .properties(broken_block_state)
                 .and_then(|properties| {
@@ -2863,6 +2968,9 @@ impl World {
             };
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
+
+            // Close container screens for any players viewing this block
+            self.close_container_screens_at(position).await;
 
             if Block::from_state_id(broken_state_id) != &Block::FIRE {
                 let particles_packet = CWorldEvent::new(
@@ -2890,6 +2998,16 @@ impl World {
             return Some(new_state_id);
         }
         None
+    }
+
+    /// Close container screens for all players who have a container open at the given block position.
+    pub async fn close_container_screens_at(&self, position: &BlockPos) {
+        let players = self.players.load();
+        for player in players.iter() {
+            if player.open_container_pos.load() == Some(*position) {
+                player.close_handled_screen().await;
+            }
+        }
     }
 
     pub async fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
@@ -2999,7 +3117,7 @@ impl World {
         let id = self.get_block_state_id(position).await;
         let fluid = Fluid::from_state_id(id).ok_or(&Fluid::EMPTY);
         if let Ok(fluid) = fluid {
-            return fluid;
+            return fluid.to_flowing();
         }
         let block = Block::from_state_id(id);
         block
@@ -3031,6 +3149,7 @@ impl World {
         let block = Block::from_state_id(id);
 
         let fluid = Fluid::from_state_id(id)
+            .map(Fluid::to_flowing)
             .ok_or(&Fluid::EMPTY)
             .unwrap_or_else(|_| {
                 block
@@ -3059,7 +3178,7 @@ impl World {
     ) -> (&'static Fluid, &'static FluidState) {
         let id = self.get_block_state_id(position).await;
 
-        let Some(fluid) = Fluid::from_state_id(id) else {
+        let Some(raw_fluid) = Fluid::from_state_id(id) else {
             let block = Block::from_state_id(id);
             if let Some(properties) = block.properties(id) {
                 for (name, value) in properties.to_props() {
@@ -3078,7 +3197,7 @@ impl World {
             return (&Fluid::EMPTY, state);
         };
 
-        //let state = fluid.get_state(id);
+        let fluid = raw_fluid.to_flowing();
         let state = &fluid.states[0];
 
         (fluid, state)
@@ -3592,6 +3711,34 @@ impl pumpkin_world::world::SimpleWorld for World {
     ) -> WorldFuture<'static, ()> {
         Box::pin(async move {
             ExperienceOrbEntity::spawn(&self, position, amount).await;
+        })
+    }
+
+    fn update_from_neighbor_shapes(
+        self: Arc<Self>,
+        block_state_id: BlockStateId,
+        position: &BlockPos,
+    ) -> WorldFuture<'_, BlockStateId> {
+        Box::pin(async move {
+            let block = Block::from_state_id(block_state_id);
+            let mut state_id = block_state_id;
+            for direction in BlockDirection::update_order() {
+                let neighbor_pos = position.offset(direction.to_offset());
+                let neighbor_state_id = self.get_block_state_id(&neighbor_pos).await;
+                state_id = self
+                    .block_registry
+                    .get_state_for_neighbor_update(
+                        &self,
+                        block,
+                        state_id,
+                        position,
+                        direction,
+                        &neighbor_pos,
+                        neighbor_state_id,
+                    )
+                    .await;
+            }
+            state_id
         })
     }
 }

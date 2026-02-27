@@ -49,19 +49,21 @@ impl EntityBase for TNTEntity {
             entity.move_entity(caller.clone(), velo).await;
             entity.tick_block_collisions(&caller, server).await;
             entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
+
             if entity.on_ground.load(Ordering::Relaxed) {
                 entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
             }
-            let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst);
 
-            if velocity_dirty {
+            if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
                 entity.send_pos_rot().await;
-
                 entity.send_velocity().await;
             }
 
-            let fuse = self.fuse.fetch_sub(1, Relaxed);
-            if fuse == 0 {
+            // FIX: Prevent fuse underflow (vanilla parity)
+            let fuse = self.fuse.load(Relaxed);
+
+            if fuse <= 1 {
+                // TNT explodes now
                 self.entity.remove().await;
                 self.entity
                     .world
@@ -69,6 +71,8 @@ impl EntityBase for TNTEntity {
                     .explode(self.entity.pos.load(), self.power)
                     .await;
             } else {
+                // Safe decrement
+                self.fuse.store(fuse - 1, Relaxed);
                 entity.update_fluid_state(&caller).await;
             }
         })
@@ -76,23 +80,22 @@ impl EntityBase for TNTEntity {
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {
-            // TODO: Yes, this is the wrong function, but we need to send this after spawning the entity.
             let pos: f64 = rand::random::<f64>() * TAU;
 
             self.entity
                 .set_velocity(Vector3::new(-pos.sin() * 0.02, 0.2, -pos.cos() * 0.02))
                 .await;
-            // We can merge multiple `Metadata`s into one meta packet.
+
             self.entity
                 .send_meta_data(&[
                     Metadata::new(
                         TrackedData::DATA_FUSE,
-                        MetaDataType::Integer,
+                        MetaDataType::INTEGER,
                         VarInt(self.fuse.load(Relaxed) as i32),
                     ),
                     Metadata::new(
                         TrackedData::DATA_BLOCK_STATE,
-                        MetaDataType::BlockState,
+                        MetaDataType::BLOCK_STATE,
                         VarInt(i32::from(Block::TNT.default_state.id)),
                     ),
                 ])

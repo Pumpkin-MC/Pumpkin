@@ -3,9 +3,9 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
-    AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DeathProtection,
-    Enchantments, Equippable, Food, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize,
-    PotionContents, Tool, Unbreakable,
+    AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
+    DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemName,
+    JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable,
 };
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
@@ -49,6 +49,10 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
+        DamageResistant => Some(DamageResistantImpl::read_data(data)?.to_dyn()),
+        PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
+        Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
+        FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -349,8 +353,232 @@ impl Hash for ConsumableImpl {
 pub struct UseRemainderImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct UseCooldownImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct DamageResistantImpl;
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum DamageResistantType {
+    /// Damage always dealt to ender dragons
+    AlwaysHurtsEnderDragons,
+    /// Destroys armor stands in a single hit
+    AlwaysKillsArmorStands,
+    AlwaysMostSignificantFall,
+    /// Damage always notifies nearby hidden silverfish
+    AlwaysTriggersSilverfish,
+    AvoidsGuardianThorns,
+    BurnsArmorStands,
+    BurnFromStepping,
+    BypassesArmor,
+    BypassesCooldown,
+    BypassesEffects,
+    BypassesEnchantments,
+    BypassesInvulnerability,
+    BypassesResistance,
+    BypassesShield,
+    BypassesWolfArmor,
+    CanBreakArmorStands,
+    DamagesHelmet,
+    IgnitesArmorStands,
+    Drowning,
+    /// Damage is reduced by the blast protection enchantment
+    Explosion,
+    /// Damage is reduced by the feather falling enchantment and ignored if slow falling
+    Fall,
+    /// Damage is reduced by the fire protection enchantment or ignored by game rule
+    Fire,
+    /// Damage is reduced by wearing any piece of leather armor or ignored by game rule
+    Freezing,
+    /// So turtles drop bowls when killed by lightning
+    Lightning,
+    PlayerAttack,
+    /// Damage is reduced by the projectile protection enchantment
+    Projectile,
+    MaceSmash,
+    /// Prevents entities from becoming angry at the source of the damage
+    NoAnger,
+    /// Prevents entities from being marked hurt (preventing the server from syncing velocity)
+    NoImpact,
+    NoKnockback,
+    PanicCauses,
+    PanicEnvironmentalCauses,
+    /// Reducese damage dealt to witches by 85%
+    WitchResistantTo,
+    WitherImmuneTo,
+    /// Generic fallback
+    Generic,
+}
+
+impl DamageResistantType {
+    pub fn from_tag(s: &str) -> Self {
+        match s {
+            "#minecraft:always_hurts_ender_dragons"
+            | "minecraft:always_hurts_ender_dragons"
+            | "always_hurts_ender_dragons" => Self::AlwaysHurtsEnderDragons,
+            "#minecraft:always_kills_armor_stands"
+            | "minecraft:always_kills_armor_stands"
+            | "always_kills_armor_stands" => Self::AlwaysKillsArmorStands,
+            "#minecraft:always_most_significant_fall"
+            | "minecraft:always_most_significant_fall"
+            | "always_most_significant_fall" => Self::AlwaysMostSignificantFall,
+            "#minecraft:always_triggers_silverfish"
+            | "minecraft:always_triggers_silverfish"
+            | "always_triggers_silverfish" => Self::AlwaysTriggersSilverfish,
+            "#minecraft:avoids_guardian_thorns"
+            | "minecraft:avoids_guardian_thorns"
+            | "avoids_guardian_thorns" => Self::AvoidsGuardianThorns,
+            "#minecraft:burns_armor_stands"
+            | "minecraft:burns_armor_stands"
+            | "burns_armor_stands" => Self::BurnsArmorStands,
+            "#minecraft:burn_from_stepping"
+            | "minecraft:burn_from_stepping"
+            | "burn_from_stepping" => Self::BurnFromStepping,
+            "#minecraft:bypasses_armor" | "minecraft:bypasses_armor" | "bypasses_armor" => {
+                Self::BypassesArmor
+            }
+            "#minecraft:bypasses_cooldown"
+            | "minecraft:bypasses_cooldown"
+            | "bypasses_cooldown" => Self::BypassesCooldown,
+            "#minecraft:bypasses_effects" | "minecraft:bypasses_effects" | "bypasses_effects" => {
+                Self::BypassesEffects
+            }
+            "#minecraft:bypasses_enchantments"
+            | "minecraft:bypasses_enchantments"
+            | "bypasses_enchantments" => Self::BypassesEnchantments,
+            "#minecraft:bypasses_invulnerability"
+            | "minecraft:bypasses_invulnerability"
+            | "bypasses_invulnerability" => Self::BypassesInvulnerability,
+            "#minecraft:bypasses_resistance"
+            | "minecraft:bypasses_resistance"
+            | "bypasses_resistance" => Self::BypassesResistance,
+            "#minecraft:bypasses_shield" | "minecraft:bypasses_shield" | "bypasses_shield" => {
+                Self::BypassesShield
+            }
+            "#minecraft:bypasses_wolf_armor"
+            | "minecraft:bypasses_wolf_armor"
+            | "bypasses_wolf_armor" => Self::BypassesWolfArmor,
+            "#minecraft:can_break_armor_stand"
+            | "minecraft:can_break_armor_stand"
+            | "can_break_armor_stand" => Self::CanBreakArmorStands,
+            "#minecraft:damages_helmet" | "minecraft:damages_helmet" | "damages_helmet" => {
+                Self::DamagesHelmet
+            }
+            "#minecraft:ignites_armor_stands"
+            | "minecraft:ignites_armor_stands"
+            | "ignites_armor_stands" => Self::IgnitesArmorStands,
+            "#minecraft:is_drowning" | "minecraft:is_drowning" | "is_drowning" => Self::Drowning,
+            "#minecraft:is_explosion" | "minecraft:is_explosion" | "is_explosion" | "explosion" => {
+                Self::Explosion
+            }
+            "#minecraft:is_fall" | "minecraft:is_fall" | "is_fall" | "fall" => Self::Fall,
+            "#minecraft:is_fire" | "minecraft:is_fire" | "is_fire" | "fire" | "in_fire"
+            | "minecraft:in_fire" => Self::Fire,
+            "#minecraft:is_freezing" | "minecraft:is_freezing" | "is_freezing" => Self::Freezing,
+            "#minecraft:is_lightning" | "minecraft:is_lightning" | "is_lightning" => {
+                Self::Lightning
+            }
+            "#minecraft:is_player_attack" | "minecraft:is_player_attack" | "is_player_attack" => {
+                Self::PlayerAttack
+            }
+            "#minecraft:is_projectile" | "minecraft:is_projectile" | "is_projectile" => {
+                Self::Projectile
+            }
+            "#minecraft:mace_smash" | "minecraft:mace_smash" | "mace_smash" => Self::MaceSmash,
+            "#minecraft:no_anger" | "minecraft:no_anger" | "no_anger" => Self::NoAnger,
+            "#minecraft:no_impact" | "minecraft:no_impact" | "no_impact" => Self::NoImpact,
+            "#minecraft:no_knockback" | "minecraft:no_knockback" | "no_knockback" => {
+                Self::NoKnockback
+            }
+            "#minecraft:panic_causes" | "minecraft:panic_causes" | "panic_causes" => {
+                Self::PanicCauses
+            }
+            "#minecraft:panic_environmental_causes"
+            | "minecraft:panic_environmental_causes"
+            | "panic_environmental_causes" => Self::PanicEnvironmentalCauses,
+            "#minecraft:witch_resistant_to"
+            | "minecraft:witch_resistant_to"
+            | "witch_resistant_to" => Self::WitchResistantTo,
+            "#minecraft:wither_immune_to" | "minecraft:wither_immune_to" | "wither_immune_to" => {
+                Self::WitherImmuneTo
+            }
+            _ => Self::Generic,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AlwaysHurtsEnderDragons => "#minecraft:always_hurts_ender_dragons",
+            Self::AlwaysKillsArmorStands => "#minecraft:always_kills_armor_stands",
+            Self::AlwaysMostSignificantFall => "#minecraft:always_most_significant_fall",
+            Self::AlwaysTriggersSilverfish => "#minecraft:always_triggers_silverfish",
+            Self::AvoidsGuardianThorns => "#minecraft:avoids_guardian_thorns",
+            Self::BurnsArmorStands => "#minecraft:burns_armor_stands",
+            Self::BurnFromStepping => "#minecraft:burn_from_stepping",
+            Self::BypassesArmor => "#minecraft:bypasses_armor",
+            Self::BypassesCooldown => "#minecraft:bypasses_cooldown",
+            Self::BypassesEffects => "#minecraft:bypasses_effects",
+            Self::BypassesEnchantments => "#minecraft:bypasses_enchantments",
+            Self::BypassesInvulnerability => "#minecraft:bypasses_invulnerability",
+            Self::BypassesResistance => "#minecraft:bypasses_resistance",
+            Self::BypassesShield => "#minecraft:bypasses_shield",
+            Self::BypassesWolfArmor => "#minecraft:bypasses_wolf_armor",
+            Self::CanBreakArmorStands => "#minecraft:can_break_armor_stand",
+            Self::DamagesHelmet => "#minecraft:damages_helmet",
+            Self::IgnitesArmorStands => "#minecraft:ignites_armor_stands",
+            Self::Drowning => "#minecraft:is_drowning",
+            Self::Explosion => "#minecraft:is_explosion",
+            Self::Fall => "#minecraft:is_fall",
+            Self::Fire => "#minecraft:is_fire",
+            Self::Freezing => "#minecraft:is_freezing",
+            Self::Lightning => "#minecraft:is_lightning",
+            Self::PlayerAttack => "#minecraft:is_player_attack",
+            Self::Projectile => "#minecraft:is_projectile",
+            Self::MaceSmash => "#minecraft:mace_smash",
+            Self::NoAnger => "#minecraft:no_anger",
+            Self::NoImpact => "#minecraft:no_impact",
+            Self::NoKnockback => "#minecraft:no_knockback",
+            Self::PanicCauses => "#minecraft:panic_causes",
+            Self::PanicEnvironmentalCauses => "#minecraft:panic_environmental_causes",
+            Self::WitchResistantTo => "#minecraft:witch_resistant_to",
+            Self::WitherImmuneTo => "#minecraft:wither_immune_to",
+            Self::Generic => "minecraft:generic",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct DamageResistantImpl {
+    pub res_type: DamageResistantType,
+}
+
+impl DamageResistantImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let type_str = compound.get_string("types")?;
+
+        Some(Self {
+            res_type: DamageResistantType::from_tag(type_str),
+        })
+    }
+}
+
+impl std::str::FromStr for DamageResistantType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(DamageResistantType::from_tag(s))
+    }
+}
+
+impl DataComponentImpl for DamageResistantImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("types", self.res_type.as_str().to_string());
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.res_type.as_str()) as i32
+    }
+
+    default_impl!(DamageResistant);
+}
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum IDSet {
@@ -648,6 +876,69 @@ pub struct PotionContentsImpl {
     pub custom_name: Option<String>,
 }
 
+impl PotionContentsImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let compound = tag.extract_compound()?;
+        let potion_id = if let Some(id) = compound.get_int("potion") {
+            Some(id)
+        } else if let Some(name) = compound.get_string("potion") {
+            // Handle "minecraft:swiftness" -> "swiftness"
+            let name = name.strip_prefix("minecraft:").unwrap_or(name);
+            crate::potion::Potion::from_name(name).map(|p| p.id as i32)
+        } else {
+            None
+        };
+
+        let custom_color = compound.get_int("custom_color");
+        let custom_name = compound.get_string("custom_name").map(|s| s.to_string());
+
+        let custom_effects = compound
+            .get_list("custom_effects")
+            .map(|list| {
+                list.iter()
+                    .filter_map(|item| {
+                        // Try to get the compound for this specific effect
+                        let effect_tag = item.extract_compound()?;
+
+                        // Try to get the ID
+                        let id = effect_tag.get_int("id")?;
+
+                        // Fallback values for optional fields
+                        let amplifier = effect_tag
+                            .get_int("amplifier")
+                            .or_else(|| effect_tag.get_byte("amplifier").map(i32::from))
+                            .unwrap_or(0);
+                        let duration = effect_tag
+                            .get_int("duration")
+                            .or_else(|| effect_tag.get_byte("duration").map(i32::from))
+                            .unwrap_or(0);
+                        let ambient = effect_tag.get_bool("ambient").unwrap_or(false);
+                        let show_particles = effect_tag.get_bool("show_particles").unwrap_or(true);
+                        let show_icon = effect_tag.get_bool("show_icon").unwrap_or(true);
+
+                        // Create the StatusEffectInstance
+                        Some(StatusEffectInstance {
+                            effect_id: id,
+                            amplifier,
+                            duration,
+                            ambient,
+                            show_particles,
+                            show_icon,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        Some(Self {
+            potion_id,
+            custom_color,
+            custom_effects,
+            custom_name,
+        })
+    }
+}
+
 impl DataComponentImpl for PotionContentsImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
@@ -680,6 +971,39 @@ impl DataComponentImpl for PotionContentsImpl {
         }
 
         NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+
+        if let Some(id) = self.potion_id {
+            digest.update(&[1u8]);
+            digest.update(&get_i32_hash(id).to_le_bytes());
+        }
+
+        if let Some(color) = self.custom_color {
+            digest.update(&[2u8]);
+            digest.update(&get_i32_hash(color).to_le_bytes());
+        }
+
+        if let Some(name) = &self.custom_name {
+            digest.update(&[3u8]);
+            digest.update(&get_str_hash(name).to_le_bytes());
+        }
+
+        if !self.custom_effects.is_empty() {
+            digest.update(&[4u8]);
+            for effect in &self.custom_effects {
+                digest.update(&get_i32_hash(effect.effect_id).to_le_bytes());
+                digest.update(&get_i32_hash(effect.amplifier).to_le_bytes());
+                digest.update(&get_i32_hash(effect.duration).to_le_bytes());
+                digest.update(&[effect.ambient as u8]);
+                digest.update(&[effect.show_particles as u8]);
+                digest.update(&[effect.show_icon as u8]);
+            }
+        }
+
+        digest.finalize() as i32
     }
 
     default_impl!(PotionContents);
@@ -721,10 +1045,195 @@ pub struct ProvidesBannerPatternsImpl;
 pub struct RecipesImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct LodestoneTrackerImpl;
+/// Firework explosion shape types
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FireworkExplosionShape {
+    SmallBall = 0,
+    LargeBall = 1,
+    Star = 2,
+    Creeper = 3,
+    Burst = 4,
+}
+
+impl FireworkExplosionShape {
+    pub fn from_id(id: i32) -> Option<Self> {
+        match id {
+            0 => Some(Self::SmallBall),
+            1 => Some(Self::LargeBall),
+            2 => Some(Self::Star),
+            3 => Some(Self::Creeper),
+            4 => Some(Self::Burst),
+            _ => None,
+        }
+    }
+
+    pub fn to_id(&self) -> i32 {
+        *self as i32
+    }
+
+    pub fn to_name(&self) -> &str {
+        match self {
+            Self::SmallBall => "small_ball",
+            Self::LargeBall => "large_ball",
+            Self::Star => "star",
+            Self::Creeper => "creeper",
+            Self::Burst => "burst",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "small_ball" => Some(Self::SmallBall),
+            "large_ball" => Some(Self::LargeBall),
+            "star" => Some(Self::Star),
+            "creeper" => Some(Self::Creeper),
+            "burst" => Some(Self::Burst),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct FireworkExplosionImpl;
+pub struct FireworkExplosionImpl {
+    pub shape: FireworkExplosionShape,
+    pub colors: Vec<i32>,
+    pub fade_colors: Vec<i32>,
+    pub has_trail: bool,
+    pub has_twinkle: bool,
+}
+
+impl FireworkExplosionImpl {
+    pub fn new(
+        shape: FireworkExplosionShape,
+        colors: Vec<i32>,
+        fade_colors: Vec<i32>,
+        has_trail: bool,
+        has_twinkle: bool,
+    ) -> Self {
+        Self {
+            shape,
+            colors,
+            fade_colors,
+            has_trail,
+            has_twinkle,
+        }
+    }
+
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let compound = tag.extract_compound()?;
+        let shape = FireworkExplosionShape::from_name(compound.get_string("shape")?)?;
+        let colors = compound
+            .get_int_array("colors")
+            .map(|v| v.to_vec())
+            .unwrap_or_default();
+        let fade_colors = compound
+            .get_int_array("fade_colors")
+            .map(|v| v.to_vec())
+            .unwrap_or_default();
+        let has_trail = compound.get_bool("has_trail").unwrap_or(false);
+        let has_twinkle = compound.get_bool("has_twinkle").unwrap_or(false);
+
+        Some(Self {
+            shape,
+            colors,
+            fade_colors,
+            has_trail,
+            has_twinkle,
+        })
+    }
+}
+
+impl DataComponentImpl for FireworkExplosionImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("shape", self.shape.to_name().to_string());
+        compound.put("colors", NbtTag::IntArray(self.colors.clone()));
+        compound.put("fade_colors", NbtTag::IntArray(self.fade_colors.clone()));
+        compound.put_bool("has_trail", self.has_trail);
+        compound.put_bool("has_twinkle", self.has_twinkle);
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        digest.update(&[self.shape.to_id() as u8]);
+        for color in &self.colors {
+            digest.update(&get_i32_hash(*color).to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        for color in &self.fade_colors {
+            digest.update(&get_i32_hash(*color).to_le_bytes());
+        }
+        digest.update(&[4u8]);
+        digest.update(&[self.has_trail as u8]);
+        digest.update(&[self.has_twinkle as u8]);
+        digest.finalize() as i32
+    }
+
+    default_impl!(FireworkExplosion);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct FireworksImpl;
+pub struct FireworksImpl {
+    pub flight_duration: i32,
+    pub explosions: Vec<FireworkExplosionImpl>,
+}
+
+impl FireworksImpl {
+    pub fn new(flight_duration: i32, explosions: Vec<FireworkExplosionImpl>) -> Self {
+        Self {
+            flight_duration,
+            explosions,
+        }
+    }
+
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let compound = tag.extract_compound()?;
+        let flight_duration = compound
+            .get_byte("flight_duration")
+            .map(i32::from)
+            .or_else(|| compound.get_int("flight_duration"))
+            .unwrap_or(1);
+
+        let mut explosions = Vec::new();
+        if let Some(list) = compound.get_list("explosions") {
+            for item in list {
+                if let Some(explosion) = FireworkExplosionImpl::read_data(item) {
+                    explosions.push(explosion);
+                }
+            }
+        }
+
+        Some(Self {
+            flight_duration,
+            explosions,
+        })
+    }
+}
+
+impl DataComponentImpl for FireworksImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("flight_duration", self.flight_duration);
+        let explosions_list: Vec<NbtTag> = self.explosions.iter().map(|e| e.write_data()).collect();
+        compound.put_list("explosions", explosions_list);
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        digest.update(&get_i32_hash(self.flight_duration).to_le_bytes());
+        for explosion in &self.explosions {
+            digest.update(&get_i32_hash(explosion.get_hash()).to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        digest.finalize() as i32
+    }
+
+    default_impl!(Fireworks);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProfileImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
