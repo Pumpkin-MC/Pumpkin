@@ -26,6 +26,7 @@ use crate::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
     block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
 };
+use crate::block::entities::bell::BellBlockEntity;
 
 pub mod barrel;
 pub mod bed;
@@ -167,6 +168,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             Arc::new(block_entity_from_generic::<BlastingFurnaceBlockEntity>(nbt))
         }
         SmokerBlockEntity::ID => Arc::new(block_entity_from_generic::<SmokerBlockEntity>(nbt)),
+        BellBlockEntity::ID => Arc::new(block_entity_from_generic::<BellBlockEntity>(nbt)),
         _ => return None,
     })
 }
