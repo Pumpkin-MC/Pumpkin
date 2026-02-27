@@ -10,7 +10,7 @@ use crate::entity::item::ItemEntity;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{Block, FacingExt, translation};
+use pumpkin_data::{FacingExt, translation};
 use pumpkin_inventory::generic_container_screen_handler::create_generic_3x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -154,10 +154,8 @@ impl BlockBehaviour for DropperBlock {
                     .downcast_ref::<DropperBlockEntity>()
                     .unwrap();
                 if let Some(mut item) = dropper.get_random_slot().await {
-                    let props = DispenserLikeProperties::from_state_id(
-                        args.world.get_block_state(args.position).await.id,
-                        args.block,
-                    );
+                    let block_state = args.world.get_block_state(args.position).await;
+                    let props = DispenserLikeProperties::from_state_id(block_state.id, args.block);
                     if let Some(entity) = args
                         .world
                         .get_block_entity(
@@ -207,9 +205,9 @@ impl BlockBehaviour for DropperBlock {
                         triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
                     );
                     let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade() {
-                        let block_static = Block::from_id(args.block.id);
                         let event = crate::plugin::block::dispense::BlockDispenseEvent::new(
-                            block_static,
+                            args.world.clone(),
+                            block_state,
                             *args.position,
                             drop_item,
                             velocity,
