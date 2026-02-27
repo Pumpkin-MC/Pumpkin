@@ -223,7 +223,7 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
         let pumpkin_ko_kr: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_KO_KR_JSON).expect("Could not parse ko_kr.json.");
         let pumpkin_nds_de: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_NDS_DE_JSON).expect("Could not parse nds_de.json.");  
+            serde_json::from_str(PUMPKIN_NDS_DE_JSON).expect("Could not parse nds_de.json.");
         let pumpkin_nl_be: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_NL_BE_JSON).expect("Could not parse nl_be.json.");
         let pumpkin_nl_nl: HashMap<String, String> =
