@@ -14,6 +14,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
+use crate::block::entities::bell::BellBlockEntity;
 use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity;
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
@@ -26,7 +27,6 @@ use crate::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
     block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
 };
-use crate::block::entities::bell::BellBlockEntity;
 
 pub mod barrel;
 pub mod bed;
