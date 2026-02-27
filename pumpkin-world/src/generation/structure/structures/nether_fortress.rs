@@ -728,7 +728,13 @@ impl BridgePiece {
         fill_forward_opening(&self.piece.piece, start, random, 1, 3, false, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -842,7 +848,13 @@ impl BridgeCrossingPiece {
         fill_se_opening(&self.piece.piece, start, random, 3, 8, false, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -981,7 +993,13 @@ impl BridgeSmallCrossingPiece {
         fill_se_opening(&self.piece.piece, start, random, 0, 2, false, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -1095,7 +1113,13 @@ impl BridgeStairsPiece {
         fill_se_opening(&self.piece.piece, start, random, 6, 2, false, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -1206,7 +1230,13 @@ impl BridgePlatformPiece {
         })
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -1371,7 +1401,13 @@ impl BridgeEndPiece {
         })
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
 
@@ -1456,7 +1492,13 @@ impl CorridorExitPiece {
         fill_forward_opening(&self.piece.piece, start, random, 5, 3, true, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -1682,7 +1724,13 @@ impl SmallCorridorPiece {
         fill_forward_opening(&self.piece.piece, start, random, 1, 0, true, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -1770,7 +1818,13 @@ impl CorridorCrossingPiece {
         fill_se_opening(&self.piece.piece, start, random, 0, 1, true, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -1854,7 +1908,13 @@ impl CorridorRightTurnPiece {
         fill_se_opening(&self.piece.piece, start, random, 0, 1, true, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -1962,7 +2022,13 @@ impl CorridorLeftTurnPiece {
         fill_nw_opening(&self.piece.piece, start, random, 0, 1, true, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -2064,7 +2130,13 @@ impl CorridorStairsPiece {
         fill_forward_opening(&self.piece.piece, start, random, 1, 0, true, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -2218,7 +2290,13 @@ impl CorridorBalconyPiece {
         fill_se_opening(&self.piece.piece, start, random, 0, i, inside, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -2338,7 +2416,13 @@ impl CorridorNetherWartsRoomPiece {
         fill_forward_opening(&self.piece.piece, start, random, 5, 11, true, collector);
     }
 
-    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
@@ -2464,18 +2548,48 @@ impl CorridorNetherWartsRoomPiece {
                     .piece
                     .add_block(chunk, stairs_north, l, 5 + j, k, &bb);
             }
-            if k >= 5 && k <= 8 {
+            if (5..=8).contains(&k) {
                 self.piece.piece.fill_with_outline(
-                    chunk, &bb, false, 5, 5, k, 7, j + 4, k, bricks, bricks,
+                    chunk,
+                    &bb,
+                    false,
+                    5,
+                    5,
+                    k,
+                    7,
+                    j + 4,
+                    k,
+                    bricks,
+                    bricks,
                 );
-            } else if k >= 9 && k <= 10 {
+            } else if (9..=10).contains(&k) {
                 self.piece.piece.fill_with_outline(
-                    chunk, &bb, false, 5, 8, k, 7, j + 4, k, bricks, bricks,
+                    chunk,
+                    &bb,
+                    false,
+                    5,
+                    8,
+                    k,
+                    7,
+                    j + 4,
+                    k,
+                    bricks,
+                    bricks,
                 );
             }
             if j >= 1 {
                 self.piece.piece.fill_with_outline(
-                    chunk, &bb, false, 5, 6 + j, k, 7, 9 + j, k, air, air,
+                    chunk,
+                    &bb,
+                    false,
+                    5,
+                    6 + j,
+                    k,
+                    7,
+                    9 + j,
+                    k,
+                    air,
+                    air,
                 );
             }
         }
@@ -2543,27 +2657,15 @@ impl CorridorNetherWartsRoomPiece {
         // Side stairs (east/west facing)
         let stairs_east = make_stairs(HorizontalFacing::East);
         let stairs_west = make_stairs(HorizontalFacing::West);
-        self.piece
-            .piece
-            .add_block(chunk, stairs_west, 4, 5, 2, &bb);
-        self.piece
-            .piece
-            .add_block(chunk, stairs_west, 4, 5, 3, &bb);
-        self.piece
-            .piece
-            .add_block(chunk, stairs_west, 4, 5, 9, &bb);
+        self.piece.piece.add_block(chunk, stairs_west, 4, 5, 2, &bb);
+        self.piece.piece.add_block(chunk, stairs_west, 4, 5, 3, &bb);
+        self.piece.piece.add_block(chunk, stairs_west, 4, 5, 9, &bb);
         self.piece
             .piece
             .add_block(chunk, stairs_west, 4, 5, 10, &bb);
-        self.piece
-            .piece
-            .add_block(chunk, stairs_east, 8, 5, 2, &bb);
-        self.piece
-            .piece
-            .add_block(chunk, stairs_east, 8, 5, 3, &bb);
-        self.piece
-            .piece
-            .add_block(chunk, stairs_east, 8, 5, 9, &bb);
+        self.piece.piece.add_block(chunk, stairs_east, 8, 5, 2, &bb);
+        self.piece.piece.add_block(chunk, stairs_east, 8, 5, 3, &bb);
+        self.piece.piece.add_block(chunk, stairs_east, 8, 5, 9, &bb);
         self.piece
             .piece
             .add_block(chunk, stairs_east, 8, 5, 10, &bb);
