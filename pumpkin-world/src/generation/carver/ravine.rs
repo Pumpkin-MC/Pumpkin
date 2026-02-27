@@ -23,7 +23,7 @@ pub struct RavineCarver {
     #[serde(default)]
     pub floor_level: Option<FloatProvider>,
     #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
+    pub extra: HashMap<String, pumpkin_util::serde_json::Value>,
 }
 
 #[derive(Deserialize)]

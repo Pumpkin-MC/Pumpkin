@@ -143,9 +143,11 @@ impl<'a> NoiseBiomeSampler<'a> {
         biome_z: i32,
     ) -> &'static Biome {
         if dimension == Dimension::THE_END {
-            TheEndBiomeSupplier::biome(biome_x, biome_y, biome_z, &mut self.sampler, dimension)
+            TheEndBiomeSupplier.biome(biome_x, biome_y, biome_z, &mut self.sampler)
+        } else if dimension == Dimension::THE_NETHER {
+            MultiNoiseBiomeSupplier::NETHER.biome(biome_x, biome_y, biome_z, &mut self.sampler)
         } else {
-            MultiNoiseBiomeSupplier::biome(biome_x, biome_y, biome_z, &mut self.sampler, dimension)
+            MultiNoiseBiomeSupplier::OVERWORLD.biome(biome_x, biome_y, biome_z, &mut self.sampler)
         }
     }
 }

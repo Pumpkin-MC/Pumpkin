@@ -203,11 +203,9 @@ impl GenerationCache for Cache {
         let dx = (pos.x >> 4) - self.x;
         let dz = (pos.z >> 4) - self.z;
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
-            log::debug!(
+            debug!(
                 "illegal mark_pos_for_postprocessing {pos:?} cache pos ({}, {}) size {}",
-                self.x,
-                self.z,
-                self.size
+                self.x, self.z, self.size
             );
             return;
         }
@@ -215,7 +213,7 @@ impl GenerationCache for Cache {
         let block_pos = BlockPos::new(pos.x, pos.y, pos.z);
         match &mut self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(_) => {
-                log::debug!("skipping mark_pos_for_postprocessing on Level chunk at {pos:?}");
+                debug!("skipping mark_pos_for_postprocessing on Level chunk at {pos:?}");
             }
             Chunk::Proto(data) => {
                 data.mark_pos_for_postprocessing(block_pos);

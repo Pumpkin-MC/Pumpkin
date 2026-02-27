@@ -27,7 +27,7 @@ pub struct CaveCarver {
     #[serde(default, rename = "vertical_rotation")]
     pub vertical_rotation: Option<FloatProvider>,
     #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
+    pub extra: HashMap<String, pumpkin_util::serde_json::Value>,
 }
 
 impl Carver for CaveCarver {

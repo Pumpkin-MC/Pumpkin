@@ -187,14 +187,14 @@ struct BiomeGenerationSettings {
 }
 
 pub static CONFIGURED_CARVERS: LazyLock<HashMap<String, ConfiguredCarver>> = LazyLock::new(|| {
-    pumpkin_util::include_json_static!(
-        "../../../../assets/carver.json",
-        HashMap<String, ConfiguredCarver>
-    )
+    pumpkin_util::serde_json::from_str(include_str!("../../../../assets/carver.json"))
+        .expect("failed to decode assets/carver.json")
 });
 
 static BIOME_CARVERS: LazyLock<HashMap<String, Vec<String>>> = LazyLock::new(|| {
-    let raw: HashMap<String, BiomeGenerationSettings> = pumpkin_util::include_json_static!("../../../../assets/biome.json", HashMap<String, BiomeGenerationSettings>);
+    let raw: HashMap<String, BiomeGenerationSettings> =
+        pumpkin_util::serde_json::from_str(include_str!("../../../../assets/biome.json"))
+            .expect("failed to decode assets/biome.json");
     raw.into_iter()
         .map(|(name, settings)| (name, settings.carvers.into_vec()))
         .collect()

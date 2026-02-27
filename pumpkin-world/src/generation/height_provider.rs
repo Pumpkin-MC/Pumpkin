@@ -4,11 +4,17 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
     y_offset::YOffset,
 };
+use serde::Deserialize;
 use tracing::warn;
 
+#[derive(Deserialize)]
+#[serde(tag = "type")]
 pub enum HeightProvider {
+    #[serde(rename = "minecraft:uniform")]
     Uniform(UniformHeightProvider),
+    #[serde(rename = "minecraft:trapezoid")]
     Trapezoid(TrapezoidHeightProvider),
+    #[serde(rename = "minecraft:very_biased_to_bottom")]
     VeryBiasedToBottom(VeryBiasedToBottomHeightProvider),
 }
 
@@ -22,6 +28,7 @@ impl HeightProvider {
     }
 }
 
+#[derive(Deserialize)]
 pub struct VeryBiasedToBottomHeightProvider {
     pub min_inclusive: YOffset,
     pub max_inclusive: YOffset,
@@ -41,6 +48,7 @@ impl VeryBiasedToBottomHeightProvider {
     }
 }
 
+#[derive(Deserialize)]
 pub struct UniformHeightProvider {
     pub min_inclusive: YOffset,
     pub max_inclusive: YOffset,
@@ -55,6 +63,7 @@ impl UniformHeightProvider {
     }
 }
 
+#[derive(Deserialize)]
 pub struct TrapezoidHeightProvider {
     pub min_inclusive: YOffset,
     pub max_inclusive: YOffset,
