@@ -28,6 +28,8 @@ use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
@@ -593,6 +595,11 @@ impl Player {
         }
     }
 
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.1)
+    }
+
     /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
     /// when the client. This means tasks should complete in a reasonable amount of time or select
     /// on `Self::await_close_interrupt` to cancel the task when the client is closed
@@ -661,14 +668,16 @@ impl Player {
         let inventory = self.inventory();
         let item_stack = inventory.held_item();
 
-        let base_damage = 1.0;
+        let base_damage = self
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_DAMAGE);
         let base_attack_speed = 4.0;
 
         let mut damage_multiplier = 1.0;
         let mut add_damage = 0.0;
         let mut add_speed = 0.0;
 
-        // Get the attack damage
+        // Get the attack damage from the held item
         // TODO: this should be cached in memory, we shouldn't just use default here either
         if let Some(modifiers) = item_stack
             .lock()
@@ -700,11 +709,10 @@ impl Player {
         if attack_cooldown_progress < 1.0 {
             damage_multiplier = attack_cooldown_progress.powi(2).mul_add(0.8, 0.2);
         }
+
         // Modify the added damage based on the multiplier.
         let mut damage = base_damage + add_damage * damage_multiplier;
-
         let pos = victim_entity.pos.load();
-
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
 
         if matches!(attack_type, AttackType::Critical) {
@@ -1973,7 +1981,7 @@ impl Player {
 
     pub fn can_food_heal(&self) -> bool {
         let health = self.living_entity.health.load();
-        let max_health = 20.0; // TODO
+        let max_health = self.living_entity.get_max_health();
         health > 0.0 && health < max_health
     }
 

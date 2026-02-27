@@ -6,12 +6,14 @@ use crate::entity::ai::goal::step_and_destroy_block::{
 };
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};
+use crate::entity::attributes::AttributeBuilder;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
 use crate::world::World;
 use pumpkin_data::Block;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
@@ -28,9 +30,7 @@ pub struct ZombieEntity {
 
 impl ZombieEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
-        let mut mob_entity = MobEntity::new(entity);
-        mob_entity.attack_damage = 3.0;
-        mob_entity.follow_range = 35.0;
+        let mob_entity = MobEntity::new(entity);
         let zombie = Self { mob_entity };
         let mob_arc = Arc::new(zombie);
         let mob_weak: Weak<dyn Mob> = {
@@ -57,6 +57,16 @@ impl ZombieEntity {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::MAX_HEALTH, 20.0)
+            .add(Attributes::MOVEMENT_SPEED, 0.23)
+            .add(Attributes::ATTACK_DAMAGE, 3.0)
+            .add(Attributes::FOLLOW_RANGE, 35.0)
+            .add(Attributes::ARMOR, 2.0)
     }
 }
 

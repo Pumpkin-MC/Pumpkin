@@ -10,6 +10,7 @@ use crate::entity::ai::pathfinder::node_evaluator::{MobData, NodeEvaluator};
 use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::ai::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_util::math::wrap_degrees;
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -55,7 +56,6 @@ pub struct Navigator {
     path_type_overrides: HashMap<PathType, f32>,
     mob_width: f32,
     mob_height: f32,
-    follow_range: f32,
 }
 
 impl Default for Navigator {
@@ -71,7 +71,6 @@ impl Default for Navigator {
             path_type_overrides: HashMap::new(),
             mob_width: 0.6,
             mob_height: 1.95,
-            follow_range: DEFAULT_FOLLOW_RANGE,
         }
     }
 }
@@ -81,17 +80,9 @@ impl Default for Navigator {
 // other things)
 // TODO: Calculate from mob attributes like in vanilla
 const MAX_ITERS: usize = 560;
-
 const TARGET_DISTANCE_MULTIPLIER: f32 = 1.5;
-
-const DEFAULT_FOLLOW_RANGE: f32 = 35.0;
-
 const NODE_REACH_XZ: f64 = 0.5;
 const NODE_REACH_Y: f64 = 1.0;
-
-// TODO: Read from entity attributes (vanilla default 0.6)
-const MOB_STEP_HEIGHT: f64 = 0.6;
-
 const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 
 impl Navigator {
@@ -121,10 +112,6 @@ impl Navigator {
     pub const fn set_mob_dimensions(&mut self, width: f32, height: f32) {
         self.mob_width = width;
         self.mob_height = height;
-    }
-
-    pub const fn set_follow_range(&mut self, range: f32) {
-        self.follow_range = range;
     }
 
     async fn compute_path(
@@ -196,7 +183,9 @@ impl Navigator {
                 let dz = (current.pos.0.z - start_pos.z) as f32;
                 (dx * dx + dy * dy + dz * dz).sqrt()
             };
-            if euclidean_from_start >= self.follow_range {
+
+            let follow_range = entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32;
+            if euclidean_from_start >= follow_range {
                 continue;
             }
 
@@ -208,7 +197,7 @@ impl Navigator {
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
 
                 let in_heap = open_set.contains(&neighbor);
-                if neighbor.walked_dist < self.follow_range
+                if neighbor.walked_dist < follow_range
                     && (!in_heap
                         || open_set
                             .get_node(&neighbor)
@@ -376,15 +365,18 @@ impl Navigator {
                 entity.entity.head_yaw.store(target_yaw);
                 entity.entity.body_yaw.store(target_yaw);
 
-                // Vanilla reads from entity's movement speed attribute (which includes modifiers
-                // like anger speed boost). Don't overwrite it — just use it for movement input.
-                let mob_speed = goal.speed * entity.movement_speed.load();
+                // Get movement speed from goal and mob attributes
+                let mob_speed =
+                    goal.speed * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+
                 entity
                     .movement_input
                     .store(Vector3::new(0.0, 0.0, mob_speed));
 
                 // Jump when the next node is above step height and we're close enough horizontally
-                if dy > MOB_STEP_HEIGHT && horizontal_dist < 2.0 {
+                if dy > entity.get_attribute_value(&Attributes::STEP_HEIGHT)
+                    && horizontal_dist < 2.0
+                {
                     entity
                         .jumping
                         .store(true, std::sync::atomic::Ordering::SeqCst);
