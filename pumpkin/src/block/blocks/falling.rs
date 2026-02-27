@@ -56,7 +56,8 @@ impl BlockBehaviour for FallingBlock {
             if !Self::can_fall_through(state, block) || args.position.0.y < args.world.min_y {
                 return;
             }
-            FallingEntity::replace_spawn(args.world, *args.position, args.block.default_state.id)
+            let state = args.world.get_block_state(args.position).await;
+            FallingEntity::replace_spawn(args.world, *args.position, state.id)
                 .await;
         })
     }
