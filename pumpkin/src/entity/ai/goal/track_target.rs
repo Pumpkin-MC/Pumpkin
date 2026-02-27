@@ -3,7 +3,7 @@ use crate::entity::ai::goal::GoalFuture;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
-use crate::entity::mob::MobEntity;
+use pumpkin_data::attributes::Attributes;
 use rand::RngExt;
 
 const UNSET: i32 = 0;
@@ -40,10 +40,6 @@ impl TrackTargetGoal {
 
     pub fn with_default(check_visibility: bool) -> Self {
         Self::new(check_visibility, false)
-    }
-
-    pub const fn get_follow_range(mob: &MobEntity) -> f64 {
-        mob.follow_range
     }
 
     fn can_navigate_to_entity(&mut self, mob: &dyn Mob, _target: &LivingEntity) -> bool {
@@ -117,7 +113,11 @@ impl Goal for TrackTargetGoal {
                 .pos
                 .load()
                 .squared_distance_to_vec(&target.entity.pos.load());
-            let follow_range = Self::get_follow_range(mob_entity);
+
+            // Get follow range attribute value and check if target is within range
+            let follow_range = mob_entity
+                .living_entity
+                .get_attribute_value(&Attributes::FOLLOW_RANGE);
             if dist_sq > follow_range * follow_range {
                 return false;
             }

@@ -3,6 +3,13 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use crate::entity::attributes::AttributeBuilder;
+use crate::entity::attributes::Modifier;
+use crate::entity::attributes::ModifierOperation;
+use pumpkin_data::attributes::Attributes;
+use std::sync::LazyLock;
+use uuid::Uuid;
+
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
     damage::DamageType,
@@ -41,6 +48,8 @@ use crate::entity::{
 };
 
 const SPEED_BOOST: f64 = 0.15;
+static ENDERMAN_SPEED_BOOST_UUID: LazyLock<Uuid> =
+    LazyLock::new(|| Uuid::new_v3(&Uuid::NAMESPACE_OID, b"enderman:angry_speed"));
 
 pub const ENDERMAN_EYE_HEIGHT: f64 = 2.55;
 pub const ENDERMAN_BODY_Y_OFFSET: f64 = 1.45;
@@ -61,9 +70,7 @@ pub struct EndermanEntity {
 
 impl EndermanEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
-        let mut mob_entity = MobEntity::new(entity);
-        mob_entity.attack_damage = 7.0;
-        mob_entity.follow_range = 64.0;
+        let mob_entity = MobEntity::new(entity);
         let entity = Self {
             mob_entity,
             carried_block: AtomicCell::new(None),
@@ -77,11 +84,8 @@ impl EndermanEntity {
             Arc::downgrade(&mob_arc)
         };
 
-        mob_arc.mob_entity.living_entity.movement_speed.store(0.3);
-
         let mut navigator = mob_arc.mob_entity.navigator.lock().await;
         navigator.set_mob_dimensions(0.6, 2.9);
-        navigator.set_follow_range(64.0);
         navigator.set_pathfinding_malus(PathType::Water, -1.0);
         drop(navigator);
 
@@ -110,6 +114,16 @@ impl EndermanEntity {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::ATTACK_DAMAGE, 7.0)
+            .add(Attributes::FOLLOW_RANGE, 64.0)
+            .add(Attributes::MOVEMENT_SPEED, 0.3)
+            .add(Attributes::STEP_HEIGHT, 1.0)
+            .add(Attributes::MAX_HEALTH, 40.0)
     }
 
     pub async fn teleport_randomly(&self) -> bool {
@@ -245,19 +259,40 @@ impl EndermanEntity {
 
         if target.is_some() {
             self.set_angry(true).await;
-            // TODO: use attribute modifiers instead of direct speed arithmetic
+            // Use attribute modifier instead of direct speed arithmetic
             if !self.speed_boosted.swap(true, Ordering::Relaxed) {
                 let living = &self.mob_entity.living_entity;
-                let current = living.movement_speed.load();
-                living.movement_speed.store(current + SPEED_BOOST);
+                let modifier = Modifier {
+                    id: *ENDERMAN_SPEED_BOOST_UUID,
+                    amount: SPEED_BOOST,
+                    operation: ModifierOperation::Add,
+                };
+
+                living.update_attribute(&Attributes::MOVEMENT_SPEED, |inst| {
+                    inst.add_or_replace_modifier(modifier);
+                });
+
+                crate::entity::attributes::send_attribute_updates_for_living(
+                    living,
+                    vec![Attributes::MOVEMENT_SPEED],
+                )
+                .await;
             }
         } else {
             self.set_angry(false).await;
             self.set_provoked(false).await;
             if self.speed_boosted.swap(false, Ordering::Relaxed) {
                 let living = &self.mob_entity.living_entity;
-                let current = living.movement_speed.load();
-                living.movement_speed.store(current - SPEED_BOOST);
+
+                living.update_attribute(&Attributes::MOVEMENT_SPEED, |inst| {
+                    inst.remove_modifier(*ENDERMAN_SPEED_BOOST_UUID);
+                });
+
+                crate::entity::attributes::send_attribute_updates_for_living(
+                    living,
+                    vec![Attributes::MOVEMENT_SPEED],
+                )
+                .await;
             }
         }
     }

@@ -1,5 +1,7 @@
 use std::sync::{Arc, Weak};
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::{entity::EntityType, item::Item};
 
 use crate::entity::{
@@ -28,8 +30,6 @@ impl CowEntity {
             Arc::downgrade(&mob_arc)
         };
 
-        mob_arc.mob_entity.living_entity.movement_speed.store(0.2);
-
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
 
@@ -45,6 +45,13 @@ impl CowEntity {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::MOVEMENT_SPEED, 0.2)
+            .add(Attributes::MAX_HEALTH, 10.0)
     }
 }
 
