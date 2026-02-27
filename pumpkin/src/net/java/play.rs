@@ -1914,14 +1914,21 @@ impl JavaClient {
                 .await;
 
             let binding = inventory.entity_equipment.lock().await.get(equippable.slot);
-            let mut equip_item = binding.lock().await;
-            if equip_item.is_empty() {
-                *equip_item = held.clone();
-                held.decrement_unless_creative(player.gamemode.load(), 1);
-            } else {
-                let binding = held.clone();
-                *held = equip_item.clone();
-                *equip_item = binding;
+            // Guard against re-entrant deadlock: if item_in_hand IS the
+            // equipment slot (e.g. shield already in offhand, right-clicked
+            // to block), binding points to the same Mutex that `held`
+            // already locked. Locking it again would deadlock forever
+            // (tokio::sync::Mutex is not re-entrant).
+            if !Arc::ptr_eq(item_in_hand, &binding) {
+                let mut equip_item = binding.lock().await;
+                if equip_item.is_empty() {
+                    *equip_item = held.clone();
+                    held.decrement_unless_creative(player.gamemode.load(), 1);
+                } else {
+                    let binding = held.clone();
+                    *held = equip_item.clone();
+                    *equip_item = binding;
+                }
             }
         }
     }

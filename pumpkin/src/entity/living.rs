@@ -1477,15 +1477,25 @@ impl EntityBase for LivingEntity {
                             .await;
                     }
 
-                    // Apply potion effects
+                    // Apply potion effects (use get_data_component_owned for
+                    // cdylib compatibility — plugin-created components have
+                    // different TypeIds so downcast_ref alone fails silently).
+                    // Must use player.add_effect() (not self.add_effect()) so
+                    // the effect packet is sent to the client.
                     if let Some(potion_contents) =
-                        item.get_data_component::<PotionContentsImpl>()
+                        item.get_data_component_owned::<PotionContentsImpl>()
                     {
                         // Apply base potion effects (from potion_id)
                         if let Some(potion_id) = potion_contents.potion_id {
                             if let Some(potion) = Potion::from_id(potion_id as u8) {
-                                for effect in potion.effects {
-                                    self.add_effect(effect.clone()).await;
+                                if let Some(player) = caller.get_player() {
+                                    for effect in potion.effects {
+                                        player.add_effect(effect.clone()).await;
+                                    }
+                                } else {
+                                    for effect in potion.effects {
+                                        self.add_effect(effect.clone()).await;
+                                    }
                                 }
                             }
                         }
@@ -1494,7 +1504,7 @@ impl EntityBase for LivingEntity {
                             if let Some(status_effect) =
                                 StatusEffect::from_id(effect_instance.effect_id as u8)
                             {
-                                self.add_effect(Effect {
+                                let effect = Effect {
                                     effect_type: status_effect,
                                     duration: effect_instance.duration,
                                     amplifier: effect_instance.amplifier as u8,
@@ -1502,8 +1512,12 @@ impl EntityBase for LivingEntity {
                                     show_particles: effect_instance.show_particles,
                                     show_icon: effect_instance.show_icon,
                                     blend: false,
-                                })
-                                .await;
+                                };
+                                if let Some(player) = caller.get_player() {
+                                    player.add_effect(effect).await;
+                                } else {
+                                    self.add_effect(effect).await;
+                                }
                             }
                         }
                     }

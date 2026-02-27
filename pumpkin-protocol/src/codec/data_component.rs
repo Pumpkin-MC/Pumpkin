@@ -196,10 +196,10 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
             seq.serialize_field::<bool>("", &false)?;
         }
 
-        // Custom name (optional) — vanilla encodes as Optional<Component> (NBT-backed)
+        // Custom name (optional) — vanilla 1.21.11 encodes as Optional<String>
         if let Some(name) = &self.custom_name {
             seq.serialize_field::<bool>("", &true)?;
-            seq.serialize_field::<TextComponent>("", &TextComponent::text(name.clone()))?;
+            seq.serialize_field::<&str>("", &name.as_str())?;
         } else {
             seq.serialize_field::<bool>("", &false)?;
         }

@@ -90,6 +90,30 @@ impl ItemStack {
         }
         None
     }
+    /// Like `get_data_component`, but returns an owned clone.
+    /// Falls back to an NBT round-trip when `downcast_ref` fails (cdylib boundary).
+    #[must_use]
+    pub fn get_data_component_owned<T: DataComponentImpl + Clone + 'static>(&self) -> Option<T> {
+        // Fast path: normal downcast
+        if let Some(v) = self.get_data_component::<T>() {
+            return Some(v.clone());
+        }
+        // Slow path: cdylib TypeId mismatch — round-trip through NBT
+        let target_id = T::get_enum();
+        for (id, component) in &self.patch {
+            if *id == target_id {
+                if let Some(component) = component.as_ref() {
+                    let nbt = component.write_data();
+                    if let Some(reconstructed) = read_data(target_id, &nbt) {
+                        return reconstructed.as_any().downcast_ref::<T>().cloned();
+                    }
+                }
+                return None;
+            }
+        }
+        None
+    }
+
     pub fn get_data_component_mut<T: DataComponentImpl + 'static>(&mut self) -> Option<&mut T> {
         let to_get_id = &T::get_enum();
         for (id, component) in &mut self.patch {
