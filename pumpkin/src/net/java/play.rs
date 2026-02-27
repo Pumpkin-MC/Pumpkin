@@ -1525,8 +1525,9 @@ impl JavaClient {
                             let event =
                                 crate::plugin::player::harvest_block::PlayerHarvestBlockEvent::new(
                                     player.clone(),
+                                    world.clone(),
                                     location,
-                                    block,
+                                    state,
                                     tool,
                                     item_drops,
                                     exp_to_drop,
