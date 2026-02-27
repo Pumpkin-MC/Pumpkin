@@ -129,7 +129,6 @@ impl From<Number> for serde_json::Value {
             Number::Short(n) => n.into(),
             Number::Int(n) => n.into(),
             Number::Long(n) => n.into(),
-            // Serde JSON doesn't support infinity/NAN, so make those null.
             Number::Float(n) => n.into(),
             Number::Double(n) => n.into(),
         }
