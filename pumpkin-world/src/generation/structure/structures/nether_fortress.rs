@@ -25,9 +25,30 @@ use crate::{
     },
 };
 
-// ============================================================================
-// Fence state helpers
-// ============================================================================
+macro_rules! impl_piece_base {
+    ($ty:ty) => {
+        impl StructurePieceBase for $ty {
+            fn get_structure_piece(&self) -> &StructurePiece {
+                &self.piece.piece
+            }
+            fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+                &mut self.piece.piece
+            }
+            fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+                Box::new(self.clone())
+            }
+            fn place(
+                &mut self,
+                chunk: &mut ProtoChunk,
+                random: &mut RandomGenerator,
+                seed: i64,
+                chunk_box: &BlockBox,
+            ) {
+                self.place_blocks(chunk, random, seed, chunk_box);
+            }
+        }
+    };
+}
 
 type FenceProps = pumpkin_data::block_properties::OakFenceLikeProperties;
 
@@ -73,10 +94,6 @@ fn fence_w() -> &'static BlockState {
     make_fence(false, false, false, true)
 }
 
-// ============================================================================
-// Stairs & Chest state helpers
-// ============================================================================
-
 type StairProps = pumpkin_data::block_properties::OakStairsLikeProperties;
 
 fn make_stairs(facing: HorizontalFacing) -> &'static BlockState {
@@ -100,10 +117,6 @@ fn make_chest(facing: HorizontalFacing) -> &'static BlockState {
     BlockState::from_id(props.to_state_id(&Block::CHEST))
 }
 
-// ============================================================================
-// Generator
-// ============================================================================
-
 #[derive(Deserialize)]
 pub struct NetherFortressGenerator;
 
@@ -118,16 +131,13 @@ impl StructureGenerator for NetherFortressGenerator {
         let start_x = section_coords::section_to_block(context.chunk_x) + 2;
         let start_z = section_coords::section_to_block(context.chunk_z) + 2;
 
-        // Create start piece
         let mut start = StartPiece::new(&mut random, start_x, start_z);
 
         let start_piece = start.piece.clone();
         collector.add_piece(Box::new(start_piece.clone()));
 
-        // Fill initial openings from start piece
         start_piece.fill_openings(&mut start, &mut random, &mut collector);
 
-        // Process pieces queue (no iteration limit like vanilla)
         while !start.pieces.is_empty() {
             let idx = random.next_bounded_i32(start.pieces.len() as i32) as usize;
             let mut piece = start.pieces.remove(idx);
@@ -138,7 +148,6 @@ impl StructureGenerator for NetherFortressGenerator {
             return None;
         }
 
-        // Shift structure to random Y position between 48 and 70 (like vanilla)
         collector.shift_into_y_range(&mut random, 48, 70);
 
         let final_bbox = collector.get_bounding_box();
@@ -153,17 +162,13 @@ impl StructureGenerator for NetherFortressGenerator {
         Some(StructurePosition {
             start_pos: BlockPos::new(
                 section_coords::section_to_block(context.chunk_x),
-                final_bbox.min.y,
+                64,
                 section_coords::section_to_block(context.chunk_z),
             ),
             collector: Arc::new(Mutex::new(collector)),
         })
     }
 }
-
-// ============================================================================
-// Piece Types
-// ============================================================================
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NetherFortressPieceType {
@@ -182,10 +187,6 @@ pub enum NetherFortressPieceType {
     CorridorBalcony,
     CorridorNetherWartsRoom,
 }
-
-// ============================================================================
-// Piece Data (weights and limits)
-// ============================================================================
 
 #[derive(Clone)]
 pub struct PieceData {
@@ -245,10 +246,6 @@ fn get_corridor_pieces() -> Vec<PieceData> {
     ]
 }
 
-// ============================================================================
-// Start Piece (holds generation state)
-// ============================================================================
-
 pub struct StartPiece {
     pub piece: BridgeCrossingPiece,
     pub bridge_pieces: Vec<PieceData>,
@@ -260,7 +257,7 @@ pub struct StartPiece {
 impl StartPiece {
     pub fn new(random: &mut RandomGenerator, x: i32, z: i32) -> Self {
         let facing = StructurePiece::get_random_horizontal_direction(random);
-        let bbox = BlockBox::rotated(x, 64, z, -8, -3, 0, 19, 10, 19, &facing);
+        let bbox = BlockBox::create_box(x, 64, z, facing.get_axis(), 19, 10, 19);
 
         let mut piece = NetherFortressPiece::new(
             StructurePieceType::NetherFortressBridgeCrossing,
@@ -279,10 +276,6 @@ impl StartPiece {
         }
     }
 }
-
-// ============================================================================
-// Base piece wrapper
-// ============================================================================
 
 #[derive(Clone)]
 pub struct NetherFortressPiece {
@@ -307,10 +300,6 @@ impl NetherFortressPiece {
         bb.min.y > 10
     }
 }
-
-// ============================================================================
-// Fortress Piece Enum (for generation queue)
-// ============================================================================
 
 #[derive(Clone)]
 pub enum FortressPiece {
@@ -388,10 +377,6 @@ impl FortressPiece {
     }
 }
 
-// ============================================================================
-// Piece generation helpers
-// ============================================================================
-
 fn check_remaining_pieces(pieces: &[PieceData]) -> i32 {
     let mut has_limited = false;
     let mut total_weight = 0;
@@ -458,7 +443,6 @@ fn pick_piece(
                 pieces[idx].generated_count += 1;
                 start.last_piece = Some(piece_type);
 
-                // Remove from list if it can no longer generate (like vanilla)
                 if !pieces[idx].can_generate() {
                     pieces.remove(idx);
                 }
@@ -568,12 +552,10 @@ fn piece_generator(
 ) -> Option<FortressPiece> {
     let start_bbox = start.piece.piece.piece.bounding_box;
 
-    // Distance limit check (112 blocks)
     if (x - start_bbox.min.x).abs() > 112 || (z - start_bbox.min.z).abs() > 112 {
         return create_bridge_end(random, x, y, z, facing, chain_length, collector);
     }
 
-    // Collision check happens inside create functions (like vanilla)
     if let Some(new_piece) = pick_piece(
         start,
         inside,
@@ -593,7 +575,6 @@ fn piece_generator(
     None
 }
 
-// Opening fill helpers
 fn fill_forward_opening(
     piece: &StructurePiece,
     start: &mut StartPiece,
@@ -708,10 +689,6 @@ fn fill_se_opening(
     );
 }
 
-// ============================================================================
-// Bridge Piece (5x10x19, offset -1,-3,0)
-// ============================================================================
-
 #[derive(Clone)]
 pub struct BridgePiece {
     pub piece: NetherFortressPiece,
@@ -750,21 +727,9 @@ impl BridgePiece {
     ) {
         fill_forward_opening(&self.piece.piece, start, random, 1, 3, false, collector);
     }
-}
 
-impl StructurePieceBase for BridgePiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
@@ -832,23 +797,9 @@ impl StructurePieceBase for BridgePiece {
             .piece
             .fill_with_outline(chunk, &bb, false, 4, 1, 17, 4, 4, 17, fence_nsw, fence_nsw);
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// BridgeCrossing Piece (19x10x19, offset -8,-3,0)
-// ============================================================================
+impl_piece_base!(BridgePiece);
 
 #[derive(Clone)]
 pub struct BridgeCrossingPiece {
@@ -890,21 +841,9 @@ impl BridgeCrossingPiece {
         fill_nw_opening(&self.piece.piece, start, random, 3, 8, false, collector);
         fill_se_opening(&self.piece.piece, start, random, 3, 8, false, collector);
     }
-}
 
-impl StructurePieceBase for BridgeCrossingPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
@@ -997,23 +936,9 @@ impl StructurePieceBase for BridgeCrossingPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// BridgeSmallCrossing Piece (7x9x7, offset -2,0,0)
-// ============================================================================
+impl_piece_base!(BridgeCrossingPiece);
 
 #[derive(Clone)]
 pub struct BridgeSmallCrossingPiece {
@@ -1055,21 +980,9 @@ impl BridgeSmallCrossingPiece {
         fill_nw_opening(&self.piece.piece, start, random, 0, 2, false, collector);
         fill_se_opening(&self.piece.piece, start, random, 0, 2, false, collector);
     }
-}
 
-impl StructurePieceBase for BridgeSmallCrossingPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
@@ -1139,23 +1052,9 @@ impl StructurePieceBase for BridgeSmallCrossingPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// BridgeStairs Piece (7x11x7, offset -2,0,0)
-// ============================================================================
+impl_piece_base!(BridgeSmallCrossingPiece);
 
 #[derive(Clone)]
 pub struct BridgeStairsPiece {
@@ -1195,21 +1094,9 @@ impl BridgeStairsPiece {
     ) {
         fill_se_opening(&self.piece.piece, start, random, 6, 2, false, collector);
     }
-}
 
-impl StructurePieceBase for BridgeStairsPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
@@ -1281,27 +1168,14 @@ impl StructurePieceBase for BridgeStairsPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// BridgePlatform Piece (7x8x9, offset -2,0,0) - Blaze spawner
-// ============================================================================
+impl_piece_base!(BridgeStairsPiece);
 
 #[derive(Clone)]
 pub struct BridgePlatformPiece {
     pub piece: NetherFortressPiece,
+    pub has_blaze_spawner: bool,
 }
 
 impl BridgePlatformPiece {
@@ -1326,26 +1200,16 @@ impl BridgePlatformPiece {
             bbox,
         );
         piece.piece.set_facing(Some(facing));
-        Some(Self { piece })
-    }
-}
-
-impl StructurePieceBase for BridgePlatformPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
+        Some(Self {
+            piece,
+            has_blaze_spawner: false,
+        })
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
-        // TODO: Set block entity to spawn Blaze (requires ProtoChunk block entity support)
         let spawner = Block::SPAWNER.default_state;
 
         self.piece
@@ -1450,8 +1314,15 @@ impl StructurePieceBase for BridgePlatformPiece {
         self.piece.piece.add_block(chunk, fence_we(), 3, 8, 8, &bb);
         self.piece.piece.add_block(chunk, fence_w(), 4, 8, 8, &bb);
 
-        // Blaze spawner
-        self.piece.piece.add_block(chunk, spawner, 3, 5, 5, &bb);
+        // Blaze spawner (guarded to prevent double-placement across chunk boundaries)
+        if !self.has_blaze_spawner {
+            let pos = self.piece.piece.offset_pos(3, 5, 5);
+            if bb.contains_pos(&pos) {
+                self.has_blaze_spawner = true;
+                self.piece.piece.add_block(chunk, spawner, 3, 5, 5, &bb);
+                // TODO: Set block entity type to Blaze (requires ProtoChunk block entity support)
+            }
+        }
 
         for i in 0..=6 {
             for j in 0..=6 {
@@ -1461,23 +1332,9 @@ impl StructurePieceBase for BridgePlatformPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// BridgeEnd Piece (5x10x8, offset -1,-3,0) - Dead end cap
-// ============================================================================
+impl_piece_base!(BridgePlatformPiece);
 
 #[derive(Clone)]
 pub struct BridgeEndPiece {
@@ -1513,21 +1370,9 @@ impl BridgeEndPiece {
             seed: random.next_i32(),
         })
     }
-}
 
-impl StructurePieceBase for BridgeEndPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
 
         let mut rng = RandomGenerator::Legacy(
@@ -1568,23 +1413,9 @@ impl StructurePieceBase for BridgeEndPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// CorridorExit Piece (13x14x13, offset -5,-3,0) - Transition to corridor
-// ============================================================================
+impl_piece_base!(BridgeEndPiece);
 
 #[derive(Clone)]
 pub struct CorridorExitPiece {
@@ -1624,21 +1455,9 @@ impl CorridorExitPiece {
     ) {
         fill_forward_opening(&self.piece.piece, start, random, 5, 3, true, collector);
     }
-}
 
-impl StructurePieceBase for CorridorExitPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
         let lava = Block::LAVA.default_state;
@@ -1676,6 +1495,22 @@ impl StructurePieceBase for CorridorExitPiece {
         self.piece
             .piece
             .fill_with_outline(chunk, &bb, false, 2, 11, 2, 10, 12, 10, bricks, bricks);
+
+        // Default fence fill at entrance (vanilla line 699-701)
+        let default_fence = Block::NETHER_BRICK_FENCE.default_state;
+        self.piece.piece.fill_with_outline(
+            chunk,
+            &bb,
+            false,
+            5,
+            8,
+            0,
+            7,
+            8,
+            0,
+            default_fence,
+            default_fence,
+        );
 
         let fence_we = fence_we();
         let fence_ns = fence_ns();
@@ -1802,24 +1637,11 @@ impl StructurePieceBase for CorridorExitPiece {
             .fill_with_outline(chunk, &bb, false, 6, 1, 6, 6, 4, 6, air, air);
         self.piece.piece.add_block(chunk, bricks, 6, 0, 6, &bb);
         self.piece.piece.add_block(chunk, lava, 6, 5, 6, &bb);
-    }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
+        // TODO: schedule fluid tick for lava at (6, 5, 6) - requires ProtoChunk fluid tick support
     }
 }
 
-// ============================================================================
-// SmallCorridor Piece (5x7x5, offset -1,0,0)
-// ============================================================================
+impl_piece_base!(CorridorExitPiece);
 
 #[derive(Clone)]
 pub struct SmallCorridorPiece {
@@ -1859,21 +1681,9 @@ impl SmallCorridorPiece {
     ) {
         fill_forward_opening(&self.piece.piece, start, random, 1, 0, true, collector);
     }
-}
 
-impl StructurePieceBase for SmallCorridorPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
@@ -1915,23 +1725,9 @@ impl StructurePieceBase for SmallCorridorPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// CorridorCrossing Piece (5x7x5, offset -1,0,0)
-// ============================================================================
+impl_piece_base!(SmallCorridorPiece);
 
 #[derive(Clone)]
 pub struct CorridorCrossingPiece {
@@ -1973,21 +1769,9 @@ impl CorridorCrossingPiece {
         fill_nw_opening(&self.piece.piece, start, random, 0, 1, true, collector);
         fill_se_opening(&self.piece.piece, start, random, 0, 1, true, collector);
     }
-}
 
-impl StructurePieceBase for CorridorCrossingPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
@@ -2021,23 +1805,9 @@ impl StructurePieceBase for CorridorCrossingPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// CorridorRightTurn Piece (5x7x5, offset -1,0,0)
-// ============================================================================
+impl_piece_base!(CorridorCrossingPiece);
 
 #[derive(Clone)]
 pub struct CorridorRightTurnPiece {
@@ -2083,21 +1853,9 @@ impl CorridorRightTurnPiece {
     ) {
         fill_se_opening(&self.piece.piece, start, random, 0, 1, true, collector);
     }
-}
 
-impl StructurePieceBase for CorridorRightTurnPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
@@ -2132,10 +1890,15 @@ impl StructurePieceBase for CorridorRightTurnPiece {
             .piece
             .fill_with_outline(chunk, &bb, false, 3, 3, 4, 3, 4, 4, fence_we, fence_we);
 
-        // Chest (33% chance, set during creation)
+        // Chest (33% chance, guarded to prevent double-placement across chunk boundaries)
         if self.contains_chest {
-            let chest = make_chest(HorizontalFacing::East);
-            self.piece.piece.add_block(chunk, chest, 1, 2, 3, &bb);
+            let pos = self.piece.piece.offset_pos(1, 2, 3);
+            if bb.contains_pos(&pos) {
+                self.contains_chest = false;
+                let chest = make_chest(HorizontalFacing::East);
+                self.piece.piece.add_block(chunk, chest, 1, 2, 3, &bb);
+                // TODO: Associate loot table LootTables.NETHER_BRIDGE_CHEST
+            }
         }
 
         self.piece
@@ -2150,23 +1913,9 @@ impl StructurePieceBase for CorridorRightTurnPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// CorridorLeftTurn Piece (5x7x5, offset -1,0,0)
-// ============================================================================
+impl_piece_base!(CorridorRightTurnPiece);
 
 #[derive(Clone)]
 pub struct CorridorLeftTurnPiece {
@@ -2212,21 +1961,9 @@ impl CorridorLeftTurnPiece {
     ) {
         fill_nw_opening(&self.piece.piece, start, random, 0, 1, true, collector);
     }
-}
 
-impl StructurePieceBase for CorridorLeftTurnPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
@@ -2261,10 +1998,15 @@ impl StructurePieceBase for CorridorLeftTurnPiece {
             .piece
             .fill_with_outline(chunk, &bb, false, 3, 3, 4, 3, 4, 4, fence_we, fence_we);
 
-        // Chest (33% chance, set during creation)
+        // Chest (33% chance, guarded to prevent double-placement across chunk boundaries)
         if self.contains_chest {
-            let chest = make_chest(HorizontalFacing::West);
-            self.piece.piece.add_block(chunk, chest, 3, 2, 3, &bb);
+            let pos = self.piece.piece.offset_pos(3, 2, 3);
+            if bb.contains_pos(&pos) {
+                self.contains_chest = false;
+                let chest = make_chest(HorizontalFacing::West);
+                self.piece.piece.add_block(chunk, chest, 3, 2, 3, &bb);
+                // TODO: Associate loot table LootTables.NETHER_BRIDGE_CHEST
+            }
         }
 
         self.piece
@@ -2279,23 +2021,9 @@ impl StructurePieceBase for CorridorLeftTurnPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// CorridorStairs Piece (5x14x10, offset -1,-7,0)
-// ============================================================================
+impl_piece_base!(CorridorLeftTurnPiece);
 
 #[derive(Clone)]
 pub struct CorridorStairsPiece {
@@ -2335,21 +2063,9 @@ impl CorridorStairsPiece {
     ) {
         fill_forward_opening(&self.piece.piece, start, random, 1, 0, true, collector);
     }
-}
 
-impl StructurePieceBase for CorridorStairsPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
         let stairs = make_stairs(HorizontalFacing::South);
@@ -2449,23 +2165,9 @@ impl StructurePieceBase for CorridorStairsPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// CorridorBalcony Piece (9x7x9, offset -3,0,0)
-// ============================================================================
+impl_piece_base!(CorridorStairsPiece);
 
 #[derive(Clone)]
 pub struct CorridorBalconyPiece {
@@ -2515,21 +2217,9 @@ impl CorridorBalconyPiece {
         let inside = random.next_bounded_i32(8) > 0;
         fill_se_opening(&self.piece.piece, start, random, 0, i, inside, collector);
     }
-}
 
-impl StructurePieceBase for CorridorBalconyPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
 
@@ -2604,23 +2294,9 @@ impl StructurePieceBase for CorridorBalconyPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
 
-// ============================================================================
-// CorridorNetherWartsRoom Piece (13x14x13, offset -5,-3,0)
-// ============================================================================
+impl_piece_base!(CorridorBalconyPiece);
 
 #[derive(Clone)]
 pub struct CorridorNetherWartsRoomPiece {
@@ -2658,25 +2334,12 @@ impl CorridorNetherWartsRoomPiece {
         random: &mut RandomGenerator,
         collector: &mut StructurePiecesCollector,
     ) {
-        // Two forward openings at z offsets 3 and 11
         fill_forward_opening(&self.piece.piece, start, random, 5, 3, true, collector);
         fill_forward_opening(&self.piece.piece, start, random, 5, 11, true, collector);
     }
-}
 
-impl StructurePieceBase for CorridorNetherWartsRoomPiece {
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece.piece
-    }
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let bb = self.piece.piece.bounding_box;
+    fn place_blocks(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64, chunk_box: &BlockBox) {
+        let bb = *chunk_box;
         let bricks = Block::NETHER_BRICKS.default_state;
         let air = Block::AIR.default_state;
         let soul_sand = Block::SOUL_SAND.default_state;
@@ -2792,6 +2455,119 @@ impl StructurePieceBase for CorridorNetherWartsRoomPiece {
             );
         }
 
+        // Central staircase (north-facing nether brick stairs, rising from z=4 to z=10)
+        let stairs_north = make_stairs(HorizontalFacing::North);
+        for j in 0..=6 {
+            let k = j + 4;
+            for l in 5..=7 {
+                self.piece
+                    .piece
+                    .add_block(chunk, stairs_north, l, 5 + j, k, &bb);
+            }
+            if k >= 5 && k <= 8 {
+                self.piece.piece.fill_with_outline(
+                    chunk, &bb, false, 5, 5, k, 7, j + 4, k, bricks, bricks,
+                );
+            } else if k >= 9 && k <= 10 {
+                self.piece.piece.fill_with_outline(
+                    chunk, &bb, false, 5, 8, k, 7, j + 4, k, bricks, bricks,
+                );
+            }
+            if j >= 1 {
+                self.piece.piece.fill_with_outline(
+                    chunk, &bb, false, 5, 6 + j, k, 7, 9 + j, k, air, air,
+                );
+            }
+        }
+
+        // Top stairs at back
+        for j in 5..=7 {
+            self.piece
+                .piece
+                .add_block(chunk, stairs_north, j, 12, 11, &bb);
+        }
+
+        // Fence accents on staircase platform
+        self.piece.piece.fill_with_outline(
+            chunk,
+            &bb,
+            false,
+            5,
+            6,
+            7,
+            5,
+            7,
+            7,
+            fence_nse(),
+            fence_nse(),
+        );
+        self.piece.piece.fill_with_outline(
+            chunk,
+            &bb,
+            false,
+            7,
+            6,
+            7,
+            7,
+            7,
+            7,
+            fence_nsw(),
+            fence_nsw(),
+        );
+
+        // Clear air at back ceiling opening
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 5, 13, 12, 7, 13, 12, air, air);
+
+        // Platform blocks around the soul sand gardens
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 5, 2, 3, 5, 3, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 5, 9, 3, 5, 10, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 2, 5, 4, 2, 5, 8, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 9, 5, 2, 10, 5, 3, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 9, 5, 9, 10, 5, 10, bricks, bricks);
+        self.piece
+            .piece
+            .fill_with_outline(chunk, &bb, false, 10, 5, 4, 10, 5, 8, bricks, bricks);
+
+        // Side stairs (east/west facing)
+        let stairs_east = make_stairs(HorizontalFacing::East);
+        let stairs_west = make_stairs(HorizontalFacing::West);
+        self.piece
+            .piece
+            .add_block(chunk, stairs_west, 4, 5, 2, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, stairs_west, 4, 5, 3, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, stairs_west, 4, 5, 9, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, stairs_west, 4, 5, 10, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, stairs_east, 8, 5, 2, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, stairs_east, 8, 5, 3, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, stairs_east, 8, 5, 9, &bb);
+        self.piece
+            .piece
+            .add_block(chunk, stairs_east, 8, 5, 10, &bb);
+
         // Soul sand and nether wart
         self.piece
             .piece
@@ -2867,16 +2643,6 @@ impl StructurePieceBase for CorridorNetherWartsRoomPiece {
             }
         }
     }
-
-    fn fill_openings(
-        &self,
-        _: &StructurePiece,
-        _: &mut RandomGenerator,
-        _: &mut Vec<super::stronghold::PieceWeight>,
-        _: &mut Option<super::stronghold::StrongholdPieceType>,
-        _: &mut bool,
-        _: &mut StructurePiecesCollector,
-        _: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-    }
 }
+
+impl_piece_base!(CorridorNetherWartsRoomPiece);
