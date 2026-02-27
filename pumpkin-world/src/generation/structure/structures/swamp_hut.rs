@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use pumpkin_data::Block;
-use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+use pumpkin_util::{
+    math::{block_box::BlockBox, position::BlockPos},
+    random::RandomGenerator,
+};
 use serde::Deserialize;
 
 use crate::{
@@ -61,7 +64,13 @@ impl StructurePieceBase for SwampHutPiece {
         Box::new(self.clone())
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         if !self
             .shiftable_structure_piece
             .adjust_to_average_height(chunk)
@@ -69,7 +78,7 @@ impl StructurePieceBase for SwampHutPiece {
             return;
         }
 
-        let box_limit = self.shiftable_structure_piece.piece.bounding_box;
+        let box_limit = *chunk_box;
         let p = &self.shiftable_structure_piece.piece;
 
         let spruce_planks = Block::SPRUCE_PLANKS.default_state;
