@@ -57,8 +57,7 @@ impl BlockBehaviour for FallingBlock {
                 return;
             }
             let state = args.world.get_block_state(args.position).await;
-            FallingEntity::replace_spawn(args.world, *args.position, state.id)
-                .await;
+            FallingEntity::replace_spawn(args.world, *args.position, state.id).await;
         })
     }
 }
