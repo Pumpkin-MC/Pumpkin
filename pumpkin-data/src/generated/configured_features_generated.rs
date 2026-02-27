@@ -9338,7 +9338,11 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     map.insert(
         "underwater_magma".to_string(),
         ConfiguredFeature::UnderwaterMagma(
-            crate::generation::feature::features::underwater_magma::UnderwaterMagmaFeature {},
+            crate::generation::feature::features::underwater_magma::UnderwaterMagmaFeature {
+                floor_search_range: 5i32,
+                placement_radius: 1i32,
+                placement_probability: 0.5f32,
+            },
         ),
     );
     map.insert(

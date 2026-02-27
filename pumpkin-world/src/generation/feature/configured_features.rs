@@ -291,6 +291,9 @@ impl ConfiguredFeature {
             Self::Seagrass(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::UnderwaterMagma(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
             Self::SeaPickle(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
