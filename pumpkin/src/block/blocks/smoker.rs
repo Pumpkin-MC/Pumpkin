@@ -3,6 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::{
     block_properties::{BlockProperties, FurnaceLikeProperties},
     screen::WindowType,
+    translation,
 };
 use pumpkin_inventory::{
     furnace_like::furnace_like_screen_handler::FurnaceLikeScreenHandler,
@@ -73,7 +74,7 @@ impl ScreenHandlerFactory for SmokerScreenFactory {
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
-        TextComponent::translate("container.smoker", &[])
+        TextComponent::translate(translation::CONTAINER_SMOKER, &[])
     }
 }
 #[pumpkin_block("minecraft:smoker")]
@@ -90,7 +91,7 @@ impl BlockBehaviour for SmokerBlock {
                 let smoker_screen_factory =
                     SmokerScreenFactory::new(inventory, property_delegate, experience_container);
                 args.player
-                    .open_handled_screen(&smoker_screen_factory)
+                    .open_handled_screen(&smoker_screen_factory, Some(*args.position))
                     .await;
             }
             crate::block::registry::BlockActionResult::Consume

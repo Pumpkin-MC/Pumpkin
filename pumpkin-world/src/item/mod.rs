@@ -294,6 +294,11 @@ impl ItemStack {
         self.item_count = self.item_count.saturating_add(amount);
     }
 
+    /// Completely resets the stack to air
+    pub fn clear(&mut self) {
+        *self = Self::EMPTY.clone();
+    }
+
     pub fn enchant(&mut self, enchantment: &'static Enchantment, level: i32) {
         // TODO itemstack may not send update packet to client
         if level <= 0 {
@@ -327,23 +332,23 @@ impl ItemStack {
             return false;
         }
         for (id, data) in &self.patch {
-            let mut not_find = true;
+            let mut not_found = true;
             'out: for (other_id, other_data) in &other.patch {
                 if id == other_id {
                     if let (Some(data), Some(other_data)) = (data, other_data) {
-                        if data.equal(other_data.as_ref()) {
+                        if !data.equal(other_data.as_ref()) {
                             return false;
                         }
-                        not_find = false;
+                        not_found = false;
                         break 'out;
                     } else if data.is_none() && other_data.is_none() {
-                        not_find = false;
+                        not_found = false;
                         break 'out;
                     }
                     return false;
                 }
             }
-            if not_find {
+            if not_found {
                 return false;
             }
         }

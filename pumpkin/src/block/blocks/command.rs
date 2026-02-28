@@ -1,6 +1,5 @@
 use std::sync::{Arc, atomic::Ordering};
 
-use log::warn;
 use pumpkin_data::{
     Block, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
@@ -11,6 +10,7 @@ use pumpkin_world::{
     block::entities::{BlockEntity, command_block::CommandBlockEntity},
     tick::TickPriority,
 };
+use tracing::warn;
 
 use crate::{
     block::{
@@ -131,7 +131,9 @@ impl CommandBlock {
         if !command_blocks_work {
             return;
         }
-        let command_entity: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
+
+        let command_entity: Arc<CommandBlockEntity> = Arc::downcast(block_entity).unwrap();
+
         if command.is_empty() {
             command_entity.success_count.store(0, Ordering::Release);
         } else {
@@ -140,7 +142,7 @@ impl CommandBlock {
                 .read()
                 .await
                 .handle_command(
-                    &crate::command::CommandSender::CommandBlock(block_entity, world),
+                    &crate::command::CommandSender::CommandBlock(command_entity, world),
                     server,
                     command,
                 )

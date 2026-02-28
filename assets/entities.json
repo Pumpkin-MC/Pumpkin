@@ -17,6 +17,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:acacia_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "acacia_chest_boat": {
@@ -37,6 +52,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:acacia_chest_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "allay": {
@@ -197,6 +227,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:bamboo_chest_raft"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "bamboo_raft": {
@@ -217,6 +262,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:bamboo_raft"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "bat": {
@@ -287,6 +347,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:birch_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "birch_chest_boat": {
@@ -307,6 +382,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:birch_chest_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "blaze": {
@@ -840,6 +930,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:cherry_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "cherry_chest_boat": {
@@ -860,6 +965,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:cherry_chest_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "chest_minecart": {
@@ -1407,6 +1527,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:dark_oak_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "dark_oak_chest_boat": {
@@ -1427,6 +1562,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:dark_oak_chest_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "dolphin": {
@@ -3389,6 +3539,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:jungle_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "jungle_chest_boat": {
@@ -3409,6 +3574,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:jungle_chest_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "leash_knot": {
@@ -3700,6 +3880,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:mangrove_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "mangrove_chest_boat": {
@@ -3720,6 +3915,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:mangrove_chest_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "mannequin": {
@@ -4037,6 +4247,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:oak_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "oak_chest_boat": {
@@ -4057,6 +4282,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:oak_chest_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "ocelot": {
@@ -4142,6 +4382,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:pale_oak_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "pale_oak_chest_boat": {
@@ -4162,6 +4417,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:pale_oak_chest_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "panda": {
@@ -6206,6 +6476,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:spruce_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "spruce_chest_boat": {
@@ -6226,6 +6511,21 @@
     "spawn_restriction": {
       "location": "UNRESTRICTED",
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    },
+    "loot_table": {
+      "type": "minecraft:entity",
+      "pools": [
+        {
+          "entries": [
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:spruce_chest_boat"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0
+        }
+      ]
     }
   },
   "squid": {

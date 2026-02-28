@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use tokio::sync::Mutex;
+use tracing::info;
 
 pub mod format;
 pub mod io;
@@ -80,7 +81,8 @@ pub struct ChunkData {
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
     pub block_entities: std::sync::Mutex<FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
-    pub light_engine: ChunkLight,
+    pub light_engine: std::sync::Mutex<ChunkLight>,
+    pub light_populated: AtomicBool,
     pub status: ChunkStatus,
     pub dirty: AtomicBool,
 }
@@ -269,7 +271,7 @@ impl ChunkHeightmaps {
             .collect::<Vec<_>>()
             .join("\n");
 
-        log::info!("\nHeightMap:\n{header}\n{grid}");
+        info!("\nHeightMap:\n{header}\n{grid}");
     }
 }
 

@@ -47,15 +47,13 @@ impl Goal for CreeperIgniteGoal {
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             let mut navigator = mob.get_mob_entity().navigator.lock().await;
-            navigator.cancel();
-
-            // TODO
+            navigator.stop();
         })
     }
 
     fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            // TODO
+            self.creeper.set_fuse_speed(-1).await;
         })
     }
 
@@ -77,7 +75,7 @@ impl Goal for CreeperIgniteGoal {
             if dist_sq > 49.0 {
                 self.creeper.set_fuse_speed(-1).await;
             }
-            // TODO: Check line of sight
+            // TODO: line of sight check (needs world raycast)
             else {
                 self.creeper.set_fuse_speed(1).await;
             }

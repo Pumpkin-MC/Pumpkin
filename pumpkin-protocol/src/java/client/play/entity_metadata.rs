@@ -1,13 +1,16 @@
+use std::io::{Cursor, Write};
+
 use pumpkin_data::{
-    meta_data_type::MetaDataType, packet::clientbound::PLAY_SET_ENTITY_DATA,
-    tracked_data::TrackedId,
+    block_state_remap::remap_block_state_for_version, meta_data_type::MetaDataType,
+    packet::clientbound::PLAY_SET_ENTITY_DATA, tracked_data::TrackedId,
 };
 use pumpkin_macros::java_packet;
+use pumpkin_util::version::MinecraftVersion;
 use serde::Serialize;
 
 use crate::{
-    VarInt,
-    ser::{NetworkWriteExt, WritingError, network_serialize_no_prefix, serializer},
+    ClientPacket, VarInt,
+    ser::{NetworkWriteExt, WritingError, serializer},
 };
 
 /// Updates the "Data Tracker" values for an entity.
@@ -15,14 +18,12 @@ use crate::{
 /// Entity Metadata (or `DataWatchers`) controls persistent visual states that
 /// don't require a full packet to update, such as whether an entity is on fire,
 /// crouching, glowing, or the custom name displayed above its head.
-#[derive(Serialize)]
 #[java_packet(PLAY_SET_ENTITY_DATA)]
 pub struct CSetEntityMetadata {
     /// The Entity ID of the entity whose metadata is being updated.
     pub entity_id: VarInt,
     /// A serialized collection of metadata entries.
     /// Ends with a terminal byte (0xFF).
-    #[serde(serialize_with = "network_serialize_no_prefix")]
     pub metadata: Box<[u8]>,
 }
 
@@ -36,9 +37,26 @@ impl CSetEntityMetadata {
     }
 }
 
+impl ClientPacket for CSetEntityMetadata {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let mut write = write;
+
+        // 1. Entity ID
+        write.write_var_int(&self.entity_id)?;
+
+        write
+            .write_all(&self.metadata)
+            .map_err(WritingError::IoError)
+    }
+}
+
 pub struct Metadata<T> {
     index: TrackedId,
-    r#type: VarInt,
+    r#type: MetaDataType,
     value: T,
 }
 
@@ -46,7 +64,7 @@ impl<T> Metadata<T> {
     pub const fn new(index: TrackedId, r#type: MetaDataType, value: T) -> Self {
         Self {
             index,
-            r#type: VarInt(r#type as i32),
+            r#type,
             value,
         }
     }
@@ -65,8 +83,34 @@ impl<T> Metadata<T> {
             return Ok(());
         }
 
+        let remapped_type_id = self.r#type.id(*version);
+        if remapped_type_id < 0 {
+            // Metadata type does not exist in this protocol version.
+            return Ok(());
+        }
+
         writer.write_u8(resolved_index)?;
-        self.r#type.encode(&mut writer)?;
+        writer.write_var_int(&VarInt(remapped_type_id))?;
+
+        if self.r#type == MetaDataType::BLOCK_STATE {
+            let mut serialized_value = Vec::new();
+            {
+                let mut serializer = serializer::Serializer::new(&mut serialized_value);
+                self.value
+                    .serialize(&mut serializer)
+                    .map_err(|e| WritingError::Serde(e.to_string()))?;
+            };
+
+            let mut cursor = Cursor::new(serialized_value);
+            let decoded_state = VarInt::decode(&mut cursor).map_err(|e| {
+                WritingError::Message(format!("Failed to decode block state metadata: {e}"))
+            })?;
+            let remapped_state = u16::try_from(decoded_state.0).map_or(decoded_state, |state_id| {
+                VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
+            });
+            writer.write_var_int(&remapped_state)?;
+            return Ok(());
+        }
 
         let mut serializer = serializer::Serializer::new(&mut writer);
         self.value

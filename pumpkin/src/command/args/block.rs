@@ -1,5 +1,5 @@
-use pumpkin_data::Block;
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
+use pumpkin_data::{Block, translation};
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
@@ -56,12 +56,12 @@ impl<'a> FindArg<'a> for BlockArgumentConsumer {
                 || {
                     if name.starts_with("minecraft:") {
                         Err(CommandError::CommandFailed(TextComponent::translate(
-                            "argument.block.id.invalid",
+                            translation::ARGUMENT_BLOCK_ID_INVALID,
                             [TextComponent::text((*name).to_string())],
                         )))
                     } else {
                         Err(CommandError::CommandFailed(TextComponent::translate(
-                            "argument.block.id.invalid",
+                            translation::ARGUMENT_BLOCK_ID_INVALID,
                             [TextComponent::text("minecraft:".to_string() + *name)],
                         )))
                     }
@@ -122,12 +122,12 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
                         || {
                             if name.starts_with("minecraft:") {
                                 Err(CommandError::CommandFailed(TextComponent::translate(
-                                    "argument.block.id.invalid",
+                                    translation::ARGUMENT_BLOCK_ID_INVALID,
                                     [TextComponent::text((*name).to_string())],
                                 )))
                             } else {
                                 Err(CommandError::CommandFailed(TextComponent::translate(
-                                    "argument.block.id.invalid",
+                                    translation::ARGUMENT_BLOCK_ID_INVALID,
                                     [TextComponent::text("minecraft:".to_string() + *name)],
                                 )))
                             }
@@ -139,7 +139,7 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
                     get_tag_ids(RegistryKey::Block, tag).map_or_else(
                         || {
                             Err(CommandError::CommandFailed(TextComponent::translate(
-                                "arguments.block.tag.unknown",
+                                translation::ARGUMENTS_BLOCK_TAG_UNKNOWN,
                                 [TextComponent::text((*tag).to_string())],
                             )))
                         },

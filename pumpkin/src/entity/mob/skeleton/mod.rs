@@ -1,5 +1,7 @@
 use std::sync::{Arc, Weak};
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
@@ -11,14 +13,19 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-//pub mod skeleton;
+pub mod bogged;
+pub mod parched;
+#[allow(clippy::module_inception)]
+pub mod skeleton;
+pub mod stray;
+pub mod wither;
 
 pub struct SkeletonEntityBase {
     pub mob_entity: MobEntity,
 }
 
 impl SkeletonEntityBase {
-    pub async fn make(entity: Entity) -> Arc<Self> {
+    pub async fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let mob = Self { mob_entity };
         let mob_arc = Arc::new(mob);
@@ -43,6 +50,11 @@ impl SkeletonEntityBase {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.25)
     }
 }
 

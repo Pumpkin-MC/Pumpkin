@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use pumpkin_data::translation;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 
@@ -131,7 +132,7 @@ async fn set_spawnpoint(sender: &CommandSender, target: &Arc<Player>, pos: Block
 
     sender
         .send_message(TextComponent::translate(
-            "commands.spawnpoint.success.single",
+            translation::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
             [
                 TextComponent::text(pos.0.x.to_string()),
                 TextComponent::text(pos.0.y.to_string()),

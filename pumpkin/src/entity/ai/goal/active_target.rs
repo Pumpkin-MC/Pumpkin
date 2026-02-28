@@ -6,13 +6,13 @@ use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::{EntityBase, mob::MobEntity, player::Player};
 use crate::world::World;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use rand::RngExt;
 use std::sync::Arc;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
 
-#[expect(dead_code)]
 pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
@@ -35,8 +35,10 @@ impl ActiveTargetGoal {
         Fut: Future<Output = bool> + Send + 'static,
     {
         let track_target_goal = TrackTargetGoal::new(check_visibility, check_can_navigate);
-        let mut target_predicate = TargetPredicate::attackable();
-        target_predicate.base_max_distance = TrackTargetGoal::get_follow_range(mob);
+        let mut target_predicate = TargetPredicate::create_attackable();
+        target_predicate.base_max_distance = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
         if let Some(predicate) = predicate {
             target_predicate.set_predicate(predicate);
         }
@@ -56,8 +58,10 @@ impl ActiveTargetGoal {
         check_visibility: bool,
     ) -> Box<Self> {
         let track_target_goal = TrackTargetGoal::with_default(check_visibility);
-        let mut target_predicate = TargetPredicate::attackable();
-        target_predicate.base_max_distance = TrackTargetGoal::get_follow_range(mob);
+        let mut target_predicate = TargetPredicate::create_attackable();
+        target_predicate.base_max_distance = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
         Box::new(Self {
             track_target_goal,
             target: None,
@@ -70,19 +74,40 @@ impl ActiveTargetGoal {
     fn find_closest_target(&mut self, mob: &MobEntity) {
         let world = mob.living_entity.entity.world.load();
         if self.target_type == &EntityType::PLAYER {
-            self.target = world
+            let potential_player = world
                 .get_closest_player(
                     mob.living_entity.entity.pos.load(),
-                    TrackTargetGoal::get_follow_range(mob).into(),
+                    mob.living_entity
+                        .get_attribute_value(&Attributes::FOLLOW_RANGE),
                 )
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+            if let Some(potential_entity) = potential_player
+                && let Some(living) = potential_entity.get_living_entity()
+                && self
+                    .target_predicate
+                    .test(&world, Some(&mob.living_entity), living)
+            {
+                self.target = Some(potential_entity);
+                return;
+            }
         } else {
-            self.target = world.get_closest_entity(
+            let potential_entity = world.get_closest_entity(
                 mob.living_entity.entity.pos.load(),
-                TrackTargetGoal::get_follow_range(mob).into(),
+                mob.living_entity
+                    .get_attribute_value(&Attributes::FOLLOW_RANGE),
                 Some(&[self.target_type]),
             );
+            if let Some(potential_entity) = potential_entity
+                && let Some(living) = potential_entity.get_living_entity()
+                && self
+                    .target_predicate
+                    .test(&world, Some(&mob.living_entity), living)
+            {
+                self.target = Some(potential_entity);
+                return;
+            }
         }
+        self.target = None;
     }
 }
 
@@ -104,9 +129,7 @@ impl Goal for ActiveTargetGoal {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
-            let mob_entity = mob.get_mob_entity();
-            let mut mob_target = mob_entity.target.lock().await;
-            (*mob_target).clone_from(&self.target);
+            mob.set_mob_target(self.target.clone()).await;
 
             self.track_target_goal.start(mob).await;
         })

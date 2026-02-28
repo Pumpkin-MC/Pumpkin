@@ -13,11 +13,13 @@ use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
+use trapped_chest::TrappedChestBlockEntity;
 
 use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity;
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
+use crate::block::entities::jukebox::JukeboxBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::block::entities::smoker::SmokerBlockEntity;
@@ -30,6 +32,7 @@ pub mod barrel;
 pub mod bed;
 pub mod blasting_furnace;
 pub mod chest;
+pub mod chest_like_block_entity;
 pub mod chiseled_bookshelf;
 pub mod command_block;
 pub mod comparator;
@@ -39,14 +42,16 @@ pub mod ender_chest;
 pub mod furnace;
 pub mod furnace_like_block_entity;
 pub mod hopper;
+pub mod jukebox;
 pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
 pub mod sign;
 pub mod smoker;
+pub mod trapped_chest;
 
 //TODO: We need a mark_dirty for chests
-pub trait BlockEntity: Send + Sync {
+pub trait BlockEntity: Any + Send + Sync {
     fn write_nbt<'a>(
         &'a self,
         nbt: &'a mut NbtCompound,
@@ -112,6 +117,11 @@ pub trait BlockEntity: Send + Sync {
         false
     }
 
+    fn clear_dirty(&self) {
+        // Default implementation does nothing
+        // Override in implementations that have a dirty flag
+    }
+
     fn as_any(&self) -> &dyn Any;
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
         None
@@ -133,9 +143,13 @@ pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
 pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> {
     Some(match nbt.get_string("id").unwrap() {
         ChestBlockEntity::ID => Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt)),
+        TrappedChestBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<TrappedChestBlockEntity>(nbt))
+        }
         EnderChestBlockEntity::ID => {
             Arc::new(block_entity_from_generic::<EnderChestBlockEntity>(nbt))
         }
+        JukeboxBlockEntity::ID => Arc::new(block_entity_from_generic::<JukeboxBlockEntity>(nbt)),
         SignBlockEntity::ID => Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt)),
         BedBlockEntity::ID => Arc::new(block_entity_from_generic::<BedBlockEntity>(nbt)),
         ComparatorBlockEntity::ID => {

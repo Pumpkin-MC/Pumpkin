@@ -1,4 +1,4 @@
-use pumpkin_data::damage::DamageType;
+use pumpkin_data::{damage::DamageType, translation};
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
@@ -40,14 +40,14 @@ async fn send_damage_result(
 ) -> Result<i32, CommandError> {
     if !success {
         return Err(CommandError::CommandFailed(TextComponent::translate(
-            "commands.damage.invulnerable",
+            translation::COMMANDS_DAMAGE_INVULNERABLE,
             [],
         )));
     }
 
     sender
         .send_message(TextComponent::translate(
-            "commands.damage.success",
+            translation::COMMANDS_DAMAGE_SUCCESS,
             [TextComponent::text(amount.to_string()), target_name],
         ))
         .await;

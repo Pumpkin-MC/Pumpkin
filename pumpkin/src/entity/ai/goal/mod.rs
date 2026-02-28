@@ -3,14 +3,31 @@ use std::{any::TypeId, ops::BitOr, pin::Pin, ptr};
 
 pub mod active_target;
 pub mod ambient_stand;
+pub mod avoid_entity;
+pub mod beg;
+pub mod breed;
+pub mod chase_player;
 pub mod creeper_ignite;
+pub mod eat_grass;
+pub mod escape_danger;
+pub mod follow_owner;
+pub mod follow_parent;
 pub mod goal_selector;
 pub mod look_around;
 pub mod look_at_entity;
-mod melee_attack;
+pub mod melee_attack;
 pub mod move_to_target_pos;
+pub mod owner_hurt_by_target;
+pub mod owner_hurt_target;
+pub mod pick_up_block;
+pub mod place_block;
+pub mod revenge;
 pub mod step_and_destroy_block;
-mod track_target;
+pub mod swim;
+pub mod teleport_towards_player;
+pub mod tempt;
+pub(crate) mod track_target;
+pub mod wander_around;
 pub mod zombie_attack;
 
 #[must_use]

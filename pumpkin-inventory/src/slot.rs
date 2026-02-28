@@ -245,7 +245,11 @@ pub trait Slot: Send + Sync {
                     }
                 }
             }
-            stack
+            if stack.is_empty() {
+                ItemStack::EMPTY.clone()
+            } else {
+                stack
+            }
         })
     }
 }
