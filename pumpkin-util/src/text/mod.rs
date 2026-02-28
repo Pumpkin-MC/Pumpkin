@@ -5,6 +5,7 @@ use crate::translation::{
 use click::ClickEvent;
 use color::Color;
 use colored::Colorize;
+use pumpkin_nbt::serializer::Serializer;
 use core::str;
 use hover::HoverEvent;
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
@@ -445,8 +446,8 @@ impl TextComponent {
     pub fn encode(&self) -> Box<[u8]> {
         let mut buf = Vec::new();
         // TODO: Properly handle errors
-        pumpkin_nbt::serializer::to_bytes_unnamed(&self, &mut buf)
-            .expect("Failed to serialize text component NBT for encode");
+        let mut serializer = Serializer::new(&mut buf, None);
+        self.0.clone().to_translated().serialize(&mut serializer).expect("Failed to serialize text component NBT for encode");
 
         buf.into_boxed_slice()
     }
