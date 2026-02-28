@@ -8,6 +8,7 @@ use std::sync::{Arc, Weak};
 
 pub mod drowned;
 pub mod husk;
+#[allow(clippy::module_inception)]
 pub mod zombie;
 pub mod zombie_villager;
 

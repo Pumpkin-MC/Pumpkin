@@ -11,9 +11,7 @@ impl ZombieEntity {
     pub async fn new(entity: crate::entity::Entity) -> Arc<Self> {
         let entity = ZombieEntityBase::new(entity).await;
         let zombie = Self { entity };
-        let mob_arc = Arc::new(zombie);
-        
-        mob_arc
+        Arc::new(zombie)
     }
 }
 
