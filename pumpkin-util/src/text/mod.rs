@@ -75,13 +75,6 @@ impl Serialize for TextComponent {
     }
 }
 
-impl ToTokens for TextComponent {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let text = &self.0;
-        tokens.extend(quote! {#text});
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct TextComponentBase {
@@ -251,22 +244,6 @@ impl TextComponentBase {
             style,
             extra,
         }
-    }
-}
-
-impl ToTokens for TextComponentBase {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let content = &self.content;
-        let style = &self.style;
-        let extra = &self.extra;
-
-        tokens.extend(quote! {
-            TextComponentBase {
-                content: #content,
-                style: Box::new(*#style),
-                extra: vec![ #( #extra ),* ],
-            }
-        });
     }
 }
 
@@ -682,56 +659,6 @@ pub enum TextContent {
         locale: Locale,
         with: Vec<TextComponentBase>,
     },
-}
-
-impl ToTokens for TextContent {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            TextContent::Text { text } => {
-                tokens.extend(quote! {
-                    TextContent::Text {
-                        text: Cow::Borrowed(#text),
-                    }
-                });
-            }
-
-            TextContent::Translate { translate, with } => {
-                tokens.extend(quote! {
-                    TextContent::Translate {
-                        translate: Cow::Borrowed(#translate),
-                        with: vec![ #( #with ),* ],
-                    }
-                });
-            }
-
-            TextContent::EntityNames { selector, separator } => {
-                tokens.extend(quote! {
-                    TextContent::EntityNames {
-                        selector: Cow::Borrowed(#selector),
-                        separator: #separator,
-                    }
-                });
-            }
-
-            TextContent::Keybind { keybind } => {
-                tokens.extend(quote! {
-                    TextContent::Keybind {
-                        keybind: Cow::Borrowed(#keybind),
-                    }
-                });
-            }
-
-            TextContent::Custom { key, locale, with } => {
-                tokens.extend(quote! {
-                    TextContent::Custom {
-                        key: Cow::Borrowed(#key),
-                        locale: #locale,
-                        with: vec![ #( #with ),* ],
-                    }
-                });
-            }
-        }
-    }
 }
 
 

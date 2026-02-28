@@ -66,6 +66,7 @@ pub fn main() {
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),
         (sound::build, "sound.rs"),
+        (advancement::build, "advancement.rs"),
         (meta_data_type::build, "meta_data_type.rs"),
         (tracked_data::build, "tracked_data.rs"),
         (chunk_status::build, "chunk_status.rs"),
