@@ -490,11 +490,10 @@ pub trait SunSensitive: Mob + Send + Sync {
             let mob = self.get_mob_entity();
             let entity = &mob.living_entity.entity;
 
-            if entity.touching_water.load(Relaxed) {
-                return;
-            }
-
-            if entity.is_in_powder_snow().await {
+            if !entity.is_alive()
+                || entity.touching_water.load(Relaxed)
+                || entity.is_in_powder_snow().await
+            {
                 return;
             }
 
@@ -504,21 +503,21 @@ pub trait SunSensitive: Mob + Send + Sync {
             if world.level_time.lock().await.is_night() {
                 return;
             }
-
             if world.weather.lock().await.raining {
                 return;
             }
 
             let pos = entity.pos.load();
             let top_y = world.get_top_block(Vector2::new(pos.x as i32, pos.z as i32)).await;
-            if (pos.y as i32) < top_y {
+            if (entity.get_eye_y() as i32) < top_y {
                 return;
             }
 
-            let light_level = world.level.light_engine
+            let brightness = world.level.light_engine
                 .get_sky_light_level(&world.level, &pos.to_block_pos())
-                .await;
-            let brightness = light_level.unwrap_or(0) as f32 / 15.0;
+                .await
+                .unwrap_or(0) as f32 / 15.0;
+
             if brightness < 0.5 {
                 return;
             }
