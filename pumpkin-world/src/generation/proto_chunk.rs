@@ -467,7 +467,12 @@ impl ProtoChunk {
         let chunk_x = x >> 4;
         let chunk_z = z >> 4;
         if chunk_x != self.x || chunk_z != self.z {
-            return; // Outside this chunk, skip
+            debug_assert!(
+                false,
+                "set_block_state called with out-of-chunk coords ({x}, {y}, {z}) for chunk ({}, {})",
+                self.x, self.z
+            );
+            return;
         }
 
         let local_x = x & 15;

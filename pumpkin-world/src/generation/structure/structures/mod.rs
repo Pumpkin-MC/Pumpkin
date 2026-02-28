@@ -175,23 +175,10 @@ fn transform_block_state(
         return BlockState::from_id(state.id);
     }
 
-    // Search all states of this block to find the one matching target properties
-    for candidate in block.states {
-        if let Some(cand_props) = block.properties(candidate.id) {
-            let cand_pairs = cand_props.to_props();
-            if cand_pairs.len() == target.len()
-                && cand_pairs
-                    .iter()
-                    .zip(target.iter())
-                    .all(|((ck, cv), (tk, tv))| *ck == *tk && *cv == *tv)
-            {
-                return BlockState::from_id(candidate.id);
-            }
-        }
-    }
-
-    // Fallback: return original
-    BlockState::from_id(state.id)
+    // Compute the target state ID directly via from_properties + to_state_id
+    let new_props = block.from_properties(&target);
+    let new_state_id = new_props.to_state_id(block);
+    BlockState::from_id(new_state_id)
 }
 
 pub trait BlockRandomizer {
