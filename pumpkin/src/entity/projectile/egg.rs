@@ -20,6 +20,8 @@ use pumpkin_world::item::ItemStack;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+const MAX_EGG_HATCH_EVENT_SPAWNS: usize = 16;
+
 pub struct EggEntity {
     pub thrown: ThrownItemEntity,
     pub item_stack: RwLock<ItemStack>,
@@ -137,14 +139,12 @@ impl EntityBase for EggEntity {
                     self.get_entity().entity_uuid,
                     hatching,
                     to_spawn.min(u8::MAX as usize) as u8,
-                    format!("minecraft:{}", hatching_type.resource_name),
+                    hatching_type,
                 );
                 let event = server.plugin_manager.fire(event).await;
-                hatching = event.hatching;
-                to_spawn = event.num_hatches as usize;
-                if let Some(new_type) = EntityType::from_name(&event.hatching_type) {
-                    hatching_type = new_type;
-                }
+                hatching = event.hatching && !event.cancelled;
+                to_spawn = (event.num_hatches as usize).min(MAX_EGG_HATCH_EVENT_SPAWNS);
+                hatching_type = event.hatching_type;
             }
 
             // Spawn chickens in a separate task to prevent stack overflow
