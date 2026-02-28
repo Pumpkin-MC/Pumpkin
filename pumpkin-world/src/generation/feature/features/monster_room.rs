@@ -75,7 +75,6 @@ impl DungeonFeature {
 
                     let on_boundary = dx == min_x
                         || dy == -1
-                        || dy == 3
                         || dz == min_z
                         || dx == max_x
                         || dy == 4
