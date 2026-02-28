@@ -30,7 +30,7 @@ impl PartialEq for TaskHeapNode {
     }
 }
 impl TaskHeapNode {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn node_key(&self) -> NodeKey {
         self.1
     }
@@ -185,7 +185,7 @@ impl GenerationSchedule {
 
     fn calc_priority(
         last_level: &ChunkLevel,
-        last_high_priority: &Vec<ChunkPos>,
+        last_high_priority: &[ChunkPos],
         pos: ChunkPos,
         stage: StagedChunkEnum,
     ) -> i8 {
@@ -229,7 +229,7 @@ impl GenerationSchedule {
         graph: &mut DAG,
         queue: &mut BinaryHeap<TaskHeapNode>,
         last_level: &ChunkLevel,
-        last_high_priority: &Vec<ChunkPos>,
+        last_high_priority: &[ChunkPos],
         dependency_task: NodeKey,
         chunk_pos: ChunkPos,
         holder: &mut ChunkHolder,
@@ -269,10 +269,11 @@ impl GenerationSchedule {
         }
 
         for stage_i in start..=end {
-            if !newly_created[stage_i] {
+            let cur = holder.tasks[stage_i];
+            if cur.is_null() {
                 continue;
             }
-            let cur = holder.tasks[stage_i];
+
             if stage_i > empty {
                 let prev = holder.tasks[stage_i - 1];
                 if !prev.is_null() {
@@ -307,6 +308,10 @@ impl GenerationSchedule {
         }
 
         let ano_task = holder.tasks[end];
+        debug_assert!(
+            !ano_task.is_null(),
+            "holder.tasks[end] must not be null before adding edge"
+        );
         graph.add_edge(ano_task, dependency_task);
     }
 
@@ -392,8 +397,7 @@ impl GenerationSchedule {
                                     continue;
                                 }
 
-                                let mut ano_chunk =
-                                    self.chunk_map.remove(&new_pos).unwrap_or_default();
+                                let ano_chunk = self.chunk_map.entry(new_pos).or_default();
                                 Self::ensure_dependency_chain(
                                     &mut self.graph,
                                     &mut self.queue,
@@ -401,10 +405,9 @@ impl GenerationSchedule {
                                     &self.last_high_priority,
                                     task,
                                     new_pos,
-                                    &mut ano_chunk,
+                                    ano_chunk,
                                     req_stage,
                                 );
-                                self.chunk_map.insert(new_pos, ano_chunk);
                             }
                         }
                     }
@@ -901,16 +904,10 @@ impl GenerationSchedule {
                                 swap(&mut tmp, &mut holder.chunk);
                                 let tmp = match tmp {
                                     Some(v) => v,
-                                    None => {
-                                        error!(
-                                            "Missing chunk for position {:?} during generation of {:?}. This indicates a scheduling bug; aborting.",
-                                            new_pos, node.pos
-                                        );
-                                        panic!(
-                                            "Missing chunk {:?} during generation of {:?}: scheduling bug",
-                                            new_pos, node.pos
-                                        );
-                                    }
+                                    None => panic!(
+                                        "Missing chunk for position {:?} while processing generation task for {:?} stage {:?}",
+                                        new_pos, node.pos, node.stage
+                                    ),
                                 };
                                 match tmp {
                                     Chunk::Level(chunk) => {
