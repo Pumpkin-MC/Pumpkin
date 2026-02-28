@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use crate::entity::mob::SunSensitive;
-use crate::entity::{mob::{skeleton::SkeletonEntityBase, Mob, MobEntity}, Entity, EntityBase, EntityBaseFuture, NBTStorage};
+use crate::entity::{
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
+};
 
 pub struct StraySkeletonEntity {
     entity: Arc<SkeletonEntityBase>,

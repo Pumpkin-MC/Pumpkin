@@ -1,14 +1,16 @@
-use std::pin::Pin;
-use std::sync::Arc;
-use rand::{rng, RngExt};
+use crate::entity::ai::goal::move_to_target_pos::MoveToTargetPos;
+use crate::entity::ai::goal::step_and_destroy_block::{
+    StepAndDestroyBlockGoal, Stepping, SteppingFuture,
+};
+use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};
+use crate::entity::mob::Mob;
+use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
-use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};
-use crate::entity::ai::goal::move_to_target_pos::MoveToTargetPos;
-use crate::entity::ai::goal::step_and_destroy_block::{StepAndDestroyBlockGoal, Stepping, SteppingFuture};
-use crate::entity::mob::Mob;
-use crate::world::World;
+use rand::{RngExt, rng};
+use std::pin::Pin;
+use std::sync::Arc;
 
 pub struct DestroyEggGoal {
     step_and_destroy_block_goal: StepAndDestroyBlockGoal<Self, Self>,

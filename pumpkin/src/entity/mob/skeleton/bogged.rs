@@ -1,5 +1,8 @@
 use crate::entity::mob::SunSensitive;
-use crate::entity::{mob::{skeleton::SkeletonEntityBase, Mob, MobEntity}, Entity, EntityBase, EntityBaseFuture, NBTStorage};
+use crate::entity::{
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
+};
 use std::sync::Arc;
 
 pub struct BoggedSkeletonEntity {

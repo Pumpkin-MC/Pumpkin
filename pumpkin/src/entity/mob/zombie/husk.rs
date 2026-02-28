@@ -4,9 +4,9 @@ use pumpkin_data::entity::EntityType;
 
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::{
-    ai::goal::active_target::ActiveTargetGoal, mob::{Mob, MobEntity},
-    Entity,
-    NBTStorage,
+    Entity, NBTStorage,
+    ai::goal::active_target::ActiveTargetGoal,
+    mob::{Mob, MobEntity},
 };
 
 pub struct HuskEntity {

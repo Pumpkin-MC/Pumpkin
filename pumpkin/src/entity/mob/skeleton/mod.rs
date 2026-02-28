@@ -5,12 +5,12 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
+    Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::LookAroundGoal,
         look_at_entity::LookAtEntityGoal,
-    }, mob::{Mob, MobEntity},
-    Entity,
-    NBTStorage,
+    },
+    mob::{Mob, MobEntity},
 };
 
 pub mod bogged;

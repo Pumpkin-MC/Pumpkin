@@ -1,8 +1,8 @@
-use super::{ai::pathfinder::Navigator, living::LivingEntity, Entity, EntityBase, NBTStorage};
+use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
+use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::player::Player;
-use crate::entity::EntityBaseFuture;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
@@ -17,11 +17,11 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
+use rand::RngExt;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
-use std::sync::Arc;
-use rand::RngExt;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -536,15 +536,20 @@ pub trait SunSensitive: Mob + Send + Sync {
             }
 
             let pos = entity.pos.load();
-            let top_y = world.get_top_block(Vector2::new(pos.x as i32, pos.z as i32)).await;
+            let top_y = world
+                .get_top_block(Vector2::new(pos.x as i32, pos.z as i32))
+                .await;
             if (entity.get_eye_y() as i32) < top_y {
                 return;
             }
 
-            let brightness = world.level.light_engine
+            let brightness = world
+                .level
+                .light_engine
                 .get_sky_light_level(&world.level, &pos.to_block_pos())
                 .await
-                .unwrap_or(0) as f32 / 15.0;
+                .unwrap_or(0) as f32
+                / 15.0;
 
             if brightness < 0.5 {
                 return;

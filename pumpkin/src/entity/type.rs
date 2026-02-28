@@ -4,9 +4,12 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
+use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
 use crate::{
     entity::{
-        boss::wither::WitherEntity, decoration::{
+        Entity, EntityBase,
+        boss::wither::WitherEntity,
+        decoration::{
             armor_stand::ArmorStandEntity, end_crystal::EndCrystalEntity, painting::PaintingEntity,
         },
         living::LivingEntity,
@@ -25,12 +28,9 @@ use crate::{
             cat::CatEntity, chicken::ChickenEntity, cow::CowEntity, iron_golem::IronGolemEntity,
             pig::PigEntity, sheep::SheepEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity,
         },
-        Entity,
-        EntityBase,
     },
     world::World,
 };
-use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
 
 pub async fn from_type(
     entity_type: &'static EntityType,

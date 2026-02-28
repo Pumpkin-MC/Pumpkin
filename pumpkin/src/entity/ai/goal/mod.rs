@@ -8,6 +8,7 @@ pub mod beg;
 pub mod breed;
 pub mod chase_player;
 pub mod creeper_ignite;
+pub mod destroy_egg;
 pub mod eat_grass;
 pub mod escape_danger;
 pub mod follow_owner;
@@ -29,7 +30,6 @@ pub mod tempt;
 pub(crate) mod track_target;
 pub mod wander_around;
 pub mod zombie_attack;
-pub mod destroy_egg;
 
 #[must_use]
 pub const fn to_goal_ticks(server_ticks: i32) -> i32 {

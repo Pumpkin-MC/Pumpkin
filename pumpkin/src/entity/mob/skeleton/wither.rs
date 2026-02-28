@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::entity::{
-    mob::{skeleton::SkeletonEntityBase, Mob, MobEntity}, Entity,
-    NBTStorage,
+    Entity, NBTStorage,
+    mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
 };
 
 pub struct WitherSkeletonEntity {

@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
-use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::mob::SunSensitive;
-use crate::entity::{mob::{Mob, MobEntity}, Entity, EntityBase, EntityBaseFuture, NBTStorage};
+use crate::entity::mob::zombie::ZombieEntityBase;
+use crate::entity::{
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    mob::{Mob, MobEntity},
+};
 
 pub struct DrownedEntity {
     entity: Arc<ZombieEntityBase>,
