@@ -150,15 +150,6 @@ impl StructureGenerator for NetherFortressGenerator {
 
         collector.shift_into_y_range(&mut random, 48, 70);
 
-        let final_bbox = collector.get_bounding_box();
-        log::debug!(
-            "Nether Fortress generated at ({}, {}, {}) with {} pieces",
-            start_x,
-            final_bbox.min.y,
-            start_z,
-            collector.pieces.len()
-        );
-
         Some(StructurePosition {
             start_pos: BlockPos::new(
                 section_coords::section_to_block(context.chunk_x),
