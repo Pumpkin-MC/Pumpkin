@@ -269,10 +269,10 @@ impl GenerationSchedule {
         }
 
         for stage_i in start..=end {
-            let cur = holder.tasks[stage_i];
-            if cur.is_null() {
+            if !newly_created[stage_i] {
                 continue;
             }
+            let cur = holder.tasks[stage_i];
 
             if stage_i > empty {
                 let prev = holder.tasks[stage_i - 1];
@@ -1020,12 +1020,15 @@ impl GenerationSchedule {
                 "Cancelling {} in-flight generation tasks",
                 self.running_task_count
             );
+            // Collect nodes to drop
+            let mut nodes_to_drop = Vec::new();
+
             // Clear occupy nodes for cancelled tasks
             for holder in self.chunk_map.values_mut() {
-                // Drop any task nodes associated with this holder to ensure full cleanup.
+                // Collect any task nodes associated with this holder to ensure full cleanup
                 for task in &mut holder.tasks {
                     if !task.is_null() {
-                        self.graph.fast_drop_node(*task);
+                        nodes_to_drop.push(*task);
                         *task = NodeKey::null();
                     }
                 }
@@ -1035,11 +1038,17 @@ impl GenerationSchedule {
                     && node.pos.x == i32::MAX
                     && node.pos.y == i32::MAX
                 {
-                    // This is an occupy node for an in-flight task; drop it and its edges.
-                    self.graph.fast_drop_node(holder.occupied);
+                    // This is an occupy node for an in-flight task
+                    nodes_to_drop.push(holder.occupied);
                     holder.occupied = NodeKey::null();
                 }
             }
+
+            // Safely drop them (using `drop_node`, which decrements in_degree on targets)
+            for node_key in nodes_to_drop {
+                self.drop_node(node_key);
+            }
+
             self.running_task_count = 0;
         }
 
