@@ -37,22 +37,34 @@ impl FlowingLava {
             .get_block(&block_pos.offset(BlockDirection::Down.to_offset()))
             .await
             == &Block::SOUL_SOIL;
-        let is_still = world.get_block_state_id(block_pos).await == Block::LAVA.default_state.id;
+        let old_state_id = world.get_block_state_id(block_pos).await;
+        let is_still = old_state_id == Block::LAVA.default_state.id;
 
         for dir in BlockDirection::all() {
             let neighbor_pos = block_pos.offset(dir.to_offset());
             if world.get_block(&neighbor_pos).await == &Block::WATER {
-                let block = if is_still {
+                let mut new_state_id = if is_still {
                     Block::OBSIDIAN
                 } else {
                     Block::COBBLESTONE
-                };
+                }
+                .default_state
+                .id;
+                if let Some(server) = world.server.upgrade() {
+                    let event = crate::plugin::block::block_form::BlockFormEvent::new(
+                        world.clone(),
+                        old_state_id,
+                        new_state_id,
+                        *block_pos,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return false;
+                    }
+                    new_state_id = event.new_state_id;
+                }
                 world
-                    .set_block_state(
-                        block_pos,
-                        block.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
+                    .set_block_state(block_pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
                     .await;
                 world
                     .sync_world_event(WorldEvent::LavaExtinguished, *block_pos, 0)
@@ -60,12 +72,22 @@ impl FlowingLava {
                 return false;
             }
             if below_is_soul_soil && world.get_block(&neighbor_pos).await == &Block::BLUE_ICE {
+                let mut new_state_id = Block::BASALT.default_state.id;
+                if let Some(server) = world.server.upgrade() {
+                    let event = crate::plugin::block::block_form::BlockFormEvent::new(
+                        world.clone(),
+                        old_state_id,
+                        new_state_id,
+                        *block_pos,
+                    );
+                    let event = server.plugin_manager.fire(event).await;
+                    if event.cancelled {
+                        return false;
+                    }
+                    new_state_id = event.new_state_id;
+                }
                 world
-                    .set_block_state(
-                        block_pos,
-                        Block::BASALT.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
+                    .set_block_state(block_pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
                     .await;
                 world
                     .sync_world_event(WorldEvent::LavaExtinguished, *block_pos, 0)
