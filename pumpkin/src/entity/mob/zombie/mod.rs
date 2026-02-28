@@ -2,7 +2,7 @@ use super::{Mob, MobEntity};
 use crate::entity::ai::goal::destroy_egg::DestroyEggGoal;
 use crate::entity::ai::goal::look_around::LookAroundGoal;
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
-use crate::entity::{ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal}, Entity, EntityBase, EntityBaseFuture, NBTStorage};
+use crate::entity::{ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal}, Entity, NBTStorage};
 use pumpkin_data::entity::EntityType;
 use std::sync::{Arc, Weak};
 
@@ -52,9 +52,5 @@ impl NBTStorage for ZombieEntityBase {}
 impl Mob for ZombieEntityBase {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move { self.sunburn().await })
     }
 }

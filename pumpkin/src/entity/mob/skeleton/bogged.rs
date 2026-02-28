@@ -1,6 +1,6 @@
-use std::sync::Arc;
-
+use crate::entity::mob::SunSensitive;
 use crate::entity::{mob::{skeleton::SkeletonEntityBase, Mob, MobEntity}, Entity, EntityBase, EntityBaseFuture, NBTStorage};
+use std::sync::Arc;
 
 pub struct BoggedSkeletonEntity {
     entity: Arc<SkeletonEntityBase>,
@@ -9,8 +9,8 @@ pub struct BoggedSkeletonEntity {
 impl BoggedSkeletonEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
         let entity = SkeletonEntityBase::new(entity).await;
-        let zombie = Self { entity };
-        Arc::new(zombie)
+        let bogged = Self { entity };
+        Arc::new(bogged)
     }
 }
 
@@ -22,6 +22,8 @@ impl Mob for BoggedSkeletonEntity {
     }
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move { self.sunburn().await })
+        self.sun_sensitive_tick()
     }
 }
+
+impl SunSensitive for BoggedSkeletonEntity {}

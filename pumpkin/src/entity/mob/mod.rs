@@ -1,27 +1,28 @@
 use super::{ai::pathfinder::Navigator, living::LivingEntity, Entity, EntityBase, NBTStorage};
-use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::player::Player;
+use crate::entity::EntityBaseFuture;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
+use std::sync::Arc;
+use rand::RngExt;
 use tokio::sync::Mutex;
 use uuid::Uuid;
-use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_util::math::vector2::Vector2;
 
 pub mod bat;
 pub mod creeper;
@@ -278,35 +279,6 @@ pub trait Mob: EntityBase + Send + Sync {
     fn is_sitting(&self) -> bool {
         false
     }
-
-    /// Set mob on fire if it is exposed to sunlight
-    fn sunburn(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async {
-            let mob = self.get_mob_entity();
-            let entity = &mob.living_entity.entity;
-
-            if entity.touching_water.load(Relaxed) {
-                return;
-            }
-
-            let world = entity.world.load();
-
-            if world.level_time.lock().await.is_night() {
-                return;
-            }
-
-            let pos = entity.pos.load();
-            let top_y = world.get_top_block(Vector2::new(pos.x as i32, pos.z as i32)).await;
-            if (pos.y as i32) < top_y {
-                return;
-            }
-
-            let equipment = mob.living_entity.entity_equipment.lock().await;
-            if equipment.get(&EquipmentSlot::HEAD).lock().await.is_empty() {
-                entity.set_on_fire_for(8.0);
-            }
-        })
-    }
 }
 
 impl<T: Mob + Send + 'static> EntityBase for T {
@@ -509,5 +481,64 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
     fn get_follow_leash_speed(&self) -> f32 {
         1.0
+    }
+}
+
+pub trait SunSensitive: Mob + Send + Sync {
+    fn sun_sensitive_tick(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {
+            let mob = self.get_mob_entity();
+            let entity = &mob.living_entity.entity;
+
+            if entity.touching_water.load(Relaxed) {
+                return;
+            }
+
+            if entity.is_in_powder_snow().await {
+                return;
+            }
+
+            let world_arc = entity.world.load();
+            let world = world_arc.as_ref();
+
+            if world.level_time.lock().await.is_night() {
+                return;
+            }
+
+            if world.weather.lock().await.raining {
+                return;
+            }
+
+            let pos = entity.pos.load();
+            let top_y = world.get_top_block(Vector2::new(pos.x as i32, pos.z as i32)).await;
+            if (pos.y as i32) < top_y {
+                return;
+            }
+
+            let light_level = world.level.light_engine
+                .get_sky_light_level(&world.level, &pos.to_block_pos())
+                .await;
+            let brightness = light_level.unwrap_or(0) as f32 / 15.0;
+            if brightness < 0.5 {
+                return;
+            }
+
+            let damage_amount = {
+                let mut rng = self.get_random();
+                if rng.random::<f32>() * 30.0 >= (brightness - 0.4) * 2.0 {
+                    return;
+                }
+                rng.random_range(0..=1i32)
+            };
+
+            let equipment = mob.living_entity.entity_equipment.lock().await;
+            let head_slot = equipment.get(&EquipmentSlot::HEAD);
+            let mut head_item = head_slot.lock().await;
+            if head_item.is_empty() {
+                entity.set_on_fire_for(8.0);
+            } else {
+                head_item.damage_item(damage_amount);
+            }
+        })
     }
 }

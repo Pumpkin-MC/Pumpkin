@@ -1,5 +1,5 @@
 use crate::entity::mob::zombie::ZombieEntityBase;
-use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::mob::{Mob, MobEntity, SunSensitive};
 use crate::entity::{EntityBase, EntityBaseFuture, NBTStorage};
 use std::sync::Arc;
 
@@ -25,6 +25,8 @@ impl Mob for ZombieEntity {
     }
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move { self.sunburn().await })
+        self.sun_sensitive_tick()
     }
 }
+
+impl SunSensitive for ZombieEntity {}
