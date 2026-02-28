@@ -1,5 +1,3 @@
-use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
 use super::{
     click::ClickEvent,
     color::{self, Color},

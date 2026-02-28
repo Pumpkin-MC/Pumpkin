@@ -2,7 +2,6 @@ use crate::ResourceLocation;
 use pumpkin_data::packet::clientbound::PLAY_SELECT_ADVANCEMENTS_TAB;
 use pumpkin_macros::java_packet;
 use serde::Serialize;
-use pumpkin_data::packet::clientbound::PLAY_SELECT_ADVANCEMENTS_TAB;
 
 #[derive(Serialize)]
 #[java_packet(PLAY_SELECT_ADVANCEMENTS_TAB)]

@@ -94,7 +94,6 @@ mod update_mob_effect;
 mod update_objectives;
 mod update_score;
 mod worldevent;
-mod update_advancement;
 
 pub use acknowledge_block::*;
 pub use actionbar::*;
