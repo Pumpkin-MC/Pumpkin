@@ -5,9 +5,9 @@ use crate::translation::{
 use click::ClickEvent;
 use color::Color;
 use colored::Colorize;
-use pumpkin_nbt::serializer::Serializer;
 use core::str;
 use hover::HoverEvent;
+use pumpkin_nbt::serializer::Serializer;
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
@@ -447,7 +447,11 @@ impl TextComponent {
         let mut buf = Vec::new();
         // TODO: Properly handle errors
         let mut serializer = Serializer::new(&mut buf, None);
-        self.0.clone().to_translated().serialize(&mut serializer).expect("Failed to serialize text component NBT for encode");
+        self.0
+            .clone()
+            .to_translated()
+            .serialize(&mut serializer)
+            .expect("Failed to serialize text component NBT for encode");
 
         buf.into_boxed_slice()
     }
