@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::{
     entity::EntityType,
     item::Item,
@@ -91,7 +93,7 @@ impl CreeperEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_FUSE_SPEED,
-                MetaDataType::Integer,
+                MetaDataType::INTEGER,
                 VarInt(speed),
             )])
             .await;
@@ -114,6 +116,11 @@ impl CreeperEntity {
         world.explode(pos, radius * multiplier).await;
         // TODO: spawn area effect cloud with potion effects
         entity.remove().await;
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.25)
     }
 }
 
@@ -231,7 +238,7 @@ impl Mob for CreeperEntity {
             entity
                 .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_IGNITED,
-                    MetaDataType::Boolean,
+                    MetaDataType::BOOLEAN,
                     true,
                 )])
                 .await;

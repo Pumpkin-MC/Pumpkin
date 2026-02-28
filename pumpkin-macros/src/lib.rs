@@ -185,7 +185,11 @@ pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
     quote! {
         #ast
         impl #impl_generics crate::packet::MultiVersionJavaPacket for #name #ty_generics #where_clause {
-            const PACKET_ID: pumpkin_data::packet::PacketId = #packet_id_expr;
+            #[must_use]
+            #[inline]
+            fn to_id(version: pumpkin_util::version::MinecraftVersion) -> i32 {
+                #packet_id_expr.to_id(version)
+            }
         }
     }
     .into()

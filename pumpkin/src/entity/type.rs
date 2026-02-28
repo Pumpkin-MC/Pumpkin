@@ -23,7 +23,7 @@ use crate::{
         },
         passive::{
             cat::CatEntity, chicken::ChickenEntity, cow::CowEntity, iron_golem::IronGolemEntity,
-            sheep::SheepEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity,
+            pig::PigEntity, sheep::SheepEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity,
         },
         Entity,
         EntityBase,
@@ -61,6 +61,7 @@ pub async fn from_type(
         id if id == EntityType::CAT.id => CatEntity::new(entity).await,
         id if id == EntityType::CHICKEN.id => ChickenEntity::new(entity).await,
         id if id == EntityType::COW.id => CowEntity::new(entity).await,
+        id if id == EntityType::PIG.id => PigEntity::new(entity).await,
         id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::new(entity).await,
         id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity).await,
         id if id == EntityType::SHEEP.id => SheepEntity::new(entity).await,

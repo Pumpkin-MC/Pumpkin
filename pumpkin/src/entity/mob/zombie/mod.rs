@@ -2,7 +2,15 @@ use super::{Mob, MobEntity};
 use crate::entity::ai::goal::destroy_egg::DestroyEggGoal;
 use crate::entity::ai::goal::look_around::LookAroundGoal;
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
-use crate::entity::{ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal}, Entity, NBTStorage};
+use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};
+use crate::entity::attributes::AttributeBuilder;
+use crate::entity::{
+    Entity, NBTStorage,
+    ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
+};
+use crate::world::World;
+use pumpkin_data::Block;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use std::sync::{Arc, Weak};
 
@@ -45,6 +53,16 @@ impl ZombieEntityBase {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::MAX_HEALTH, 20.0)
+            .add(Attributes::MOVEMENT_SPEED, 0.23)
+            .add(Attributes::ATTACK_DAMAGE, 3.0)
+            .add(Attributes::FOLLOW_RANGE, 35.0)
+            .add(Attributes::ARMOR, 2.0)
     }
 }
 

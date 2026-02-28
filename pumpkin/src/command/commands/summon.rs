@@ -1,7 +1,3 @@
-use pumpkin_data::translation;
-use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
-use uuid::Uuid;
-
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandResult, CommandSender,
@@ -13,6 +9,12 @@ use crate::{
     },
     entity::r#type::from_type,
 };
+use pumpkin_data::translation;
+use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
+use uuid::Uuid;
+
+use pumpkin_world::block::entities::BlockEntity;
+
 const NAMES: [&str; 1] = ["summon"];
 
 const DESCRIPTION: &str = "Spawns a Entity at position.";
@@ -34,7 +36,7 @@ impl CommandExecutor for Executor {
             let entity_type = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
             let (world, pos) = match sender {
-                CommandSender::Console | CommandSender::Rcon(_) => {
+                CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
                     let guard = server.worlds.load();
                     let world = guard
                         .first()

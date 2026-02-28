@@ -3,27 +3,26 @@ use foliage::FoliagePlacer;
 use pumpkin_data::tag;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
-use serde::Deserialize;
+
 use trunk::TrunkPlacer;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize};
 
-mod decorator;
-mod foliage;
-mod trunk;
+pub mod decorator;
+pub mod foliage;
+pub mod trunk;
 
-#[derive(Deserialize)]
 pub struct TreeFeature {
-    dirt_provider: BlockStateProvider,
-    trunk_provider: BlockStateProvider,
-    trunk_placer: TrunkPlacer,
-    foliage_provider: BlockStateProvider,
-    foliage_placer: FoliagePlacer,
-    minimum_size: FeatureSize,
-    ignore_vines: bool,
-    force_dirt: bool,
-    decorators: Vec<TreeDecorator>,
+    pub dirt_provider: BlockStateProvider,
+    pub trunk_provider: BlockStateProvider,
+    pub trunk_placer: TrunkPlacer,
+    pub foliage_provider: BlockStateProvider,
+    pub foliage_placer: FoliagePlacer,
+    pub minimum_size: FeatureSize,
+    pub ignore_vines: bool,
+    pub force_dirt: bool,
+    pub decorators: Vec<TreeDecorator>,
 }
 
 pub struct TreeNode {
