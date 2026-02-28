@@ -14,7 +14,10 @@ use pumpkin_world::{
 };
 use rand::RngExt;
 
-use crate::{block::blocks::plant::PlantBlockBase, world::World};
+use crate::{
+    block::blocks::plant::PlantBlockBase, plugin::api::events::block::block_grow::BlockGrowEvent,
+    world::World,
+};
 
 type CropProperties = WheatLikeProperties;
 type FarmlandProperties = FarmlandLikeProperties;
@@ -57,9 +60,11 @@ trait CropBlockBase: PlantBlockBase {
             if rand::rng().random_range(0..=(25.0 / f).floor() as i64) == 0 {
                 let mut new_state_id = self.state_with_age(block, state, age + 1);
                 if let Some(server) = world.server.upgrade() {
-                    let event = crate::plugin::block::block_grow::BlockGrowEvent::new(
+                    let event = BlockGrowEvent::new(
                         world.clone(),
+                        block,
                         state,
+                        Block::from_state_id(new_state_id),
                         new_state_id,
                         *pos,
                     );
