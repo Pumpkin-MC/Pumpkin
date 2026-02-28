@@ -2,14 +2,11 @@ use super::{Mob, MobEntity};
 use crate::entity::ai::goal::destroy_egg::DestroyEggGoal;
 use crate::entity::ai::goal::look_around::LookAroundGoal;
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
-use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};
 use crate::entity::attributes::AttributeBuilder;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
-use crate::world::World;
-use pumpkin_data::Block;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use std::sync::{Arc, Weak};
