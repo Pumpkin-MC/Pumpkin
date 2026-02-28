@@ -7,12 +7,12 @@ use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
+use proc_macro2::TokenStream;
+use quote::{ToTokens, quote};
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
 use std::fmt::Formatter;
-use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
 use style::Style;
 
 pub mod click;
@@ -660,7 +660,6 @@ pub enum TextContent {
         with: Vec<TextComponentBase>,
     },
 }
-
 
 #[cfg(test)]
 mod test {

@@ -1,11 +1,11 @@
-use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
 use super::{
     click::ClickEvent,
     color::{self, Color},
     hover::HoverEvent,
 };
 use crate::text::color::ARGBColor;
+use proc_macro2::TokenStream;
+use quote::{ToTokens, quote};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
