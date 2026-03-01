@@ -1,6 +1,8 @@
 pub mod changed_main_hand;
+pub mod egg_throw;
 pub mod exp_change;
 pub mod fish;
+pub mod item_held;
 pub mod player_change_world;
 pub mod player_chat;
 pub mod player_command_send;

@@ -1,7 +1,7 @@
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
@@ -20,11 +20,16 @@ use tracing::warn;
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
+use crate::entity::attributes::Modifier;
+use crate::entity::attributes::ModifierOperation;
+use crate::entity::attributes::{AttributeInstance, DEFAULT_ATTRIBUTE_REGISTRY};
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
+use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -37,6 +42,7 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CEntityAnimation, CHurtAnimation, CSetPlayerInventory, CTakeItemEntity,
+    CUpdateMobEffect,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -45,7 +51,10 @@ use pumpkin_protocol::{
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
+use rand::RngExt;
+use std::sync::RwLock;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 /// Represents a living entity within the game world.
 ///
@@ -59,6 +68,8 @@ pub struct LivingEntity {
     pub last_damage_taken: AtomicCell<f32>,
     /// The current health level of the entity.
     pub health: AtomicCell<f32>,
+    /// The current absorption (yellow hearts) on the entity.
+    pub absorption: AtomicCell<f32>,
     pub item_use_time: AtomicI32,
     pub item_in_use: Mutex<Option<ItemStack>>,
     pub death_time: AtomicU8,
@@ -70,8 +81,6 @@ pub struct LivingEntity {
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
     pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
-
-    pub movement_speed: AtomicCell<f64>,
 
     pub jumping: AtomicBool,
 
@@ -94,6 +103,9 @@ pub struct LivingEntity {
 
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
+
+    /// The attributes of the entity
+    pub attributes: RwLock<HashMap<u8, AttributeInstance>>,
 }
 
 impl LivingEntity {
@@ -108,7 +120,6 @@ impl LivingEntity {
         &Block::POWDER_SNOW,
         &Block::SLIME_BLOCK,
     ];
-    const FALL_DAMAGE_SAFE_DISTANCE: f64 = 1.3;
 
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
@@ -118,14 +129,29 @@ impl LivingEntity {
         } else {
             0.8
         };
-        // TODO: Extract default MOVEMENT_SPEED Entity Attribute
-        let default_movement_speed = 0.25;
-        let health = entity.entity_type.max_health.unwrap_or(20.0);
+        let entity_type_id = entity.entity_type.id;
+        let mut max_health: f32 = 20.0; // Overridden by attribute base below
         Self {
+            // Populate local attribute instances from the default registry and get initial vars
+            attributes: {
+                let mut m = std::collections::HashMap::new();
+                let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
+
+                if let Some(overrides) = reg.get_overrides_for_entity(entity_type_id) {
+                    for (attr_id, base) in overrides {
+                        if attr_id == Attributes::MAX_HEALTH.id {
+                            max_health = base as f32;
+                        }
+                        m.insert(attr_id, AttributeInstance::new(base));
+                    }
+                }
+                std::sync::RwLock::new(m)
+            },
+            health: AtomicCell::new(max_health), // Initial health value from attributes
             entity,
             hurt_cooldown: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
-            health: AtomicCell::new(health),
+            absorption: AtomicCell::new(0.0),
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),
@@ -144,7 +170,6 @@ impl LivingEntity {
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
-            movement_speed: AtomicCell::new(default_movement_speed),
             water_movement_speed_multiplier,
         }
     }
@@ -225,15 +250,152 @@ impl LivingEntity {
     }
 
     pub async fn set_health(&self, health: f32) {
-        self.health.store(health.max(0.0));
+        // Clamp to [0, max_health]
+        let max_health = self.get_max_health();
+        let clamped = health.max(0.0).min(max_health);
+        self.health.store(clamped);
         // tell everyone entities health changed
         self.entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_HEALTH,
                 MetaDataType::FLOAT,
-                health,
+                clamped,
             )])
             .await;
+    }
+
+    /// Returns the current maximum health for this entity
+    pub fn get_max_health(&self) -> f32 {
+        self.get_attribute_value(&Attributes::MAX_HEALTH) as f32
+    }
+
+    /// Sets the maximum health for this entity
+    pub async fn set_max_health(&self, max_health: f32) {
+        // Update base attribute
+        self.set_attribute_base(&Attributes::MAX_HEALTH, max_health as f64);
+
+        // Broadcast the attribute change
+        crate::entity::attributes::send_attribute_updates_for_living(
+            self,
+            vec![Attributes::MAX_HEALTH],
+        )
+        .await;
+
+        // Clamp current health to new max if needed and send metadata update
+        let current_health = self.health.load();
+        if current_health > max_health {
+            self.set_health(max_health).await;
+        }
+    }
+
+    /// Returns the current absorption amount for this entity (yellow hearts)
+    pub fn get_absorption(&self) -> f32 {
+        self.absorption.load()
+    }
+
+    /// Sets the current absorption amount for this entity (yellow hearts)
+    pub async fn set_absorption(&self, new_abs: f32) {
+        // Must be at least 0
+        let new_abs = new_abs.max(0.0);
+
+        // Set local state
+        self.absorption.store(new_abs);
+
+        // Broadcast attribute update for max_absorption so clients receive
+        // the updated absorption value via the attribute packet.
+        crate::entity::attributes::send_attribute_updates_for_living(
+            self,
+            vec![Attributes::MAX_ABSORPTION],
+        )
+        .await;
+
+        // Send absorption metadata for players (visual yellow hearts)
+        if let Some(tracked_id) = self.player_absorption_id() {
+            self.entity
+                .send_meta_data(&[Metadata::new(tracked_id, MetaDataType::FLOAT, new_abs)])
+                .await;
+        }
+    }
+
+    /// Returns the absorption ID for this (player) entity
+    /// TODO: don't hardcode these here?
+    fn player_absorption_id(&self) -> Option<TrackedId> {
+        (self.entity.entity_type == &EntityType::PLAYER).then_some(TrackedId {
+            v1_21: 17u8,
+            v1_21_2: 17u8,
+            v1_21_4: 17u8,
+            v1_21_5: 17u8,
+            v1_21_6: 17u8,
+            v1_21_7: 17u8,
+            v1_21_9: 17u8,
+            v1_21_11: 17u8,
+        })
+    }
+
+    /// Convenience helper to mutate an attribute instance. Automatically inserts
+    /// a new instance populated from the registry base if needed.
+    pub fn update_attribute<F: FnOnce(&mut AttributeInstance)>(
+        &self,
+        attribute: &Attributes,
+        f: F,
+    ) {
+        let mut map = self.attributes.write().unwrap();
+
+        let inst = map.entry(attribute.id).or_insert_with(|| {
+            let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
+            let base = reg.get_base_value(self.entity.entity_type.id, attribute);
+            AttributeInstance::new(base)
+        });
+
+        f(inst);
+        inst.dirty.store(true, Ordering::Relaxed);
+    }
+
+    /// Returns the computed value for `attribute` using the local instance, falling back
+    /// to `attribute.default_value` if no local instance exists.
+    pub fn get_attribute_value(&self, attribute: &Attributes) -> f64 {
+        let map = self.attributes.read().unwrap();
+        map.get(&attribute.id)
+            .map_or(attribute.default_value, AttributeInstance::value)
+    }
+
+    /// Returns the base attribute value for `attribute` for this entity's type.
+    pub fn get_attribute_base(&self, attribute: &Attributes) -> f64 {
+        // Check the local base value first (could be modified)
+        let map = self.attributes.read().unwrap();
+        if let Some(instance) = map.get(&attribute.id) {
+            return instance.base_value;
+        }
+
+        // Fall back to registry base value if no local instance exists
+        let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
+        reg.get_base_value(self.entity.entity_type.id, attribute)
+    }
+
+    /// Update or insert the base value for an attribute on this entity.
+    /// If the attribute doesn't exist locally yet, it will be inserted.
+    pub fn set_attribute_base(&self, attribute: &Attributes, new_base: f64) {
+        let mut map = self.attributes.write().unwrap();
+        if let Some(inst) = map.get_mut(&attribute.id) {
+            inst.base_value = new_base;
+            inst.dirty.store(true, Ordering::Relaxed);
+        } else {
+            let ai = AttributeInstance::new(new_base);
+            ai.dirty.store(true, Ordering::Relaxed);
+            map.insert(attribute.id, ai);
+        }
+    }
+
+    pub async fn reset_effects_and_attributes(&self) {
+        // Clear active effects and reset modified attributes
+        let effects_to_remove: Vec<_> = {
+            let lock = self.active_effects.lock().await;
+            lock.keys().copied().collect()
+        };
+
+        for effect_type in effects_to_remove {
+            self.remove_effect(effect_type).await;
+        }
     }
 
     pub const fn entity_id(&self) -> i32 {
@@ -241,25 +403,182 @@ impl LivingEntity {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
-        self.active_effects
-            .lock()
-            .await
-            .insert(effect.effect_type, effect);
-        // TODO broadcast metadata
+        // Apply instant effects immediately before storing
+        if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
+            let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
+            self.heal(heal_amount).await;
+        } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
+            let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
+            if let Some(dyn_self) = self
+                .entity
+                .world
+                .load()
+                .get_entity_by_id(self.entity.entity_id)
+            {
+                dyn_self
+                    .damage(&*dyn_self, damage_amount, DamageType::MAGIC)
+                    .await;
+            }
+        } else {
+            // Apply non-instant effects
+            self.active_effects
+                .lock()
+                .await
+                .insert(effect.effect_type, effect.clone());
+
+            // Effects that modify attributes (ex. speed) should also update the
+            // entity's attribute instances (server-side) and then notify clients.
+            if !effect.effect_type.attribute_modifiers.is_empty() {
+                // Apply each attribute modifier into the local AttributeInstance
+                for m in effect.effect_type.attribute_modifiers {
+                    let uuid = Uuid::new_v3(&Uuid::NAMESPACE_OID, m.id.as_bytes());
+                    let op = match m.operation {
+                        Operation::AddValue => ModifierOperation::Add,
+                        Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                        Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                    };
+                    let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
+                    let mod_inst = Modifier {
+                        id: uuid,
+                        amount: scaled_amount,
+                        operation: op,
+                    };
+
+                    self.update_attribute(m.attribute, |inst| {
+                        inst.add_or_replace_modifier(mod_inst.clone());
+                    });
+                }
+
+                // Recompute packet modifiers from active effects for each affected attribute
+                let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
+                for m in effect.effect_type.attribute_modifiers {
+                    if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
+                        touched_attrs.push(m.attribute.clone());
+                    }
+                }
+
+                if !touched_attrs.is_empty() {
+                    crate::entity::attributes::send_attribute_updates_for_living(
+                        self,
+                        touched_attrs,
+                    )
+                    .await;
+                }
+            }
+
+            // Apply absorption effect (+4 absorption per level)
+            if effect.effect_type == &StatusEffect::ABSORPTION {
+                let added = 4.0 * (effect.amplifier as f32 + 1.0);
+                let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
+                let new_abs = (self.absorption.load() + added).min(max_abs);
+                self.set_absorption(new_abs).await;
+            }
+
+            // Apply invisible effect
+            if effect.effect_type == &StatusEffect::INVISIBILITY {
+                self.entity.set_invisible(true).await;
+            }
+
+            // Apply glowing effect
+            if effect.effect_type == &StatusEffect::GLOWING {
+                self.entity.set_glowing(true).await;
+            }
+        }
+
+        // Broadcast effect to nearby players
+        let mut flag: i8 = 0;
+        if effect.ambient {
+            flag |= 1;
+        }
+        if effect.show_particles {
+            flag |= 2;
+        }
+        if effect.show_icon {
+            flag |= 4;
+        }
+        if effect.blend {
+            flag |= 8;
+        }
+
+        let packet = CUpdateMobEffect::new(
+            self.entity.entity_id.into(),
+            VarInt(i32::from(effect.effect_type.id)),
+            effect.amplifier.into(),
+            effect.duration.into(),
+            flag,
+        );
+
+        self.entity.world.load().broadcast_packet_all(&packet).await;
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
+        // Remove the effect
         let succeeded = self
             .active_effects
             .lock()
             .await
             .remove(&effect_type)
             .is_some();
+
+        // Broadcast effect removal
         self.entity
             .world
             .load()
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
+
+        // Remove attribute modifiers, if any
+        if !effect_type.attribute_modifiers.is_empty() {
+            let mut touched_attrs = Vec::new();
+
+            for m in effect_type.attribute_modifiers {
+                let uuid = Uuid::new_v3(&Uuid::NAMESPACE_OID, m.id.as_bytes());
+
+                // Clean local server state
+                self.update_attribute(m.attribute, |inst| {
+                    inst.modifiers.retain(|mod_inst| mod_inst.id != uuid);
+                });
+
+                // Track unique attributes for the packet update
+                if !touched_attrs
+                    .iter()
+                    .any(|a: &Attributes| a.id == m.attribute.id)
+                {
+                    touched_attrs.push(m.attribute.clone());
+                }
+            }
+
+            // Sync the clean state to the client
+            if !touched_attrs.is_empty() {
+                crate::entity::attributes::send_attribute_updates_for_living(self, touched_attrs)
+                    .await;
+            }
+        }
+
+        // If absorption effect removed, clear current absorption amount and notify clients
+        if effect_type == &StatusEffect::ABSORPTION {
+            self.set_absorption(0.0).await;
+        }
+
+        // If health boost effect removed, clamp current health to new max and notify clients
+        if effect_type == &StatusEffect::HEALTH_BOOST {
+            let new_max = self.get_max_health();
+            if self.health.load() > new_max {
+                // Update local health and send both health and absorption metadata together
+                self.set_health(new_max.max(0.0)).await;
+            }
+        }
+
+        // If invisible effect removed, disable invisibility
+        if effect_type == &StatusEffect::INVISIBILITY {
+            self.entity.set_invisible(false).await;
+        }
+
+        // If glowing effect removed, disable glowing
+        if effect_type == &StatusEffect::GLOWING {
+            self.entity.set_glowing(false).await;
+        }
+
         succeeded
     }
 
@@ -351,8 +670,9 @@ impl LivingEntity {
                 );
                 let distance = entity_pos.squared_distance_to_vec(&block_center);
 
-                return distance.sqrt()
-                    <= Self::FALL_DAMAGE_SAFE_DISTANCE * Self::FALL_DAMAGE_SAFE_DISTANCE;
+                // Fetch safe fall distance from attribute
+                let safe_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE);
+                return distance.sqrt() <= safe_distance * safe_distance;
             }
         }
 
@@ -479,6 +799,8 @@ impl LivingEntity {
     async fn travel_in_air(&self, caller: Arc<dyn EntityBase>) {
         // applyMovementInput
 
+        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+
         let (speed, friction) = if self.entity.on_ground.load(SeqCst) {
             // getVelocityAffectingPos
 
@@ -490,8 +812,8 @@ impl LivingEntity {
                     .slipperiness,
             );
 
-            let speed = self.movement_speed.load() * 0.216_000_02
-                / (slipperiness * slipperiness * slipperiness);
+            let speed =
+                effective_speed * 0.216_000_02 / (slipperiness * slipperiness * slipperiness);
 
             (speed, slipperiness * 0.91)
         } else {
@@ -554,12 +876,10 @@ impl LivingEntity {
 
     async fn travel_in_fluid(&self, caller: Arc<dyn EntityBase>, water: bool) {
         let movement_input = self.movement_input.load();
-
         let y0 = self.entity.pos.load().y;
-
         let falling = self.entity.velocity.load().y <= 0.0;
-
         let gravity = self.get_effective_gravity(&caller).await;
+        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
 
         if water {
             let mut friction = if self.entity.sprinting.load(Relaxed) {
@@ -570,7 +890,9 @@ impl LivingEntity {
 
             let mut speed = 0.02;
 
-            let mut water_movement_efficiency = 0.0; // TODO: Entity attribute
+            // Apply water movement efficiency attribute
+            let mut water_movement_efficiency =
+                self.get_attribute_value(&Attributes::WATER_MOVEMENT_EFFICIENCY);
 
             if water_movement_efficiency > 0.0 {
                 if !self.entity.on_ground.load(SeqCst) {
@@ -578,8 +900,7 @@ impl LivingEntity {
                 }
 
                 friction += (0.546_000_06 - friction) * water_movement_efficiency;
-
-                speed += (self.movement_speed.load() - speed) * water_movement_efficiency;
+                speed += (effective_speed - speed) * water_movement_efficiency;
             }
 
             if self.has_effect(&StatusEffect::DOLPHINS_GRACE).await {
@@ -592,7 +913,6 @@ impl LivingEntity {
             self.make_move(caller).await;
 
             let mut velo = self.entity.velocity.load();
-
             if self.entity.horizontal_collision.load(SeqCst) && self.climbing.load(Relaxed) {
                 velo.y = 0.2;
             }
@@ -600,7 +920,6 @@ impl LivingEntity {
             velo = velo.multiply(friction, 0.8, friction);
 
             self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
-
             self.entity.velocity.store(velo);
         } else {
             self.entity.update_velocity_from_input(movement_input, 0.02);
@@ -611,9 +930,7 @@ impl LivingEntity {
 
             if self.entity.lava_height.load() <= self.get_swim_height() {
                 velo.x *= 0.5;
-
                 velo.z *= 0.5;
-
                 velo.y *= 0.8;
 
                 self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
@@ -806,13 +1123,8 @@ impl LivingEntity {
     }
 
     async fn get_jump_velocity(&self, mut strength: f64) -> f64 {
-        strength *= 0.42; // TODO: Read from Entity Attribute JUMP_STRENGTH (default 0.42)
-
+        strength *= self.get_attribute_value(&Attributes::JUMP_STRENGTH);
         strength *= f64::from(self.entity.get_jump_velocity_multiplier().await);
-
-        if let Some(effect) = self.get_effect(&StatusEffect::JUMP_BOOST).await {
-            strength += 0.1 * f64::from(effect.amplifier + 1);
-        }
 
         strength
     }
@@ -873,8 +1185,8 @@ impl LivingEntity {
             return;
         }
 
-        // TODO: use attributes
-        let safe_fall_distance = 3.0;
+        // Fetches the safe fall distance attribute
+        let safe_fall_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE) as f32;
         let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
 
         let damage = (unsafe_fall_distance * damage_per_distance).floor();
@@ -954,6 +1266,7 @@ impl LivingEntity {
         {
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
+
             // Plays the death sound
             world
                 .send_entity_status(
@@ -966,6 +1279,7 @@ impl LivingEntity {
                 ..Default::default()
             };
 
+            // Drop loot
             self.drop_loot(params).await;
             self.entity.pose.store(EntityPose::Dying);
 
@@ -981,6 +1295,7 @@ impl LivingEntity {
                 world.drop_stack(&block_pos, item).await;
             }
 
+            // Broadcast death message if it's a player and the gamerule is enabled
             let show_death_messages = { world.level_info.load().game_rules.show_death_messages };
             if self.entity.entity_type == &EntityType::PLAYER && show_death_messages {
                 //TODO: KillCredit
@@ -992,6 +1307,8 @@ impl LivingEntity {
                     }
                 }
             }
+
+            self.reset_effects_and_attributes().await;
         }
     }
 
@@ -1006,27 +1323,140 @@ impl LivingEntity {
 
     async fn tick_effects(&self) {
         let mut effects_to_remove = Vec::new();
+        let mut effects_to_apply = Vec::new();
 
         {
             let mut effects = self.active_effects.lock().await;
             for effect in effects.values_mut() {
+                // A duration below 0 means the effect is infinite
                 if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
+                    continue;
+                }
+
+                if Self::should_apply_effect_tick(effect) {
+                    effects_to_apply.push((effect.effect_type, effect.amplifier));
                 }
                 effect.duration -= 1;
             }
         }
 
+        // Call the central removal function for each expired effect
+        // This will now trigger your logs and absorption resets!
         for effect_type in effects_to_remove {
             self.remove_effect(effect_type).await;
         }
+
+        for (effect_type, amplifier) in effects_to_apply {
+            self.apply_effect_tick(effect_type, amplifier).await;
+        }
     }
 
+    /// Determines if an effect should apply its tick effect this frame
+    /// Based on vanilla Minecraft's effect tick frequencies
+    ///
+    /// TODO: villager, beacon, and other effects.
+    fn should_apply_effect_tick(effect: &pumpkin_data::potion::Effect) -> bool {
+        let duration = effect.duration;
+        let effect_type = effect.effect_type;
+
+        if effect_type == &StatusEffect::REGENERATION {
+            if duration <= 0 {
+                return false;
+            }
+            let tick_rate = 50 >> effect.amplifier.min(4);
+            duration % tick_rate == 0
+        } else if effect_type == &StatusEffect::POISON {
+            if duration <= 0 {
+                return false;
+            }
+            let tick_rate = 25 >> effect.amplifier.min(4);
+            duration % tick_rate == 0
+        } else if effect_type == &StatusEffect::WITHER {
+            if duration <= 0 {
+                return false;
+            }
+            let tick_rate = 40 >> effect.amplifier.min(4);
+            duration % tick_rate == 0
+        } else if effect_type == &StatusEffect::HUNGER {
+            // Hunger every 20 ticks
+            duration % 20 == 0
+        } else if effect_type == &StatusEffect::SATURATION {
+            // Saturation every tick
+            true
+        } else {
+            // Other effects that don't tick
+            false
+        }
+    }
+
+    /// Applies the actual effect to the entity
+    /// This is called by `tick_effects` when an effect should trigger this tick
+    async fn apply_effect_tick(&self, effect_type: &'static StatusEffect, amplifier: u8) {
+        if effect_type == &StatusEffect::REGENERATION {
+            let current_health = self.health.load();
+            let max_health = self.get_max_health();
+            if current_health < max_health && current_health > 0.0 {
+                self.heal(1.0).await;
+            }
+        } else if effect_type == &StatusEffect::POISON {
+            let current_health = self.health.load();
+            if current_health > 1.0
+                && let Some(dyn_self) = self
+                    .entity
+                    .world
+                    .load()
+                    .get_entity_by_id(self.entity.entity_id)
+            {
+                let damage_amount = (current_health - 1.0).min(1.0);
+                if damage_amount > 0.0 {
+                    dyn_self
+                        .damage(&*dyn_self, damage_amount, DamageType::MAGIC)
+                        .await;
+                }
+            }
+        } else if effect_type == &StatusEffect::WITHER {
+            let damage_amount = 1.0;
+            if let Some(dyn_self) = self
+                .entity
+                .world
+                .load()
+                .get_entity_by_id(self.entity.entity_id)
+            {
+                dyn_self
+                    .damage(&*dyn_self, damage_amount, DamageType::WITHER)
+                    .await;
+            }
+        } else if effect_type == &StatusEffect::HUNGER {
+            let world = self.entity.world.load();
+            if let Some(entity) = world.get_entity_by_id(self.entity.entity_id)
+                && let Some(player) = entity.get_player()
+            {
+                // Add exhaustion to trigger hunger decrease
+                let exhaustion = 0.1 * (amplifier as f32 + 1.0);
+                player.hunger_manager.add_exhaustion(exhaustion);
+            }
+            drop(world);
+        } else if effect_type == &StatusEffect::SATURATION {
+            let world = self.entity.world.load();
+            if let Some(entity) = world.get_entity_by_id(self.entity.entity_id)
+                && let Some(player) = entity.get_player()
+            {
+                // Add hunger and saturation
+                let hunger = amplifier + 1;
+                player.hunger_manager.add_hunger(hunger);
+                player.hunger_manager.add_saturation(hunger as f32 * 2.0);
+            }
+        }
+    }
+
+    /// Tries to use a totem of undying from the entity's hands. If successful, applies the totem effects and returns true.
     async fn try_use_death_protector(&self, caller: &dyn EntityBase) -> bool {
         for hand in Hand::all() {
             let stack = self.get_stack_in_hand(caller, hand).await;
             let mut stack = stack.lock().await;
-            // TODO: effects...
+
+            // Clear the stack and use the totem of undying
             if stack.get_data_component::<DeathProtectionImpl>().is_some() {
                 stack.clear();
                 self.set_health(1.0).await;
@@ -1035,6 +1465,39 @@ impl LivingEntity {
                     .load()
                     .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
                     .await;
+
+                // Set Absorption, Regeneration, and Fire Resistance effects
+                self.add_effect(Effect {
+                    effect_type: &StatusEffect::ABSORPTION,
+                    duration: 100,
+                    amplifier: 1,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: false,
+                })
+                .await;
+                self.add_effect(Effect {
+                    effect_type: &StatusEffect::REGENERATION,
+                    duration: 900,
+                    amplifier: 1,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: false,
+                })
+                .await;
+                self.add_effect(Effect {
+                    effect_type: &StatusEffect::FIRE_RESISTANCE,
+                    duration: 800,
+                    amplifier: 0,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: false,
+                })
+                .await;
+
                 return true;
             }
         }
@@ -1125,8 +1588,20 @@ impl LivingEntity {
         self.entity.reset_state().await;
 
         // Restore to maximum health for this entity type
-        let max_health = self.entity.entity_type.max_health.unwrap_or(20.0);
+        let max_health = self.get_max_health();
         self.set_health(max_health).await;
+        // Clear any absorption
+        self.absorption.store(0.0);
+        // Send health metadata
+        self.entity
+            .send_meta_data(&[Metadata::new(
+                TrackedData::DATA_HEALTH,
+                MetaDataType::FLOAT,
+                max_health,
+            )])
+            .await;
+
+        self.reset_effects_and_attributes().await;
 
         // Give a short grace period of invulnerability after respawn
         self.hurt_cooldown.store(20, Relaxed);
@@ -1156,6 +1631,66 @@ impl LivingEntity {
         self.dead.store(false, Relaxed);
     }
 
+    /// Try to spawn silverfish when this entity is infested and hurt.
+    async fn try_spawn_infested_silverfish(&self) {
+        if !self.has_effect(&StatusEffect::INFESTED).await {
+            return;
+        }
+
+        // Wither, ender dragon and silverfish are immune
+        if self.entity.entity_type == &EntityType::WITHER
+            || self.entity.entity_type == &EntityType::ENDER_DRAGON
+            || self.entity.entity_type == &EntityType::SILVERFISH
+        {
+            return;
+        }
+
+        let world = self.entity.world.load();
+
+        // 10% chance
+        if rand::rng().random::<f32>() <= 0.1 {
+            let count = rand::rng().random_range(1..3);
+            for _ in 0..count {
+                // Spawn at center of entity
+                let bbox = self.entity.bounding_box.load();
+                let center = Vector3::new(
+                    f64::midpoint(bbox.min.x, bbox.max.x),
+                    f64::midpoint(bbox.min.y, bbox.max.y),
+                    f64::midpoint(bbox.min.z, bbox.max.z),
+                );
+
+                // Random direction
+                let yaw_rad = self.entity.yaw.load().to_radians() as f64;
+                let random_angle = rand::rng().random::<f64>() * std::f64::consts::PI
+                    - std::f64::consts::FRAC_PI_2;
+                let angle = yaw_rad + random_angle;
+                let speed = 0.3f64;
+                let dx = -angle.sin() * speed;
+                let dz = angle.cos() * speed;
+                let dy = 0.1f64;
+
+                // Spawn
+                let silver = crate::entity::r#type::from_type(
+                    &EntityType::SILVERFISH,
+                    center,
+                    &world,
+                    Uuid::new_v4(),
+                )
+                .await;
+
+                silver.get_entity().set_pos(center);
+                silver.get_entity().velocity.store(Vector3::new(dx, dy, dz));
+
+                world.spawn_entity(silver).await;
+
+                // Play sound
+                world
+                    .play_sound(Sound::EntitySilverfishHurt, SoundCategory::Players, &center)
+                    .await;
+            }
+        }
+    }
+
     pub fn is_player(&self) -> bool {
         let world = self.entity.world.load();
         world.get_player_by_id(self.entity.entity_id).is_some()
@@ -1177,6 +1712,8 @@ impl NBTStorage for LivingEntity {
             } else {
                 self.fall_distance.load()
             };
+            // Persist current absorption amount
+            nbt.put("AbsorptionAmount", NbtTag::Float(self.absorption.load()));
             nbt.put("fall_distance", NbtTag::Float(fall_distance));
             {
                 let effects = self.active_effects.lock().await;
@@ -1200,6 +1737,13 @@ impl NBTStorage for LivingEntity {
         Box::pin(async {
             self.entity.read_nbt_non_mut(nbt).await;
             self.health.store(nbt.get_float("Health").unwrap_or(0.0));
+
+            // Clamp any persisted absorption to the entity's configured max
+            let raw_abs = nbt.get_float("AbsorptionAmount").unwrap_or(0.0);
+            let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
+            let clamped_abs = raw_abs.max(0.0).min(max_abs);
+            self.absorption.store(clamped_abs);
+
             // Load fall distance, but if this entity is currently marked dead ensure we don't restore
             // a lethal fall distance that would immediately re-kill on spawn.
             let fd = nbt.get_float("fall_distance").unwrap_or(0.0);
@@ -1281,22 +1825,35 @@ impl EntityBase for LivingEntity {
             let bypasses_cooldown_protection =
                 damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
 
+            // Apply Resistance effect reduction (20% per level), excluding bypasses_cooldown_protection and starvation damage
+            let resistance_reduction =
+                if !bypasses_cooldown_protection && damage_type != DamageType::STARVE {
+                    self.get_effect(&pumpkin_data::effect::StatusEffect::RESISTANCE)
+                        .await
+                        .map_or(0.0, |e| 0.2 * (e.amplifier + 1) as f32)
+                } else {
+                    0.0
+                };
+
+            // Total damage after reductions
+            let effective_amount = amount * (1.0 - resistance_reduction);
+
+            // Apply hurt cooldown logic
             let last_damage = self.last_damage_taken.load();
-            let play_sound;
-            let mut damage_amount =
+            let (damage_amount, play_sound) =
                 if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
-                    if amount <= last_damage {
+                    if effective_amount <= last_damage {
                         return false;
                     }
-                    play_sound = false;
-                    amount - self.last_damage_taken.load()
+                    (effective_amount - last_damage, false)
                 } else {
                     self.hurt_cooldown.store(20, Relaxed);
-                    play_sound = true;
-                    amount
+                    (effective_amount, true)
                 };
+
+            // Finalize state
             self.last_damage_taken.store(amount);
-            damage_amount = damage_amount.max(0.0);
+            let damage_amount = damage_amount.max(0.0);
 
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
 
@@ -1323,6 +1880,9 @@ impl EntityBase for LivingEntity {
                 ))
                 .await;
 
+            // Try to spawn infested silverfish
+            self.try_spawn_infested_silverfish().await;
+
             if play_sound {
                 world
                     .play_sound(
@@ -1342,8 +1902,19 @@ impl EntityBase for LivingEntity {
                 }
             }
 
-            let new_health = self.health.load() - damage_amount;
-            if damage_amount > 0.0 {
+            // Consume absorption first, then apply remaining damage to health
+            let mut remaining = damage_amount;
+            let current_abs = self.absorption.load();
+            if current_abs > 0.0 {
+                if current_abs >= remaining {
+                    let new_abs = current_abs - remaining;
+                    self.set_absorption(new_abs).await;
+                    remaining = 0.0;
+                } else {
+                    remaining -= current_abs;
+                    self.set_absorption(0.0).await;
+                }
+
                 // Track attacker for RevengeGoal (only after confirming damage)
                 if let Some(attacker) = cause.or(source) {
                     self.last_attacker_id
@@ -1351,19 +1922,33 @@ impl EntityBase for LivingEntity {
                     self.last_attacked_time
                         .store(self.entity.age.load(Relaxed), Relaxed);
                 }
-                //self.on_actually_hurt(damage_amount, damage_type).await;
-                self.set_health(new_health).await;
+            }
+
+            // Apply remaining damage to health (clamped)
+            let max_h = self.get_max_health();
+            let new_health = self.health.load() - remaining;
+            let clamped_health = new_health.max(0.0).min(max_h);
+            if remaining > 0.0 {
+                self.set_health(clamped_health).await;
+
+                // Track attacker for RevengeGoal (only after confirming damage)
+                if let Some(attacker) = cause.or(source) {
+                    self.last_attacker_id
+                        .store(attacker.get_entity().entity_id, Relaxed);
+                    self.last_attacked_time
+                        .store(self.entity.age.load(Relaxed), Relaxed);
+                }
             }
 
             // Check if the entity died and isn't protected by a death protection mechanic (ex. totem of undying)
-            if new_health <= 0.0
+            if clamped_health <= 0.0
                 && (bypasses_cooldown_protection || !self.try_use_death_protector(caller).await)
             {
                 self.on_death(damage_type, source, cause).await;
             }
 
-            if damage_amount > 0.0 {
-                self.damage_armor_items(caller, damage_amount).await;
+            if remaining > 0.0 {
+                self.damage_armor_items(caller, remaining).await;
             }
 
             true
