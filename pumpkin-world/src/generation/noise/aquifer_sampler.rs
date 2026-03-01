@@ -36,6 +36,11 @@ impl FluidLevel {
         self.max_y
     }
 
+    #[inline]
+    fn matches(&self, other: &Self) -> bool {
+        self.max_y == other.max_y && std::ptr::eq(self.block, other.block)
+    }
+
     const fn get_block(&self, y: i32) -> &'static Block {
         if y < self.max_y {
             self.block
@@ -233,6 +238,8 @@ impl WorldAquiferSampler {
     fn max_distance(i: i32, a: i32) -> f64 {
         1f64 - ((a - i).abs() as f64) / 25f64
     }
+
+    const FLOWING_UPDATE_SIMILARITY: f64 = 1f64 - (144f64 - 100f64) / 25f64;
 
     fn calculate_density(
         barrier_sample: &mut Option<f64>,
@@ -484,7 +491,9 @@ impl WorldAquiferSampler {
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,
+        should_schedule_fluid_update: &mut bool,
     ) -> Option<&'static BlockState> {
+        *should_schedule_fluid_update = false;
         if density > 0f64 {
             None
         } else {
@@ -496,13 +505,14 @@ impl WorldAquiferSampler {
                 .fluid_level_sampler
                 .get_fluid_level(sample_x, sample_y, sample_z);
             if fluid_level.get_block(sample_y) == &LAVA_BLOCK {
+                *should_schedule_fluid_update = false;
                 Some(LAVA_BLOCK.default_state)
             } else {
                 let scaled_x = local_xz!(sample_x - 5);
                 let scaled_y = local_y!(sample_y + 1);
                 let scaled_z = local_xz!(sample_z - 5);
 
-                let mut random_positions_and_hypot = [(0, i32::MAX); 3];
+                let mut random_positions_and_hypot = [(0, i32::MAX); 4];
                 for packed_random in self.random_positions_for_pos(scaled_x, scaled_y, scaled_z) {
                     let unpacked_x = block_pos::unpack_x(packed_random);
                     let unpacked_y = block_pos::unpack_y(packed_random);
@@ -514,16 +524,24 @@ impl WorldAquiferSampler {
 
                     let hypot_squared = local_x * local_x + local_y * local_y + local_z * local_z;
 
+                    if random_positions_and_hypot[3].1 > hypot_squared {
+                        random_positions_and_hypot[3] = (packed_random, hypot_squared);
+                    }
+
                     if random_positions_and_hypot[2].1 > hypot_squared {
+                        random_positions_and_hypot[3] = random_positions_and_hypot[2];
                         random_positions_and_hypot[2] = (packed_random, hypot_squared);
                     }
 
                     if random_positions_and_hypot[1].1 > hypot_squared {
+                        random_positions_and_hypot[3] = random_positions_and_hypot[2];
                         random_positions_and_hypot[2] = random_positions_and_hypot[1];
                         random_positions_and_hypot[1] = (packed_random, hypot_squared);
                     }
 
                     if random_positions_and_hypot[0].1 > hypot_squared {
+                        random_positions_and_hypot[3] = random_positions_and_hypot[2];
+                        random_positions_and_hypot[2] = random_positions_and_hypot[1];
                         random_positions_and_hypot[1] = random_positions_and_hypot[0];
                         random_positions_and_hypot[0] = (packed_random, hypot_squared);
                     }
@@ -543,8 +561,17 @@ impl WorldAquiferSampler {
                 let block_state = fluid_level2.get_block(sample_y);
 
                 if d <= 0f64 {
-                    // TODO: Handle fluid tick
-
+                    if d >= Self::FLOWING_UPDATE_SIMILARITY {
+                        let fluid_level3 = self.get_water_level(
+                            random_positions_and_hypot[1].0,
+                            router,
+                            height_estimator,
+                            sample_options,
+                        );
+                        *should_schedule_fluid_update = !fluid_level2.matches(fluid_level3);
+                    } else {
+                        *should_schedule_fluid_update = false;
+                    }
                     Some(block_state.default_state)
                 } else if block_state == &WATER_BLOCK
                     && self
@@ -553,6 +580,7 @@ impl WorldAquiferSampler {
                         .get_block(sample_y - 1)
                         == &LAVA_BLOCK
                 {
+                    *should_schedule_fluid_update = true;
                     Some(block_state.default_state)
                 } else {
                     let mut barrier_sample = None;
@@ -574,6 +602,7 @@ impl WorldAquiferSampler {
                     );
 
                     if density + e > 0f64 {
+                        *should_schedule_fluid_update = false;
                         None
                     } else {
                         let fluid_level4 = self.get_water_level(
@@ -598,6 +627,7 @@ impl WorldAquiferSampler {
                                     fluid_level4,
                                 );
                             if density + g > 0f64 {
+                                *should_schedule_fluid_update = false;
                                 return None;
                             }
                         }
@@ -618,17 +648,76 @@ impl WorldAquiferSampler {
                                     fluid_level4,
                                 );
                             if density + h > 0f64 {
+                                *should_schedule_fluid_update = false;
                                 return None;
                             }
                         }
-
-                        //TODO Handle fluid tick
-
+                        let is_level2_vs_3 = !fluid_level2.matches(&fluid_level3);
+                        let is_level3_vs_4 = g >= Self::FLOWING_UPDATE_SIMILARITY
+                            && !fluid_level3.matches(fluid_level4);
+                        let is_level2_vs_4 = f >= Self::FLOWING_UPDATE_SIMILARITY
+                            && !fluid_level2.matches(fluid_level4);
+                        if !is_level2_vs_3 && !is_level3_vs_4 && !is_level2_vs_4 {
+                            let fluid_level5 = self.get_water_level(
+                                random_positions_and_hypot[3].0,
+                                router,
+                                height_estimator,
+                                sample_options,
+                            );
+                            *should_schedule_fluid_update = f >= Self::FLOWING_UPDATE_SIMILARITY
+                                && Self::max_distance(
+                                    random_positions_and_hypot[0].1,
+                                    random_positions_and_hypot[3].1,
+                                ) >= Self::FLOWING_UPDATE_SIMILARITY
+                                && !fluid_level2.matches(fluid_level5);
+                        } else {
+                            *should_schedule_fluid_update = true;
+                        }
                         Some(block_state.default_state)
                     }
                 }
             }
         }
+    }
+
+    #[inline]
+    pub(crate) fn apply_with_density_and_schedule(
+        &mut self,
+        router: &mut ChunkNoiseRouter,
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
+        density: f64,
+        should_schedule_fluid_update: &mut bool,
+    ) -> Option<&'static BlockState> {
+        self.apply_internal(
+            router,
+            pos,
+            sample_options,
+            height_estimator,
+            density,
+            should_schedule_fluid_update,
+        )
+    }
+
+    #[inline]
+    pub(crate) fn apply_with_density(
+        &mut self,
+        router: &mut ChunkNoiseRouter,
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
+        density: f64,
+    ) -> Option<&'static BlockState> {
+        let mut should_schedule_fluid_update = false;
+        self.apply_internal(
+            router,
+            pos,
+            sample_options,
+            height_estimator,
+            density,
+            &mut should_schedule_fluid_update,
+        )
     }
 }
 
@@ -642,7 +731,15 @@ impl AquiferSamplerImpl for WorldAquiferSampler {
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         let density = router.final_density(pos, sample_options);
-        self.apply_internal(router, pos, sample_options, height_estimator, density)
+        let mut should_schedule_fluid_update = false;
+        self.apply_internal(
+            router,
+            pos,
+            sample_options,
+            height_estimator,
+            density,
+            &mut should_schedule_fluid_update,
+        )
     }
 }
 
@@ -655,6 +752,75 @@ impl SeaLevelAquiferSampler {
     pub const fn new(level_sampler: FluidLevelSampler) -> Self {
         Self { level_sampler }
     }
+
+    #[inline]
+    pub(crate) fn apply_with_density(
+        &mut self,
+        _router: &mut ChunkNoiseRouter,
+        pos: &Vector3<i32>,
+        _sample_options: &ChunkNoiseFunctionSampleOptions,
+        _height_estimator: &mut SurfaceHeightEstimateSampler,
+        density: f64,
+    ) -> Option<&'static BlockState> {
+        if density > 0f64 {
+            None
+        } else {
+            Some(
+                self.level_sampler
+                    .get_fluid_level(pos.x, pos.y, pos.z)
+                    .get_block(pos.y)
+                    .default_state,
+            )
+        }
+    }
+}
+
+impl AquiferSampler {
+    #[inline]
+    pub(crate) fn apply_with_density(
+        &mut self,
+        router: &mut ChunkNoiseRouter,
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
+        density: f64,
+    ) -> Option<&'static BlockState> {
+        let mut should_schedule_fluid_update = false;
+        self.apply_with_density_and_schedule(
+            router,
+            pos,
+            sample_options,
+            height_estimator,
+            density,
+            &mut should_schedule_fluid_update,
+        )
+    }
+
+    #[inline]
+    pub(crate) fn apply_with_density_and_schedule(
+        &mut self,
+        router: &mut ChunkNoiseRouter,
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
+        density: f64,
+        should_schedule_fluid_update: &mut bool,
+    ) -> Option<&'static BlockState> {
+        match self {
+            Self::SeaLevel(sea_level) => {
+                *should_schedule_fluid_update = false;
+                sea_level.apply_with_density(router, pos, sample_options, height_estimator, density)
+            }
+            Self::Aquifer(aquifer) => aquifer.apply_with_density_and_schedule(
+                router,
+                pos,
+                sample_options,
+                height_estimator,
+                density,
+                should_schedule_fluid_update,
+            ),
+        }
+    }
 }
 
 impl AquiferSamplerImpl for SeaLevelAquiferSampler {
@@ -666,7 +832,6 @@ impl AquiferSamplerImpl for SeaLevelAquiferSampler {
         _height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         let sample = router.final_density(pos, sample_options);
-        //log::debug!("Aquifer sample {:?}: {}", &pos, sample);
         if sample > 0f64 {
             None
         } else {
@@ -2655,8 +2820,16 @@ mod random_positions_and_hypot {
 
         for ((x, y, z, sample), result) in values {
             let pos = Vector3::new(x, y, z);
+            let mut should_schedule_fluid_update = false;
             assert_eq!(
-                aquifer.apply_internal(&mut router, &pos, &env, &mut height_estimator, sample),
+                aquifer.apply_internal(
+                    &mut router,
+                    &pos,
+                    &env,
+                    &mut height_estimator,
+                    sample,
+                    &mut should_schedule_fluid_update,
+                ),
                 result.map(|r| r.to_state())
             );
         }

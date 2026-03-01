@@ -199,6 +199,28 @@ impl GenerationCache for Cache {
         }
     }
 
+    fn mark_pos_for_postprocessing(&mut self, pos: &Vector3<i32>) {
+        let dx = (pos.x >> 4) - self.x;
+        let dz = (pos.z >> 4) - self.z;
+        if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
+            debug!(
+                "illegal mark_pos_for_postprocessing {pos:?} cache pos ({}, {}) size {}",
+                self.x, self.z, self.size
+            );
+            return;
+        }
+
+        let block_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        match &mut self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Level(_) => {
+                debug!("skipping mark_pos_for_postprocessing on Level chunk at {pos:?}");
+            }
+            Chunk::Proto(data) => {
+                data.mark_pos_for_postprocessing(block_pos);
+            }
+        }
+    }
+
     fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
             HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
@@ -338,6 +360,7 @@ impl Cache {
                 noise_router,
             ),
             StagedChunkEnum::Features => {
+                ProtoChunk::step_to_carvers(self, settings, random_config, noise_router, dimension);
                 ProtoChunk::generate_features_and_structure(self, block_registry, random_config);
             }
             StagedChunkEnum::Lighting => {

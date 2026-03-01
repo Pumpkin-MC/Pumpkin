@@ -198,6 +198,10 @@ impl Chunk {
                 light_populated: AtomicBool::new(false),
                 status: ChunkStatus::Empty,
                 dirty: AtomicBool::new(false),
+                post_processing_positions: Default::default(),
+                blending_data: None,
+                carving_mask_air: Default::default(),
+                carving_mask_liquid: Default::default(),
             })),
         ) {
             Chunk::Proto(proto) => proto,
@@ -255,9 +259,19 @@ impl Chunk {
             }
         }
 
-        // Move the light data instead of cloning it
-        // By taking ownership of proto_chunk, we can move the light data directly
-        // This prevents keeping duplicate lighting data in memory
+        // Grab any additional data we need before moving `light` out.
+        let post_processing_positions = proto_chunk.post_processing_positions().clone();
+        let blending_data = proto_chunk.blending_data.clone();
+        let carving_mask_air = proto_chunk
+            .carving_mask_data(crate::generation::carver::CarvingStage::Air)
+            .unwrap_or_default();
+        let carving_mask_liquid = proto_chunk
+            .carving_mask_data(crate::generation::carver::CarvingStage::Liquid)
+            .unwrap_or_default();
+
+        // Move the light data instead of cloning it.
+        // By taking ownership of proto_chunk, we can move the light data directly.
+        // This prevents keeping duplicate lighting data in memory.
         let light_data = proto_chunk.light;
 
         // Only mark lit if past the lighting stage, and the lighting config is "default" ("full" and "dark" modes skip proper lighting)
@@ -276,6 +290,10 @@ impl Chunk {
             fluid_ticks: Default::default(),
             block_entities: Default::default(),
             status: proto_chunk.stage.into(),
+            post_processing_positions,
+            blending_data,
+            carving_mask_air,
+            carving_mask_liquid,
         };
 
         chunk.heightmap = Mutex::new(chunk.calculate_heightmap());
