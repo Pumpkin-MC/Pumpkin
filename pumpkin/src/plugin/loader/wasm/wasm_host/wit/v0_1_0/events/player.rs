@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -15,13 +17,13 @@ impl ToV0_1_0WasmEvent for PlayerJoinEvent {
             .add_player(self.player.clone())
             .expect("failed to add player resource");
 
-        // TODO - Do not leave this around before doing a v1.0.0 official release, we should have a resource for text components in the future
-        let text_component =
-            serde_json::to_vec(&self.join_message).expect("failed to serialize text component");
+        let text_component_resource = state
+            .add_text_component(Arc::new(self.join_message.clone()))
+            .unwrap();
 
         Event::PlayerJoinEvent(PlayerJoinEventData {
             player: player_resource,
-            text_component,
+            text_component: text_component_resource,
             cancelled: self.cancelled,
         })
     }

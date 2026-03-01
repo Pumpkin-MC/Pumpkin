@@ -3,12 +3,18 @@ use std::sync::Arc;
 use crate::{
     plugin::{
         BoxFuture, EventHandler, Payload,
-        loader::wasm::wasm_host::{PluginInstance, WasmPlugin, state::PluginHostState, wit},
+        loader::wasm::wasm_host::{
+            PluginInstance, WasmPlugin,
+            state::PluginHostState,
+            wit::{self, v0_1_0::pumpkin},
+        },
     },
     server::Server,
 };
 
 pub mod player;
+
+impl pumpkin::plugin::event::Host for PluginHostState {}
 
 pub struct WasmPluginV0_1_0EventHandler {
     pub handler_id: u32,
@@ -31,7 +37,7 @@ impl<E: Payload + ToV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0EventHa
                 PluginInstance::V0_1_0(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
                     plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, &event)
+                        .call_handle_event(&mut *store, self.handler_id, server, event)
                         .await
                         .unwrap();
                 }
@@ -51,7 +57,7 @@ impl<E: Payload + ToV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0EventHa
                 PluginInstance::V0_1_0(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
                     plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, &event)
+                        .call_handle_event(&mut *store, self.handler_id, server, event)
                         .await
                         .unwrap();
                 }
