@@ -556,12 +556,11 @@ impl<R> DataResult<R> {
                 Self::Success { result, .. },
                 DataResult::Error {
                     message: m2,
-                    partial_result,
                     ..
                 },
             ) => Self::new_option_error_with_lifecycle(
                 m2.clone(),
-                partial_result.is_some().then_some(result),
+                Some(result),
                 Lifecycle::Stable,
             ),
         }
