@@ -1,3 +1,5 @@
+use proc_macro2::TokenStream;
+use quote::{quote, ToTokens};
 use super::{
     click::ClickEvent,
     color::{self, Color},
@@ -129,5 +131,37 @@ impl Style {
     pub const fn shadow_color(mut self, color: ARGBColor) -> Self {
         self.shadow_color = Some(color);
         self
+    }
+}
+
+impl ToTokens for Style {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let color = &self.color;
+        let bold = &self.bold;
+        let italic = &self.italic;
+        let underlined = &self.underlined;
+        let strikethrough = &self.strikethrough;
+        let obfuscated = &self.obfuscated;
+        let insertion = &self.insertion;
+        let click_event = &self.click_event;
+        let hover_event = &self.hover_event;
+        let font = &self.font;
+        let shadow_color = &self.shadow_color;
+
+        tokens.extend(quote! {
+            Style {
+                color: #color,
+                bold: #bold,
+                italic: #italic,
+                underlined: #underlined,
+                strikethrough: #strikethrough,
+                obfuscated: #obfuscated,
+                insertion: #insertion,
+                click_event: #click_event,
+                hover_event: #hover_event,
+                font: #font,
+                shadow_color: #shadow_color,
+            }
+        });
     }
 }
