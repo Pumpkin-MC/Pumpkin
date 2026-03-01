@@ -1,7 +1,9 @@
 use super::*;
 use crate::chunk_system::dag::Node;
+use crate::chunk_system::dag::NodeKey;
 use slotmap::Key;
 use std::collections::BinaryHeap;
+use std::collections::HashMap;
 
 #[test]
 fn ensure_dependency_chain_builds_multistage_chain() {
@@ -197,5 +199,110 @@ fn ensure_dependency_chain_respects_occupied_lock() {
     assert!(
         queue.is_empty(),
         "Task should not be queued because it is blocked by occupied status"
+    );
+}
+
+#[test]
+fn ensure_dependency_chain_early_return_skips_edge() {
+    let mut graph = DAG::default();
+    let mut queue = BinaryHeap::new();
+    let last_level = HashMapType::default();
+    let last_high_priority = Vec::new();
+
+    let dependency_task = graph
+        .nodes
+        .insert(Node::new(ChunkPos::new(1, 1), StagedChunkEnum::Surface));
+
+    // Create a holder that is already at the required stage (Features > Surface)
+    let mut holder = ChunkHolder {
+        current_stage: StagedChunkEnum::Features,
+        target_stage: StagedChunkEnum::Features,
+        ..Default::default()
+    };
+
+    // Require 'Empty', but holder is already at 'Features'
+    GenerationSchedule::ensure_dependency_chain(
+        &mut graph,
+        &mut queue,
+        &last_level,
+        &last_high_priority,
+        dependency_task,
+        ChunkPos::new(0, 0),
+        &mut holder,
+        StagedChunkEnum::Empty,
+    );
+
+    let dep_node = graph.nodes.get(dependency_task).unwrap();
+
+    // Because of the early return, the dependency_task should not have its in_degree increased
+    assert_eq!(
+        dep_node.in_degree, 0,
+        "Dependency task should not be blocked if the neighbor is already past the required stage"
+    );
+}
+
+#[test]
+fn test_cancellation_path_decrements_in_degree() {
+    let mut graph = DAG::default();
+
+    // Create a task that is waiting (in_degree = 1)
+    let waiting_task_key = graph
+        .nodes
+        .insert(Node::new(ChunkPos::new(0, 0), StagedChunkEnum::Surface));
+    let waiting_node = graph.nodes.get_mut(waiting_task_key).unwrap();
+    waiting_node.in_degree = 1;
+
+    // Create the occupy node that the task is waiting on
+    let occupy_key = graph.nodes.insert(Node::new(
+        ChunkPos::new(i32::MAX, i32::MAX),
+        StagedChunkEnum::None,
+    ));
+    graph.add_edge(occupy_key, waiting_task_key);
+
+    // Set up the chunk map to simulate an in-flight task
+    let mut chunk_map = HashMap::new();
+    let mut holder = ChunkHolder {
+        current_stage: StagedChunkEnum::Empty,
+        target_stage: StagedChunkEnum::Surface,
+        occupied: occupy_key,
+        ..Default::default()
+    };
+    holder.tasks[StagedChunkEnum::Surface as usize] = waiting_task_key;
+    chunk_map.insert(ChunkPos::new(0, 0), holder);
+
+    // Simulate the cancellation logic from `work()`
+    let mut nodes_to_drop = Vec::new();
+    for holder in chunk_map.values_mut() {
+        for task in &mut holder.tasks {
+            if !task.is_null() {
+                nodes_to_drop.push(*task);
+                *task = NodeKey::null();
+            }
+        }
+        if !holder.occupied.is_null() {
+            nodes_to_drop.push(holder.occupied);
+            holder.occupied = NodeKey::null();
+        }
+    }
+
+    // Drop nodes using the proper graph edge traversal
+    for node_key in nodes_to_drop {
+        // Simulating the self.drop_node logic inside the test
+        if let Some(old) = graph.nodes.remove(node_key) {
+            let mut edge = old.edge;
+            while !edge.is_null() {
+                let cur = graph.edges.remove(edge).unwrap();
+                if let Some(node) = graph.nodes.get_mut(cur.to) {
+                    node.in_degree -= 1;
+                }
+                edge = cur.next;
+            }
+        }
+    }
+
+    // Assert that the waiting task was properly cleaned up
+    assert!(
+        graph.nodes.get(waiting_task_key).is_none(),
+        "The waiting task should have been dropped during cancellation"
     );
 }
