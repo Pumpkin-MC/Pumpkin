@@ -40,8 +40,8 @@ impl PlantBlockBase for SporeBlossomBlock {
         false
     }
     async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-        let block = block_accessor.get_block(&block_pos.up()).await;
-        supports_spore_blossom(block)
+        let ceiling_block = block_accessor.get_block(&block_pos.up()).await;
+        supports_spore_blossom(ceiling_block)
     }
 }
 fn supports_spore_blossom(block: &Block) -> bool {
