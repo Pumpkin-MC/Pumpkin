@@ -67,6 +67,7 @@ pub fn main() {
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
 
     let mut build_functions: Vec<(BuilderFn, &str)> = vec![
+        (advancement::build,"advancement.rs"),
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),

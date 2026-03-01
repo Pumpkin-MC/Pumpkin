@@ -41,7 +41,7 @@ pub(crate) fn build() -> TokenStream {
         let send_telemetry = advancement.send_telemetry;
         let display_name = match &advancement.display_name {
             Some(name) => {
-                let Translate { translate, with: _ } = &name.0.content else { panic!() };
+                let Translate { translate, with: _ } = name.0.content.as_ref() else { panic!() };
                 quote! { TextComponent::translate(#translate,[]) }
             }
             None => quote! { None }
