@@ -23,7 +23,7 @@ pub struct PlayerResource {
 }
 
 pub struct TextComponentResource {
-    pub provider: Arc<TextComponent>,
+    pub provider: TextComponent,
 }
 
 pub struct PluginHostState {
@@ -75,7 +75,7 @@ impl PluginHostState {
 
     pub fn add_text_component<T>(
         &mut self,
-        provider: Arc<TextComponent>,
+        provider: TextComponent,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self
             .resource_table

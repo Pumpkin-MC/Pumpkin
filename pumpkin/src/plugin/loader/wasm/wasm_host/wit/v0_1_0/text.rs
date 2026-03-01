@@ -1,7 +1,7 @@
 use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::{
-    state::PluginHostState,
+    state::{PluginHostState, TextComponentResource},
     wit::v0_1_0::pumpkin::{
         self,
         plugin::text::{ArgbColor, NamedColor, RgbColor, TextComponent},
@@ -10,9 +10,35 @@ use crate::plugin::loader::wasm::wasm_host::{
 
 impl pumpkin::plugin::text::Host for PluginHostState {}
 
+trait TextComponentResourceExt {
+    fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a TextComponentResource;
+    fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut TextComponentResource;
+}
+
+impl TextComponentResourceExt for Resource<TextComponent> {
+    fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a TextComponentResource {
+        state
+            .resource_table
+            .get_any_mut(self.rep())
+            .expect("invalid server resource handle")
+            .downcast_ref::<TextComponentResource>()
+            .expect("resource type mismatch")
+    }
+
+    fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut TextComponentResource {
+        state
+            .resource_table
+            .get_any_mut(self.rep())
+            .expect("invalid server resource handle")
+            .downcast_mut::<TextComponentResource>()
+            .expect("resource type mismatch")
+    }
+}
+
 impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
     async fn text(&mut self, plain: String) -> Resource<TextComponent> {
-        todo!()
+        let text_component = pumpkin_util::text::TextComponent::text(plain);
+        self.add_text_component(text_component).unwrap()
     }
 
     async fn translate(
@@ -20,18 +46,27 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         key: String,
         with: Vec<Resource<TextComponent>>,
     ) -> Resource<TextComponent> {
-        todo!()
+        let with: Vec<pumpkin_util::text::TextComponent> = with
+            .iter()
+            .map(|component| component.downcast_ref(self).provider.clone())
+            .collect();
+        let text_component = pumpkin_util::text::TextComponent::translate(key, with);
+        self.add_text_component(text_component).unwrap()
     }
 
     async fn add_child(
         &mut self,
         text_component: Resource<TextComponent>,
         child: Resource<TextComponent>,
-    ) -> () {
-        todo!()
+    ) {
+        let child = child.downcast_ref(self).provider.clone();
+        let parent = &mut text_component.downcast_mut(self).provider;
+
+        // The current builder pattern for text components doesn't accept &mut references of self.
+        *parent = parent.clone().add_child(child);
     }
 
-    async fn add_text(&mut self, text_component: Resource<TextComponent>, text: String) -> () {
+    async fn add_text(&mut self, text_component: Resource<TextComponent>, text: String) {
         todo!()
     }
 
@@ -43,55 +78,47 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         todo!()
     }
 
-    async fn color_named(
-        &mut self,
-        text_component: Resource<TextComponent>,
-        color: NamedColor,
-    ) -> () {
+    async fn color_named(&mut self, text_component: Resource<TextComponent>, color: NamedColor) {
         todo!()
     }
 
-    async fn color_rgb(&mut self, text_component: Resource<TextComponent>, color: RgbColor) -> () {
+    async fn color_rgb(&mut self, text_component: Resource<TextComponent>, color: RgbColor) {
         todo!()
     }
 
-    async fn bold(&mut self, text_component: Resource<TextComponent>, value: bool) -> () {
+    async fn bold(&mut self, text_component: Resource<TextComponent>, value: bool) {
         todo!()
     }
 
-    async fn italic(&mut self, text_component: Resource<TextComponent>, value: bool) -> () {
+    async fn italic(&mut self, text_component: Resource<TextComponent>, value: bool) {
         todo!()
     }
 
-    async fn underlined(&mut self, text_component: Resource<TextComponent>, value: bool) -> () {
+    async fn underlined(&mut self, text_component: Resource<TextComponent>, value: bool) {
         todo!()
     }
 
-    async fn strikethrough(&mut self, text_component: Resource<TextComponent>, value: bool) -> () {
+    async fn strikethrough(&mut self, text_component: Resource<TextComponent>, value: bool) {
         todo!()
     }
 
-    async fn obfuscated(&mut self, text_component: Resource<TextComponent>, value: bool) -> () {
+    async fn obfuscated(&mut self, text_component: Resource<TextComponent>, value: bool) {
         todo!()
     }
 
-    async fn insertion(&mut self, text_component: Resource<TextComponent>, text: String) -> () {
+    async fn insertion(&mut self, text_component: Resource<TextComponent>, text: String) {
         todo!()
     }
 
-    async fn font(&mut self, text_component: Resource<TextComponent>, font: String) -> () {
+    async fn font(&mut self, text_component: Resource<TextComponent>, font: String) {
         todo!()
     }
 
-    async fn shadow_color(
-        &mut self,
-        text_component: Resource<TextComponent>,
-        color: ArgbColor,
-    ) -> () {
+    async fn shadow_color(&mut self, text_component: Resource<TextComponent>, color: ArgbColor) {
         todo!()
     }
 
-    async fn click_open_url(&mut self, text_component: Resource<TextComponent>, url: String) -> () {
+    async fn click_open_url(&mut self, text_component: Resource<TextComponent>, url: String) {
         todo!()
     }
 
@@ -99,7 +126,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         &mut self,
         text_component: Resource<TextComponent>,
         command: String,
-    ) -> () {
+    ) {
         todo!()
     }
 
@@ -107,7 +134,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         &mut self,
         text_component: Resource<TextComponent>,
         command: String,
-    ) -> () {
+    ) {
         todo!()
     }
 
@@ -115,7 +142,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         &mut self,
         text_component: Resource<TextComponent>,
         text: String,
-    ) -> () {
+    ) {
         todo!()
     }
 
@@ -123,15 +150,11 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         &mut self,
         text_component: Resource<TextComponent>,
         text: Resource<TextComponent>,
-    ) -> () {
+    ) {
         todo!()
     }
 
-    async fn hover_show_item(
-        &mut self,
-        text_component: Resource<TextComponent>,
-        item: String,
-    ) -> () {
+    async fn hover_show_item(&mut self, text_component: Resource<TextComponent>, item: String) {
         todo!()
     }
 
@@ -141,11 +164,14 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         entity_type: String,
         id: String,
         name: Option<Resource<TextComponent>>,
-    ) -> () {
+    ) {
         todo!()
     }
 
     async fn drop(&mut self, rep: Resource<TextComponent>) -> wasmtime::Result<()> {
-        todo!()
+        let _ = self
+            .resource_table
+            .delete::<TextComponentResource>(Resource::new_own(rep.rep()));
+        Ok(())
     }
 }
