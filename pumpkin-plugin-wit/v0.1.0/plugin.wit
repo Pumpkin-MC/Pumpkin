@@ -20,5 +20,5 @@ world plugin {
     export metadata;
     export common;
     export handle-event: func(event-id: u32, server: server-instance, event: event) -> event;
-    export handle-command: func(command-id: u32, sender: command-sender, server: server-instance, args: consumed-args) -> event;
+    export handle-command: func(command-id: u32, sender: command-sender, server: server-instance, args: consumed-args);
 }
