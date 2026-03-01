@@ -34,16 +34,16 @@ impl BlockBehaviour for SporeBlossomBlock {
 impl PlantBlockBase for SporeBlossomBlock {
     async fn can_plant_on_top(
         &self,
-        block_accessor: &dyn pumpkin_world::world::BlockAccessor,
-        pos: &pumpkin_util::math::position::BlockPos,
+        _block_accessor: &dyn pumpkin_world::world::BlockAccessor,
+        _pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
-        let block = block_accessor.get_block(&pos.up_height(2)).await;
-        supports_spore_blossom(block)
+        false
     }
     async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down()).await
+        let block = block_accessor.get_block(&block_pos.up()).await;
+        supports_spore_blossom(block)
     }
 }
 fn supports_spore_blossom(block: &Block) -> bool {
-    !block.has_tag(&tag::Block::MINECRAFT_LEAVES) && !block.has_tag(&tag::Block::MINECRAFT_AIR)
+    !block.has_tag(&tag::Block::MINECRAFT_LEAVES) && block.is_solid()
 }
