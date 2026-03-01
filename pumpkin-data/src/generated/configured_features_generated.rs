@@ -53,6 +53,8 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             giant::GiantTrunkPlacer, mega_jungle::MegaJungleTrunkPlacer,
             straight::StraightTrunkPlacer, upwards_branching::UpwardsBranchingTrunkPlacer,
         },
+        vegetation_patch::VegetationPatchFeature,
+        waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature,
     };
     use crate::generation::feature::placed_features::{
         BiomePlacementModifier, BlockFilterPlacementModifier, CountOnEveryLayerPlacementModifier,
@@ -1751,12 +1753,69 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             crate::generation::feature::features::chorus_plant::ChorusPlantFeature {},
         ),
     );
-    map . insert ("clay_pool_with_dripleaves" . to_string () , ConfiguredFeature :: WaterloggedVegetationPatch (crate :: generation :: feature :: features :: waterlogged_vegetation_patch :: WaterloggedVegetationPatchFeature { })) ;
+    map.insert(
+        "clay_pool_with_dripleaves".to_string(),
+        ConfiguredFeature::WaterloggedVegetationPatch(
+            waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature {
+                base: vegetation_patch::VegetationPatchFeature {
+                    replaceable: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: "minecraft:lush_ground_replaceable".to_string(),
+                    }),
+                    ground_state: BlockStateProvider::Simple(SimpleStateProvider {
+                        state: BlockStateCodec {
+                            name: &pumpkin_data::Block::CLAY,
+                            properties: None,
+                        },
+                    }),
+                    vegetation_feature: Box::new(PlacedFeature {
+                        feature: Feature::Named("dripleaf".to_string()),
+                        placement: vec![],
+                    }),
+                    surface: pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor,
+                    depth: IntProvider::Constant(3i32),
+                    extra_bottom_block_chance: 0.8f32,
+                    vertical_range: 5i32,
+                    vegetation_chance: 0.1f32,
+                    xz_radius: IntProvider::Object(NormalIntProvider::Uniform(
+                        UniformIntProvider {
+                            min_inclusive: 4i32,
+                            max_inclusive: 7i32,
+                        },
+                    )),
+                    extra_edge_column_chance: 0.7f32,
+                },
+            },
+        ),
+    );
     map.insert(
         "clay_with_dripleaves".to_string(),
-        ConfiguredFeature::VegetationPatch(
-            crate::generation::feature::features::vegetation_patch::VegetationPatchFeature {},
-        ),
+        ConfiguredFeature::VegetationPatch(vegetation_patch::VegetationPatchFeature {
+            replaceable: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                tag: "minecraft:lush_ground_replaceable".to_string(),
+            }),
+            ground_state: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::CLAY,
+                    properties: None,
+                },
+            }),
+            vegetation_feature: Box::new(PlacedFeature {
+                feature: Feature::Named("dripleaf".to_string()),
+                placement: vec![],
+            }),
+            surface: pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor,
+            depth: IntProvider::Constant(3i32),
+            extra_bottom_block_chance: 0.8f32,
+            vertical_range: 2i32,
+            vegetation_chance: 0.05f32,
+            xz_radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 4i32,
+                max_inclusive: 7i32,
+            })),
+            extra_edge_column_chance: 0.7f32,
+        }),
     );
     map.insert(
         "crimson_forest_vegetation".to_string(),
@@ -5192,21 +5251,93 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     );
     map.insert(
         "moss_patch".to_string(),
-        ConfiguredFeature::VegetationPatch(
-            crate::generation::feature::features::vegetation_patch::VegetationPatchFeature {},
-        ),
+        ConfiguredFeature::VegetationPatch(vegetation_patch::VegetationPatchFeature {
+            replaceable: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                tag: "minecraft:moss_replaceable".to_string(),
+            }),
+            ground_state: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::MOSS_BLOCK,
+                    properties: None,
+                },
+            }),
+            vegetation_feature: Box::new(PlacedFeature {
+                feature: Feature::Named("moss_vegetation".to_string()),
+                placement: vec![],
+            }),
+            surface: pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor,
+            depth: IntProvider::Constant(1i32),
+            extra_bottom_block_chance: 0f32,
+            vertical_range: 5i32,
+            vegetation_chance: 0.8f32,
+            xz_radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 4i32,
+                max_inclusive: 7i32,
+            })),
+            extra_edge_column_chance: 0.3f32,
+        }),
     );
     map.insert(
         "moss_patch_bonemeal".to_string(),
-        ConfiguredFeature::VegetationPatch(
-            crate::generation::feature::features::vegetation_patch::VegetationPatchFeature {},
-        ),
+        ConfiguredFeature::VegetationPatch(vegetation_patch::VegetationPatchFeature {
+            replaceable: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                tag: "minecraft:moss_replaceable".to_string(),
+            }),
+            ground_state: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::MOSS_BLOCK,
+                    properties: None,
+                },
+            }),
+            vegetation_feature: Box::new(PlacedFeature {
+                feature: Feature::Named("moss_vegetation".to_string()),
+                placement: vec![],
+            }),
+            surface: pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor,
+            depth: IntProvider::Constant(1i32),
+            extra_bottom_block_chance: 0f32,
+            vertical_range: 5i32,
+            vegetation_chance: 0.6f32,
+            xz_radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 1i32,
+                max_inclusive: 2i32,
+            })),
+            extra_edge_column_chance: 0.75f32,
+        }),
     );
     map.insert(
         "moss_patch_ceiling".to_string(),
-        ConfiguredFeature::VegetationPatch(
-            crate::generation::feature::features::vegetation_patch::VegetationPatchFeature {},
-        ),
+        ConfiguredFeature::VegetationPatch(vegetation_patch::VegetationPatchFeature {
+            replaceable: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                tag: "minecraft:moss_replaceable".to_string(),
+            }),
+            ground_state: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::MOSS_BLOCK,
+                    properties: None,
+                },
+            }),
+            vegetation_feature: Box::new(PlacedFeature {
+                feature: Feature::Named("cave_vine_in_moss".to_string()),
+                placement: vec![],
+            }),
+            surface: pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Ceiling,
+            depth: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 1i32,
+                max_inclusive: 2i32,
+            })),
+            extra_bottom_block_chance: 0f32,
+            vertical_range: 5i32,
+            vegetation_chance: 0.08f32,
+            xz_radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 4i32,
+                max_inclusive: 7i32,
+            })),
+            extra_edge_column_chance: 0.3f32,
+        }),
     );
     map.insert(
         "moss_vegetation".to_string(),
@@ -7034,15 +7165,61 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     );
     map.insert(
         "pale_moss_patch".to_string(),
-        ConfiguredFeature::VegetationPatch(
-            crate::generation::feature::features::vegetation_patch::VegetationPatchFeature {},
-        ),
+        ConfiguredFeature::VegetationPatch(vegetation_patch::VegetationPatchFeature {
+            replaceable: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                tag: "minecraft:moss_replaceable".to_string(),
+            }),
+            ground_state: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::PALE_MOSS_BLOCK,
+                    properties: None,
+                },
+            }),
+            vegetation_feature: Box::new(PlacedFeature {
+                feature: Feature::Named("pale_moss_vegetation".to_string()),
+                placement: vec![],
+            }),
+            surface: pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor,
+            depth: IntProvider::Constant(1i32),
+            extra_bottom_block_chance: 0f32,
+            vertical_range: 5i32,
+            vegetation_chance: 0.3f32,
+            xz_radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 2i32,
+                max_inclusive: 4i32,
+            })),
+            extra_edge_column_chance: 0.75f32,
+        }),
     );
     map.insert(
         "pale_moss_patch_bonemeal".to_string(),
-        ConfiguredFeature::VegetationPatch(
-            crate::generation::feature::features::vegetation_patch::VegetationPatchFeature {},
-        ),
+        ConfiguredFeature::VegetationPatch(vegetation_patch::VegetationPatchFeature {
+            replaceable: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                tag: "minecraft:moss_replaceable".to_string(),
+            }),
+            ground_state: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::PALE_MOSS_BLOCK,
+                    properties: None,
+                },
+            }),
+            vegetation_feature: Box::new(PlacedFeature {
+                feature: Feature::Named("pale_moss_vegetation".to_string()),
+                placement: vec![],
+            }),
+            surface: pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor,
+            depth: IntProvider::Constant(1i32),
+            extra_bottom_block_chance: 0f32,
+            vertical_range: 5i32,
+            vegetation_chance: 0.6f32,
+            xz_radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 1i32,
+                max_inclusive: 2i32,
+            })),
+            extra_edge_column_chance: 0.75f32,
+        }),
     );
     map.insert(
         "pale_moss_vegetation".to_string(),
