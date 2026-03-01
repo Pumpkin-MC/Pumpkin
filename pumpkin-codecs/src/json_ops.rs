@@ -121,10 +121,16 @@ impl DynamicOps for JsonOps {
             }
             Value::String(string) => {
                 if self.compressed {
-                    return string.parse::<i32>().map_or_else(
-                        |_| DataResult::error(format!("Number cannot be parsed as i32: {string}")),
-                        |r| DataResult::success(Number::Int(r)),
-                    );
+                    if let Ok(i) = string.parse::<i32>() {
+                        return DataResult::success(Number::Int(i));
+                    }
+                    if let Ok(l) = string.parse::<i64>() {
+                        return DataResult::success(Number::Long(l));
+                    }
+                    if let Ok(d) = string.parse::<f64>() {
+                        return DataResult::success(Number::Double(d));
+                    }
+                    return DataResult::error(format!("Number could not be parsed: {string}"));
                 }
             }
             _ => {}
