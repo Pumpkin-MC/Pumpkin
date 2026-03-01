@@ -505,7 +505,7 @@ impl World {
                 Some(decorated_message.clone()),
                 FilterType::PassThrough,
                 (RAW + 1).into(), // Custom registry chat_type with no sender name
-                TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
+                TextComponent::empty(), // Not needed since we're injecting the name in the message for custom formatting
                 None,
             );
             recipient.client.enqueue_packet(packet).await;
@@ -1541,7 +1541,7 @@ impl World {
         &self,
         base_config: &BasicConfiguration,
         player: &Arc<Player>,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         let dimensions: Vec<ResourceLocation> = server
             .dimensions

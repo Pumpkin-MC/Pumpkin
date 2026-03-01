@@ -1,7 +1,7 @@
 use crate::command::argument_types::argument_type::AnyArgumentType;
 use crate::command::node::{
     ArgumentNodeMetadata, Command, CommandNodeMetadata, LiteralNodeMetadata, NodeMetadata,
-    OwnedNodeData, RedirectModifier, Redirection, Requirement,
+    OwnedNodeData, RedirectModifier, Redirection, Requirements,
 };
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
@@ -54,29 +54,23 @@ impl LiteralDetachedNode {
     /// without any children.
     ///
     /// # Note
-    /// Prefer using the [`LiteralArgumentBuilder`] over this function.
-    #[expect(clippy::too_many_arguments)]
-    pub fn new<P>(
+    /// Prefer using the [`literal`](crate::command::argument_builder::literal) function over this one.
+    pub fn new(
         global_id: GlobalNodeId,
         literal: impl Into<Cow<'static, str>>,
         command: Option<Command>,
-        requirement: Requirement,
+        requirements: Requirements,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
-        permission: Option<P>,
         forks: bool,
-    ) -> Self
-    where
-        P: Into<Cow<'static, str>>,
-    {
+    ) -> Self {
         Self {
             owned: OwnedNodeData {
                 global_id,
-                requirement,
+                requirements,
                 modifier,
                 forks,
                 command,
-                permission: permission.map(Into::into),
             },
             children: FxHashMap::default(),
             redirect,
@@ -103,30 +97,25 @@ impl CommandDetachedNode {
     /// without any children.
     ///
     /// # Note
-    /// Prefer using the [`LiteralArgumentBuilder`] over this function.
+    /// Prefer using the [`command`](crate::command::argument_builder::command) function over this one.
     #[expect(clippy::too_many_arguments)]
-    pub fn new<P>(
+    pub fn new(
         global_id: GlobalNodeId,
         literal: impl Into<Cow<'static, str>>,
         description: impl Into<Cow<'static, str>>,
         command: Option<Command>,
-        requirement: Requirement,
+        requirements: Requirements,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
-        permission: Option<P>,
         forks: bool,
-    ) -> Self
-    where
-        P: Into<Cow<'static, str>>,
-    {
+    ) -> Self {
         Self {
             owned: OwnedNodeData {
                 global_id,
-                requirement,
+                requirements,
                 modifier,
                 forks,
                 command,
-                permission: permission.map(Into::into),
             },
             children: FxHashMap::default(),
             redirect,
@@ -150,30 +139,25 @@ impl ArgumentDetachedNode {
     /// without any children.
     ///
     /// # Note
-    /// Prefer using the [`RequiredArgumentBuilder`] over this function.
+    /// Prefer using the [`argument`](crate::command::argument_builder::argument) function over this one.
     #[expect(clippy::too_many_arguments)]
-    pub fn new<P>(
+    pub fn new(
         global_id: GlobalNodeId,
         name: impl Into<Cow<'static, str>>,
         argument_type: Arc<dyn AnyArgumentType>,
         command: Option<Command>,
-        requirement: Requirement,
+        requirements: Requirements,
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
-        permission: Option<P>,
         forks: bool,
-    ) -> Self
-    where
-        P: Into<Cow<'static, str>>,
-    {
+    ) -> Self {
         Self {
             owned: OwnedNodeData {
                 global_id,
-                requirement,
+                requirements,
                 modifier,
                 forks,
                 command,
-                permission: permission.map(Into::into),
             },
             children: FxHashMap::default(),
             redirect,

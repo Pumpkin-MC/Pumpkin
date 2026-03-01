@@ -1,5 +1,8 @@
 use crate::command::{
-    argument_types::{argument_type::ArgumentType, core::within_or_err},
+    argument_types::{
+        argument_type::{ArgumentType, JavaClientArgumentType},
+        core::within_or_err,
+    },
     errors::{command_syntax_error::CommandSyntaxError, error_types},
     string_reader::StringReader,
 };
@@ -26,6 +29,13 @@ impl ArgumentType for DoubleArgumentType {
             &error_types::DOUBLE_TOO_LOW,
             &error_types::DOUBLE_TOO_HIGH,
         )
+    }
+
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+        JavaClientArgumentType::Double {
+            min: (self.min != f64::MIN).then_some(self.min),
+            max: (self.max != f64::MAX).then_some(self.max),
+        }
     }
 
     fn examples(&self) -> Vec<String> {

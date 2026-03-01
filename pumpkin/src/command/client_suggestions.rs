@@ -1,28 +1,37 @@
+use pumpkin_protocol::{
+    codec::var_int::VarInt,
+    java::client::play::{CCommands, ProtoNode, ProtoNodeType},
+};
 use std::sync::Arc;
 
-use pumpkin_protocol::java::client::play::{CCommands, ProtoNode, ProtoNodeType};
-
-use crate::entity::player::Player;
-
-use super::{
-    dispatcher::CommandDispatcher,
-    tree::{Node, NodeType},
+use super::tree::{Node, NodeType};
+use crate::server::Server;
+use crate::{
+    command::node::{
+        attached::{AttachedNode, NodeId},
+        dispatcher::CommandDispatcher,
+        tree::ROOT_NODE_ID,
+    },
+    entity::player::Player,
 };
 
+#[expect(clippy::too_many_lines)]
 pub async fn send_c_commands_packet(
     player: &Arc<Player>,
-    server: &crate::server::Server,
+    server: &Server,
     dispatcher: &CommandDispatcher,
 ) {
     let cmd_src = super::CommandSender::Player(player.clone());
+
     let mut first_level = Vec::new();
 
-    for key in dispatcher.commands.keys() {
-        let Ok(tree) = dispatcher.get_tree(key) else {
+    let fallback_dispatcher = &dispatcher.fallback_dispatcher;
+    for key in fallback_dispatcher.commands.keys() {
+        let Ok(tree) = fallback_dispatcher.get_tree(key) else {
             continue;
         };
 
-        let Some(permission) = dispatcher.permissions.get(key) else {
+        let Some(permission) = fallback_dispatcher.permissions.get(key) else {
             continue;
         };
 
@@ -38,6 +47,8 @@ pub async fn send_c_commands_packet(
             node_type: ProtoNodeType::Literal {
                 name: key,
                 is_executable,
+                redirect_target: None,
+                restricted: false,
             },
         };
 
@@ -52,8 +63,137 @@ pub async fn send_c_commands_packet(
     let mut proto_nodes = Vec::new();
     let root_node_index = root.build(&mut proto_nodes);
 
+    let node_id_offset = proto_nodes.len();
+
+    // We can finally assign indices from our tree:
+    // ID = 2: node_id_offset
+    // ID = 3: node_id_offset + 1
+    // ID = 4: node_id_offset + 2      and so on...
+    let mut root_node_children_second: Box<[VarInt]> = Box::new([]);
+
+    // TODO:
+    // Once the /op and /deop commands are ported to the new dispatcher,
+    // we'll be able to make this function take an &Arc<Server> instead of &Server.
+    // With that permissions can be evaluated.
+    //
+    // &Arc<Server> ----------------------------,
+    //                                          |
+    //                                          v
+    // let source = player.get_command_source(server).await;
+
+    for node in &dispatcher.tree {
+        // We map IDs to the indexes:
+        let children: Box<[VarInt]> = node
+            .children_ref()
+            .values()
+            .copied()
+            .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
+            .map(|i| i.try_into().expect("i32 limit reached for ids"))
+            .collect();
+
+        let redirect_target = node
+            .redirect()
+            .and_then(|redirection| dispatcher.tree.resolve(redirection))
+            .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
+            .map(|i| i.try_into().expect("i32 limit reached for ids"));
+
+        // TODO:
+        // As stated in the previous TODO, after
+        // we can get a reference to an Arc of Server,
+        // we can add the permission checking.
+        //
+        // Luckily, for now the new dispatcher
+        // only has the /help commands which
+        // is accessible to everyone by default.
+        let satisfies_requirements = true;
+        // let satisfies_requirements = node.requirements().evaluate(&source).await;
+
+        match node {
+            AttachedNode::Root(_) => {
+                // We skip the root node because we already have a root node.
+                // We do need to capture its children though, for later.
+                root_node_children_second = children;
+            }
+            AttachedNode::Literal(literal_attached_node) => {
+                let node = ProtoNode {
+                    children,
+                    node_type: ProtoNodeType::Literal {
+                        name: &literal_attached_node.meta.literal,
+                        is_executable: literal_attached_node.owned.command.is_some(),
+                        redirect_target,
+                        restricted: !satisfies_requirements,
+                    },
+                };
+                proto_nodes.push(node);
+            }
+            AttachedNode::Command(command_attached_node) => {
+                let node = ProtoNode {
+                    children,
+                    node_type: ProtoNodeType::Literal {
+                        name: &command_attached_node.meta.literal,
+                        is_executable: command_attached_node.owned.command.is_some(),
+                        redirect_target,
+                        restricted: !satisfies_requirements,
+                    },
+                };
+                proto_nodes.push(node);
+            }
+            AttachedNode::Argument(argument_attached_node) => {
+                let arg_type = &argument_attached_node.meta.argument_type;
+
+                let node = ProtoNode {
+                    children,
+                    node_type: ProtoNodeType::Argument {
+                        name: &argument_attached_node.meta.name,
+                        is_executable: argument_attached_node.owned.command.is_some(),
+                        parser: arg_type.client_side_parser(),
+                        override_suggestion_type: arg_type.override_suggestion_providers(),
+                        redirect_target,
+                        restricted: !satisfies_requirements,
+                    },
+                };
+                proto_nodes.push(node);
+            }
+        }
+    }
+
+    if !root_node_children_second.is_empty() {
+        let root_node = &mut proto_nodes[root_node_index];
+
+        // Take the first children buffer, leaving it empty.
+        let mut first = std::mem::take(&mut root_node.children).into_vec();
+
+        // Add elements of the second buffer to the first.
+        first.append(&mut root_node_children_second.into_vec());
+
+        // Convert it back to a boxed slice.
+        root_node.children = first.into_boxed_slice();
+    }
+
     let packet = CCommands::new(proto_nodes.into(), root_node_index.try_into().unwrap());
     player.client.enqueue_packet(&packet).await;
+}
+
+fn resolve_node_id(node_id: NodeId, node_id_offset: usize, root_node_index: usize) -> usize {
+    // ASSUMPTION:
+    // We assume, in all Trees, that
+    // their root node always has a local ID of 1.
+    // Other nodes will ALWAYS have an ID greater than 1.
+    // (No node, not even the root node, can have an ID of 0
+    // as it is wrapped in a `NonZero<usize>`)
+    //
+    // If this is violated, then logic errors arise!
+    // See the `Tree` documentation for more information.
+    if node_id == ROOT_NODE_ID {
+        root_node_index
+    } else {
+        const FIRST_NONROOT_ID: usize = 2; // ROOT_NODE_ID.0.get() + 1
+        debug_assert!(
+            node_id.0.get() >= FIRST_NONROOT_ID,
+            "Root node should have been handled in the if body"
+        );
+        node_id_offset + node_id.0.get() - FIRST_NONROOT_ID
+    }
 }
 
 struct ProtoNodeBuilder<'a> {
@@ -97,9 +237,11 @@ fn nodes_to_proto_node_builders<'a>(
                     node_type: ProtoNodeType::Argument {
                         name,
                         is_executable: node_is_executable,
+                        redirect_target: None,
                         parser: consumer.get_client_side_parser(),
                         override_suggestion_type: consumer
                             .get_client_side_suggestion_type_override(),
+                        restricted: false,
                     },
                 });
             }
@@ -112,6 +254,8 @@ fn nodes_to_proto_node_builders<'a>(
                     node_type: ProtoNodeType::Literal {
                         name: string,
                         is_executable: node_is_executable,
+                        redirect_target: None,
+                        restricted: false,
                     },
                 });
             }

@@ -56,7 +56,15 @@ pub enum NodeIdClassification {
 ///
 /// - **Root**:
 ///   Does not have a parent. Exactly one instance of this type of node
-///   exists per [`Tree`]. Always identifiable by [`ROOT_NODE_ID`].
+///   exists per [`Tree`]. Always identifiable by [`ROOT_NODE_ID`] (= 1).
+///   Only command nodes can be the children of this node.
+///
+///   **In any `Tree`**, the root node always has the ID of 1.
+///
+///   **Violating this constraint is a logic error** and breaks the assumptions
+///   made in this structure's functionality and that of outside as well.
+///
+///   In other words, a non-root node CANNOT HAVE an ID of 1!
 ///
 /// - **Command**:
 ///   Its parent must be the root node, and specifies the start of a
@@ -78,6 +86,9 @@ pub struct Tree {
     /// Keys linking [`GlobalNodeId`] to the [`NodeId`] for this tree.
     /// Useful for redirecting.
     ids_map: FxHashMap<GlobalNodeId, NodeId>,
+
+    /// Cached mappings for each command.
+    command_node_mappings: FxHashMap<String, CommandNodeId>,
 }
 
 impl Default for Tree {
@@ -96,6 +107,7 @@ impl Tree {
         Self {
             nodes: vec![AttachedNode::Root(node)],
             ids_map,
+            command_node_mappings: FxHashMap::default(),
         }
     }
 
@@ -155,10 +167,16 @@ impl Tree {
     /// Adds a [`CommandDetachedNode`] to the root node of this tree.
     pub fn add_child_to_root(&mut self, node: impl Into<CommandDetachedNode>) -> CommandNodeId {
         // First, attach the node to this tree.
-        let node = self.attach(node.into().into());
+        let node = node.into();
+        let name = node.meta.literal.to_string();
+        let node = self.attach(node.into());
         self.add_attached_child(ROOT_NODE_ID, node);
+
         // This is safe as the node ID now points to a `CommandAttachedNode`.
-        CommandNodeId(node.0)
+        let node = CommandNodeId(node.0);
+
+        self.command_node_mappings.insert(name, node);
+        node
     }
 
     /// Adds a child to a given node.
@@ -223,13 +241,23 @@ impl Tree {
         self[node].children_ref().values().copied().collect()
     }
 
+    /// Gets the children of the root node in the tree.
+    #[must_use]
+    pub fn get_root_children(&self) -> Vec<CommandNodeId> {
+        self[ROOT_NODE_ID]
+            .children_ref()
+            .values()
+            .copied()
+            // This should be fine as all children of the
+            // root node are Command Nodes.
+            .map(|id| CommandNodeId(id.0))
+            .collect()
+    }
+
     /// Returns whether the given node is able to be used by a given source.
     #[must_use]
     pub async fn can_use(&self, node: NodeId, source: &CommandSource) -> bool {
-        source
-            .has_permission_from_option(self[node].permission())
-            .await
-            && self[node].requirement().evaluate(source).await
+        self[node].requirements().evaluate(source).await
     }
 
     /// Finds ambiguities of input and gives them to the [`AmbiguityConsumer`].
@@ -267,9 +295,14 @@ impl Tree {
         }
     }
 
-    pub fn get_relevant_nodes(&self, reader: &mut StringReader, node: NodeId) -> Vec<NodeId> {
-        // TODO: Determine whether this function should be optimized or not.
+    /// Returns whether the given ID points to a command node.
+    #[must_use]
+    pub fn is_command_node(&self, node: NodeId) -> bool {
+        matches!(self[node].classification(), NodeClassification::Command)
+    }
 
+    #[must_use]
+    pub fn get_relevant_nodes(&self, reader: &mut StringReader, node: NodeId) -> Vec<NodeId> {
         let children = self.get_children(node);
         let mut literals = Vec::new();
         let mut commands = Vec::new();
@@ -362,6 +395,17 @@ impl Tree {
             Redirection::Local(id) => (id.0 < self.size_nonzero()).then_some(id),
         }
     }
+
+    /// Gets the command node by ID, given its literal.
+    #[must_use]
+    pub fn get(&self, name: &str) -> Option<CommandNodeId> {
+        self.command_node_mappings.get(name).copied()
+    }
+
+    /// Returns an iterator to all the nodes of this tree.
+    pub fn iter(&self) -> std::slice::Iter<'_, AttachedNode> {
+        self.nodes.iter()
+    }
 }
 
 impl Index<NodeId> for Tree {
@@ -415,6 +459,15 @@ macro_rules! impl_index_index_mut {
 impl_index_index_mut!(LiteralNodeId -> AttachedNode::Literal(LiteralAttachedNode));
 impl_index_index_mut!(CommandNodeId -> AttachedNode::Command(CommandAttachedNode));
 impl_index_index_mut!(ArgumentNodeId -> AttachedNode::Argument(ArgumentAttachedNode));
+
+impl<'a> IntoIterator for &'a Tree {
+    type Item = &'a AttachedNode;
+    type IntoIter = std::slice::Iter<'a, AttachedNode>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
 
 #[cfg(test)]
 mod test {

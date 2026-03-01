@@ -1,5 +1,8 @@
 use crate::command::{
-    argument_types::{argument_type::ArgumentType, core::within_or_err},
+    argument_types::{
+        argument_type::{ArgumentType, JavaClientArgumentType},
+        core::within_or_err,
+    },
     errors::{command_syntax_error::CommandSyntaxError, error_types},
     string_reader::StringReader,
 };
@@ -26,6 +29,13 @@ impl ArgumentType for FloatArgumentType {
             &error_types::FLOAT_TOO_LOW,
             &error_types::FLOAT_TOO_HIGH,
         )
+    }
+
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+        JavaClientArgumentType::Float {
+            min: (self.min != f32::MIN).then_some(self.min),
+            max: (self.max != f32::MAX).then_some(self.max),
+        }
     }
 
     fn examples(&self) -> Vec<String> {

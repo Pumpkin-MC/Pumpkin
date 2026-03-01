@@ -447,7 +447,9 @@ mod test {
     async fn dynamic_command() {
         let config = BasicConfiguration::default();
         let registry = RwLock::new(PermissionRegistry::new());
-        let mut dispatcher = default_dispatcher(&registry, &config).await;
+        let mut dispatcher = default_dispatcher(&registry, &config)
+            .await
+            .fallback_dispatcher;
         let tree = CommandTree::new(["test"], "test_desc");
         dispatcher.register(tree, "minecraft:test");
     }

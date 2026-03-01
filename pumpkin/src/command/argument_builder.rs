@@ -3,7 +3,9 @@ use crate::command::argument_types::argument_type::AnyArgumentType;
 use crate::command::node::detached::{
     ArgumentDetachedNode, CommandDetachedNode, DetachedNode, GlobalNodeId, LiteralDetachedNode,
 };
-use crate::command::node::{Command, CommandExecutor, RedirectModifier, Redirection, Requirement};
+use crate::command::node::{
+    Command, CommandExecutor, RedirectModifier, Redirection, Requirement, Requirements,
+};
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -18,10 +20,9 @@ struct CommonArgumentBuilder {
     pub global_id: GlobalNodeId,
     pub arguments: FxHashMap<String, DetachedNode>,
     pub command: Option<Command>,
-    pub requirement: Requirement,
+    pub requirements: Requirements,
     pub target: Option<Redirection>,
     pub modifier: RedirectModifier,
-    pub permission: Option<Cow<'static, str>>,
     pub forks: bool,
 }
 
@@ -31,10 +32,9 @@ impl CommonArgumentBuilder {
             global_id: GlobalNodeId::new(),
             arguments: FxHashMap::default(),
             command: None,
-            requirement: Requirement::AlwaysQualified,
+            requirements: Requirements::new(),
             target: None,
-            modifier: RedirectModifier::OneSource,
-            permission: None,
+            modifier: RedirectModifier::KeepSource,
             forks: false,
         }
     }
@@ -144,7 +144,13 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
 
     /// Sets the command to execute for the node being built.
     #[must_use]
-    fn executes(self, command: impl CommandExecutor + 'static) -> Self;
+    fn executes(self, command: impl CommandExecutor + 'static) -> Self {
+        self.executes_arc(Arc::new(command))
+    }
+
+    /// Sets the command to execute for the node being built.
+    #[must_use]
+    fn executes_arc(self, command: Arc<dyn CommandExecutor + 'static>) -> Self;
 
     /// Sets the redirect target of the node being built to another, without a modifier.
     #[must_use]
@@ -180,9 +186,18 @@ pub trait ArgumentBuilder<N: Into<DetachedNode>>: Sized + Sealed {
     #[must_use]
     fn target(&self) -> Option<Redirection>;
 
-    /// Gets the permission required by this node to run, in addition to the requirement in the node.
+    /// Adds a given predicate to this list of requirements of the node being built.
+    ///
+    /// This means that it is possible to chain multiple predicates together, which must all
+    /// be satisfied.
+    ///
+    /// Permissions can also be inserted directly into this method as a `requirement`.
     #[must_use]
-    fn permission(&self) -> Option<&str>;
+    fn requires(self, requirement: impl Into<Requirement>) -> Self;
+
+    /// Overwrites the current requirements of this node to a new value.
+    #[must_use]
+    fn overwrite_requirements(self, requirements: Requirements) -> Self;
 
     /// Gets the redirect modifier of the node this [`ArgumentBuilder`] is building.
     #[must_use]
@@ -229,13 +244,23 @@ macro_rules! impl_boilerplate_argument_builder {
             self.common.command.clone()
         }
 
-        fn executes(mut self, command: impl CommandExecutor + 'static) -> Self {
-            self.common.command = Some(Arc::new(command));
+        fn executes_arc(mut self, command: Arc<dyn CommandExecutor + 'static>) -> Self {
+            self.common.command = Some(command);
+            self
+        }
+
+        fn requires(mut self, requirement: impl Into<Requirement>) -> Self {
+            self.common.requirements.0.push(requirement.into());
+            self
+        }
+
+        fn overwrite_requirements(mut self, requirements: Requirements) -> Self {
+            self.common.requirements = requirements;
             self
         }
 
         fn redirect(self, redirection: impl Into<Redirection>) -> Self {
-            self.forward(redirection.into(), RedirectModifier::OneSource, false)
+            self.forward(redirection.into(), RedirectModifier::KeepSource, false)
         }
 
         fn redirect_with_modifier(self, redirection: impl Into<Redirection>, redirect_modifier: RedirectModifier) -> Self {
@@ -260,10 +285,6 @@ macro_rules! impl_boilerplate_argument_builder {
 
         fn target(&self) -> Option<Redirection> {
             self.common.target.clone()
-        }
-
-        fn permission(&self) -> Option<&str> {
-            self.common.permission.as_deref()
         }
 
         fn redirect_modifier(&self) -> RedirectModifier {
@@ -347,10 +368,9 @@ impl ArgumentBuilder<LiteralDetachedNode> for LiteralArgumentBuilder {
             self.common.global_id,
             self.literal,
             self.common.command,
-            self.common.requirement,
+            self.common.requirements,
             self.common.target,
             self.common.modifier,
-            self.common.permission,
             self.common.forks,
         );
         node.children = self.common.arguments;
@@ -367,10 +387,9 @@ impl ArgumentBuilder<CommandDetachedNode> for CommandArgumentBuilder {
             self.literal,
             self.description,
             self.common.command,
-            self.common.requirement,
+            self.common.requirements,
             self.common.target,
             self.common.modifier,
-            self.common.permission,
             self.common.forks,
         );
         node.children = self.common.arguments;
@@ -387,10 +406,9 @@ impl ArgumentBuilder<ArgumentDetachedNode> for RequiredArgumentBuilder {
             self.name,
             self.argument_type,
             self.common.command,
-            self.common.requirement,
+            self.common.requirements,
             self.common.target,
             self.common.modifier,
-            self.common.permission,
             self.common.forks,
         );
         node.children = self.common.arguments;

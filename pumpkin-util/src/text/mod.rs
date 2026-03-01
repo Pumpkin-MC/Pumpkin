@@ -247,6 +247,12 @@ impl TextComponentBase {
 }
 
 impl TextComponent {
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::text("")
+    }
+
+    #[must_use]
     pub fn text<P: Into<Cow<'static, str>>>(plain: P) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::Text { text: plain.into() }),
@@ -255,6 +261,7 @@ impl TextComponent {
         })
     }
 
+    #[must_use]
     pub fn translate<K: Into<Cow<'static, str>>, W: Into<Vec<Self>>>(key: K, with: W) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::Translate {
@@ -266,6 +273,7 @@ impl TextComponent {
         })
     }
 
+    #[must_use]
     pub fn custom<K: Into<Cow<'static, str>>, W: Into<Vec<Self>>>(
         namespace: K,
         key: K,

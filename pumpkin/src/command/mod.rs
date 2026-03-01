@@ -8,7 +8,14 @@ use crate::server::Server;
 use crate::world::World;
 use args::ConsumedArgs;
 
+use crate::command::context::command_source::CommandSource;
+use crate::entity::EntityBase;
 use dispatcher::CommandError;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::CommandBlockLikeProperties;
+use pumpkin_data::block_properties::Facing;
+use pumpkin_data::dimension::Dimension;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
@@ -223,6 +230,102 @@ impl CommandSender {
             Self::Dummy => false,
             Self::Player(..) | Self::Console | Self::Rcon(_) | Self::CommandBlock(..) => true,
         }
+    }
+
+    #[must_use]
+    pub async fn into_source(self, server: &Arc<Server>) -> CommandSource {
+        match self {
+            Self::Rcon(rcon) => {
+                let (world, spawn_point) = Self::get_world_and_spawn_point(server);
+                CommandSource::new(
+                    Self::Rcon(rcon),
+                    world,
+                    None,
+                    spawn_point,
+                    Vector2::new(0.0, 0.0),
+                    "Rcon".to_owned(),
+                    TextComponent::text("Rcon"),
+                    server.clone(),
+                )
+            }
+            Self::Console => {
+                let (world, spawn_point) = Self::get_world_and_spawn_point(server);
+                CommandSource::new(
+                    Self::Console,
+                    world,
+                    None,
+                    spawn_point,
+                    Vector2::new(0.0, 0.0),
+                    "Server".to_owned(),
+                    TextComponent::text("Server"),
+                    server.clone(),
+                )
+            }
+            Self::Player(player) => CommandSource::new(
+                Self::Player(player.clone()),
+                player.world(),
+                Some(player.clone()),
+                player.position(),
+                player.rotation().into(),
+                player.get_display_name().await.get_text(),
+                player.get_display_name().await,
+                server.clone(),
+            ),
+            Self::CommandBlock(command_entity, world) => {
+                let pos = command_entity.position;
+
+                let state_id = world.get_block_state_id(&pos).await;
+                let block = world.get_block(&pos).await;
+                let command_block_props =
+                    CommandBlockLikeProperties::from_state_id(state_id, block);
+                let facing = command_block_props.facing;
+
+                let horizontal_direction = match facing {
+                    Facing::South => 0.0,
+                    Facing::West => 90.0,
+                    Facing::North => 180.0,
+                    Facing::Up | Facing::Down | Facing::East => 270.0,
+                };
+
+                // TODO: when command blocks get custom names, add a check for it
+                let name = TextComponent::text("@");
+
+                CommandSource::new(
+                    Self::CommandBlock(command_entity, world.clone()),
+                    world,
+                    None,
+                    pos.to_centered_f64(),
+                    Vector2::new(0.0, horizontal_direction),
+                    name.clone().get_text(),
+                    name,
+                    server.clone(),
+                )
+            }
+            Self::Dummy => {
+                let (world, spawn_point) = Self::get_world_and_spawn_point(server);
+                CommandSource::new(
+                    Self::Dummy,
+                    world,
+                    None,
+                    spawn_point,
+                    Vector2::new(0.0, 0.0),
+                    String::new(),
+                    TextComponent::empty(),
+                    server.clone(),
+                )
+            }
+        }
+    }
+
+    fn get_world_and_spawn_point(server: &Arc<Server>) -> (Arc<World>, Vector3<f64>) {
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let spawn_point = {
+            let level_data = world.level_info.load();
+
+            Vector3::new(level_data.spawn_x, level_data.spawn_y, level_data.spawn_z)
+        };
+
+        (world, spawn_point.to_f64())
     }
 }
 
