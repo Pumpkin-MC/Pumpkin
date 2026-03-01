@@ -13,6 +13,7 @@ impl pumpkin::plugin::text::Host for PluginHostState {}
 trait TextComponentResourceExt {
     fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a TextComponentResource;
     fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut TextComponentResource;
+    fn consume(self, state: &mut PluginHostState) -> TextComponentResource;
 }
 
 impl TextComponentResourceExt for Resource<TextComponent> {
@@ -33,6 +34,13 @@ impl TextComponentResourceExt for Resource<TextComponent> {
             .downcast_mut::<TextComponentResource>()
             .expect("resource type mismatch")
     }
+
+    fn consume(self, state: &mut PluginHostState) -> TextComponentResource {
+        state
+            .resource_table
+            .delete::<TextComponentResource>(Resource::new_own(self.rep()))
+            .expect("invalid child resource handle")
+    }
 }
 
 impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
@@ -47,8 +55,8 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         with: Vec<Resource<TextComponent>>,
     ) -> Resource<TextComponent> {
         let with: Vec<pumpkin_util::text::TextComponent> = with
-            .iter()
-            .map(|component| component.downcast_ref(self).provider.clone())
+            .into_iter()
+            .map(|component| component.consume(self).provider)
             .collect();
         let text_component = pumpkin_util::text::TextComponent::translate(key, with);
         self.add_text_component(text_component).unwrap()
@@ -59,7 +67,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         text_component: Resource<TextComponent>,
         child: Resource<TextComponent>,
     ) {
-        let child = child.downcast_ref(self).provider.clone();
+        let child = child.consume(self).provider;
         let parent = &mut text_component.downcast_mut(self).provider;
 
         // The current builder pattern for text components doesn't accept &mut references of self.
