@@ -58,6 +58,7 @@ pub struct GenerationSchedule {
     public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
     unload_chunks: HashSetType<ChunkPos>,
+    unload_retry_counts: HashMap<ChunkPos, u32>,
 
     io_lock: IOLock,
     running_task_count: u16,
@@ -136,6 +137,7 @@ impl GenerationSchedule {
                     send_level: level_channel,
                     public_chunk_map: level_sched.loaded_chunks.clone(),
                     unload_chunks: HashSetType::default(),
+                    unload_retry_counts: HashMap::new(),
                     io_lock,
                     running_task_count: 0,
                     recv_chunk,
@@ -445,18 +447,37 @@ impl GenerationSchedule {
                             holder.public = false;
                         }
                         let sc = Arc::strong_count(&chunk);
-                        if sc == 1 {
-                            // debug!("unload chunk {pos:?} to file");
-                            chunks.push((pos, Chunk::Level(chunk)));
-                            self.chunk_map.remove(&pos);
-                        } else {
+                        let force_unload = if sc > 1 {
+                            let retry_count = self.unload_retry_counts.entry(pos).or_insert(0);
+                            *retry_count += 1;
+                            let count = *retry_count;
+
+                            if count < 120 {
+                                if count == 1 || count.is_multiple_of(20) {
+                                    warn!(
+                                        "unload_chunk: chunk {pos:?} still has {sc} strong refs; \
+                                         retry {count}/120. holder.public={}",
+                                        holder.public
+                                    );
+                                }
+                                self.unload_chunks.insert(pos);
+                                holder.chunk = Some(Chunk::Level(chunk));
+                                continue;
+                            }
                             warn!(
-                                "unload_chunk: chunk {pos:?} still has {} strong refs; cannot unload. holder.public={}",
-                                sc, holder.public
+                                "unload_chunk: chunk {pos:?} force-unloading after {count} retries \
+                                 (still has {sc} strong refs, holder.public={})",
+                                holder.public
                             );
-                            self.unload_chunks.insert(pos);
-                            holder.chunk = Some(Chunk::Level(chunk));
+                            true
+                        } else {
+                            false
+                        };
+                        if force_unload {
+                            self.unload_retry_counts.remove(&pos);
                         }
+                        chunks.push((pos, Chunk::Level(chunk)));
+                        self.chunk_map.remove(&pos);
                     }
                     Chunk::Proto(chunk) => {
                         debug_assert!(!holder.public);

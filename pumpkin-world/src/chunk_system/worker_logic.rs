@@ -3,6 +3,7 @@ use super::generation_cache::Cache;
 use super::{ChunkPos, IOLock};
 use crate::ProtoChunk;
 use crate::chunk::format::LightContainer;
+use crate::chunk::io::Dirtiable;
 use crate::chunk::io::LoadedData;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::level::Level;
@@ -193,12 +194,16 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
             }
         }
         let pos = vec.iter().map(|(pos, _)| *pos).collect_vec();
+        let chunk_refs: Vec<_> = vec.iter().map(|(_, c)| c.clone()).collect();
         if let Err(e) = level
             .chunk_saver
             .save_chunks(&level.level_folder, vec)
             .await
         {
             error!("Failed to save chunks: {:?}", e);
+            for chunk in &chunk_refs {
+                chunk.mark_dirty(true);
+            }
         }
 
         for i in pos {
