@@ -64,6 +64,7 @@ use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
+use crate::block::blocks::plant::spore_blossom::SporeBlossomBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
 use crate::block::blocks::plant::wither_rose::WitherRose;
@@ -256,6 +257,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CobwebBlock);
     manager.register(WitherRose);
     manager.register(Fungus);
+    manager.register(SporeBlossomBlock);
 
     manager.register(FallingBlock);
 
