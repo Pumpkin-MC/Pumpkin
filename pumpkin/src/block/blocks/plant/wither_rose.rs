@@ -6,9 +6,9 @@ use pumpkin_world::BlockStateId;
 
 use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs, OnEntityCollisionArgs};
 #[pumpkin_block("minecraft:wither_rose")]
-pub struct WitherRose;
+pub struct WitherRoseBlock;
 
-impl BlockBehaviour for WitherRose {
+impl BlockBehaviour for WitherRoseBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if let Some(living_entity) = args.entity.get_living_entity() {
@@ -59,4 +59,4 @@ impl BlockBehaviour for WitherRose {
     }
 }
 
-impl PlantBlockBase for WitherRose {}
+impl PlantBlockBase for WitherRoseBlock {}
