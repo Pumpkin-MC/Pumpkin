@@ -251,7 +251,7 @@ macro_rules! impl_key_dispatchable {
                     $variant => $crate::map_coders::new_map_encoder_encoder(&$map_codec).encode_start(input, ops),
                 )+
 
-                _ => todo!("Map encode not implemented yet"),
+                _ => todo!("Encode not implemented yet"),
             }
         }
 
