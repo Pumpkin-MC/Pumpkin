@@ -94,7 +94,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@v2
       - uses: Swatinem/rust-cache@v2
       - name: Set CPU flags
         if: matrix.arch_variant != 'standard'
@@ -105,7 +105,7 @@ jobs:
       - run: cargo test --doc --verbose
 
   build_release:
-    name: Build Release (${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.variant == 'standard' && '' || '-' + (matrix.variant).split('-') }})
+    name: Build Release (${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }})
     runs-on: ${{ matrix.os }}
     needs: [build_and_test]
     strategy:
@@ -195,7 +195,7 @@ jobs:
           cp "target/release/${{ matrix.bin }}" "dist/$name"
       - uses: actions/upload-artifact@v6
         with:
-          name: release-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.variant == 'standard' && '' || '-' + (matrix.variant).split('-') }}
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}
           path: dist/*
           if-no-files-found: error
           compression-level: 9
@@ -208,7 +208,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: dist/
           pattern: release-*
