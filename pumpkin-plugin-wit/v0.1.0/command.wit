@@ -1,9 +1,10 @@
 interface command {
     use player.{player};
-    use world.{world};
+    use %world.{%world};
     use entity.{command-block-entity, entity};
-    use common.{raw-text-component, position, block-position};
-    use server.{difficulty};
+    use common.{position, block-position};
+    use server.{server, difficulty};
+    use text.{text-component};
 
     enum gamemode {
         survival,
@@ -80,7 +81,7 @@ interface command {
         bossbar-style(bossbar-style),
         particle(string),
         msg(string),
-        text-component(raw-text-component),
+        text-component(text-component),
         time(s32),
         num(result<number, not-in-bounds>),
         %bool(bool),
@@ -90,7 +91,6 @@ interface command {
         effect(string),
         enchantment(string),
         entity-anchor(entity-anchor),
-        // command-tree,
     }
 
     resource consumed-args {
@@ -101,7 +101,7 @@ interface command {
         rcon(list<string>),
         console,
         player(player),
-        command-block(tuple<command-block-entity, world>),
+        command-block(tuple<command-block-entity, %world>),
         dummy,
     }
 
@@ -115,7 +115,7 @@ interface command {
 
     resource command-sender {
         get-command-sender-type: func() -> command-sender-type;
-        send-message: func(text: raw-text-component);
+        send-message: func(text: text-component);
         set-success-count: func(count: s32);
         is-player: func() -> bool;
         is-console: func() -> bool;
@@ -124,14 +124,59 @@ interface command {
         has-permission-level: func(level: permission-level) -> bool;
         has-permission: func(server: borrow<server>, node: string) -> bool;
         position: func() -> option<position>;
-        world: func() -> option<world>;
+        %world: func() -> option<%world>;
         get-locale: func() -> string;
         should-receive-feedback: func() -> bool;
         should-broadcast-console-to-ops: func() -> bool;
         should-track-output: func() -> bool;
     }
 
+    enum string-type {
+        single-word,
+        quotable,
+        greedy,
+    }
+
+    variant argument-type {
+        %bool,
+        float(tuple<option<f32>, option<f32>>),
+        double(tuple<option<f64>, option<f64>>),
+        integer(tuple<option<s32>, option<s32>>),
+        long(tuple<option<s64>, option<s64>>),
+        %string(string-type),
+        entities,
+        entity,
+        %players,
+        game-profile,
+        block-pos,
+        position-3d,
+        position-2d,
+        block-state,
+        block-predicate,
+        item,
+        item-predicate,
+        component,
+        rotation,
+        %resource-location,
+        entity-anchor,
+        gamemode,
+        difficulty,
+        time(s32),
+        %resource(string),
+    }
+
+    resource command-node {
+        literal: static func(name: string) -> command-node;
+        argument: static func(name: string, arg-type: argument-type) -> command-node;
+        then: func(node: command-node);
+        execute: func(handler-id: u32);
+        require-permission: func(level: permission-level);
+    }
+
     resource command {
-        constructor(name: string);
+        /// First name is primary, rest are aliases
+        constructor(names: list<string>, description: string);
+        then: func(node: command-node);
+        execute: func(handler-id: u32);
     }
 }
