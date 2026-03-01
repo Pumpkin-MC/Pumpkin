@@ -54,7 +54,7 @@ use crate::block::blocks::plant::crop::wheat::WheatBlock;
 use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
 use crate::block::blocks::plant::flower::FlowerBlock;
 use crate::block::blocks::plant::flowerbed::FlowerbedBlock;
-use crate::block::blocks::plant::fungus::Fungus;
+use crate::block::blocks::plant::fungus::FungusBlock;
 use crate::block::blocks::plant::kelp::KelpBlock;
 use crate::block::blocks::plant::leaf_litter::LeafLitterBlock;
 use crate::block::blocks::plant::lily_pad::LilyPadBlock;
@@ -66,7 +66,7 @@ use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
-use crate::block::blocks::plant::wither_rose::WitherRose;
+use crate::block::blocks::plant::wither_rose::WitherRoseBlock;
 use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
@@ -254,8 +254,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(MangroveRootsBlock);
     manager.register(LayeredSnowBlock);
     manager.register(CobwebBlock);
-    manager.register(WitherRose);
-    manager.register(Fungus);
+    manager.register(WitherRoseBlock);
+    manager.register(FungusBlock);
 
     manager.register(FallingBlock);
 
