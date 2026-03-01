@@ -1,163 +1,248 @@
-name: CI & Release Build
+name: Cargo Build, Test, and Linting
 
 on:
   push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-Dwarnings"
 
 jobs:
-  clippy_debug:
-    name: Clippy (Debug)
+  format:
+    name: Check formatting
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add rustfmt
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo fmt --check
+
+  machete:
+    name: Detect unused dependencies
+    runs-on: ubuntu-latest
+    needs: [format]
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: bnjbvr/cargo-machete@main
+
+  clippy_debug:
+    name: Run lints (debug)
+    runs-on: ubuntu-latest
+    needs: [machete]
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy (debug)
+        run: cargo clippy --all-targets --all-features
 
   clippy_release:
-    name: Clippy (Release)
+    name: Run lints (release)
     runs-on: ubuntu-latest
+    needs: [machete]
+    strategy:
+      matrix:
+        toolchain:
+          - stable
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets --release -- -D warnings
+      - name: Clippy (release)
+        run: cargo clippy --release --all-targets --all-features
 
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
+  build_and_test:
+    name: Build project and test
+    runs-on: ${{ matrix.os }}
     needs: [clippy_debug, clippy_release]
+    strategy:
+      matrix:
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            windows-latest,
+            windows-11-arm,
+            macos-latest,
+            macos-15-intel,
+          ]
+        arch_variant:
+          [
+            standard,
+            x86-64-v2,
+            x86-64-v3
+          ]
+        toolchain:
+          - stable
+        exclude:
+          # Exclude non-x86_64 architectures from x86-64-v2/v3 variants
+          - os: ubuntu-24.04-arm
+            arch_variant: x86-64-v2
+          - os: ubuntu-24.04-arm
+            arch_variant: x86-64-v3
+          - os: windows-11-arm
+            arch_variant: x86-64-v2
+          - os: windows-11-arm
+            arch_variant: x86-64-v3
+          - os: macos-latest
+            arch_variant: x86-64-v2
+          - os: macos-latest
+            arch_variant: x86-64-v3
+          # Exclude x86-64-v2 variant from macOS Intel as we want x86-64-v3
+          - os: macos-15-intel
+            arch_variant: standard
+          - os: macos-15-intel
+            arch_variant: x86-64-v2
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
-      - name: Run unit & integration tests
+      - name: Set CPU flags for x86-64-v2 and x86-64-v3
+        if: matrix.arch_variant != 'standard'
+        shell: bash
+        run: |
+          export RUSTFLAGS="$RUSTFLAGS -C target-cpu=${{ matrix.arch_variant }}"
+          echo "RUSTFLAGS=$RUSTFLAGS" >> $GITHUB_ENV
+          echo "Using target CPU: ${{ matrix.arch_variant }}"
+      - name: Cargo nextest
         run: cargo nextest run --verbose
-      - name: Run doctests
+      - name: Cargo doctest
         run: cargo test --doc --verbose
-
   build_release:
-    name: Build Release (${{ matrix.suffix }})
-    runs-on: ${{ matrix.runner }}
-    needs: [test]
+    name: Build Release (${{ matrix.target }})
+    runs-on: ${{ matrix.runs_on }}
+    needs: [build_and_test]
     strategy:
-      fail-fast: false
       matrix:
+        toolchain: [stable]
         include:
-          # --- Standard builds ---
-          - runner: ubuntu-latest
-            os: linux
-            arch_variant: standard
-            suffix: standard-ubuntu-x64
+          # Standard Builds (All Platforms)
+          - target: "Standard (Ubuntu)"
+            runs_on: ubuntu-latest
+            arch: standard
+            artifact_name: pumpkin-standard-Ubuntu-X64
+          - target: "Standard (Ubuntu ARM)"
+            runs_on: ubuntu-24.04-arm
+            arch: standard
+            artifact_name: pumpkin-standard-Ubuntu-ARM64
+          - target: "Standard (Windows)"
+            runs_on: windows-latest
+            arch: standard
+            artifact_name: pumpkin-standard-Windows-X64
+          - target: "Standard (Windows ARM)"
+            runs_on: windows-11-arm
+            arch: standard
+            artifact_name: pumpkin-standard-Windows-ARM64
+          - target: "Standard (macOS)"
+            runs_on: macos-latest
+            arch: standard
+            artifact_name: pumpkin-standard-macOS-X64
 
-          - runner: ubuntu-24.04-arm
-            os: linux
-            arch_variant: standard
-            suffix: standard-ubuntu-arm
+          # x86-64-v2 Builds (Linux & Windows only)
+          - target: "x86-64-v2 (Ubuntu)"
+            runs_on: ubuntu-latest
+            arch: x86-64-v2
+            artifact_name: pumpkin-x86-64-v2-Ubuntu-X64
+          - target: "x86-64-v2 (Windows)"
+            runs_on: windows-latest
+            arch: x86-64-v2
+            artifact_name: pumpkin-x86-64-v2-Windows-X64
 
-          - runner: windows-latest
-            os: windows
-            arch_variant: standard
-            suffix: standard-windows-x64
-
-          - runner: windows-11-arm
-            os: windows
-            arch_variant: standard
-            suffix: standard-windows-arm
-
-          - runner: macos-latest
-            os: macos
-            arch_variant: standard
-            suffix: standard-macos-arm
-
-          - runner: macos-15-intel
-            os: macos
-            arch_variant: x86-64-v3
-            suffix: x86-64-v3-macos-x64
-
-          # --- x86-64-v2 builds ---
-          - runner: ubuntu-latest
-            os: linux
-            arch_variant: x86-64-v2
-            suffix: x86-64-v2-ubuntu-x64
-
-          - runner: windows-latest
-            os: windows
-            arch_variant: x86-64-v2
-            suffix: x86-64-v2-windows-x64
-
-          # --- x86-64-v3 builds ---
-          - runner: ubuntu-latest
-            os: linux
-            arch_variant: x86-64-v3
-            suffix: x86-64-v3-ubuntu-x64
-
-          - runner: windows-latest
-            os: windows
-            arch_variant: x86-64-v3
-            suffix: x86-64-v3-windows-x64
+          # x86-64-v3 Builds (Linux, Windows, macOS Intel)
+          - target: "x86-64-v3 (Ubuntu)"
+            runs_on: ubuntu-latest
+            arch: x86-64-v3
+            artifact_name: pumpkin-x86-64-v3-Ubuntu-X64
+          - target: "x86-64-v3 (Windows)"
+            runs_on: windows-latest
+            arch: x86-64-v3
+            artifact_name: pumpkin-x86-64-v3-Windows-X64
+          - target: "x86-64-v3 (macOS Intel)"
+            runs_on: macos-15-intel
+            arch: x86-64-v3
+            artifact_name: pumpkin-x86-64-v3-macOS-X64
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
 
-      - name: Set RUSTFLAGS for non-standard CPU variants
-        if: matrix.arch_variant != 'standard'
+      - name: Set CPU Flags
+        if: matrix.arch != 'standard'
         run: |
-          echo "RUSTFLAGS=-C target-cpu=${{ matrix.arch_variant }}" >> "$GITHUB_ENV"
-          echo "Using target CPU: ${{ matrix.arch_variant }}"
+          echo "RUSTFLAGS=-C target-cpu=${{ matrix.arch }}" >> $GITHUB_ENV
+        shell: bash
 
-      - name: Build release binary
-        run: cargo build --release --verbose
+      - name: Build Release
+        run: cargo build --verbose --release
 
-      - name: Prepare artifact
+      - name: Prepare Artifacts
         shell: bash
         run: |
           mkdir -p dist
-          if [ "${{ matrix.os }}" == "windows" ]; then
-            cp target/release/pumpkin.exe dist/pumpkin-${{ matrix.suffix }}.exe
-          else
-            cp target/release/pumpkin dist/pumpkin-${{ matrix.suffix }}
-          fi
+          EXT=""
+          if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
+          cp "target/release/pumpkin$EXT" "dist/${{ matrix.artifact_name }}$EXT"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v6
         with:
-          name: pumpkin-${{ matrix.suffix }}
+          name: ${{ matrix.artifact_name }}
           path: dist/
           compression-level: 9
 
   draft_release:
-    name: Create Draft Release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    needs: [build_release]
     permissions:
       contents: write
+    needs: [build_release]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - name: Download prebuilt binary artifacts
+        uses: actions/download-artifact@v7
         with:
-          path: artifacts/
-
-      - name: Flatten and list artifacts
+          pattern: "**/pumpkin-*"
+          path: dist/
+          merge-multiple: true
+      - name: Generate release notes
         run: |
-          mkdir -p release
-          find artifacts -type f -name "pumpkin-*" -exec cp {} release/ \;
-          ls -l release/
+          tree dist/
+          echo "From commit: $(git rev-parse --short HEAD)" > dist/RELEASE.md
+          echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
+          cat dist/RELEASE.md
 
-      - name: Create draft release
+      - name: Update the nightly tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag --force nightly && git push --force origin tag nightly
+
+      - name: Draft a nightly github release
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
-          prerelease: false
-          files: release/pumpkin-*
-          tag_name: v$(date +%Y%m%d)-ci
-          name: Nightly Build $(date +%Y-%m-%d)
+          prerelease: true
+          files: dist/pumpkin*
+          tag_name: nightly
+          name: Nightly Build
+          body_path: dist/RELEASE.md
