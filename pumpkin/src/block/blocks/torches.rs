@@ -23,6 +23,8 @@ impl BlockMetadata for TorchBlock {
             Block::SOUL_TORCH.id,
             Block::WALL_TORCH.id,
             Block::SOUL_WALL_TORCH.id,
+            Block::COPPER_TORCH.id,
+            Block::COPPER_WALL_TORCH.id,
         ]
         .into()
     }
@@ -62,10 +64,14 @@ impl BlockBehaviour for TorchBlock {
                     && dir != Facing::Down
                     && can_place_at(args.world, args.position, dir.to_block_direction()).await
                 {
-                    let wall_block = if args.block == &Block::TORCH {
-                        Block::WALL_TORCH
-                    } else {
-                        Block::SOUL_WALL_TORCH
+                    let wall_block = {
+                        if args.block == &Block::TORCH {
+                            Block::WALL_TORCH
+                        } else if args.block == &Block::SOUL_TORCH {
+                            Block::SOUL_WALL_TORCH
+                        } else {
+                            Block::COPPER_WALL_TORCH
+                        }
                     };
                     let mut torch_props = WallTorchProps::default(&wall_block);
                     torch_props.facing = dir
@@ -109,7 +115,10 @@ impl BlockBehaviour for TorchBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if args.block == &Block::WALL_TORCH || args.block == &Block::SOUL_WALL_TORCH {
+            if args.block == &Block::WALL_TORCH
+                || args.block == &Block::SOUL_WALL_TORCH
+                || args.block == &Block::COPPER_WALL_TORCH
+            {
                 let props = WallTorchProps::from_state_id(args.state_id, args.block);
                 if props.facing.to_block_direction().opposite() == args.direction
                     && !can_place_at(args.world, args.position, props.facing.to_block_direction())
