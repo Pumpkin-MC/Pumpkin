@@ -154,10 +154,8 @@ impl BlockBehaviour for DropperBlock {
                     .downcast_ref::<DropperBlockEntity>()
                     .unwrap();
                 if let Some(mut item) = dropper.get_random_slot().await {
-                    let props = DispenserLikeProperties::from_state_id(
-                        args.world.get_block_state(args.position).await.id,
-                        args.block,
-                    );
+                    let block_state = args.world.get_block_state(args.position).await;
+                    let props = DispenserLikeProperties::from_state_id(block_state.id, args.block);
                     if let Some(entity) = args
                         .world
                         .get_block_entity(
@@ -206,6 +204,23 @@ impl BlockBehaviour for DropperBlock {
                         triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
                         triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
                     );
+                    let (drop_item, velocity) = if let Some(server) = args.world.server.upgrade() {
+                        let event = crate::plugin::block::dispense::BlockDispenseEvent::new(
+                            args.world.clone(),
+                            block_state,
+                            *args.position,
+                            drop_item,
+                            velocity,
+                        );
+                        let event = server.plugin_manager.fire(event).await;
+                        if event.cancelled || event.item_stack.is_empty() {
+                            item.item_count = item.item_count.saturating_add(1);
+                            return;
+                        }
+                        (event.item_stack, event.velocity)
+                    } else {
+                        (drop_item, velocity)
+                    };
                     let item_entity = Arc::new(
                         ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await,
                     );
