@@ -5,10 +5,10 @@ pub mod events;
 pub use wit::pumpkin::plugin::{
     command::{CommandSender, ConsumedArgs},
     context::{Context, Server},
+    text,
 };
 
 pub mod logging;
-pub mod text_component;
 
 mod wit {
     wit_bindgen::generate!({
