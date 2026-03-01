@@ -10,6 +10,7 @@ members = [
     "pumpkin-world",
     "pumpkin/",
     "pumpkin-data",
+    "pumpkin-codecs"
 ]
 exclude = ["pumpkin-codegen"]
 
@@ -138,6 +139,7 @@ p384 = "0.13.1"
 phf = "0.13.1"
 pkcs8 = "=0.11.0-rc.11"
 proc-macro2 = "1.0"
+pumpkin-codecs = { path = "pumpkin-codecs" }
 pumpkin-config = { path = "pumpkin-config" }
 pumpkin-data = { path = "pumpkin-data" }
 pumpkin-inventory = { path = "pumpkin-inventory" }
