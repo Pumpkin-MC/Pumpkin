@@ -6,6 +6,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
@@ -40,8 +41,6 @@ pub struct MobEntity {
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
-    pub attack_damage: f32,
-    pub follow_range: f64,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
     last_sent_pitch: AtomicU8,
@@ -68,8 +67,6 @@ impl MobEntity {
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
-            attack_damage: 2.0,
-            follow_range: 16.0,
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -162,10 +159,14 @@ impl MobEntity {
             return;
         }
 
+        let attack_damage: f32 =
+            self.living_entity
+                .get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
+
         let damaged = target
             .damage_with_context(
                 target,
-                self.attack_damage,
+                attack_damage,
                 DamageType::MOB_ATTACK,
                 None,
                 Some(caller),
