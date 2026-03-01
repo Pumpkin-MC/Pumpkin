@@ -116,6 +116,41 @@ impl Block {
         })
     }
 
+    /// Returns a new [`BlockState`] reference for the given `state_id` with the
+    /// `waterlogged` property forced to `true` if the block supports that
+    /// property.  If the state is already waterlogged or the block does not
+    /// expose a `waterlogged` property then `None` is returned.
+    #[must_use]
+    pub fn with_waterlogged(&self, state_id: u16) -> Option<&'static BlockState> {
+        // Check if already waterlogged
+        if self.is_waterlogged(state_id) {
+            return Some(BlockState::from_id(state_id));
+        }
+
+        // Modify the property list if available
+        if let Some(props_source) = self.properties(state_id) {
+            let mut props: Vec<(&str, &str)> = props_source
+                .to_props()
+                .iter()
+                .map(|(k, v)| (*k, *v))
+                .collect();
+
+            // Only try to change states that actually have the key
+            if props.iter().any(|(k, _)| *k == "waterlogged") {
+                if let Some(idx) = props.iter().position(|(k, _)| *k == "waterlogged") {
+                    props[idx] = ("waterlogged", "true");
+                } else {
+                    props.push(("waterlogged", "true"));
+                }
+
+                let new_state_id = self.from_properties(&props).to_state_id(self);
+                return Some(BlockState::from_id(new_state_id));
+            }
+        }
+
+        None
+    }
+
     /// Returns whether this block is solid (based on default state)
     #[must_use]
     pub const fn is_solid(&self) -> bool {

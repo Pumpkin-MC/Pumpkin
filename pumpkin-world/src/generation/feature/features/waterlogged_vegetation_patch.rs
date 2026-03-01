@@ -115,29 +115,10 @@ impl WaterloggedVegetationPatchFeature {
         ) {
             let placed_raw = GenerationCache::get_block_state(chunk, &placement_pos.0);
             let placed_state = placed_raw.to_state();
-            if !placed_state.is_waterlogged() {
-                let block = placed_raw.to_block();
-                if let Some(props_source) = block.properties(placed_raw.0) {
-                    let mut props: Vec<(&str, &str)> = props_source
-                        .to_props()
-                        .iter()
-                        .map(|(k, v)| (*k, *v))
-                        .collect();
-
-                    if props.iter().any(|(k, _)| *k == "waterlogged") {
-                        if let Some(idx) = props.iter().position(|(k, _)| *k == "waterlogged") {
-                            props[idx] = ("waterlogged", "true");
-                        } else {
-                            props.push(("waterlogged", "true"));
-                        }
-
-                        let new_state_id = block.from_properties(&props).to_state_id(block);
-                        chunk.set_block_state(
-                            &placement_pos.0,
-                            pumpkin_data::BlockState::from_id(new_state_id),
-                        );
-                    }
-                }
+            if !placed_state.is_waterlogged()
+                && let Some(new_state) = placed_raw.to_block().with_waterlogged(placed_raw.0)
+            {
+                chunk.set_block_state(&placement_pos.0, new_state);
             }
             true
         } else {
