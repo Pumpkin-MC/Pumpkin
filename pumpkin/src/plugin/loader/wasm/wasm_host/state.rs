@@ -1,5 +1,6 @@
 use std::sync::{Arc, Weak};
 
+use pumpkin_util::text::TextComponent;
 use wasmtime::component::ResourceTable;
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
@@ -19,6 +20,10 @@ pub struct ContextResource {
 
 pub struct PlayerResource {
     pub provider: Arc<Player>,
+}
+
+pub struct TextComponentResource {
+    pub provider: Arc<TextComponent>,
 }
 
 pub struct PluginHostState {
@@ -65,6 +70,16 @@ impl PluginHostState {
         provider: Arc<Player>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(PlayerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_text_component<T>(
+        &mut self,
+        provider: Arc<TextComponent>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(TextComponentResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 }
