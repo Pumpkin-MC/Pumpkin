@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -17,9 +15,7 @@ impl ToV0_1_0WasmEvent for PlayerJoinEvent {
             .add_player(self.player.clone())
             .expect("failed to add player resource");
 
-        let text_component_resource = state
-            .add_text_component(Arc::new(self.join_message.clone()))
-            .unwrap();
+        let text_component_resource = state.add_text_component(self.join_message.clone()).unwrap();
 
         Event::PlayerJoinEvent(PlayerJoinEventData {
             player: player_resource,
