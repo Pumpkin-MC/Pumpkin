@@ -173,8 +173,8 @@ tokio-util = "0.7.18"
 toml = "1.0"
 ureq = "3.2.0"
 
-wasmtime = "41.0"
-wasmtime-wasi = "41.0"
+wasmtime = "42.0"
+wasmtime-wasi = "42.0"
 wit-bindgen = "0.53"
 wasmparser = "0.245"
 

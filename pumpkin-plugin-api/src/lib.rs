@@ -2,7 +2,10 @@ use crate::{events::EVENT_HANDLERS, logging::WitSubscriber};
 
 pub mod events;
 
-pub use wit::pumpkin::plugin::context::{Context, Server};
+pub use wit::pumpkin::plugin::{
+    command::{CommandSender, ConsumedArgs},
+    context::{Context, Server},
+};
 
 pub mod logging;
 pub mod text_component;
@@ -59,6 +62,10 @@ impl wit::Guest for Component {
         } else {
             event
         }
+    }
+
+    fn handle_command(command_id: u32, sender: CommandSender, server: Server, args: ConsumedArgs) {
+        todo!()
     }
 }
 
