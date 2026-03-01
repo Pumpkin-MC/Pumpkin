@@ -40,8 +40,10 @@ default = [
     "potion",
     "recipe_remainder",
     "chunk_gen_settings",
+    "advancement",
 ]
 
+advancement = []
 item = []
 packet = []
 jukebox_song = []
