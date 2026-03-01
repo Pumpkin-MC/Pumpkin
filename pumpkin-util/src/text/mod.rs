@@ -7,8 +7,7 @@ use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
-use proc_macro2::TokenStream;
-use quote::{ToTokens, quote};
+use pumpkin_nbt::serializer::Serializer;
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
@@ -447,7 +446,11 @@ impl TextComponent {
     pub fn encode(&self) -> Box<[u8]> {
         let mut buf = Vec::new();
         // TODO: Properly handle errors
-        pumpkin_nbt::serializer::to_bytes_unnamed(&self, &mut buf)
+        let mut serializer = Serializer::new(&mut buf, None);
+        self.0
+            .clone()
+            .to_translated()
+            .serialize(&mut serializer)
             .expect("Failed to serialize text component NBT for encode");
 
         buf.into_boxed_slice()

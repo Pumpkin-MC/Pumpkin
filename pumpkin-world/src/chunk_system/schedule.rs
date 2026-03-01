@@ -23,10 +23,16 @@ use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, trace, warn};
 
-struct TaskHeapNode(i8, NodeKey);
+pub(crate) struct TaskHeapNode(i8, NodeKey);
 impl PartialEq for TaskHeapNode {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
+    }
+}
+impl TaskHeapNode {
+    #[cfg(test)]
+    pub(crate) fn node_key(&self) -> NodeKey {
+        self.1
     }
 }
 impl Eq for TaskHeapNode {}
@@ -179,7 +185,7 @@ impl GenerationSchedule {
 
     fn calc_priority(
         last_level: &ChunkLevel,
-        last_high_priority: &Vec<ChunkPos>,
+        last_high_priority: &[ChunkPos],
         pos: ChunkPos,
         stage: StagedChunkEnum,
     ) -> i8 {
@@ -214,6 +220,99 @@ impl GenerationSchedule {
             }
         }
         self.queue = new_queue;
+    }
+
+    // Ensure that the dependency chain for `req_stage` exists on `holder` (for chunk at
+    // `chunk_pos`) and wire it to depend on `dependency_task`.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn ensure_dependency_chain(
+        graph: &mut DAG,
+        queue: &mut BinaryHeap<TaskHeapNode>,
+        last_level: &ChunkLevel,
+        last_high_priority: &[ChunkPos],
+        dependency_task: NodeKey,
+        chunk_pos: ChunkPos,
+        holder: &mut ChunkHolder,
+        req_stage: StagedChunkEnum,
+    ) {
+        // Insert occupied_by edge head
+        holder.occupied_by = graph.edges.insert(crate::chunk_system::dag::Edge::new(
+            dependency_task,
+            holder.occupied_by,
+        ));
+
+        if !holder.occupied.is_null() {
+            graph.add_edge(holder.occupied, dependency_task);
+        }
+
+        if holder.current_stage >= req_stage {
+            return;
+        }
+
+        let empty = StagedChunkEnum::Empty as usize;
+        let start = (holder.current_stage as usize + 1).max(empty);
+        let end = req_stage as u8 as usize;
+        let mut newly_created = [false; StagedChunkEnum::COUNT];
+
+        for (i, flag) in newly_created[start..=end].iter_mut().enumerate() {
+            let stage_i = start + i;
+            if holder.tasks[stage_i].is_null() {
+                let new_node = graph
+                    .nodes
+                    .insert(Node::new(chunk_pos, StagedChunkEnum::from(stage_i as u8)));
+                holder.tasks[stage_i] = new_node;
+                *flag = true;
+                if !holder.occupied.is_null() {
+                    graph.add_edge(holder.occupied, new_node);
+                }
+            }
+        }
+
+        for stage_i in start..=end {
+            if !newly_created[stage_i] {
+                continue;
+            }
+            let cur = holder.tasks[stage_i];
+
+            if stage_i > empty {
+                let prev = holder.tasks[stage_i - 1];
+                if !prev.is_null() {
+                    graph.add_edge(prev, cur);
+                }
+            }
+            if stage_i < end {
+                let next = holder.tasks[stage_i + 1];
+                if !next.is_null() && !newly_created[stage_i + 1] {
+                    graph.add_edge(cur, next);
+                }
+            }
+        }
+
+        // Queue the entry task (lowest unblocked stage)
+        let entry_task = holder.tasks[start];
+        if !entry_task.is_null()
+            && let Some(n) = graph.nodes.get_mut(entry_task)
+            && n.in_degree == 0
+            && !n.in_queue
+        {
+            n.in_queue = true;
+            queue.push(TaskHeapNode(
+                Self::calc_priority(
+                    last_level,
+                    last_high_priority,
+                    chunk_pos,
+                    StagedChunkEnum::from(start as u8),
+                ),
+                entry_task,
+            ));
+        }
+
+        let ano_task = holder.tasks[end];
+        debug_assert!(
+            !ano_task.is_null(),
+            "holder.tasks[end] must not be null before adding edge"
+        );
+        graph.add_edge(ano_task, dependency_task);
     }
 
     fn resort_work(&mut self, new_data: (Option<LevelChange>, Option<Vec<ChunkPos>>)) -> bool {
@@ -285,70 +384,30 @@ impl GenerationSchedule {
                                 let new_pos = pos.add_raw(dx, dz);
                                 let req_stage = dependency[dx.abs().max(dz.abs()) as usize];
                                 if new_pos == pos {
-                                    // TODO
-                                    holder.occupied_by = self.graph.edges.insert(
-                                        crate::chunk_system::dag::Edge::new(
-                                            task,
-                                            holder.occupied_by,
-                                        ),
-                                    );
-                                    if holder.current_stage >= req_stage {
-                                        continue;
-                                    }
-                                    let ano_task = &mut holder.tasks[req_stage as usize];
-                                    if ano_task.is_null() {
-                                        *ano_task =
-                                            self.graph.nodes.insert(Node::new(new_pos, req_stage));
-
-                                        // Ensure the implicitly created task is queued
-                                        let node = self.graph.nodes.get_mut(*ano_task).unwrap();
-                                        node.in_queue = true;
-                                        self.queue.push(TaskHeapNode(
-                                            Self::calc_priority(
-                                                &self.last_level,
-                                                &self.last_high_priority,
-                                                new_pos,
-                                                req_stage,
-                                            ),
-                                            *ano_task,
-                                        ));
-                                    }
-                                    self.graph.add_edge(*ano_task, task); // task depend on ano_task
-                                    continue;
-                                }
-                                let ano_chunk = self.chunk_map.entry(new_pos).or_default();
-                                ano_chunk.occupied_by =
-                                    self.graph.edges.insert(crate::chunk_system::dag::Edge::new(
+                                    Self::ensure_dependency_chain(
+                                        &mut self.graph,
+                                        &mut self.queue,
+                                        &self.last_level,
+                                        &self.last_high_priority,
                                         task,
-                                        ano_chunk.occupied_by,
-                                    ));
-
-                                if !ano_chunk.occupied.is_null() {
-                                    self.graph.add_edge(ano_chunk.occupied, task);
-                                }
-
-                                if ano_chunk.current_stage >= req_stage {
+                                        new_pos,
+                                        &mut holder,
+                                        req_stage,
+                                    );
                                     continue;
                                 }
-                                let ano_task = &mut ano_chunk.tasks[req_stage as usize];
-                                if ano_task.is_null() {
-                                    *ano_task =
-                                        self.graph.nodes.insert(Node::new(new_pos, req_stage));
 
-                                    // Ensure the implicitly created task is queued
-                                    let node = self.graph.nodes.get_mut(*ano_task).unwrap();
-                                    node.in_queue = true;
-                                    self.queue.push(TaskHeapNode(
-                                        Self::calc_priority(
-                                            &self.last_level,
-                                            &self.last_high_priority,
-                                            new_pos,
-                                            req_stage,
-                                        ),
-                                        *ano_task,
-                                    ));
-                                }
-                                self.graph.add_edge(*ano_task, task); // task depend on ano_task
+                                let ano_chunk = self.chunk_map.entry(new_pos).or_default();
+                                Self::ensure_dependency_chain(
+                                    &mut self.graph,
+                                    &mut self.queue,
+                                    &self.last_level,
+                                    &self.last_high_priority,
+                                    task,
+                                    new_pos,
+                                    ano_chunk,
+                                    req_stage,
+                                );
                             }
                         }
                     }
@@ -961,12 +1020,15 @@ impl GenerationSchedule {
                 "Cancelling {} in-flight generation tasks",
                 self.running_task_count
             );
+            // Collect nodes to drop
+            let mut nodes_to_drop = Vec::new();
+
             // Clear occupy nodes for cancelled tasks
             for holder in self.chunk_map.values_mut() {
-                // Drop any task nodes associated with this holder to ensure full cleanup.
+                // Collect any task nodes associated with this holder to ensure full cleanup
                 for task in &mut holder.tasks {
                     if !task.is_null() {
-                        self.graph.fast_drop_node(*task);
+                        nodes_to_drop.push(*task);
                         *task = NodeKey::null();
                     }
                 }
@@ -977,10 +1039,16 @@ impl GenerationSchedule {
                     && node.pos.y == i32::MAX
                 {
                     // This is an occupy node for an in-flight task
-                    self.graph.nodes.remove(holder.occupied);
+                    nodes_to_drop.push(holder.occupied);
                     holder.occupied = NodeKey::null();
                 }
             }
+
+            // Safely drop them (using `drop_node`, which decrements in_degree on targets)
+            for node_key in nodes_to_drop {
+                self.drop_node(node_key);
+            }
+
             self.running_task_count = 0;
         }
 
