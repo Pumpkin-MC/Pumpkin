@@ -10,9 +10,6 @@ tracing = { workspace = true }
 postcard = { workspace = true }
 tracing-serde-structured = { workspace = true }
 
-# Only here temporarily until we have a proper way to handle text components
-serde_json = { workspace = true }
-
 pumpkin-util = { workspace = true }
 
 [package.metadata.component]

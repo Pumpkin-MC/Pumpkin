@@ -12,7 +12,7 @@ interface event {
 
     record player-join-event-data {
         player: player,
-        text-component: text-component,
+        join-message: text-component,
         cancelled: bool
     }
 
