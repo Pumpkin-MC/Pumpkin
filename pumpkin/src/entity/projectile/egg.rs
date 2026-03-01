@@ -138,13 +138,17 @@ impl EntityBase for EggEntity {
                     player,
                     self.get_entity().entity_uuid,
                     hatching,
-                    to_spawn.min(u8::MAX as usize) as u8,
+                    to_spawn as u8,
                     hatching_type,
                 );
                 let event = server.plugin_manager.fire(event).await;
-                hatching = event.hatching && !event.cancelled;
-                to_spawn = (event.num_hatches as usize).min(MAX_EGG_HATCH_EVENT_SPAWNS);
-                hatching_type = event.hatching_type;
+                if event.cancelled {
+                    hatching = false;
+                } else {
+                    hatching = event.hatching;
+                    to_spawn = (event.num_hatches as usize).min(MAX_EGG_HATCH_EVENT_SPAWNS);
+                    hatching_type = event.hatching_type;
+                }
             }
 
             // Spawn chickens in a separate task to prevent stack overflow
