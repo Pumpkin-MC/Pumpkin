@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use crate::entity::mob::SunSensitive;
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
 };
 
@@ -12,8 +13,8 @@ pub struct StraySkeletonEntity {
 impl StraySkeletonEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
         let entity = SkeletonEntityBase::new(entity).await;
-        let zombie = Self { entity };
-        Arc::new(zombie)
+        let stray = Self { entity };
+        Arc::new(stray)
     }
 }
 
@@ -23,4 +24,10 @@ impl Mob for StraySkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
     }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        self.sun_sensitive_tick()
+    }
 }
+
+impl SunSensitive for StraySkeletonEntity {}
