@@ -134,6 +134,9 @@ run/
 result
 result-*
 
+# Generated Data
+pumpkin-data/src/generated
+
 # Vanilla minecraft server
 banned-ips.json
 banned-players.json

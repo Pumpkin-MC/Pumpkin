@@ -4,6 +4,8 @@ use super::{
     hover::HoverEvent,
 };
 use crate::text::color::ARGBColor;
+use proc_macro2::TokenStream;
+use quote::ToTokens;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
@@ -127,5 +129,21 @@ impl Style {
     pub const fn shadow_color(mut self, color: ARGBColor) -> Self {
         self.shadow_color = Some(color);
         self
+    }
+}
+
+impl ToTokens for Style {
+    fn to_tokens(&self, _tokens: &mut TokenStream) {
+        let _color = &self.color;
+        let _bold = &self.bold;
+        let _italic = &self.italic;
+        let _underlined = &self.underlined;
+        let _strikethrough = &self.strikethrough;
+        let _obfuscated = &self.obfuscated;
+        let _insertion = &self.insertion;
+        let _click_event = &self.click_event;
+        let _hover_event = &self.hover_event;
+        let _font = &self.font;
+        let _shadow_color = &self.shadow_color;
     }
 }

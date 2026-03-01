@@ -664,6 +664,7 @@ pub enum TextContent {
     },
 }
 
+
 #[cfg(test)]
 mod test {
     use pumpkin_nbt::serializer::to_bytes_unnamed;

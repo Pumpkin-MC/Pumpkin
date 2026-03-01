@@ -56,6 +56,10 @@ pub mod sound {
 #[path = "generated/recipes.rs"]
 pub mod recipes;
 
+// #[rustfmt::skip]
+// #[path = "generated/advancement.rs"]
+// pub mod advancement;
+
 #[cfg(feature = "data_component")]
 #[rustfmt::skip]
 #[path = "generated/data_component.rs"]
@@ -155,7 +159,6 @@ pub mod entity {
     pub use super::entity_status::*;
     #[cfg(feature = "entity_type")]
     pub use super::entity_type::*;
-    #[cfg(feature = "spawn_egg")]
     pub use super::spawn_egg::*;
 }
 
