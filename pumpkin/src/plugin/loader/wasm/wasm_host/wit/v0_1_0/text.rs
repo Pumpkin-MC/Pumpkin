@@ -24,6 +24,8 @@ trait TextComponentResourceExt {
     fn consume(self, state: &mut PluginHostState) -> TextComponentResource;
 }
 
+// TODO - Change the pumpkin_util::text::TextComponent to use &mut self instead of self for the builder pattern.
+// right now we have to do a bunch of cloning due to the fact that the builder pattern doesn't accept &mut self.
 impl TextComponentResourceExt for Resource<TextComponent> {
     fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a TextComponentResource {
         state
