@@ -1,4 +1,7 @@
 use crate::HasValue;
+use crate::codecs::dispatched_map::{
+    DispatchedMapCodec, MapDispatchable, new_dispatched_map_codec,
+};
 use crate::codecs::lazy::{LazyCodec, new_lazy_codec};
 use crate::codecs::list::{ListCodec, new_list_codec};
 use crate::codecs::primitive::{
@@ -87,9 +90,13 @@ use std::hash::Hash;
 /// Use the [`unbounded_map`] function to create a codec encoding/decoding a `HashMap` of any arbitrary key.
 /// **Unbounded map codecs only support keys that can encode from/decode to strings.**
 ///
-/// ## Dispatch
+/// ## Key Dispatch
 /// This is usually for enum types (or any type with variants that may each store different values.)
 /// Use [`dispatch`] or [`dispatch_with_key`] to create a codec for a type that has variants of different contents.
+///
+/// ## Dispatched Maps
+/// This is used for map-like values whose keys can store values of entirely different types.
+/// Use [`dispatched_map`] to create a codec for such a map. This is useful for storages like *Minecraft*'s *data components*.
 ///
 /// # Transformers
 /// A map codec of a type `B` can be implemented by *transforming* another codec of type `A` to work with type `B`.
@@ -537,7 +544,7 @@ pub const fn dispatch<T: KeyDispatchable, C: Codec<Value = T::Key>>(
     dispatch_with_key("type", codec)
 }
 
-/// Creates a [`Codec`] for a type implementing [`KeyDispatchable`], using the provided `Codec` as the codec for the differentiator key and the differentiator key.
+/// Creates a [`Codec`] for a type implementing [`KeyDispatchable`], using the provided `Codec` as the codec for the differentiator key and the differentiator key itself.
 ///
 /// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key.
 pub const fn dispatch_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(
@@ -547,25 +554,35 @@ pub const fn dispatch_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(
     super::map_codec::dispatch_map_codec_to_codec(field(codec, key))
 }
 
-/// Creates a [`Codec`] for a type implementing [`KeyDispatchable`], using the provided `Codec` as the codec for the differentiator key.
+/// Creates a [`MapCodec`] for a type implementing [`KeyDispatchable`], using the provided `Codec` as the codec for the differentiator key.
 ///
-/// The differentiator key will be `"value"`.
+/// The differentiator key will be `"type"`.
 ///
 /// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key (`"type"`).
-pub const fn dispatch_map<T: KeyDispatchable, C: Codec<Value = T::Key>>(
+pub const fn dispatch_map_codec<T: KeyDispatchable, C: Codec<Value = T::Key>>(
     codec: &'static C,
 ) -> FieldedKeyDispatchMapCodec<T, C> {
-    dispatch_map_with_key("type", codec)
+    dispatch_map_codec_with_key("type", codec)
 }
 
 /// Creates a [`MapCodec`] for a type implementing [`KeyDispatchable`], using the provided [`Codec`] as the codec for the differentiator key and the differentiator key.
 ///
 /// `key_codec` is the `Codec` used to serialize/deserialize the differentiator key.
-pub const fn dispatch_map_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(
+pub const fn dispatch_map_codec_with_key<T: KeyDispatchable, C: Codec<Value = T::Key>>(
     key: &'static str,
     codec: &'static C,
 ) -> FieldedKeyDispatchMapCodec<T, C> {
     super::map_codec::dispatch_map_codec_to_map_codec(field(codec, key))
+}
+
+/// Creates a [`DispatchedMapCodec`] with the provided key and [`MapDispatchable`] marker type.
+pub const fn dispatched_map<T: MapDispatchable, K: Codec<Value = T::Key>>(
+    key_codec: &'static K,
+) -> DispatchedMapCodec<T, K>
+where
+    <K as HasValue>::Value: Display + Eq + Hash,
+{
+    new_dispatched_map_codec::<T, K>(key_codec)
 }
 
 // Field functions

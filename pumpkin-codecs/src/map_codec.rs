@@ -1,9 +1,13 @@
 use crate::HasValue;
+use crate::codecs::map_codec::MapCodecCodec;
 use crate::data_result::DataResult;
 use crate::dynamic_ops::DynamicOps;
 use crate::key_compressor::KeyCompressor;
 use crate::keyable::Keyable;
 use crate::lifecycle::Lifecycle;
+use crate::map_codecs::key_dispatch::{
+    KeyDispatchMapCodec, KeyDispatchable, new_key_dispatch_map_codec,
+};
 use crate::map_codecs::validated::{ValidatedMapCodec, new_validated_map_codec};
 use crate::map_coders::{
     ComappedMapEncoderImpl, CompressorHolder, FlatComappedMapEncoderImpl, FlatMappedMapDecoderImpl,
@@ -14,8 +18,6 @@ use crate::struct_builder::StructBuilder;
 use crate::struct_codecs::Field;
 use std::fmt::Display;
 use std::sync::Arc;
-use crate::codecs::map_codec::MapCodecCodec;
-use crate::map_codecs::key_dispatch::{new_key_dispatch_map_codec, KeyDispatchMapCodec, KeyDispatchable};
 
 /// A type of *codec* which encodes/decodes fields of a map.
 ///
@@ -41,7 +43,7 @@ use crate::map_codecs::key_dispatch::{new_key_dispatch_map_codec, KeyDispatchMap
 ///   For optional fields which have a default value for when no value is found while decoding.
 ///
 /// ## Dispatch Map Codecs
-/// Similar to codecs, use [`codec::dispatch_map`] or [`codec::dispatch_map_with_key`] to create a direct [`KeyDispatchMapCodec`]
+/// Similar to codecs, use [`codec::dispatch_map_codec`] or [`codec::dispatch_map_codec_with_key`] to create a direct [`KeyDispatchMapCodec`]
 /// with the provided `MapCodec`, which serializes/deserializes a type with variants of different contents.
 ///
 /// # Transformers
@@ -55,6 +57,9 @@ use crate::map_codecs::key_dispatch::{new_key_dispatch_map_codec, KeyDispatchMap
 /// The [`validate`] function returns a codec wrapper that validates a value before encoding and after decoding.
 /// A validated codec takes a function that can either return an [`Ok`] for a success,
 /// or an [`Err`] with the provided message to place in a `DataResult`.
+///
+/// [`codec::dispatch_map_codec`]: crate::codec::dispatch_map_codec
+/// [`codec::dispatch_map_codec_with_key`]: crate::codec::dispatch_map_codec_with_key
 pub trait MapCodec: MapEncoder + MapDecoder {}
 
 // Any struct implementing MapEncoder<Value = A> and MapDecoder<Value = A> will also implement MapCodec<Value = A>.

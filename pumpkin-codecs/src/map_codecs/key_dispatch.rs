@@ -1,7 +1,7 @@
-use crate::impl_compressor;
 use crate::HasValue;
 use crate::data_result::DataResult;
 use crate::dynamic_ops::DynamicOps;
+use crate::impl_compressor;
 use crate::key_compressor::KeyCompressor;
 use crate::keyable::Keyable;
 use crate::map_codec::MapCodec;
@@ -122,7 +122,7 @@ macro_rules! impl_variant_getter {
 /// ```txt
 /// (Self::A(..), A) => A_MAP_CODEC
 /// ```
-/// Here, the `A` without the self is part of the differentiator enum (as an identifier).
+/// Here, the `A` (without the `self`) is part of the differentiator enum (as an identifier).
 /// There is no need to specify the enum type, as that is already handled by this macro.
 ///
 /// You don't have to add a branch for every variant, but any left variant `MapCodec`s will be considered `todo!()`,
@@ -131,7 +131,7 @@ macro_rules! impl_variant_getter {
 /// # Examples
 ///
 /// ```rust
-/// # use pumpkin_codecs::{struct_map_codec, impl_variant_getter, impl_key_dispatchable};
+/// # use pumpkin_codecs::{struct_map_codec};
 /// # use pumpkin_codecs::codec::{field, FieldMapCodec, INT_CODEC, STRING_CODEC};
 /// # use pumpkin_codecs::codecs::primitive::*;
 /// # use pumpkin_codecs::coders::{Encoder, Decoder};
@@ -140,6 +140,7 @@ macro_rules! impl_variant_getter {
 /// # use pumpkin_codecs::struct_codecs::StructMapCodec1;
 ///
 /// use pumpkin_codecs::map_codecs::key_dispatch::*;
+/// use pumpkin_codecs::{impl_variant_getter, impl_key_dispatchable};
 ///
 /// /// Our example `KeyDispatchable`.
 /// pub enum Example {
