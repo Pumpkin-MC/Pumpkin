@@ -17,7 +17,7 @@ pub struct CUpdateAdvancements<'a> {
 
 impl<'a> CUpdateAdvancements<'a> {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         reset: bool,
         advancement: &'a [Advancement<'a>],
         progress: &'a [AdvancementProgress<'a>],
@@ -50,7 +50,7 @@ pub struct AdvancementProgress<'a> {
 
 impl<'a> AdvancementProgress<'a> {
     #[must_use]
-    pub fn new(id: ResourceLocation, progress: &'a [Criteria]) -> Self {
+    pub const fn new(id: ResourceLocation, progress: &'a [Criteria]) -> Self {
         Self { id, progress }
     }
 }
@@ -65,7 +65,7 @@ pub struct Advancement<'a> {
 
 impl<'a> Advancement<'a> {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         parent_id: Option<ResourceLocation>,
         display: Option<AdvancementDisplay<'a>>,
         requirements: &'a [&'a [String]],
@@ -94,7 +94,7 @@ pub struct AdvancementDisplay<'a> {
 
 impl<'a> AdvancementDisplay<'a> {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         title: TextComponent,
         description: TextComponent,
         icon: ItemStackSerializer<'a>,
@@ -125,7 +125,7 @@ pub struct Criteria {
 
 impl Criteria {
     #[must_use]
-    pub fn new(criterion_id: ResourceLocation, achieve_date: Option<i64>) -> Self {
+    pub const fn new(criterion_id: ResourceLocation, achieve_date: Option<i64>) -> Self {
         Self {
             criterion_id,
             achieve_date,

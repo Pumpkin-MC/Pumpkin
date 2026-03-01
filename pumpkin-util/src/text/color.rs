@@ -181,7 +181,7 @@ impl Serialize for ARGBColor {
 
 impl ToTokens for ARGBColor {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let ARGBColor {
+        let Self {
             alpha,
             red,
             green,
@@ -194,7 +194,7 @@ impl ToTokens for ARGBColor {
                 green: #green,
                 blue: #blue,
             }
-        })
+        });
     }
 }
 

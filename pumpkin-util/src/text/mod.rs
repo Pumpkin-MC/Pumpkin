@@ -12,8 +12,6 @@ use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
 use std::fmt::Formatter;
-use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
 use style::Style;
 
 pub mod click;
