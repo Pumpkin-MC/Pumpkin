@@ -437,7 +437,7 @@ impl LivingEntity {
                         Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
                         Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
                     };
-                    let scaled_amount = m.base_value * f64::from(effect.amplifier + 1);
+                    let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
                     let mod_inst = Modifier {
                         id: uuid,
                         amount: scaled_amount,
@@ -1328,7 +1328,8 @@ impl LivingEntity {
         {
             let mut effects = self.active_effects.lock().await;
             for effect in effects.values_mut() {
-                if effect.duration <= 0 {
+                // A duration below 0 means the effect is infinite
+                if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
                     continue;
                 }
