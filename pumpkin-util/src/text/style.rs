@@ -147,21 +147,5 @@ impl ToTokens for Style {
         let hover_event = &self.hover_event;
         let font = &self.font;
         let shadow_color = &self.shadow_color;
-
-        tokens.extend(quote! {
-            Style {
-                color: #color,
-                bold: #bold,
-                italic: #italic,
-                underlined: #underlined,
-                strikethrough: #strikethrough,
-                obfuscated: #obfuscated,
-                insertion: #insertion,
-                click_event: #click_event,
-                hover_event: #hover_event,
-                font: #font,
-                shadow_color: #shadow_color,
-            }
-        });
     }
 }
