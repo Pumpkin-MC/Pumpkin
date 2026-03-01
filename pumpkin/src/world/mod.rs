@@ -1606,6 +1606,11 @@ impl World {
         // This is made before the player teleport so that the player doesn't glitch out when spawning
         chunker::update_position(player).await;
 
+        // Fix: Send entities from world.entities that may not be in loaded chunks
+        // This handles the case where entities exist in memory but their chunks were
+        // unloaded and not persisted to disk yet
+        self.send_in_memory_entities_to_player(player).await;
+
         // Teleport
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
@@ -2731,6 +2736,49 @@ impl World {
             .await;
 
         self.remove_entity_data(entity).await;
+    }
+
+    /// Sends entities from world.entities to a player that are within their view distance.
+    async fn send_in_memory_entities_to_player(&self, player: &Arc<Player>) {
+        use std::collections::HashSet;
+
+        let view_distance = chunker::get_view_distance(player).get() as u32;
+        let player_pos = player.get_entity().pos.load();
+
+        // Track which entity IDs were sent to avoid duplicates
+        let mut sent_entity_ids = HashSet::new();
+
+        // Send all entities from world.entities within view distance
+        let entities = self.entities.load();
+        for entity in entities.iter() {
+            let base_entity = entity.get_entity();
+            let entity_id = base_entity.entity_id;
+
+            // Skip if already sent
+            if sent_entity_ids.contains(&entity_id) {
+                continue;
+            }
+
+            // Check if entity is within view distance
+            let entity_pos = base_entity.pos.load();
+            let dx = entity_pos.x - player_pos.x;
+            let dz = entity_pos.z - player_pos.z;
+            let dist_squared = dx * dx + dz * dz;
+            let view_distance_blocks = (view_distance * 16) as f64;
+
+            if dist_squared <= view_distance_blocks * view_distance_blocks {
+                player
+                    .client
+                    .enqueue_packet(&base_entity.create_spawn_packet())
+                    .await;
+                entity.init_data_tracker().await;
+                sent_entity_ids.insert(entity_id);
+                trace!(
+                    "Sent in-memory entity {} (uuid: {:?}) to player {}",
+                    entity_id, base_entity.entity_uuid, player.gameprofile.name
+                );
+            }
+        }
     }
 
     pub async fn set_block_breaking(&self, from: &Entity, location: BlockPos, progress: i32) {
