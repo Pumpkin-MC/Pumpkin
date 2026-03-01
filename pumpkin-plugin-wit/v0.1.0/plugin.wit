@@ -9,6 +9,8 @@ world plugin {
     // This is what the host should provide to the plugin
     import logging;
     import server;
+    import text;
+    import command;
     import context;
 
     // This is what the plugin should provide

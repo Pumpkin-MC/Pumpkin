@@ -1,6 +1,6 @@
 interface event {
     use player.{player};
-    use common.{raw-text-component};
+    use text.{text-component};
 
     enum event-priority {
         highest,
@@ -12,7 +12,7 @@ interface event {
 
     record player-join-event-data {
         player: player,
-        text-component: raw-text-component,
+        text-component: text-component,
         cancelled: bool
     }
 

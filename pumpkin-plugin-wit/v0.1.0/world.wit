@@ -1,5 +1,5 @@
-interface world {
-    resource world {
+interface %world {
+    resource %world {
         get-id: func () -> string;
     }
 }
