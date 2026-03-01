@@ -1,26 +1,21 @@
-use std::sync::Arc;
-
+use crate::plugin::{
+    PluginMetadata,
+    loader::wasm::wasm_host::{PluginInstance, WasmPlugin, state::PluginHostState},
+};
 use tokio::sync::Mutex;
 use wasmtime::component::{Component, HasData, Linker, bindgen};
 use wasmtime::{Engine, Store};
 
-use crate::plugin::loader::wasm::wasm_host::state::PlayerResource;
-use crate::plugin::loader::wasm::wasm_host::wit::v0_1_0::events::WasmPluginV0_1_0EventHandler;
-use crate::plugin::{
-    PluginMetadata,
-    loader::wasm::wasm_host::{
-        PluginInstance, WasmPlugin,
-        logging::log_tracing,
-        state::{ContextResource, PluginHostState, ServerResource},
-        wit::v0_1_0::pumpkin::plugin::{
-            event::{EventPriority, EventType},
-            player,
-            server::{Difficulty, Server},
-        },
-    },
-};
-
+pub mod commands;
+pub mod common;
+pub mod context;
+pub mod entity;
 pub mod events;
+pub mod logging;
+pub mod player;
+pub mod server;
+pub mod text;
+pub mod world;
 
 bindgen!({
     path: "../pumpkin-plugin-wit/v0.1.0",
@@ -34,146 +29,6 @@ struct PluginHostComponent;
 impl HasData for PluginHostComponent {
     type Data<'a> = &'a mut PluginHostState;
 }
-
-impl pumpkin::plugin::logging::Host for PluginHostState {
-    async fn log(&mut self, level: pumpkin::plugin::logging::Level, message: String) {
-        match level {
-            pumpkin::plugin::logging::Level::Trace => tracing::trace!("[plugin] {message}"),
-            pumpkin::plugin::logging::Level::Debug => tracing::debug!("[plugin] {message}"),
-            pumpkin::plugin::logging::Level::Info => tracing::info!("[plugin] {message}"),
-            pumpkin::plugin::logging::Level::Warn => tracing::warn!("[plugin] {message}"),
-            pumpkin::plugin::logging::Level::Error => tracing::error!("[plugin] {message}"),
-        }
-    }
-
-    async fn log_tracing(&mut self, event: Vec<u8>) {
-        log_tracing(event).await;
-    }
-}
-
-impl pumpkin::plugin::server::HostServer for PluginHostState {
-    async fn drop(&mut self, rep: wasmtime::component::Resource<Server>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<ServerResource>(wasmtime::component::Resource::new_own(rep.rep()));
-        Ok(())
-    }
-
-    async fn get_difficulty(
-        &mut self,
-        server: wasmtime::component::Resource<Server>,
-    ) -> Difficulty {
-        let resource: &ServerResource = self
-            .resource_table
-            .get_any_mut(server.rep())
-            .expect("invalid server resource handle")
-            .downcast_ref::<ServerResource>()
-            .expect("resource type mismatch");
-
-        match resource.provider.get_difficulty() {
-            pumpkin_util::Difficulty::Peaceful => Difficulty::Peaceful,
-            pumpkin_util::Difficulty::Easy => Difficulty::Easy,
-            pumpkin_util::Difficulty::Normal => Difficulty::Normal,
-            pumpkin_util::Difficulty::Hard => Difficulty::Hard,
-        }
-    }
-}
-
-impl pumpkin::plugin::context::HostContext for PluginHostState {
-    async fn drop(&mut self, rep: wasmtime::component::Resource<Context>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<ContextResource>(wasmtime::component::Resource::new_own(rep.rep()));
-        Ok(())
-    }
-
-    async fn get_server(
-        &mut self,
-        context: wasmtime::component::Resource<Context>,
-    ) -> wasmtime::component::Resource<Server> {
-        let resource = self
-            .resource_table
-            .get_any_mut(context.rep())
-            .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
-            .expect("resource type mismatch");
-        let server_provider = resource.provider.server.clone();
-        self.add_server(server_provider)
-            .expect("failed to add server resource")
-    }
-
-    async fn register_event(
-        &mut self,
-        context: wasmtime::component::Resource<Context>,
-        handler_id: u32,
-        event_type: EventType,
-        event_priority: EventPriority,
-        blocking: bool,
-    ) {
-        let resource = self
-            .resource_table
-            .get_any_mut(context.rep())
-            .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
-            .expect("resource type mismatch");
-
-        let priority = match event_priority {
-            EventPriority::Highest => crate::plugin::EventPriority::Highest,
-            EventPriority::High => crate::plugin::EventPriority::High,
-            EventPriority::Normal => crate::plugin::EventPriority::Normal,
-            EventPriority::Low => crate::plugin::EventPriority::Low,
-            EventPriority::Lowest => crate::plugin::EventPriority::Lowest,
-        };
-
-        let plugin = self
-            .plugin
-            .as_ref()
-            .expect("plugin should always be initialized here")
-            .upgrade()
-            .expect("plugin has been dropped");
-
-        let handler = Arc::new(WasmPluginV0_1_0EventHandler { handler_id, plugin });
-
-        match event_type {
-            EventType::PlayerJoinEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::player_join::PlayerJoinEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
-            }
-        }
-    }
-}
-
-impl pumpkin::plugin::player::HostPlayer for PluginHostState {
-    async fn drop(
-        &mut self,
-        rep: wasmtime::component::Resource<pumpkin::plugin::player::Player>,
-    ) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<PlayerResource>(wasmtime::component::Resource::new_own(rep.rep()));
-        Ok(())
-    }
-
-    async fn get_id(&mut self, player: wasmtime::component::Resource<player::Player>) -> String {
-        let resource = self
-            .resource_table
-            .get_any_mut(player.rep())
-            .expect("invalid player resource handle")
-            .downcast_ref::<PlayerResource>()
-            .expect("resource type mismatch");
-        resource.provider.gameprofile.id.to_string()
-    }
-}
-
-impl pumpkin::plugin::player::Host for PluginHostState {}
-impl pumpkin::plugin::common::Host for PluginHostState {}
-impl pumpkin::plugin::context::Host for PluginHostState {}
-impl pumpkin::plugin::server::Host for PluginHostState {}
-impl pumpkin::plugin::event::Host for PluginHostState {}
 
 pub fn setup_linker(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState>> {
     let mut linker = Linker::new(engine);
