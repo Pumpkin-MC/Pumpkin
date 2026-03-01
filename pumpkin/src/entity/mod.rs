@@ -61,6 +61,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub mod ai;
+pub mod attributes;
 pub mod boss;
 pub mod breath;
 pub mod decoration;
@@ -379,6 +380,8 @@ pub struct Entity {
     pub sprinting: AtomicBool,
     /// Indicates whether the entity is invisible
     pub invisible: AtomicBool,
+    /// Indicates whether the entity is glowing
+    pub glowing: AtomicBool,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka knockback
@@ -441,6 +444,8 @@ pub struct Entity {
     pub custom_name_visible: bool,
     /// The data send in the Entity Spawn packet
     pub data: AtomicI32,
+    /// Stores entity boolean flags (on fire, sneaking, invisible, glowing, etc.)
+    pub flags: std::sync::atomic::AtomicI8,
     /// If true, the entity cannot collide with anything (e.g. spectator)
     pub no_clip: AtomicBool,
     /// Multiplies movement for one tick before being reset
@@ -497,6 +502,7 @@ impl Entity {
             )),
             sneaking: AtomicBool::new(false),
             invisible: AtomicBool::new(false),
+            glowing: AtomicBool::new(false),
             world: ArcSwap::new(world),
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
@@ -517,6 +523,7 @@ impl Entity {
             invulnerable: AtomicBool::new(false),
             damage_immunities: Vec::new(),
             data: AtomicI32::new(0),
+            flags: std::sync::atomic::AtomicI8::new(0),
             fire_immune: AtomicBool::new(false),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
@@ -1796,12 +1803,23 @@ impl Entity {
         self.set_flag(Flag::Sneaking, sneaking).await;
     }
 
+    /// Sets whether the entity is invisible and sends updated metadata.
     pub async fn set_invisible(&self, invisible: bool) {
-        assert!(self.invisible.load(Relaxed) != invisible);
-        self.invisible.store(invisible, Relaxed);
-        self.set_flag(Flag::Invisible, invisible).await;
+        if self.invisible.load(Ordering::Relaxed) != invisible {
+            self.invisible.store(invisible, Relaxed);
+            self.set_flag(Flag::Invisible, invisible).await;
+        }
     }
 
+    /// Sets whether the entity is glowing and sends updated metadata.
+    pub async fn set_glowing(&self, glowing: bool) {
+        if self.glowing.load(Ordering::Relaxed) != glowing {
+            self.glowing.store(glowing, Ordering::Relaxed);
+            self.set_flag(Flag::Glowing, glowing).await;
+        }
+    }
+
+    /// Sets whether the entity is on fire for visual and damage purposes. This is separate from `fire_ticks` which tracks the damage aspect of being on fire.
     pub async fn set_on_fire(&self, on_fire: bool) {
         if self.has_visual_fire.load(Ordering::Relaxed) != on_fire {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
@@ -1951,12 +1969,14 @@ impl Entity {
 
     async fn set_flag(&self, flag: Flag, value: bool) {
         let index = flag as u8;
-        let mut b = 0i8;
+        let mask = (1i8).wrapping_shl(index as u32);
+        let mut b = self.flags.load(Ordering::Relaxed);
         if value {
-            b |= 1 << index;
+            b |= mask;
         } else {
-            b &= !(1 << index);
+            b &= !mask;
         }
+        self.flags.store(b, Ordering::Relaxed);
         self.send_meta_data(&[Metadata::new(
             TrackedData::DATA_FLAGS,
             MetaDataType::BYTE,

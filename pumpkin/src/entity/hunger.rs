@@ -36,7 +36,9 @@ impl HungerManager {
         let mut exhaustion = self.exhaustion.load();
         let mut timer = self.tick_timer.load();
 
-        let difficulty = player.world().level_info.load().difficulty;
+        let level_info = player.world().level_info.load();
+        let difficulty = level_info.difficulty;
+        let natural_regen = level_info.game_rules.natural_health_regeneration;
         let health = player.living_entity.health.load();
         let can_heal = player.can_food_heal();
 
@@ -53,8 +55,6 @@ impl HungerManager {
             }
             needs_sync = true;
         }
-
-        let natural_regen = true; // TODO: GameRule check
 
         if natural_regen && saturation > 0.0 && can_heal && level >= 20 {
             timer += 1;
@@ -130,10 +130,24 @@ impl HungerManager {
         player.send_health().await;
     }
 
+    /// Add exhaustion to trigger hunger decrease
     pub fn add_exhaustion(&self, exhaustion: f32) {
         let current = self.exhaustion.load();
         self.exhaustion
             .store((current + exhaustion).min(MAX_EXHAUSTION));
+    }
+
+    /// Add hunger manually
+    pub fn add_hunger(&self, hunger: u8) {
+        let current = self.level.load();
+        self.level.store((current + hunger).min(MAX_FOOD));
+    }
+
+    /// Add saturation manually
+    pub fn add_saturation(&self, saturation: f32) {
+        let current = self.saturation.load();
+        self.saturation
+            .store((current + saturation).min(f32::from(self.level.load())));
     }
 
     pub fn restart(&self) {
