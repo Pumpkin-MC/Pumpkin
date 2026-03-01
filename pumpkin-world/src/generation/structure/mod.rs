@@ -10,7 +10,8 @@ use crate::{
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
-            stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
+            nether_fortress::NetherFortressGenerator, stronghold::StrongholdGenerator,
+            swamp_hut::SwampHutGenerator,
         },
     },
 };
@@ -41,6 +42,9 @@ pub fn try_generate_structure(
     let structure_pos = match key {
         StructureKeys::BuriedTreasure => {
             BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
+        }
+        StructureKeys::Fortress => {
+            NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
         }
         StructureKeys::SwampHut => {
             SwampHutGenerator::get_structure_position(&SwampHutGenerator, context)

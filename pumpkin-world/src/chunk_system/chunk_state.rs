@@ -111,7 +111,7 @@ impl StagedChunkEnum {
         match self {
             Self::Empty => 0,
             Self::StructureStart => 0,
-            Self::StructureReferences => 0,
+            Self::StructureReferences => 8,
             Self::Biomes => 0,
             Self::Noise => 0,
             Self::Surface => 0,
@@ -126,7 +126,7 @@ impl StagedChunkEnum {
         match self {
             Self::Empty => 0,
             Self::StructureStart => 0,
-            Self::StructureReferences => 0,
+            Self::StructureReferences => 8,
             Self::Biomes => 0,
             Self::Noise => 0,
             Self::Surface => 0,
@@ -142,7 +142,21 @@ impl StagedChunkEnum {
             // the Biome Step, this should be more efficient
             Self::Biomes => &[Self::Empty],
             Self::StructureStart => &[Self::Biomes],
-            Self::StructureReferences => &[Self::StructureStart],
+            // Radius 8: structures (e.g. nether fortresses) can span up to 8 chunks from
+            // their start chunk, so we need all neighbors within that radius to have their
+            // StructureStart computed before we can resolve references. The array length (9)
+            // encodes this radius for the dependency system (center + 8 layers).
+            Self::StructureReferences => &[
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+            ],
             Self::Noise => &[Self::StructureReferences],
             Self::Surface => &[Self::Noise],
             Self::Features => &[Self::Surface, Self::Surface],

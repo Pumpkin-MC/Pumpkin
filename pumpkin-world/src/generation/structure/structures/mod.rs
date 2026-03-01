@@ -26,6 +26,162 @@ pub mod nether_fortress;
 pub mod stronghold;
 pub mod swamp_hut;
 
+/// Block rotation for structure piece placement (matches vanilla BlockRotation).
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum BlockRotation {
+    None,
+    Clockwise90,
+    Clockwise180,
+    CounterClockwise90,
+}
+
+/// Block mirror for structure piece placement (matches vanilla BlockMirror).
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum BlockMirror {
+    None,
+    LeftRight,
+    FrontBack,
+}
+
+/// Mirrors a horizontal facing value.
+fn mirror_facing(facing: &str, mirror: BlockMirror) -> &str {
+    match mirror {
+        BlockMirror::LeftRight => match facing {
+            "north" => "south",
+            "south" => "north",
+            other => other,
+        },
+        BlockMirror::FrontBack => match facing {
+            "east" => "west",
+            "west" => "east",
+            other => other,
+        },
+        BlockMirror::None => facing,
+    }
+}
+
+/// Rotates a horizontal facing value clockwise by the given rotation amount.
+fn rotate_facing(facing: &str, rotation: BlockRotation) -> &str {
+    match rotation {
+        BlockRotation::Clockwise90 => match facing {
+            "north" => "east",
+            "east" => "south",
+            "south" => "west",
+            "west" => "north",
+            other => other,
+        },
+        BlockRotation::Clockwise180 => match facing {
+            "north" => "south",
+            "south" => "north",
+            "east" => "west",
+            "west" => "east",
+            other => other,
+        },
+        BlockRotation::CounterClockwise90 => match facing {
+            "north" => "west",
+            "west" => "south",
+            "south" => "east",
+            "east" => "north",
+            other => other,
+        },
+        BlockRotation::None => facing,
+    }
+}
+
+/// Transforms a block state by applying mirror then rotation to directional properties.
+/// Handles "facing" property (stairs, furnaces, etc.) and directional connection
+/// properties "north"/"south"/"east"/"west" (fences, walls, etc.).
+fn transform_block_state(
+    state: &BlockState,
+    mirror: BlockMirror,
+    rotation: BlockRotation,
+) -> &'static BlockState {
+    if mirror == BlockMirror::None && rotation == BlockRotation::None {
+        return BlockState::from_id(state.id);
+    }
+
+    let block = Block::from_state_id(state.id);
+    let Some(props) = block.properties(state.id) else {
+        return BlockState::from_id(state.id);
+    };
+
+    let pairs = props.to_props();
+
+    // Detect which directional properties exist
+    let mut has_facing = false;
+    let mut has_connections = true;
+    let mut conns: [&str; 4] = [""; 4]; // [N, S, E, W]
+
+    for &(name, value) in &pairs {
+        match name {
+            "facing" => has_facing = true,
+            "north" => conns[0] = value,
+            "south" => conns[1] = value,
+            "east" => conns[2] = value,
+            "west" => conns[3] = value,
+            _ => {}
+        }
+    }
+
+    // Only treat as having connections if all 4 directional properties exist
+    if conns[0].is_empty() || conns[1].is_empty() || conns[2].is_empty() || conns[3].is_empty() {
+        has_connections = false;
+    }
+
+    if !has_facing && !has_connections {
+        return BlockState::from_id(state.id);
+    }
+
+    // Transform connections: mirror first, then rotate
+    let new_conns = if has_connections {
+        let [n, s, e, w] = conns;
+        let (n, s, e, w) = match mirror {
+            BlockMirror::LeftRight => (s, n, e, w),
+            BlockMirror::FrontBack => (n, s, w, e),
+            BlockMirror::None => (n, s, e, w),
+        };
+        match rotation {
+            BlockRotation::Clockwise90 => [w, e, n, s],
+            BlockRotation::Clockwise180 => [s, n, w, e],
+            BlockRotation::CounterClockwise90 => [e, w, s, n],
+            BlockRotation::None => [n, s, e, w],
+        }
+    } else {
+        conns
+    };
+
+    // Build target property list
+    let mut target: Vec<(&str, &str)> = Vec::with_capacity(pairs.len());
+    let mut any_changed = false;
+
+    for &(name, value) in &pairs {
+        let new_value = match name {
+            "facing" => {
+                let m = mirror_facing(value, mirror);
+                rotate_facing(m, rotation)
+            }
+            "north" if has_connections => new_conns[0],
+            "south" if has_connections => new_conns[1],
+            "east" if has_connections => new_conns[2],
+            "west" if has_connections => new_conns[3],
+            _ => value,
+        };
+        if new_value != value {
+            any_changed = true;
+        }
+        target.push((name, new_value));
+    }
+
+    if !any_changed {
+        return BlockState::from_id(state.id);
+    }
+
+    // Compute the target state ID directly via from_properties + to_state_id
+    let new_props = block.from_properties(&target);
+    let new_state_id = new_props.to_state_id(block);
+    BlockState::from_id(new_state_id)
+}
+
 pub trait BlockRandomizer {
     fn get_block(&self, rng: &mut RandomGenerator, is_border: bool) -> &BlockState;
 }
@@ -47,7 +203,13 @@ pub trait StructurePieceBase: Send + Sync {
     fn clone_box(&self) -> Box<dyn StructurePieceBase>;
 
     /// Places the blocks for this piece into the chunk.
-    fn place(&mut self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, seed: i64);
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        random: &mut RandomGenerator,
+        seed: i64,
+        chunk_box: &BlockBox,
+    );
 
     #[expect(clippy::too_many_arguments)]
     fn fill_openings(
@@ -70,6 +232,8 @@ pub struct StructurePiece {
     pub r#type: StructurePieceType,
     pub bounding_box: BlockBox,
     pub facing: Option<BlockDirection>,
+    pub rotation: BlockRotation,
+    pub mirror: BlockMirror,
     pub chain_length: u32,
 }
 
@@ -84,12 +248,39 @@ impl StructurePiece {
             r#type,
             bounding_box,
             facing: None,
+            rotation: BlockRotation::None,
+            mirror: BlockMirror::None,
             chain_length,
         }
     }
 
+    /// Sets the facing and computes the corresponding rotation/mirror
+    /// (matches vanilla's setOrientation).
     pub const fn set_facing(&mut self, facing: Option<BlockDirection>) {
         self.facing = facing;
+        match facing {
+            None => {
+                self.rotation = BlockRotation::None;
+                self.mirror = BlockMirror::None;
+            }
+            Some(BlockDirection::South) => {
+                self.mirror = BlockMirror::LeftRight;
+                self.rotation = BlockRotation::None;
+            }
+            Some(BlockDirection::West) => {
+                self.mirror = BlockMirror::LeftRight;
+                self.rotation = BlockRotation::Clockwise90;
+            }
+            Some(BlockDirection::East) => {
+                self.mirror = BlockMirror::None;
+                self.rotation = BlockRotation::Clockwise90;
+            }
+            Some(_) => {
+                // North and Up/Down default
+                self.mirror = BlockMirror::None;
+                self.rotation = BlockRotation::None;
+            }
+        }
     }
 
     const fn offset_pos(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
@@ -266,7 +457,7 @@ impl StructurePiece {
         }
     }
 
-    /// Fills downwards from a relative point until the bottom of the world.
+    /// Fills downwards from a relative point until hitting a solid block.
     pub fn fill_downwards(
         &self,
         chunk: &mut ProtoChunk,
@@ -276,17 +467,21 @@ impl StructurePiece {
         z: i32,
         box_limit: &BlockBox,
     ) {
-        // We transform the starting point to world space to get the real Y
         let world_pos = self.offset_pos(x, y, z);
         let start_y = world_pos.y;
-        let end_y = chunk.bottom_y() as i32;
+        let end_y = chunk.bottom_y() as i32 + 1;
 
         for current_y in (end_y..=start_y).rev() {
-            // We bypass add_block here because add_block transforms X/Z again.
-            // We use the already-transformed world X/Z but iterate Y manually.
-            if box_limit.contains(world_pos.x, current_y, world_pos.z) {
-                chunk.set_block_state(world_pos.x, current_y, world_pos.z, state);
+            if !box_limit.contains(world_pos.x, current_y, world_pos.z) {
+                continue;
             }
+            let existing = chunk
+                .get_block_state(&Vector3::new(world_pos.x, current_y, world_pos.z))
+                .to_state();
+            if !existing.is_air() && !existing.is_liquid() {
+                break;
+            }
+            chunk.set_block_state(world_pos.x, current_y, world_pos.z, state);
         }
     }
 
@@ -344,13 +539,8 @@ impl StructurePiece {
             return;
         }
 
-        // // Apply Mirror and Rotation
-        // if self.mirror != BlockMirror::None {
-        //     block = block.mirror(self.mirror);
-        // }
-        // if self.rotation != BlockRotation::None {
-        //     block = block.rotate(self.rotation);
-        // }
+        // Apply Mirror and Rotation to directional block properties
+        let block = transform_block_state(block, self.mirror, self.rotation);
 
         // World interaction
         world.set_block_state(block_pos.x, block_pos.y, block_pos.z, block);
@@ -380,7 +570,14 @@ impl StructurePieceBase for StructurePiece {
         Box::new(self.clone())
     }
 
-    fn place(&mut self, _chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {}
+    fn place(
+        &mut self,
+        _chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        _chunk_box: &BlockBox,
+    ) {
+    }
 
     fn translate(&mut self, x: i32, y: i32, z: i32) {
         self.bounding_box.move_pos(x, y, z);
@@ -449,7 +646,7 @@ impl StructurePiecesCollector {
 
         for piece in &mut self.pieces {
             if piece.bounding_box().intersects(&chunk_box) {
-                piece.place(chunk, random, seed);
+                piece.place(chunk, random, seed, &chunk_box);
             }
         }
     }
@@ -496,6 +693,23 @@ impl StructurePiecesCollector {
 
         self.cached_box = Some(bbox);
         bbox
+    }
+
+    /// Shifts structure to fit within a Y range. Used by NetherFortress.
+    /// Matches vanilla's deprecated 'shiftInto(Random random, int baseY, int topY)'
+    pub fn shift_into_y_range(&mut self, random: &mut RandomGenerator, base_y: i32, top_y: i32) {
+        let bounding_box = self.get_bounding_box();
+        let height = bounding_box.max.y - bounding_box.min.y + 1;
+        let available_space = top_y - base_y + 1 - height;
+
+        let new_min_y = if available_space > 1 {
+            base_y + random.next_bounded_i32(available_space)
+        } else {
+            base_y
+        };
+
+        let shift_amount = new_min_y - bounding_box.min.y;
+        self.shift(shift_amount);
     }
 
     #[must_use]
@@ -548,7 +762,7 @@ pub fn create_chunk_random(seed: i64, chunk_x: i32, chunk_z: i32) -> RandomGener
 pub enum StructureInstance {
     /// This chunk is the "owner" of the structure.
     Start(StructurePosition),
-    /// This chunk just contains a piece of a structure starting elsewhere.
-    /// Stores the `BlockPos` of the 'Start' so you can look it up.
-    Reference(BlockPos),
+    /// This chunk contains a piece of a structure starting elsewhere.
+    /// Stores the collector directly so we don't need the origin chunk in cache.
+    Reference(Arc<Mutex<StructurePiecesCollector>>),
 }
