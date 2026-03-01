@@ -15,6 +15,7 @@ use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 use trapped_chest::TrappedChestBlockEntity;
 
+use crate::block::entities::bell::BellBlockEntity;
 use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity;
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
@@ -30,6 +31,7 @@ use crate::{
 
 pub mod barrel;
 pub mod bed;
+pub mod bell;
 pub mod blasting_furnace;
 pub mod chest;
 pub mod chest_like_block_entity;
@@ -177,6 +179,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             Arc::new(block_entity_from_generic::<BlastingFurnaceBlockEntity>(nbt))
         }
         SmokerBlockEntity::ID => Arc::new(block_entity_from_generic::<SmokerBlockEntity>(nbt)),
+        BellBlockEntity::ID => Arc::new(block_entity_from_generic::<BellBlockEntity>(nbt)),
         _ => return None,
     })
 }

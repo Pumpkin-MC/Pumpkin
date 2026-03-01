@@ -9,6 +9,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::world::World;
 
+pub mod bell;
 pub mod buttons;
 pub mod comparator;
 pub mod copper_bulb;
