@@ -12,6 +12,7 @@ use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -423,6 +424,8 @@ pub struct Entity {
     /// The number of ticks the entity has been frozen (in powder snow)
     /// Max is 140 ticks (7 seconds). Increases by 1/tick in powder snow, decreases by 2/tick outside.
     pub frozen_ticks: AtomicI32,
+    /// Set during block-collision processing when the entity is touching powder snow.
+    pub is_in_powder_snow: AtomicBool,
     pub removal_reason: AtomicCell<Option<RemovalReason>>,
     // The passengers that entity has
     pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
@@ -528,6 +531,7 @@ impl Entity {
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
             frozen_ticks: AtomicI32::new(0),
+            is_in_powder_snow: AtomicBool::new(false),
             removal_reason: AtomicCell::new(None),
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
@@ -981,6 +985,9 @@ impl Entity {
                 .await;
 
             if bounding_box.intersects(&collision_shape.at_pos(pos)) {
+                if block == &Block::POWDER_SNOW {
+                    self.is_in_powder_snow.store(true, Relaxed);
+                }
                 world
                     .block_registry
                     .on_entity_collision(block, &world, caller.as_ref(), &pos, state, server)
@@ -1681,10 +1688,12 @@ impl Entity {
     /// Freeze damage is dealt every 40 ticks when fully frozen
     const FREEZE_DAMAGE_INTERVAL: i32 = 40;
 
-    /// Check if the entity is currently in powder snow
-    pub async fn is_in_powder_snow(&self) -> bool {
-        let block_pos = self.block_pos.load();
-        self.world.load().get_block(&block_pos).await == &Block::POWDER_SNOW
+    /// Check if the entity is currently in powder snow.
+    ///
+    /// The flag is reset at the start of each tick and set while processing
+    /// block collisions for the current tick.
+    pub fn is_in_powder_snow(&self) -> bool {
+        self.is_in_powder_snow.load(Ordering::Relaxed)
     }
 
     /// Check if this entity type is immune to freezing
@@ -1693,24 +1702,54 @@ impl Entity {
             .has_tag(&tag::EntityType::MINECRAFT_FREEZE_IMMUNE_ENTITY_TYPES)
     }
 
-    /// Ticks the frozen state of the entity.
-    /// In powder snow: `frozen_ticks` increases by 1 (up to `MAX_FROZEN_TICKS`)
-    /// Outside powder snow: `frozen_ticks` decreases by 2 (down to 0)
-    /// When fully frozen, deals 1 damage every 40 ticks
-    pub async fn tick_frozen(&self, caller: &dyn EntityBase) {
-        // Freeze-immune entities don't accumulate freeze ticks
-        if self.is_freeze_immune() {
-            return;
+    /// Mirrors vanilla `LivingEntity#canFreeze`: spectators and entities wearing
+    /// freeze-immune wearables (e.g. leather armor) cannot freeze.
+    async fn can_freeze(&self, caller: &dyn EntityBase) -> bool {
+        if caller.is_spectator() || self.is_freeze_immune() {
+            return false;
         }
 
-        let in_powder_snow = self.is_in_powder_snow().await;
+        let Some(living) = caller.get_living_entity() else {
+            return true;
+        };
+
+        let armor = {
+            let equipment = living.entity_equipment.lock().await;
+            [
+                equipment.get(&EquipmentSlot::HEAD),
+                equipment.get(&EquipmentSlot::CHEST),
+                equipment.get(&EquipmentSlot::LEGS),
+                equipment.get(&EquipmentSlot::FEET),
+            ]
+        };
+
+        for stack in armor {
+            let stack = stack.lock().await;
+            if stack
+                .get_item()
+                .has_tag(&tag::Item::MINECRAFT_FREEZE_IMMUNE_WEARABLES)
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Ticks the frozen state of the entity.
+    /// In powder snow and freezeable: `frozen_ticks` increases by 1 (up to `MAX_FROZEN_TICKS`)
+    /// Otherwise: `frozen_ticks` decreases by 2 (down to 0)
+    /// When fully frozen, deals 1 damage every 40 ticks
+    pub async fn tick_frozen(&self, caller: &dyn EntityBase) {
+        let can_freeze = self.can_freeze(caller).await;
+        let in_powder_snow = self.is_in_powder_snow();
         let old_frozen_ticks = self.frozen_ticks.load(Ordering::Relaxed);
 
-        let new_frozen_ticks = if in_powder_snow {
+        let new_frozen_ticks = if in_powder_snow && can_freeze {
             // Increase frozen ticks when in powder snow
             (old_frozen_ticks + 1).min(Self::MAX_FROZEN_TICKS)
         } else {
-            // Decrease frozen ticks when not in powder snow (2x faster thaw rate)
+            // Vanilla: thaw whenever not in powder snow OR when freezing is prevented
             (old_frozen_ticks - 2).max(0)
         };
 
@@ -1725,8 +1764,9 @@ impl Entity {
             .await;
         }
 
-        // Deal freeze damage when fully frozen (every 40 ticks)
-        if new_frozen_ticks >= Self::MAX_FROZEN_TICKS
+        // Vanilla parity: full-freeze damage is tick-phase based.
+        if can_freeze
+            && new_frozen_ticks >= Self::MAX_FROZEN_TICKS
             && self.age.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
         {
             caller.damage(caller, 1.0, DamageType::FREEZE).await;
@@ -2492,6 +2532,8 @@ impl EntityBase for Entity {
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
+            // Recomputed during movement/block-collision handling in the same tick.
+            self.is_in_powder_snow.store(false, Ordering::Relaxed);
             self.update_last_pos();
             self.tick_portal(&caller).await;
             self.update_fluid_state(&caller).await;
@@ -2519,9 +2561,6 @@ impl EntityBase for Entity {
             // Check if visual fire should be sent
             let should_render_fire = self.fire_ticks.load(Ordering::Relaxed) > 0 && !is_immune;
             self.set_on_fire(should_render_fire).await;
-
-            // Tick freeze state (powder snow)
-            self.tick_frozen(&*caller).await;
 
             let riding_cooldown = self.riding_cooldown.load(Ordering::Relaxed);
             if riding_cooldown > 0 {
