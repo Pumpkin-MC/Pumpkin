@@ -1,10 +1,14 @@
-use pumpkin_data::packet::clientbound::PLAY_LOGIN;
-use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
+use pumpkin_data::{dimension::Dimension, packet::clientbound::PLAY_LOGIN};
+use pumpkin_util::{
+    math::position::BlockPos, resource_location::ResourceLocation, version::MinecraftVersion,
+};
 
 use pumpkin_macros::java_packet;
-use serde::{Deserialize, Serialize};
 
-use crate::VarInt;
+use crate::{
+    ClientPacket, VarInt,
+    ser::{NetworkWriteExt, WritingError},
+};
 
 /// The "Join Game" packet that transitions the client from the Configuration state
 /// to the Play state.
@@ -12,7 +16,6 @@ use crate::VarInt;
 /// This is one of the largest and most important packets in the protocol. It
 /// initializes the player's world view, dimension settings, and local game
 /// rules. Once received, the client begins rendering the world.
-#[derive(Serialize, Deserialize)]
 #[java_packet(PLAY_LOGIN)]
 pub struct CLogin {
     /// The unique ID assigned to the player for the current session.
@@ -30,10 +33,8 @@ pub struct CLogin {
     pub enabled_respawn_screen: bool,
     pub limited_crafting: bool,
     // Spawn info
-    /// The registry ID for the current dimension's properties (lighting, sky color).
-    pub dimension_type: VarInt,
-    /// The specific resource location of the current dimension.
-    pub dimension_name: ResourceLocation,
+    /// The Dimension for the current dimension's properties (lighting, sky color).
+    pub dimension: Dimension,
     /// Used by the client to seed local biome noise and decoration algorithms.
     pub hashed_seed: i64,
     pub game_mode: u8,
@@ -66,8 +67,7 @@ impl CLogin {
         reduced_debug_info: bool,
         enabled_respawn_screen: bool,
         limited_crafting: bool,
-        dimension_type: VarInt,
-        dimension_name: ResourceLocation,
+        dimension: Dimension,
         hashed_seed: i64,
         game_mode: u8,
         previous_gamemode: i8,
@@ -88,8 +88,7 @@ impl CLogin {
             reduced_debug_info,
             enabled_respawn_screen,
             limited_crafting,
-            dimension_type,
-            dimension_name,
+            dimension,
             hashed_seed,
             game_mode,
             previous_gamemode,
@@ -100,5 +99,45 @@ impl CLogin {
             sealevel,
             enforce_secure_chat,
         }
+    }
+}
+
+impl ClientPacket for CLogin {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
+        write.write_i32_be(self.entity_id)?;
+        write.write_bool(self.is_hardcore)?;
+        write.write_list(&self.dimension_names, |write, dim| write.write_string(dim))?;
+        write.write_var_int(&self.max_players)?;
+        write.write_var_int(&self.view_distance)?;
+        write.write_var_int(&self.simulated_distance)?;
+        write.write_bool(self.reduced_debug_info)?;
+        write.write_bool(self.enabled_respawn_screen)?;
+        write.write_bool(self.limited_crafting)?;
+        if version >= &MinecraftVersion::V_1_21_2 {
+            write.write_var_int(&VarInt(self.dimension.id as i32))?;
+        } else {
+            write.write_string("")?;
+        }
+        write.write_string(self.dimension.minecraft_name)?;
+        write.write_i64_be(self.hashed_seed)?;
+        write.write_u8(self.game_mode)?;
+        write.write_i8(self.previous_gamemode)?;
+        write.write_bool(self.debug)?;
+        write.write_bool(self.is_flat)?;
+        write.write_option(&self.death_dimension_name, |write, (dim, pos)| {
+            write.write_string(dim)?;
+            write.write_block_pos(pos)?;
+            Ok(())
+        })?;
+        write.write_var_int(&self.portal_cooldown)?;
+        if version >= &MinecraftVersion::V_1_21_2 {
+            write.write_var_int(&self.sealevel)?;
+        }
+        write.write_bool(self.enforce_secure_chat)?;
+        Ok(())
     }
 }

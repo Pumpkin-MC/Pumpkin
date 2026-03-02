@@ -3,12 +3,10 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::generation::feature::features::tree::{TreeFeature, TreeNode, trunk::TrunkPlacer};
 use crate::generation::proto_chunk::GenerationCache;
 
-#[derive(Deserialize)]
 pub struct DarkOakTrunkPlacer;
 
 impl DarkOakTrunkPlacer {

@@ -4,7 +4,6 @@ use pumpkin_data::{
         BlockBlueprint, ConditionMaterialRule, MaterialRule, SequenceMaterialRule,
     },
 };
-use serde::Deserialize;
 
 use super::MaterialRuleContext;
 use crate::{
@@ -35,7 +34,6 @@ pub fn try_apply_material_rule(
     }
 }
 
-#[derive(Deserialize)]
 pub struct BadLandsMaterialRule;
 
 impl BadLandsMaterialRule {
@@ -48,7 +46,6 @@ impl BadLandsMaterialRule {
     }
 }
 
-#[derive(Deserialize)]
 pub struct BlockMaterialRule;
 
 impl BlockMaterialRule {

@@ -7,7 +7,7 @@ rust-version.workspace = true
 [features]
 default = [
     "item",
-    "packet", 
+    "packet",
     "jukebox_song",
     "translation",
     "registry",
@@ -87,6 +87,7 @@ world_event = []
 message_type = []
 block = []
 item_id_remap = []
+entity_id_remap = []
 potion_brewing = []
 
 [dependencies]

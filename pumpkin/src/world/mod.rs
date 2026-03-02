@@ -1570,8 +1570,7 @@ impl World {
                 false,
                 true,
                 false,
-                (self.dimension.id).into(),
-                ResourceLocation::from(self.dimension.minecraft_name),
+                self.dimension,
                 biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
                 player
@@ -1758,7 +1757,7 @@ impl World {
                 {
                     let meta = Metadata::new(
                         TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
-                        MetaDataType::Byte,
+                        MetaDataType::BYTE,
                         config.skin_parts,
                     );
                     meta.write(&mut buf, &client.version.load()).unwrap();
@@ -2923,7 +2922,16 @@ impl World {
         flags: BlockFlags,
     ) -> Option<u16> {
         let (broken_block, broken_block_state) = self.get_block_and_state_id(position).await;
-        let event = BlockBreakEvent::new(cause.clone(), broken_block, *position, 0, false);
+        if is_air(broken_block_state) {
+            return None;
+        }
+        let event = BlockBreakEvent::new(
+            cause.clone(),
+            broken_block,
+            *position,
+            0,
+            !flags.contains(BlockFlags::SKIP_DROPS),
+        );
 
         let event = self
             .server
@@ -2934,6 +2942,12 @@ impl World {
             .await;
 
         if !event.cancelled {
+            let mut flags = flags;
+            if event.drop {
+                flags.remove(BlockFlags::SKIP_DROPS);
+            } else {
+                flags.insert(BlockFlags::SKIP_DROPS);
+            }
             let new_state_id = if broken_block
                 .properties(broken_block_state)
                 .and_then(|properties| {

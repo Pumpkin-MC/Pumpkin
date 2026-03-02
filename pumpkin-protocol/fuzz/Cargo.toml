@@ -1,0 +1,27 @@
+[package]
+name = "pumpkin-protocol-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+# IMPORTANT: disable lto when running
+# cargo +nightly fuzz run decoder_java
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+libfuzzer-sys = "0.4"
+
+[dependencies.pumpkin-protocol]
+path = ".."
+
+[[bin]]
+name = "decoder_java"
+path = "fuzz_targets/decoder_java.rs"
+test = false
+doc = false
+bench = false

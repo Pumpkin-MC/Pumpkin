@@ -3,15 +3,13 @@ use pumpkin_util::{
     math::int_provider::IntProvider,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use super::{FoliagePlacer, LeaveValidator};
 use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
 
-#[derive(Deserialize)]
 pub struct SpruceFoliagePlacer {
-    trunk_height: IntProvider,
+    pub trunk_height: IntProvider,
 }
 
 impl SpruceFoliagePlacer {

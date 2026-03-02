@@ -54,10 +54,15 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
         Ok(())
     }
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        const MAX_ENCHANTMENTS: usize = 256;
+
         let len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom("No EnchantmentsImpl len VarInt!"))?
             .0 as usize;
+        if len > MAX_ENCHANTMENTS {
+            return Err(de::Error::custom("Too many enchantments"));
+        }
         let mut enc = Vec::with_capacity(len);
         for _ in 0..len {
             let id = seq
@@ -134,6 +139,8 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
     }
 
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        const MAX_EFFECTS: usize = 128;
+
         // Potion ID (optional)
         let has_potion = seq
             .next_element::<bool>()?
@@ -166,7 +173,9 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom("No PotionContents effects_len VarInt!"))?
             .0 as usize;
-
+        if effects_len > MAX_EFFECTS {
+            return Err(de::Error::custom("Too many potion effects"));
+        }
         let mut custom_effects = Vec::with_capacity(effects_len);
         for _ in 0..effects_len {
             let effect_id = seq
@@ -423,7 +432,7 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::PotionContents => Ok(PotionContentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
-        _ => todo!("{} not yet implemented", id.to_name()),
+        _ => Err(serde::de::Error::custom("TODO")),
     }
 }
 pub fn serialize<T: SerializeStruct>(
