@@ -1,4 +1,5 @@
 pub mod changed_main_hand;
+pub mod egg_throw;
 pub mod exp_change;
 pub mod fish;
 pub mod item_held;

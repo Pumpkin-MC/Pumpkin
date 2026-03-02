@@ -365,6 +365,8 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 })
             }
         }
+        "minecraft:monster_room" => quote! { ConfiguredFeature::MonsterRoom(crate::generation::feature::features::monster_room::DungeonFeature {}) },
+        
         // All TODO/empty features
         "minecraft:geode" => quote! { ConfiguredFeature::Geode(crate::generation::feature::features::geode::GeodeFeature {}) },
         "minecraft:fossil" => quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) },
@@ -381,7 +383,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:root_system" => quote! { ConfiguredFeature::RootSystem(crate::generation::feature::features::root_system::RootSystemFeature {}) },
         "minecraft:multiface_growth" => quote! { ConfiguredFeature::MultifaceGrowth(crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {}) },
         "minecraft:underwater_magma" => quote! { ConfiguredFeature::UnderwaterMagma(crate::generation::feature::features::underwater_magma::UnderwaterMagmaFeature {}) },
-        "minecraft:monster_room" => quote! { ConfiguredFeature::MonsterRoom(crate::generation::feature::features::monster_room::DungeonFeature {}) },
         "minecraft:blue_ice" => quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) },
         "minecraft:iceberg" => quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature {}) },
         "minecraft:forest_rock" => quote! { ConfiguredFeature::ForestRock(crate::generation::feature::features::forest_rock::ForestRockFeature {}) },

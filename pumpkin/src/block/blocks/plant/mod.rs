@@ -21,6 +21,7 @@ pub mod sea_grass;
 pub mod sea_pickles;
 pub mod segmented;
 pub mod short_plant;
+pub mod spore_blossom;
 pub mod sugar_cane;
 pub mod tall_plant;
 pub mod wither_rose;
