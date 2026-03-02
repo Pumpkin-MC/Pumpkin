@@ -1,3 +1,4 @@
+use pumpkin_util::identifier::Identifier;
 use std::pin::Pin;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
@@ -5,7 +6,6 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::atomic::Ordering,
 };
-use pumpkin_util::identifier::Identifier;
 use tracing::{debug, error, info, trace, warn};
 
 pub mod chunker;

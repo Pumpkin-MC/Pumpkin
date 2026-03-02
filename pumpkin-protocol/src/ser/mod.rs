@@ -209,12 +209,11 @@ impl<R: Read> NetworkReadExt for R {
         }
         Ok(list)
     }
-    
+
     fn get_identifier(&mut self) -> Result<Identifier, ReadingError> {
         let string = self.get_string()?;
 
-        Identifier::parse(&string)
-            .map_err(|error| ReadingError::Message(error.to_string()))
+        Identifier::parse(&string).map_err(|error| ReadingError::Message(error.to_string()))
     }
 }
 

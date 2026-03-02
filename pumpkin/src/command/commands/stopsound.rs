@@ -37,7 +37,10 @@ impl CommandExecutor for Executor {
                         sound
                             .as_ref()
                             .map(Sound::to_name)
-                            .map(|sound_name| Identifier::parse(sound_name).expect("expected Sound to have a valid identifier"))
+                            .map(|sound_name| {
+                                Identifier::parse(sound_name)
+                                    .expect("expected Sound to have a valid identifier")
+                            })
                             .ok(),
                         category.as_ref().map(|s| **s).ok(),
                     )

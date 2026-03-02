@@ -131,10 +131,7 @@ impl CustomBossbar {
             .filter(|player| self.players.contains(&player.gameprofile.id));
         for player in matching_players {
             player
-                .update_bossbar_title(
-                    &self.bossbar_data.uuid,
-                    self.bossbar_data.title.clone(),
-                )
+                .update_bossbar_title(&self.bossbar_data.uuid, self.bossbar_data.title.clone())
                 .await;
         }
 
@@ -161,8 +158,8 @@ impl CustomBossbar {
                 player
                     .update_bossbar_style(
                         &self.bossbar_data.uuid,
-                        self.bossbar_data.color.clone(),
-                        self.bossbar_data.division.clone(),
+                        self.bossbar_data.color,
+                        self.bossbar_data.division,
                     )
                     .await;
             }
@@ -191,8 +188,8 @@ impl CustomBossbar {
                 player
                     .update_bossbar_style(
                         &self.bossbar_data.uuid,
-                        self.bossbar_data.color.clone(),
-                        self.bossbar_data.division.clone(),
+                        self.bossbar_data.color,
+                        self.bossbar_data.division,
                     )
                     .await;
             }
@@ -283,17 +280,13 @@ impl CustomBossbars {
     }
 
     pub fn create_bossbar(&mut self, identifier: Identifier, bossbar_data: Bossbar) {
-        self.custom_bossbars.insert(
-            identifier.clone(),
-            CustomBossbar::new(bossbar_data),
-        );
+        self.custom_bossbars
+            .insert(identifier.clone(), CustomBossbar::new(bossbar_data));
     }
 
     #[must_use]
     pub fn get_all_bossbars(&self) -> Vec<(&Identifier, &CustomBossbar)> {
-        self.custom_bossbars
-            .iter()
-            .collect()
+        self.custom_bossbars.iter().collect()
     }
 
     #[must_use]
@@ -303,19 +296,24 @@ impl CustomBossbars {
 
     #[must_use]
     pub fn get_bossbar(&self, identifier: &Identifier) -> Option<&CustomBossbar> {
-        self.custom_bossbars
-            .get(identifier)
+        self.custom_bossbars.get(identifier)
     }
 
     #[must_use]
-    pub fn get_bossbar_or_err(&self, identifier: &Identifier) -> Result<&CustomBossbar, BossbarUpdateError> {
+    pub fn get_bossbar_or_err(
+        &self,
+        identifier: &Identifier,
+    ) -> Result<&CustomBossbar, BossbarUpdateError> {
         self.custom_bossbars
             .get(identifier)
             .ok_or_else(|| BossbarUpdateError::UnknownBossbar(identifier.clone()))
     }
 
     #[must_use]
-    pub fn get_bossbar_mut_or_err(&mut self, identifier: &Identifier) -> Result<&mut CustomBossbar, BossbarUpdateError> {
+    pub fn get_bossbar_mut_or_err(
+        &mut self,
+        identifier: &Identifier,
+    ) -> Result<&mut CustomBossbar, BossbarUpdateError> {
         self.custom_bossbars
             .get_mut(identifier)
             .ok_or_else(|| BossbarUpdateError::UnknownBossbar(identifier.clone()))
@@ -324,7 +322,7 @@ impl CustomBossbars {
     pub async fn remove_bossbar(
         &mut self,
         server: &Server,
-        identifier: &Identifier
+        identifier: &Identifier,
     ) -> Result<CustomBossbar, BossbarUpdateError> {
         if let Some(bossbar) = self.custom_bossbars.remove(identifier) {
             let players: Vec<Arc<Player>> = server.get_all_players();

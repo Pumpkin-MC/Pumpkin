@@ -30,13 +30,7 @@ impl ArgumentConsumer for IdentifierArgumentConsumer {
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop();
 
-        Box::pin(
-            async move {
-                s_opt
-                    .map(Identifier::parse)
-                    .map(Arg::Identifier)
-            }
-        )
+        Box::pin(async move { s_opt.map(Identifier::parse).map(Arg::Identifier) })
     }
 
     // async fn suggest<'a>(

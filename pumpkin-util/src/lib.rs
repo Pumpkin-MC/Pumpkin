@@ -26,8 +26,8 @@ pub mod version;
 pub mod world_seed;
 pub mod y_offset;
 
-pub mod jwt;
 pub mod identifier;
+pub mod jwt;
 
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
