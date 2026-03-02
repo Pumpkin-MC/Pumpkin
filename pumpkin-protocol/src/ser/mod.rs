@@ -10,7 +10,7 @@ use crate::{
 
 pub mod deserializer;
 use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::{identifier::Identifier, math::position::BlockPos};
 use thiserror::Error;
 pub mod serializer;
 
@@ -73,6 +73,8 @@ pub trait NetworkReadExt {
         &mut self,
         parse: impl Fn(&mut Self) -> Result<G, ReadingError>,
     ) -> Result<Vec<G>, ReadingError>;
+
+    fn get_identifier(&mut self) -> Result<Identifier, ReadingError>;
 }
 
 macro_rules! get_number_be {
@@ -207,6 +209,13 @@ impl<R: Read> NetworkReadExt for R {
         }
         Ok(list)
     }
+    
+    fn get_identifier(&mut self) -> Result<Identifier, ReadingError> {
+        let string = self.get_string()?;
+
+        Identifier::parse(&string)
+            .map_err(|error| ReadingError::Message(error.to_string()))
+    }
 }
 
 pub trait NetworkWriteExt {
@@ -276,6 +285,10 @@ pub trait NetworkWriteExt {
     }
 
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError>;
+
+    fn write_identifier(&mut self, identifier: &Identifier) -> Result<(), WritingError> {
+        self.write_string(&identifier.to_string())
+    }
 }
 
 macro_rules! write_number_be {

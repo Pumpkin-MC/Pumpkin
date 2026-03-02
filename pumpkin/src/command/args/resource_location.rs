@@ -6,13 +6,14 @@ use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
+use pumpkin_util::identifier::{Identifier, IdentifierCreationResult};
 
 // TODO: Add proper autocomplete
-pub struct ResourceLocationArgumentConsumer;
+pub struct IdentifierArgumentConsumer;
 
-impl GetClientSideArgParser for ResourceLocationArgumentConsumer {
+impl GetClientSideArgParser for IdentifierArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType<'_> {
-        ArgumentType::ResourceLocation
+        ArgumentType::Identifier
     }
 
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
@@ -20,7 +21,7 @@ impl GetClientSideArgParser for ResourceLocationArgumentConsumer {
     }
 }
 
-impl ArgumentConsumer for ResourceLocationArgumentConsumer {
+impl ArgumentConsumer for IdentifierArgumentConsumer {
     fn consume<'a, 'b>(
         &'a self,
         _sender: &'a CommandSender,
@@ -29,7 +30,13 @@ impl ArgumentConsumer for ResourceLocationArgumentConsumer {
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop();
 
-        Box::pin(async move { s_opt.map(Arg::ResourceLocation) })
+        Box::pin(
+            async move {
+                s_opt
+                    .map(Identifier::parse)
+                    .map(Arg::Identifier)
+            }
+        )
     }
 
     // async fn suggest<'a>(
@@ -56,18 +63,18 @@ impl ArgumentConsumer for ResourceLocationArgumentConsumer {
     // }
 }
 
-impl DefaultNameArgConsumer for ResourceLocationArgumentConsumer {
+impl DefaultNameArgConsumer for IdentifierArgumentConsumer {
     fn default_name(&self) -> &'static str {
         "id"
     }
 }
 
-impl<'a> FindArg<'a> for ResourceLocationArgumentConsumer {
-    type Data = &'a str;
+impl<'a> FindArg<'a> for IdentifierArgumentConsumer {
+    type Data = &'a IdentifierCreationResult;
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::ResourceLocation(data)) => Ok(data),
+            Some(Arg::Identifier(data)) => Ok(data),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
     }

@@ -7,8 +7,10 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::translation::ARGUMENT_ID_INVALID;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::Difficulty;
+use pumpkin_util::identifier::{Identifier, IdentifierCreationResult};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{
     GameMode,
@@ -106,7 +108,7 @@ pub enum Arg<'a> {
     CommandTree(CommandTree),
     Item(&'a str),
     ItemPredicate(&'a str),
-    ResourceLocation(&'a str),
+    Identifier(IdentifierCreationResult),
     Block(&'a str),
     BlockPredicate(&'a str),
     BossbarColor(BossbarColor),
@@ -205,5 +207,22 @@ impl<'a, T: DoubleEndedIterator<Item = (usize, char)>> Iterator
                 }
             }
         }
+    }
+}
+
+/// A trait to allow easy conversion of result types
+/// parsed from an `Arg` into a Result whose Err is a `CommandError`.
+pub trait CommandErrorMappable<T> {
+    fn map_to_command_error(&self) -> Result<T, CommandError>;
+}
+
+impl CommandErrorMappable<Identifier> for IdentifierCreationResult {
+    fn map_to_command_error(&self) -> Result<Identifier, CommandError> {
+        self
+            .as_ref()
+            .map(Clone::clone)
+            .map_err(|_| CommandError::CommandFailed(
+                TextComponent::translate(ARGUMENT_ID_INVALID, &[])
+            ))
     }
 }
