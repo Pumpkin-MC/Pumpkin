@@ -1,11 +1,3 @@
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    str::FromStr,
-    sync::{LazyLock, Mutex},
-};
-use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
 /// TODO List
 /// - Add server locale support
 /// - Use translations in the logs
@@ -14,6 +6,14 @@ use quote::{quote, ToTokens};
 /// - Integrate custom translations with the plugins API
 /// - Try to optimize code of '`to_translated`'
 use crate::text::{TextComponentBase, TextContent, style::Style};
+use proc_macro2::TokenStream;
+use quote::{ToTokens, quote};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    str::FromStr,
+    sync::{LazyLock, Mutex},
+};
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../assets/en_us.json");
 static PUMPKIN_DE_DE_JSON: &str = include_str!("../../assets/translations/de_de.json");

@@ -85,6 +85,7 @@ mod ticking_state;
 mod ticking_step;
 mod transfer;
 mod unload_chunk;
+mod update_advancement;
 mod update_attributes;
 mod update_entity_pos;
 mod update_entity_pos_rot;
@@ -93,7 +94,6 @@ mod update_mob_effect;
 mod update_objectives;
 mod update_score;
 mod worldevent;
-mod update_advancement;
 
 pub use acknowledge_block::*;
 pub use actionbar::*;
