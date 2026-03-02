@@ -52,6 +52,7 @@ use crate::{
     generation::{biome, positions::chunk_pos},
     world::{BlockAccessor, BlockRegistryExt},
 };
+use pumpkin_nbt::compound::NbtCompound;
 
 pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk;
@@ -155,6 +156,9 @@ pub struct ProtoChunk {
     bottom_y: i8,
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
+    /// Block entities pending creation when the chunk is finalized.
+    /// These are created from structure templates during world generation.
+    pub pending_block_entities: Vec<NbtCompound>,
 }
 
 pub struct TerrainCache {
@@ -232,6 +236,7 @@ impl ProtoChunk {
                     .map(|_| LightContainer::new_filled(0))
                     .collect(),
             },
+            pending_block_entities: Vec::new(),
         }
     }
 
@@ -339,6 +344,18 @@ impl ProtoChunk {
     #[must_use]
     pub const fn bottom_y(&self) -> i8 {
         self.bottom_y
+    }
+
+    /// Adds a pending block entity to be created when the chunk is finalized.
+    ///
+    /// The NBT compound should include the block entity's position (x, y, z) and id fields.
+    pub fn add_pending_block_entity(&mut self, nbt: NbtCompound) {
+        self.pending_block_entities.push(nbt);
+    }
+
+    /// Takes all pending block entities, leaving an empty Vec.
+    pub fn take_pending_block_entities(&mut self) -> Vec<NbtCompound> {
+        std::mem::take(&mut self.pending_block_entities)
     }
 
     fn maybe_update_surface_height_map(&mut self, index: usize, y: i16) {
