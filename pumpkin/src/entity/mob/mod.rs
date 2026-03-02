@@ -366,7 +366,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             let last_head_yaw = mob_entity.last_sent_head_yaw.load(Relaxed);
 
             if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
-                let world = entity.world.load();
+                let world = entity.world();
                 world
                     .broadcast_packet_all(&CUpdateEntityRot::new(
                         entity.entity_id.into(),
@@ -380,7 +380,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             }
 
             if head_yaw.abs_diff(last_head_yaw) >= 1 {
-                let world = entity.world.load();
+                let world = entity.world();
                 world
                     .broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), head_yaw))
                     .await;
@@ -525,7 +525,7 @@ pub trait SunSensitive: Mob + Send + Sync {
                 return;
             }
 
-            let world_arc = entity.world.load();
+            let world_arc = entity.world();
             let world = world_arc.as_ref();
 
             if world.level_time.lock().await.is_night() {

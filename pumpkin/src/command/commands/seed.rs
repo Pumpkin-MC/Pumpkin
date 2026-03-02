@@ -23,7 +23,7 @@ impl CommandExecutor for Executor {
         Box::pin(async move {
             let seed = match sender {
                 CommandSender::Player(player) => {
-                    player.living_entity.entity.world.load().level.seed.0
+                    player.living_entity.entity.world().level.seed.0
                 }
                 // TODO: Maybe ask player for world, or get the current world
                 _ => match server.worlds.load().first() {

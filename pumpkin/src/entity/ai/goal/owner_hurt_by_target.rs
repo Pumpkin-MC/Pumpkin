@@ -33,7 +33,7 @@ impl Goal for OwnerHurtByTargetGoal {
             };
 
             let entity = &mob.get_mob_entity().living_entity.entity;
-            let world = entity.world.load_full();
+            let world = entity.world();
             let Some(owner) = world.get_player_by_uuid(owner_uuid) else {
                 return false;
             };
@@ -86,7 +86,7 @@ impl Goal for OwnerHurtByTargetGoal {
             *mob_entity.target.lock().await = self.target.clone();
 
             if let Some(owner_uuid) = mob.get_owner_uuid() {
-                let world = mob_entity.living_entity.entity.world.load_full();
+                let world = mob_entity.living_entity.entity.world();
                 if let Some(owner) = world.get_player_by_uuid(owner_uuid) {
                     self.last_attacked_time = owner.living_entity.last_attacked_time.load(Relaxed);
                 }

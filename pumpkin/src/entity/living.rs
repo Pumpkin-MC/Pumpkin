@@ -508,7 +508,7 @@ impl LivingEntity {
             flag,
         );
 
-        self.entity.world.load().broadcast_packet_all(&packet).await;
+        self.entity.world().broadcast_packet_all(&packet).await;
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -594,7 +594,7 @@ impl LivingEntity {
 
     pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
         let block_pos = self.entity.block_pos.load();
-        let block = self.entity.world.load().get_block(&block_pos).await;
+        let block = self.entity.world().get_block(&block_pos).await;
         (
             block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING),
             block,
@@ -604,13 +604,13 @@ impl LivingEntity {
     // Check if the entity is in water
     pub async fn is_in_water(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
-        self.entity.world.load().get_block(&block_pos).await == &Block::WATER
+        self.entity.world().get_block(&block_pos).await == &Block::WATER
     }
 
     // Check if the entity is in powder snow
     pub async fn is_in_powder_snow(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
-        self.entity.world.load().get_block(&block_pos).await == &Block::POWDER_SNOW
+        self.entity.world().get_block(&block_pos).await == &Block::POWDER_SNOW
     }
 
     pub async fn should_prevent_fall_damage(&self) -> bool {
@@ -630,7 +630,7 @@ impl LivingEntity {
             }
 
             if block == &Block::NETHER_PORTAL {
-                let world = self.entity.world.load();
+                let world = self.entity.world();
                 let level_info = world.level_info.load();
 
                 return level_info.game_rules.players_nether_portal_default_delay == 0;
@@ -641,7 +641,7 @@ impl LivingEntity {
     }
 
     pub async fn should_prevent_fall_damage_in_area(&self) -> bool {
-        let world = self.entity.world.load();
+        let world = self.entity.world();
         let block_pos = self.entity.block_pos.load().down();
         let entity_pos = self.entity.pos.load();
 
@@ -1146,7 +1146,7 @@ impl LivingEntity {
             {
                 return;
             }
-            let world = self.entity.world.load();
+            let world = self.entity.world();
             let block = world
                 .get_block(&self.entity.get_pos_with_y_offset(0.2).await.0)
                 .await;
@@ -1255,7 +1255,7 @@ impl LivingEntity {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) {
-        let world = self.entity.world.load();
+        let world = self.entity.world();
         let dyn_self = world
             .get_entity_by_id(self.entity.entity_id)
             .expect("Entity not found in world");
@@ -1316,7 +1316,7 @@ impl LivingEntity {
         if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
             let pos = self.entity.block_pos.load();
             for stack in loot_table.get_loot(params) {
-                self.entity.world.load().drop_stack(&pos, stack).await;
+                self.entity.world().drop_stack(&pos, stack).await;
             }
         }
     }
@@ -1428,7 +1428,7 @@ impl LivingEntity {
                     .await;
             }
         } else if effect_type == &StatusEffect::HUNGER {
-            let world = self.entity.world.load();
+            let world = self.entity.world();
             if let Some(entity) = world.get_entity_by_id(self.entity.entity_id)
                 && let Some(player) = entity.get_player()
             {
@@ -1438,7 +1438,7 @@ impl LivingEntity {
             }
             drop(world);
         } else if effect_type == &StatusEffect::SATURATION {
-            let world = self.entity.world.load();
+            let world = self.entity.world();
             if let Some(entity) = world.get_entity_by_id(self.entity.entity_id)
                 && let Some(player) = entity.get_player()
             {
@@ -1623,7 +1623,7 @@ impl LivingEntity {
         self.jumping.store(false, Relaxed);
 
         // If this LivingEntity corresponds to a Player, reset their hunger manager
-        let world = self.entity.world.load();
+        let world = self.entity.world();
         if let Some(player) = world.get_player_by_id(self.entity.entity_id) {
             player.hunger_manager.restart();
         }
@@ -1645,7 +1645,7 @@ impl LivingEntity {
             return;
         }
 
-        let world = self.entity.world.load();
+        let world = self.entity.world();
 
         // 10% chance
         if rand::rng().random::<f32>() <= 0.1 {
@@ -1692,7 +1692,7 @@ impl LivingEntity {
     }
 
     pub fn is_player(&self) -> bool {
-        let world = self.entity.world.load();
+        let world = self.entity.world();
         world.get_player_by_id(self.entity.entity_id).is_some()
     }
 
@@ -1800,7 +1800,7 @@ impl EntityBase for LivingEntity {
                 return false;
             }
 
-            let world = self.entity.world.load();
+            let world = self.entity.world();
             let is_fire_damage = damage_type == DamageType::IN_FIRE
                 || damage_type == DamageType::ON_FIRE
                 || damage_type == DamageType::LAVA
@@ -2001,7 +2001,7 @@ impl EntityBase for LivingEntity {
 
             // Notify the block under the entity each tick if a supporting block position is found
             if let Some(supporting) = supporting_pos {
-                let world = self.entity.world.load();
+                let world = self.entity.world();
                 let (block, state) = world.get_block_and_state(&supporting).await;
 
                 world

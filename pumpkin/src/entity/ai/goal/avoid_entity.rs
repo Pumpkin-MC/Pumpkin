@@ -42,7 +42,7 @@ impl AvoidEntityGoal {
     fn find_threat(&self, mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let pos = entity.pos.load();
-        let world = entity.world.load();
+        let world = entity.world();
 
         if self.flee_type == &EntityType::PLAYER {
             world
@@ -58,7 +58,7 @@ impl AvoidEntityGoal {
     async fn find_flee_position(mob: &dyn Mob, threat_pos: &Vector3<f64>) -> Option<Vector3<f64>> {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let mob_pos = entity.pos.load();
-        let world = entity.world.load();
+        let world = entity.world();
 
         let candidates = {
             let mut rng = mob.get_random();

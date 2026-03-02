@@ -46,7 +46,7 @@ impl Goal for RevengeGoal {
                 return false;
             }
 
-            let world = living.entity.world.load();
+            let world = living.entity.world();
             let Some(attacker) = world.get_entity_by_id(attacker_id) else {
                 return false;
             };

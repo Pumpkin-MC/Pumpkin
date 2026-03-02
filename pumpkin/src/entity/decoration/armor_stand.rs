@@ -203,7 +203,7 @@ impl ArmorStandEntity {
     }
 
     async fn on_break(&self, entity: &Entity) {
-        let world = entity.world.load();
+        let world = entity.world();
         world
             .play_sound(
                 Sound::EntityArmorStandBreak,
@@ -218,7 +218,7 @@ impl ArmorStandEntity {
     /// Spawns break particles at the armor stand's position.
     // TODO: use oak plank block particles like vanilla (requires block state data in particle system)
     async fn spawn_break_particles(&self, entity: &Entity) {
-        let world = entity.world.load();
+        let world = entity.world();
         let pos = entity.pos.load();
         let width = entity.width();
         let height = entity.height();
@@ -339,7 +339,7 @@ impl EntityBase for ArmorStandEntity {
                 return false;
             }
 
-            let world = entity.world.load();
+            let world = entity.world();
 
             let mob_griefing_gamerule = {
                 let game_rules = &world.level_info.load().game_rules;

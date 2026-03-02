@@ -559,6 +559,11 @@ impl Entity {
         self.world.store(world);
     }
 
+    /// Returns the world this entity belongs to.
+    pub fn world(&self) -> Arc<World> {
+        self.world.load_full()
+    }
+
     /// Sets the entity's age in ticks.
     /// Negative values indicate that the entity is a baby.
     pub fn set_age(&self, age: i32) {
@@ -950,7 +955,7 @@ impl Entity {
         eye_level_box.max.y = eye_level_box.min.y;
 
         let mut suffocating = false;
-        let world = self.world.load();
+        let world = self.world();
 
         for pos in BlockPos::iterate(min, max) {
             let (block, state) = world.get_block_and_state(&pos).await;
@@ -1085,7 +1090,7 @@ impl Entity {
 
         let max = bounding_box.max_block_pos();
 
-        let world = self.world.load();
+        let world = self.world();
 
         for x in min.0.x..=max.0.x {
             for y in min.0.y..=max.0.y {
@@ -1262,7 +1267,7 @@ impl Entity {
         if let (Some(b), Some(s)) = (block, state) {
             (pos, b, s)
         } else {
-            let (b, s) = self.world.load().get_block_and_state(&pos).await;
+            let (b, s) = self.world().get_block_and_state(&pos).await;
 
             (pos, b, s)
         }
@@ -1306,7 +1311,7 @@ impl Entity {
 
     #[expect(clippy::float_cmp)]
     async fn get_velocity_multiplier(&self) -> f32 {
-        let block = self.world.load().get_block(&self.block_pos.load()).await;
+        let block = self.world().get_block(&self.block_pos.load()).await;
 
         let multiplier = block.velocity_multiplier;
 
@@ -1387,7 +1392,7 @@ impl Entity {
         }
 
         if motion.y != final_move.y {
-            let world = self.world.load();
+            let world = self.world();
             let block = self.get_block_with_y_offset(0.2).await.1;
             world
                 .block_registry
@@ -1467,7 +1472,7 @@ impl Entity {
                 let current_yaw = self.yaw.load();
                 let dimensions = self.entity_dimension.load();
                 let scale_factor_new = portal_manager.portal_world.dimension.coordinate_scale;
-                let scale_factor_current = self.world.load().dimension.coordinate_scale;
+                let scale_factor_current = self.world().dimension.coordinate_scale;
 
                 let scale_factor = scale_factor_current / scale_factor_new;
                 let target_pos =
@@ -1614,7 +1619,7 @@ impl Entity {
         }
 
         let mut manager = self.portal_manager.lock().await;
-        let world = self.world.load();
+        let world = self.world();
         if manager.is_none() {
             let mut new_manager = PortalManager::new(portal_delay, portal_world, pos);
 
@@ -1684,7 +1689,7 @@ impl Entity {
     /// Check if the entity is currently in powder snow
     pub async fn is_in_powder_snow(&self) -> bool {
         let block_pos = self.block_pos.load();
-        self.world.load().get_block(&block_pos).await == &Block::POWDER_SNOW
+        self.world().get_block(&block_pos).await == &Block::POWDER_SNOW
     }
 
     /// Check if this entity type is immune to freezing
@@ -1746,7 +1751,7 @@ impl Entity {
 
     /// Removes the `Entity` from their current `World`
     pub async fn remove(&self) {
-        self.world.load().remove_entity(self).await;
+        self.world().remove_entity(self).await;
     }
 
     pub fn create_spawn_packet(&self) -> CSpawnEntity {
@@ -1999,7 +2004,7 @@ impl Entity {
             meta.write(&mut buf, &MinecraftVersion::V_1_21_11).unwrap();
         }
         buf.put_u8(255);
-        let world = self.world.load();
+        let world = self.world();
         for player in world.players.load().iter() {
             if let ClientPlatform::Java(client) = &player.client {
                 let mut buf = Vec::new();
@@ -2057,7 +2062,7 @@ impl Entity {
             (aabb.max.y - 0.001).floor() as i32,
             (aabb.max.z - 0.001).floor() as i32,
         );
-        let world = entity.get_entity().world.load();
+        let world = entity.get_entity().world();
 
         for x in blockpos.0.x..=blockpos1.0.x {
             for y in blockpos.0.y..=blockpos1.0.y {
@@ -2172,7 +2177,7 @@ impl Entity {
             .map(|p| VarInt(p.get_entity().entity_id))
             .collect();
 
-        let world = self.world.load();
+        let world = self.world();
         world
             .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
             .await;
@@ -2230,7 +2235,7 @@ impl Entity {
             // Now send CSetPassengers — client movement is already blocked.
             // Vanilla sends this directly to the dismounting player's connection,
             // then broadcasts to other players separately.
-            let world = self.world.load();
+            let world = self.world();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
             if let Some(player) = passenger.get_player() {
                 player.client.enqueue_packet(&passengers_packet).await;
@@ -2354,7 +2359,7 @@ impl Entity {
             }
         } else {
             // No passenger was removed, still need to broadcast the passenger list
-            let world = self.world.load();
+            let world = self.world();
             world
                 .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
                 .await;
@@ -2362,7 +2367,7 @@ impl Entity {
     }
 
     pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
-        if self.pos.load().y < f64::from(self.world.load().dimension.min_y) - 64.0 {
+        if self.pos.load().y < f64::from(self.world().dimension.min_y) - 64.0 {
             dyn_self.tick_in_void(dyn_self).await;
         }
     }

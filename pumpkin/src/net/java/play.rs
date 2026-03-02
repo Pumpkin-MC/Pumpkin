@@ -467,7 +467,7 @@ impl JavaClient {
                 let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
                 let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
                 // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
-                let world = entity.world.load_full();
+                let world = entity.world();
 
                 // TODO: Warn when player moves to quickly
                 if !self
@@ -570,7 +570,7 @@ impl JavaClient {
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
-        let world = entity.world.load_full();
+        let world = entity.world();
         let packet =
             CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
         world
@@ -963,7 +963,7 @@ impl JavaClient {
                 );
 
                 let entity = &player.living_entity.entity;
-                let world = entity.world.load_full();
+                let world = entity.world();
                 if server.basic_config.allow_chat_reports {
                     world.broadcast_secure_player_chat(player, &chat_message, &decorated_message).await;
                 } else {
@@ -1270,7 +1270,7 @@ impl JavaClient {
         };
 
         // Resolve the target entity for the event
-        let world = player_entity.world.load_full();
+        let world = player_entity.world();
         let player_target = world.get_player_by_id(entity_id.0);
         let target: Option<Arc<dyn EntityBase>> = player_target
             .as_ref()
@@ -1385,7 +1385,7 @@ impl JavaClient {
                     }
                     let position = player_action.position;
                     let entity = &player.living_entity.entity;
-                    let world = entity.world.load_full();
+                    let world = entity.world();
                     let (block, state) = world.get_block_and_state(&position).await;
 
                     let inventory = player.inventory();
@@ -1492,7 +1492,7 @@ impl JavaClient {
 
                     // Block break & play sound
                     let entity = &player.living_entity.entity;
-                    let world = entity.world.load_full();
+                    let world = entity.world();
 
                     player.mining.store(false, Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
@@ -1646,7 +1646,7 @@ impl JavaClient {
         };
 
         let entity = &player.living_entity.entity;
-        let world = entity.world.load_full();
+        let world = entity.world();
         let block = world.get_block(&position).await;
 
         let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
@@ -1775,7 +1775,7 @@ impl JavaClient {
     }
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
-        let world = player.living_entity.entity.world.load_full();
+        let world = player.living_entity.entity.world();
         let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
             return;
         };
@@ -2176,7 +2176,7 @@ impl JavaClient {
         }
 
         let clicked_block_pos = BlockPos(location.0);
-        let world = entity.world.load_full();
+        let world = entity.world();
 
         // Check if the block is under the world
         if location.0.y + face.to_offset().y < world.get_bottom_y() {

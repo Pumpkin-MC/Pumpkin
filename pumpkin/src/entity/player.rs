@@ -1614,7 +1614,7 @@ impl Player {
     }
 
     pub fn world(&self) -> Arc<World> {
-        self.living_entity.entity.world.load_full()
+        self.living_entity.entity.world()
     }
 
     pub fn position(&self) -> Vector3<f64> {
@@ -1829,7 +1829,7 @@ impl Player {
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
-        let current_world = self.living_entity.entity.world.load_full();
+        let current_world = self.living_entity.entity.world();
         let yaw = yaw.unwrap_or(new_world.level_info.load().spawn_yaw);
         let pitch = pitch.unwrap_or(new_world.level_info.load().spawn_pitch);
 

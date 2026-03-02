@@ -43,7 +43,7 @@ impl TemptGoal {
     async fn find_tempting_player(&self, mob: &dyn Mob) -> Option<Arc<Player>> {
         let mob_entity = mob.get_mob_entity();
         let pos = mob_entity.living_entity.entity.pos.load();
-        let world = mob_entity.living_entity.entity.world.load();
+        let world = mob_entity.living_entity.entity.world();
 
         for player in world.get_nearby_players(pos, TEMPT_RANGE) {
             if self.is_holding_tempt_item(&player).await {

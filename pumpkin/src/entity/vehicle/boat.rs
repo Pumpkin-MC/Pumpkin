@@ -84,7 +84,7 @@ impl BoatEntity {
     }
 
     async fn kill_and_drop_self(&self) {
-        let world = self.entity.world.load();
+        let world = self.entity.world();
         let entity_drops = world.level_info.load().game_rules.entity_drops;
 
         if entity_drops && let Some(loot_table) = &self.entity.entity_type.loot_table {
@@ -213,7 +213,7 @@ impl EntityBase for BoatEntity {
                 return false;
             }
 
-            let world = self.entity.world.load();
+            let world = self.entity.world();
             let Some(vehicle) = world.get_entity_by_id(self.entity.entity_id) else {
                 return false;
             };
