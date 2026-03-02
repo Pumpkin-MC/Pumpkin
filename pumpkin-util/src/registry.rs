@@ -1,14 +1,22 @@
-use serde::de::{self, Error, SeqAccess, Visitor};
+use serde::de::{Error, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use std::fmt::Formatter;
 
+/// Represents either a single item or a tag reference.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum TagType {
+    /// A single item identified by its name.
     Item(String),
+    /// A tag reference, usually prefixed with `#`.
     Tag(String),
 }
 
 impl TagType {
+    /// Serializes the tag type into a string representation.
+    ///
+    /// # Returns
+    /// - For `Item`, returns the item name.
+    /// - For `Tag`, returns the tag prefixed with `#`.
     #[must_use]
     pub fn serialize(&self) -> String {
         match self {
@@ -18,12 +26,16 @@ impl TagType {
     }
 }
 
+/// Visitor for deserializing a `TagType` from a string.
 pub struct TagVisitor;
+
 impl Visitor<'_> for TagVisitor {
     type Value = TagType;
+
     fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
         write!(formatter, "valid tag")
     }
+
     fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
         v.strip_prefix('#').map_or_else(
             || Ok(TagType::Item(v.to_string())),
@@ -38,13 +50,20 @@ impl<'de> Deserialize<'de> for TagType {
     }
 }
 
+/// Represents either a single tag type or a list of multiple tag types.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum RegistryEntryList {
+    /// A single tag type.
     Single(TagType),
+    /// Multiple tag types.
     Many(Vec<TagType>),
 }
 
 impl RegistryEntryList {
+    /// Converts the registry entry list into a flat vector of `TagType`.
+    ///
+    /// # Returns
+    /// A vector containing all contained `TagType` values.
     #[must_use]
     pub fn into_vec(self) -> Vec<TagType> {
         match self {
@@ -67,13 +86,13 @@ impl<'de> Deserialize<'de> for RegistryEntryList {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct SlotTypeVisitor;
         impl<'de> Visitor<'de> for SlotTypeVisitor {
+            type Value = RegistryEntryList;
+
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
                 write!(formatter, "valid ingredient slot")
             }
 
-            type Value = RegistryEntryList;
-
-            fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+            fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(RegistryEntryList::Single(TagVisitor.visit_str(v)?))
             }
 

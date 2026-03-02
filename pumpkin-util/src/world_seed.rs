@@ -4,6 +4,14 @@ use crate::{
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+/// Represents a world generation seed.
+///
+/// The seed is stored as a `u64` but follows Java-style behaviour:
+/// - Numeric strings are parsed as `i64` and then cast.
+/// - Non-numeric strings are hashed using the Java string hash algorithm.
+/// - Empty or whitespace-only input generates a random seed.
+///
+/// This allows compatibility with typical Minecraft-style seed inputs.
 #[derive(Clone, Copy)]
 pub struct Seed(pub u64);
 

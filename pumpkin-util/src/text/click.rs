@@ -10,7 +10,7 @@ pub enum ClickEvent {
     OpenUrl { url: Cow<'static, str> },
     /// Opens a file.
     OpenFile { path: Cow<'static, str> },
-    /// Works in signs, but only on the root text component.
+    /// Works in signs but only on the root text component.
     RunCommand { command: Cow<'static, str> },
     /// Replaces the contents of the chat box with the text, not necessarily a
     /// command.
@@ -18,6 +18,6 @@ pub enum ClickEvent {
     /// Only usable within written books. Changes the page of the book. Indexing
     /// starts at 1.
     ChangePage { page: u32 },
-    /// Copies the given text to system clipboard.
+    /// Copies the given text to the system clipboard.
     CopyToClipboard { value: Cow<'static, str> },
 }

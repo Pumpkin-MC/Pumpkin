@@ -6,6 +6,7 @@ use super::int_provider::IntProvider;
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Experience {
+    /// The experience points, represented as an `IntProvider`.
     pub experience: IntProvider,
 }
 
@@ -19,7 +20,10 @@ impl ToTokens for Experience {
     }
 }
 
-/// Get the number of points in a level.
+/// Returns the number of points required to progress within a specific level.
+///
+/// # Arguments
+/// * `level` – The level to calculate points for.
 #[must_use]
 pub const fn points_in_level(level: i32) -> i32 {
     match level {
@@ -29,7 +33,10 @@ pub const fn points_in_level(level: i32) -> i32 {
     }
 }
 
-/// Calculate the total number of points to reach a level.
+/// Calculates the total points required to reach a given level.
+///
+/// # Arguments
+/// * `level` – The target level.
 #[must_use]
 pub fn points_to_level(level: i32) -> i32 {
     match level {
@@ -43,7 +50,14 @@ pub fn points_to_level(level: i32) -> i32 {
     }
 }
 
-/// Calculate level and points from total points.
+/// Converts total experience points into a level and points within that level.
+///
+/// # Arguments
+/// * `total_points` – The total accumulated experience points.
+///
+/// # Returns
+/// A tuple `(level, points_into_level)` representing the current level and
+/// remaining points within that level.
 #[must_use]
 pub fn total_to_level_and_points(total_points: i32) -> (i32, i32) {
     let level = match total_points {
@@ -54,18 +68,21 @@ pub fn total_to_level_and_points(total_points: i32) -> (i32, i32) {
                 as i32
         }
     };
-
     let level_start = points_to_level(level);
     let points_into_level = total_points - level_start;
 
     (level, points_into_level)
 }
 
-/// Calculate progress (0.0 to 1.0) from points within a level.
+/// Calculates the progress within a level as a value between 0.0 and 1.0.
+///
+/// # Arguments
+/// * `points` – The points accumulated in the current level.
+/// * `level` – The current level.
 #[must_use]
 pub fn progress_in_level(points: i32, level: i32) -> f32 {
     let max_points = points_in_level(level);
-
     let progress = (points as f32) / (max_points as f32);
+
     progress.clamp(0.0, 1.0)
 }

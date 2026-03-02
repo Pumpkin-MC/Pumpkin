@@ -34,28 +34,51 @@ static PUMPKIN_UK_UA_JSON: &str = include_str!("../../assets/translations/uk_ua.
 static PUMPKIN_VI_VN_JSON: &str = include_str!("../../assets/translations/vi_vn.json");
 static PUMPKIN_PT_BR_JSON: &str = include_str!("../../assets/translations/pt_br.json");
 
+/// A character range representing a substitution placeholder within a translation string.
+///
+/// The range is inclusive and corresponds to the full placeholder span
+/// (for example `%s` or `%1$s`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct SubstitutionRange {
+    /// Start byte index (inclusive).
     pub start: usize,
+    /// End byte index (inclusive).
     pub end: usize,
 }
 impl SubstitutionRange {
+    /// Returns the length of the range.
     #[must_use]
     pub const fn len(&self) -> usize {
         (self.end - self.start) + 1
     }
+    /// Returns `true` if the range contains no characters.
+    ///
+    /// A range is considered empty when `start == end`.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.start == self.end
     }
 }
 
+/// Adds or overrides a single translation entry.
+///
+/// # Arguments
+/// * `namespace`: The namespace of the translation key.
+/// * `key`: The translation key without namespace.
+/// * `translation`: The localized translation string.
+/// * `locale`: The locale the translation belongs to.
 pub fn add_translation<P: Into<String>>(namespace: P, key: P, translation: P, locale: Locale) {
     let mut translations = TRANSLATIONS.lock().unwrap();
     let namespaced_key = format!("{}:{}", namespace.into(), key.into()).to_lowercase();
     translations[locale as usize].insert(namespaced_key, translation.into());
 }
 
+/// Loads translations from a JSON string and registers them under a namespace.
+///
+/// # Arguments
+/// * `namespace`: The namespace applied to all loaded keys.
+/// * `file_path`: A JSON string containing a flat key-value translation map.
+/// * `locale`: The locale the translations belong to.
 pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale: Locale) {
     let translations_map: HashMap<String, String> =
         serde_json::from_str(&file_path.into()).unwrap_or(HashMap::new());
@@ -72,6 +95,14 @@ pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale:
     }
 }
 
+/// Retrieves a translation for the given key and locale.
+///
+/// # Arguments
+/// * `key`: The fully qualified `namespace:key`.
+/// * `locale`: The requested locale.
+///
+/// # Returns
+/// The localized translation. Falls back to `en_us` or the key itself if not found.
 pub fn get_translation(key: &str, locale: Locale) -> String {
     let translations = TRANSLATIONS.lock().unwrap();
     let key = key.to_lowercase();
@@ -85,6 +116,14 @@ pub fn get_translation(key: &str, locale: Locale) -> String {
     )
 }
 
+/// Reorders substitution placeholders within a translation string.
+///
+/// # Arguments
+/// * `translation`: The raw translation string containing placeholders.
+/// * `with`: Substitution components to insert into the placeholders.
+///
+/// # Returns
+/// A tuple containing the reordered components and their substitution ranges.
 #[must_use]
 pub fn reorder_substitutions(
     translation: &str,
@@ -149,6 +188,16 @@ pub fn reorder_substitutions(
     }
     (substitutions, ranges)
 }
+
+/// Resolves a translation into formatted console output.
+///
+/// # Arguments
+/// * `namespaced_key`: The fully qualified `namespace:key`.
+/// * `locale`: The requested locale.
+/// * `with`: Substitution components used to replace placeholders.
+///
+/// # Returns
+/// The resolved and formatted translation string.
 pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
     namespaced_key: P,
     locale: Locale,
@@ -176,6 +225,15 @@ pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
     result
 }
 
+/// Resolves a translation into plain text.
+///
+/// # Arguments
+/// * `namespaced_key`: The fully qualified `namespace:key`.
+/// * `locale`: The requested locale.
+/// * `with`: Substitution components used to replace placeholders.
+///
+/// # Returns
+/// The resolved translation as plain text.
 pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     namespaced_key: P,
     locale: Locale,
@@ -306,6 +364,7 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
         Mutex::new(array)
     });
 
+/// Supported locales for translations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Locale {
     AfZa,
