@@ -1,10 +1,11 @@
-use crate::{events::EVENT_HANDLERS, logging::WitSubscriber};
+use crate::{
+    events::EVENT_HANDLERS, logging::WitSubscriber, wit::pumpkin::plugin::command::ConsumedArgs,
+};
 
 pub mod events;
 
 pub use wit::pumpkin::plugin::{
-    command::CommandError,
-    command::{CommandSender, ConsumedArgs},
+    command::{Command, CommandError, CommandNode, CommandSender},
     context::{Context, Server},
     text,
 };
