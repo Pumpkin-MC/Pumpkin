@@ -1,7 +1,9 @@
 use crate::{
-    events::EVENT_HANDLERS, logging::WitSubscriber, wit::pumpkin::plugin::command::ConsumedArgs,
+    commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber,
+    wit::pumpkin::plugin::command::ConsumedArgs,
 };
 
+pub mod commands;
 pub mod events;
 
 pub use wit::pumpkin::plugin::{
@@ -72,7 +74,13 @@ impl wit::Guest for Component {
         server: Server,
         args: ConsumedArgs,
     ) -> Result<i32, CommandError> {
-        todo!()
+        let handlers = COMMAND_HANDLERS.lock().unwrap();
+        if let Some(handler) = handlers.get(&command_id) {
+            //handler.handle_erased(server, event);
+            todo!()
+        } else {
+            todo!()
+        }
     }
 }
 
