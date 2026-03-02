@@ -380,7 +380,20 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:waterlogged_vegetation_patch" => quote! { ConfiguredFeature::WaterloggedVegetationPatch(crate::generation::feature::features::waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature {}) },
         "minecraft:root_system" => quote! { ConfiguredFeature::RootSystem(crate::generation::feature::features::root_system::RootSystemFeature {}) },
         "minecraft:multiface_growth" => quote! { ConfiguredFeature::MultifaceGrowth(crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {}) },
-        "minecraft:underwater_magma" => quote! { ConfiguredFeature::UnderwaterMagma(crate::generation::feature::features::underwater_magma::UnderwaterMagmaFeature {}) },
+        "minecraft:underwater_magma" => {
+            let floor_range = config["floor_search_range"].as_i64().unwrap_or(0) as i32;
+            let placement_radius = config["placement_radius_around_floor"].as_i64().unwrap_or(0) as i32;
+            let placement_prob = config["placement_probability_per_valid_position"].as_f64().unwrap_or(0.0) as f32;
+            quote! {
+                ConfiguredFeature::UnderwaterMagma(
+                    crate::generation::feature::features::underwater_magma::UnderwaterMagmaFeature {
+                        floor_search_range: #floor_range,
+                        placement_radius: #placement_radius,
+                        placement_probability: #placement_prob,
+                    }
+                )
+            }
+        },
         "minecraft:monster_room" => quote! { ConfiguredFeature::MonsterRoom(crate::generation::feature::features::monster_room::DungeonFeature {}) },
         "minecraft:blue_ice" => quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) },
         "minecraft:iceberg" => quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature {}) },
