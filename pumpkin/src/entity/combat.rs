@@ -1,13 +1,16 @@
 use std::sync::atomic::Ordering;
 
 use pumpkin_data::{
+    damage::DamageType,
     particle::Particle,
     sound::{Sound, SoundCategory},
+    tag::{self, Taggable},
+    Enchantment,
 };
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
-    entity::{Entity, player::Player},
+    entity::{Entity, EntityBase, player::Player},
     world::World,
 };
 
@@ -34,15 +37,11 @@ impl AttackType {
             return Self::Knockback;
         }
 
-        // TODO: even more checks
-        if is_strong && !on_ground && fall_distance > 0.0 {
-            // !sprinting omitted
+        if is_strong && !on_ground && fall_distance > 0.0 && !sprinting {
             return Self::Critical;
         }
 
-        // TODO: movement speed check
-        if sword && is_strong {
-            // !is_crit, !is_knockback_hit, on_ground omitted
+        if sword && is_strong && on_ground && !sprinting {
             return Self::Sweeping;
         }
 
@@ -62,6 +61,141 @@ pub fn handle_knockback(attacker: &Entity, victim: &Entity, strength: f64) {
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
 }
 
+/// Calculate enchantment bonus damage for the given weapon enchantments against the victim.
+///
+/// Returns the extra damage from Sharpness, Smite, or Bane of Arthropods.
+pub fn get_enchantment_damage(
+    sharpness_level: i32,
+    smite_level: i32,
+    bane_level: i32,
+    victim: &dyn EntityBase,
+) -> f64 {
+    let victim_type = victim.get_entity().entity_type;
+
+    // Smite: +2.5 per level vs undead
+    if smite_level > 0 && victim_type.has_tag(&tag::EntityType::MINECRAFT_SENSITIVE_TO_SMITE) {
+        return 2.5 * f64::from(smite_level);
+    }
+
+    // Bane of Arthropods: +2.5 per level vs arthropods
+    if bane_level > 0
+        && victim_type.has_tag(&tag::EntityType::MINECRAFT_SENSITIVE_TO_BANE_OF_ARTHROPODS)
+    {
+        return 2.5 * f64::from(bane_level);
+    }
+
+    // Sharpness: +0.5 * level + 0.5 extra damage
+    if sharpness_level > 0 {
+        return f64::from(sharpness_level).mul_add(0.5, 0.5);
+    }
+
+    0.0
+}
+
+/// Calculate the sweep damage ratio based on Sweeping Edge enchantment level.
+///
+/// Formula: level / (level + 1)
+/// Level 0: 0% of attack damage (just 1 base)
+/// Level 1: 50%
+/// Level 2: 66.7%
+/// Level 3: 75%
+pub fn get_sweep_damage_ratio(sweeping_edge_level: i32) -> f32 {
+    if sweeping_edge_level > 0 {
+        sweeping_edge_level as f32 / (sweeping_edge_level as f32 + 1.0)
+    } else {
+        0.0
+    }
+}
+
+/// Apply sweep attack damage to all nearby entities around the victim.
+pub async fn apply_sweep_attack(
+    attacker: &Player,
+    victim_entity_id: i32,
+    victim_pos: &Vector3<f64>,
+    base_damage: f64,
+    sweeping_edge_level: i32,
+    knockback_enchant_level: i32,
+    world: &World,
+) {
+    let attacker_entity = &attacker.living_entity.entity;
+
+    // Sweep damage: 1 + sweeping_edge_ratio * base_damage
+    let sweep_ratio = get_sweep_damage_ratio(sweeping_edge_level);
+    let sweep_damage = 1.0 + sweep_ratio as f64 * base_damage;
+
+    // Find entities within range (vanilla uses 1.0 block horizontal + 0.25 vertical from victim)
+    let nearby = world.get_nearby_entities(*victim_pos, 2.0);
+
+    for (_, entity) in &nearby {
+        let ent = entity.get_entity();
+
+        // Skip the attacker and the original victim
+        if ent.entity_id == attacker_entity.entity_id || ent.entity_id == victim_entity_id {
+            continue;
+        }
+
+        // Only damage living entities
+        if entity.get_living_entity().is_none() {
+            continue;
+        }
+
+        // Check distance more precisely (1 block from victim)
+        let entity_pos = ent.pos.load();
+        let dx = entity_pos.x - victim_pos.x;
+        let dz = entity_pos.z - victim_pos.z;
+        let horizontal_dist_sq = dx * dx + dz * dz;
+        if horizontal_dist_sq > 9.0 {
+            // 3.0^2 - vanilla uses attack range + sweep range
+            continue;
+        }
+
+        // Vertical check
+        let dy = (entity_pos.y - victim_pos.y).abs();
+        if dy > 2.0 {
+            continue;
+        }
+
+        // Apply sweep damage
+        entity
+            .damage_with_context(
+                &**entity,
+                sweep_damage as f32,
+                DamageType::PLAYER_ATTACK,
+                None,
+                Some(attacker),
+                Some(attacker),
+            )
+            .await;
+
+        // Apply knockback to swept entities
+        let knockback_strength = 0.4 + f64::from(knockback_enchant_level) * 0.5;
+        handle_knockback(attacker_entity, ent, knockback_strength);
+        ent.send_velocity().await;
+    }
+
+    // Spawn sweep particle
+    spawn_sweep_particle(attacker_entity, world, victim_pos).await;
+}
+
+/// Spawn critical hit particles around the victim.
+pub async fn spawn_crit_particles(world: &World, victim_pos: &Vector3<f64>, enchanted: bool) {
+    let particle = if enchanted {
+        Particle::EnchantedHit
+    } else {
+        Particle::Crit
+    };
+
+    world
+        .spawn_particle(
+            *victim_pos,
+            Vector3::new(0.5, 0.5, 0.5),
+            0.2,
+            10,
+            particle,
+        )
+        .await;
+}
+
 pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {
     let yaw = attacker_entity.yaw.load();
     let d = -f64::from((yaw.to_radians()).sin());
@@ -79,6 +213,33 @@ pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: 
             Particle::SweepAttack,
         )
         .await;
+}
+
+/// Get enchantment levels from the player's held item.
+///
+/// Returns (sharpness, smite, bane_of_arthropods, knockback, fire_aspect, sweeping_edge).
+pub async fn get_combat_enchantments(player: &Player) -> CombatEnchantments {
+    let item = player.inventory().held_item();
+    let item_lock = item.lock().await;
+
+    CombatEnchantments {
+        sharpness: item_lock.get_enchantment_level(&Enchantment::SHARPNESS),
+        smite: item_lock.get_enchantment_level(&Enchantment::SMITE),
+        bane_of_arthropods: item_lock.get_enchantment_level(&Enchantment::BANE_OF_ARTHROPODS),
+        knockback: item_lock.get_enchantment_level(&Enchantment::KNOCKBACK),
+        fire_aspect: item_lock.get_enchantment_level(&Enchantment::FIRE_ASPECT),
+        sweeping_edge: item_lock.get_enchantment_level(&Enchantment::SWEEPING_EDGE),
+    }
+}
+
+/// Combat-related enchantment levels for the held weapon.
+pub struct CombatEnchantments {
+    pub sharpness: i32,
+    pub smite: i32,
+    pub bane_of_arthropods: i32,
+    pub knockback: i32,
+    pub fire_aspect: i32,
+    pub sweeping_edge: i32,
 }
 
 pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type: AttackType) {

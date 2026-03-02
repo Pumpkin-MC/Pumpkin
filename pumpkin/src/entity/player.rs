@@ -678,7 +678,6 @@ impl Player {
         let mut add_speed = 0.0;
 
         // Get the attack damage from the held item
-        // TODO: this should be cached in memory, we shouldn't just use default here either
         if let Some(modifiers) = item_stack
             .lock()
             .await
@@ -705,16 +704,30 @@ impl Player {
         self.last_attacked_ticks.store(0, Ordering::Relaxed);
 
         // Only reduce attack damage if in cooldown
-        // TODO: Enchantments are reduced in the same way, just without the square.
         if attack_cooldown_progress < 1.0 {
             damage_multiplier = attack_cooldown_progress.powi(2).mul_add(0.8, 0.2);
         }
 
-        // Modify the added damage based on the multiplier.
-        let mut damage = base_damage + add_damage * damage_multiplier;
+        // Get combat enchantments from held weapon
+        let enchants = combat::get_combat_enchantments(self).await;
+
+        // Calculate enchantment bonus damage (Sharpness/Smite/Bane of Arthropods)
+        let enchant_damage = combat::get_enchantment_damage(
+            enchants.sharpness,
+            enchants.smite,
+            enchants.bane_of_arthropods,
+            &*victim,
+        );
+
+        // Apply enchantment damage with cooldown reduction (linear, not squared)
+        let enchant_damage_scaled = enchant_damage * f64::from(damage_multiplier);
+
+        // Total damage: base + item modifier (scaled by cooldown²) + enchantment bonus (scaled by cooldown)
+        let mut damage = base_damage + add_damage * damage_multiplier + enchant_damage_scaled;
         let pos = victim_entity.pos.load();
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
 
+        // Critical hit: 1.5x damage
         if matches!(attack_type, AttackType::Critical) {
             damage *= 1.5;
         }
@@ -740,7 +753,19 @@ impl Player {
             return;
         }
 
+        // Play attack sound
         player_attack_sound(&pos, &world, attack_type).await;
+
+        // Spawn particles for critical hits
+        if matches!(attack_type, AttackType::Critical) {
+            let has_enchant_damage = enchant_damage > 0.0;
+            combat::spawn_crit_particles(&world, &pos, has_enchant_damage).await;
+        }
+
+        // Spawn enchanted hit particles when enchantment bonus damage is applied
+        if enchant_damage > 0.0 && !matches!(attack_type, AttackType::Critical) {
+            combat::spawn_crit_particles(&world, &pos, true).await;
+        }
 
         self.living_entity.last_attacking_id.store(
             victim_entity.entity_id,
@@ -755,16 +780,34 @@ impl Player {
         );
 
         if victim.get_living_entity().is_some() {
-            let mut knockback_strength = 1.0;
+            // Knockback: base 1.0 + sprint bonus + enchantment bonus
+            let mut knockback_strength = 1.0 + f64::from(enchants.knockback) * 0.5;
+
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
+                    // Sweep attack: damage nearby entities
+                    combat::apply_sweep_attack(
+                        self,
+                        victim_entity.entity_id,
+                        &pos,
+                        damage,
+                        enchants.sweeping_edge,
+                        enchants.knockback,
+                        &world,
+                    )
+                    .await;
                 }
                 _ => {}
             }
             if config.knockback {
                 combat::handle_knockback(attacker_entity, victim_entity, knockback_strength);
+            }
+
+            // Fire Aspect: set victim on fire (4 seconds per level)
+            if enchants.fire_aspect > 0 {
+                victim_entity.set_on_fire_for(4.0 * enchants.fire_aspect as f32);
+                victim_entity.set_on_fire(true).await;
             }
         }
 
