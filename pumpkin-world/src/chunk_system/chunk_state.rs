@@ -100,6 +100,9 @@ impl StagedChunkEnum {
             Self::None
         }
     }
+
+    /// Total number of state values (0 = None … 9 = Full).
+    pub const COUNT: usize = Self::Full as usize + 1;
     pub const FULL_DEPENDENCIES: &'static [Self] =
         &[Self::Full, Self::Lighting, Self::Features, Self::Surface];
     pub const FULL_RADIUS: i32 = 3;
