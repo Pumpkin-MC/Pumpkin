@@ -10,6 +10,7 @@ members = [
     "pumpkin-world",
     "pumpkin/",
     "pumpkin-data",
+    "pumpkin-plugin-api",
 ]
 exclude = ["pumpkin-codegen"]
 
@@ -171,3 +172,11 @@ arc-swap = "1.8"
 tokio-util = "0.7.18"
 toml = "1.0"
 ureq = "3.2.0"
+
+wasmtime = "42.0"
+wasmtime-wasi = "42.0"
+wit-bindgen = "0.53"
+wasmparser = "0.245"
+
+postcard = { version = "1.0", features = ["alloc"] }
+tracing-serde-structured = "0.4"

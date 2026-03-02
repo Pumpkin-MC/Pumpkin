@@ -1,0 +1,189 @@
+interface command {
+    use player.{player};
+    use %world.{%world};
+    use entity.{command-block-entity, entity};
+    use common.{position, block-position};
+    use server.{server, difficulty};
+    use text.{text-component};
+
+    enum gamemode {
+        survival,
+        creative,
+        adventure,
+        spectator,
+    }
+
+    enum bossbar-color {
+        pink,
+        blue,
+        red,
+        green,
+        yellow,
+        purple,
+        white,
+    }
+
+    enum bossbar-style {
+        no-division,
+        notches6,
+        notches10,
+        notches12,
+        notches20,
+    }
+
+    enum sound-category {
+        master,
+        music,
+        records,
+        weather,
+        blocks,
+        hostile,
+        neutral,
+        players,
+        ambient,
+        voice,
+        ui,
+    }
+
+    enum entity-anchor {
+        feet,
+        eyes,
+    }
+
+    variant number {
+        float64(f64),
+        float32(f32),
+        int32(s32),
+        int64(s64),
+    }
+
+    variant not-in-bounds {
+        lower-bound(tuple<number, number>),
+        upper-bound(tuple<number, number>),
+    }
+
+    variant arg {
+        entities(list<entity>),
+        entity(entity),
+        players(list<player>),
+        block-pos(block-position),
+        pos3d(position),
+        pos2d(tuple<f64, f64>),
+        rotation(tuple<f32, bool, f32, bool>),
+        game-mode(gamemode),
+        difficulty(difficulty),
+        item(string),
+        item-predicate(string),
+        resource-location(string),
+        block(string),
+        block-predicate(string),
+        bossbar-color(bossbar-color),
+        bossbar-style(bossbar-style),
+        particle(string),
+        msg(string),
+        text-component(text-component),
+        time(s32),
+        num(result<number, not-in-bounds>),
+        %bool(bool),
+        simple(string),
+        sound-category(sound-category),
+        damage-type(string),
+        effect(string),
+        enchantment(string),
+        entity-anchor(entity-anchor),
+    }
+
+    resource consumed-args {
+        get-value: func(key: string) -> arg;
+    }
+
+    variant command-sender-type {
+        rcon(list<string>),
+        console,
+        player(player),
+        command-block(tuple<command-block-entity, %world>),
+        dummy,
+    }
+
+    enum permission-level {
+        zero,
+        one,
+        two,
+        three,
+        four,
+    }
+
+    resource command-sender {
+        get-command-sender-type: func() -> command-sender-type;
+        send-message: func(text: text-component);
+        set-success-count: func(count: s32);
+        is-player: func() -> bool;
+        is-console: func() -> bool;
+        as-player: func() -> option<player>;
+        permission-level: func() -> permission-level;
+        has-permission-level: func(level: permission-level) -> bool;
+        has-permission: func(server: borrow<server>, node: string) -> bool;
+        position: func() -> option<position>;
+        %world: func() -> option<%world>;
+        get-locale: func() -> string;
+        should-receive-feedback: func() -> bool;
+        should-broadcast-console-to-ops: func() -> bool;
+        should-track-output: func() -> bool;
+    }
+
+    enum string-type {
+        single-word,
+        quotable,
+        greedy,
+    }
+
+    variant argument-type {
+        %bool,
+        float(tuple<option<f32>, option<f32>>),
+        double(tuple<option<f64>, option<f64>>),
+        integer(tuple<option<s32>, option<s32>>),
+        long(tuple<option<s64>, option<s64>>),
+        %string(string-type),
+        entities,
+        entity,
+        %players,
+        game-profile,
+        block-pos,
+        position3d,
+        position2d,
+        block-state,
+        block-predicate,
+        item,
+        item-predicate,
+        component,
+        rotation,
+        %resource-location,
+        entity-anchor,
+        gamemode,
+        difficulty,
+        time(s32),
+        %resource(string),
+    }
+
+    variant command-error {
+        invalid-consumption(option<string>),
+        invalid-requirement,
+        permission-denied,
+        command-failed(text-component),
+    }
+
+    resource command-node {
+        literal: static func(name: string) -> command-node;
+        argument: static func(name: string, arg-type: argument-type) -> command-node;
+        then: func(node: command-node);
+        execute-with-handler-id: func(handler-id: u32);
+        require-permission: func(level: permission-level);
+    }
+
+    resource command {
+        /// First name is primary, rest are aliases
+        constructor(names: list<string>, description: string);
+        then: func(node: command-node);
+        execute-with-handler-id: func(handler-id: u32);
+    }
+}
