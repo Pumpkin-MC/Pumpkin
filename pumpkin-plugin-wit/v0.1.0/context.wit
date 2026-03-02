@@ -5,7 +5,7 @@ interface context {
 
     resource context {
         register-event: func(handler-id: u32, event-type: event-type, event-priority: event-priority, blocking: bool);
-        register-command: func(command-id: u32, command: command);
+        register-command: func(command: command, permission: string);
         get-server: func() -> server;
     }
 }

@@ -165,11 +165,18 @@ interface command {
         %resource(string),
     }
 
+    variant command-error {
+        invalid-consumption(option<string>),
+        invalid-requirement,
+        permission-denied,
+        command-failed(text-component),
+    }
+
     resource command-node {
         literal: static func(name: string) -> command-node;
         argument: static func(name: string, arg-type: argument-type) -> command-node;
         then: func(node: command-node);
-        execute: func(handler-id: u32);
+        execute-with-handler-id: func(handler-id: u32);
         require-permission: func(level: permission-level);
     }
 
@@ -177,6 +184,6 @@ interface command {
         /// First name is primary, rest are aliases
         constructor(names: list<string>, description: string);
         then: func(node: command-node);
-        execute: func(handler-id: u32);
+        execute-with-handler-id: func(handler-id: u32);
     }
 }

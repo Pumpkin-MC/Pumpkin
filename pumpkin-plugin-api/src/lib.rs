@@ -3,6 +3,7 @@ use crate::{events::EVENT_HANDLERS, logging::WitSubscriber};
 pub mod events;
 
 pub use wit::pumpkin::plugin::{
+    command::CommandError,
     command::{CommandSender, ConsumedArgs},
     context::{Context, Server},
     text,
@@ -64,7 +65,12 @@ impl wit::Guest for Component {
         }
     }
 
-    fn handle_command(command_id: u32, sender: CommandSender, server: Server, args: ConsumedArgs) {
+    fn handle_command(
+        command_id: u32,
+        sender: CommandSender,
+        server: Server,
+        args: ConsumedArgs,
+    ) -> Result<i32, CommandError> {
         todo!()
     }
 }

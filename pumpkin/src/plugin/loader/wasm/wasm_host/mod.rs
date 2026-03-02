@@ -5,6 +5,7 @@ use wasmtime::{Cache, CacheConfig, Engine, Store, component::Component};
 
 use crate::plugin::{Context, PluginMetadata, loader::wasm::wasm_host::state::PluginHostState};
 
+pub mod args;
 pub mod logging;
 pub mod state;
 pub mod wit;
@@ -45,7 +46,6 @@ pub struct WasmPlugin {
 impl PluginRuntime {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, PluginInitError> {
         let mut config = wasmtime::Config::new();
-        config.async_support(true);
         config.wasm_component_model(true);
         let mut path = std::path::absolute(path.as_ref()).expect("Failed to get absolute path");
         path.pop();
@@ -154,6 +154,8 @@ impl WasmPlugin {
     ) -> Result<Result<(), String>, wasmtime::Error> {
         let mut store = self.store.lock().await;
 
+        store.data_mut().server = Some(context.server.clone());
+
         match self.plugin_instance {
             PluginInstance::V0_1_0(ref plugin) => {
                 let context = store.data_mut().add_context(context)?;
@@ -175,4 +177,10 @@ impl WasmPlugin {
             }
         }
     }
+}
+
+pub trait DowncastResourceExt<E> {
+    fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a E;
+    fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut E;
+    fn consume(self, state: &mut PluginHostState) -> E;
 }
