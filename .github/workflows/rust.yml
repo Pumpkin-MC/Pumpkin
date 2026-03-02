@@ -127,7 +127,7 @@ jobs:
           if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
           cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}$EXT"
       - name: Export executable
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: pumpkin-${{ runner.arch }}-${{ runner.os }}
           compression-level: 9
