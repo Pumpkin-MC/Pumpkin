@@ -47,7 +47,8 @@ impl PlantBlockBase for Fungus {
         <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down()).await
     }
 }
-fn supports_fungus(block: &Block) -> bool {
+#[must_use]
+pub fn supports_fungus(block: &Block) -> bool {
     block.has_tag(&tag::Block::MINECRAFT_DIRT)
         || block == &Block::FARMLAND
         || block == &Block::WARPED_NYLIUM

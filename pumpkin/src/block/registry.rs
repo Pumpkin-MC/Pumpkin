@@ -55,14 +55,17 @@ use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
 use crate::block::blocks::plant::flower::FlowerBlock;
 use crate::block::blocks::plant::flowerbed::FlowerbedBlock;
 use crate::block::blocks::plant::fungus::Fungus;
+use crate::block::blocks::plant::kelp::KelpBlock;
 use crate::block::blocks::plant::leaf_litter::LeafLitterBlock;
 use crate::block::blocks::plant::lily_pad::LilyPadBlock;
 use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
+use crate::block::blocks::plant::nether_sprouts::NetherSproutsBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
+use crate::block::blocks::plant::spore_blossom::SporeBlossomBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
 use crate::block::blocks::plant::wither_rose::WitherRose;
@@ -212,6 +215,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CarrotBlock);
     manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
+    manager.register(KelpBlock);
     manager.register(NetherWartBlock);
     manager.register(WheatBlock);
     manager.register(TorchBlock);
@@ -254,6 +258,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CobwebBlock);
     manager.register(WitherRose);
     manager.register(Fungus);
+    manager.register(NetherSproutsBlock);
+    manager.register(SporeBlossomBlock);
 
     manager.register(FallingBlock);
 
