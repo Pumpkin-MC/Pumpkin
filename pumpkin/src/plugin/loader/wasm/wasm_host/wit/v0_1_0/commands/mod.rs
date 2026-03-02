@@ -2,7 +2,28 @@ use wasmtime::component::Resource;
 
 use crate::{
     command::{
-        args::bool::BoolArgConsumer,
+        args::{
+            GetClientSideArgParser,
+            block::{BlockArgumentConsumer, BlockPredicateArgumentConsumer},
+            bool::BoolArgConsumer,
+            bounded_num::{BoundedNumArgumentConsumer, ToFromNumber},
+            difficulty::DifficultyArgumentConsumer,
+            entities::EntitiesArgumentConsumer,
+            entity::EntityArgumentConsumer,
+            entity_anchor::EntityAnchorArgumentConsumer,
+            gamemode::GamemodeArgumentConsumer,
+            message::MsgArgConsumer,
+            players::PlayersArgumentConsumer,
+            position_2d::Position2DArgumentConsumer,
+            position_3d::Position3DArgumentConsumer,
+            position_block::BlockPosArgumentConsumer,
+            resource::item::{ItemArgumentConsumer, ItemPredicateArgumentConsumer},
+            resource_location::ResourceLocationArgumentConsumer,
+            rotation::RotationArgumentConsumer,
+            simple::SimpleArgConsumer,
+            textcomponent::TextComponentArgConsumer,
+            time::TimeArgumentConsumer,
+        },
         tree::builder::{argument, literal},
     },
     plugin::loader::wasm::wasm_host::{
@@ -15,7 +36,7 @@ use crate::{
                 plugin::{
                     command::{
                         Arg, ArgumentType, Command, CommandNode, CommandSender, CommandSenderType,
-                        ConsumedArgs, PermissionLevel,
+                        ConsumedArgs, PermissionLevel, StringType,
                     },
                     common::Position,
                     player::Player,
@@ -178,6 +199,25 @@ impl DowncastResourceExt<CommandNodeResource> for Resource<CommandNode> {
     }
 }
 
+fn bounded_num_argument<T: ToFromNumber + 'static>(
+    state: &mut PluginHostState,
+    name: String,
+    min: Option<T>,
+    max: Option<T>,
+) -> Resource<CommandNode>
+where
+    BoundedNumArgumentConsumer<T>: GetClientSideArgParser,
+{
+    let mut consumer = BoundedNumArgumentConsumer::<T>::new();
+    if let Some(min) = min {
+        consumer = consumer.min(min);
+    }
+    if let Some(max) = max {
+        consumer = consumer.max(max);
+    }
+    state.add_command_node(argument(name, consumer)).unwrap()
+}
+
 impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
     async fn literal(&mut self, name: String) -> Resource<CommandNode> {
         self.add_command_node(literal(name)).unwrap()
@@ -188,30 +228,69 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
             ArgumentType::Bool => self
                 .add_command_node(argument(name, BoolArgConsumer))
                 .unwrap(),
-            ArgumentType::Float((min, max)) => todo!(),
-            ArgumentType::Double(_) => todo!(),
-            ArgumentType::Integer(_) => todo!(),
-            ArgumentType::Long(_) => todo!(),
-            ArgumentType::String(string_type) => todo!(),
-            ArgumentType::Entities => todo!(),
-            ArgumentType::Entity => todo!(),
-            ArgumentType::Players => todo!(),
-            ArgumentType::GameProfile => todo!(),
-            ArgumentType::BlockPos => todo!(),
-            ArgumentType::Position3d => todo!(),
-            ArgumentType::Position2d => todo!(),
-            ArgumentType::BlockState => todo!(),
-            ArgumentType::BlockPredicate => todo!(),
-            ArgumentType::Item => todo!(),
-            ArgumentType::ItemPredicate => todo!(),
-            ArgumentType::Component => todo!(),
-            ArgumentType::Rotation => todo!(),
-            ArgumentType::ResourceLocation => todo!(),
-            ArgumentType::EntityAnchor => todo!(),
-            ArgumentType::Gamemode => todo!(),
-            ArgumentType::Difficulty => todo!(),
-            ArgumentType::Time(_) => todo!(),
-            ArgumentType::Resource(_) => todo!(),
+            ArgumentType::Float((min, max)) => bounded_num_argument(self, name, min, max),
+            ArgumentType::Double((min, max)) => bounded_num_argument(self, name, min, max),
+            ArgumentType::Integer((min, max)) => bounded_num_argument(self, name, min, max),
+            ArgumentType::Long((min, max)) => bounded_num_argument(self, name, min, max),
+            ArgumentType::String(string_type) => match string_type {
+                StringType::SingleWord | StringType::Quotable => self
+                    .add_command_node(argument(name, SimpleArgConsumer))
+                    .unwrap(),
+                StringType::Greedy => self
+                    .add_command_node(argument(name, MsgArgConsumer))
+                    .unwrap(),
+            },
+            ArgumentType::Entities => self
+                .add_command_node(argument(name, EntitiesArgumentConsumer))
+                .unwrap(),
+            ArgumentType::Entity => self
+                .add_command_node(argument(name, EntityArgumentConsumer))
+                .unwrap(),
+            ArgumentType::Players | ArgumentType::GameProfile => self
+                .add_command_node(argument(name, PlayersArgumentConsumer))
+                .unwrap(),
+            ArgumentType::BlockPos => self
+                .add_command_node(argument(name, BlockPosArgumentConsumer))
+                .unwrap(),
+            ArgumentType::Position3d => self
+                .add_command_node(argument(name, Position3DArgumentConsumer))
+                .unwrap(),
+            ArgumentType::Position2d => self
+                .add_command_node(argument(name, Position2DArgumentConsumer))
+                .unwrap(),
+            ArgumentType::BlockState => self
+                .add_command_node(argument(name, BlockArgumentConsumer))
+                .unwrap(),
+            ArgumentType::BlockPredicate => self
+                .add_command_node(argument(name, BlockPredicateArgumentConsumer))
+                .unwrap(),
+            ArgumentType::Item => self
+                .add_command_node(argument(name, ItemArgumentConsumer))
+                .unwrap(),
+            ArgumentType::ItemPredicate => self
+                .add_command_node(argument(name, ItemPredicateArgumentConsumer))
+                .unwrap(),
+            ArgumentType::Component => self
+                .add_command_node(argument(name, TextComponentArgConsumer))
+                .unwrap(),
+            ArgumentType::Rotation => self
+                .add_command_node(argument(name, RotationArgumentConsumer))
+                .unwrap(),
+            ArgumentType::ResourceLocation | ArgumentType::Resource(_) => self
+                .add_command_node(argument(name, ResourceLocationArgumentConsumer))
+                .unwrap(),
+            ArgumentType::EntityAnchor => self
+                .add_command_node(argument(name, EntityAnchorArgumentConsumer))
+                .unwrap(),
+            ArgumentType::Gamemode => self
+                .add_command_node(argument(name, GamemodeArgumentConsumer))
+                .unwrap(),
+            ArgumentType::Difficulty => self
+                .add_command_node(argument(name, DifficultyArgumentConsumer))
+                .unwrap(),
+            ArgumentType::Time(_) => self
+                .add_command_node(argument(name, TimeArgumentConsumer))
+                .unwrap(),
         }
     }
 
