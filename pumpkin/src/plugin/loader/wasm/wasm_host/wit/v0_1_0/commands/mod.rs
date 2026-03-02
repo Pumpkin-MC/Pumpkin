@@ -247,7 +247,7 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
         };
 
         let resource = command_node.downcast_mut(self);
-        // Unless we make the native command registration code less convinent to use, this is our best option
+        // Unless we make the native command registration code less convenient to use, this is our best option
         let builder = std::mem::replace(&mut resource.provider, literal(""));
         resource.provider = builder.execute(executor);
     }
