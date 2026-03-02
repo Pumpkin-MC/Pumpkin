@@ -299,7 +299,6 @@ impl CustomBossbars {
         self.custom_bossbars.get(identifier)
     }
 
-    #[must_use]
     pub fn get_bossbar_or_err(
         &self,
         identifier: &Identifier,
@@ -309,7 +308,6 @@ impl CustomBossbars {
             .ok_or_else(|| BossbarUpdateError::UnknownBossbar(identifier.clone()))
     }
 
-    #[must_use]
     pub fn get_bossbar_mut_or_err(
         &mut self,
         identifier: &Identifier,
@@ -347,6 +345,11 @@ impl CustomBossbars {
     pub fn has_bossbar(&self, identifier: &Identifier) -> bool {
         self.custom_bossbars.contains_key(identifier)
     }
+
+    #[must_use]
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, Identifier, CustomBossbar> {
+        self.custom_bossbars.iter()
+    }
 }
 
 impl<'a> IntoIterator for &'a CustomBossbars {
@@ -355,6 +358,6 @@ impl<'a> IntoIterator for &'a CustomBossbars {
     type IntoIter = std::collections::hash_map::Iter<'a, Identifier, CustomBossbar>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.custom_bossbars.iter()
+        self.iter()
     }
 }

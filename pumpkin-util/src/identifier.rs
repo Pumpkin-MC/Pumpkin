@@ -87,23 +87,21 @@ impl Identifier {
     }
 
     /// Attempts to parse an identifier from a given string.
-    #[must_use]
     pub fn parse(identifier: &str) -> IdentifierCreationResult {
-        let colon_i = identifier.bytes().position(|b| b == b':');
+        identifier.bytes().position(|b| b == b':').map_or_else(
+            || Self::new(VANILLA_NAMESPACE, identifier.to_string()),
+            |colon_i| {
+                // Colon exists.
+                let path = identifier[colon_i + 1..].to_string();
 
-        if let Some(colon_i) = colon_i {
-            // Colon exists.
-            let path = identifier[colon_i + 1..].to_string();
-
-            if colon_i == 0 {
-                Self::new(VANILLA_NAMESPACE, path)
-            } else {
-                let namespace = identifier[0..colon_i].to_string();
-                Self::new(namespace, path)
-            }
-        } else {
-            Self::new(VANILLA_NAMESPACE, identifier.to_string())
-        }
+                if colon_i == 0 {
+                    Self::new(VANILLA_NAMESPACE, path)
+                } else {
+                    let namespace = identifier[0..colon_i].to_string();
+                    Self::new(namespace, path)
+                }
+            },
+        )
     }
 
     // Attempts to parse an identifier from a given string at compile-time.
@@ -309,7 +307,6 @@ impl<'de> Deserialize<'de> for Identifier {
         D: serde::Deserializer<'de>,
     {
         let identifier_string = String::deserialize(deserializer)?;
-        Self::parse(&identifier_string)
-            .map_err(|error| serde::de::Error::custom(error.to_string()))
+        Self::parse(&identifier_string).map_err(|error| serde::de::Error::custom(error.to_string()))
     }
 }
