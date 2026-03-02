@@ -287,7 +287,7 @@ macro_rules! impl_key_dispatchable {
                     $matched => $crate::map_coders::new_map_decoder_decoder(&$map_codec).parse(input, ops),
                 )+
 
-                &_ => $crate::data_result::DataResult::error(format!("Invalid differentiator value {key}")),
+                &_ => $crate::data_result::DataResult::new_error(format!("Invalid differentiator value {key}")),
             }
         }
 
@@ -297,7 +297,7 @@ macro_rules! impl_key_dispatchable {
                     $matched => $map_codec.decode(input, ops),
                 )+
 
-                &_ => $crate::data_result::DataResult::error(format!("Invalid differentiator value {key}")),
+                &_ => $crate::data_result::DataResult::new_error(format!("Invalid differentiator value {key}")),
             }
         }
 
@@ -329,7 +329,7 @@ macro_rules! impl_key_dispatchable {
             match key {
                 $( $e::$matched => $crate::map_coders::new_map_decoder_decoder(&$map_codec).parse(input, ops), )+
 
-                _ => $crate::data_result::DataResult::error(format!("Invalid differentiator value {key}")),
+                _ => $crate::data_result::DataResult::new_error(format!("Invalid differentiator value {key}")),
             }
         }
 
@@ -338,7 +338,7 @@ macro_rules! impl_key_dispatchable {
             match key {
                 $( $e::$matched => $map_codec.decode(input, ops), )+
 
-                _ => $crate::data_result::DataResult::error(format!("Invalid differentiator value {key}")),
+                _ => $crate::data_result::DataResult::new_error(format!("Invalid differentiator value {key}")),
             }
         }
 
@@ -412,7 +412,7 @@ impl<T: KeyDispatchable, M: MapCodec<Value = T::Key>> MapDecoder for KeyDispatch
                 // If the ops we're using compresses maps, we decode
                 // the data in the individual "value" key using a normal `Codec`.
                 input.get_str(COMPRESSED_VALUE_KEY).map_or_else(
-                    || DataResult::error("Input doesn't have a 'value' key".to_string()),
+                    || DataResult::new_error("Input doesn't have a 'value' key".to_string()),
                     |v| T::decode(key, v.clone(), ops),
                 )
             } else {

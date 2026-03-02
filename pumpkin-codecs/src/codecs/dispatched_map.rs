@@ -169,11 +169,11 @@ macro_rules! impl_map_dispatchable {
                 match key.as_str() {
                     $(
                         $key => input.as_any().downcast_ref::<$ty>().map_or_else(
-                            || $crate::data_result::DataResult::error(format!("Invalid type for key {key}")),
+                            || $crate::data_result::DataResult::new_error(format!("Invalid type for key {key}")),
                             |o| $codec.encode_start(o, ops)
                         ),
                     )+
-                    _ => $crate::data_result::DataResult::error(format!("Invalid key for map {key}"))
+                    _ => $crate::data_result::DataResult::new_error(format!("Invalid key for map {key}"))
                 }
             }
 
@@ -186,7 +186,7 @@ macro_rules! impl_map_dispatchable {
                     $(
                         $key => $codec.parse(input, ops).map(|d| Box::new(d) as Box<dyn $trait_ty>),
                     )+
-                    _ => $crate::data_result::DataResult::error(format!("Invalid key for map {key}"))
+                    _ => $crate::data_result::DataResult::new_error(format!("Invalid key for map {key}"))
                 }
             }
         }
@@ -212,11 +212,11 @@ macro_rules! impl_map_dispatchable {
                 match key {
                     $(
                         $key => input.as_any().downcast_ref::<$ty>().map_or_else(
-                            || $crate::data_result::DataResult::error(format!("Invalid type for key {key}")),
+                            || $crate::data_result::DataResult::new_error(format!("Invalid type for key {key}")),
                             |o| $codec.encode_start(o, ops)
                         ),
                     )+
-                   _ => $crate::data_result::DataResult::error(format!("Invalid key for map {key}"))
+                   _ => $crate::data_result::DataResult::new_error(format!("Invalid key for map {key}"))
                 }
             }
 
@@ -229,7 +229,7 @@ macro_rules! impl_map_dispatchable {
                     $(
                         $key => $codec.parse(input, ops).map(|d| Box::new(d) as Box<dyn $trait_ty>),
                     )+
-                    _ => $crate::data_result::DataResult::error(format!("Invalid key for map {key}"))
+                    _ => $crate::data_result::DataResult::new_error(format!("Invalid key for map {key}"))
                 }
             }
         }
@@ -286,7 +286,7 @@ where
             let mut failed: Vec<(U, U)> = Vec::new();
 
             let final_result = m.iter().fold(
-                DataResult::success_with_lifecycle((), Lifecycle::Stable),
+                DataResult::new_success_with_lifecycle((), Lifecycle::Stable),
                 |r, (k, v)| self.parse_entry(r, ops, (k, v.clone()), &mut entries, &mut failed),
             );
 
@@ -330,7 +330,7 @@ where
         if let Some((k, v)) = entry_result.into_result_or_partial() {
             match entries.entry(k.clone()) {
                 Entry::Occupied(_) => {
-                    return result.add_message(&DataResult::<()>::error(format!(
+                    return result.add_message(&DataResult::<()>::new_error(format!(
                         "Duplicate entry for key: {k}"
                     )));
                 }
