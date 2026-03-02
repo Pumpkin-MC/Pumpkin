@@ -54,13 +54,15 @@ pub(crate) fn build() -> TokenStream {
                 display_name : #display_name,
             };
         }]);
-        name_to_type.extend(quote! { #raw_name => Some(&Self::#format_name), });
-        minecraft_name_to_type.extend(quote! { #minecraft_name => Some(&Self::#format_name), });
+        name_to_type.extend(quote! { #raw_name => Some(&'static Self::#format_name), });
+        minecraft_name_to_type.extend(quote! { #minecraft_name => Some(&'static Self::#format_name), });
     }
 
 
 
     quote! {
+        use pumpkin_util::resource_location::ResourceLocation;
+
         pub struct Advancement {
             pub id : ResourceLocation,
             pub parent : Option<ResourceLocation>,
