@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Display};
+use std::{cmp::Ordering, fmt::Display, ops::Deref};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -7,7 +7,72 @@ pub const VANILLA_NAMESPACE: &str = "minecraft";
 pub const PUMPKIN_NAMESPACE: &str = "pumpkin";
 
 /// The type a part of an identifier is stored as.
-pub type IdentifierPart = Cow<'static, str>;
+/// 
+/// This is an implementation detail.
+#[derive(Clone, Debug)]
+pub enum IdentifierPart {
+    Static(&'static str),
+    Box(Box<str>)
+}
+
+impl Deref for IdentifierPart {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        match self {
+            IdentifierPart::Static(string) => string,
+            IdentifierPart::Box(string) => string
+        }
+    }
+}
+
+impl PartialEq for IdentifierPart {
+    fn eq(&self, other: &Self) -> bool {
+        &**self == &**other
+    }
+}
+impl Eq for IdentifierPart {}
+
+impl PartialOrd for IdentifierPart {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some((&**self).cmp(&**other))
+    }
+}
+impl Ord for IdentifierPart {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (&**self).cmp(&**other)
+    }
+}   
+
+impl std::hash::Hash for IdentifierPart {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (&**self).hash(state);
+    }
+}
+
+impl std::fmt::Display for IdentifierPart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&**self)
+    }
+}
+
+impl From<&'static str> for IdentifierPart {
+    fn from(value: &'static str) -> Self {
+        IdentifierPart::Static(value)
+    }
+}
+
+impl From<Box<str>> for IdentifierPart {
+    fn from(value: Box<str>) -> Self {
+        IdentifierPart::Box(value)
+    }
+}
+
+impl From<String> for IdentifierPart {
+    fn from(value: String) -> Self {
+        value.into_boxed_str().into()
+    }
+}
 
 /// An immutable structure that identifies a particular resource.
 ///
@@ -81,8 +146,8 @@ impl Identifier {
         );
 
         Self {
-            namespace: Cow::Borrowed(namespace),
-            path: Cow::Borrowed(path),
+            namespace: IdentifierPart::Static(namespace),
+            path: IdentifierPart::Static(path),
         }
     }
 
@@ -199,7 +264,7 @@ impl Identifier {
     pub fn prefix_path(self, prefix: &str) -> IdentifierCreationResult {
         Self::validate_identifier_only_path(Self {
             namespace: self.namespace,
-            path: Cow::Owned(format!("{prefix}{}", self.path)),
+            path: format!("{prefix}{}", self.path).into(),
         })
     }
 
@@ -207,7 +272,7 @@ impl Identifier {
     pub fn suffix_path(self, suffix: &str) -> IdentifierCreationResult {
         Self::validate_identifier_only_path(Self {
             namespace: self.namespace,
-            path: Cow::Owned(format!("{}{suffix}", self.path)),
+            path: format!("{}{suffix}", self.path).into(),
         })
     }
 
@@ -218,7 +283,7 @@ impl Identifier {
     {
         Self::validate_identifier_only_path(Self {
             namespace: self.namespace,
-            path: Cow::Owned(f(&self.path)),
+            path: f(&self.path).into(),
         })
     }
 
@@ -309,4 +374,13 @@ impl<'de> Deserialize<'de> for Identifier {
         let identifier_string = String::deserialize(deserializer)?;
         Self::parse(&identifier_string).map_err(|error| serde::de::Error::custom(error.to_string()))
     }
+}
+
+/// Allows a type to convert an object of its own to and fro its identifier.
+pub trait Identified: Sized {
+    /// Uses a registry to find an object from its own type from its [`Identifier`].
+    fn from_identifier(identifier: &Identifier) -> Option<Self>;
+
+    /// Queries the [`Identifier`] of this object.
+    fn to_identifier(&self) -> Identifier;
 }
