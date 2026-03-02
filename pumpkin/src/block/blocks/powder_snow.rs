@@ -15,7 +15,8 @@ use crate::entity::EntityBase;
 #[pumpkin_block("minecraft:powder_snow")]
 pub struct PowderSnowBlock;
 
-const FALLING_COLLISION_SHAPE: BoundingBox = BoundingBox::new_array([0.0, 0.0, 0.0], [1.0, 0.9, 1.0]);
+const FALLING_COLLISION_SHAPE: BoundingBox =
+    BoundingBox::new_array([0.0, 0.0, 0.0], [1.0, 0.9, 1.0]);
 const WALK_ON_EPSILON: f64 = 1.0e-7;
 
 pub(crate) async fn can_entity_walk_on_powder_snow(entity: &dyn EntityBase) -> bool {

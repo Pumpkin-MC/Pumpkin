@@ -142,8 +142,9 @@ impl ThrownItemEntity {
         let mut hit = None;
 
         // Block collisions
-        let (block_cols, block_positions) =
-            world.get_block_collisions(search_box, caller.as_ref()).await;
+        let (block_cols, block_positions) = world
+            .get_block_collisions(search_box, caller.as_ref())
+            .await;
         for (idx, bb) in block_cols.iter().enumerate() {
             if let Some(t) = calculate_ray_intersection(&start_pos, &delta, bb)
                 && t < closest_t
