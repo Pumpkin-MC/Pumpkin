@@ -104,7 +104,7 @@ impl CommandExecutor for GiveExecutor {
                             duration: second,
                             amplifier,
                             ambient: false, //this is not a beacon effect
-                            show_particles: hide_particles,
+                            show_particles: !hide_particles,
                             show_icon: true,
                             blend: true, //Currently only used in the DARKNESS effect to apply extra void fog and adjust the gamma value for lighting.
                         })
