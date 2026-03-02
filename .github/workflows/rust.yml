@@ -141,7 +141,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Download prebuilt binary artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: "**/pumpkin-*"
           path: dist/
