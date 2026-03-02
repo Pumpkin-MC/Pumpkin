@@ -21,9 +21,8 @@ pub enum CommandError {
     InvalidConsumption(Option<String>),
     /// Return this if a condition that a [`Node::Require`] should ensure is met is not met.
     InvalidRequirement,
-    /// The command could not be executed due to insufficient permissions.
-    /// The user attempting to run the command lacks the necessary authorization.
-    PermissionDenied,
+    /// Insufficient permissions. Contains an optional plugin-provided denial message.
+    PermissionDenied(Option<TextComponent>),
     /// A general error occurred during command execution that doesn't fit into
     /// more specific `CommandError` variants.
     CommandFailed(TextComponent),
@@ -31,27 +30,27 @@ pub enum CommandError {
 
 impl CommandError {
     #[must_use]
-    pub fn into_component(self, cmd: &str) -> TextComponent {
+    pub fn into_component(self, cmd: &str) -> Option<TextComponent> {
         match self {
             InvalidConsumption(s) => {
                 error!(
                     "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
                 );
-                TextComponent::text("Internal error (See logs for details)")
+                Some(TextComponent::text("Internal error (See logs for details)"))
             }
             InvalidRequirement => {
                 error!(
                     "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
                 );
-                TextComponent::text("Internal error (See logs for details)")
+                Some(TextComponent::text("Internal error (See logs for details)"))
             }
-            PermissionDenied => {
+            PermissionDenied(msg) => {
                 warn!("Permission denied for command \"{cmd}\"");
-                TextComponent::text(
+                Some(msg.unwrap_or_else(|| TextComponent::text(
                     "I'm sorry, but you do not have permission to perform this command. Please contact the server administrator if you believe this is an error.",
-                )
+                )))
             }
-            CommandFailed(s) => s,
+            CommandFailed(s) => Some(s),
         }
     }
 }
@@ -73,8 +72,9 @@ impl CommandDispatcher {
         let result = self.dispatch(sender, server, cmd).await;
         sender.set_success_count(u32::from(result.is_ok()));
 
-        if let Err(e) = result {
-            let text = e.into_component(cmd);
+        if let Err(e) = result
+            && let Some(text) = e.into_component(cmd)
+        {
             sender
                 .send_message(text.color_named(pumpkin_util::text::color::NamedColor::Red))
                 .await;
@@ -122,7 +122,7 @@ impl CommandDispatcher {
                     );
                     return Vec::new();
                 }
-                Err(PermissionDenied) => {
+                Err(PermissionDenied(..)) => {
                     debug!("Permission denied for command \"{cmd}\"");
                     return Vec::new();
                 }
@@ -260,8 +260,9 @@ impl CommandDispatcher {
             )));
         };
 
-        if !src.has_permission(server, permission.as_str()).await {
-            return Err(PermissionDenied);
+        let (allowed, denial_message) = src.has_permission(server, permission.as_str()).await;
+        if !allowed {
+            return Err(PermissionDenied(denial_message));
         }
 
         let tree = self.get_tree(key)?;
