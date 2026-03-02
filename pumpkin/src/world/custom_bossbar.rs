@@ -281,7 +281,7 @@ impl CustomBossbars {
 
     pub fn create_bossbar(&mut self, identifier: Identifier, bossbar_data: Bossbar) {
         self.custom_bossbars
-            .insert(identifier.clone(), CustomBossbar::new(bossbar_data));
+            .insert(identifier, CustomBossbar::new(bossbar_data));
     }
 
     #[must_use]

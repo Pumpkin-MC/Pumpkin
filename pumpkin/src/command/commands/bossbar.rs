@@ -325,8 +325,8 @@ impl CommandExecutor for SetExecutor {
                 CommandValueSet::Color => {
                     let color = BossbarColorArgumentConsumer.find_arg_default_name(args)?;
 
-                    match bossbar.update_color(server, color.clone()).await {
-                        Ok(_) => {
+                    match bossbar.update_color(server, *color).await {
+                        Ok(()) => {
                             sender
                                 .send_message(TextComponent::translate(
                                     "commands.bossbar.set.color.success",
@@ -354,7 +354,7 @@ impl CommandExecutor for SetExecutor {
                         .update_health(server, max_value, bossbar.value)
                         .await
                     {
-                        Ok(_) => {
+                        Ok(()) => {
                             sender
                                 .send_message(TextComponent::translate(
                                     "commands.bossbar.set.max.success",
@@ -377,7 +377,7 @@ impl CommandExecutor for SetExecutor {
                     let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
 
                     match bossbar.update_name(server, text_component.clone()).await {
-                        Ok(_) => {
+                        Ok(()) => {
                             sender
                                 .send_message(TextComponent::translate(
                                     "commands.bossbar.set.name.success",
@@ -391,24 +391,7 @@ impl CommandExecutor for SetExecutor {
                     }
                 }
                 CommandValueSet::Players(has_players) => {
-                    if !has_players {
-                        match bossbar.update_players(server, vec![]).await {
-                            Ok(_) => {
-                                sender
-                                    .send_message(TextComponent::translate(
-                                        "commands.bossbar.set.players.success.none",
-                                        [bossbar_prefix(
-                                            bossbar.bossbar_data.title.clone(),
-                                            &identifier,
-                                        )],
-                                    ))
-                                    .await;
-
-                                Ok(0)
-                            }
-                            Err(error) => Err(handle_bossbar_error(error)),
-                        }
-                    } else {
+                    if has_players {
                         let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
                         let players: Vec<Uuid> =
                             targets.iter().map(|player| player.gameprofile.id).collect();
@@ -447,11 +430,28 @@ impl CommandExecutor for SetExecutor {
                             }
                             Err(err) => Err(handle_bossbar_error(err)),
                         }
+                    } else {
+                        match bossbar.update_players(server, vec![]).await {
+                            Ok(()) => {
+                                sender
+                                    .send_message(TextComponent::translate(
+                                        "commands.bossbar.set.players.success.none",
+                                        [bossbar_prefix(
+                                            bossbar.bossbar_data.title.clone(),
+                                            &identifier,
+                                        )],
+                                    ))
+                                    .await;
+
+                                Ok(0)
+                            }
+                            Err(error) => Err(handle_bossbar_error(error)),
+                        }
                     }
                 }
                 CommandValueSet::Style => {
                     let style = BossbarStyleArgumentConsumer.find_arg_default_name(args)?;
-                    match bossbar.update_division(server, style.clone()).await {
+                    match bossbar.update_division(server, *style).await {
                         Ok(()) => {
                             sender
                                 .send_message(TextComponent::translate(

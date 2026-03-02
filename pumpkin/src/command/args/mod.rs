@@ -218,7 +218,7 @@ pub trait CommandErrorMappable<T> {
 
 impl CommandErrorMappable<Identifier> for IdentifierCreationResult {
     fn map_to_command_error(&self) -> Result<Identifier, CommandError> {
-        self.as_ref().map(Clone::clone).map_err(|_| {
+        self.clone().map_err(|_| {
             CommandError::CommandFailed(TextComponent::translate(ARGUMENT_ID_INVALID, &[]))
         })
     }

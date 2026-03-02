@@ -48,7 +48,6 @@ pub type IdentifierCreationResult = Result<Identifier, IdentifierError>;
 
 impl Identifier {
     /// Tries to create a new [`Identifier`] from both a specified namespace and path.
-    #[must_use]
     pub fn new(
         namespace: impl Into<IdentifierPart>,
         path: impl Into<IdentifierPart>,
@@ -109,7 +108,7 @@ impl Identifier {
 
     // Attempts to parse an identifier from a given string at compile-time.
     #[must_use]
-    pub const fn parse_static(identifier: &'static str) -> Identifier {
+    pub const fn parse_static(identifier: &'static str) -> Self {
         let bytes = identifier.as_bytes();
         let mut colon_i = 0;
 
@@ -237,8 +236,7 @@ impl Identifier {
         &self.path
     }
 
-    #[must_use]
-    fn validate_identifier(identifier: Identifier) -> IdentifierCreationResult {
+    fn validate_identifier(identifier: Self) -> IdentifierCreationResult {
         if !Self::is_valid_namespace(&identifier.namespace) {
             return Err(IdentifierError::InvalidNamespace(identifier));
         }
@@ -248,8 +246,7 @@ impl Identifier {
         Ok(identifier)
     }
 
-    #[must_use]
-    fn validate_identifier_only_path(identifier: Identifier) -> IdentifierCreationResult {
+    fn validate_identifier_only_path(identifier: Self) -> IdentifierCreationResult {
         if !Self::is_valid_path(&identifier.path) {
             return Err(IdentifierError::InvalidPath(identifier));
         }
@@ -312,7 +309,7 @@ impl<'de> Deserialize<'de> for Identifier {
         D: serde::Deserializer<'de>,
     {
         let identifier_string = String::deserialize(deserializer)?;
-        Ok(Identifier::parse(&identifier_string)
-            .map_err(|error| serde::de::Error::custom(error.to_string()))?)
+        Self::parse(&identifier_string)
+            .map_err(|error| serde::de::Error::custom(error.to_string()))
     }
 }
