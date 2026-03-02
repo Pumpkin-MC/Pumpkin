@@ -423,6 +423,8 @@ pub struct Entity {
     pub frozen_ticks: AtomicI32,
     /// Set during block-collision processing when the entity is touching powder snow.
     pub is_in_powder_snow: AtomicBool,
+    /// True if the entity was in powder snow during the previous tick.
+    pub was_in_powder_snow: AtomicBool,
     pub removal_reason: AtomicCell<Option<RemovalReason>>,
     // The passengers that entity has
     pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
@@ -525,6 +527,7 @@ impl Entity {
             has_visual_fire: AtomicBool::new(false),
             frozen_ticks: AtomicI32::new(0),
             is_in_powder_snow: AtomicBool::new(false),
+            was_in_powder_snow: AtomicBool::new(false),
             removal_reason: AtomicCell::new(None),
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
@@ -714,7 +717,11 @@ impl Entity {
     }
 
     #[expect(clippy::float_cmp)]
-    async fn adjust_movement_for_collisions(&self, movement: Vector3<f64>) -> Vector3<f64> {
+    async fn adjust_movement_for_collisions(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+    ) -> Vector3<f64> {
         self.on_ground.store(false, Ordering::SeqCst);
         self.supporting_block_pos.store(None);
         self.horizontal_collision.store(false, Ordering::SeqCst);
@@ -728,7 +735,7 @@ impl Entity {
         let (collisions, block_positions) = self
             .world
             .load()
-            .get_block_collisions(bounding_box.stretch(movement))
+            .get_block_collisions(bounding_box.stretch(movement), caller)
             .await;
 
         if collisions.is_empty() {
@@ -972,10 +979,18 @@ impl Entity {
                 },
             );
 
-            let collision_shape = world
-                .block_registry
-                .get_inside_collision_shape(block, &world, state, &pos)
-                .await;
+            let collision_shape = if block == &Block::POWDER_SNOW {
+                crate::block::blocks::powder_snow::inside_collision_shape_for_entity(
+                    caller.as_ref(),
+                    &pos,
+                )
+                .await
+            } else {
+                world
+                    .block_registry
+                    .get_inside_collision_shape(block, &world, state, &pos)
+                    .await
+            };
 
             if bounding_box.intersects(&collision_shape.at_pos(pos)) {
                 if block == &Block::POWDER_SNOW {
@@ -1367,7 +1382,9 @@ impl Entity {
             self.velocity.store(Vector3::default());
         }
 
-        let final_move = self.adjust_movement_for_collisions(motion).await;
+        let final_move = self
+            .adjust_movement_for_collisions(motion, caller.as_ref())
+            .await;
 
         self.move_pos(final_move);
 
@@ -2513,6 +2530,9 @@ impl EntityBase for Entity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             // Recomputed during movement/block-collision handling in the same tick.
+            let was_in_powder_snow = self.is_in_powder_snow.load(Ordering::Relaxed);
+            self.was_in_powder_snow
+                .store(was_in_powder_snow, Ordering::Relaxed);
             self.is_in_powder_snow.store(false, Ordering::Relaxed);
             self.update_last_pos();
             self.tick_portal(&caller).await;

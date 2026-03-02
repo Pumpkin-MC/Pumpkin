@@ -124,7 +124,17 @@ impl ItemBehaviour for EmptyBucketItem {
 
             let (block, state) = world.get_block_and_state_id(&block_pos).await;
 
-            if block
+            let mut picked_item = None;
+            if block == &Block::POWDER_SNOW {
+                world
+                    .break_block(
+                        &block_pos,
+                        None,
+                        BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
+                    )
+                    .await;
+                picked_item = Some(&Item::POWDER_SNOW_BUCKET);
+            } else if block
                 .properties(state)
                 .and_then(|properties| {
                     properties
@@ -142,6 +152,7 @@ impl ItemBehaviour for EmptyBucketItem {
                 world
                     .schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal)
                     .await;
+                picked_item = Some(&Item::WATER_BUCKET);
             } else if state == Block::LAVA.default_state.id
                 || state == Block::WATER.default_state.id
             {
@@ -155,6 +166,11 @@ impl ItemBehaviour for EmptyBucketItem {
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
+                picked_item = Some(if state == Block::LAVA.default_state.id {
+                    &Item::LAVA_BUCKET
+                } else {
+                    &Item::WATER_BUCKET
+                });
             } else {
                 let (block, state) = world
                     .get_block_and_state_id(&block_pos.offset(direction.to_offset()))
@@ -176,15 +192,14 @@ impl ItemBehaviour for EmptyBucketItem {
                             TickPriority::Normal,
                         )
                         .await;
+                    picked_item = Some(&Item::WATER_BUCKET);
                 } else {
                     return;
                 }
             }
 
-            let item = if state == Block::LAVA.default_state.id {
-                &Item::LAVA_BUCKET
-            } else {
-                &Item::WATER_BUCKET
+            let Some(item) = picked_item else {
+                return;
             };
 
             if player.gamemode.load() == GameMode::Creative {
@@ -236,7 +251,10 @@ impl ItemBehaviour for FilledBucketItem {
                 return;
             };
 
-            if item.id != Item::LAVA_BUCKET.id && world.dimension == Dimension::THE_NETHER {
+            if item.id != Item::LAVA_BUCKET.id
+                && item.id != Item::POWDER_SNOW_BUCKET.id
+                && world.dimension == Dimension::THE_NETHER
+            {
                 world
                     .play_sound_raw(
                         Sound::BlockFireExtinguish as u16,
@@ -248,9 +266,31 @@ impl ItemBehaviour for FilledBucketItem {
                     .await;
                 return;
             }
-            let (block, state) = world.get_block_and_state_id(&pos).await;
-            if waterlogged_check(block, state).is_some() && item.id == Item::WATER_BUCKET.id {
-                let state_id = set_waterlogged(block, state, true);
+            let (block, state) = world.get_block_and_state(&pos).await;
+            if item.id == Item::POWDER_SNOW_BUCKET.id {
+                let target_pos = if state.replaceable() {
+                    pos
+                } else {
+                    pos.offset(direction.to_offset())
+                };
+                let target_state = world.get_block_state(&target_pos).await;
+                if !target_state.is_air()
+                    && !target_state.is_liquid()
+                    && !target_state.replaceable()
+                {
+                    return;
+                }
+                world
+                    .set_block_state(
+                        &target_pos,
+                        Block::POWDER_SNOW.default_state.id,
+                        BlockFlags::NOTIFY_NEIGHBORS,
+                    )
+                    .await;
+            } else if waterlogged_check(block, state.id).is_some()
+                && item.id == Item::WATER_BUCKET.id
+            {
+                let state_id = set_waterlogged(block, state.id, true);
                 world
                     .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                     .await;
