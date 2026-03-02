@@ -275,6 +275,7 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
         }
         for (key, value) in pumpkin_ka_ge {
             array[Locale::KaGe as usize].insert(format!("pumpkin:{key}"), value);
+        }
         for (key, value) in pumpkin_ko_kr {
             array[Locale::KoKr as usize].insert(format!("pumpkin:{key}"), value);
         }
