@@ -124,8 +124,7 @@ impl ItemBehaviour for EmptyBucketItem {
 
             let (block, state) = world.get_block_and_state_id(&block_pos).await;
 
-            let mut picked_item = None;
-            if block == &Block::POWDER_SNOW {
+            let picked_item = if block == &Block::POWDER_SNOW {
                 world
                     .break_block(
                         &block_pos,
@@ -133,7 +132,7 @@ impl ItemBehaviour for EmptyBucketItem {
                         BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                     )
                     .await;
-                picked_item = Some(&Item::POWDER_SNOW_BUCKET);
+                Some(&Item::POWDER_SNOW_BUCKET)
             } else if block
                 .properties(state)
                 .and_then(|properties| {
@@ -152,7 +151,7 @@ impl ItemBehaviour for EmptyBucketItem {
                 world
                     .schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal)
                     .await;
-                picked_item = Some(&Item::WATER_BUCKET);
+                Some(&Item::WATER_BUCKET)
             } else if state == Block::LAVA.default_state.id
                 || state == Block::WATER.default_state.id
             {
@@ -166,11 +165,11 @@ impl ItemBehaviour for EmptyBucketItem {
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
-                picked_item = Some(if state == Block::LAVA.default_state.id {
+                Some(if state == Block::LAVA.default_state.id {
                     &Item::LAVA_BUCKET
                 } else {
                     &Item::WATER_BUCKET
-                });
+                })
             } else {
                 let (block, state) = world
                     .get_block_and_state_id(&block_pos.offset(direction.to_offset()))
@@ -192,11 +191,11 @@ impl ItemBehaviour for EmptyBucketItem {
                             TickPriority::Normal,
                         )
                         .await;
-                    picked_item = Some(&Item::WATER_BUCKET);
+                    Some(&Item::WATER_BUCKET)
                 } else {
                     return;
                 }
-            }
+            };
 
             let Some(item) = picked_item else {
                 return;

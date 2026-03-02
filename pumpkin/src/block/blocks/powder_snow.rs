@@ -57,7 +57,7 @@ pub(crate) async fn collision_shape_for_entity(
         .map(|living| living.fall_distance.load())
         .unwrap_or(0.0);
 
-    if fall_distance > 2.5_f32 {
+    if fall_distance > 2.5f32 {
         return Some(FALLING_COLLISION_SHAPE);
     }
 
