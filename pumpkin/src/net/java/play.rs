@@ -15,6 +15,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
 use crate::entity::EntityBase;
+use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::{ChatMode, ChatSession, Player};
 use crate::error::PumpkinError;
 use crate::log_at_level;
@@ -31,6 +32,7 @@ use crate::plugin::player::player_interact_event::{InteractAction, PlayerInterac
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
+use crate::world::loot::{LootContextParameters, LootTableExt};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
     BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
@@ -62,6 +64,8 @@ use pumpkin_protocol::java::server::play::{
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomGenerator, get_seed};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
@@ -1500,12 +1504,52 @@ impl JavaClient {
                     let (block, state) = world.get_block_and_state(&location).await;
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
+                    let custom_harvest_result =
+                        if block_drop && let Some(server) = world.server.upgrade() {
+                            let tool = player.inventory.held_item().lock().await.clone();
+                            let item_drops =
+                                block
+                                    .loot_table
+                                    .as_ref()
+                                    .map_or_else(Vec::new, |loot_table| {
+                                        loot_table.get_loot(LootContextParameters {
+                                            block_state: Some(state),
+                                            ..Default::default()
+                                        })
+                                    });
+                            let exp_to_drop = block.experience.as_ref().map_or(0, |experience| {
+                                let mut random =
+                                    RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+                                experience.experience.get(&mut random)
+                            });
+                            let event =
+                                crate::plugin::player::harvest_block::PlayerHarvestBlockEvent::new(
+                                    player.clone(),
+                                    world.clone(),
+                                    location,
+                                    state,
+                                    tool,
+                                    item_drops,
+                                    exp_to_drop,
+                                );
+                            let event = server.plugin_manager.fire(event).await;
+                            if event.cancelled {
+                                world.set_block_breaking(entity, location, -1).await;
+                                self.update_sequence(player, player_action.sequence.0);
+                                return;
+                            }
+                            Some((event.item_drops, event.exp_to_drop))
+                        } else {
+                            None
+                        };
 
                     let new_state = world
                         .break_block(
                             &location,
                             Some(player.clone()),
-                            if block_drop {
+                            if custom_harvest_result.is_some() {
+                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            } else if block_drop {
                                 BlockFlags::NOTIFY_NEIGHBORS
                             } else {
                                 BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
@@ -1517,6 +1561,22 @@ impl JavaClient {
                             .block_registry
                             .broken(&world, block, player, &location, server, state)
                             .await;
+
+                        if let Some((item_drops, exp_to_drop)) = custom_harvest_result {
+                            for item_drop in item_drops {
+                                if !item_drop.is_empty() {
+                                    world.drop_stack(&location, item_drop).await;
+                                }
+                            }
+                            if exp_to_drop > 0 {
+                                ExperienceOrbEntity::spawn(
+                                    &world,
+                                    location.to_f64(),
+                                    exp_to_drop as u32,
+                                )
+                                .await;
+                            }
+                        }
                         player.apply_tool_damage_for_block_break(state).await;
                     }
                     self.sync_block_state_to_client(&world, location).await;
