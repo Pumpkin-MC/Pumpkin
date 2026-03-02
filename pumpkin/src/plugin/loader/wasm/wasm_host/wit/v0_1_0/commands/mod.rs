@@ -24,7 +24,10 @@ use crate::{
             textcomponent::TextComponentArgConsumer,
             time::TimeArgumentConsumer,
         },
-        tree::builder::{argument, literal},
+        tree::{
+            CommandTree,
+            builder::{argument, literal},
+        },
     },
     plugin::loader::wasm::wasm_host::{
         DowncastResourceExt,
@@ -65,7 +68,8 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
 
 impl pumpkin::plugin::command::HostCommand for PluginHostState {
     async fn new(&mut self, names: Vec<String>, description: String) -> Resource<Command> {
-        todo!()
+        self.add_command(CommandTree::new(names, description))
+            .unwrap()
     }
 
     async fn then(&mut self, command: Resource<Command>, node: Resource<CommandNode>) -> () {
