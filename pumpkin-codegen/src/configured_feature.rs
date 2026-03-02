@@ -89,6 +89,7 @@ pub fn build() -> TokenStream {
                 simple_block::SimpleBlockFeature,
                 simple_random_selector::SimpleRandomFeature,
                 spring_feature::{BlockWrapper, SpringFeatureFeature},
+                geode::GeodeFeature,
                 tree::TreeFeature,
                 tree::trunk::{TrunkPlacer, TrunkType,
                     bending::BendingTrunkPlacer,
@@ -365,8 +366,78 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 })
             }
         }
+        "minecraft:geode" => {
+            let blocks = &config["blocks"];
+            let filling_provider = value_to_block_state_provider(&blocks["filling_provider"]);
+            let inner_layer_provider = value_to_block_state_provider(&blocks["inner_layer_provider"]);
+            let alternate_inner_layer_provider =
+                value_to_block_state_provider(&blocks["alternate_inner_layer_provider"]);
+            let middle_layer_provider = value_to_block_state_provider(&blocks["middle_layer_provider"]);
+            let outer_layer_provider = value_to_block_state_provider(&blocks["outer_layer_provider"]);
+            let inner_placements: Vec<TokenStream> = blocks["inner_placements"]
+                .as_array()
+                .map(|arr| arr.iter().map(|s| value_to_block_state_codec(s)).collect())
+                .unwrap_or_default();
+            let cannot_replace = value_to_block_wrapper(&blocks["cannot_replace"]);
+            let invalid_blocks = value_to_block_wrapper(&blocks["invalid_blocks"]);
+
+            let layers = &config["layers"];
+            let filling = layers["filling"].as_f64().unwrap_or(1.7);
+            let inner_layer = layers["inner_layer"].as_f64().unwrap_or(2.2);
+            let middle_layer = layers["middle_layer"].as_f64().unwrap_or(3.2);
+            let outer_layer = layers["outer_layer"].as_f64().unwrap_or(4.2);
+
+            let crack = &config["crack"];
+            let generate_crack_chance = crack["generate_crack_chance"].as_f64().unwrap_or(1.0);
+            let base_crack_size = crack["base_crack_size"].as_f64().unwrap_or(2.0);
+            let crack_point_offset = crack["crack_point_offset"].as_i64().unwrap_or(2) as i32;
+
+            let use_potential_placements_chance =
+                config["use_potential_placements_chance"].as_f64().unwrap_or(0.35);
+            let use_alternate_layer0_chance =
+                config["use_alternate_layer0_chance"].as_f64().unwrap_or(0.0);
+            let placements_require_layer0_alternate =
+                config["placements_require_layer0_alternate"].as_bool().unwrap_or(true);
+            let outer_wall_distance = value_to_int_provider(&config["outer_wall_distance"]);
+            let distribution_points = value_to_int_provider(&config["distribution_points"]);
+            let point_offset = value_to_int_provider(&config["point_offset"]);
+            let min_gen_offset = config["min_gen_offset"].as_i64().unwrap_or(-16) as i32;
+            let max_gen_offset = config["max_gen_offset"].as_i64().unwrap_or(16) as i32;
+            let noise_multiplier = config["noise_multiplier"].as_f64().unwrap_or(0.05);
+            let invalid_blocks_threshold =
+                config["invalid_blocks_threshold"].as_i64().unwrap_or(0) as i32;
+
+            quote! {
+                ConfiguredFeature::Geode(Box::new(GeodeFeature {
+                    filling_provider: #filling_provider,
+                    inner_layer_provider: #inner_layer_provider,
+                    alternate_inner_layer_provider: #alternate_inner_layer_provider,
+                    middle_layer_provider: #middle_layer_provider,
+                    outer_layer_provider: #outer_layer_provider,
+                    inner_placements: vec![#(#inner_placements),*],
+                    cannot_replace: #cannot_replace,
+                    invalid_blocks: #invalid_blocks,
+                    filling: #filling,
+                    inner_layer: #inner_layer,
+                    middle_layer: #middle_layer,
+                    outer_layer: #outer_layer,
+                    generate_crack_chance: #generate_crack_chance,
+                    base_crack_size: #base_crack_size,
+                    crack_point_offset: #crack_point_offset,
+                    use_potential_placements_chance: #use_potential_placements_chance,
+                    use_alternate_layer0_chance: #use_alternate_layer0_chance,
+                    placements_require_layer0_alternate: #placements_require_layer0_alternate,
+                    outer_wall_distance: #outer_wall_distance,
+                    distribution_points: #distribution_points,
+                    point_offset: #point_offset,
+                    min_gen_offset: #min_gen_offset,
+                    max_gen_offset: #max_gen_offset,
+                    noise_multiplier: #noise_multiplier,
+                    invalid_blocks_threshold: #invalid_blocks_threshold,
+                }))
+            }
+        },
         // All TODO/empty features
-        "minecraft:geode" => quote! { ConfiguredFeature::Geode(crate::generation::feature::features::geode::GeodeFeature {}) },
         "minecraft:fossil" => quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) },
         "minecraft:lake" => quote! { ConfiguredFeature::Lake(crate::generation::feature::features::lake::LakeFeature {}) },
         "minecraft:disk" => quote! { ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {}) },

@@ -20,6 +20,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         block_column::{BlockColumnFeature, Layer},
         end_spike::{EndSpikeFeature, Spike},
         fallen_tree::FallenTreeFeature,
+        geode::GeodeFeature,
         nether_forest_vegetation::NetherForestVegetationFeature,
         netherrack_replace_blobs::ReplaceBlobsFeature,
         ore::{OreFeature, OreTarget},
@@ -144,7 +145,108 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     );
     map.insert(
         "amethyst_geode".to_string(),
-        ConfiguredFeature::Geode(crate::generation::feature::features::geode::GeodeFeature {}),
+        ConfiguredFeature::Geode(Box::new(GeodeFeature {
+            filling_provider: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::AIR,
+                    properties: None,
+                },
+            }),
+            inner_layer_provider: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::AMETHYST_BLOCK,
+                    properties: None,
+                },
+            }),
+            alternate_inner_layer_provider: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::BUDDING_AMETHYST,
+                    properties: None,
+                },
+            }),
+            middle_layer_provider: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::CALCITE,
+                    properties: None,
+                },
+            }),
+            outer_layer_provider: BlockStateProvider::Simple(SimpleStateProvider {
+                state: BlockStateCodec {
+                    name: &pumpkin_data::Block::SMOOTH_BASALT,
+                    properties: None,
+                },
+            }),
+            inner_placements: vec![
+                {
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("facing".to_string(), "up".to_string());
+                    props.insert("waterlogged".to_string(), "false".to_string());
+                    BlockStateCodec {
+                        name: &pumpkin_data::Block::SMALL_AMETHYST_BUD,
+                        properties: Some(props),
+                    }
+                },
+                {
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("facing".to_string(), "up".to_string());
+                    props.insert("waterlogged".to_string(), "false".to_string());
+                    BlockStateCodec {
+                        name: &pumpkin_data::Block::MEDIUM_AMETHYST_BUD,
+                        properties: Some(props),
+                    }
+                },
+                {
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("facing".to_string(), "up".to_string());
+                    props.insert("waterlogged".to_string(), "false".to_string());
+                    BlockStateCodec {
+                        name: &pumpkin_data::Block::LARGE_AMETHYST_BUD,
+                        properties: Some(props),
+                    }
+                },
+                {
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("facing".to_string(), "up".to_string());
+                    props.insert("waterlogged".to_string(), "false".to_string());
+                    BlockStateCodec {
+                        name: &pumpkin_data::Block::AMETHYST_CLUSTER,
+                        properties: Some(props),
+                    }
+                },
+            ],
+            cannot_replace: BlockWrapper::Single("#minecraft:features_cannot_replace".to_string()),
+            invalid_blocks: BlockWrapper::Single("#minecraft:geode_invalid_blocks".to_string()),
+            filling: 1.7f64,
+            inner_layer: 2.2f64,
+            middle_layer: 3.2f64,
+            outer_layer: 4.2f64,
+            generate_crack_chance: 0.95f64,
+            base_crack_size: 2f64,
+            crack_point_offset: 2i32,
+            use_potential_placements_chance: 0.35f64,
+            use_alternate_layer0_chance: 0.083f64,
+            placements_require_layer0_alternate: true,
+            outer_wall_distance: IntProvider::Object(NormalIntProvider::Uniform(
+                UniformIntProvider {
+                    min_inclusive: 4i32,
+                    max_inclusive: 6i32,
+                },
+            )),
+            distribution_points: IntProvider::Object(NormalIntProvider::Uniform(
+                UniformIntProvider {
+                    min_inclusive: 3i32,
+                    max_inclusive: 4i32,
+                },
+            )),
+            point_offset: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 1i32,
+                max_inclusive: 2i32,
+            })),
+            min_gen_offset: -16i32,
+            max_gen_offset: 16i32,
+            noise_multiplier: 0.05f64,
+            invalid_blocks_threshold: 1i32,
+        })),
     );
     map.insert(
         "azalea_tree".to_string(),
