@@ -716,18 +716,16 @@ impl Player {
             Ordering::Relaxed,
         );
 
-        combat::handle_post_damage_effects(
-            self,
-            &*victim,
+        let ctx = combat::PostDamageContext {
+            attacker: self,
+            victim: &*victim,
             damage,
             enchant_damage,
             attack_type,
-            &enchants,
-            &world,
-            &pos,
-            config.knockback,
-        )
-        .await;
+            enchants: &enchants,
+            config_knockback: config.knockback,
+        };
+        combat::handle_post_damage_effects(&ctx, &world, &pos).await;
 
         self.damage_held_item(1).await;
     }
@@ -782,7 +780,7 @@ impl Player {
             1.0
         };
 
-        let damage = base_damage + add_damage * f64::from(damage_multiplier);
+        let damage = base_damage + add_damage * damage_multiplier;
         (damage, cooldown as f32)
     }
 

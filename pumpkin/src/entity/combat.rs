@@ -127,7 +127,7 @@ pub async fn apply_sweep_attack(
     // Find entities within range (vanilla uses 1.0 block horizontal + 0.25 vertical from victim)
     let nearby = world.get_nearby_entities(*victim_pos, 2.0);
 
-    for (_, entity) in &nearby {
+    for entity in nearby.values() {
         let ent = entity.get_entity();
 
         // Skip the attacker and the original victim
@@ -212,7 +212,7 @@ pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: 
 
 /// Get enchantment levels from the player's held item.
 ///
-/// Returns (sharpness, smite, bane_of_arthropods, knockback, fire_aspect, sweeping_edge).
+/// Returns a `CombatEnchantments` struct with all combat-relevant enchantment levels.
 pub async fn get_combat_enchantments(player: &Player) -> CombatEnchantments {
     let item = player.inventory().held_item();
     let item_lock = item.lock().await;
@@ -237,41 +237,46 @@ pub struct CombatEnchantments {
     pub sweeping_edge: i32,
 }
 
+/// Context for post-damage combat effects.
+pub struct PostDamageContext<'a> {
+    pub attacker: &'a Player,
+    pub victim: &'a dyn EntityBase,
+    pub damage: f64,
+    pub enchant_damage: f64,
+    pub attack_type: AttackType,
+    pub enchants: &'a CombatEnchantments,
+    pub config_knockback: bool,
+}
+
 /// Handle post-damage combat effects: knockback, sweep attack, fire aspect, and particles.
 pub async fn handle_post_damage_effects(
-    attacker: &Player,
-    victim: &dyn EntityBase,
-    damage: f64,
-    enchant_damage: f64,
-    attack_type: AttackType,
-    enchants: &CombatEnchantments,
+    ctx: &PostDamageContext<'_>,
     world: &World,
     pos: &Vector3<f64>,
-    config_knockback: bool,
 ) {
-    let attacker_entity = &attacker.living_entity.entity;
-    let victim_entity = victim.get_entity();
+    let attacker_entity = &ctx.attacker.living_entity.entity;
+    let victim_entity = ctx.victim.get_entity();
 
     // Spawn particles
-    if matches!(attack_type, AttackType::Critical) {
-        spawn_crit_particles(world, pos, enchant_damage > 0.0).await;
-    } else if enchant_damage > 0.0 {
+    if matches!(ctx.attack_type, AttackType::Critical) {
+        spawn_crit_particles(world, pos, ctx.enchant_damage > 0.0).await;
+    } else if ctx.enchant_damage > 0.0 {
         spawn_crit_particles(world, pos, true).await;
     }
 
-    if victim.get_living_entity().is_some() {
-        let mut knockback_strength = 1.0 + f64::from(enchants.knockback) * 0.5;
+    if ctx.victim.get_living_entity().is_some() {
+        let mut knockback_strength = 1.0 + f64::from(ctx.enchants.knockback) * 0.5;
 
-        match attack_type {
+        match ctx.attack_type {
             AttackType::Knockback => knockback_strength += 1.0,
             AttackType::Sweeping => {
                 apply_sweep_attack(
-                    attacker,
+                    ctx.attacker,
                     victim_entity.entity_id,
                     pos,
-                    damage,
-                    enchants.sweeping_edge,
-                    enchants.knockback,
+                    ctx.damage,
+                    ctx.enchants.sweeping_edge,
+                    ctx.enchants.knockback,
                     world,
                 )
                 .await;
@@ -279,12 +284,12 @@ pub async fn handle_post_damage_effects(
             _ => {}
         }
 
-        if config_knockback {
+        if ctx.config_knockback {
             // Armor stands only take knockback from sprint attacks or knockback enchantment
             let is_armor_stand = *victim_entity.entity_type == EntityType::ARMOR_STAND;
             let should_apply = !is_armor_stand
-                || matches!(attack_type, AttackType::Knockback)
-                || enchants.knockback > 0;
+                || matches!(ctx.attack_type, AttackType::Knockback)
+                || ctx.enchants.knockback > 0;
 
             if should_apply {
                 handle_knockback(attacker_entity, victim_entity, knockback_strength);
@@ -292,8 +297,8 @@ pub async fn handle_post_damage_effects(
         }
 
         // Fire Aspect: set victim on fire (4 seconds per level)
-        if enchants.fire_aspect > 0 {
-            victim_entity.set_on_fire_for(4.0 * enchants.fire_aspect as f32);
+        if ctx.enchants.fire_aspect > 0 {
+            victim_entity.set_on_fire_for(4.0 * ctx.enchants.fire_aspect as f32);
             victim_entity.set_on_fire(true).await;
         }
     }
