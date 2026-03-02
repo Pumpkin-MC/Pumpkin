@@ -2,6 +2,7 @@ use std::sync::atomic::Ordering;
 
 use pumpkin_data::{
     damage::DamageType,
+    entity::EntityType,
     particle::Particle,
     sound::{Sound, SoundCategory},
     tag::{self, Taggable},
@@ -240,6 +241,68 @@ pub struct CombatEnchantments {
     pub knockback: i32,
     pub fire_aspect: i32,
     pub sweeping_edge: i32,
+}
+
+/// Handle post-damage combat effects: knockback, sweep attack, fire aspect, and particles.
+pub async fn handle_post_damage_effects(
+    attacker: &Player,
+    victim: &dyn EntityBase,
+    damage: f64,
+    enchant_damage: f64,
+    attack_type: AttackType,
+    enchants: &CombatEnchantments,
+    world: &World,
+    pos: &Vector3<f64>,
+    config_knockback: bool,
+) {
+    let attacker_entity = &attacker.living_entity.entity;
+    let victim_entity = victim.get_entity();
+
+    // Spawn particles
+    if matches!(attack_type, AttackType::Critical) {
+        spawn_crit_particles(world, pos, enchant_damage > 0.0).await;
+    } else if enchant_damage > 0.0 {
+        spawn_crit_particles(world, pos, true).await;
+    }
+
+    if victim.get_living_entity().is_some() {
+        let mut knockback_strength = 1.0 + f64::from(enchants.knockback) * 0.5;
+
+        match attack_type {
+            AttackType::Knockback => knockback_strength += 1.0,
+            AttackType::Sweeping => {
+                apply_sweep_attack(
+                    attacker,
+                    victim_entity.entity_id,
+                    pos,
+                    damage,
+                    enchants.sweeping_edge,
+                    enchants.knockback,
+                    world,
+                )
+                .await;
+            }
+            _ => {}
+        }
+
+        if config_knockback {
+            // Armor stands only take knockback from sprint attacks or knockback enchantment
+            let is_armor_stand = *victim_entity.entity_type == EntityType::ARMOR_STAND;
+            let should_apply = !is_armor_stand
+                || matches!(attack_type, AttackType::Knockback)
+                || enchants.knockback > 0;
+
+            if should_apply {
+                handle_knockback(attacker_entity, victim_entity, knockback_strength);
+            }
+        }
+
+        // Fire Aspect: set victim on fire (4 seconds per level)
+        if enchants.fire_aspect > 0 {
+            victim_entity.set_on_fire_for(4.0 * enchants.fire_aspect as f32);
+            victim_entity.set_on_fire(true).await;
+        }
+    }
 }
 
 pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type: AttackType) {
