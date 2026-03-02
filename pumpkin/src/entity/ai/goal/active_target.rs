@@ -6,6 +6,7 @@ use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::{EntityBase, mob::MobEntity, player::Player};
 use crate::world::World;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use rand::RngExt;
 use std::sync::Arc;
@@ -35,7 +36,9 @@ impl ActiveTargetGoal {
     {
         let track_target_goal = TrackTargetGoal::new(check_visibility, check_can_navigate);
         let mut target_predicate = TargetPredicate::create_attackable();
-        target_predicate.base_max_distance = TrackTargetGoal::get_follow_range(mob);
+        target_predicate.base_max_distance = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
         if let Some(predicate) = predicate {
             target_predicate.set_predicate(predicate);
         }
@@ -56,7 +59,9 @@ impl ActiveTargetGoal {
     ) -> Box<Self> {
         let track_target_goal = TrackTargetGoal::with_default(check_visibility);
         let mut target_predicate = TargetPredicate::create_attackable();
-        target_predicate.base_max_distance = TrackTargetGoal::get_follow_range(mob);
+        target_predicate.base_max_distance = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
         Box::new(Self {
             track_target_goal,
             target: None,
@@ -72,7 +77,8 @@ impl ActiveTargetGoal {
             let potential_player = world
                 .get_closest_player(
                     mob.living_entity.entity.pos.load(),
-                    TrackTargetGoal::get_follow_range(mob),
+                    mob.living_entity
+                        .get_attribute_value(&Attributes::FOLLOW_RANGE),
                 )
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
             if let Some(potential_entity) = potential_player
@@ -87,7 +93,8 @@ impl ActiveTargetGoal {
         } else {
             let potential_entity = world.get_closest_entity(
                 mob.living_entity.entity.pos.load(),
-                TrackTargetGoal::get_follow_range(mob),
+                mob.living_entity
+                    .get_attribute_value(&Attributes::FOLLOW_RANGE),
                 Some(&[self.target_type]),
             );
             if let Some(potential_entity) = potential_entity
