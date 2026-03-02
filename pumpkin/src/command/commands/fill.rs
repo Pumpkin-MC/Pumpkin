@@ -264,14 +264,15 @@ impl CommandExecutor for Executor {
         Box::pin(async move {
             let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
             let block_state_id = block.default_state.id;
-            let from = BlockPosArgumentConsumer::find_arg(args, ARG_FROM)?;
-            let to = BlockPosArgumentConsumer::find_arg(args, ARG_TO)?;
             let mode = self.0;
+            let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
+            let from = BlockPosArgumentConsumer::find_loaded_arg(args, ARG_FROM, &world)?;
+            let to = BlockPosArgumentConsumer::find_loaded_arg(args, ARG_TO, &world)?;
 
             let mut context = Context {
                 block_state_id,
                 option_filter: BlockPredicateArgumentConsumer::find_arg(args, ARG_FILTER)?,
-                world: sender.world().ok_or(CommandError::InvalidRequirement)?,
+                world,
                 placed_blocks: 0,
                 to_update: Vec::new(),
 
@@ -283,13 +284,6 @@ impl CommandExecutor for Executor {
                 end_y: from.0.y.max(to.0.y),
                 end_z: from.0.z.max(to.0.z),
             };
-
-            if !context.world.is_in_build_limit(from) || !context.world.is_in_build_limit(to) {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
-                    [],
-                )));
-            }
 
             let max_block_modifications = {
                 let level_info = server.level_info.load();

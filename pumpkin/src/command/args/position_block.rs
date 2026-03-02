@@ -1,12 +1,14 @@
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandSender;
 use crate::command::args::ConsumeResult;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
+use crate::world::World;
 
 use super::super::args::ArgumentConsumer;
 use super::coordinate::MaybeRelativeBlockCoordinate;
@@ -86,5 +88,47 @@ impl<'a> FindArg<'a> for BlockPosArgumentConsumer {
             Some(Arg::BlockPos(data)) => Ok(*data),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
+    }
+}
+
+impl BlockPosArgumentConsumer {
+    pub fn find_loaded_arg(
+        args: &super::ConsumedArgs,
+        name: &str,
+        world: &World,
+    ) -> Result<BlockPos, CommandError> {
+        let pos = Self::find_arg(args, name)?;
+
+        if world.level.try_get_chunk(&pos.chunk_position()).is_none() {
+            return Err(CommandError::CommandFailed(TextComponent::translate(
+                "argument.pos.unloaded",
+                [],
+            )));
+        }
+
+        if !world.is_in_build_limit(pos) {
+            return Err(CommandError::CommandFailed(TextComponent::translate(
+                "argument.pos.outofworld",
+                [],
+            )));
+        }
+
+        Ok(pos)
+    }
+
+    pub fn find_spawnable_arg(
+        args: &super::ConsumedArgs,
+        name: &str,
+    ) -> Result<BlockPos, CommandError> {
+        let pos = Self::find_arg(args, name)?;
+
+        if !World::is_valid(pos) {
+            return Err(CommandError::CommandFailed(TextComponent::translate(
+                "argument.pos.outofbounds",
+                [],
+            )));
+        }
+
+        Ok(pos)
     }
 }

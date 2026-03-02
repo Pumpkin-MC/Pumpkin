@@ -81,13 +81,11 @@ impl CommandExecutor for TargetsPosExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-            let Some(Arg::BlockPos(pos)) = args.get(ARG_POS) else {
-                return Err(CommandError::InvalidConsumption(Some(ARG_POS.into())));
-            };
+            let pos = BlockPosArgumentConsumer::find_spawnable_arg(args, ARG_POS)?;
 
             for target in targets {
                 let yaw = target.living_entity.entity.yaw.load();
-                set_spawnpoint(sender, target, *pos, yaw).await;
+                set_spawnpoint(sender, target, pos, yaw).await;
             }
 
             Ok(targets.len() as i32)
@@ -107,15 +105,13 @@ impl CommandExecutor for TargetsPosAngleExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-            let Some(Arg::BlockPos(pos)) = args.get(ARG_POS) else {
-                return Err(CommandError::InvalidConsumption(Some(ARG_POS.into())));
-            };
+            let pos = BlockPosArgumentConsumer::find_spawnable_arg(args, ARG_POS)?;
             let Some(Arg::Rotation(yaw, _, _, _)) = args.get(ARG_ANGLE) else {
                 return Err(CommandError::InvalidConsumption(Some(ARG_ANGLE.into())));
             };
 
             for target in targets {
-                set_spawnpoint(sender, target, *pos, *yaw).await;
+                set_spawnpoint(sender, target, pos, *yaw).await;
             }
 
             Ok(targets.len() as i32)
