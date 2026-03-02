@@ -2808,7 +2808,6 @@ name = "pumpkin-plugin-api"
 version = "0.1.0"
 dependencies = [
  "postcard",
- "pumpkin-util",
  "tracing",
  "tracing-serde-structured",
  "wit-bindgen 0.53.1",
