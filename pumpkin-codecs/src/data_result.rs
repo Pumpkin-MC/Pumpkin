@@ -546,9 +546,19 @@ impl<R> DataResult<R> {
                 },
                 _,
             ) => Self::error_any_with_lifecycle(m1, partial_result, Lifecycle::Stable),
-            (Self::Success { result, .. }, DataResult::Error { message: m2, .. }) => {
-                Self::error_any_with_lifecycle(m2.clone(), Some(result), Lifecycle::Stable)
-            }
+
+            (
+                Self::Success { result, .. },
+                DataResult::Error {
+                    message: m2,
+                    partial_result,
+                    ..
+                },
+            ) => Self::error_any_with_lifecycle(
+                m2.clone(),
+                partial_result.is_some().then_some(result),
+                Lifecycle::Stable,
+            ),
         }
     }
 
