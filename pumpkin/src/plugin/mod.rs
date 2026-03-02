@@ -312,8 +312,9 @@ impl PluginManager {
             }
 
             // Start loading plugin concurrently
-            if let Ok(task) = self.start_loading_plugin(&path).await {
-                load_tasks.push(task);
+            match self.start_loading_plugin(&path).await {
+                Ok(task) => load_tasks.push(task),
+                Err(err) => error!("{}", err),
             }
         }
 
