@@ -64,6 +64,7 @@ impl Context {
     /// Registers an event handler with the plugin.
     ///
     /// The handler must implement the [`EventHandler`] trait.
+    /// If the event is blocking, returning an event from the handler will modify the event.
     pub fn register_event_handler<
         E: FromIntoEvent + Send + Sync + 'static,
         H: EventHandler<E> + Send + Sync + 'static,

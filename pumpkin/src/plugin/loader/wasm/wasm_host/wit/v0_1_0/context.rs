@@ -3,7 +3,7 @@ use std::sync::Arc;
 use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::{
-    state::{ContextResource, PluginHostState},
+    state::{CommandResource, ContextResource, PluginHostState},
     wit::v0_1_0::{
         events::WasmPluginV0_1_0EventHandler,
         pumpkin::{
@@ -87,9 +87,25 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
     async fn register_command(
         &mut self,
         context: Resource<Context>,
-        command_id: u32,
         command: Resource<Command>,
+        permission: String,
     ) {
-        todo!()
+        let command = self
+            .resource_table
+            .delete::<CommandResource>(Resource::new_own(command.rep()))
+            .expect("invalid command resource handle")
+            .provider;
+
+        let context_resource = self
+            .resource_table
+            .get_any_mut(context.rep())
+            .expect("invalid context resource handle")
+            .downcast_ref::<ContextResource>()
+            .expect("resource type mismatch");
+
+        context_resource
+            .provider
+            .register_command(command, permission)
+            .await;
     }
 }
