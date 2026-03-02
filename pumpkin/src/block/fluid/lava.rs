@@ -42,6 +42,9 @@ impl FlowingLava {
         for dir in BlockDirection::all() {
             let neighbor_pos = block_pos.offset(dir.to_offset());
             if world.get_block(&neighbor_pos).await == &Block::WATER {
+                if dir == BlockDirection::Down {
+                    return true;
+                }
                 let block = if is_still {
                     Block::OBSIDIAN
                 } else {
