@@ -42,7 +42,7 @@ impl<C: MapCodec> MapEncoder for ValidatedMapCodec<C> {
     ) -> B {
         match (self.validator)(input) {
             Ok(()) => self.codec.encode(input, ops, prefix),
-            Err(s) => prefix.with_errors_from(&DataResult::<()>::error(s)),
+            Err(s) => prefix.with_errors_from(&DataResult::<()>::new_error(s)),
         }
     }
 }
@@ -55,7 +55,7 @@ impl<C: MapCodec> MapDecoder for ValidatedMapCodec<C> {
     ) -> DataResult<Self::Value> {
         let result = self.codec.decode(input, ops);
         if let Some(v) = result.result_or_partial_as_ref() {
-            (self.validator)(v).map_or_else(DataResult::error, |()| result)
+            (self.validator)(v).map_or_else(DataResult::new_error, |()| result)
         } else {
             result
         }

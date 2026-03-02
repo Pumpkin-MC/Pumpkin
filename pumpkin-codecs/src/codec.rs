@@ -195,9 +195,9 @@ macro_rules! impl_unsigned_transformer_codec {
         pub static $name: $unsigned_codec_type = flat_xmap(
             &$transformed_codec,
             |i| <$unsigned_prim>::try_from(i)
-                    .map_or_else(|_| DataResult::error(concat!("Could not fit ", stringify!($signed_prim), " into ", stringify!($unsigned_prim))), DataResult::success),
+                    .map_or_else(|_| DataResult::new_error(concat!("Could not fit ", stringify!($signed_prim), " into ", stringify!($unsigned_prim))), DataResult::new_success),
             |u| <$signed_prim>::try_from(*u)
-                .map_or_else(|_| DataResult::error(concat!("Could not fit ", stringify!($unsigned_prim), " into ", stringify!($signed_prim))), DataResult::success),
+                .map_or_else(|_| DataResult::new_error(concat!("Could not fit ", stringify!($unsigned_prim), " into ", stringify!($signed_prim))), DataResult::new_success),
         );
     };
 }

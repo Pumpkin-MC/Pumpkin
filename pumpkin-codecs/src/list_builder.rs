@@ -28,7 +28,7 @@ pub fn new_list_builder_impl<T>(
     ops: &'static impl DynamicOps<Value = T>,
 ) -> impl ListBuilder<Value = T> {
     ListBuilderImpl {
-        elements: DataResult::success(vec![]),
+        elements: DataResult::new_success(vec![]),
         ops,
     }
 }

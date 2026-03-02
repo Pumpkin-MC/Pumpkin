@@ -59,11 +59,11 @@ impl<C: Codec> MapDecoder for OptionalFieldMapCodec<C> {
         ops: &'static impl DynamicOps<Value = T>,
     ) -> DataResult<Self::Value> {
         input.get_str(self.name).map_or_else(
-            || DataResult::success(None),
+            || DataResult::new_success(None),
             |value| {
                 let result = self.element_codec.parse(value.clone(), ops);
                 if result.is_error() && self.lenient {
-                    DataResult::success(None)
+                    DataResult::new_success(None)
                 } else {
                     result.map(Some)
                 }

@@ -23,14 +23,14 @@ where
 
 impl<C: Codec> ListCodec<C> {
     fn create_too_short_error<T>(&self, size: usize) -> DataResult<T> {
-        DataResult::error(format!(
+        DataResult::new_error(format!(
             "List is too short: {size}, expected range [{}-{}]",
             self.min_size, self.max_size
         ))
     }
 
     fn create_too_long_error<T>(&self, size: usize) -> DataResult<T> {
-        DataResult::error(format!(
+        DataResult::new_error(format!(
             "List is too long: {size}, expected range [{}-{}]",
             self.min_size, self.max_size
         ))
@@ -80,7 +80,7 @@ where
             // This is used to keep track of the overall `DataResult`.
             // If any one element has a partial result, this turns into a partial result.
             // If any one element has no result, this turns into a non-result.
-            let mut result = DataResult::success(());
+            let mut result = DataResult::new_success(());
 
             for element in i {
                 total_count += 1;

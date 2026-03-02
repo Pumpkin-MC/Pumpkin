@@ -56,9 +56,9 @@ where
 /// A helper function to check whether a number is between the range `[min, max]` (both inclusive).
 fn check_range<T: PartialOrd + Display + Clone>(input: &T, min: &T, max: &T) -> DataResult<T> {
     if input >= min && input <= max {
-        DataResult::success(input.clone())
+        DataResult::new_success(input.clone())
     } else {
-        DataResult::error(format!("Value {input} is outside range [{min}, {max}]"))
+        DataResult::new_error(format!("Value {input} is outside range [{min}, {max}]"))
     }
 }
 

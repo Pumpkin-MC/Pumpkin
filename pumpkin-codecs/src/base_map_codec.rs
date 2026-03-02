@@ -46,7 +46,7 @@ pub trait BaseMapCodec {
         let mut failed: Vec<(T, T)> = vec![];
 
         let result = input.iter().fold(
-            DataResult::success_with_lifecycle((), Lifecycle::Stable),
+            DataResult::new_success_with_lifecycle((), Lifecycle::Stable),
             |r, (k, e)| {
                 // First, we try to parse the key and value.
                 let key_result = self.key_codec().parse(k.clone(), ops);
@@ -62,7 +62,7 @@ pub trait BaseMapCodec {
                     if read_map.contains_key(&key) {
                         // There was already a value for this key.
                         failed.push((k, e.clone()));
-                        return accumulated.add_message::<()>(&DataResult::error(format!(
+                        return accumulated.add_message::<()>(&DataResult::new_error(format!(
                             "Duplicate entry for key: {key}"
                         )));
                     }

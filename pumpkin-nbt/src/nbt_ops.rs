@@ -88,21 +88,21 @@ impl DynamicOps for NbtOps {
 
     fn get_number(&self, input: &Self::Value) -> DataResult<Number> {
         match input {
-            NbtTag::Byte(b) => DataResult::success(Number::Byte(*b)),
-            NbtTag::Short(s) => DataResult::success(Number::Short(*s)),
-            NbtTag::Int(i) => DataResult::success(Number::Int(*i)),
-            NbtTag::Long(l) => DataResult::success(Number::Long(*l)),
-            NbtTag::Float(f) => DataResult::success(Number::Float(*f)),
-            NbtTag::Double(d) => DataResult::success(Number::Double(*d)),
+            NbtTag::Byte(b) => DataResult::new_success(Number::Byte(*b)),
+            NbtTag::Short(s) => DataResult::new_success(Number::Short(*s)),
+            NbtTag::Int(i) => DataResult::new_success(Number::Int(*i)),
+            NbtTag::Long(l) => DataResult::new_success(Number::Long(*l)),
+            NbtTag::Float(f) => DataResult::new_success(Number::Float(*f)),
+            NbtTag::Double(d) => DataResult::new_success(Number::Double(*d)),
 
-            _ => DataResult::error("Not a number".to_string()),
+            _ => DataResult::new_error("Not a number".to_string()),
         }
     }
 
     fn get_string(&self, input: &Self::Value) -> DataResult<String> {
         input.extract_string().map_or_else(
-            || DataResult::error("Not a string".to_string()),
-            |s| DataResult::success(s.to_string()),
+            || DataResult::new_error("Not a string".to_string()),
+            |s| DataResult::new_success(s.to_string()),
         )
     }
 
@@ -111,14 +111,14 @@ impl DynamicOps for NbtOps {
         input: &'a Self::Value,
     ) -> DataResult<impl Iterator<Item = (Self::Value, &'a Self::Value)> + 'a> {
         if let NbtTag::Compound(compound) = input {
-            DataResult::success(
+            DataResult::new_success(
                 compound
                     .child_tags
                     .iter()
                     .map(|(k, v)| (self.create_string(k), v)),
             )
         } else {
-            DataResult::error(format!("Not a map: {input}"))
+            DataResult::new_error(format!("Not a map: {input}"))
         }
     }
 
@@ -127,9 +127,9 @@ impl DynamicOps for NbtOps {
         input: &'a Self::Value,
     ) -> DataResult<impl MapLike<Value = Self::Value> + 'a> {
         if let NbtTag::Compound(compound) = input {
-            DataResult::success(NbtMapLike { compound })
+            DataResult::new_success(NbtMapLike { compound })
         } else {
-            DataResult::error(format!("Not a map: {input}"))
+            DataResult::new_error(format!("Not a map: {input}"))
         }
     }
 
@@ -141,7 +141,7 @@ impl DynamicOps for NbtOps {
                 if !l.is_empty()
                     && let NbtTag::Compound(_) = l.first().unwrap()
                 {
-                    DataResult::success(NbtIter::CompoundList(l.into_iter().map(|c| {
+                    DataResult::new_success(NbtIter::CompoundList(l.into_iter().map(|c| {
                         if let NbtTag::Compound(compound) = c {
                             Self::try_unwrap(compound)
                         } else {
@@ -149,27 +149,27 @@ impl DynamicOps for NbtOps {
                         }
                     })))
                 } else {
-                    DataResult::success(NbtIter::List(l.into_iter()))
+                    DataResult::new_success(NbtIter::List(l.into_iter()))
                 }
             }
 
-            NbtTag::ByteArray(b) => DataResult::success(NbtIter::ByteArray(
+            NbtTag::ByteArray(b) => DataResult::new_success(NbtIter::ByteArray(
                 b.into_iter().map(|b| Self.create_byte(b as i8)),
             )),
-            NbtTag::IntArray(i) => {
-                DataResult::success(NbtIter::IntArray(i.into_iter().map(|i| Self.create_int(i))))
-            }
-            NbtTag::LongArray(l) => DataResult::success(NbtIter::LongArray(
+            NbtTag::IntArray(i) => DataResult::new_success(NbtIter::IntArray(
+                i.into_iter().map(|i| Self.create_int(i)),
+            )),
+            NbtTag::LongArray(l) => DataResult::new_success(NbtIter::LongArray(
                 l.into_iter().map(|l| Self.create_long(l)),
             )),
 
-            _ => DataResult::error(format!("Not a list: {input}")),
+            _ => DataResult::new_error(format!("Not a list: {input}")),
         }
     }
 
     fn get_byte_buffer(&self, input: Self::Value) -> DataResult<Box<[u8]>> {
         if let NbtTag::ByteArray(b) = input {
-            DataResult::success(b)
+            DataResult::new_success(b)
         } else {
             impl_get_list!(box self, input, "bytes")
         }
@@ -181,7 +181,7 @@ impl DynamicOps for NbtOps {
 
     fn get_int_list(&self, input: Self::Value) -> DataResult<Vec<i32>> {
         if let NbtTag::IntArray(i) = input {
-            DataResult::success(i)
+            DataResult::new_success(i)
         } else {
             impl_get_list!(self, input, "ints")
         }
@@ -193,7 +193,7 @@ impl DynamicOps for NbtOps {
 
     fn get_long_list(&self, input: Self::Value) -> DataResult<Vec<i64>> {
         if let NbtTag::LongArray(i) = input {
-            DataResult::success(i)
+            DataResult::new_success(i)
         } else {
             impl_get_list!(self, input, "longs")
         }
@@ -205,8 +205,8 @@ impl DynamicOps for NbtOps {
 
     fn merge_into_list(&self, list: Self::Value, value: Self::Value) -> DataResult<Self::Value> {
         ListCollector::new(list.clone()).map_or_else(
-            || DataResult::partial_error("Not a list".to_string(), list),
-            |c| DataResult::success(c.accept(value).result()),
+            || DataResult::new_partial_error("Not a list".to_string(), list),
+            |c| DataResult::new_success(c.accept(value).result()),
         )
     }
 
@@ -215,8 +215,8 @@ impl DynamicOps for NbtOps {
         I: IntoIterator<Item = Self::Value>,
     {
         ListCollector::new(list.clone()).map_or_else(
-            || DataResult::partial_error("Not a list".to_string(), list),
-            |c| DataResult::success(c.accept_all(values).result()),
+            || DataResult::new_partial_error("Not a list".to_string(), list),
+            |c| DataResult::new_success(c.accept_all(values).result()),
         )
     }
 
@@ -230,9 +230,9 @@ impl DynamicOps for NbtOps {
         Self::Value: Clone,
     {
         if !matches!(map, NbtTag::Compound(_) | NbtTag::End) {
-            DataResult::partial_error(format!("Not a map: {map}"), map)
+            DataResult::new_partial_error(format!("Not a map: {map}"), map)
         } else if !matches!(key, NbtTag::String(_)) {
-            DataResult::partial_error(format!("Key is not a string: {key}"), map)
+            DataResult::new_partial_error(format!("Key is not a string: {key}"), map)
         } else {
             let mut compound = if let NbtTag::Compound(c) = map {
                 c
@@ -240,7 +240,7 @@ impl DynamicOps for NbtOps {
                 NbtCompound::new()
             };
             compound.put(key.extract_string().unwrap(), value);
-            DataResult::success(compound.into())
+            DataResult::new_success(compound.into())
         }
     }
 
@@ -268,15 +268,15 @@ impl DynamicOps for NbtOps {
                 }
             });
             if failed.is_empty() {
-                DataResult::success(compound.into())
+                DataResult::new_success(compound.into())
             } else {
-                DataResult::partial_error(
+                DataResult::new_partial_error(
                     format!("Some keys are not strings: {failed:?}"),
                     NbtTag::Compound(compound),
                 )
             }
         } else {
-            DataResult::partial_error(format!("Not a map: {map}"), map)
+            DataResult::new_partial_error(format!("Not a map: {map}"), map)
         }
     }
 
@@ -315,7 +315,7 @@ impl DynamicOps for NbtOps {
 
     fn map_builder(&'static self) -> Self::StructBuilder {
         NbtStructBuilder {
-            builder: DataResult::success_with_lifecycle(
+            builder: DataResult::new_success_with_lifecycle(
                 NbtTag::Compound(NbtCompound::new()),
                 Lifecycle::Stable,
             ),
@@ -402,7 +402,7 @@ impl ResultStructBuilder for NbtStructBuilder {
         prefix: Self::Value,
     ) -> DataResult<Self::Value> {
         match prefix {
-            NbtTag::End => DataResult::success(builder),
+            NbtTag::End => DataResult::new_success(builder),
             NbtTag::Compound(mut compound) => {
                 match builder {
                     NbtTag::Compound(builder_compound) => {
@@ -412,14 +412,14 @@ impl ResultStructBuilder for NbtStructBuilder {
                     }
                     // This shouldn't happen, but just in case.
                     _ => {
-                        return DataResult::error(format!(
+                        return DataResult::new_error(format!(
                             "Expected compound in builder, found {builder}"
                         ));
                     }
                 }
-                DataResult::success(compound.into())
+                DataResult::new_success(compound.into())
             }
-            _ => DataResult::partial_error(format!("Prefix is not a map: {prefix}"), prefix),
+            _ => DataResult::new_partial_error(format!("Prefix is not a map: {prefix}"), prefix),
         }
     }
 }
@@ -1054,8 +1054,8 @@ mod test {
             &STRING_CODEC,
             |string| {
                 string.clone().try_into().map_or_else(
-                    |_| DataResult::error(format!("Invalid alignment: {string}")),
-                    DataResult::success,
+                    |_| DataResult::new_error(format!("Invalid alignment: {string}")),
+                    DataResult::new_success,
                 )
             },
             |modifier: &TextAlignment| modifier.into(),
@@ -1372,7 +1372,7 @@ mod test {
             |v| {
                 // While decoding, our codec only accepts byte buffers (arrays) with exactly 3 or 4 elements.
                 if v.len() == 4 {
-                    DataResult::success(PackedColor {
+                    DataResult::new_success(PackedColor {
                         r: v[0],
                         g: v[1],
                         b: v[2],
@@ -1380,14 +1380,14 @@ mod test {
                     })
                 } else if v.len() == 3 {
                     // Alpha defaults to 255.
-                    DataResult::success(PackedColor {
+                    DataResult::new_success(PackedColor {
                         r: v[0],
                         g: v[1],
                         b: v[2],
                         a: 255,
                     })
                 } else {
-                    DataResult::error(format!("Invalid byte buffer for color: {v:?}"))
+                    DataResult::new_error(format!("Invalid byte buffer for color: {v:?}"))
                 }
             },
             |c| vec![c.r, c.g, c.b, c.a].into_boxed_slice(),
