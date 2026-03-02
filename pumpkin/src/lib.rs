@@ -48,6 +48,7 @@ pub mod world;
 pub struct LoggingConfig {
     pub color: bool,
     pub threads: bool,
+    pub target: bool,
     pub timestamp: bool,
 }
 
@@ -119,7 +120,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let fmt_layer = fmt::layer()
             .with_writer(std::sync::Mutex::new(logger))
             .with_ansi(advanced_config.logging.color)
-            .with_target(true)
+            .with_target(advanced_config.logging.target)
             .with_thread_names(advanced_config.logging.threads)
             .with_thread_ids(advanced_config.logging.threads);
 
@@ -150,6 +151,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let logging_config = LoggingConfig {
             color: advanced_config.logging.color,
             threads: advanced_config.logging.threads,
+            target: advanced_config.logging.target,
             timestamp: advanced_config.logging.timestamp,
         };
 
