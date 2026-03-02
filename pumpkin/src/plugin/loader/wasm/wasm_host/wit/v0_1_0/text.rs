@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::{
+    DowncastResourceExt,
     state::{PluginHostState, TextComponentResource},
     wit::v0_1_0::pumpkin::{
         self,
@@ -18,15 +19,9 @@ use pumpkin_util::text::{
 
 impl pumpkin::plugin::text::Host for PluginHostState {}
 
-trait TextComponentResourceExt {
-    fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a TextComponentResource;
-    fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut TextComponentResource;
-    fn consume(self, state: &mut PluginHostState) -> TextComponentResource;
-}
-
 // TODO - Change the pumpkin_util::text::TextComponent to use &mut self instead of self for the builder pattern.
 // right now we have to do a bunch of cloning due to the fact that the builder pattern doesn't accept &mut self.
-impl TextComponentResourceExt for Resource<TextComponent> {
+impl DowncastResourceExt<TextComponentResource> for Resource<TextComponent> {
     fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a TextComponentResource {
         state
             .resource_table
