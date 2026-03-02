@@ -1,7 +1,9 @@
+use crate::block::entities::block_entity_from_nbt;
 use crate::chunk::{ChunkData, ChunkLight, ChunkSections};
 use crate::generation::biome_coords;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::dimension::Dimension;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -264,6 +266,15 @@ impl Chunk {
         let is_lit = proto_chunk.stage >= StagedChunkEnum::Lighting
             && *lighting_config == LightingEngineConfig::Default;
 
+        // Convert pending block entities from structure generation to actual block entities
+        let mut block_entities = FxHashMap::default();
+        for nbt in proto_chunk.pending_block_entities {
+            if let Some(block_entity) = block_entity_from_nbt(&nbt) {
+                let pos = block_entity.get_position();
+                block_entities.insert(pos, block_entity);
+            }
+        }
+
         let mut chunk = ChunkData {
             light_engine: Mutex::new(light_data),
             light_populated: AtomicBool::new(is_lit),
@@ -274,7 +285,7 @@ impl Chunk {
             dirty: AtomicBool::new(true),
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),
-            block_entities: Default::default(),
+            block_entities: Mutex::new(block_entities),
             status: proto_chunk.stage.into(),
         };
 
