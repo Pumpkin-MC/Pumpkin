@@ -706,6 +706,9 @@ impl Player {
             return;
         }
 
+        // Reset attack cooldown only after confirmed hit
+        self.last_attacked_ticks.store(0, Ordering::Relaxed);
+
         player_attack_sound(&pos, &world, attack_type).await;
 
         self.living_entity
@@ -743,7 +746,9 @@ impl Player {
         let base_damage = self
             .living_entity
             .get_attribute_value(&Attributes::ATTACK_DAMAGE);
-        let base_attack_speed = 4.0;
+        let base_attack_speed = self
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_SPEED);
 
         let mut add_damage = 0.0;
         let mut add_speed = 0.0;
@@ -772,7 +777,6 @@ impl Player {
             0.5,
             attack_speed,
         );
-        self.last_attacked_ticks.store(0, Ordering::Relaxed);
 
         let damage_multiplier = if cooldown < 1.0 {
             cooldown.powi(2).mul_add(0.8, 0.2)

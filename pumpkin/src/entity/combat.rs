@@ -2,6 +2,7 @@ use std::sync::atomic::Ordering;
 
 use pumpkin_data::{
     Enchantment,
+    attributes::Attributes,
     damage::DamageType,
     entity::EntityType,
     particle::Particle,
@@ -50,10 +51,21 @@ impl AttackType {
     }
 }
 
-pub fn handle_knockback(attacker: &Entity, victim: &Entity, strength: f64) {
+pub fn handle_knockback(
+    attacker: &Entity,
+    victim: &Entity,
+    strength: f64,
+    victim_knockback_resistance: f64,
+) {
+    // Apply knockback resistance (0.0 = no resistance, 1.0 = full immunity)
+    let effective_strength = strength * (1.0 - victim_knockback_resistance);
+    if effective_strength <= 0.0 {
+        return;
+    }
+
     let yaw = attacker.yaw.load();
     victim.knockback(
-        strength * 0.5,
+        effective_strength * 0.5,
         f64::from((yaw.to_radians()).sin()),
         f64::from(-(yaw.to_radians()).cos()),
     );
@@ -170,7 +182,10 @@ pub async fn apply_sweep_attack(
 
         // Apply knockback to swept entities
         let knockback_strength = 0.4 + f64::from(knockback_enchant_level) * 0.5;
-        handle_knockback(attacker_entity, ent, knockback_strength);
+        let kb_resist = entity.get_living_entity().map_or(0.0, |le| {
+            le.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
+        });
+        handle_knockback(attacker_entity, ent, knockback_strength, kb_resist);
         ent.send_velocity().await;
     }
 
@@ -292,8 +307,23 @@ pub async fn handle_post_damage_effects(
                 || ctx.enchants.knockback > 0;
 
             if should_apply {
-                handle_knockback(attacker_entity, victim_entity, knockback_strength);
+                let kb_resist = ctx.victim.get_living_entity().map_or(0.0, |le| {
+                    le.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
+                });
+                handle_knockback(
+                    attacker_entity,
+                    victim_entity,
+                    knockback_strength,
+                    kb_resist,
+                );
+                victim_entity.send_velocity().await;
+                attacker_entity.send_velocity().await;
             }
+        }
+
+        // Sprint knockback attack should reset sprinting
+        if matches!(ctx.attack_type, AttackType::Knockback) {
+            attacker_entity.set_sprinting(false).await;
         }
 
         // Fire Aspect: set victim on fire (4 seconds per level)

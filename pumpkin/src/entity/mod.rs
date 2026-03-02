@@ -814,8 +814,6 @@ impl Entity {
     /// `LivingEntity.takeKnockback()`
     /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
     pub fn apply_knockback(&self, strength: f64, mut x: f64, mut z: f64) {
-        // TODO: strength *= 1 - Entity attribute knockback resistance
-
         if strength <= 0.0 {
             return;
         }
@@ -1776,7 +1774,12 @@ impl Entity {
     ///
     /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
     pub fn knockback(&self, strength: f64, x: f64, z: f64) {
-        // This has some vanilla magic
+        if strength <= 0.0 {
+            return;
+        }
+
+        self.velocity_dirty.store(true, Ordering::SeqCst);
+
         let mut x = x;
         let mut z = z;
         while x.mul_add(x, z * z) < 1.0E-5 {
