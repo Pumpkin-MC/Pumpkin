@@ -54,8 +54,7 @@ pub(crate) async fn collision_shape_for_entity(
 ) -> Option<BoundingBox> {
     let fall_distance = entity
         .get_living_entity()
-        .map(|living| living.fall_distance.load())
-        .unwrap_or(0.0);
+        .map_or(0.0, |living| living.fall_distance.load());
 
     if fall_distance > 2.5f32 {
         return Some(FALLING_COLLISION_SHAPE);
