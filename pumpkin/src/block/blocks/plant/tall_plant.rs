@@ -1,8 +1,11 @@
+use crate::block::{BrokenArgs, PlacedArgs};
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{
     BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
 };
 use pumpkin_world::BlockStateId;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
 use crate::block::{
@@ -65,6 +68,52 @@ impl BlockBehaviour for TallPlantBlock {
                 }
             }
             Block::AIR.default_state.id
+        })
+    }
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let mut tall_plant_props =
+                TallSeagrassLikeProperties::from_state_id(args.state_id, args.block);
+            tall_plant_props.half = DoubleBlockHalf::Upper;
+            args.world
+                .set_block_state(
+                    &args.position.offset(BlockDirection::Up.to_offset()),
+                    tall_plant_props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                )
+                .await;
+        })
+    }
+
+    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // When one half of a tall plant is broken, break the other half too
+            let tall_plant_props =
+                TallSeagrassLikeProperties::from_state_id(args.state.id, args.block);
+            let other_block_pos = match tall_plant_props.half {
+                DoubleBlockHalf::Upper => args.position.down(),
+                DoubleBlockHalf::Lower => args.position.up(),
+            };
+            let (other_block, other_state_id) =
+                args.world.get_block_and_state_id(&other_block_pos).await;
+            if Self::ids().contains(&other_block.id) {
+                let other_props =
+                    TallSeagrassLikeProperties::from_state_id(other_state_id, other_block);
+                let opposite_half = match tall_plant_props.half {
+                    DoubleBlockHalf::Upper => DoubleBlockHalf::Lower,
+                    DoubleBlockHalf::Lower => DoubleBlockHalf::Upper,
+                };
+                if other_props.half == opposite_half {
+                    // Break the other half, using SKIP_DROPS to prevent double drops
+                    args.world
+                        .break_block(
+                            &other_block_pos,
+                            None,
+                            BlockFlags::SKIP_DROPS | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                        )
+                        .await;
+                }
+            }
         })
     }
 }
