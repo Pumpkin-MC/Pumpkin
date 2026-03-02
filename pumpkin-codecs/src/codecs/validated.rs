@@ -24,7 +24,7 @@ impl<C: Codec> Encoder for ValidatedCodec<C> {
         prefix: T,
     ) -> DataResult<T> {
         (self.validator)(input).map_or_else(
-            |error| DataResult::error(error),
+            |error| DataResult::new_error(error),
             |()| self.codec.encode(input, ops, prefix),
         )
     }
@@ -38,7 +38,7 @@ impl<C: Codec> Decoder for ValidatedCodec<C> {
     ) -> DataResult<(Self::Value, T)> {
         self.codec.decode(input, ops).flat_map(|decoded| {
             (self.validator)(&decoded.0)
-                .map_or_else(DataResult::error, |()| DataResult::success(decoded))
+                .map_or_else(DataResult::new_error, |()| DataResult::new_success(decoded))
         })
     }
 }

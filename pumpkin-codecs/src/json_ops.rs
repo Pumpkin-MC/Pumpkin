@@ -105,9 +105,9 @@ impl DynamicOps for JsonOps {
 
     fn get_bool(&self, input: &Self::Value) -> DataResult<bool> {
         if let Value::Bool(b) = input {
-            DataResult::success(*b)
+            DataResult::new_success(*b)
         } else {
-            DataResult::error(format!("Not a boolean: {input}"))
+            DataResult::new_error(format!("Not a boolean: {input}"))
         }
     }
 
@@ -115,27 +115,27 @@ impl DynamicOps for JsonOps {
         match input {
             Value::Number(_) => {
                 return input.try_into().map_or_else(
-                    |_| DataResult::error(format!("Not a number: {input}")),
-                    DataResult::success,
+                    |_| DataResult::new_error(format!("Not a number: {input}")),
+                    DataResult::new_success,
                 );
             }
             Value::String(string) => {
                 if self.compressed {
                     if let Ok(i) = string.parse::<i32>() {
-                        return DataResult::success(Number::Int(i));
+                        return DataResult::new_success(Number::Int(i));
                     }
                     if let Ok(l) = string.parse::<i64>() {
-                        return DataResult::success(Number::Long(l));
+                        return DataResult::new_success(Number::Long(l));
                     }
                     if let Ok(d) = string.parse::<f64>() {
-                        return DataResult::success(Number::Double(d));
+                        return DataResult::new_success(Number::Double(d));
                     }
-                    return DataResult::error(format!("Number could not be parsed: {string}"));
+                    return DataResult::new_error(format!("Number could not be parsed: {string}"));
                 }
             }
             _ => {}
         }
-        DataResult::error(format!("Not a number: {input}"))
+        DataResult::new_error(format!("Not a number: {input}"))
     }
 
     fn get_string(&self, input: &Self::Value) -> DataResult<String> {
@@ -143,9 +143,9 @@ impl DynamicOps for JsonOps {
             || (matches!(input, Value::Number(_)) && self.compressed)
         {
             // Unwrapping is fine as only strings and numbers are possible here.
-            DataResult::success(Self::get_as_string(input).unwrap())
+            DataResult::new_success(Self::get_as_string(input).unwrap())
         } else {
-            DataResult::error(format!("Not a string: {input}"))
+            DataResult::new_error(format!("Not a string: {input}"))
         }
     }
 
@@ -154,9 +154,9 @@ impl DynamicOps for JsonOps {
         input: &'a Self::Value,
     ) -> DataResult<impl Iterator<Item = (Self::Value, &'a Self::Value)> + 'a> {
         if let Value::Object(map) = input {
-            DataResult::success(map.iter().map(|(k, v)| (Value::String(k.clone()), v)))
+            DataResult::new_success(map.iter().map(|(k, v)| (Value::String(k.clone()), v)))
         } else {
-            DataResult::error(format!("Not a JSON object: {input}"))
+            DataResult::new_error(format!("Not a JSON object: {input}"))
         }
     }
 
@@ -165,18 +165,18 @@ impl DynamicOps for JsonOps {
         input: &'a Self::Value,
     ) -> DataResult<impl MapLike<Value = Self::Value> + 'a> {
         if let Value::Object(map) = input {
-            DataResult::success(JsonMapLike { map })
+            DataResult::new_success(JsonMapLike { map })
         } else {
-            DataResult::error(format!("Not a JSON object: {input}"))
+            DataResult::new_error(format!("Not a JSON object: {input}"))
         }
     }
 
     fn get_iter(&self, input: Self::Value) -> DataResult<impl Iterator<Item = Self::Value>> {
         // This only works for JSON arrays.
         if let Value::Array(list) = input {
-            DataResult::success(list.into_iter())
+            DataResult::new_success(list.into_iter())
         } else {
-            DataResult::error(format!("Not a JSON array: {input}"))
+            DataResult::new_error(format!("Not a JSON array: {input}"))
         }
     }
 
@@ -189,9 +189,9 @@ impl DynamicOps for JsonOps {
 
             result_vec.push(value);
 
-            DataResult::success(Value::Array(result_vec))
+            DataResult::new_success(Value::Array(result_vec))
         } else {
-            DataResult::partial_error(format!("Not a list: {list}"), list)
+            DataResult::new_partial_error(format!("Not a list: {list}"), list)
         }
     }
 
@@ -207,9 +207,9 @@ impl DynamicOps for JsonOps {
 
             result_vec.extend(values);
 
-            DataResult::success(Value::Array(result_vec))
+            DataResult::new_success(Value::Array(result_vec))
         } else {
-            DataResult::partial_error(format!("Not a list: {list}"), list)
+            DataResult::new_partial_error(format!("Not a list: {list}"), list)
         }
     }
 
@@ -223,11 +223,11 @@ impl DynamicOps for JsonOps {
         Self::Value: Clone,
     {
         if !matches!(map, Value::Object(_)) && map != self.empty() {
-            return DataResult::partial_error(format!("Not a map: {map}"), map);
+            return DataResult::new_partial_error(format!("Not a map: {map}"), map);
         }
 
         if !self.is_valid_key(&key) {
-            return DataResult::partial_error(format!("Key is not a string: {key}"), map);
+            return DataResult::new_partial_error(format!("Key is not a string: {key}"), map);
         }
 
         let mut output_map = Map::new();
@@ -237,7 +237,7 @@ impl DynamicOps for JsonOps {
         }
         output_map.insert(Self::get_as_string(&key).unwrap(), value);
 
-        DataResult::success(Value::Object(output_map))
+        DataResult::new_success(Value::Object(output_map))
     }
 
     fn merge_map_like_into_map<M>(
@@ -270,9 +270,9 @@ impl DynamicOps for JsonOps {
             let object = Value::Object(output_map);
             let pretty_missed = serde_json::to_string_pretty(&missed);
             if missed.is_empty() {
-                DataResult::success(object)
+                DataResult::new_success(object)
             } else {
-                DataResult::partial_error(
+                DataResult::new_partial_error(
                     format!(
                         "Some keys are not strings{}",
                         pretty_missed.map_or_else(|_| String::new(), |r| format!(": {r}"))
@@ -281,7 +281,7 @@ impl DynamicOps for JsonOps {
                 )
             }
         } else {
-            DataResult::partial_error(format!("Not a map: {map}"), map)
+            DataResult::new_partial_error(format!("Not a map: {map}"), map)
         }
     }
 
@@ -333,7 +333,7 @@ impl DynamicOps for JsonOps {
 
     fn map_builder(&'static self) -> Self::StructBuilder {
         JsonStructBuilder {
-            builder: DataResult::success_with_lifecycle(
+            builder: DataResult::new_success_with_lifecycle(
                 Value::Object(Map::new()),
                 Lifecycle::Stable,
             ),
@@ -383,7 +383,7 @@ impl ResultStructBuilder for JsonStructBuilder {
         prefix: Self::Value,
     ) -> DataResult<Self::Value> {
         match prefix {
-            Value::Null => DataResult::success(builder),
+            Value::Null => DataResult::new_success(builder),
             Value::Object(mut map) => {
                 match builder {
                     Value::Object(builder_map) => {
@@ -393,14 +393,14 @@ impl ResultStructBuilder for JsonStructBuilder {
                     }
                     // This shouldn't happen, but just in case.
                     _ => {
-                        return DataResult::error(format!(
+                        return DataResult::new_error(format!(
                             "Expected object in builder, found {builder}"
                         ));
                     }
                 }
-                DataResult::success(Value::Object(map))
+                DataResult::new_success(Value::Object(map))
             }
-            _ => DataResult::partial_error(format!("Prefix is not a map: {prefix}"), prefix),
+            _ => DataResult::new_partial_error(format!("Prefix is not a map: {prefix}"), prefix),
         }
     }
 }

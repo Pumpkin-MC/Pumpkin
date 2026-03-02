@@ -26,7 +26,7 @@ macro_rules! impl_apply {
         let result_1 = $self;
         if !(result_1.is_error() $(|| $result.is_error())+) {
             // All n results are successful.
-            return DataResult::success($f(
+            return DataResult::new_success($f(
                 result_1.into_result().unwrap()
                 $( , $result.into_result().unwrap() )+
             ));
@@ -37,7 +37,7 @@ macro_rules! impl_apply {
         collect_partial_and_message!(partial_1, result_1, messages);
         $( collect_partial_and_message!($result, $result, messages); )+
 
-        return DataResult::error_any_with_lifecycle(
+        return DataResult::new_option_error_with_lifecycle(
             messages.join("; "),
             match (partial_1, $($result, )+) {
                 (Some(result_1), $(Some($result), )+) => Some($f(result_1 $(, $result )+)),
@@ -135,31 +135,35 @@ impl<R> DataResult<R> {
 
     /// Returns a *successful* `DataResult` with an experimental lifecycle.
     #[inline]
-    pub const fn success(result: R) -> Self {
-        Self::success_with_lifecycle(result, Lifecycle::Experimental)
+    pub const fn new_success(result: R) -> Self {
+        Self::new_success_with_lifecycle(result, Lifecycle::Experimental)
     }
 
     /// Returns a *successful* `DataResult` with a given lifecycle.
     #[inline]
-    pub const fn success_with_lifecycle(result: R, lifecycle: Lifecycle) -> Self {
+    pub const fn new_success_with_lifecycle(result: R, lifecycle: Lifecycle) -> Self {
         Self::Success { result, lifecycle }
     }
 
     /// Returns an *errored* `DataResult` with no result and an experimental lifecycle.
     #[inline]
-    pub fn error(error: impl Into<String>) -> Self {
-        Self::error_with_lifecycle(error.into(), Lifecycle::Experimental)
+    pub fn new_error(error: impl Into<String>) -> Self {
+        Self::new_error_with_lifecycle(error.into(), Lifecycle::Experimental)
     }
 
     /// Returns an *errored* `DataResult` with a partial result and an experimental lifecycle.
     #[inline]
-    pub fn partial_error(error: impl Into<String>, partial_result: R) -> Self {
-        Self::partial_error_with_lifecycle(error.into(), partial_result, Lifecycle::Experimental)
+    pub fn new_partial_error(error: impl Into<String>, partial_result: R) -> Self {
+        Self::new_partial_error_with_lifecycle(
+            error.into(),
+            partial_result,
+            Lifecycle::Experimental,
+        )
     }
 
     /// Returns an *errored* `DataResult` with no result and a given lifecycle.
     #[inline]
-    pub fn error_with_lifecycle<T>(
+    pub fn new_error_with_lifecycle<T>(
         message: impl Into<String>,
         lifecycle: Lifecycle,
     ) -> DataResult<T> {
@@ -172,7 +176,7 @@ impl<R> DataResult<R> {
 
     /// Returns an *errored* `DataResult` with a partial result and a given lifecycle.
     #[inline]
-    pub fn partial_error_with_lifecycle(
+    pub fn new_partial_error_with_lifecycle(
         message: impl Into<String>,
         partial_result: R,
         lifecycle: Lifecycle,
@@ -186,7 +190,7 @@ impl<R> DataResult<R> {
 
     /// Returns an *errored* `DataResult` with result [`Option<R>`] and a given lifecycle.
     #[inline]
-    const fn error_any_with_lifecycle(
+    const fn new_option_error_with_lifecycle(
         message: String,
         partial_result: Option<R>,
         lifecycle: Lifecycle,
@@ -271,13 +275,17 @@ impl<R> DataResult<R> {
     pub fn map<T>(self, op: impl FnOnce(R) -> T) -> DataResult<T> {
         match self {
             Self::Success { result, lifecycle } => {
-                DataResult::success_with_lifecycle(op(result), lifecycle)
+                DataResult::new_success_with_lifecycle(op(result), lifecycle)
             }
             Self::Error {
                 partial_result,
                 lifecycle,
                 message,
-            } => DataResult::error_any_with_lifecycle(message, partial_result.map(op), lifecycle),
+            } => DataResult::new_option_error_with_lifecycle(
+                message,
+                partial_result.map(op),
+                lifecycle,
+            ),
         }
     }
 
@@ -316,13 +324,17 @@ impl<R> DataResult<R> {
                     let new_lifecycle = second_result.lifecycle().add(lifecycle);
                     match second_result {
                         DataResult::Success { result, .. } => {
-                            DataResult::partial_error_with_lifecycle(message, result, new_lifecycle)
+                            DataResult::new_partial_error_with_lifecycle(
+                                message,
+                                result,
+                                new_lifecycle,
+                            )
                         }
                         DataResult::Error {
                             partial_result,
                             message: second_message,
                             ..
-                        } => DataResult::error_any_with_lifecycle(
+                        } => DataResult::new_option_error_with_lifecycle(
                             Self::append_messages(&message, &second_message),
                             partial_result,
                             new_lifecycle,
@@ -345,7 +357,7 @@ impl<R> DataResult<R> {
         let lifecycle = self.lifecycle().add(function_result.lifecycle());
         match (self, function_result) {
             (Self::Success { result, .. }, DataResult::Success { result: f, .. }) => {
-                DataResult::success_with_lifecycle(f(result), lifecycle)
+                DataResult::new_success_with_lifecycle(f(result), lifecycle)
             }
             (
                 Self::Success { result, .. },
@@ -354,7 +366,7 @@ impl<R> DataResult<R> {
                     message: func_message,
                     ..
                 },
-            ) => DataResult::error_any_with_lifecycle(
+            ) => DataResult::new_option_error_with_lifecycle(
                 func_message,
                 partial_result.map(|f| f(result)),
                 lifecycle,
@@ -366,7 +378,11 @@ impl<R> DataResult<R> {
                     ..
                 },
                 DataResult::Success { result: f, .. },
-            ) => DataResult::error_any_with_lifecycle(message, partial_result.map(f), lifecycle),
+            ) => DataResult::new_option_error_with_lifecycle(
+                message,
+                partial_result.map(f),
+                lifecycle,
+            ),
             (
                 Self::Error {
                     partial_result,
@@ -378,7 +394,7 @@ impl<R> DataResult<R> {
                     message: func_message,
                     ..
                 },
-            ) => DataResult::error_any_with_lifecycle(
+            ) => DataResult::new_option_error_with_lifecycle(
                 Self::append_messages(&message, &func_message),
                 partial_result.and_then(|r| partial_func_result.map(|f| f(r))),
                 lifecycle,
@@ -425,20 +441,7 @@ impl<R> DataResult<R> {
                 message,
                 lifecycle,
                 partial_result,
-            } => Self::error_any_with_lifecycle(f(message), partial_result, lifecycle),
-        }
-    }
-
-    /// Applies a boxed `dyn` function to `DataResult` errors, leaving successes untouched.
-    /// This can be used to provide additional context to an error.
-    pub fn map_error_dyn(self, f: Box<dyn FnOnce(String) -> String>) -> Self {
-        match self {
-            Self::Success { .. } => self,
-            Self::Error {
-                message,
-                lifecycle,
-                partial_result,
-            } => Self::error_any_with_lifecycle(f(message), partial_result, lifecycle),
+            } => Self::new_option_error_with_lifecycle(f(message), partial_result, lifecycle),
         }
     }
 
@@ -455,8 +458,8 @@ impl<R> DataResult<R> {
             } => {
                 f(message.clone());
                 partial_result.map_or_else(
-                    || Self::error_with_lifecycle(message, lifecycle),
-                    |result| Self::success_with_lifecycle(result, lifecycle),
+                    || Self::new_error_with_lifecycle(message, lifecycle),
+                    |result| Self::new_success_with_lifecycle(result, lifecycle),
                 )
             }
         }
@@ -468,7 +471,7 @@ impl<R> DataResult<R> {
             Self::Success { .. } => self,
             Self::Error {
                 message, lifecycle, ..
-            } => Self::partial_error_with_lifecycle(message, partial_value, lifecycle),
+            } => Self::new_partial_error_with_lifecycle(message, partial_value, lifecycle),
         }
     }
 
@@ -478,15 +481,17 @@ impl<R> DataResult<R> {
     /// - For a non-result, this returns itself.
     pub fn with_complete_or_partial<T>(self, value: T) -> DataResult<T> {
         match self {
-            Self::Success { lifecycle, .. } => DataResult::success_with_lifecycle(value, lifecycle),
+            Self::Success { lifecycle, .. } => {
+                DataResult::new_success_with_lifecycle(value, lifecycle)
+            }
             Self::Error {
                 message,
                 lifecycle,
                 partial_result: Some(_),
-            } => DataResult::partial_error_with_lifecycle(message, value, lifecycle),
+            } => DataResult::new_partial_error_with_lifecycle(message, value, lifecycle),
             Self::Error {
                 message, lifecycle, ..
-            } => Self::error_with_lifecycle(message, lifecycle),
+            } => Self::new_error_with_lifecycle(message, lifecycle),
         }
     }
 
@@ -512,7 +517,7 @@ impl<R> DataResult<R> {
         match (self, other_result) {
             // Both results are successful.
             (Self::Success { result: r, .. }, DataResult::Success { .. }) => {
-                Self::success_with_lifecycle(r, Lifecycle::Stable)
+                Self::new_success_with_lifecycle(r, Lifecycle::Stable)
             }
 
             // Both results are errors.
@@ -527,7 +532,7 @@ impl<R> DataResult<R> {
                     message: m2,
                     ..
                 },
-            ) => Self::error_any_with_lifecycle(
+            ) => Self::new_option_error_with_lifecycle(
                 Self::append_messages(&m1, m2),
                 if p1.is_some() && p2.is_some() {
                     p1
@@ -545,7 +550,7 @@ impl<R> DataResult<R> {
                     ..
                 },
                 _,
-            ) => Self::error_any_with_lifecycle(m1, partial_result, Lifecycle::Stable),
+            ) => Self::new_option_error_with_lifecycle(m1, partial_result, Lifecycle::Stable),
 
             (
                 Self::Success { result, .. },
@@ -554,7 +559,7 @@ impl<R> DataResult<R> {
                     partial_result,
                     ..
                 },
-            ) => Self::error_any_with_lifecycle(
+            ) => Self::new_option_error_with_lifecycle(
                 m2.clone(),
                 partial_result.is_some().then_some(result),
                 Lifecycle::Stable,
@@ -582,7 +587,7 @@ impl<R> DataResult<R> {
             ) => {
                 let self_lifecycle = self.lifecycle();
                 if let Self::Success { result, .. } = self {
-                    Self::partial_error_with_lifecycle(
+                    Self::new_partial_error_with_lifecycle(
                         message.clone(),
                         result,
                         self_lifecycle.add(*other_lifecycle),
@@ -615,9 +620,9 @@ macro_rules! assert_success {
             "Expected a `DataResult` success, got: {:?}",
             result
         );
-        let value = result.clone().unwrap();
         assert_eq!(
-            value, $right,
+            result.clone().unwrap(),
+            $right,
             "`DataResult` was successful but the value doesn't match"
         );
     }};
@@ -625,6 +630,6 @@ macro_rules! assert_success {
 
 impl<T> Default for DataResult<T> {
     fn default() -> Self {
-        Self::error("Default DataResult")
+        Self::new_error("Default DataResult")
     }
 }

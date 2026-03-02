@@ -33,8 +33,8 @@ macro_rules! impl_get_list {
             iter.map(|e| $target.get_number(&e).into_result().map(Into::into))
                 .collect::<Option<Vec<_>>>()
                 .map_or_else(
-                    || DataResult::error(concat!("Some elements are not ", $ty)),
-                    |v| DataResult::success(v.into_boxed_slice()),
+                    || DataResult::new_error(concat!("Some elements are not ", $ty)),
+                    |v| DataResult::new_success(v.into_boxed_slice()),
                 )
         })
     };
@@ -44,8 +44,8 @@ macro_rules! impl_get_list {
             iter.map(|e| $target.get_number(&e).into_result().map(Into::into))
                 .collect::<Option<Vec<_>>>()
                 .map_or_else(
-                    || DataResult::error(concat!("Some elements are not ", $ty)),
-                    DataResult::success,
+                    || DataResult::new_error(concat!("Some elements are not ", $ty)),
+                    DataResult::new_success,
                 )
         })
     };
@@ -169,7 +169,7 @@ pub trait DynamicOps {
     where
         I: IntoIterator<Item = Self::Value>,
     {
-        let mut result = DataResult::success(list);
+        let mut result = DataResult::new_success(list);
 
         for value in values {
             result = result.flat_map(|list_value| self.merge_into_list(list_value, value));
@@ -196,7 +196,7 @@ pub trait DynamicOps {
         I: IntoIterator<Item = (Self::Value, Self::Value)>,
         Self::Value: Clone,
     {
-        let mut result = DataResult::success(map);
+        let mut result = DataResult::new_success(map);
 
         for (key, value) in entries {
             result = result.flat_map(|list_value| self.merge_into_map(list_value, key, value));
@@ -216,7 +216,7 @@ pub trait DynamicOps {
         M: MapLike<Value = Self::Value>,
         Self::Value: Clone,
     {
-        let mut result = DataResult::success(map);
+        let mut result = DataResult::new_success(map);
 
         for (key, value) in other_map_like.iter() {
             result =
@@ -236,9 +236,9 @@ pub trait DynamicOps {
         <Self as DynamicOps>::Value: PartialEq,
     {
         if prefix == self.empty() {
-            DataResult::success(value)
+            DataResult::new_success(value)
         } else {
-            DataResult::error(format!(
+            DataResult::new_error(format!(
                 "Do not know how to append a primitive value {value} to {prefix}"
             ))
         }
@@ -268,8 +268,8 @@ pub trait DynamicOps {
 where {
         self.get_map_iter(input).flat_map(|mut iter| {
             iter.find(|(k, _)| k == key).map_or_else(
-                || DataResult::error(format!("No element {key} in the map")),
-                |(_, v)| DataResult::success(v),
+                || DataResult::new_error(format!("No element {key} in the map")),
+                |(_, v)| DataResult::new_success(v),
             )
         })
     }

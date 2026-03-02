@@ -43,7 +43,7 @@ pub trait StructBuilder {
 
     /// Maps the error from the internal builder to the function `f` and returns the builder.
     #[must_use]
-    fn map_error(self, f: Box<dyn FnOnce(String) -> String>) -> Self;
+    fn map_error(self, f: impl FnOnce(String) -> String) -> Self;
 
     /// Builds the map stored in this builder along with a prefix and returns the result.
     fn build(self, prefix: Self::Value) -> DataResult<Self::Value>;
@@ -96,8 +96,8 @@ macro_rules! impl_struct_builder {
             self
         }
 
-        fn map_error(mut self, f: Box<dyn FnOnce(String) -> String>) -> Self {
-            self.$builder = self.$builder.map_error_dyn(f);
+        fn map_error(mut self, f: impl FnOnce(String) -> String) -> Self {
+            self.$builder = self.$builder.map_error(f);
             self
         }
 
@@ -263,7 +263,7 @@ pub struct MapBuilder<T, O: DynamicOps<Value = T> + 'static> {
 impl<T: Clone, O: DynamicOps<Value = T>> MapBuilder<T, O> {
     pub(crate) const fn new(ops: &'static O) -> Self {
         Self {
-            builder: DataResult::success_with_lifecycle(vec![], Lifecycle::Stable),
+            builder: DataResult::new_success_with_lifecycle(vec![], Lifecycle::Stable),
             ops,
         }
     }

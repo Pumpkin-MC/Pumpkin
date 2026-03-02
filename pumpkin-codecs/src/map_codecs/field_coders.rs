@@ -86,7 +86,7 @@ impl<A, D: Decoder<Value = A>> MapDecoder for FieldDecoder<A, D> {
         ops: &'static impl DynamicOps<Value = T>,
     ) -> DataResult<Self::Value> {
         input.get_str(self.name).map_or_else(
-            || DataResult::error(format!("No key {} in map", self.name)),
+            || DataResult::new_error(format!("No key {} in map", self.name)),
             |v| self.element_decoder.parse(v.clone(), ops),
         )
     }
