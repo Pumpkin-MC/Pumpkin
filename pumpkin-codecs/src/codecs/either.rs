@@ -1,8 +1,8 @@
+use crate::HasValue;
 use crate::codec::Codec;
 use crate::coders::{Decoder, Encoder};
 use crate::data_result::DataResult;
 use crate::dynamic_ops::DynamicOps;
-use crate::HasValue;
 use either::Either;
 use std::fmt::Display;
 
@@ -69,7 +69,7 @@ impl<L: Codec, R: Codec> Decoder for EitherCodec<L, R> {
             return right;
         }
 
-        DataResult::error(format!(
+        DataResult::new_error(format!(
             "Failed to parse either. First: {}; Second: {}",
             left.get_message().unwrap(),
             right.get_message().unwrap()
@@ -90,7 +90,6 @@ pub(crate) const fn new_either_codec<L: Codec, R: Codec>(
 
 #[cfg(test)]
 mod test {
-    use either::Either;
     use crate::codec::{
         DOUBLE_CODEC, FieldMapCodec, INT_CODEC, STRING_CODEC, either, field, unbounded_map,
     };
@@ -100,8 +99,9 @@ mod test {
     use crate::coders::{Decoder, Encoder};
     use crate::json_ops;
     use crate::map_codec::for_getter;
-    use crate::struct_codecs::StructCodec2;
     use crate::struct_codec;
+    use crate::struct_codecs::StructCodec2;
+    use either::Either;
     use serde_json::json;
 
     #[test]

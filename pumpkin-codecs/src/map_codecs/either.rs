@@ -1,15 +1,15 @@
-use crate::impl_compressor;
+use crate::HasValue;
 use crate::data_result::DataResult;
 use crate::dynamic_ops::DynamicOps;
-use crate::HasValue;
+use crate::impl_compressor;
 use crate::key_compressor::KeyCompressor;
 use crate::keyable::Keyable;
 use crate::map_codec::MapCodec;
 use crate::map_coders::{CompressorHolder, MapDecoder, MapEncoder};
 use crate::map_like::MapLike;
 use crate::struct_builder::StructBuilder;
-use std::fmt::Display;
 use either::Either;
+use std::fmt::Display;
 
 /// A [`MapCodec`] that can serialize/deserialize one of two types, with a map codec for each one.
 ///
