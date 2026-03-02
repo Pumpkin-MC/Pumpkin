@@ -1,12 +1,12 @@
 use std::sync::atomic::Ordering;
 
 use pumpkin_data::{
+    Enchantment,
     damage::DamageType,
     entity::EntityType,
     particle::Particle,
     sound::{Sound, SoundCategory},
     tag::{self, Taggable},
-    Enchantment,
 };
 use pumpkin_util::math::vector3::Vector3;
 
@@ -187,13 +187,7 @@ pub async fn spawn_crit_particles(world: &World, victim_pos: &Vector3<f64>, ench
     };
 
     world
-        .spawn_particle(
-            *victim_pos,
-            Vector3::new(0.5, 0.5, 0.5),
-            0.2,
-            10,
-            particle,
-        )
+        .spawn_particle(*victim_pos, Vector3::new(0.5, 0.5, 0.5), 0.2, 10, particle)
         .await;
 }
 

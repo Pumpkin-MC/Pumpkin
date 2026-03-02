@@ -664,8 +664,7 @@ impl Player {
         let victim_entity = victim.get_entity();
         let config = &server.advanced_config.pvp;
 
-        let (mut damage, damage_multiplier) =
-            self.calculate_attack_damage(&server, &*victim).await;
+        let (mut damage, damage_multiplier) = self.calculate_attack_damage(&server, &*victim).await;
 
         // Get combat enchantments from held weapon
         let enchants = combat::get_combat_enchantments(self).await;
@@ -709,10 +708,9 @@ impl Player {
 
         player_attack_sound(&pos, &world, attack_type).await;
 
-        self.living_entity.last_attacking_id.store(
-            victim_entity.entity_id,
-            Ordering::Relaxed,
-        );
+        self.living_entity
+            .last_attacking_id
+            .store(victim_entity.entity_id, Ordering::Relaxed);
         self.living_entity.last_attack_time.store(
             self.living_entity.entity.age.load(Ordering::Relaxed),
             Ordering::Relaxed,
