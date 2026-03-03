@@ -5,4 +5,5 @@ pub mod iron_golem;
 pub mod pig;
 pub mod sheep;
 pub mod snow_golem;
+pub mod villager;
 pub mod wolf;
