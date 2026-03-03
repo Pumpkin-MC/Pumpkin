@@ -8,6 +8,7 @@ pub mod beg;
 pub mod breed;
 pub mod chase_player;
 pub mod creeper_ignite;
+pub mod destroy_egg;
 pub mod eat_grass;
 pub mod escape_danger;
 pub mod follow_owner;

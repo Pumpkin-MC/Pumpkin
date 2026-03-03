@@ -22,6 +22,7 @@ use crate::{
 };
 
 pub mod buried_treasure;
+pub mod igloo;
 pub mod nether_fortress;
 pub mod stronghold;
 pub mod swamp_hut;
