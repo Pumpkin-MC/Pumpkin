@@ -175,7 +175,7 @@ pub struct VillagerEntity {
     pub level: AtomicI32,
     pub experience: AtomicI32,
     pub trade_offers: Mutex<Vec<TradeOffer>>,
-    pub trading_player_id: AtomicI32,
+    pub trading_player_id: Arc<AtomicI32>,
     pub workstation_pos: Mutex<Option<BlockPos>>,
     pub bed_pos: Mutex<Option<BlockPos>>,
     pub gossips: Mutex<GossipContainer>,
@@ -197,7 +197,7 @@ impl VillagerEntity {
             level: AtomicI32::new(1),
             experience: AtomicI32::new(0),
             trade_offers: Mutex::new(Vec::new()),
-            trading_player_id: AtomicI32::new(-1),
+            trading_player_id: Arc::new(AtomicI32::new(-1)),
             workstation_pos: Mutex::new(None),
             bed_pos: Mutex::new(None),
             gossips: Mutex::new(GossipContainer::new()),
@@ -474,11 +474,16 @@ impl VillagerEntity {
         // If the villager had a profession from a workstation, lose it
         let prof = self.get_profession();
         if prof != VillagerProfession::None && prof != VillagerProfession::Nitwit {
-            // Only lose profession if level 1 and no trades used
+            // Only lose profession if level 1 and no trades have ever been used
             let level = self.get_level();
             if level <= 1 {
-                self.set_profession(VillagerProfession::None);
-                self.trade_offers.lock().await.clear();
+                let offers = self.trade_offers.lock().await;
+                let any_used = offers.iter().any(|o| o.uses > 0);
+                drop(offers);
+                if !any_used {
+                    self.set_profession(VillagerProfession::None);
+                    self.trade_offers.lock().await.clear();
+                }
             }
         }
     }
@@ -537,6 +542,7 @@ impl VillagerEntity {
 struct MerchantScreenHandlerFactory {
     trade_offers: Vec<MerchantTradeOffer>,
     villager_entity_id: i32,
+    villager_trading_lock: Arc<AtomicI32>,
 }
 
 impl ScreenHandlerFactory for MerchantScreenHandlerFactory {
@@ -550,6 +556,7 @@ impl ScreenHandlerFactory for MerchantScreenHandlerFactory {
             let mut handler = MerchantScreenHandler::new(sync_id, player_inventory);
             handler.villager_entity_id = self.villager_entity_id;
             handler.set_trade_offers(self.trade_offers.clone());
+            handler.villager_trading_lock = Some(self.villager_trading_lock.clone());
             Some(Arc::new(tokio::sync::Mutex::new(handler)) as SharedScreenHandler)
         })
     }
@@ -783,6 +790,23 @@ impl Mob for VillagerEntity {
             self.tick_ambient_sound().await;
             self.tick_head_shake();
 
+            // --- Reset trading state if player disconnected or closed the screen ---
+            if self.is_trading() {
+                // Check if the trading player is still connected and has the merchant screen open
+                let trading_id = self.trading_player_id.load(Ordering::Relaxed);
+                let entities = world.entities.load();
+                let mut player_still_trading = false;
+                for other in entities.iter() {
+                    if other.get_entity().entity_id == trading_id {
+                        player_still_trading = true;
+                        break;
+                    }
+                }
+                if !player_still_trading {
+                    self.trading_player_id.store(-1, Ordering::Relaxed);
+                }
+            }
+
             // --- Cache time values once per tick (avoid repeated lock acquisitions) ---
             let (time_of_day, world_age) = {
                 let time = world.level_time.lock().await;
@@ -879,8 +903,9 @@ impl Mob for VillagerEntity {
                 }
             }
 
-            // --- Iron Golem spawning check (every 100 ticks) ---
-            if world_age % 100 == 0 {
+            // --- Iron Golem spawning check (staggered per villager, every 100 ticks) ---
+            // Stagger by entity_id so not all villagers check on the same tick
+            if world_age % 100 == (entity.entity_id as i64 % 100) {
                 // Count nearby villagers and beds
                 let mut villager_count = 0i32;
                 let entities = world.entities.load();
@@ -992,7 +1017,14 @@ impl Mob for VillagerEntity {
                 return false;
             }
 
-            if self.is_trading() {
+            // Atomically claim the trading slot to prevent race conditions
+            // If another player is already trading, this will fail
+            if self.trading_player_id.compare_exchange(
+                -1,
+                player.entity_id(),
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ).is_err() {
                 return false;
             }
 
@@ -1004,8 +1036,6 @@ impl Mob for VillagerEntity {
                     self.populate_all_trades().await;
                 }
             }
-
-            self.set_trading_player(player.entity_id());
 
             // Build trade offer snapshots for the screen handler
             let offers = self.trade_offers.lock().await;
@@ -1027,6 +1057,7 @@ impl Mob for VillagerEntity {
             let factory = MerchantScreenHandlerFactory {
                 trade_offers: trade_snapshots,
                 villager_entity_id: self.mob_entity.living_entity.entity.entity_id,
+                villager_trading_lock: self.trading_player_id.clone(),
             };
             if let Some(window_id) = player.open_handled_screen(&factory, None).await {
                 self.send_merchant_offers(player, window_id).await;

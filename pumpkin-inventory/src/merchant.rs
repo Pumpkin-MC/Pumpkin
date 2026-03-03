@@ -159,9 +159,11 @@ pub struct MerchantTradeOffer {
 /// Slot layout: 0=input1, 1=input2, 2=output, then 3..38=player inventory (27+9)
 pub struct MerchantScreenHandler {
     pub inventory: Arc<MerchantInventory>,
-    pub trade_offers: Vec<MerchantTradeOffer>,
+    pub trade_offers: tokio::sync::Mutex<Vec<MerchantTradeOffer>>,
     pub villager_entity_id: i32,
     pub selected_trade: i32,
+    /// Reference to the villager's trading_player_id for cleanup on close.
+    pub villager_trading_lock: Option<Arc<std::sync::atomic::AtomicI32>>,
     behaviour: ScreenHandlerBehaviour,
 }
 
@@ -170,9 +172,10 @@ impl MerchantScreenHandler {
         let inventory = Arc::new(MerchantInventory::new());
         let mut handler = Self {
             inventory: inventory.clone(),
-            trade_offers: Vec::new(),
+            trade_offers: tokio::sync::Mutex::new(Vec::new()),
             villager_entity_id: -1,
             selected_trade: -1,
+            villager_trading_lock: None,
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(WindowType::Merchant)),
         };
 
@@ -191,14 +194,15 @@ impl MerchantScreenHandler {
 
     /// Set the trade offers snapshot (called after creating the handler).
     pub fn set_trade_offers(&mut self, offers: Vec<MerchantTradeOffer>) {
-        self.trade_offers = offers;
+        self.trade_offers = tokio::sync::Mutex::new(offers);
     }
 
     /// Select a trade by index and update the output slot.
     pub async fn select_trade(&mut self, index: i32) {
         self.selected_trade = index;
-        if index >= 0 && (index as usize) < self.trade_offers.len() {
-            let offer = &self.trade_offers[index as usize];
+        let offers = self.trade_offers.lock().await;
+        if index >= 0 && (index as usize) < offers.len() {
+            let offer = &offers[index as usize];
             // Only show output if the trade is not depleted
             if offer.uses < offer.max_uses {
                 self.inventory.set_stack(2, offer.output.clone()).await;
@@ -216,10 +220,11 @@ impl MerchantScreenHandler {
             return false;
         }
         let idx = self.selected_trade as usize;
-        if idx >= self.trade_offers.len() {
+        let offers = self.trade_offers.lock().await;
+        if idx >= offers.len() {
             return false;
         }
-        let offer = &self.trade_offers[idx];
+        let offer = &offers[idx];
         if offer.uses >= offer.max_uses {
             return false;
         }
@@ -254,10 +259,11 @@ impl MerchantScreenHandler {
             return;
         }
         let idx = self.selected_trade as usize;
-        if idx >= self.trade_offers.len() {
+        let offers = self.trade_offers.lock().await;
+        if idx >= offers.len() {
             return;
         }
-        let offer = &self.trade_offers[idx];
+        let offer = &offers[idx];
 
         // Consume input1
         let mut input1 = self.inventory.items[0].lock().await;
@@ -293,6 +299,10 @@ impl ScreenHandler for MerchantScreenHandler {
             }
             // Clear output
             self.inventory.set_stack(2, ItemStack::EMPTY.clone()).await;
+            // Reset villager trading state
+            if let Some(ref trading_lock) = self.villager_trading_lock {
+                trading_lock.store(-1, std::sync::atomic::Ordering::Relaxed);
+            }
             self.default_on_closed(player).await;
         })
     }
@@ -318,8 +328,14 @@ impl ScreenHandler for MerchantScreenHandler {
                     return true; // Block the click — inputs don't match
                 }
                 self.consume_inputs().await;
-                // Increment uses on the offer snapshot
-                // (The actual VillagerEntity.on_trade_completed is called separately via entity ID)
+                // Increment uses on the snapshot to enforce max_uses server-side
+                {
+                    let mut offers = self.trade_offers.lock().await;
+                    let idx = self.selected_trade as usize;
+                    if idx < offers.len() {
+                        offers[idx].uses += 1;
+                    }
+                }
             }
             false // Let default handling continue for non-output slots
         })
@@ -364,6 +380,14 @@ impl ScreenHandler for MerchantScreenHandler {
                         return ItemStack::EMPTY.clone();
                     }
                     self.consume_inputs().await;
+                    // Increment uses
+                    {
+                        let mut offers = self.trade_offers.lock().await;
+                        let idx = self.selected_trade as usize;
+                        if idx < offers.len() {
+                            offers[idx].uses += 1;
+                        }
+                    }
                     if !self.insert_item(&mut slot_stack_mut, 3, 39, true).await {
                         return ItemStack::EMPTY.clone();
                     }
