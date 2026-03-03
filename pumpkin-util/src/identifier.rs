@@ -602,3 +602,35 @@ impl PartialEq<Identifier> for StaticIdentifier {
         self.namespace == &*other.namespace && self.path == &*other.path
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::identifier::{Identifier, IdentifierError};
+
+    #[test]
+    fn new() -> Result<(), IdentifierError> {
+        assert_eq!(Identifier::new("abc", "def")?.to_string(), "abc:def");
+        assert_eq!(Identifier::from_static("abc", "def").to_string(), "abc:def");
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse() -> Result<(), IdentifierError> {
+        assert_eq!(Identifier::parse("abc")?.to_string(), "minecraft:abc");
+        assert_eq!(Identifier::parse("abc:def")?.to_string(), "abc:def");
+
+        assert_eq!(Identifier::parse_static("abc").to_string(), "minecraft:abc");
+        assert_eq!(Identifier::parse_static("abc:def").to_string(), "abc:def");
+
+        let _ = Identifier::parse("")?;
+        let _ = Identifier::parse("abc:/4/5")?;
+        let _ = Identifier::parse("a._b-c:/4_-/5.9")?;
+
+        assert!(Identifier::parse("a:b:c").is_err());
+        assert!(Identifier::parse("he/llo:bye").is_err());
+        assert!(Identifier::parse("1234+567:89").is_err());
+
+        Ok(())
+    }
+}
