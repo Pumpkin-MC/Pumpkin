@@ -173,15 +173,15 @@ async fn resolve_single_profile(server: &Server, value: &str) -> Option<GameProf
         return Some(profile);
     }
 
-    if !server.basic_config.online_mode {
-        if let Ok(uuid) = offline_uuid(value) {
-            return Some(GameProfile {
-                id: uuid,
-                name: value.to_string(),
-                properties: vec![],
-                profile_actions: None,
-            });
-        }
+    if !server.basic_config.online_mode
+        && let Ok(uuid) = offline_uuid(value)
+    {
+        return Some(GameProfile {
+            id: uuid,
+            name: value.to_string(),
+            properties: vec![],
+            profile_actions: None,
+        });
     }
 
     None

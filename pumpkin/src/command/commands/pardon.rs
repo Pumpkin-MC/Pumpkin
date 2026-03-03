@@ -49,7 +49,7 @@ impl CommandExecutor for Executor {
                 }
             }
 
-            let result = if successes > 0 {
+            if successes > 0 {
                 lock.save();
                 Ok(successes)
             } else {
@@ -57,9 +57,7 @@ impl CommandExecutor for Executor {
                     "commands.pardon.failed",
                     [],
                 )))
-            };
-
-            result
+            }
         })
     }
 }

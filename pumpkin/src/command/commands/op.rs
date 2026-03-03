@@ -47,7 +47,7 @@ impl CommandExecutor for Executor {
                     }
 
                     op.level = new_level;
-                    op.name = profile.name.clone();
+                    op.name.clone_from(&profile.name);
                 } else {
                     let op_entry = Op::new(profile.id, profile.name.clone(), new_level, false);
                     config.ops.push(op_entry);
