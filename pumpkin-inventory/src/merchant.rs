@@ -28,9 +28,8 @@ pub struct MerchantInventory {
     pub items: Vec<Arc<Mutex<ItemStack>>>,
 }
 
-impl MerchantInventory {
-    #[must_use]
-    pub fn new() -> Self {
+impl Default for MerchantInventory {
+    fn default() -> Self {
         Self {
             items: vec![
                 Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
@@ -38,6 +37,13 @@ impl MerchantInventory {
                 Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             ],
         }
+    }
+}
+
+impl MerchantInventory {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -160,7 +166,7 @@ pub struct MerchantScreenHandler {
 }
 
 impl MerchantScreenHandler {
-    pub async fn new(sync_id: u8, player_inventory: &Arc<PlayerInventory>) -> Self {
+    pub fn new(sync_id: u8, player_inventory: &Arc<PlayerInventory>) -> Self {
         let inventory = Arc::new(MerchantInventory::new());
         let mut handler = Self {
             inventory: inventory.clone(),
@@ -171,7 +177,7 @@ impl MerchantScreenHandler {
         };
 
         // Add 2 input slots (normal) + 1 output slot (no insertion)
-        let inv: Arc<dyn Inventory> = inventory.clone();
+        let inv: Arc<dyn Inventory> = inventory;
         handler.add_slot(Arc::new(NormalSlot::new(inv.clone(), 0)));
         handler.add_slot(Arc::new(NormalSlot::new(inv.clone(), 1)));
         handler.add_slot(Arc::new(MerchantOutputSlot::new(inv, 2)));

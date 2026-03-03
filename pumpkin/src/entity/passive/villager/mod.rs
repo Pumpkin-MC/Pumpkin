@@ -444,7 +444,7 @@ impl ScreenHandlerFactory for MerchantScreenHandlerFactory {
         _player: &'a dyn InventoryPlayer,
     ) -> std::pin::Pin<Box<dyn Future<Output = Option<SharedScreenHandler>> + Send + 'a>> {
         Box::pin(async move {
-            let mut handler = MerchantScreenHandler::new(sync_id, player_inventory).await;
+            let mut handler = MerchantScreenHandler::new(sync_id, player_inventory);
             handler.villager_entity_id = self.villager_entity_id;
             handler.set_trade_offers(self.trade_offers.clone());
             Some(Arc::new(tokio::sync::Mutex::new(handler)) as SharedScreenHandler)
