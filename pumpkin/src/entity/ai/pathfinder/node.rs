@@ -56,7 +56,7 @@ impl Node {
     }
 
     #[must_use]
-    pub fn clone_and_move(&self, pos: BlockPos) -> Self {
+    pub const fn clone_and_move(&self, pos: BlockPos) -> Self {
         Self {
             pos,
             heap_idx: self.heap_idx,

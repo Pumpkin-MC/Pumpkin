@@ -131,7 +131,7 @@ impl VillagerType {
     }
 }
 
-/// Wire format for villager data metadata (type 19 = VILLAGER_DATA)
+/// Wire format for villager data metadata (type 19 = `VILLAGER_DATA`)
 #[derive(Serialize)]
 pub struct VillagerDataMeta {
     pub villager_type: VarInt,
@@ -438,7 +438,7 @@ impl VillagerEntity {
     }
 }
 
-/// Factory for creating merchant screen handlers (used by Player::open_handled_screen).
+/// Factory for creating merchant screen handlers (used by `Player::open_handled_screen`).
 struct MerchantScreenHandlerFactory {
     trade_offers: Vec<MerchantTradeOffer>,
     villager_entity_id: i32,
@@ -586,42 +586,42 @@ impl NBTStorage for VillagerEntity {
             }
 
             // Trade offers
-            if let Some(offers_nbt) = nbt.get_compound("Offers") {
-                if let Some(recipes) = offers_nbt.get_list("Recipes") {
-                    let mut offers = self.trade_offers.lock().await;
-                    offers.clear();
-                    for recipe_tag in recipes {
-                        if let pumpkin_nbt::tag::NbtTag::Compound(recipe) = recipe_tag {
-                            let input1 = recipe
-                                .get_compound("buy")
-                                .and_then(ItemStack::read_item_stack)
-                                .unwrap_or_else(|| ItemStack::EMPTY.clone());
-                            let input2 = recipe
-                                .get_compound("buyB")
-                                .and_then(ItemStack::read_item_stack);
-                            let output = recipe
-                                .get_compound("sell")
-                                .and_then(ItemStack::read_item_stack)
-                                .unwrap_or_else(|| ItemStack::EMPTY.clone());
-                            let uses = recipe.get_int("uses").unwrap_or(0);
-                            let max_uses = recipe.get_int("maxUses").unwrap_or(16);
-                            let xp_reward = recipe.get_int("xp").unwrap_or(1);
-                            let special_price = recipe.get_int("specialPrice").unwrap_or(0);
-                            let price_multiplier =
-                                recipe.get_float("priceMultiplier").unwrap_or(0.05);
-                            let demand = recipe.get_int("demand").unwrap_or(0);
-                            offers.push(TradeOffer {
-                                input1,
-                                input2,
-                                output,
-                                uses,
-                                max_uses,
-                                xp_reward,
-                                special_price,
-                                price_multiplier,
-                                demand,
-                            });
-                        }
+            if let Some(recipes) = nbt
+                .get_compound("Offers")
+                .and_then(|o| o.get_list("Recipes"))
+            {
+                let mut offers = self.trade_offers.lock().await;
+                offers.clear();
+                for recipe_tag in recipes {
+                    if let pumpkin_nbt::tag::NbtTag::Compound(recipe) = recipe_tag {
+                        let input1 = recipe
+                            .get_compound("buy")
+                            .and_then(ItemStack::read_item_stack)
+                            .unwrap_or_else(|| ItemStack::EMPTY.clone());
+                        let input2 = recipe
+                            .get_compound("buyB")
+                            .and_then(ItemStack::read_item_stack);
+                        let output = recipe
+                            .get_compound("sell")
+                            .and_then(ItemStack::read_item_stack)
+                            .unwrap_or_else(|| ItemStack::EMPTY.clone());
+                        let uses = recipe.get_int("uses").unwrap_or(0);
+                        let max_uses = recipe.get_int("maxUses").unwrap_or(16);
+                        let xp_reward = recipe.get_int("xp").unwrap_or(1);
+                        let special_price = recipe.get_int("specialPrice").unwrap_or(0);
+                        let price_multiplier = recipe.get_float("priceMultiplier").unwrap_or(0.05);
+                        let demand = recipe.get_int("demand").unwrap_or(0);
+                        offers.push(TradeOffer {
+                            input1,
+                            input2,
+                            output,
+                            uses,
+                            max_uses,
+                            xp_reward,
+                            special_price,
+                            price_multiplier,
+                            demand,
+                        });
                     }
                 }
             }
@@ -631,25 +631,23 @@ impl NBTStorage for VillagerEntity {
                 let mut gossips = self.gossips.lock().await;
                 gossips.entries.clear();
                 for gossip_tag in gossip_list {
-                    if let pumpkin_nbt::tag::NbtTag::Compound(g) = gossip_tag {
-                        if let (Some(type_name), Some(int_arr), Some(value)) = (
+                    if let pumpkin_nbt::tag::NbtTag::Compound(g) = gossip_tag
+                        && let (Some(type_name), Some(int_arr), Some(value)) = (
                             g.get_string("Type"),
                             g.get_int_array("Target"),
                             g.get_int("Value"),
-                        ) {
-                            if int_arr.len() == 4 {
-                                let hi = ((int_arr[0] as u64) << 32) | (int_arr[1] as u32 as u64);
-                                let lo = ((int_arr[2] as u64) << 32) | (int_arr[3] as u32 as u64);
-                                let uuid =
-                                    uuid::Uuid::from_u128(((hi as u128) << 64) | (lo as u128));
-                                if let Some(gtype) = GossipType::from_name(type_name) {
-                                    gossips.entries.push(GossipEntry {
-                                        gossip_type: gtype,
-                                        target: uuid,
-                                        value,
-                                    });
-                                }
-                            }
+                        )
+                        && int_arr.len() == 4
+                    {
+                        let hi = ((int_arr[0] as u64) << 32) | (int_arr[1] as u32 as u64);
+                        let lo = ((int_arr[2] as u64) << 32) | (int_arr[3] as u32 as u64);
+                        let uuid = uuid::Uuid::from_u128(((hi as u128) << 64) | (lo as u128));
+                        if let Some(gtype) = GossipType::from_name(type_name) {
+                            gossips.entries.push(GossipEntry {
+                                gossip_type: gtype,
+                                target: uuid,
+                                value,
+                            });
                         }
                     }
                 }

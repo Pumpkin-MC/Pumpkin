@@ -80,7 +80,12 @@ impl MobData {
     }
 
     #[must_use]
-    pub fn new(position: Vector3<f64>, width: f32, height: f32, max_step_height: f32) -> Self {
+    pub const fn new(
+        position: Vector3<f64>,
+        width: f32,
+        height: f32,
+        max_step_height: f32,
+    ) -> Self {
         Self {
             position,
             width,
@@ -101,7 +106,7 @@ impl MobData {
         self.path_type_malus[path_type as usize].unwrap_or_else(|| path_type.get_malus())
     }
 
-    pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
+    pub const fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.path_type_malus[path_type as usize] = Some(malus);
     }
 

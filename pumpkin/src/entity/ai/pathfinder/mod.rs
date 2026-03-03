@@ -122,6 +122,7 @@ impl Navigator {
         self.mob_height = height;
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn compute_path(
         &mut self,
         entity: &LivingEntity,

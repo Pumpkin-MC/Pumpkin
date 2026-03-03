@@ -17,7 +17,7 @@ pub enum VillagerActivity {
 impl VillagerActivity {
     /// Get the current activity based on world time (0-24000).
     #[must_use]
-    pub fn from_time(time_of_day: i64) -> Self {
+    pub const fn from_time(time_of_day: i64) -> Self {
         let t = time_of_day.rem_euclid(24000); // Normalize to 0-23999
         match t {
             0..2000 | 11000..12000 => Self::Idle,
