@@ -67,6 +67,9 @@ async fn main() {
         .set(thread::current().id())
         .expect("Expected to successfully set the main thread ID");
 
+    // Set the panic handler.
+    std::panic::set_hook(Box::new(handle_panic));
+
     #[cfg(feature = "console-subscriber")]
     console_subscriber::init();
     let time = Instant::now();
@@ -166,9 +169,6 @@ async fn main() {
             TextComponent::text(String::new()).to_pretty_console()
         }
     );
-
-    // Set the new panic handler.
-    std::panic::set_hook(Box::new(handle_panic));
 
     pumpkin_server.start().await;
 
