@@ -6,14 +6,18 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
+use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
@@ -27,7 +31,6 @@ pub mod enderman;
 pub mod silverfish;
 pub mod skeleton;
 pub mod zombie;
-pub mod zombie_villager;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
@@ -102,7 +105,7 @@ impl MobEntity {
                 .entity
                 .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_MOB_FLAGS,
-                    MetaDataType::Byte,
+                    MetaDataType::BYTE,
                     new_b,
                 )])
                 .await;
@@ -154,17 +157,18 @@ impl MobEntity {
     }
 
     pub async fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
-        // TODO: Use entity attributes for damage once implemented
-        const ZOMBIE_ATTACK_DAMAGE: f32 = 3.0;
-
         if self.living_entity.dead.load(Relaxed) {
             return;
         }
 
+        let attack_damage: f32 =
+            self.living_entity
+                .get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
+
         let damaged = target
             .damage_with_context(
                 target,
-                ZOMBIE_ATTACK_DAMAGE,
+                attack_damage,
                 DamageType::MOB_ATTACK,
                 None,
                 Some(caller),
@@ -242,7 +246,21 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
-    fn on_damage(&self, _damage_type: DamageType) -> EntityBaseFuture<'_, ()> {
+    /// Called before damage is applied. Return `false` to cancel the damage entirely.
+    /// Used by endermen to dodge projectiles via teleportation.
+    fn pre_damage<'a>(
+        &'a self,
+        _damage_type: DamageType,
+        _source: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async { true })
+    }
+
+    fn on_damage<'a>(
+        &'a self,
+        _damage_type: DamageType,
+        _source: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
     }
 
@@ -260,6 +278,14 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_y_velocity_drag(&self) -> Option<f64> {
         None
+    }
+
+    /// Set or clear the mob's target. Override to add side effects when targeting changes.
+    fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mut mob_target = self.get_mob_entity().target.lock().await;
+            *mob_target = target;
+        })
     }
 
     fn mob_interact<'a>(
@@ -373,13 +399,17 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
+            // pre_damage hook: allows mobs to dodge/cancel damage (e.g. enderman projectile dodge)
+            if !self.pre_damage(damage_type, source).await {
+                return false;
+            }
             let damaged = self
                 .get_mob_entity()
                 .living_entity
                 .damage_with_context(caller, amount, damage_type, position, source, cause)
                 .await;
             if damaged {
-                self.on_damage(damage_type).await;
+                self.on_damage(damage_type, source).await;
             }
             damaged
         })
@@ -479,5 +509,68 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
     fn get_follow_leash_speed(&self) -> f32 {
         1.0
+    }
+}
+
+pub trait SunSensitive: Mob + Send + Sync {
+    fn sun_sensitive_tick(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {
+            let mob = self.get_mob_entity();
+            let entity = &mob.living_entity.entity;
+
+            if !entity.is_alive()
+                || entity.touching_water.load(Relaxed)
+                || entity.is_in_powder_snow().await
+            {
+                return;
+            }
+
+            let world_arc = entity.world.load();
+            let world = world_arc.as_ref();
+
+            if world.level_time.lock().await.is_night() {
+                return;
+            }
+            if world.weather.lock().await.raining {
+                return;
+            }
+
+            let pos = entity.pos.load();
+            let top_y = world
+                .get_top_block(Vector2::new(pos.x as i32, pos.z as i32))
+                .await;
+            if (entity.get_eye_y() as i32) < top_y {
+                return;
+            }
+
+            let brightness = world
+                .level
+                .light_engine
+                .get_sky_light_level(&world.level, &pos.to_block_pos())
+                .await
+                .unwrap_or(0) as f32
+                / 15.0;
+
+            if brightness < 0.5 {
+                return;
+            }
+
+            let damage_amount = {
+                let mut rng = self.get_random();
+                if rng.random::<f32>() * 30.0 >= (brightness - 0.4) * 2.0 {
+                    return;
+                }
+                rng.random_range(0..=1i32)
+            };
+
+            let equipment = mob.living_entity.entity_equipment.lock().await;
+            let head_slot = equipment.get(&EquipmentSlot::HEAD);
+            let mut head_item = head_slot.lock().await;
+            if head_item.is_empty() {
+                entity.set_on_fire_for(8.0);
+            } else {
+                head_item.damage_item(damage_amount);
+            }
+        })
     }
 }

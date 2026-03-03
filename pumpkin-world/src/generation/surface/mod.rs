@@ -10,7 +10,6 @@ use pumpkin_util::{
     math::{lerp2, vertical_surface_type::VerticalSurfaceType},
     random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
-use serde::Deserialize;
 
 use terrain::SurfaceTerrainBuilder;
 
@@ -199,7 +198,6 @@ pub fn test_condition(
     }
 }
 
-#[derive(Deserialize)]
 pub struct HoleMaterialCondition;
 
 impl HoleMaterialCondition {
@@ -236,7 +234,6 @@ pub fn test_not_material(
     )
 }
 
-#[derive(Deserialize)]
 pub struct SurfaceMaterialCondition;
 
 impl SurfaceMaterialCondition {
@@ -291,7 +288,6 @@ pub fn estimate_surface_height(
     context.surface_min_y
 }
 
-#[derive(Deserialize)]
 pub struct BiomeMaterialCondition;
 
 impl BiomeMaterialCondition {

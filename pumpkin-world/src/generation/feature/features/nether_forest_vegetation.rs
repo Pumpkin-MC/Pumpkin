@@ -3,16 +3,14 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{generation::block_state_provider::BlockStateProvider, world::BlockRegistryExt};
 
-#[derive(Deserialize)]
 pub struct NetherForestVegetationFeature {
-    state_provider: BlockStateProvider,
-    spread_width: i32,
-    spread_height: i32,
+    pub state_provider: BlockStateProvider,
+    pub spread_width: i32,
+    pub spread_height: i32,
 }
 
 impl NetherForestVegetationFeature {

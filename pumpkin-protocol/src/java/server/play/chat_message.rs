@@ -23,8 +23,7 @@ pub struct SChatMessage {
 }
 
 impl ServerPacket for SChatMessage {
-    fn read(read: impl Read) -> Result<Self, ReadingError> {
-        let mut read = read;
+    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             message: read.get_string_bounded(256)?,
             timestamp: read.get_i64_be()?,

@@ -1,9 +1,8 @@
-use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::translation::get_translation_text;
-use pumpkin_world::CURRENT_MC_VERSION;
 use serde::Deserialize;
 use std::borrow::Cow;
 
@@ -153,8 +152,10 @@ impl CommandExecutor for Executor {
                             "commands.pumpkin.minecraft_version",
                             locale,
                             vec![
-                                TextComponent::text(CURRENT_MC_VERSION),
-                                TextComponent::text(format!("{CURRENT_MC_PROTOCOL}")),
+                                TextComponent::text(CURRENT_MC_VERSION.to_string()),
+                                TextComponent::text(
+                                    CURRENT_MC_VERSION.protocol_version().to_string(),
+                                ),
                             ],
                         )
                         .click_event(ClickEvent::CopyToClipboard {
@@ -163,8 +164,11 @@ impl CommandExecutor for Executor {
                                     "pumpkin:commands.pumpkin.minecraft_version",
                                     locale,
                                     vec![
-                                        TextComponent::text(CURRENT_MC_VERSION).0,
-                                        TextComponent::text(format!("{CURRENT_MC_PROTOCOL}")).0,
+                                        TextComponent::text(CURRENT_MC_VERSION.to_string()).0,
+                                        TextComponent::text(
+                                            CURRENT_MC_VERSION.protocol_version().to_string(),
+                                        )
+                                        .0,
                                     ],
                                 )
                                 .replace('\n', ""),

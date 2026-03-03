@@ -1,6 +1,5 @@
 use std::io::{Error, Read, Write};
 
-use pumpkin_data::packet::PacketId;
 use pumpkin_util::version::MinecraftVersion;
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -16,7 +15,8 @@ pub trait Packet {
 }
 
 pub trait MultiVersionJavaPacket {
-    const PACKET_ID: PacketId;
+    #[must_use]
+    fn to_id(version: MinecraftVersion) -> i32;
 }
 
 impl<P: MultiVersionJavaPacket + Serialize> ClientPacket for P {
@@ -31,7 +31,7 @@ impl<P: MultiVersionJavaPacket + Serialize> ClientPacket for P {
 }
 
 impl<P: MultiVersionJavaPacket + DeserializeOwned> ServerPacket for P {
-    fn read(read: impl Read) -> Result<P, ReadingError> {
+    fn read(read: impl Read, _version: &MinecraftVersion) -> Result<P, ReadingError> {
         let mut deserializer = deserializer::Deserializer::new(read);
         P::deserialize(&mut deserializer)
     }

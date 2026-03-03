@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
@@ -59,10 +61,15 @@ impl BatEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_BAT_FLAGS,
-                MetaDataType::Byte,
+                MetaDataType::BYTE,
                 flags,
             )])
             .await;
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new().add(Attributes::MAX_HEALTH, 6.0)
     }
 }
 
@@ -228,7 +235,11 @@ impl Mob for BatEntity {
         Some(0.6)
     }
 
-    fn on_damage(&self, _damage_type: DamageType) -> EntityBaseFuture<'_, ()> {
+    fn on_damage<'a>(
+        &'a self,
+        _damage_type: DamageType,
+        _source: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             if self.is_roosting() {
                 self.set_roosting(false).await;

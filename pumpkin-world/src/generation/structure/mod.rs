@@ -3,6 +3,7 @@ use pumpkin_data::{
     tag::{RegistryKey, get_tag_ids},
 };
 
+
 use crate::{
     ProtoChunk,
     generation::{
@@ -10,7 +11,9 @@ use crate::{
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
-            nether_fossil::NetherFossilGenerator, stronghold::StrongholdGenerator,
+            igloo::IglooGenerator,
+            nether_fossil::NetherFossilGenerator,
+            stronghold::StrongholdGenerator,
             swamp_hut::SwampHutGenerator,
         },
     },
@@ -39,7 +42,6 @@ pub fn try_generate_structure(
         sea_level,
         min_y: chunk.bottom_y() as i32,
     };
-
     let structure_pos = match key {
         StructureKeys::BuriedTreasure => {
             BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
@@ -53,6 +55,7 @@ pub fn try_generate_structure(
         StructureKeys::NetherFossil => {
             NetherFossilGenerator::get_structure_position(&NetherFossilGenerator, context)
         }
+        StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
         // TODO: Implement other structure types
         _ => None,
     };
