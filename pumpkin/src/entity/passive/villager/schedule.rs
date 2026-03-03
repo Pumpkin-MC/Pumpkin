@@ -18,32 +18,31 @@ impl VillagerActivity {
     /// Get the current activity based on world time (0-24000).
     #[must_use]
     pub fn from_time(time_of_day: i64) -> Self {
-        let t = ((time_of_day % 24000) + 24000) % 24000; // Normalize to 0-23999
+        let t = time_of_day.rem_euclid(24000); // Normalize to 0-23999
         match t {
-            0..2000 => Self::Idle,
+            0..2000 | 11000..12000 => Self::Idle,
             2000..9000 => Self::Work,
             9000..11000 => Self::Meet,
-            11000..12000 => Self::Idle,
             _ => Self::Rest,
         }
     }
 
     /// Whether the villager should be sleeping during this activity.
     #[must_use]
-    pub fn is_sleeping(&self) -> bool {
-        *self == Self::Rest
+    pub const fn is_sleeping(&self) -> bool {
+        matches!(self, Self::Rest)
     }
 
     /// Whether the villager should go to their workstation.
     #[must_use]
-    pub fn is_working(&self) -> bool {
-        *self == Self::Work
+    pub const fn is_working(&self) -> bool {
+        matches!(self, Self::Work)
     }
 
     /// Whether the villager should gather at the village bell.
     #[must_use]
-    pub fn is_meeting(&self) -> bool {
-        *self == Self::Meet
+    pub const fn is_meeting(&self) -> bool {
+        matches!(self, Self::Meet)
     }
 }
 
@@ -52,7 +51,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_schedule_phases() {
+    fn schedule_phases() {
         assert_eq!(VillagerActivity::from_time(0), VillagerActivity::Idle);
         assert_eq!(VillagerActivity::from_time(1000), VillagerActivity::Idle);
         assert_eq!(VillagerActivity::from_time(2000), VillagerActivity::Work);
@@ -66,7 +65,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_wrapping() {
+    fn schedule_wrapping() {
         assert_eq!(VillagerActivity::from_time(24000), VillagerActivity::Idle);
         assert_eq!(VillagerActivity::from_time(48000), VillagerActivity::Idle);
         assert_eq!(VillagerActivity::from_time(-1), VillagerActivity::Rest);

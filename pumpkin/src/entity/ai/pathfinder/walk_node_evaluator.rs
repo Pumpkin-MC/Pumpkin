@@ -196,7 +196,7 @@ impl WalkNodeEvaluator {
         None
     }
 
-    /// Searches downward for the first non-OPEN block, respecting safe fall distance.
+    /// Searches downward for the first non-`OPEN` block, respecting safe fall distance.
     async fn get_open_node(&mut self, pos: Vector3<i32>) -> Node {
         let safe_fall_distance = self
             .base
@@ -434,7 +434,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
                 .await;
 
             if let Some(neighbor) = neighbor_opt {
-                self.reusable_neighbors[i] = Some(neighbor.clone());
+                self.reusable_neighbors[i] = Some(neighbor);
                 if Self::is_neighbor_valid(Some(&neighbor), current) {
                     out_neighbors.push(neighbor);
                 }

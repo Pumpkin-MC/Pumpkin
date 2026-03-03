@@ -13,9 +13,15 @@ pub struct ClaimWorkstationGoal {
     cooldown: i32,
 }
 
+impl Default for ClaimWorkstationGoal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClaimWorkstationGoal {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             goal_control: Controls::MOVE,
             target_pos: None,

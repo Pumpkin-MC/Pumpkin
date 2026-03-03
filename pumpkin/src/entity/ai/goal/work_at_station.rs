@@ -13,9 +13,15 @@ pub struct WorkAtStationGoal {
     work_ticks: i32,
 }
 
+impl Default for WorkAtStationGoal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorkAtStationGoal {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             goal_control: Controls::MOVE,
             station_pos: None,

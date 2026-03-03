@@ -98,7 +98,7 @@ impl Coordinate for Node {
     }
 
     fn as_node(&self) -> Node {
-        self.clone()
+        *self
     }
 
     fn as_vector3(&self) -> Vector3<i32> {
@@ -163,7 +163,7 @@ impl Coordinate for Target {
     }
 
     fn as_node(&self) -> Node {
-        self.node.clone()
+        self.node
     }
 
     fn as_vector3(&self) -> Vector3<i32> {

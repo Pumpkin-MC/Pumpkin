@@ -19,7 +19,8 @@ pub struct TradePool {
 }
 
 /// Get the trade pool for a profession at a specific level.
-/// Returns None if the profession has no trades (None/Nitwit) or level is invalid.
+/// Returns `None` if the profession has no trades (`None`/Nitwit) or level is invalid.
+#[must_use]
 pub fn get_trade_pool(profession: i32, level: i32) -> Option<&'static TradePool> {
     match profession {
         5 => FARMER_TRADES.get((level - 1) as usize), // Farmer
@@ -40,6 +41,7 @@ pub fn get_trade_pool(profession: i32, level: i32) -> Option<&'static TradePool>
 }
 
 /// Select random trades from a pool (up to `count` trades).
+#[must_use]
 pub fn select_random_trades(pool: &TradePool, count: usize, seed: u64) -> Vec<usize> {
     if pool.entries.len() <= count {
         return (0..pool.entries.len()).collect();

@@ -60,7 +60,8 @@ pub enum VillagerProfession {
 }
 
 impl VillagerProfession {
-    pub fn from_i32(v: i32) -> Self {
+    #[must_use]
+    pub const fn from_i32(v: i32) -> Self {
         match v {
             1 => Self::Armorer,
             2 => Self::Butcher,
@@ -81,7 +82,8 @@ impl VillagerProfession {
     }
 
     /// Returns the workstation block name for this profession, if any.
-    pub fn workstation_block(&self) -> Option<&'static str> {
+    #[must_use]
+    pub const fn workstation_block(&self) -> Option<&'static str> {
         match self {
             Self::Armorer => Some("blast_furnace"),
             Self::Butcher => Some("smoker"),
@@ -115,7 +117,8 @@ pub enum VillagerType {
 }
 
 impl VillagerType {
-    pub fn from_i32(v: i32) -> Self {
+    #[must_use]
+    pub const fn from_i32(v: i32) -> Self {
         match v {
             0 => Self::Desert,
             1 => Self::Jungle,
@@ -221,6 +224,7 @@ impl VillagerEntity {
             .add(Attributes::MAX_HEALTH, 20.0)
     }
 
+    #[must_use]
     pub fn get_profession(&self) -> VillagerProfession {
         VillagerProfession::from_i32(self.profession.load(Ordering::Relaxed))
     }
@@ -229,6 +233,7 @@ impl VillagerEntity {
         self.profession.store(profession as i32, Ordering::Relaxed);
     }
 
+    #[must_use]
     pub fn get_villager_type(&self) -> VillagerType {
         VillagerType::from_i32(self.villager_type.load(Ordering::Relaxed))
     }
@@ -237,6 +242,7 @@ impl VillagerEntity {
         self.villager_type.store(vtype as i32, Ordering::Relaxed);
     }
 
+    #[must_use]
     pub fn get_level(&self) -> i32 {
         self.level.load(Ordering::Relaxed)
     }
@@ -245,6 +251,7 @@ impl VillagerEntity {
         self.level.store(level.clamp(1, 5), Ordering::Relaxed);
     }
 
+    #[must_use]
     pub fn get_experience(&self) -> i32 {
         self.experience.load(Ordering::Relaxed)
     }
@@ -253,6 +260,7 @@ impl VillagerEntity {
         self.experience.fetch_add(amount, Ordering::Relaxed);
     }
 
+    #[must_use]
     pub fn should_level_up(&self) -> bool {
         let level = self.get_level();
         if level >= 5 {
@@ -269,6 +277,7 @@ impl VillagerEntity {
         }
     }
 
+    #[must_use]
     pub fn is_trading(&self) -> bool {
         self.trading_player_id.load(Ordering::Relaxed) != -1
     }
@@ -363,13 +372,12 @@ impl VillagerEntity {
     /// Send the merchant offers packet to a player.
     pub async fn send_merchant_offers(&self, player: &Player, window_id: u8) {
         let offers = self.trade_offers.lock().await;
-        let empty_stack = ItemStack::EMPTY.clone();
 
         let trades: Vec<MerchantTrade<'_>> = offers
             .iter()
             .map(|offer| MerchantTrade {
                 input1: &offer.input1,
-                input2: offer.input2.as_ref().unwrap_or(&empty_stack),
+                input2: offer.input2.as_ref().unwrap_or(ItemStack::EMPTY),
                 output: &offer.output,
                 uses: offer.uses,
                 max_uses: offer.max_uses,
@@ -496,9 +504,9 @@ impl NBTStorage for VillagerEntity {
                         recipe.put_component("buyB", buy_b);
                     }
 
-                    let mut sell = pumpkin_nbt::compound::NbtCompound::new();
-                    offer.output.write_item_stack(&mut sell);
-                    recipe.put_component("sell", sell);
+                    let mut output_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                    offer.output.write_item_stack(&mut output_nbt);
+                    recipe.put_component("sell", output_nbt);
 
                     recipe.put_int("uses", offer.uses);
                     recipe.put_int("maxUses", offer.max_uses);
@@ -545,6 +553,7 @@ impl NBTStorage for VillagerEntity {
         })
     }
 
+    #[allow(clippy::too_many_lines)]
     fn read_nbt_non_mut<'a>(
         &'a self,
         nbt: &'a pumpkin_nbt::compound::NbtCompound,
@@ -660,6 +669,7 @@ impl Mob for VillagerEntity {
         })
     }
 
+    #[allow(clippy::too_many_lines)]
     fn mob_tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,
@@ -684,22 +694,25 @@ impl Mob for VillagerEntity {
                     let block = world.get_block(&candidate).await;
                     let short_name = block.name.strip_prefix("minecraft:").unwrap_or(block.name);
 
-                    if let Some(poi_type) = poi::block_to_poi_type(short_name) {
-                        if let Some(profession_id) = poi::poi_type_to_profession(poi_type) {
-                            let profession = VillagerProfession::from_i32(profession_id);
-                            self.set_profession(profession);
-                            *self.workstation_pos.lock().await = Some(candidate);
-                            self.populate_all_trades().await;
-                            self.sync_villager_data().await;
-                            break;
-                        }
+                    if let Some(poi_type) = poi::block_to_poi_type(short_name)
+                        && let Some(profession_id) = poi::poi_type_to_profession(poi_type)
+                    {
+                        let profession = VillagerProfession::from_i32(profession_id);
+                        self.set_profession(profession);
+                        *self.workstation_pos.lock().await = Some(candidate);
+                        self.populate_all_trades().await;
+                        self.sync_villager_data().await;
+                        break;
                     }
                 }
             }
 
             // --- Restock: when working and near workstation ---
             if activity.is_working() {
-                if let Some(ws_pos) = *self.workstation_pos.lock().await {
+                let ws_guard = self.workstation_pos.lock().await;
+                let ws_pos_opt = *ws_guard;
+                drop(ws_guard);
+                if let Some(ws_pos) = ws_pos_opt {
                     let dx = pos.x - (ws_pos.0.x as f64 + 0.5);
                     let dz = pos.z - (ws_pos.0.z as f64 + 0.5);
                     let dist_sq = dx * dx + dz * dz;
@@ -885,8 +898,9 @@ impl Mob for VillagerEntity {
     }
 }
 
-/// Convert VillagerType enum to string name (for NBT).
-fn villager_type_name(vtype: VillagerType) -> &'static str {
+/// Convert `VillagerType` enum to string name (for NBT).
+#[must_use]
+const fn villager_type_name(vtype: VillagerType) -> &'static str {
     match vtype {
         VillagerType::Desert => "desert",
         VillagerType::Jungle => "jungle",
@@ -898,7 +912,8 @@ fn villager_type_name(vtype: VillagerType) -> &'static str {
     }
 }
 
-/// Parse VillagerType from string name (for NBT).
+/// Parse `VillagerType` from string name (for NBT).
+#[must_use]
 fn villager_type_from_name(name: &str) -> VillagerType {
     match name {
         "desert" => VillagerType::Desert,
@@ -911,8 +926,9 @@ fn villager_type_from_name(name: &str) -> VillagerType {
     }
 }
 
-/// Convert VillagerProfession enum to string name (for NBT).
-fn profession_name(prof: VillagerProfession) -> &'static str {
+/// Convert `VillagerProfession` enum to string name (for NBT).
+#[must_use]
+const fn profession_name(prof: VillagerProfession) -> &'static str {
     match prof {
         VillagerProfession::None => "none",
         VillagerProfession::Armorer => "armorer",
@@ -932,7 +948,8 @@ fn profession_name(prof: VillagerProfession) -> &'static str {
     }
 }
 
-/// Parse VillagerProfession from string name (for NBT).
+/// Parse `VillagerProfession` from string name (for NBT).
+#[must_use]
 fn profession_from_name(name: &str) -> VillagerProfession {
     match name {
         "armorer" => VillagerProfession::Armorer,

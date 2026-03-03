@@ -13,43 +13,39 @@ pub enum GossipType {
 impl GossipType {
     /// Reputation weight per gossip value point.
     #[must_use]
-    pub fn weight(&self) -> i32 {
+    pub const fn weight(&self) -> i32 {
         match self {
             Self::MajorPositive => 5,
-            Self::MinorPositive => 1,
+            Self::MinorPositive | Self::Trading => 1,
             Self::MinorNegative => -1,
             Self::MajorNegative => -5,
-            Self::Trading => 1,
         }
     }
 
     /// Maximum value this gossip type can reach.
     #[must_use]
-    pub fn max_value(&self) -> i32 {
+    pub const fn max_value(&self) -> i32 {
         match self {
-            Self::MajorPositive => 100,
-            Self::MinorPositive => 200,
-            Self::MinorNegative => 200,
-            Self::MajorNegative => 100,
+            Self::MajorPositive | Self::MajorNegative => 100,
+            Self::MinorPositive | Self::MinorNegative => 200,
             Self::Trading => 25,
         }
     }
 
     /// How much this gossip decays per in-game day.
     #[must_use]
-    pub fn decay_per_day(&self) -> i32 {
+    pub const fn decay_per_day(&self) -> i32 {
         match self {
             Self::MajorPositive => 0,
-            Self::MinorPositive => 2,
+            Self::MinorPositive | Self::Trading => 2,
             Self::MinorNegative => 20,
             Self::MajorNegative => 10,
-            Self::Trading => 2,
         }
     }
 
     /// NBT name for serialization.
     #[must_use]
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         match self {
             Self::MajorPositive => "major_positive",
             Self::MinorPositive => "minor_positive",
@@ -74,11 +70,9 @@ impl GossipType {
 
     /// Maximum value that can be shared between villagers (gossip spreading).
     #[must_use]
-    pub fn share_max(&self) -> i32 {
+    pub const fn share_max(&self) -> i32 {
         match self {
-            Self::MajorPositive => 20,
-            Self::MinorPositive => 20,
-            Self::MinorNegative => 20,
+            Self::MajorPositive | Self::MinorPositive | Self::MinorNegative => 20,
             Self::MajorNegative => 10,
             Self::Trading => 0, // Trading gossip doesn't spread
         }
@@ -101,13 +95,13 @@ pub struct GossipContainer {
 
 impl GossipContainer {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             entries: Vec::new(),
         }
     }
 
-    /// Add gossip about a player. Clamps to max_value.
+    /// Add gossip about a player. Clamps to `max_value`.
     pub fn add(&mut self, gossip_type: GossipType, target: Uuid, amount: i32) {
         if let Some(entry) = self
             .entries
@@ -152,7 +146,7 @@ impl GossipContainer {
     }
 
     /// Get gossip entries that can be shared with another villager.
-    /// Returns entries with values clamped to share_max.
+    /// Returns entries with values clamped to `share_max`.
     #[must_use]
     pub fn get_shareable(&self) -> Vec<GossipEntry> {
         self.entries
@@ -179,7 +173,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_reputation() {
+    fn reputation() {
         let mut container = GossipContainer::new();
         let uuid = Uuid::new_v4();
 
@@ -194,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn test_decay() {
+    fn decay() {
         let mut container = GossipContainer::new();
         let uuid = Uuid::new_v4();
 
@@ -209,7 +203,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clamping() {
+    fn clamping() {
         let mut container = GossipContainer::new();
         let uuid = Uuid::new_v4();
 

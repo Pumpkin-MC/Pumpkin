@@ -12,9 +12,15 @@ pub struct SleepInBedGoal {
     cooldown: i32,
 }
 
+impl Default for SleepInBedGoal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SleepInBedGoal {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             goal_control: Controls::MOVE,
             bed_pos: None,

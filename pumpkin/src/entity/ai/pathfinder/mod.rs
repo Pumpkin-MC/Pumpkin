@@ -286,7 +286,7 @@ impl Navigator {
             let dz = f64::from(path_target.z - goal_target.z);
             let distance_sq = dx * dx + dy * dy + dz * dz;
             // Adaptive threshold based on remaining distance
-            let remaining = p.get_remaining_distance().max(4.0).min(16.0);
+            let remaining = p.get_remaining_distance().clamp(4.0, 16.0);
             let threshold = remaining * 0.5;
             distance_sq > f64::from(threshold * threshold)
         })

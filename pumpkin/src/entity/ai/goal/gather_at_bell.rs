@@ -12,9 +12,15 @@ pub struct GatherAtBellGoal {
     cooldown: i32,
 }
 
+impl Default for GatherAtBellGoal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GatherAtBellGoal {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             goal_control: Controls::MOVE,
             bell_pos: None,
