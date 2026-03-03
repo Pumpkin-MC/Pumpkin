@@ -181,6 +181,7 @@ pub struct VillagerEntity {
     pub gossips: Mutex<GossipContainer>,
     pub restock_count: AtomicI32,
     pub last_restock_tick: AtomicI32,
+    pub last_golem_spawn_tick: AtomicI32,
     ambient_sound_chance: AtomicI32,
     head_shake_ticks: AtomicI32,
     pub inventory: Mutex<inventory::VillagerInventory>,
@@ -202,6 +203,7 @@ impl VillagerEntity {
             gossips: Mutex::new(GossipContainer::new()),
             restock_count: AtomicI32::new(0),
             last_restock_tick: AtomicI32::new(0),
+            last_golem_spawn_tick: AtomicI32::new(0),
             ambient_sound_chance: AtomicI32::new(MIN_AMBIENT_SOUND_DELAY),
             head_shake_ticks: AtomicI32::new(0),
             inventory: Mutex::new(inventory::VillagerInventory::new()),
@@ -781,12 +783,16 @@ impl Mob for VillagerEntity {
             self.tick_ambient_sound().await;
             self.tick_head_shake();
 
-            // --- Schedule-based behavior ---
-            let time_of_day = world.level_time.lock().await.time_of_day;
+            // --- Cache time values once per tick (avoid repeated lock acquisitions) ---
+            let (time_of_day, world_age) = {
+                let time = world.level_time.lock().await;
+                (time.time_of_day, time.world_age)
+            };
             let activity = schedule::VillagerActivity::from_time(time_of_day);
+            let age = entity.age.load(Ordering::Relaxed);
 
-            // --- Workstation claiming (unemployed villagers) ---
-            if self.get_profession() == VillagerProfession::None {
+            // --- Workstation claiming (unemployed villagers, every 20 ticks) ---
+            if self.get_profession() == VillagerProfession::None && age % 20 == 0 {
                 let mut poi_storage = world.portal_poi.lock().await;
                 let nearby = poi_storage.get_in_square(block_pos, 2, None);
                 drop(poi_storage);
@@ -823,7 +829,7 @@ impl Mob for VillagerEntity {
                     // Within 2 blocks of workstation
                     if dist_sq <= 4.0 {
                         // Play work sound periodically
-                        if entity.age.load(Ordering::Relaxed) % 40 == 0
+                        if age % 40 == 0
                             && let Some(work_sound) = self.get_work_sound()
                         {
                             entity.play_sound(work_sound).await;
@@ -841,37 +847,14 @@ impl Mob for VillagerEntity {
                 self.restock_count.store(0, Ordering::Relaxed);
             }
 
-            // --- Gossip spreading during meetings ---
-            if activity.is_meeting() {
-                // Every ~200 ticks during meeting, try to share gossip with nearby villagers
-                let world_age = world.level_time.lock().await.world_age;
-                if world_age % 200 == 0 {
-                    let shareable = self.gossips.lock().await.get_shareable();
-                    if !shareable.is_empty() {
-                        // Find nearby villager entities and merge gossip
-                        let entities = world.entities.load();
-                        for other_entity in entities.iter() {
-                            let other_pos = other_entity.get_entity().pos.load();
-                            let dx = pos.x - other_pos.x;
-                            let dz = pos.z - other_pos.z;
-                            if dx * dx + dz * dz < 25.0 {
-                                // Within 5 blocks — can't directly downcast,
-                                // but the gossip merge will happen through the meeting mechanism
-                                // For now we mark the gossip as shared
-                            }
-                        }
-                    }
-                }
-            }
-
             // --- Gossip decay once per day ---
             if time_of_day % 24000 < 20 {
                 self.gossips.lock().await.decay();
             }
 
             // --- Breeding willingness check (every 100 ticks) ---
-            if entity.age.load(Ordering::Relaxed) % 100 == 0
-                && entity.age.load(Ordering::Relaxed) >= 0
+            if age % 100 == 0
+                && age >= 0
                 && !self.mob_entity.is_in_love()
                 && self.mob_entity.is_breeding_ready()
             {
@@ -896,9 +879,7 @@ impl Mob for VillagerEntity {
                 }
             }
 
-            // --- Iron Golem spawning check ---
-            // Check every ~5 seconds (100 ticks) if conditions are met
-            let world_age = world.level_time.lock().await.world_age;
+            // --- Iron Golem spawning check (every 100 ticks) ---
             if world_age % 100 == 0 {
                 // Count nearby villagers and beds
                 let mut villager_count = 0i32;
@@ -929,8 +910,8 @@ impl Mob for VillagerEntity {
                     drop(poi_storage);
 
                     if bed_pois.len() >= 3 {
-                        // Check cooldown (using last_restock_tick as golem spawn cooldown)
-                        let last_spawn = self.last_restock_tick.load(Ordering::Relaxed);
+                        // Check cooldown (separate from restock)
+                        let last_spawn = self.last_golem_spawn_tick.load(Ordering::Relaxed);
                         let current = world_age as i32;
                         if current - last_spawn > 6000 {
                             // 5 minute cooldown (6000 ticks)
@@ -951,19 +932,14 @@ impl Mob for VillagerEntity {
                             }
 
                             if !golem_nearby {
-                                self.last_restock_tick.store(current, Ordering::Relaxed);
+                                self.last_golem_spawn_tick.store(current, Ordering::Relaxed);
                                 // Spawn iron golem nearby
                                 let spawn_pos = Vector3::new(pos.x + 2.0, pos.y, pos.z + 2.0);
-                                let golem_entity = crate::entity::Entity::new(
-                                    world.clone(),
-                                    spawn_pos,
-                                    &pumpkin_data::entity::EntityType::IRON_GOLEM,
-                                );
                                 let golem = crate::entity::r#type::from_type(
                                     &pumpkin_data::entity::EntityType::IRON_GOLEM,
                                     spawn_pos,
                                     &world,
-                                    golem_entity.entity_uuid,
+                                    uuid::Uuid::new_v4(),
                                 )
                                 .await;
                                 world.spawn_entity(golem).await;

@@ -30,6 +30,8 @@ pub const POI_TYPE_WEAPONSMITH: &str = "minecraft:weaponsmith";
 
 // Bed POI type (for villager sleeping)
 pub const POI_TYPE_HOME: &str = "minecraft:home";
+// Bell POI type (for villager meeting)
+pub const POI_TYPE_BELL: &str = "minecraft:meeting";
 
 /// Map a block name to its POI type, if any.
 /// Block names should be without the "minecraft:" prefix.
@@ -51,6 +53,7 @@ pub fn block_to_poi_type(block_name: &str) -> Option<&'static str> {
         "loom" => Some(POI_TYPE_SHEPHERD),
         "smithing_table" => Some(POI_TYPE_TOOLSMITH),
         "grindstone" => Some(POI_TYPE_GRINDSTONE),
+        "bell" => Some(POI_TYPE_BELL),
         _ => {
             // All bed variants
             if block_name.ends_with("_bed") {

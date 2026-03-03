@@ -46,43 +46,65 @@ impl Goal for GatherAtBellGoal {
                 return false;
             }
 
-            // Search for a bell block nearby
+            // Use POI system to find bells instead of brute-force block scanning.
+            // Search for bell POI type within 48 blocks.
             let pos = entity.pos.load();
             let block_pos = BlockPos(Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32));
 
-            // Search in a 48-block radius for a bell
-            // We check blocks directly since bells aren't POI types in our system
-            let search_radius = 48i32;
-            let mut best: Option<(BlockPos, i32)> = None;
+            let mut poi_storage = world.portal_poi.lock().await;
+            let candidates = poi_storage.get_in_square(
+                block_pos,
+                48,
+                Some(pumpkin_world::poi::POI_TYPE_BELL),
+            );
+            drop(poi_storage);
 
-            // Only search in a limited area to avoid performance issues
-            // Check a few random positions or use POI if bell POI exists
-            // For efficiency, scan in a grid pattern
-            for dx in (-search_radius..=search_radius).step_by(4) {
-                for dz in (-search_radius..=search_radius).step_by(4) {
-                    for dy in -3..=3 {
-                        let check_pos = BlockPos(Vector3::new(
-                            block_pos.0.x + dx,
-                            block_pos.0.y + dy,
-                            block_pos.0.z + dz,
-                        ));
-                        let block = world.get_block(&check_pos).await;
-                        let name = block.name.strip_prefix("minecraft:").unwrap_or(block.name);
-                        if name == "bell" {
-                            let dist = dx * dx + dz * dz;
-                            if best.is_none() || dist < best.unwrap().1 {
-                                best = Some((check_pos, dist));
+            // If POI search returned nothing, fall back to a small-radius block check
+            // (only 5-block radius = 3×3×7 = 63 lookups max, not 4375)
+            if candidates.is_empty() {
+                let search_radius = 5i32;
+                let mut best: Option<(BlockPos, i32)> = None;
+
+                for dx in -search_radius..=search_radius {
+                    for dz in -search_radius..=search_radius {
+                        for dy in -3..=3 {
+                            let check_pos = BlockPos(Vector3::new(
+                                block_pos.0.x + dx,
+                                block_pos.0.y + dy,
+                                block_pos.0.z + dz,
+                            ));
+                            let block = world.get_block(&check_pos).await;
+                            let name =
+                                block.name.strip_prefix("minecraft:").unwrap_or(block.name);
+                            if name == "bell" {
+                                let dist = dx * dx + dz * dz;
+                                if best.is_none() || dist < best.unwrap().1 {
+                                    best = Some((check_pos, dist));
+                                }
                             }
                         }
                     }
                 }
+
+                if let Some((pos, _)) = best {
+                    self.bell_pos = Some(pos);
+                    return true;
+                }
+
+                self.cooldown = to_goal_ticks(600);
+                return false;
             }
 
-            if let Some((pos, _)) = best {
-                self.bell_pos = Some(pos);
+            // Find closest bell from POI results
+            if let Some(nearest) = candidates.into_iter().min_by_key(|c| {
+                let dx = c.0.x - block_pos.0.x;
+                let dz = c.0.z - block_pos.0.z;
+                dx * dx + dz * dz
+            }) {
+                self.bell_pos = Some(nearest);
                 true
             } else {
-                self.cooldown = to_goal_ticks(600); // Wait longer for bell search
+                self.cooldown = to_goal_ticks(600);
                 false
             }
         })

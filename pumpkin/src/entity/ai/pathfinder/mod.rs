@@ -248,10 +248,12 @@ impl Navigator {
             let mut path_nodes: Vec<Node> = Vec::new();
             let mut current_pos = best_node.pos.0;
             path_nodes.push(best_node);
+            let mut visited: std::collections::HashSet<Vector3<i32>> = std::collections::HashSet::new();
+            visited.insert(current_pos);
             while let Some(node) = closed_set.get(&current_pos) {
                 if let Some(prev_pos) = node.came_from {
-                    if prev_pos == current_pos {
-                        break;
+                    if prev_pos == current_pos || !visited.insert(prev_pos) {
+                        break; // Self-reference or cycle detected
                     }
                     if let Some(&prev_node) = closed_set.get(&prev_pos) {
                         path_nodes.push(prev_node);
