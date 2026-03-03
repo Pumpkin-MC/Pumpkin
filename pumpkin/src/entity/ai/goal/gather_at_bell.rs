@@ -52,11 +52,8 @@ impl Goal for GatherAtBellGoal {
             let block_pos = BlockPos(Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32));
 
             let mut poi_storage = world.portal_poi.lock().await;
-            let candidates = poi_storage.get_in_square(
-                block_pos,
-                48,
-                Some(pumpkin_world::poi::POI_TYPE_BELL),
-            );
+            let candidates =
+                poi_storage.get_in_square(block_pos, 48, Some(pumpkin_world::poi::POI_TYPE_BELL));
             drop(poi_storage);
 
             // If POI search returned nothing, fall back to a small-radius block check
@@ -74,8 +71,7 @@ impl Goal for GatherAtBellGoal {
                                 block_pos.0.z + dz,
                             ));
                             let block = world.get_block(&check_pos).await;
-                            let name =
-                                block.name.strip_prefix("minecraft:").unwrap_or(block.name);
+                            let name = block.name.strip_prefix("minecraft:").unwrap_or(block.name);
                             if name == "bell" {
                                 let dist = dx * dx + dz * dz;
                                 if best.is_none() || dist < best.unwrap().1 {

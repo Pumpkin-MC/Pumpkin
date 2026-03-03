@@ -1019,12 +1019,11 @@ impl Mob for VillagerEntity {
 
             // Atomically claim the trading slot to prevent race conditions
             // If another player is already trading, this will fail
-            if self.trading_player_id.compare_exchange(
-                -1,
-                player.entity_id(),
-                Ordering::SeqCst,
-                Ordering::SeqCst,
-            ).is_err() {
+            if self
+                .trading_player_id
+                .compare_exchange(-1, player.entity_id(), Ordering::SeqCst, Ordering::SeqCst)
+                .is_err()
+            {
                 return false;
             }
 
