@@ -33,19 +33,21 @@ impl GoalSelector {
             }
         }
 
-        for goal_idx in goals_to_remove {
+        // Process removals in reverse order so earlier indices stay valid
+        for &goal_idx in goals_to_remove.iter().rev() {
+            let last_idx = self.goals.len() - 1;
             self.goals.swap_remove(goal_idx);
 
-            // This is very fast because arrays are on the stack and the compiler knows the size
             for slot in &mut self.goals_by_control {
                 if *slot == usize::MAX {
                     continue;
                 }
-                // Update the idx
                 if *slot == goal_idx {
+                    // The removed goal — clear it
                     *slot = usize::MAX;
-                } else if *slot > goal_idx {
-                    *slot -= 1;
+                } else if *slot == last_idx && goal_idx < last_idx {
+                    // The element that was at last_idx got moved to goal_idx by swap_remove
+                    *slot = goal_idx;
                 }
             }
         }

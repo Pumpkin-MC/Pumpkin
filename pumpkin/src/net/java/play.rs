@@ -2066,7 +2066,41 @@ impl JavaClient {
         _server: &Server,
         _packet: SCloseContainer,
     ) {
+        // If this was a merchant screen, reset the villager's trading state
+        {
+            let screen_handler = player.current_screen_handler.lock().await;
+            let handler = screen_handler.lock().await;
+            if let Some(merchant) = handler
+                .as_any()
+                .downcast_ref::<pumpkin_inventory::merchant::MerchantScreenHandler>(
+            ) && let Some(ref trading_lock) = merchant.villager_trading_lock
+            {
+                trading_lock.store(-1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
         player.on_handled_screen_closed().await;
+    }
+
+    pub async fn handle_select_trade(
+        &self,
+        player: &Arc<Player>,
+        packet: pumpkin_protocol::java::server::play::SSelectMerchantTrade,
+    ) {
+        let selected = packet.selected_slot.0;
+        if selected < 0 {
+            return;
+        }
+
+        let screen_handler = player.current_screen_handler.lock().await;
+        let handler = screen_handler.lock().await;
+
+        // Downcast to MerchantScreenHandler to call select_trade
+        if let Some(merchant) = handler
+            .as_any()
+            .downcast_ref::<pumpkin_inventory::merchant::MerchantScreenHandler>()
+        {
+            merchant.select_trade(selected).await;
+        }
     }
 
     pub async fn handle_command_suggestion(
