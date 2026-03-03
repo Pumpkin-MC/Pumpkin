@@ -3,17 +3,14 @@ use pumpkin_data::{
     tag::{RegistryKey, get_tag_ids},
 };
 
-
 use crate::{
     ProtoChunk,
     generation::{
         biome_coords,
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
-            buried_treasure::BuriedTreasureGenerator, create_chunk_random,
-            igloo::IglooGenerator,
-            nether_fossil::NetherFossilGenerator,
-            stronghold::StrongholdGenerator,
+            buried_treasure::BuriedTreasureGenerator, create_chunk_random, igloo::IglooGenerator,
+            nether_fossil::NetherFossilGenerator, stronghold::StrongholdGenerator,
             swamp_hut::SwampHutGenerator,
         },
     },
@@ -80,7 +77,7 @@ pub fn try_generate_structure(
             RegistryKey::WorldgenBiome,
             structure
                 .biomes
-                .strip_prefix("#")
+                .strip_prefix('#')
                 .unwrap_or(structure.biomes),
         )
         .unwrap();
