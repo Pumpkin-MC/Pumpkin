@@ -126,6 +126,8 @@ pub trait ScreenHandler: Send + Sync {
 
     fn as_any(&self) -> &dyn Any;
 
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+
     fn sync_id(&self) -> u8 {
         self.get_behaviour().sync_id
     }

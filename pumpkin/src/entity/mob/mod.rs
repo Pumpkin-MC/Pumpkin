@@ -288,6 +288,11 @@ pub trait Mob: EntityBase + Send + Sync {
         })
     }
 
+    /// Per-mob data tracker init hook. Override to send mob-specific metadata on spawn.
+    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
     fn mob_interact<'a>(
         &'a self,
         _player: &'a Player,
@@ -452,6 +457,25 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn is_panicking(&self) -> bool {
         self.get_path_aware_entity()
             .is_some_and(PathAwareEntity::is_panicking)
+    }
+
+    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            // Default init (baby flag etc.)
+            let entity = self.get_entity();
+            let is_baby = entity.age.load(Relaxed) < 0;
+            if is_baby {
+                entity
+                    .send_meta_data(&[Metadata::new(
+                        TrackedData::DATA_BABY,
+                        MetaDataType::BOOLEAN,
+                        true,
+                    )])
+                    .await;
+            }
+            // Mob-specific data tracker
+            self.mob_init_data_tracker().await;
+        })
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {

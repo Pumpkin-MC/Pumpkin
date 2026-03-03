@@ -2066,6 +2066,28 @@ impl JavaClient {
         player.on_handled_screen_closed().await;
     }
 
+    pub async fn handle_select_trade(
+        &self,
+        player: &Arc<Player>,
+        packet: pumpkin_protocol::java::server::play::SSelectMerchantTrade,
+    ) {
+        let selected = packet.selected_slot.0;
+        if selected < 0 {
+            return;
+        }
+
+        let screen_handler = player.current_screen_handler.lock().await;
+        let mut handler = screen_handler.lock().await;
+
+        // Downcast to MerchantScreenHandler to call select_trade
+        if let Some(merchant) = handler
+            .as_any_mut()
+            .downcast_mut::<pumpkin_inventory::merchant::MerchantScreenHandler>()
+        {
+            merchant.select_trade(selected).await;
+        }
+    }
+
     pub async fn handle_command_suggestion(
         &self,
         player: &Arc<Player>,

@@ -333,6 +333,11 @@ pub fn init_all_attributes() {
         crate::entity::mob::zombie::ZombieEntityBase::create_attributes(),
     );
 
+    reg.register_builder(
+        &EntityType::VILLAGER,
+        crate::entity::passive::villager::VillagerEntity::create_attributes(),
+    );
+
     // Boss entities
     reg.register_builder(
         &EntityType::WITHER,
