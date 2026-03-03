@@ -162,7 +162,7 @@ pub struct MerchantScreenHandler {
     pub trade_offers: tokio::sync::Mutex<Vec<MerchantTradeOffer>>,
     pub villager_entity_id: i32,
     pub selected_trade: i32,
-    /// Reference to the villager's trading_player_id for cleanup on close.
+    /// Reference to the villager's `trading_player_id` for cleanup on close.
     pub villager_trading_lock: Option<Arc<std::sync::atomic::AtomicI32>>,
     behaviour: ScreenHandlerBehaviour,
 }
