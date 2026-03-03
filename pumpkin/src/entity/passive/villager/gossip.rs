@@ -133,7 +133,7 @@ impl GossipContainer {
     #[must_use]
     pub fn get_price_adjustment(&self, player_uuid: &Uuid) -> i32 {
         let reputation = self.get_reputation(player_uuid);
-        -(reputation / 5)
+        -reputation
     }
 
     /// Decay all gossip entries by one day. Removes entries that reach 0.

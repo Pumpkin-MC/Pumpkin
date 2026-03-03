@@ -2089,13 +2089,13 @@ impl JavaClient {
         }
 
         let screen_handler = player.current_screen_handler.lock().await;
-        let mut handler = screen_handler.lock().await;
+        let handler = screen_handler.lock().await;
 
         // Downcast to MerchantScreenHandler to call select_trade
         if let Some(merchant) = handler
-            .as_any_mut()
-            .downcast_mut::<pumpkin_inventory::merchant::MerchantScreenHandler>(
-        ) {
+            .as_any()
+            .downcast_ref::<pumpkin_inventory::merchant::MerchantScreenHandler>()
+        {
             merchant.select_trade(selected).await;
         }
     }

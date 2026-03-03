@@ -180,11 +180,14 @@ pub struct VillagerEntity {
     pub bed_pos: Mutex<Option<BlockPos>>,
     pub gossips: Mutex<GossipContainer>,
     pub restock_count: AtomicI32,
-    pub last_restock_tick: AtomicI32,
-    pub last_golem_spawn_tick: AtomicI32,
+    pub last_restock_tick: std::sync::atomic::AtomicI64,
+    pub last_golem_spawn_tick: std::sync::atomic::AtomicI64,
+    last_reset_day: std::sync::atomic::AtomicI64,
     ambient_sound_chance: AtomicI32,
     head_shake_ticks: AtomicI32,
     pub inventory: Mutex<inventory::VillagerInventory>,
+    /// Receives trade completion indices from the merchant screen handler.
+    trade_completion_rx: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<usize>>>,
 }
 
 impl VillagerEntity {
@@ -202,11 +205,13 @@ impl VillagerEntity {
             bed_pos: Mutex::new(None),
             gossips: Mutex::new(GossipContainer::new()),
             restock_count: AtomicI32::new(0),
-            last_restock_tick: AtomicI32::new(0),
-            last_golem_spawn_tick: AtomicI32::new(0),
+            last_restock_tick: std::sync::atomic::AtomicI64::new(0),
+            last_golem_spawn_tick: std::sync::atomic::AtomicI64::new(0),
+            last_reset_day: std::sync::atomic::AtomicI64::new(-1),
             ambient_sound_chance: AtomicI32::new(MIN_AMBIENT_SOUND_DELAY),
             head_shake_ticks: AtomicI32::new(0),
             inventory: Mutex::new(inventory::VillagerInventory::new()),
+            trade_completion_rx: Mutex::new(None),
         };
         let mob_arc = Arc::new(villager);
         let mob_weak: Weak<dyn Mob> = {
@@ -244,11 +249,11 @@ impl VillagerEntity {
 
     #[must_use]
     pub fn get_profession(&self) -> VillagerProfession {
-        VillagerProfession::from_i32(self.profession.load(Ordering::Relaxed))
+        VillagerProfession::from_i32(self.profession.load(Ordering::Acquire))
     }
 
     pub fn set_profession(&self, profession: VillagerProfession) {
-        self.profession.store(profession as i32, Ordering::Relaxed);
+        self.profession.store(profession as i32, Ordering::Release);
     }
 
     #[must_use]
@@ -262,20 +267,20 @@ impl VillagerEntity {
 
     #[must_use]
     pub fn get_level(&self) -> i32 {
-        self.level.load(Ordering::Relaxed)
+        self.level.load(Ordering::Acquire)
     }
 
     pub fn set_level(&self, level: i32) {
-        self.level.store(level.clamp(1, 5), Ordering::Relaxed);
+        self.level.store(level.clamp(1, 5), Ordering::Release);
     }
 
     #[must_use]
     pub fn get_experience(&self) -> i32 {
-        self.experience.load(Ordering::Relaxed)
+        self.experience.load(Ordering::Acquire)
     }
 
     pub fn add_experience(&self, amount: i32) {
-        self.experience.fetch_add(amount, Ordering::Relaxed);
+        self.experience.fetch_add(amount, Ordering::Release);
     }
 
     #[must_use]
@@ -288,20 +293,29 @@ impl VillagerEntity {
         xp >= XP_THRESHOLDS[level as usize]
     }
 
-    pub fn level_up(&self) {
-        let current = self.get_level();
-        if current < 5 {
-            self.set_level(current + 1);
+    pub fn level_up(&self) -> bool {
+        loop {
+            let current = self.level.load(Ordering::Acquire);
+            if current >= 5 {
+                return false;
+            }
+            if self
+                .level
+                .compare_exchange(current, current + 1, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return true;
+            }
         }
     }
 
     #[must_use]
     pub fn is_trading(&self) -> bool {
-        self.trading_player_id.load(Ordering::Relaxed) != -1
+        self.trading_player_id.load(Ordering::Acquire) != -1
     }
 
     pub fn set_trading_player(&self, player_id: i32) {
-        self.trading_player_id.store(player_id, Ordering::Relaxed);
+        self.trading_player_id.store(player_id, Ordering::Release);
     }
 
     pub async fn sync_villager_data(&self) {
@@ -379,8 +393,7 @@ impl VillagerEntity {
 
     /// Attempt to level up if XP threshold is met, populating new trades.
     pub async fn try_level_up(&self) {
-        if self.should_level_up() {
-            self.level_up();
+        if self.should_level_up() && self.level_up() {
             let new_level = self.get_level();
             self.populate_trades_for_level(new_level).await;
             self.sync_villager_data().await;
@@ -392,8 +405,12 @@ impl VillagerEntity {
 
     /// Send the merchant offers packet to a player with demand-based pricing.
     pub async fn send_merchant_offers(&self, player: &Player, window_id: u8) {
-        let offers = self.trade_offers.lock().await;
+        // Clone trade data and get gossip adjustment, then drop both locks
+        // before building packet and sending over the network
+        let offers: Vec<TradeOffer> = self.trade_offers.lock().await.clone();
         let price_adj = self.get_price_adjustment(&player.gameprofile.id).await;
+        let villager_level = self.level.load(Ordering::Relaxed);
+        let villager_xp = self.experience.load(Ordering::Relaxed);
 
         let trades: Vec<MerchantTrade<'_>> = offers
             .iter()
@@ -423,8 +440,8 @@ impl VillagerEntity {
         let packet = CMerchantOffers {
             window_id: VarInt(i32::from(window_id)),
             trades: &trades,
-            villager_level: VarInt(self.level.load(Ordering::Relaxed)),
-            villager_xp: VarInt(self.experience.load(Ordering::Relaxed)),
+            villager_level: VarInt(villager_level),
+            villager_xp: VarInt(villager_xp),
             is_regular_villager: true,
             can_restock: true,
         };
@@ -461,8 +478,9 @@ impl VillagerEntity {
     pub async fn restock(&self) {
         let mut offers = self.trade_offers.lock().await;
         for offer in offers.iter_mut() {
+            // Vanilla demand formula: demand = max(0, demand + uses - max_uses)
+            offer.demand = (offer.demand + offer.uses - offer.max_uses).max(0);
             offer.uses = 0;
-            offer.demand = (offer.demand - 1).max(0);
         }
         self.restock_count.fetch_add(1, Ordering::Relaxed);
     }
@@ -543,6 +561,7 @@ struct MerchantScreenHandlerFactory {
     trade_offers: Vec<MerchantTradeOffer>,
     villager_entity_id: i32,
     villager_trading_lock: Arc<AtomicI32>,
+    trade_completion_tx: Option<tokio::sync::mpsc::UnboundedSender<usize>>,
 }
 
 impl ScreenHandlerFactory for MerchantScreenHandlerFactory {
@@ -553,9 +572,13 @@ impl ScreenHandlerFactory for MerchantScreenHandlerFactory {
         _player: &'a dyn InventoryPlayer,
     ) -> std::pin::Pin<Box<dyn Future<Output = Option<SharedScreenHandler>> + Send + 'a>> {
         Box::pin(async move {
-            let mut handler = MerchantScreenHandler::new(sync_id, player_inventory);
+            let mut handler = MerchantScreenHandler::new(
+                sync_id,
+                player_inventory,
+                self.trade_completion_tx.clone(),
+            );
             handler.villager_entity_id = self.villager_entity_id;
-            handler.set_trade_offers(self.trade_offers.clone());
+            handler.set_trade_offers(self.trade_offers.clone()).await;
             handler.villager_trading_lock = Some(self.villager_trading_lock.clone());
             Some(Arc::new(tokio::sync::Mutex::new(handler)) as SharedScreenHandler)
         })
@@ -589,6 +612,24 @@ impl NBTStorage for VillagerEntity {
 
             // Experience
             nbt.put_int("Xp", self.get_experience());
+
+            // Workstation position
+            if let Some(ws_pos) = *self.workstation_pos.lock().await {
+                let mut ws_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                ws_nbt.put_int("X", ws_pos.0.x);
+                ws_nbt.put_int("Y", ws_pos.0.y);
+                ws_nbt.put_int("Z", ws_pos.0.z);
+                nbt.put_component("WorkstationPos", ws_nbt);
+            }
+
+            // Bed position
+            if let Some(bed_pos) = *self.bed_pos.lock().await {
+                let mut bed_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                bed_nbt.put_int("X", bed_pos.0.x);
+                bed_nbt.put_int("Y", bed_pos.0.y);
+                bed_nbt.put_int("Z", bed_pos.0.z);
+                nbt.put_component("BedPos", bed_nbt);
+            }
 
             // Trade offers
             let offers = self.trade_offers.lock().await;
@@ -690,6 +731,24 @@ impl NBTStorage for VillagerEntity {
                 self.experience.store(xp, Ordering::Relaxed);
             }
 
+            // Workstation position
+            if let Some(ws) = nbt.get_compound("WorkstationPos") {
+                if let (Some(x), Some(y), Some(z)) =
+                    (ws.get_int("X"), ws.get_int("Y"), ws.get_int("Z"))
+                {
+                    *self.workstation_pos.lock().await = Some(BlockPos(Vector3::new(x, y, z)));
+                }
+            }
+
+            // Bed position
+            if let Some(bed) = nbt.get_compound("BedPos") {
+                if let (Some(x), Some(y), Some(z)) =
+                    (bed.get_int("X"), bed.get_int("Y"), bed.get_int("Z"))
+                {
+                    *self.bed_pos.lock().await = Some(BlockPos(Vector3::new(x, y, z)));
+                }
+            }
+
             // Trade offers
             if let Some(recipes) = nbt
                 .get_compound("Offers")
@@ -697,7 +756,7 @@ impl NBTStorage for VillagerEntity {
             {
                 let mut offers = self.trade_offers.lock().await;
                 offers.clear();
-                for recipe_tag in recipes {
+                for recipe_tag in recipes.iter().take(20) {
                     if let pumpkin_nbt::tag::NbtTag::Compound(recipe) = recipe_tag {
                         let input1 = recipe
                             .get_compound("buy")
@@ -735,7 +794,7 @@ impl NBTStorage for VillagerEntity {
             if let Some(gossip_list) = nbt.get_list("Gossips") {
                 let mut gossips = self.gossips.lock().await;
                 gossips.entries.clear();
-                for gossip_tag in gossip_list {
+                for gossip_tag in gossip_list.iter().take(256) {
                     if let pumpkin_nbt::tag::NbtTag::Compound(g) = gossip_tag
                         && let (Some(type_name), Some(int_arr), Some(value)) = (
                             g.get_string("Type"),
@@ -751,7 +810,7 @@ impl NBTStorage for VillagerEntity {
                             gossips.entries.push(GossipEntry {
                                 gossip_type: gtype,
                                 target: uuid,
-                                value,
+                                value: value.clamp(0, gtype.max_value()),
                             });
                         }
                     }
@@ -784,7 +843,11 @@ impl Mob for VillagerEntity {
             let entity = &self.mob_entity.living_entity.entity;
             let world = entity.world.load_full();
             let pos = entity.pos.load();
-            let block_pos = BlockPos(Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32));
+            let block_pos = BlockPos(Vector3::new(
+                pos.x.floor() as i32,
+                pos.y.floor() as i32,
+                pos.z.floor() as i32,
+            ));
 
             // --- Ambient sound + head shake ---
             self.tick_ambient_sound().await;
@@ -803,7 +866,42 @@ impl Mob for VillagerEntity {
                     }
                 }
                 if !player_still_trading {
-                    self.trading_player_id.store(-1, Ordering::Relaxed);
+                    // Use compare_exchange to avoid overwriting a new player's session
+                    let _ = self.trading_player_id.compare_exchange(
+                        trading_id,
+                        -1,
+                        Ordering::SeqCst,
+                        Ordering::SeqCst,
+                    );
+                    // Clean up the trade completion channel
+                    *self.trade_completion_rx.lock().await = None;
+                }
+            }
+
+            // --- Drain trade completion channel (process completed trades) ---
+            let completed_trades = {
+                let mut rx_guard = self.trade_completion_rx.lock().await;
+                let mut trades = Vec::new();
+                if let Some(ref mut rx) = *rx_guard {
+                    while let Ok(trade_idx) = rx.try_recv() {
+                        trades.push(trade_idx);
+                    }
+                }
+                trades
+            };
+            if !completed_trades.is_empty() {
+                let trading_id = self.trading_player_id.load(Ordering::Relaxed);
+                let player_uuid = if trading_id != -1 {
+                    let entities = world.entities.load();
+                    entities
+                        .iter()
+                        .find(|e| e.get_entity().entity_id == trading_id)
+                        .map(|e| e.get_entity().entity_uuid)
+                } else {
+                    None
+                };
+                for trade_idx in completed_trades {
+                    self.on_trade_completed(trade_idx, player_uuid).await;
                 }
             }
 
@@ -815,10 +913,51 @@ impl Mob for VillagerEntity {
             let activity = schedule::VillagerActivity::from_time(time_of_day);
             let age = entity.age.load(Ordering::Relaxed);
 
+            // --- Distance check: close trading if player is too far ---
+            if self.is_trading() {
+                let trading_id = self.trading_player_id.load(Ordering::Relaxed);
+                let entities = world.entities.load();
+                if let Some(trader) = entities
+                    .iter()
+                    .find(|e| e.get_entity().entity_id == trading_id)
+                {
+                    let trader_pos = trader.get_entity().pos.load();
+                    let dx = pos.x - trader_pos.x;
+                    let dz = pos.z - trader_pos.z;
+                    if dx * dx + dz * dz > 256.0 {
+                        // > 16 blocks away, close trading
+                        let _ = self.trading_player_id.compare_exchange(
+                            trading_id,
+                            -1,
+                            Ordering::SeqCst,
+                            Ordering::SeqCst,
+                        );
+                        *self.trade_completion_rx.lock().await = None;
+                    }
+                }
+            }
+
+            // --- Workstation validity check (every 200 ticks) ---
+            if age % 200 == 0 && self.get_profession() != VillagerProfession::None {
+                let ws_guard = self.workstation_pos.lock().await;
+                if let Some(ws_pos) = *ws_guard {
+                    drop(ws_guard);
+                    let block = world.get_block(&ws_pos).await;
+                    let short_name = block.name.strip_prefix("minecraft:").unwrap_or(block.name);
+                    let still_valid = poi::block_to_poi_type(short_name)
+                        .and_then(poi::poi_type_to_profession)
+                        .is_some();
+                    if !still_valid {
+                        self.clear_workstation().await;
+                        self.sync_villager_data().await;
+                    }
+                }
+            }
+
             // --- Workstation claiming (unemployed villagers, every 20 ticks) ---
             if self.get_profession() == VillagerProfession::None && age % 20 == 0 {
                 let mut poi_storage = world.portal_poi.lock().await;
-                let nearby = poi_storage.get_in_square(block_pos, 2, None);
+                let nearby = poi_storage.get_in_square(block_pos, 48, None);
                 drop(poi_storage);
 
                 for candidate in nearby {
@@ -858,21 +997,28 @@ impl Mob for VillagerEntity {
                         {
                             entity.play_sound(work_sound).await;
                         }
-                        // Restock if needed
-                        if self.restock_count.load(Ordering::Relaxed) < 2 {
+                        // Restock if needed (with 2400 tick cooldown)
+                        let last_restock = self.last_restock_tick.load(Ordering::Relaxed);
+                        if self.restock_count.load(Ordering::Relaxed) < 2
+                            && (world_age - last_restock) > 2400
+                        {
                             self.restock().await;
+                            self.last_restock_tick.store(world_age, Ordering::Relaxed);
                         }
                     }
                 }
             }
 
-            // Reset restock count at dawn (time ~0)
-            if time_of_day % 24000 < 20 {
+            // Reset restock count and decay gossip once per day (using atomic day tracking)
+            let current_day = time_of_day / 24000;
+            let last_day = self.last_reset_day.load(Ordering::Acquire);
+            if current_day > last_day
+                && self
+                    .last_reset_day
+                    .compare_exchange(last_day, current_day, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+            {
                 self.restock_count.store(0, Ordering::Relaxed);
-            }
-
-            // --- Gossip decay once per day ---
-            if time_of_day % 24000 < 20 {
                 self.gossips.lock().await.decay();
             }
 
@@ -937,8 +1083,7 @@ impl Mob for VillagerEntity {
                     if bed_pois.len() >= 3 {
                         // Check cooldown (separate from restock)
                         let last_spawn = self.last_golem_spawn_tick.load(Ordering::Relaxed);
-                        let current = world_age as i32;
-                        if current - last_spawn > 6000 {
+                        if world_age - last_spawn > 6000 {
                             // 5 minute cooldown (6000 ticks)
                             // Check no iron golem nearby already
                             let mut golem_nearby = false;
@@ -957,7 +1102,8 @@ impl Mob for VillagerEntity {
                             }
 
                             if !golem_nearby {
-                                self.last_golem_spawn_tick.store(current, Ordering::Relaxed);
+                                self.last_golem_spawn_tick
+                                    .store(world_age, Ordering::Relaxed);
                                 // Spawn iron golem nearby
                                 let spawn_pos = Vector3::new(pos.x + 2.0, pos.y, pos.z + 2.0);
                                 let golem = crate::entity::r#type::from_type(
@@ -1052,11 +1198,16 @@ impl Mob for VillagerEntity {
                 .collect();
             drop(offers);
 
+            // Create trade completion channel
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<usize>();
+            *self.trade_completion_rx.lock().await = Some(rx);
+
             // Open the merchant screen
             let factory = MerchantScreenHandlerFactory {
                 trade_offers: trade_snapshots,
                 villager_entity_id: self.mob_entity.living_entity.entity.entity_id,
                 villager_trading_lock: self.trading_player_id.clone(),
+                trade_completion_tx: Some(tx),
             };
             if let Some(window_id) = player.open_handled_screen(&factory, None).await {
                 self.send_merchant_offers(player, window_id).await;
@@ -1078,7 +1229,7 @@ impl Mob for VillagerEntity {
     fn on_damage<'a>(
         &'a self,
         _damage_type: pumpkin_data::damage::DamageType,
-        _source: Option<&'a dyn EntityBase>,
+        source: Option<&'a dyn EntityBase>,
     ) -> crate::entity::EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.mob_entity
@@ -1086,6 +1237,19 @@ impl Mob for VillagerEntity {
                 .entity
                 .play_sound(Sound::EntityVillagerHurt)
                 .await;
+
+            // Add major negative gossip if damaged by a player
+            if let Some(attacker) = source {
+                if attacker.get_entity().entity_type.id
+                    == pumpkin_data::entity::EntityType::PLAYER.id
+                {
+                    self.gossips.lock().await.add(
+                        GossipType::MajorNegative,
+                        attacker.get_entity().entity_uuid,
+                        25,
+                    );
+                }
+            }
         })
     }
 }

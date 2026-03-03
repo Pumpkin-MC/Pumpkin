@@ -44,7 +44,11 @@ impl Goal for ClaimWorkstationGoal {
             let entity = &mob.get_mob_entity().living_entity.entity;
             let world = entity.world.load_full();
             let pos = entity.pos.load();
-            let block_pos = BlockPos(Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32));
+            let block_pos = BlockPos(Vector3::new(
+                pos.x.floor() as i32,
+                pos.y.floor() as i32,
+                pos.z.floor() as i32,
+            ));
 
             // Search for workstation POIs within radius
             let mut poi_storage = world.portal_poi.lock().await;

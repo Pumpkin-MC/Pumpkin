@@ -51,7 +51,11 @@ impl Goal for SleepInBedGoal {
 
             // Search for a bed POI nearby
             let pos = entity.pos.load();
-            let block_pos = BlockPos(Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32));
+            let block_pos = BlockPos(Vector3::new(
+                pos.x.floor() as i32,
+                pos.y.floor() as i32,
+                pos.z.floor() as i32,
+            ));
 
             let mut poi_storage = world.portal_poi.lock().await;
             let candidates =
@@ -138,6 +142,15 @@ impl Goal for SleepInBedGoal {
             if self.sleeping {
                 let entity = &mob.get_mob_entity().living_entity.entity;
                 entity.set_pose(EntityPose::Standing).await;
+                // Reset Y position to standing on top of the bed
+                if let Some(bed) = self.bed_pos {
+                    let current_pos = entity.pos.load();
+                    entity.set_pos(Vector3::new(
+                        current_pos.x,
+                        bed.0.y as f64 + 1.0,
+                        current_pos.z,
+                    ));
+                }
                 self.sleeping = false;
             }
             self.bed_pos = None;

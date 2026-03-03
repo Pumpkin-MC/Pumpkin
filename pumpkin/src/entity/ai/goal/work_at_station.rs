@@ -52,7 +52,11 @@ impl Goal for WorkAtStationGoal {
             // We check all entities to find ourselves and get the workstation
             // For now, use POI search to find the nearest workstation
             let pos = entity.pos.load();
-            let block_pos = BlockPos(Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32));
+            let block_pos = BlockPos(Vector3::new(
+                pos.x.floor() as i32,
+                pos.y.floor() as i32,
+                pos.z.floor() as i32,
+            ));
 
             // Search for any workstation POI nearby (the villager's own station)
             let mut poi_storage = world.portal_poi.lock().await;

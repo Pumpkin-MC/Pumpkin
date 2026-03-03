@@ -49,7 +49,11 @@ impl Goal for GatherAtBellGoal {
             // Use POI system to find bells instead of brute-force block scanning.
             // Search for bell POI type within 48 blocks.
             let pos = entity.pos.load();
-            let block_pos = BlockPos(Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32));
+            let block_pos = BlockPos(Vector3::new(
+                pos.x.floor() as i32,
+                pos.y.floor() as i32,
+                pos.z.floor() as i32,
+            ));
 
             let mut poi_storage = world.portal_poi.lock().await;
             let candidates =
