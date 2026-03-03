@@ -1,0 +1,26 @@
+interface event {
+    use player.{player};
+    use text.{text-component};
+
+    enum event-priority {
+        highest,
+        high,
+        normal,
+        low,
+        lowest,
+    }
+
+    record player-join-event-data {
+        player: player,
+        join-message: text-component,
+        cancelled: bool
+    }
+
+    enum event-type {
+        player-join-event,
+    }
+
+    variant event {
+        player-join-event(player-join-event-data)
+    }
+}

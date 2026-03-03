@@ -83,7 +83,7 @@ impl Goal for OwnerHurtTargetGoal {
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             let mob_entity = mob.get_mob_entity();
-            *mob_entity.target.lock().await = self.target.clone();
+            (*mob_entity.target.lock().await).clone_from(&self.target);
 
             if let Some(owner_uuid) = mob.get_owner_uuid() {
                 let world = mob_entity.living_entity.entity.world.load_full();

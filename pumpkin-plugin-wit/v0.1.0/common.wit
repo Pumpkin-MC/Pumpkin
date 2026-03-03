@@ -1,0 +1,39 @@
+interface common {
+    /// Serialized text component as a postcard byte array.
+    /// Deprecated: use the text-component resource from the text interface instead.
+    type raw-text-component = list<u8>;
+    type block-position = tuple<s32, s32, s32>;
+    type position = tuple<f64, f64, f64>;
+
+    enum named-color {
+        black,
+        dark-blue,
+        dark-green,
+        dark-aqua,
+        dark-red,
+        dark-purple,
+        gold,
+        gray,
+        dark-gray,
+        blue,
+        green,
+        aqua,
+        red,
+        light-purple,
+        yellow,
+        white,
+    }
+
+    record rgb-color {
+        r: u8,
+        g: u8,
+        b: u8,
+    }
+
+    record argb-color {
+        a: u8,
+        r: u8,
+        g: u8,
+        b: u8,
+    }
+}
