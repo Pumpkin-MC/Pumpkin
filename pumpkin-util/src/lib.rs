@@ -27,6 +27,7 @@ pub mod y_offset;
 
 pub mod identifier;
 pub mod jwt;
+pub mod resource_location;
 
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
