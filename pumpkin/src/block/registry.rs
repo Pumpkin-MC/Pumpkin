@@ -640,6 +640,8 @@ impl BlockRegistry {
         position: &BlockPos,
         direction: BlockDirection,
         player: &Player,
+        player_placed_item: Option<&ItemStack>,
+        consumed_item: bool,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -651,6 +653,8 @@ impl BlockRegistry {
                     position,
                     direction,
                     player,
+                    player_placed_item,
+                    consumed_item,
                 })
                 .await;
         }

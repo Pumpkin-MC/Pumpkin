@@ -1697,11 +1697,22 @@ impl JavaClient {
             )
             .await;
 
+        let placed_item = stack.clone();
+
         // Check if the item is a block, because not every item can be placed :D
         let item_id = stack.item.id;
-        if let Some(block) = Block::from_item_id(item_id) {
+        let placed_block = Block::from_item_id(item_id);
+        if let Some(block) = placed_block {
             should_try_decrement = self
-                .run_is_block_place(player, block, server, use_item_on, position, face)
+                .run_is_block_place(
+                    player,
+                    block,
+                    server,
+                    use_item_on,
+                    position,
+                    face,
+                    Some(&placed_item),
+                )
                 .await?;
         }
 
@@ -2165,6 +2176,7 @@ impl JavaClient {
         use_item_on: SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
+        placed_item: Option<&ItemStack>,
     ) -> Result<bool, BlockPlacingError> {
         let entity = &player.living_entity.entity;
 
@@ -2333,7 +2345,16 @@ impl JavaClient {
 
         server
             .block_registry
-            .player_placed(&world, block, new_state, &final_block_pos, face, player)
+            .player_placed(
+                &world,
+                block,
+                new_state,
+                &final_block_pos,
+                face,
+                player,
+                placed_item,
+                false,
+            )
             .await;
 
         // The block was placed successfully, so decrement their inventory

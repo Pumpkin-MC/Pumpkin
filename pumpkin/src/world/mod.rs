@@ -46,6 +46,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
     Block,
@@ -2967,6 +2968,26 @@ impl World {
                 0
             };
 
+            let shulker_inventory = if broken_block.has_tag(&tag::Block::MINECRAFT_SHULKER_BOXES) {
+                if let Some(block_entity) = self.get_block_entity(position).await
+                    && let Some(inventory) = block_entity.get_inventory()
+                {
+                    let mut items = Vec::new();
+                    for slot in 0..inventory.size() {
+                        let stack = inventory.get_stack(slot).await;
+                        let stack = stack.lock().await.clone();
+                        if !stack.is_empty() {
+                            items.push((slot, stack));
+                        }
+                    }
+                    if !items.is_empty() { Some(items) } else { None }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
 
             // Close container screens for any players viewing this block
@@ -2979,7 +3000,7 @@ impl World {
                     broken_state_id.into(),
                     false,
                 );
-                match cause {
+                match cause.as_ref() {
                     Some(player) => {
                         self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
                             .await;
@@ -2988,12 +3009,24 @@ impl World {
                 }
             }
 
-            if !flags.contains(BlockFlags::SKIP_DROPS) {
-                let params = LootContextParameters {
+            let is_shulker_box = broken_block.has_tag(&tag::Block::MINECRAFT_SHULKER_BOXES);
+            let should_drop = !flags.contains(BlockFlags::SKIP_DROPS)
+                || (is_shulker_box && shulker_inventory.is_some());
+
+            if should_drop {
+                let mut params = LootContextParameters {
                     block_state: Some(BlockState::from_id(broken_state_id)),
                     ..Default::default()
                 };
-                block::drop_loot(self, broken_block, position, true, params).await;
+
+                if is_shulker_box {
+                    params.broken_in_creative =
+                        Some(cause.as_ref().is_some_and(|player| player.is_creative()));
+                    params.shulker_box_inventory = shulker_inventory;
+                }
+
+                let drop_experience = !is_shulker_box;
+                block::drop_loot(self, broken_block, position, drop_experience, params).await;
             }
             return Some(new_state_id);
         }
