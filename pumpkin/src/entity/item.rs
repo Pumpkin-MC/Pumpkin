@@ -235,8 +235,7 @@ impl ItemEntity {
         let bounding_box = entity.bounding_box.load();
 
         let no_clip = !entity
-            .world
-            .load()
+            .world()
             .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
             .await;
 

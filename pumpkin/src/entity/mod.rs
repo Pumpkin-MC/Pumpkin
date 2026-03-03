@@ -5,7 +5,6 @@ use crate::{
     server::Server,
     world::portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo},
 };
-use arc_swap::ArcSwap;
 use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
@@ -51,7 +50,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{
-    Arc,
+    Arc, RwLock, Weak,
     atomic::{
         AtomicBool, AtomicI32, AtomicU32,
         Ordering::{self, Relaxed},
@@ -360,8 +359,8 @@ pub struct Entity {
     /// The type of entity (e.g., player, zombie, item)
     pub entity_type: &'static EntityType,
     /// The world in which the entity exists.
-    /// Uses `ArcSwap` to allow atomic updates when changing dimensions.
-    pub world: ArcSwap<World>,
+    /// Stored weakly to avoid an `Arc<World> <-> Arc<Entity>` reference cycle.
+    pub world: RwLock<Weak<World>>,
     /// The entity's current position in the world
     pub pos: AtomicCell<Vector3<f64>>,
     /// The last known position of the entity.
@@ -503,7 +502,7 @@ impl Entity {
             sneaking: AtomicBool::new(false),
             invisible: AtomicBool::new(false),
             glowing: AtomicBool::new(false),
-            world: ArcSwap::new(world),
+            world: RwLock::new(Arc::downgrade(&world)),
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
             yaw: AtomicCell::new(0.0),
@@ -556,12 +555,16 @@ impl Entity {
     /// Updates the world reference for this entity.
     /// Called when the entity changes dimensions (e.g., through a nether portal).
     pub fn set_world(&self, world: Arc<World>) {
-        self.world.store(world);
+        *self.world.write().unwrap_or_else(|e| e.into_inner()) = Arc::downgrade(&world);
     }
 
     /// Returns the world this entity belongs to.
     pub fn world(&self) -> Arc<World> {
-        self.world.load_full()
+        self.world
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .upgrade()
+            .expect("Entity outlived its World")
     }
 
     /// Sets the entity's age in ticks.
@@ -582,8 +585,7 @@ impl Entity {
 
     pub async fn send_velocity(&self) {
         let velocity = self.velocity.load();
-        self.world
-            .load()
+        self.world()
             .broadcast_packet_all(&CEntityVelocity::new(self.entity_id.into(), velocity))
             .await;
     }
@@ -683,8 +685,7 @@ impl Entity {
 
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
 
-        self.world
-            .load()
+        self.world()
             .broadcast_packet_all(&CUpdateEntityRot::new(
                 self.entity_id.into(),
                 yaw,
@@ -697,8 +698,7 @@ impl Entity {
     }
 
     pub async fn send_head_rot(&self, head_yaw: u8) {
-        self.world
-            .load()
+        self.world()
             .broadcast_packet_all(&CHeadRot::new(self.entity_id.into(), head_yaw))
             .await;
     }
@@ -734,8 +734,7 @@ impl Entity {
         let bounding_box = self.bounding_box.load();
 
         let (collisions, block_positions) = self
-            .world
-            .load()
+            .world()
             .get_block_collisions(bounding_box.stretch(movement))
             .await;
 
@@ -1019,8 +1018,7 @@ impl Entity {
 
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
 
-        self.world
-            .load()
+        self.world()
             .broadcast_packet_all(&CUpdateEntityPosRot::new(
                 self.entity_id.into(),
                 Vector3::new(converted.x, converted.y, converted.z),
@@ -1050,8 +1048,7 @@ impl Entity {
             new.z.mul_add(4096.0, -(old.z * 4096.0)) as i16,
         );
 
-        self.world
-            .load()
+        self.world()
             .broadcast_packet_all(&CUpdateEntityPos::new(
                 self.entity_id.into(),
                 Vector3::new(converted.x, converted.y, converted.z),
@@ -1223,11 +1220,7 @@ impl Entity {
     ) {
         if let Some(mut supporting_block) = self.supporting_block_pos.load() {
             if offset > 1.0e-5 {
-                let (block, state) = self
-                    .world
-                    .load()
-                    .get_block_and_state(&supporting_block)
-                    .await;
+                let (block, state) = self.world().get_block_and_state(&supporting_block).await;
 
                 // if let Some(props) = block.properties(state.id) {
                 //     let name = props.;
@@ -1327,8 +1320,7 @@ impl Entity {
     #[expect(clippy::float_cmp)]
     async fn get_jump_velocity_multiplier(&self) -> f32 {
         let f = self
-            .world
-            .load()
+            .world()
             .get_block(&self.block_pos.load())
             .await
             .jump_velocity_multiplier;
@@ -1418,8 +1410,7 @@ impl Entity {
             let offset = dir.to_offset();
 
             if self
-                .world
-                .load()
+                .world()
                 .get_block_state(&block_pos.offset(offset))
                 .await
                 .is_full_cube()
@@ -1992,8 +1983,7 @@ impl Entity {
 
     /// Plays sound at this entity's position with the entity's sound category
     pub async fn play_sound(&self, sound: Sound) {
-        self.world
-            .load()
+        self.world()
             .play_sound(sound, SoundCategory::Neutral, &self.pos.load())
             .await;
     }
@@ -2024,12 +2014,7 @@ impl Entity {
         let dimension = Self::get_entity_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
-        if self
-            .world
-            .load()
-            .is_space_empty(aabb.contract_all(1.0E-7))
-            .await
-        {
+        if self.world().is_space_empty(aabb.contract_all(1.0E-7)).await {
             self.pose.store(pose);
             let dimension = Self::get_entity_dimensions(pose);
             self.bounding_box.store(aabb);
@@ -2118,8 +2103,7 @@ impl Entity {
         if let Some(pitch) = pitch {
             self.set_pitch(pitch);
         }
-        self.world
-            .load()
+        self.world()
             .broadcast_packet_all(&CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,

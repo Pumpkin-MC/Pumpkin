@@ -1244,8 +1244,7 @@ impl Player {
         let position = entity.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimensions);
         entity
-            .world
-            .load()
+            .world()
             .is_space_empty(aabb.contract_all(1.0E-7))
             .await
     }
@@ -2120,8 +2119,7 @@ impl Player {
                 );
                 self.living_entity
                     .entity
-                    .world
-                    .load()
+                    .world()
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
                         PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
                         &[pumpkin_protocol::java::client::play::Player {
@@ -3195,8 +3193,7 @@ impl EntityBase for Player {
                         let entity = self.get_entity();
                         self.request_teleport(position, yaw, pitch).await;
                         entity
-                            .world
-                            .load()
+                            .world()
                             .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
                                 self.living_entity.entity.entity_id.into(),
                                 position,

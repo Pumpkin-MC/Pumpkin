@@ -50,8 +50,7 @@ impl EntityBase for EndCrystalEntity {
         Box::pin(async move {
             if damage_type != DamageType::EXPLOSION {
                 self.entity
-                    .world
-                    .load()
+                    .world()
                     .explode(self.entity.pos.load(), 6.0)
                     .await;
             }

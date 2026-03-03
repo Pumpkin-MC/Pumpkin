@@ -1472,8 +1472,7 @@ impl JavaClient {
                     player.mining.store(false, Ordering::Relaxed);
                     let entity = &player.living_entity.entity;
                     entity
-                        .world
-                        .load()
+                        .world()
                         .set_block_breaking(entity, player_action.position, -1)
                         .await;
                     self.update_sequence(player, player_action.sequence.0);

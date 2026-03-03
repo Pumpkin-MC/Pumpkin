@@ -44,8 +44,7 @@ impl WindChargeEntity {
 
     pub async fn create_explosion(&self, position: Vector3<f64>) {
         self.get_entity()
-            .world
-            .load()
+            .world()
             .explode(position, EXPLOSION_POWER)
             .await;
     }

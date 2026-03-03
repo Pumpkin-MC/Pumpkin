@@ -194,8 +194,7 @@ impl ArmorStandEntity {
         //TODO: i am stupid! let armor_stand_item = ItemStack::new_with_component(1, &Item::ARMOR_STAND, vec![(DataComponent::CustomName, self.get_custom_name())]);
         let armor_stand_item = ItemStack::new(1, &Item::ARMOR_STAND);
         entity
-            .world
-            .load()
+            .world()
             .drop_stack(&entity.block_pos.load(), armor_stand_item)
             .await;
 

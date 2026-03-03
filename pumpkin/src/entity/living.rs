@@ -185,8 +185,7 @@ impl LivingEntity {
             })
             .collect();
         self.entity
-            .world
-            .load()
+            .world()
             .broadcast_packet_except(
                 &[self.entity.entity_uuid],
                 &CSetEquipment::new(self.entity_id().into(), equipment),
@@ -198,8 +197,7 @@ impl LivingEntity {
     pub async fn pickup(&self, item: &Entity, stack_amount: u32) {
         // TODO: Only nearby
         self.entity
-            .world
-            .load()
+            .world()
             .broadcast_packet_all(&CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
@@ -409,12 +407,7 @@ impl LivingEntity {
             self.heal(heal_amount).await;
         } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
             let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
-            if let Some(dyn_self) = self
-                .entity
-                .world
-                .load()
-                .get_entity_by_id(self.entity.entity_id)
-            {
+            if let Some(dyn_self) = self.entity.world().get_entity_by_id(self.entity.entity_id) {
                 dyn_self
                     .damage(&*dyn_self, damage_amount, DamageType::MAGIC)
                     .await;
@@ -522,8 +515,7 @@ impl LivingEntity {
 
         // Broadcast effect removal
         self.entity
-            .world
-            .load()
+            .world()
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
 
@@ -700,8 +692,7 @@ impl LivingEntity {
     pub async fn swing_hand(&self) {
         // TODO: radius
         self.entity
-            .world
-            .load()
+            .world()
             .broadcast_packet_all(&CEntityAnimation::new(
                 self.entity_id().into(),
                 Animation::SwingMainArm,
@@ -952,8 +943,7 @@ impl LivingEntity {
         if self.entity.horizontal_collision.load(SeqCst)
             && !self
                 .entity
-                .world
-                .load()
+                .world()
                 .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
                 .await
         {
@@ -1402,11 +1392,7 @@ impl LivingEntity {
         } else if effect_type == &StatusEffect::POISON {
             let current_health = self.health.load();
             if current_health > 1.0
-                && let Some(dyn_self) = self
-                    .entity
-                    .world
-                    .load()
-                    .get_entity_by_id(self.entity.entity_id)
+                && let Some(dyn_self) = self.entity.world().get_entity_by_id(self.entity.entity_id)
             {
                 let damage_amount = (current_health - 1.0).min(1.0);
                 if damage_amount > 0.0 {
@@ -1417,12 +1403,7 @@ impl LivingEntity {
             }
         } else if effect_type == &StatusEffect::WITHER {
             let damage_amount = 1.0;
-            if let Some(dyn_self) = self
-                .entity
-                .world
-                .load()
-                .get_entity_by_id(self.entity.entity_id)
-            {
+            if let Some(dyn_self) = self.entity.world().get_entity_by_id(self.entity.entity_id) {
                 dyn_self
                     .damage(&*dyn_self, damage_amount, DamageType::WITHER)
                     .await;
@@ -1461,8 +1442,7 @@ impl LivingEntity {
                 stack.clear();
                 self.set_health(1.0).await;
                 self.entity
-                    .world
-                    .load()
+                    .world()
                     .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
                     .await;
 
@@ -2075,8 +2055,7 @@ impl EntityBase for LivingEntity {
                 if time >= 20 && self.entity.is_alive() {
                     // Spawn Death particles
                     self.entity
-                        .world
-                        .load()
+                        .world()
                         .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
                         .await;
                     self.entity.remove().await;
