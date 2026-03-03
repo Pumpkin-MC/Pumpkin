@@ -7,12 +7,12 @@ pub const VANILLA_NAMESPACE: &str = "minecraft";
 pub const PUMPKIN_NAMESPACE: &str = "pumpkin";
 
 /// The type a part of an identifier is stored as.
-/// 
+///
 /// This is an implementation detail.
 #[derive(Clone, Debug)]
 pub enum IdentifierPart {
     Static(&'static str),
-    Box(Box<str>)
+    Box(Box<str>),
 }
 
 impl Deref for IdentifierPart {
@@ -21,7 +21,7 @@ impl Deref for IdentifierPart {
     fn deref(&self) -> &str {
         match self {
             Self::Static(string) => string,
-            Self::Box(string) => string
+            Self::Box(string) => string,
         }
     }
 }
@@ -42,7 +42,7 @@ impl Ord for IdentifierPart {
     fn cmp(&self, other: &Self) -> Ordering {
         (**self).cmp(&**other)
     }
-}   
+}
 
 impl std::hash::Hash for IdentifierPart {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -91,7 +91,7 @@ impl From<String> for IdentifierPart {
 /// If an identifier is specified without a colon and namespace,
 /// i.e. just `<path>`, then the namespace is assumed
 /// to be `minecraft`.
-/// 
+///
 /// The static version of this struct is [`StaticIdentifier`], whose
 /// methods are `const fn`s.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -293,6 +293,12 @@ impl Identifier {
         true
     }
 
+    /// Returns whether the given character could be valid in an identifier.
+    #[must_use]
+    pub const fn is_valid_char(c: char) -> bool {
+        matches!(c, '0'..='9' | 'a'..='z' | '-' | '_' | '.' | '/' | ':')
+    }
+
     /// Gets a tuple of references to the internal strings of the
     /// namespace and path.
     #[must_use]
@@ -388,7 +394,7 @@ pub trait StaticallyIdentified: Sized {
 }
 
 /// A version of [`Identifier`] only composed of `&static str`s.
-/// 
+///
 /// All the useful methods of this struct are `const fn`s.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct StaticIdentifier {
@@ -399,30 +405,21 @@ pub struct StaticIdentifier {
 impl StaticIdentifier {
     /// Creates a new [`StaticIdentifier`] from
     /// a namespace and path.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Panics if either the namespace or the path
     /// provider is invalid.
     #[must_use]
     #[inline]
-    pub const fn new(
-        namespace: &'static str,
-        path: &'static str
-    ) -> Self {
+    pub const fn new(namespace: &'static str, path: &'static str) -> Self {
         assert!(
             Identifier::is_valid_namespace(namespace),
             "Invalid namespace provided"
         );
-        assert!(
-            Identifier::is_valid_path(path),
-            "Invalid path provided"
-        );
+        assert!(Identifier::is_valid_path(path), "Invalid path provided");
 
-        Self {
-            namespace,
-            path
-        }
+        Self { namespace, path }
     }
 
     #[must_use]
@@ -469,7 +466,7 @@ impl StaticIdentifier {
     pub const fn as_identifier(&self) -> Identifier {
         Identifier {
             namespace: IdentifierPart::Static(self.namespace),
-            path: IdentifierPart::Static(self.path)
+            path: IdentifierPart::Static(self.path),
         }
     }
 
