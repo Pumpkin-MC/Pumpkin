@@ -470,6 +470,12 @@ impl Entity {
         position: Vector3<f64>,
         entity_type: &'static EntityType,
     ) -> Self {
+        let weak_world = {
+            let weak = Arc::downgrade(&world);
+            drop(world);
+            weak
+        };
+
         let floor_x = position.x.floor() as i32;
         let floor_y = position.y.floor() as i32;
         let floor_z = position.z.floor() as i32;
@@ -502,7 +508,7 @@ impl Entity {
             sneaking: AtomicBool::new(false),
             invisible: AtomicBool::new(false),
             glowing: AtomicBool::new(false),
-            world: RwLock::new(Arc::downgrade(&world)),
+            world: RwLock::new(weak_world),
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
             yaw: AtomicCell::new(0.0),
@@ -555,14 +561,22 @@ impl Entity {
     /// Updates the world reference for this entity.
     /// Called when the entity changes dimensions (e.g., through a nether portal).
     pub fn set_world(&self, world: Arc<World>) {
-        *self.world.write().unwrap_or_else(|e| e.into_inner()) = Arc::downgrade(&world);
+        let weak_world = {
+            let weak = Arc::downgrade(&world);
+            drop(world);
+            weak
+        };
+        *self
+            .world
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = weak_world;
     }
 
     /// Returns the world this entity belongs to.
     pub fn world(&self) -> Arc<World> {
         self.world
             .read()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .upgrade()
             .expect("Entity outlived its World")
     }
