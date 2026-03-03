@@ -2070,10 +2070,9 @@ impl JavaClient {
             if let Some(merchant) = handler
                 .as_any()
                 .downcast_ref::<pumpkin_inventory::merchant::MerchantScreenHandler>(
-            ) {
-                if let Some(ref trading_lock) = merchant.villager_trading_lock {
-                    trading_lock.store(-1, std::sync::atomic::Ordering::Relaxed);
-                }
+            ) && let Some(ref trading_lock) = merchant.villager_trading_lock
+            {
+                trading_lock.store(-1, std::sync::atomic::Ordering::Relaxed);
             }
         }
         player.on_handled_screen_closed().await;
