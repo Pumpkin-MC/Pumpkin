@@ -55,7 +55,7 @@ pub struct MobData {
 
 impl MobData {
     #[must_use]
-    pub fn new_zombie(position: Vector3<f64>, on_ground: bool) -> Self {
+    pub const fn new_zombie(position: Vector3<f64>, on_ground: bool) -> Self {
         let mut data = Self {
             position,
             width: 0.6,
