@@ -115,7 +115,7 @@ pub struct MerchantTradeOffer {
 
 /// Shared state between `MerchantScreenHandler` and `MerchantOutputSlot`,
 /// allowing the output slot to validate and consume trades on any extraction path
-/// (Pickup, Swap, Throw, PickupAll, QuickCraft).
+/// (Pickup, Swap, Throw, `PickupAll`, `QuickCraft`).
 pub struct MerchantTradeState {
     pub trade_offers: Mutex<Vec<MerchantTradeOffer>>,
     pub selected_trade: AtomicI32,
@@ -213,10 +213,10 @@ impl MerchantTradeState {
         }
 
         // Notify villager entity via channel
-        if let Ok(guard) = self.trade_completion_tx.lock() {
-            if let Some(ref tx) = *guard {
-                let _ = tx.send(idx);
-            }
+        if let Ok(guard) = self.trade_completion_tx.lock()
+            && let Some(ref tx) = *guard
+        {
+            let _ = tx.send(idx);
         }
     }
 }
