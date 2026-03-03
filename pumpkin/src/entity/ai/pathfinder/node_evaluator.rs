@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::entity::ai::pathfinder::{
-    node::{Node, PathType, Target, PATH_TYPE_COUNT},
+    node::{Node, PATH_TYPE_COUNT, PathType, Target},
     pathfinding_context::PathfindingContext,
 };
 
@@ -98,8 +98,7 @@ impl MobData {
 
     #[must_use]
     pub fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
-        self.path_type_malus[path_type as usize]
-            .unwrap_or_else(|| path_type.get_malus())
+        self.path_type_malus[path_type as usize].unwrap_or_else(|| path_type.get_malus())
     }
 
     pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {

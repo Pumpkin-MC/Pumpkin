@@ -3,21 +3,17 @@ pub mod schedule;
 pub mod trade_tables;
 
 use std::sync::{
-    atomic::{AtomicI32, Ordering},
     Arc, Weak,
+    atomic::{AtomicI32, Ordering},
 };
 use tokio::sync::Mutex;
 
-use pumpkin_data::{
-    attributes::Attributes,
-    entity::EntityType,
-    tracked_data::TrackedData,
-};
+use pumpkin_data::{attributes::Attributes, entity::EntityType, tracked_data::TrackedData};
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::{
     merchant::{MerchantScreenHandler, MerchantTradeOffer},
-    screen_handler::{ScreenHandlerFactory, SharedScreenHandler, InventoryPlayer},
+    screen_handler::{InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
 };
-use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CMerchantOffers, MerchantTrade};
 use pumpkin_util::text::TextComponent;
@@ -26,15 +22,10 @@ use serde::Serialize;
 use crate::entity::{
     Entity, EntityBase, NBTStorage,
     ai::goal::{
-        claim_workstation::ClaimWorkstationGoal,
-        escape_danger::EscapeDangerGoal,
-        gather_at_bell::GatherAtBellGoal,
-        look_around::LookAroundGoal,
-        look_at_entity::LookAtEntityGoal,
-        sleep_in_bed::SleepInBedGoal,
-        swim::SwimGoal,
-        wander_around::WanderAroundGoal,
-        work_at_station::WorkAtStationGoal,
+        claim_workstation::ClaimWorkstationGoal, escape_danger::EscapeDangerGoal,
+        gather_at_bell::GatherAtBellGoal, look_around::LookAroundGoal,
+        look_at_entity::LookAtEntityGoal, sleep_in_bed::SleepInBedGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal, work_at_station::WorkAtStationGoal,
     },
     attributes::AttributeBuilder,
     mob::{Mob, MobEntity},
@@ -331,9 +322,9 @@ impl VillagerEntity {
             for idx in selected {
                 let entry = &pool.entries[idx];
                 let input1 = ItemStack::new(entry.input1_count as u8, entry.input1_item);
-                let input2 = entry.input2_item.map(|item| {
-                    ItemStack::new(entry.input2_count as u8, item)
-                });
+                let input2 = entry
+                    .input2_item
+                    .map(|item| ItemStack::new(entry.input2_count as u8, item));
                 let output = ItemStack::new(entry.output_count as u8, entry.output_item);
                 offers.push(TradeOffer {
                     input1,
@@ -477,17 +468,11 @@ impl NBTStorage for VillagerEntity {
             let mut villager_data = pumpkin_nbt::compound::NbtCompound::new();
             villager_data.put_string(
                 "type",
-                format!(
-                    "minecraft:{}",
-                    villager_type_name(self.get_villager_type())
-                ),
+                format!("minecraft:{}", villager_type_name(self.get_villager_type())),
             );
             villager_data.put_string(
                 "profession",
-                format!(
-                    "minecraft:{}",
-                    profession_name(self.get_profession())
-                ),
+                format!("minecraft:{}", profession_name(self.get_profession())),
             );
             villager_data.put_int("level", self.get_level());
             nbt.put_component("VillagerData", villager_data);
@@ -574,15 +559,11 @@ impl NBTStorage for VillagerEntity {
             // VillagerData
             if let Some(vd) = nbt.get_compound("VillagerData") {
                 if let Some(vtype_str) = vd.get_string("type") {
-                    let short = vtype_str
-                        .strip_prefix("minecraft:")
-                        .unwrap_or(vtype_str);
+                    let short = vtype_str.strip_prefix("minecraft:").unwrap_or(vtype_str);
                     self.set_villager_type(villager_type_from_name(short));
                 }
                 if let Some(prof_str) = vd.get_string("profession") {
-                    let short = prof_str
-                        .strip_prefix("minecraft:")
-                        .unwrap_or(prof_str);
+                    let short = prof_str.strip_prefix("minecraft:").unwrap_or(prof_str);
                     self.set_profession(profession_from_name(short));
                 }
                 if let Some(level) = vd.get_int("level") {
@@ -616,8 +597,7 @@ impl NBTStorage for VillagerEntity {
                             let uses = recipe.get_int("uses").unwrap_or(0);
                             let max_uses = recipe.get_int("maxUses").unwrap_or(16);
                             let xp_reward = recipe.get_int("xp").unwrap_or(1);
-                            let special_price =
-                                recipe.get_int("specialPrice").unwrap_or(0);
+                            let special_price = recipe.get_int("specialPrice").unwrap_or(0);
                             let price_multiplier =
                                 recipe.get_float("priceMultiplier").unwrap_or(0.05);
                             let demand = recipe.get_int("demand").unwrap_or(0);
@@ -649,13 +629,10 @@ impl NBTStorage for VillagerEntity {
                             g.get_int("Value"),
                         ) {
                             if int_arr.len() == 4 {
-                                let hi = ((int_arr[0] as u64) << 32)
-                                    | (int_arr[1] as u32 as u64);
-                                let lo = ((int_arr[2] as u64) << 32)
-                                    | (int_arr[3] as u32 as u64);
-                                let uuid = uuid::Uuid::from_u128(
-                                    ((hi as u128) << 64) | (lo as u128),
-                                );
+                                let hi = ((int_arr[0] as u64) << 32) | (int_arr[1] as u32 as u64);
+                                let lo = ((int_arr[2] as u64) << 32) | (int_arr[3] as u32 as u64);
+                                let uuid =
+                                    uuid::Uuid::from_u128(((hi as u128) << 64) | (lo as u128));
                                 if let Some(gtype) = GossipType::from_name(type_name) {
                                     gossips.entries.push(GossipEntry {
                                         gossip_type: gtype,
@@ -705,9 +682,7 @@ impl Mob for VillagerEntity {
 
                 for candidate in nearby {
                     let block = world.get_block(&candidate).await;
-                    let short_name = block.name
-                        .strip_prefix("minecraft:")
-                        .unwrap_or(block.name);
+                    let short_name = block.name.strip_prefix("minecraft:").unwrap_or(block.name);
 
                     if let Some(poi_type) = poi::block_to_poi_type(short_name) {
                         if let Some(profession_id) = poi::poi_type_to_profession(poi_type) {
@@ -825,11 +800,7 @@ impl Mob for VillagerEntity {
                             if !golem_nearby {
                                 self.last_restock_tick.store(current, Ordering::Relaxed);
                                 // Spawn iron golem nearby
-                                let spawn_pos = Vector3::new(
-                                    pos.x + 2.0,
-                                    pos.y,
-                                    pos.z + 2.0,
-                                );
+                                let spawn_pos = Vector3::new(pos.x + 2.0, pos.y, pos.z + 2.0);
                                 let golem_entity = crate::entity::Entity::new(
                                     world.clone(),
                                     spawn_pos,

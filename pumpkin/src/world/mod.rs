@@ -2778,8 +2778,14 @@ impl World {
 
         // Update POI storage when blocks with POI types change
         if old_block != new_block {
-            let old_name = old_block.name.strip_prefix("minecraft:").unwrap_or(old_block.name);
-            let new_name = new_block.name.strip_prefix("minecraft:").unwrap_or(new_block.name);
+            let old_name = old_block
+                .name
+                .strip_prefix("minecraft:")
+                .unwrap_or(old_block.name);
+            let new_name = new_block
+                .name
+                .strip_prefix("minecraft:")
+                .unwrap_or(new_block.name);
             let old_poi = pumpkin_world::poi::block_to_poi_type(old_name);
             let new_poi = pumpkin_world::poi::block_to_poi_type(new_name);
             if old_poi != new_poi {

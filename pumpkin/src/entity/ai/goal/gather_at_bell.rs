@@ -2,8 +2,8 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use super::{Controls, Goal, GoalFuture, to_goal_ticks};
-use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use crate::entity::passive::villager::schedule::VillagerActivity;
+use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 
 /// Goal that makes a villager navigate to the village bell during meeting time.
 pub struct GatherAtBellGoal {

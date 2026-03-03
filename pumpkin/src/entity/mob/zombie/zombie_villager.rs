@@ -1,13 +1,9 @@
 use std::sync::{
-    atomic::{AtomicI32, Ordering},
     Arc,
+    atomic::{AtomicI32, Ordering},
 };
 
-use pumpkin_data::{
-    effect::StatusEffect,
-    entity::EntityType,
-    item::Item,
-};
+use pumpkin_data::{effect::StatusEffect, entity::EntityType, item::Item};
 use pumpkin_world::item::ItemStack;
 
 use crate::entity::{
@@ -55,7 +51,8 @@ impl ZombieVillagerEntity {
         // Random time between MIN and MAX conversion ticks
         let seed = self.mob_entity.mob_entity.living_entity.entity.entity_id as u64;
         let range = (MAX_CONVERSION_TICKS - MIN_CONVERSION_TICKS) as u64;
-        let time = MIN_CONVERSION_TICKS + ((seed * 6364136223846793005 + 1442695040888963407) % range) as i32;
+        let time = MIN_CONVERSION_TICKS
+            + ((seed * 6364136223846793005 + 1442695040888963407) % range) as i32;
         self.conversion_timer.store(time, Ordering::Relaxed);
     }
 
@@ -66,23 +63,16 @@ impl ZombieVillagerEntity {
         let pos = entity.pos.load();
 
         // Create a new villager entity
-        let villager_entity = Entity::new(
-            world.clone(),
-            pos,
-            &EntityType::VILLAGER,
-        );
+        let villager_entity = Entity::new(world.clone(), pos, &EntityType::VILLAGER);
 
         let villager = VillagerEntity::new(villager_entity).await;
 
         // Set the profession and type from the original zombie villager
-        let profession = VillagerProfession::from_i32(
-            self.villager_profession.load(Ordering::Relaxed),
-        );
+        let profession =
+            VillagerProfession::from_i32(self.villager_profession.load(Ordering::Relaxed));
         villager.set_profession(profession);
 
-        let vtype = VillagerType::from_i32(
-            self.villager_type.load(Ordering::Relaxed),
-        );
+        let vtype = VillagerType::from_i32(self.villager_type.load(Ordering::Relaxed));
         villager.set_villager_type(vtype);
 
         // Populate trades if the villager had a profession

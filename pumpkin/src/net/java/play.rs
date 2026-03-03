@@ -2082,8 +2082,8 @@ impl JavaClient {
         // Downcast to MerchantScreenHandler to call select_trade
         if let Some(merchant) = handler
             .as_any_mut()
-            .downcast_mut::<pumpkin_inventory::merchant::MerchantScreenHandler>()
-        {
+            .downcast_mut::<pumpkin_inventory::merchant::MerchantScreenHandler>(
+        ) {
             merchant.select_trade(selected).await;
         }
     }

@@ -6,8 +6,7 @@ use pumpkin_util::version::MinecraftVersion;
 use pumpkin_world::item::ItemStack;
 
 use crate::{
-    ClientPacket, VarInt, WritingError,
-    codec::item_stack_seralizer::ItemStackSerializer,
+    ClientPacket, VarInt, WritingError, codec::item_stack_seralizer::ItemStackSerializer,
     ser::NetworkWriteExt,
 };
 
@@ -45,10 +44,7 @@ impl ClientPacket for CMerchantOffers<'_> {
 
         write.write_var_int(&self.window_id)?;
         let trade_count = i32::try_from(self.trades.len()).map_err(|_| {
-            WritingError::Message(format!(
-                "{} trades do not fit in VarInt",
-                self.trades.len()
-            ))
+            WritingError::Message(format!("{} trades do not fit in VarInt", self.trades.len()))
         })?;
         write.write_var_int(&VarInt(trade_count))?;
 

@@ -9,7 +9,7 @@ use std::{
 
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::{
-    inventory::{split_stack, Clearable, Inventory, InventoryFuture},
+    inventory::{Clearable, Inventory, InventoryFuture, split_stack},
     item::ItemStack,
 };
 use tokio::sync::Mutex;
@@ -197,14 +197,10 @@ impl MerchantScreenHandler {
             if offer.uses < offer.max_uses {
                 self.inventory.set_stack(2, offer.output.clone()).await;
             } else {
-                self.inventory
-                    .set_stack(2, ItemStack::EMPTY.clone())
-                    .await;
+                self.inventory.set_stack(2, ItemStack::EMPTY.clone()).await;
             }
         } else {
-            self.inventory
-                .set_stack(2, ItemStack::EMPTY.clone())
-                .await;
+            self.inventory.set_stack(2, ItemStack::EMPTY.clone()).await;
         }
     }
 
@@ -279,10 +275,7 @@ impl MerchantScreenHandler {
 }
 
 impl ScreenHandler for MerchantScreenHandler {
-    fn on_closed<'a>(
-        &'a mut self,
-        player: &'a dyn InventoryPlayer,
-    ) -> ScreenHandlerFuture<'a, ()> {
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
             // Return input items to the player (slots 0 and 1)
             // Output slot (2) is not returned
@@ -365,26 +358,17 @@ impl ScreenHandler for MerchantScreenHandler {
                         return ItemStack::EMPTY.clone();
                     }
                     self.consume_inputs().await;
-                    if !self
-                        .insert_item(&mut slot_stack_mut, 3, 39, true)
-                        .await
-                    {
+                    if !self.insert_item(&mut slot_stack_mut, 3, 39, true).await {
                         return ItemStack::EMPTY.clone();
                     }
                 } else if slot_index < 3 {
                     // Move from input slots to player inventory
-                    if !self
-                        .insert_item(&mut slot_stack_mut, 3, 39, true)
-                        .await
-                    {
+                    if !self.insert_item(&mut slot_stack_mut, 3, 39, true).await {
                         return ItemStack::EMPTY.clone();
                     }
                 } else {
                     // Move from player inventory to merchant input slots (0..2)
-                    if !self
-                        .insert_item(&mut slot_stack_mut, 0, 2, false)
-                        .await
-                    {
+                    if !self.insert_item(&mut slot_stack_mut, 0, 2, false).await {
                         return ItemStack::EMPTY.clone();
                     }
                 }

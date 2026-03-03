@@ -789,11 +789,8 @@ impl JavaClient {
                     .await;
             }
             id if id == SSelectMerchantTrade::to_id(version) => {
-                self.handle_select_trade(
-                    player,
-                    SSelectMerchantTrade::read(payload, &version)?,
-                )
-                .await;
+                self.handle_select_trade(player, SSelectMerchantTrade::read(payload, &version)?)
+                    .await;
             }
             id if id == SSetHeldItem::to_id(version) => {
                 self.handle_set_held_item(player, SSetHeldItem::read(payload, &version)?)

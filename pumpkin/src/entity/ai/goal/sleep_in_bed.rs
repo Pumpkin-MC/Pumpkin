@@ -2,8 +2,8 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use super::{Controls, Goal, GoalFuture, to_goal_ticks};
-use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use crate::entity::passive::villager::schedule::VillagerActivity;
+use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 
 /// Goal that makes a villager navigate to and sleep in their bed at night.
 pub struct SleepInBedGoal {
@@ -45,11 +45,8 @@ impl Goal for SleepInBedGoal {
             let block_pos = BlockPos(Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32));
 
             let mut poi_storage = world.portal_poi.lock().await;
-            let candidates = poi_storage.get_in_square(
-                block_pos,
-                48,
-                Some(pumpkin_world::poi::POI_TYPE_HOME),
-            );
+            let candidates =
+                poi_storage.get_in_square(block_pos, 48, Some(pumpkin_world::poi::POI_TYPE_HOME));
             drop(poi_storage);
 
             if let Some(nearest) = candidates.into_iter().min_by_key(|c| {

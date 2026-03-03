@@ -402,7 +402,6 @@ impl NodeEvaluator for WalkNodeEvaluator {
     }
 
     async fn get_neighbors(&mut self, current: &Node, out_neighbors: &mut Vec<Node>) {
-
         let headroom_type = self
             .get_cached_path_type(current.pos.0.add_raw(0, 1, 0))
             .await;
