@@ -520,7 +520,7 @@ pub trait SunSensitive: Mob + Send + Sync {
 
             if !entity.is_alive()
                 || entity.touching_water.load(Relaxed)
-                || entity.is_in_powder_snow().await
+                || entity.is_in_powder_snow()
             {
                 return;
             }

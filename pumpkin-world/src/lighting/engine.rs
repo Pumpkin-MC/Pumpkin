@@ -145,10 +145,16 @@ impl<P: LightProvider> LightPropagator<P> {
                     continue;
                 }
 
+                // Skip neighbor if it's outside world bounds
+                let min_y = cache.bottom_y() as i32;
+                let max_y = min_y + cache.height() as i32;
+                if neighbor_pos.0.y < min_y || neighbor_pos.0.y >= max_y {
+                    continue;
+                }
+
                 let (cx, _rel) = neighbor_pos.chunk_and_chunk_relative_position();
                 let rel_x = cx.x - cache_x;
                 let rel_z = cx.y - cache_z;
-
                 if rel_x < 0 || rel_x >= cache_size || rel_z < 0 || rel_z >= cache_size {
                     continue;
                 }
