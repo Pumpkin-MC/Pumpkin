@@ -65,7 +65,7 @@ impl EntityBase for SnowballEntity {
 
     fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
-            let world = self.get_entity().world.load();
+            let world = self.get_entity().world();
 
             // Always send particle status regardless of what was hit
             world

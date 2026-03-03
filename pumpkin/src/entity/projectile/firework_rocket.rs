@@ -110,7 +110,7 @@ impl EntityBase for FireworkRocketEntity {
             self.entity.process_tick(caller, server).await;
 
             let entity = self.get_entity();
-            let world = entity.world.load();
+            let world = entity.world();
             let mut velocity = entity.velocity.load();
 
             if let Some(shooter_id) = self.shooter_id {

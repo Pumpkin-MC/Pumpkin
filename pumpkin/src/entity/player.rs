@@ -1244,8 +1244,7 @@ impl Player {
         let position = entity.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimensions);
         entity
-            .world
-            .load()
+            .world()
             .is_space_empty(aabb.contract_all(1.0E-7))
             .await
     }
@@ -1614,7 +1613,7 @@ impl Player {
     }
 
     pub fn world(&self) -> Arc<World> {
-        self.living_entity.entity.world.load_full()
+        self.living_entity.entity.world()
     }
 
     pub fn position(&self) -> Vector3<f64> {
@@ -1829,7 +1828,7 @@ impl Player {
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
-        let current_world = self.living_entity.entity.world.load_full();
+        let current_world = self.living_entity.entity.world();
         let yaw = yaw.unwrap_or(new_world.level_info.load().spawn_yaw);
         let pitch = pitch.unwrap_or(new_world.level_info.load().spawn_pitch);
 
@@ -2120,8 +2119,7 @@ impl Player {
                 );
                 self.living_entity
                     .entity
-                    .world
-                    .load()
+                    .world()
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
                         PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
                         &[pumpkin_protocol::java::client::play::Player {
@@ -3195,8 +3193,7 @@ impl EntityBase for Player {
                         let entity = self.get_entity();
                         self.request_teleport(position, yaw, pitch).await;
                         entity
-                            .world
-                            .load()
+                            .world()
                             .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
                                 self.living_entity.entity.entity_id.into(),
                                 position,

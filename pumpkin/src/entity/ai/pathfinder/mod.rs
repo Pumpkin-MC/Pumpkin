@@ -123,7 +123,7 @@ impl Navigator {
         let start_block_vec = start_pos_f.to_i32();
         let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
 
-        let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
+        let context = PathfindingContext::new(mob_position, entity.entity.world());
         let mut mob_data = MobData::new(start_pos_f, self.mob_width, self.mob_height, 1.0);
         mob_data.on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
         mob_data.set_pathfinding_malus(PathType::DangerFire, 16.0);

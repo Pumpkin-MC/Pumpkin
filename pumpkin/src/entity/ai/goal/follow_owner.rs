@@ -36,7 +36,7 @@ impl FollowOwnerGoal {
 
     fn find_owner(mob: &dyn Mob) -> Option<Arc<Player>> {
         let owner_uuid = mob.get_owner_uuid()?;
-        let world = mob.get_mob_entity().living_entity.entity.world.load_full();
+        let world = mob.get_mob_entity().living_entity.entity.world();
         let player = world.get_player_by_uuid(owner_uuid)?;
         if player.is_spectator() {
             return None;
@@ -53,7 +53,7 @@ impl FollowOwnerGoal {
     async fn try_teleport_to_owner(mob: &dyn Mob, owner: &Player) {
         let owner_pos = owner.living_entity.entity.pos.load();
         let mob_entity = &mob.get_mob_entity().living_entity.entity;
-        let world = mob_entity.world.load_full();
+        let world = mob_entity.world();
 
         let offsets: [(i32, i32, i32); 10] = {
             let mut rng = mob.get_random();

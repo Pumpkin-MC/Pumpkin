@@ -172,8 +172,7 @@ pub async fn send_attribute_updates_for_living(
 
     living
         .entity
-        .world
-        .load()
+        .world()
         .broadcast_editioned(&je_packet, &be_packet)
         .await;
 }

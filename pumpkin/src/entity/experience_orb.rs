@@ -84,8 +84,7 @@ impl EntityBase for ExperienceOrbEntity {
 
             let no_clip = !self
                 .entity
-                .world
-                .load()
+                .world()
                 .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
                 .await;
             // TODO: isSubmergedIn

@@ -30,7 +30,7 @@ impl BreedGoal {
 
         let entity = mob.get_entity();
         let pos = entity.pos.load();
-        let world = entity.world.load();
+        let world = entity.world();
         let my_type = entity.entity_type;
         let my_uuid = entity.entity_uuid;
 
@@ -63,7 +63,7 @@ impl BreedGoal {
     async fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {
         let mob_entity = mob.get_mob_entity();
         let entity = mob.get_entity();
-        let world = entity.world.load();
+        let world = entity.world();
 
         mob_entity.reset_love_ticks();
         mob_entity

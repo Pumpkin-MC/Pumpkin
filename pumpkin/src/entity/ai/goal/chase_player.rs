@@ -49,7 +49,7 @@ impl Goal for ChasePlayerGoal {
                 return false;
             }
 
-            let world = entity.world.load();
+            let world = entity.world();
             let closest = world.get_closest_player(mob_pos, 256.0);
             if let Some(p) = closest
                 && p.get_entity().entity_id == target.get_entity().entity_id

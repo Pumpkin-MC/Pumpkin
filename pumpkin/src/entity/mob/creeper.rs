@@ -111,7 +111,7 @@ impl CreeperEntity {
             .living_entity
             .dead
             .store(true, Ordering::Relaxed);
-        let world = entity.world.load();
+        let world = entity.world();
         let pos = entity.pos.load();
         world.explode(pos, radius * multiplier).await;
         // TODO: spawn area effect cloud with potion effects
@@ -187,7 +187,7 @@ impl Mob for CreeperEntity {
             let current = self.current_fuse_time.load(Ordering::Relaxed);
 
             if fuse_speed > 0 && current == 0 {
-                let world = entity.world.load();
+                let world = entity.world();
                 world
                     .play_sound_fine(
                         Sound::EntityCreeperPrimed,
@@ -221,7 +221,7 @@ impl Mob for CreeperEntity {
             }
 
             let entity = &self.mob_entity.living_entity.entity;
-            let world = entity.world.load();
+            let world = entity.world();
             let pos = entity.pos.load();
 
             world

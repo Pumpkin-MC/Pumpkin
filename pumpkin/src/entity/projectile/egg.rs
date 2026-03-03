@@ -106,7 +106,7 @@ impl EntityBase for EggEntity {
 
     fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
-            let world = self.get_entity().world.load();
+            let world = self.get_entity().world();
             let hit_pos = hit.hit_pos();
             let normal = hit.normal();
 

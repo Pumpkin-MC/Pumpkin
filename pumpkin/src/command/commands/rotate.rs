@@ -79,7 +79,7 @@ async fn rotate_entity(
     // Use teleport with same position to update rotation
     // This properly handles both players (sends CPlayerPosition) and other entities
     let pos = entity.pos.load();
-    let world = entity.world.load_full();
+    let world = entity.world();
     target
         .teleport(pos, Some(final_yaw), Some(final_pitch), world)
         .await;

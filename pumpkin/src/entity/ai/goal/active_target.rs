@@ -72,7 +72,7 @@ impl ActiveTargetGoal {
     }
 
     fn find_closest_target(&mut self, mob: &MobEntity) {
-        let world = mob.living_entity.entity.world.load();
+        let world = mob.living_entity.entity.world();
         if self.target_type == &EntityType::PLAYER {
             let potential_player = world
                 .get_closest_player(

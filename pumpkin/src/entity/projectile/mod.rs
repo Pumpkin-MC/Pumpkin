@@ -96,7 +96,7 @@ impl ThrownItemEntity {
     /// Process a tick for projectile movement and collisions
     pub async fn process_tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
         let entity = self.get_entity();
-        let world = entity.world.load();
+        let world = entity.world();
 
         // Apply gravity and inertia
         let mut velocity = entity.velocity.load();

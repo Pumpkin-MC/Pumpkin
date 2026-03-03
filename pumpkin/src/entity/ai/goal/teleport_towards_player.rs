@@ -43,7 +43,7 @@ impl TeleportTowardsPlayerGoal {
 
     async fn find_staring_player(&self) -> Option<Arc<Player>> {
         let entity = &self.enderman.mob_entity.living_entity.entity;
-        let world = entity.world.load();
+        let world = entity.world();
         let pos = entity.pos.load();
         let follow_range = self
             .enderman

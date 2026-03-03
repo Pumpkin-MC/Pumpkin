@@ -66,7 +66,7 @@ impl Goal for BegGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             let entity = &mob.get_mob_entity().living_entity.entity;
-            let world = entity.world.load_full();
+            let world = entity.world();
             let pos = entity.pos.load();
             let radius = self.beg_distance_sq.sqrt();
 

@@ -75,7 +75,7 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
                         block_pos_mut.0.z = block_pos.0.z + n;
                         // Make sure the world lock is dropped
                         {
-                            let world = mob.get_entity().world.load_full();
+                            let world = mob.get_entity().world();
 
                             let can_target =
                                 if let Some(move_to_target_pos) = self.move_to_target_pos.get() {
@@ -145,7 +145,7 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
-            let world = mob.get_entity().world.load_full();
+            let world = mob.get_entity().world();
             let can_target = if let Some(x) = self.move_to_target_pos.get() {
                 x.is_target_pos(world, self.target_pos).await
             } else {

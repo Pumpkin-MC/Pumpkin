@@ -194,8 +194,7 @@ impl ArmorStandEntity {
         //TODO: i am stupid! let armor_stand_item = ItemStack::new_with_component(1, &Item::ARMOR_STAND, vec![(DataComponent::CustomName, self.get_custom_name())]);
         let armor_stand_item = ItemStack::new(1, &Item::ARMOR_STAND);
         entity
-            .world
-            .load()
+            .world()
             .drop_stack(&entity.block_pos.load(), armor_stand_item)
             .await;
 
@@ -203,7 +202,7 @@ impl ArmorStandEntity {
     }
 
     async fn on_break(&self, entity: &Entity) {
-        let world = entity.world.load();
+        let world = entity.world();
         world
             .play_sound(
                 Sound::EntityArmorStandBreak,
@@ -218,7 +217,7 @@ impl ArmorStandEntity {
     /// Spawns break particles at the armor stand's position.
     // TODO: use oak plank block particles like vanilla (requires block state data in particle system)
     async fn spawn_break_particles(&self, entity: &Entity) {
-        let world = entity.world.load();
+        let world = entity.world();
         let pos = entity.pos.load();
         let width = entity.width();
         let height = entity.height();
@@ -339,7 +338,7 @@ impl EntityBase for ArmorStandEntity {
                 return false;
             }
 
-            let world = entity.world.load();
+            let world = entity.world();
 
             let mob_griefing_gamerule = {
                 let game_rules = &world.level_info.load().game_rules;

@@ -37,7 +37,7 @@ impl Goal for EatGrassGoal {
 
             let entity = &mob.get_mob_entity().living_entity.entity;
             let block_pos = entity.block_pos.load();
-            let world = entity.world.load();
+            let world = entity.world();
 
             let block_at_pos = world.get_block(&block_pos).await;
             if block_at_pos.has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
@@ -68,7 +68,7 @@ impl Goal for EatGrassGoal {
             if self.timer == 4 {
                 let entity = &mob.get_mob_entity().living_entity.entity;
                 let block_pos = entity.block_pos.load();
-                let world = entity.world.load_full();
+                let world = entity.world();
 
                 let block_at_pos = world.get_block(&block_pos).await;
                 if block_at_pos.has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {

@@ -173,7 +173,7 @@ impl EndermanEntity {
     pub async fn teleport_to(&self, x: f64, y: f64, z: f64) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let origin = entity.pos.load();
-        let world = entity.world.load();
+        let world = entity.world();
 
         let min_y = f64::from(world.dimension.min_y);
         let max_y = f64::from(world.dimension.min_y + world.dimension.height - 1);
@@ -394,7 +394,7 @@ impl EndermanEntity {
 
         let enderman_eye_pos = Vector3::new(enderman_pos.x, enderman_eye_y, enderman_pos.z);
         let player_eye_pos = Vector3::new(player_pos.x, player_eye_y, player_pos.z);
-        let world = entity.world.load();
+        let world = entity.world();
         world
             .raycast(enderman_eye_pos, player_eye_pos, async |block_pos, w| {
                 let state = w.get_block_state(block_pos).await;
@@ -451,7 +451,7 @@ impl Mob for EndermanEntity {
             }
 
             let pos = entity.pos.load();
-            let world = entity.world.load();
+            let world = entity.world();
             let particles = {
                 let mut rng = self.get_random();
                 std::array::from_fn::<_, 2, _>(|_| {

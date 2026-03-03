@@ -27,7 +27,7 @@ impl Goal for PlaceBlockGoal {
             }
 
             let entity = &mob.get_mob_entity().living_entity.entity;
-            let world = entity.world.load();
+            let world = entity.world();
             if !world.level_info.load().game_rules.mob_griefing {
                 return false;
             }
@@ -58,7 +58,7 @@ impl Goal for PlaceBlockGoal {
                 )
             };
 
-            let world = entity.world.load();
+            let world = entity.world();
             let target_pos = BlockPos::new(bx, by, bz);
 
             let state_id = world.get_block_state_id(&target_pos).await;

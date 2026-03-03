@@ -106,7 +106,7 @@ impl Mob for BatEntity {
             let entity = &self.mob_entity.living_entity.entity;
             let block_pos = entity.block_pos.load();
             let above_pos = BlockPos::new(block_pos.0.x, block_pos.0.y + 1, block_pos.0.z);
-            let world = entity.world.load();
+            let world = entity.world();
 
             // Ambient idle sound (vanilla: MobEntity.mobTick → playAmbientSound)
             let chance = self.ambient_sound_chance.fetch_sub(1, Relaxed);
