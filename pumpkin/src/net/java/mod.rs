@@ -11,8 +11,8 @@ use pumpkin_protocol::java::server::play::{
     SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SKeepAlive, SMoveVehicle,
     SPaddleBoat, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
     SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
-    SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
-    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    SPlayerRotation, SPlayerSession, SSelectMerchantTrade, SSetCommandBlock, SSetCreativeSlot,
+    SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -787,6 +787,13 @@ impl JavaClient {
                 player
                     .on_slot_click(SClickSlot::read(payload, &version)?)
                     .await;
+            }
+            id if id == SSelectMerchantTrade::to_id(version) => {
+                self.handle_select_trade(
+                    player,
+                    SSelectMerchantTrade::read(payload, &version)?,
+                )
+                .await;
             }
             id if id == SSetHeldItem::to_id(version) => {
                 self.handle_set_held_item(player, SSetHeldItem::read(payload, &version)?)

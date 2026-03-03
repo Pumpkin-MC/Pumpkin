@@ -7,11 +7,13 @@ pub mod avoid_entity;
 pub mod beg;
 pub mod breed;
 pub mod chase_player;
+pub mod claim_workstation;
 pub mod creeper_ignite;
 pub mod destroy_egg;
 pub mod eat_grass;
 pub mod escape_danger;
 pub mod follow_owner;
+pub mod gather_at_bell;
 pub mod follow_parent;
 pub mod goal_selector;
 pub mod look_around;
@@ -23,12 +25,14 @@ pub mod owner_hurt_target;
 pub mod pick_up_block;
 pub mod place_block;
 pub mod revenge;
+pub mod sleep_in_bed;
 pub mod step_and_destroy_block;
 pub mod swim;
 pub mod teleport_towards_player;
 pub mod tempt;
 pub(crate) mod track_target;
 pub mod wander_around;
+pub mod work_at_station;
 pub mod zombie_attack;
 
 #[must_use]

@@ -13,6 +13,85 @@ use serde::{Deserialize, Serialize};
 /// POI type identifier for nether portals
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
 
+// Villager workstation POI types
+pub const POI_TYPE_ARMORER: &str = "minecraft:armorer";
+pub const POI_TYPE_BUTCHER: &str = "minecraft:butcher";
+pub const POI_TYPE_CARTOGRAPHER: &str = "minecraft:cartographer";
+pub const POI_TYPE_CLERIC: &str = "minecraft:cleric";
+pub const POI_TYPE_FARMER: &str = "minecraft:farmer";
+pub const POI_TYPE_FISHERMAN: &str = "minecraft:fisherman";
+pub const POI_TYPE_FLETCHER: &str = "minecraft:fletcher";
+pub const POI_TYPE_LEATHERWORKER: &str = "minecraft:leatherworker";
+pub const POI_TYPE_LIBRARIAN: &str = "minecraft:librarian";
+pub const POI_TYPE_MASON: &str = "minecraft:mason";
+pub const POI_TYPE_SHEPHERD: &str = "minecraft:shepherd";
+pub const POI_TYPE_TOOLSMITH: &str = "minecraft:toolsmith";
+pub const POI_TYPE_WEAPONSMITH: &str = "minecraft:weaponsmith";
+
+// Bed POI type (for villager sleeping)
+pub const POI_TYPE_HOME: &str = "minecraft:home";
+
+/// Map a block name to its POI type, if any.
+/// Block names should be without the "minecraft:" prefix.
+#[must_use]
+pub fn block_to_poi_type(block_name: &str) -> Option<&'static str> {
+    match block_name {
+        "blast_furnace" => Some(POI_TYPE_ARMORER),
+        "smoker" => Some(POI_TYPE_BUTCHER),
+        "cartography_table" => Some(POI_TYPE_CARTOGRAPHER),
+        "brewing_stand" => Some(POI_TYPE_CLERIC),
+        "composter" => Some(POI_TYPE_FARMER),
+        "barrel" => Some(POI_TYPE_FISHERMAN),
+        "fletching_table" => Some(POI_TYPE_FLETCHER),
+        "cauldron" | "water_cauldron" | "lava_cauldron" | "powder_snow_cauldron" => {
+            Some(POI_TYPE_LEATHERWORKER)
+        }
+        "lectern" => Some(POI_TYPE_LIBRARIAN),
+        "stonecutter" => Some(POI_TYPE_MASON),
+        "loom" => Some(POI_TYPE_SHEPHERD),
+        "smithing_table" => Some(POI_TYPE_TOOLSMITH),
+        "grindstone" => Some(POI_TYPE_GRINDSTONE),
+        _ => {
+            // All bed variants
+            if block_name.ends_with("_bed") {
+                Some(POI_TYPE_HOME)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+// Grindstone maps to weaponsmith
+const POI_TYPE_GRINDSTONE: &str = POI_TYPE_WEAPONSMITH;
+
+/// Map a POI type to villager profession ID, if it's a workstation type.
+#[must_use]
+pub fn poi_type_to_profession(poi_type: &str) -> Option<i32> {
+    match poi_type {
+        POI_TYPE_ARMORER => Some(1),
+        POI_TYPE_BUTCHER => Some(2),
+        POI_TYPE_CARTOGRAPHER => Some(3),
+        POI_TYPE_CLERIC => Some(4),
+        POI_TYPE_FARMER => Some(5),
+        POI_TYPE_FISHERMAN => Some(6),
+        POI_TYPE_FLETCHER => Some(7),
+        POI_TYPE_LEATHERWORKER => Some(8),
+        POI_TYPE_LIBRARIAN => Some(9),
+        POI_TYPE_MASON => Some(10),
+        POI_TYPE_SHEPHERD => Some(12),
+        POI_TYPE_TOOLSMITH => Some(13),
+        POI_TYPE_WEAPONSMITH => Some(14),
+        _ => None,
+    }
+}
+
+/// Check if a POI type is a villager workstation.
+#[must_use]
+pub fn is_workstation_poi(poi_type: &str) -> bool {
+    poi_type_to_profession(poi_type).is_some()
+}
+
 /// MCA format constants
 const SECTOR_SIZE: usize = 4096;
 const REGION_SIZE: usize = 32;
