@@ -621,7 +621,7 @@ macro_rules! assert_success {
             result
         );
         assert_eq!(
-            result.clone().unwrap(),
+            result.unwrap(),
             $right,
             "`DataResult` was successful but the value doesn't match"
         );
