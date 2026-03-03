@@ -28,6 +28,8 @@ use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
@@ -84,6 +86,7 @@ use crate::command::{CommandSender, client_suggestions};
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
+use crate::plugin::player::exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
@@ -593,6 +596,11 @@ impl Player {
         }
     }
 
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.1)
+    }
+
     /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
     /// when the client. This means tasks should complete in a reasonable amount of time or select
     /// on `Self::await_close_interrupt` to cancel the task when the client is closed
@@ -661,14 +669,16 @@ impl Player {
         let inventory = self.inventory();
         let item_stack = inventory.held_item();
 
-        let base_damage = 1.0;
+        let base_damage = self
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_DAMAGE);
         let base_attack_speed = 4.0;
 
         let mut damage_multiplier = 1.0;
         let mut add_damage = 0.0;
         let mut add_speed = 0.0;
 
-        // Get the attack damage
+        // Get the attack damage from the held item
         // TODO: this should be cached in memory, we shouldn't just use default here either
         if let Some(modifiers) = item_stack
             .lock()
@@ -700,11 +710,10 @@ impl Player {
         if attack_cooldown_progress < 1.0 {
             damage_multiplier = attack_cooldown_progress.powi(2).mul_add(0.8, 0.2);
         }
+
         // Modify the added damage based on the multiplier.
         let mut damage = base_damage + add_damage * damage_multiplier;
-
         let pos = victim_entity.pos.load();
-
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
 
         if matches!(attack_type, AttackType::Critical) {
@@ -1974,7 +1983,7 @@ impl Player {
 
     pub fn can_food_heal(&self) -> bool {
         let health = self.living_entity.health.load();
-        let max_health = 20.0; // TODO
+        let max_health = self.living_entity.get_max_health();
         health > 0.0 && health < max_health
     }
 
@@ -2388,7 +2397,6 @@ impl Player {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
-        self.send_effect(effect.clone()).await;
         self.living_entity.add_effect(effect).await;
     }
 
@@ -2399,6 +2407,10 @@ impl Player {
         }
     }
 
+    /**
+     * Send a clientside only effect to the player.
+     * It won't be tracked on the server.
+     */
     pub async fn send_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 
@@ -2497,7 +2509,13 @@ impl Player {
     }
 
     /// Add experience points to the player.
-    pub async fn add_experience_points(&self, added_points: i32) {
+    pub async fn add_experience_points(self: &Arc<Self>, mut added_points: i32) {
+        if let Some(server) = self.world().server.upgrade() {
+            let event = PlayerExpChangeEvent::new(self.clone(), added_points);
+            let event = server.plugin_manager.fire(event).await;
+            added_points = event.amount;
+        }
+
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
         let total_exp = experience::points_to_level(current_level) + current_points;
@@ -3629,7 +3647,9 @@ impl InventoryPlayer for Player {
             debug!("Player::award_experience called with amount={amount}");
             if amount > 0 {
                 debug!("Player: adding {amount} experience points");
-                self.add_experience_points(amount).await;
+                if let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) {
+                    player.add_experience_points(amount).await;
+                }
             }
         })
     }
