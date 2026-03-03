@@ -38,6 +38,7 @@ pub mod entities;
 pub mod entity;
 pub mod entity_anchor;
 pub mod gamemode;
+pub mod gameprofile;
 pub mod message;
 pub mod players;
 pub mod position_2d;
@@ -96,6 +97,7 @@ pub enum Arg<'a> {
     Entities(Vec<Arc<dyn EntityBase>>),
     Entity(Arc<dyn EntityBase>),
     Players(Vec<Arc<Player>>),
+    GameProfiles(Vec<crate::net::GameProfile>),
     BlockPos(BlockPos),
     Pos3D(Vector3<f64>),
     Pos2D(Vector2<f64>),

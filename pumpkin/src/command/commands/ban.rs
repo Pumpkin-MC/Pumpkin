@@ -1,16 +1,14 @@
-use std::sync::Arc;
-
 use crate::command::CommandResult;
-use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
-        args::{Arg, ConsumedArgs, message::MsgArgConsumer, players::PlayersArgumentConsumer},
+        args::{
+            Arg, ConsumedArgs, gameprofile::GameProfilesArgumentConsumer, message::MsgArgConsumer,
+        },
         tree::{CommandTree, builder::argument},
     },
     data::{SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry},
-    entity::player::Player,
-    net::DisconnectReason,
+    net::{DisconnectReason, GameProfile},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
@@ -32,7 +30,7 @@ impl CommandExecutor for NoReasonExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
+            let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGET) else {
                 return Err(InvalidConsumption(Some(ARG_TARGET.into())));
             };
 
@@ -51,7 +49,7 @@ impl CommandExecutor for ReasonExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
+            let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGET) else {
                 return Err(InvalidConsumption(Some(ARG_TARGET.into())));
             };
 
@@ -68,12 +66,12 @@ impl CommandExecutor for ReasonExecutor {
 async fn ban_players(
     sender: &CommandSender,
     server: &crate::server::Server,
-    targets: &[Arc<Player>],
+    targets: &[GameProfile],
     reason: Option<&String>,
 ) -> Result<i32, CommandError> {
     let mut count: usize = 0;
     for target in targets {
-        if ban_player(sender, server, target, reason.cloned()).await {
+        if ban_profile(sender, server, target, reason.cloned()).await {
             count += 1;
         }
     }
@@ -89,18 +87,17 @@ async fn ban_players(
 }
 
 /// Returns `true` if the player was successfully banned.
-async fn ban_player(
+async fn ban_profile(
     sender: &CommandSender,
     server: &crate::server::Server,
-    player: &Player,
+    profile: &GameProfile,
     reason: Option<String>,
 ) -> bool {
     let mut banned_players = server.data.banned_player_list.write().await;
 
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
-    let profile = &player.gameprofile;
 
-    if banned_players.get_entry(&player.gameprofile).is_some() {
+    if banned_players.get_entry(profile).is_some() {
         return false;
     }
 
@@ -118,23 +115,28 @@ async fn ban_player(
     sender
         .send_message(TextComponent::translate(
             translation::COMMANDS_BAN_SUCCESS,
-            [player.get_display_name().await, TextComponent::text(reason)],
+            [
+                TextComponent::text(profile.name.clone()),
+                TextComponent::text(reason),
+            ],
         ))
         .await;
 
-    player
-        .kick(
-            DisconnectReason::Kicked,
-            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, []),
-        )
-        .await;
+    if let Some(player) = server.get_player_by_uuid(profile.id) {
+        player
+            .kick(
+                DisconnectReason::Kicked,
+                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, []),
+            )
+            .await;
+    }
 
     true
 }
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_TARGET, PlayersArgumentConsumer)
+        argument(ARG_TARGET, GameProfilesArgumentConsumer)
             .execute(NoReasonExecutor)
             .then(argument(ARG_REASON, MsgArgConsumer).execute(ReasonExecutor)),
     )

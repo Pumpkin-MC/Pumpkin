@@ -1,9 +1,8 @@
 use crate::command::CommandResult;
-use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
-        args::{Arg, ConsumedArgs, players::PlayersArgumentConsumer},
+        args::{Arg, ConsumedArgs, gameprofile::GameProfilesArgumentConsumer},
         tree::CommandTree,
         tree::builder::argument,
     },
@@ -29,54 +28,50 @@ impl CommandExecutor for Executor {
         Box::pin(async move {
             let mut config = server.data.operator_config.write().await;
 
-            let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
+            let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGETS) else {
                 return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
             let mut successes: i32 = 0;
-            for player in targets {
-                let new_level = server
-                    .basic_config
-                    .op_permission_level
-                    .min(sender.permission_lvl());
+            let new_level = server
+                .basic_config
+                .op_permission_level
+                .min(sender.permission_lvl());
 
-                if player.permission_lvl.load() == new_level {
-                    continue;
-                }
+            for profile in targets {
+                let maybe_existing_entry = config.ops.iter_mut().find(|o| o.uuid == profile.id);
 
-                if let Some(op) = config
-                    .ops
-                    .iter_mut()
-                    .find(|o| o.uuid == player.gameprofile.id)
-                {
+                if let Some(op) = maybe_existing_entry {
+                    if op.level == new_level {
+                        continue;
+                    }
+
                     op.level = new_level;
+                    op.name = profile.name.clone();
                 } else {
-                    let op_entry = Op::new(
-                        player.gameprofile.id,
-                        player.gameprofile.name.clone(),
-                        new_level,
-                        false,
-                    );
+                    let op_entry = Op::new(profile.id, profile.name.clone(), new_level, false);
                     config.ops.push(op_entry);
                 }
 
-                config.save();
-
-                {
+                if let Some(player) = server.get_player_by_uuid(profile.id) {
                     let command_dispatcher = server.command_dispatcher.read().await;
                     player
                         .set_permission_lvl(server, new_level, &command_dispatcher)
                         .await;
-                };
+                }
 
                 sender
                     .send_message(TextComponent::translate(
                         "commands.op.success",
-                        [player.get_display_name().await],
+                        [TextComponent::text(profile.name.clone())],
                     ))
                     .await;
 
                 successes += 1;
+            }
+
+            if successes > 0 {
+                config.save();
             }
 
             if successes == 0 {
@@ -93,5 +88,5 @@ impl CommandExecutor for Executor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(Executor))
+        .then(argument(ARG_TARGETS, GameProfilesArgumentConsumer).execute(Executor))
 }
