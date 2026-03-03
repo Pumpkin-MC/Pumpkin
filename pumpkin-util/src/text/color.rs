@@ -1,7 +1,12 @@
 use colored::{ColoredString, Colorize};
 use serde::{Deserialize, Deserializer, Serialize};
 
-/// Text color
+/// Text color for chat components.
+///
+/// Colors can be specified in three ways:
+/// - `Reset` - Uses the default color for the context
+/// - `Rgb` - A custom RGB color (e.g. "#FF55AA")
+/// - `Named` - One of the 16 standard Minecraft named colors
 #[derive(Default, Debug, Clone, Copy, Serialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum Color {
@@ -10,12 +15,21 @@ pub enum Color {
     /// is a shade of gray that isn't normally used on text).
     #[default]
     Reset,
-    /// RGB Color
+    /// An RGB color specified as a hex string like "#RRGGBB".
     Rgb(RGBColor),
-    /// One of the 16 named Minecraft colors
+    /// One of the 16 named Minecraft colors.
     Named(NamedColor),
 }
 
+/// Converts HSV (Hue, Saturation, Value) color values to RGB.
+///
+/// # Arguments
+/// - `h` – Hue in degrees (0-360)
+/// - `s` – Saturation as a float (0-1)
+/// - `v` – Value (brightness) as a float (0-1)
+///
+/// # Returns
+/// A tuple of (red, green, blue) as u8 values (0-255).
 #[must_use]
 #[expect(clippy::many_single_char_names)]
 pub fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (u8, u8, u8) {
@@ -67,6 +81,13 @@ impl<'de> Deserialize<'de> for Color {
 }
 
 impl Color {
+    /// Converts this color to a colored string for terminal output.
+    ///
+    /// # Arguments
+    /// - `text` – The text to colorize.
+    ///
+    /// # Returns
+    /// A `ColoredString` that can be printed to the terminal.
     #[must_use]
     pub fn console_color(&self, text: &str) -> ColoredString {
         match self {
@@ -93,6 +114,13 @@ impl Color {
         }
     }
 
+    /// Creates a color from a legacy Minecraft color code.
+    ///
+    /// # Arguments
+    /// - `code` – The legacy color code character (0-9, a-f).
+    ///
+    /// # Returns
+    /// The corresponding `Color`, or `None` if the code is invalid.
     #[must_use]
     pub const fn from_legacy_code(code: char) -> Option<Self> {
         let named = match code.to_ascii_lowercase() {
@@ -117,6 +145,13 @@ impl Color {
         Some(Self::Named(named))
     }
 
+    /// Creates an RGB color from a hex string.
+    ///
+    /// # Arguments
+    /// - `hex` – The hex color string without '#' prefix, exactly 6 characters (RRGGBB).
+    ///
+    /// # Returns
+    /// An RGB color, or `None` if the hex string is invalid.
     #[must_use]
     pub fn from_hex_str(hex: &str) -> Option<Self> {
         if hex.len() != 6 {
@@ -129,14 +164,27 @@ impl Color {
     }
 }
 
+/// An RGB color with red, green, and blue components.
 #[derive(Debug, Deserialize, Clone, Copy, Eq, Hash, PartialEq)]
 pub struct RGBColor {
+    /// The red component (0-255).
     pub red: u8,
+    /// The green component (0-255).
     pub green: u8,
+    /// The blue component (0-255).
     pub blue: u8,
 }
 
 impl RGBColor {
+    /// Creates a new RGB color from component values.
+    ///
+    /// # Arguments
+    /// - `red` – The red component (0-255).
+    /// - `green` – The green component (0-255).
+    /// - `blue` – The blue component (0-255).
+    ///
+    /// # Returns
+    /// A new `RGBColor` instance.
     #[must_use]
     pub const fn new(red: u8, green: u8, blue: u8) -> Self {
         Self { red, green, blue }
@@ -152,15 +200,32 @@ impl Serialize for RGBColor {
     }
 }
 
+/// An ARGB color with alpha, red, green, and blue components.
+///
+/// Used for advanced color effects like custom text shadows.
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, Deserialize)]
 pub struct ARGBColor {
+    /// The alpha (transparency) component (0-255).
     alpha: u8,
+    /// The red component (0-255).
     red: u8,
+    /// The green component (0-255).
     green: u8,
+    /// The blue component (0-255).
     blue: u8,
 }
 
 impl ARGBColor {
+    /// Creates a new ARGB color from component values.
+    ///
+    /// # Arguments
+    /// - `alpha` – The alpha (transparency) component (0-255, 0 = transparent, 255 = opaque).
+    /// - `red` – The red component (0-255).
+    /// - `green` – The green component (0-255).
+    /// - `blue` – The blue component (0-255).
+    ///
+    /// # Returns
+    /// A new `ARGBColor` instance.
     #[must_use]
     pub const fn new(alpha: u8, red: u8, green: u8, blue: u8) -> Self {
         Self {
@@ -178,29 +243,49 @@ impl Serialize for ARGBColor {
     }
 }
 
-/// Named Minecraft color
+/// One of the 16 standard Minecraft named colors.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NamedColor {
+    /// Black (#000000)
     Black = 0,
+    /// Dark Blue (#0000AA)
     DarkBlue,
+    /// Dark Green (#00AA00)
     DarkGreen,
+    /// Dark Aqua (#00AAAA)
     DarkAqua,
+    /// Dark Red (#AA0000)
     DarkRed,
+    /// Dark Purple (#AA00AA)
     DarkPurple,
+    /// Gold (#FFAA00)
     Gold,
+    /// Gray (#AAAAAA)
     Gray,
+    /// Dark Gray (#555555)
     DarkGray,
+    /// Blue (#5555FF)
     Blue,
+    /// Green (#55FF55)
     Green,
+    /// Aqua (#55FFFF)
     Aqua,
+    /// Red (#FF5555)
     Red,
+    /// Light Purple (#FF55FF)
     LightPurple,
+    /// Yellow (#FFFF55)
     Yellow,
+    /// White (#FFFFFF)
     White,
 }
 
 impl NamedColor {
+    /// Converts this named color to its corresponding RGB values.
+    ///
+    /// # Returns
+    /// The RGB color equivalent of this named color.
     #[must_use]
     pub const fn to_rgb(&self) -> RGBColor {
         match self {

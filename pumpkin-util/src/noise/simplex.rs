@@ -6,11 +6,25 @@ use crate::random::{RandomImpl, legacy_rand::LegacyRand};
 
 use super::GRADIENTS;
 
+/// A 3D Simplex noise sampler implementation.
+///
+/// Simplex noise is an improved gradient noise function developed by Ken Perlin as an
+/// alternative to classic Perlin noise. It has several advantages:
+/// - Lower computational complexity (O(n²) vs O(2ⁿ)).
+/// - No directional artifacts (better isotropy).
+/// - Well-defined and continuous gradients.
+/// - Easier to implement for higher dimensions.
+///
+/// This implementation provides both 2D and 3D simplex noise sampling.
 #[derive(Clone)]
 pub struct SimplexNoiseSampler {
+    /// Permutation table for hashing coordinates (size 256, duplicated for easy wrapping).
     permutation: [u8; 256],
+    /// X-coordinate origin offset (randomized to avoid symmetry).
     x_origin: f64,
+    /// Y-coordinate origin offset (randomized to avoid symmetry).
     y_origin: f64,
+    /// Z-coordinate origin offset (randomized to avoid symmetry).
     z_origin: f64,
 }
 
@@ -35,10 +49,20 @@ impl Hash for SimplexNoiseSampler {
 }
 
 impl SimplexNoiseSampler {
+    /// √3 constant used for skewing and unskewing factors.
     const SQRT_3: f64 = 1.7320508075688772f64;
+    /// Skew factor for 2D simplex transformation (maps square grid to simplex grid).
     const SKEW_FACTOR_2D: f64 = 0.5f64 * (Self::SQRT_3 - 1f64);
+    /// Unskew factor for 2D simplex transformation (maps simplex grid back to square grid).
     const UNSKEW_FACTOR_2D: f64 = (3f64 - Self::SQRT_3) / 6f64;
 
+    /// Creates a new Simplex noise sampler with randomized origin and permutation table.
+    ///
+    /// # Arguments
+    /// - `random` – The random number generator to use for initialization.
+    ///
+    /// # Returns
+    /// A new `SimplexNoiseSampler` instance.
     pub fn new(random: &mut impl RandomImpl) -> Self {
         let x_origin = random.next_f64() * 256f64;
         let y_origin = random.next_f64() * 256f64;
@@ -64,11 +88,31 @@ impl SimplexNoiseSampler {
         }
     }
 
+    /// Maps an integer coordinate through the permutation table.
+    ///
+    /// # Arguments
+    /// - `input` – The input coordinate.
+    ///
+    /// # Returns
+    /// A hashed value in the range [0, 255].
     #[inline]
     fn map(&self, input: i32) -> i32 {
         i32::from(self.permutation[(input & 0xFF) as usize])
     }
 
+    /// Computes the contribution of a single simplex corner.
+    ///
+    /// This function applies the simplex noise falloff kernel: (r² - |dist|²)⁴ · gradient.
+    ///
+    /// # Arguments
+    /// - `gradient_index` – Index into the gradients array for this corner.
+    /// - `x` – The X offset from the corner.
+    /// - `y` – The Y offset from the corner.
+    /// - `z` – The Z offset from the corner.
+    /// - `distance` – The kernel radius (typically 0.5 for 2D, 0.6 for 3D).
+    ///
+    /// # Returns
+    /// The contribution of this corner to the final noise value.
     #[expect(clippy::suboptimal_flops)]
     fn grad(gradient_index: usize, x: f64, y: f64, z: f64, distance: f64) -> f64 {
         let d = distance - x * x - y * y - z * z;
@@ -80,6 +124,16 @@ impl SimplexNoiseSampler {
         }
     }
 
+    /// Samples 2D Simplex noise at the given coordinates.
+    ///
+    /// The noise value is in the approximate range [-1, 1].
+    ///
+    /// # Arguments
+    /// - `x` – The X coordinate.
+    /// - `y` – The Y coordinate.
+    ///
+    /// # Returns
+    /// A noise value in the range [-1, 1].
     #[must_use]
     #[expect(clippy::many_single_char_names)]
     #[expect(clippy::suboptimal_flops)]
@@ -116,6 +170,17 @@ impl SimplexNoiseSampler {
         70.0 * (w + z + aa)
     }
 
+    /// Samples 3D Simplex noise at the given coordinates.
+    ///
+    /// The noise value is in the approximate range [-1, 1].
+    ///
+    /// # Arguments
+    /// - `x` – The X coordinate.
+    /// - `y` – The Y coordinate.
+    /// - `z` – The Z coordinate.
+    ///
+    /// # Returns
+    /// A noise value in the range [-1, 1].
     #[must_use]
     #[expect(clippy::many_single_char_names)]
     pub fn sample_3d(&self, x: f64, y: f64, z: f64) -> f64 {
@@ -167,6 +232,7 @@ impl SimplexNoiseSampler {
         let ak = k & 0xFF;
 
         let al = self.map(ai.wrapping_add(self.map(aj.wrapping_add(self.map(ak))))) % 12;
+        //TODO: extract duplication to a helper method.
         let am = self.map(
             ai.wrapping_add(q).wrapping_add(
                 self.map(
@@ -201,13 +267,32 @@ impl SimplexNoiseSampler {
     }
 }
 
+/// A multi-octave Simplex noise sampler that combines multiple noise layers.
+///
+/// Octave noise, also known as fractal noise, combines multiple octaves of Simplex noise
+/// with different frequencies and amplitudes to create more complex, natural-looking patterns.
+/// Each octave adds finer detail to the overall noise.
 pub struct OctaveSimplexNoiseSampler {
+    /// The list of samplers for each octave (None for unused octaves).
     octave_samplers: Vec<Option<SimplexNoiseSampler>>,
+    /// The persistence factor (amplitude scaling between octaves).
     persistence: f64,
+    /// The lacunarity factor (frequency scaling between octaves).
     lacunarity: f64,
 }
 
 impl OctaveSimplexNoiseSampler {
+    /// Creates a new octave Simplex noise sampler.
+    ///
+    /// This constructor follows Minecraft's legacy initialization pattern, using a combination
+    /// of Xoroshiro and `LegacyRand` to ensure compatibility with existing world generation.
+    ///
+    /// # Arguments
+    /// - `random` – The random number generator to use.
+    /// - `octaves` – The list of octave indices to include (can be negative).
+    ///
+    /// # Returns
+    /// A new `OctaveSimplexNoiseSampler` instance.
     #[expect(clippy::many_single_char_names)]
     pub fn new(random: &mut impl RandomImpl, octaves: &[i32]) -> Self {
         let mut octaves = Vec::from_iter(octaves);
@@ -259,6 +344,18 @@ impl OctaveSimplexNoiseSampler {
         }
     }
 
+    /// Samples 2D octave Simplex noise at the given coordinates.
+    ///
+    /// This method combines all active octaves, summing their contributions with
+    /// appropriate scaling based on persistence and lacunarity.
+    ///
+    /// # Arguments
+    /// - `x` – The X coordinate.
+    /// - `y` – The Y coordinate.
+    /// - `use_origin` – Whether to include the per-octave origin offsets.
+    ///
+    /// # Returns
+    /// The combined noise value from all octaves.
     #[must_use]
     #[expect(clippy::many_single_char_names)]
     #[expect(clippy::suboptimal_flops)]
@@ -283,6 +380,7 @@ impl OctaveSimplexNoiseSampler {
     }
 }
 
+/// Tests for the simplex noise implementations.
 #[cfg(test)]
 mod octave_simplex_noise_sampler_test {
     use crate::{

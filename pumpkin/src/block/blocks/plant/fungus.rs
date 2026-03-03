@@ -5,15 +5,15 @@ use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
-pub struct Fungus;
+pub struct FungusBlock;
 
-impl BlockMetadata for Fungus {
+impl BlockMetadata for FungusBlock {
     fn ids() -> Box<[u16]> {
         [Block::CRIMSON_FUNGUS.id, Block::WARPED_FUNGUS.id].into()
     }
 }
 
-impl BlockBehaviour for Fungus {
+impl BlockBehaviour for FungusBlock {
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
             <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
@@ -34,7 +34,7 @@ impl BlockBehaviour for Fungus {
         })
     }
 }
-impl PlantBlockBase for Fungus {
+impl PlantBlockBase for FungusBlock {
     async fn can_plant_on_top(
         &self,
         block_accessor: &dyn pumpkin_world::world::BlockAccessor,
