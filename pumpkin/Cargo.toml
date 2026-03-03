@@ -85,6 +85,10 @@ rustc-hash.workspace = true
 # Task handling
 tokio-util = { workspace = true, features = ["rt"] }
 
+# System details & Rustc version
+sysinfo = "0.38"
+rustc_version_runtime = "0.1.*"
+
 flate2.workspace = true
 console-subscriber = { workspace = true, optional = true }
 

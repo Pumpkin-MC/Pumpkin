@@ -23,6 +23,7 @@ use pumpkin::{
     CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
+    stop_or_exit_server,
 };
 use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
@@ -211,7 +212,7 @@ fn handle_interrupt() {
             .color_named(NamedColor::Red)
             .to_pretty_console()
     );
-    stop_server();
+    stop_or_exit_server();
 }
 
 fn handle_panic(panic_info: &PanicHookInfo<'_>) {
