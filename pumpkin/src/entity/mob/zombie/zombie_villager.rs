@@ -3,13 +3,20 @@ use std::sync::{
     atomic::{AtomicI32, Ordering},
 };
 
-use pumpkin_data::{effect::StatusEffect, entity::EntityType, item::Item};
+use pumpkin_data::{
+    effect::StatusEffect,
+    entity::{EntityStatus, EntityType},
+    item::Item,
+    sound::Sound,
+};
 use pumpkin_world::item::ItemStack;
+use tokio::sync::Mutex;
+use uuid::Uuid;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
     mob::{Mob, MobEntity, SunSensitive},
-    passive::villager::{VillagerEntity, VillagerProfession, VillagerType},
+    passive::villager::{GossipType, VillagerEntity, VillagerProfession, VillagerType},
     player::Player,
 };
 
@@ -27,6 +34,8 @@ pub struct ZombieVillagerEntity {
     pub villager_profession: AtomicI32,
     /// The biome type of the original villager.
     pub villager_type: AtomicI32,
+    /// UUID of the player who initiated the cure (for gossip discount).
+    curer_uuid: Mutex<Option<Uuid>>,
 }
 
 impl ZombieVillagerEntity {
@@ -37,6 +46,7 @@ impl ZombieVillagerEntity {
             conversion_timer: AtomicI32::new(-1),
             villager_profession: AtomicI32::new(VillagerProfession::None as i32),
             villager_type: AtomicI32::new(VillagerType::Plains as i32),
+            curer_uuid: Mutex::new(None),
         };
         Arc::new(zombie)
     }
@@ -80,8 +90,21 @@ impl ZombieVillagerEntity {
             villager.populate_all_trades().await;
         }
 
+        // Add cured discount gossip for the curing player
+        let curer = *self.curer_uuid.lock().await;
+        if let Some(uuid) = curer {
+            let mut gossips = villager.gossips.lock().await;
+            gossips.add(GossipType::MajorPositive, uuid, 20);
+            gossips.add(GossipType::MinorPositive, uuid, 25);
+        }
+
         // Sync metadata so clients see the correct appearance
         villager.sync_villager_data().await;
+
+        // Play cure sound
+        entity
+            .play_sound(Sound::EntityZombieVillagerConverted)
+            .await;
 
         // Remove the zombie villager
         entity.remove().await;
@@ -119,7 +142,7 @@ impl Mob for ZombieVillagerEntity {
 
     fn mob_interact<'a>(
         &'a self,
-        _player: &'a Player,
+        player: &'a Player,
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
@@ -149,11 +172,18 @@ impl Mob for ZombieVillagerEntity {
             // Consume the golden apple
             item_stack.item_count = item_stack.item_count.saturating_sub(1);
 
+            // Store who is curing (for gossip discount)
+            *self.curer_uuid.lock().await = Some(player.gameprofile.id);
+
             // Start conversion
             self.start_conversion();
 
-            // TODO: Play cure sound effect (EntityStatus 16)
-            // TODO: Show particles
+            // Play cure sound and particles
+            let entity = &self.mob_entity.mob_entity.living_entity.entity;
+            let world = entity.world.load();
+            world
+                .send_entity_status(entity, EntityStatus::PlayCureZombieVillagerSound)
+                .await;
 
             true
         })

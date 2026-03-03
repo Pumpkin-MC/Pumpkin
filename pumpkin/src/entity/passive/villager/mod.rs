@@ -1,4 +1,5 @@
 pub mod gossip;
+pub mod inventory;
 pub mod schedule;
 pub mod trade_tables;
 
@@ -8,7 +9,12 @@ use std::sync::{
 };
 use tokio::sync::Mutex;
 
-use pumpkin_data::{attributes::Attributes, entity::EntityType, tracked_data::TrackedData};
+use pumpkin_data::sound::Sound;
+use pumpkin_data::{
+    attributes::Attributes,
+    entity::{EntityStatus, EntityType},
+    tracked_data::TrackedData,
+};
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::{
     merchant::{MerchantScreenHandler, MerchantTradeOffer},
@@ -22,7 +28,7 @@ use serde::Serialize;
 use crate::entity::{
     Entity, EntityBase, NBTStorage,
     ai::goal::{
-        claim_workstation::ClaimWorkstationGoal, escape_danger::EscapeDangerGoal,
+        breed::BreedGoal, claim_workstation::ClaimWorkstationGoal, escape_danger::EscapeDangerGoal,
         gather_at_bell::GatherAtBellGoal, look_around::LookAroundGoal,
         look_at_entity::LookAtEntityGoal, sleep_in_bed::SleepInBedGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal, work_at_station::WorkAtStationGoal,
@@ -159,6 +165,9 @@ pub use gossip::{GossipContainer, GossipEntry, GossipType};
 /// XP thresholds for each villager level (1-5)
 pub const XP_THRESHOLDS: [i32; 5] = [0, 10, 70, 150, 250];
 
+/// Vanilla: `getMinAmbientSoundDelay()` returns 80 for most mobs
+const MIN_AMBIENT_SOUND_DELAY: i32 = 80;
+
 pub struct VillagerEntity {
     pub mob_entity: MobEntity,
     pub profession: AtomicI32,
@@ -172,6 +181,9 @@ pub struct VillagerEntity {
     pub gossips: Mutex<GossipContainer>,
     pub restock_count: AtomicI32,
     pub last_restock_tick: AtomicI32,
+    ambient_sound_chance: AtomicI32,
+    head_shake_ticks: AtomicI32,
+    pub inventory: Mutex<inventory::VillagerInventory>,
 }
 
 impl VillagerEntity {
@@ -190,6 +202,9 @@ impl VillagerEntity {
             gossips: Mutex::new(GossipContainer::new()),
             restock_count: AtomicI32::new(0),
             last_restock_tick: AtomicI32::new(0),
+            ambient_sound_chance: AtomicI32::new(MIN_AMBIENT_SOUND_DELAY),
+            head_shake_ticks: AtomicI32::new(0),
+            inventory: Mutex::new(inventory::VillagerInventory::new()),
         };
         let mob_arc = Arc::new(villager);
         let mob_weak: Weak<dyn Mob> = {
@@ -202,7 +217,8 @@ impl VillagerEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
-            goal_selector.add_goal(2, Box::new(WorkAtStationGoal::new()));
+            goal_selector.add_goal(2, BreedGoal::new(0.5));
+            goal_selector.add_goal(3, Box::new(WorkAtStationGoal::new()));
             goal_selector.add_goal(3, Box::new(ClaimWorkstationGoal::new()));
             goal_selector.add_goal(4, Box::new(GatherAtBellGoal::new()));
             goal_selector.add_goal(4, Box::new(SleepInBedGoal::new()));
@@ -366,25 +382,39 @@ impl VillagerEntity {
             let new_level = self.get_level();
             self.populate_trades_for_level(new_level).await;
             self.sync_villager_data().await;
+            // Happy particles on level up
+            self.send_entity_status(EntityStatus::AddVillagerHappyParticles)
+                .await;
         }
     }
 
-    /// Send the merchant offers packet to a player.
+    /// Send the merchant offers packet to a player with demand-based pricing.
     pub async fn send_merchant_offers(&self, player: &Player, window_id: u8) {
         let offers = self.trade_offers.lock().await;
+        let price_adj = self.get_price_adjustment(&player.gameprofile.id).await;
 
         let trades: Vec<MerchantTrade<'_>> = offers
             .iter()
-            .map(|offer| MerchantTrade {
-                input1: &offer.input1,
-                input2: offer.input2.as_ref().unwrap_or(ItemStack::EMPTY),
-                output: &offer.output,
-                uses: offer.uses,
-                max_uses: offer.max_uses,
-                xp_reward: offer.xp_reward,
-                special_price: offer.special_price,
-                price_multiplier: offer.price_multiplier,
-                demand: offer.demand,
+            .map(|offer| {
+                // Vanilla demand formula: demand_adj = floor(price_multiplier * max(0, demand) * base_price)
+                let base_price = offer.input1.item_count as i32;
+                let demand_adj =
+                    (offer.price_multiplier * offer.demand.max(0) as f32 * base_price as f32)
+                        .floor() as i32;
+                let adjusted_special =
+                    (offer.special_price + demand_adj + price_adj).max(1 - base_price);
+
+                MerchantTrade {
+                    input1: &offer.input1,
+                    input2: offer.input2.as_ref().unwrap_or(ItemStack::EMPTY),
+                    output: &offer.output,
+                    uses: offer.uses,
+                    max_uses: offer.max_uses,
+                    xp_reward: offer.xp_reward,
+                    special_price: adjusted_special,
+                    price_multiplier: offer.price_multiplier,
+                    demand: offer.demand,
+                }
             })
             .collect();
 
@@ -401,14 +431,27 @@ impl VillagerEntity {
     }
 
     /// Called when a trade is completed at the given index.
-    pub async fn on_trade_completed(&self, index: usize) {
+    pub async fn on_trade_completed(&self, index: usize, player_uuid: Option<uuid::Uuid>) {
         let mut offers = self.trade_offers.lock().await;
         if let Some(offer) = offers.get_mut(index) {
             offer.uses += 1;
+            offer.demand += 1;
             let xp = offer.xp_reward;
             drop(offers);
             self.add_experience(xp);
             self.try_level_up().await;
+
+            // Trade sound
+            self.mob_entity
+                .living_entity
+                .entity
+                .play_sound(Sound::EntityVillagerYes)
+                .await;
+
+            // Add trading gossip for the player
+            if let Some(uuid) = player_uuid {
+                self.gossips.lock().await.add(GossipType::Trading, uuid, 2);
+            }
         }
     }
 
@@ -417,6 +460,7 @@ impl VillagerEntity {
         let mut offers = self.trade_offers.lock().await;
         for offer in offers.iter_mut() {
             offer.uses = 0;
+            offer.demand = (offer.demand - 1).max(0);
         }
         self.restock_count.fetch_add(1, Ordering::Relaxed);
     }
@@ -434,6 +478,55 @@ impl VillagerEntity {
                 self.set_profession(VillagerProfession::None);
                 self.trade_offers.lock().await.clear();
             }
+        }
+    }
+
+    /// Tick ambient sound countdown; plays ambient sound when timer reaches zero.
+    async fn tick_ambient_sound(&self) {
+        let chance = self.ambient_sound_chance.fetch_sub(1, Ordering::Relaxed);
+        if chance <= 0 {
+            self.ambient_sound_chance
+                .store(MIN_AMBIENT_SOUND_DELAY, Ordering::Relaxed);
+            self.mob_entity
+                .living_entity
+                .entity
+                .play_sound(Sound::EntityVillagerAmbient)
+                .await;
+        }
+    }
+
+    /// Tick head-shake animation counter.
+    fn tick_head_shake(&self) {
+        let ticks = self.head_shake_ticks.load(Ordering::Relaxed);
+        if ticks > 0 {
+            self.head_shake_ticks.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Send entity status to all nearby players.
+    async fn send_entity_status(&self, status: EntityStatus) {
+        let entity = &self.mob_entity.living_entity.entity;
+        entity.world.load().send_entity_status(entity, status).await;
+    }
+
+    /// Get the work sound for the current profession.
+    #[must_use]
+    pub fn get_work_sound(&self) -> Option<Sound> {
+        match self.get_profession() {
+            VillagerProfession::Armorer => Some(Sound::EntityVillagerWorkArmorer),
+            VillagerProfession::Butcher => Some(Sound::EntityVillagerWorkButcher),
+            VillagerProfession::Cartographer => Some(Sound::EntityVillagerWorkCartographer),
+            VillagerProfession::Cleric => Some(Sound::EntityVillagerWorkCleric),
+            VillagerProfession::Farmer => Some(Sound::EntityVillagerWorkFarmer),
+            VillagerProfession::Fisherman => Some(Sound::EntityVillagerWorkFisherman),
+            VillagerProfession::Fletcher => Some(Sound::EntityVillagerWorkFletcher),
+            VillagerProfession::Leatherworker => Some(Sound::EntityVillagerWorkLeatherworker),
+            VillagerProfession::Librarian => Some(Sound::EntityVillagerWorkLibrarian),
+            VillagerProfession::Mason => Some(Sound::EntityVillagerWorkMason),
+            VillagerProfession::Shepherd => Some(Sound::EntityVillagerWorkShepherd),
+            VillagerProfession::Toolsmith => Some(Sound::EntityVillagerWorkToolsmith),
+            VillagerProfession::Weaponsmith => Some(Sound::EntityVillagerWorkWeaponsmith),
+            VillagerProfession::None | VillagerProfession::Nitwit => None,
         }
     }
 }
@@ -550,6 +643,9 @@ impl NBTStorage for VillagerEntity {
             if !gossip_tags.is_empty() {
                 nbt.put_list("Gossips", gossip_tags);
             }
+
+            // Inventory
+            self.inventory.lock().await.write_nbt(nbt);
         })
     }
 
@@ -652,6 +748,9 @@ impl NBTStorage for VillagerEntity {
                     }
                 }
             }
+
+            // Inventory
+            self.inventory.lock().await.read_nbt(nbt);
         })
     }
 }
@@ -678,6 +777,10 @@ impl Mob for VillagerEntity {
             let pos = entity.pos.load();
             let block_pos = BlockPos(Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32));
 
+            // --- Ambient sound + head shake ---
+            self.tick_ambient_sound().await;
+            self.tick_head_shake();
+
             // --- Schedule-based behavior ---
             let time_of_day = world.level_time.lock().await.time_of_day;
             let activity = schedule::VillagerActivity::from_time(time_of_day);
@@ -700,6 +803,9 @@ impl Mob for VillagerEntity {
                         *self.workstation_pos.lock().await = Some(candidate);
                         self.populate_all_trades().await;
                         self.sync_villager_data().await;
+                        // Happy particles on workstation claim
+                        self.send_entity_status(EntityStatus::AddVillagerHappyParticles)
+                            .await;
                         break;
                     }
                 }
@@ -714,9 +820,18 @@ impl Mob for VillagerEntity {
                     let dx = pos.x - (ws_pos.0.x as f64 + 0.5);
                     let dz = pos.z - (ws_pos.0.z as f64 + 0.5);
                     let dist_sq = dx * dx + dz * dz;
-                    // Within 2 blocks of workstation and restock count < 2
-                    if dist_sq <= 4.0 && self.restock_count.load(Ordering::Relaxed) < 2 {
-                        self.restock().await;
+                    // Within 2 blocks of workstation
+                    if dist_sq <= 4.0 {
+                        // Play work sound periodically
+                        if entity.age.load(Ordering::Relaxed) % 40 == 0
+                            && let Some(work_sound) = self.get_work_sound()
+                        {
+                            entity.play_sound(work_sound).await;
+                        }
+                        // Restock if needed
+                        if self.restock_count.load(Ordering::Relaxed) < 2 {
+                            self.restock().await;
+                        }
                     }
                 }
             }
@@ -752,6 +867,33 @@ impl Mob for VillagerEntity {
             // --- Gossip decay once per day ---
             if time_of_day % 24000 < 20 {
                 self.gossips.lock().await.decay();
+            }
+
+            // --- Breeding willingness check (every 100 ticks) ---
+            if entity.age.load(Ordering::Relaxed) % 100 == 0
+                && entity.age.load(Ordering::Relaxed) >= 0
+                && !self.mob_entity.is_in_love()
+                && self.mob_entity.is_breeding_ready()
+            {
+                let inv = self.inventory.lock().await;
+                if inv.is_willing() {
+                    drop(inv);
+                    // Check for an unclaimed bed nearby
+                    let mut poi_storage = world.portal_poi.lock().await;
+                    let beds = poi_storage.get_in_square(
+                        block_pos,
+                        48,
+                        Some(pumpkin_world::poi::POI_TYPE_HOME),
+                    );
+                    drop(poi_storage);
+                    if !beds.is_empty() {
+                        // Consume food and enter love mode
+                        self.inventory.lock().await.consume_food_for_breeding();
+                        self.mob_entity.set_love_ticks(600);
+                        self.send_entity_status(EntityStatus::AddVillagerHeartParticles)
+                            .await;
+                    }
+                }
             }
 
             // --- Iron Golem spawning check ---
@@ -841,9 +983,36 @@ impl Mob for VillagerEntity {
         Box::pin(async move {
             let profession = self.get_profession();
 
+            // Baby villagers can't trade
+            if self
+                .mob_entity
+                .living_entity
+                .entity
+                .age
+                .load(Ordering::Relaxed)
+                < 0
+            {
+                self.head_shake_ticks.store(40, Ordering::Relaxed);
+                self.mob_entity
+                    .living_entity
+                    .entity
+                    .play_sound(Sound::EntityVillagerNo)
+                    .await;
+                self.send_entity_status(EntityStatus::AddVillagerAngryParticles)
+                    .await;
+                return false;
+            }
+
             // Nitwits and unemployed villagers can't trade
             if profession == VillagerProfession::None || profession == VillagerProfession::Nitwit {
-                // TODO: shake head animation
+                self.head_shake_ticks.store(40, Ordering::Relaxed);
+                self.mob_entity
+                    .living_entity
+                    .entity
+                    .play_sound(Sound::EntityVillagerNo)
+                    .await;
+                self.send_entity_status(EntityStatus::AddVillagerAngryParticles)
+                    .await;
                 return false;
             }
 
@@ -885,6 +1054,11 @@ impl Mob for VillagerEntity {
             };
             if let Some(window_id) = player.open_handled_screen(&factory, None).await {
                 self.send_merchant_offers(player, window_id).await;
+                self.mob_entity
+                    .living_entity
+                    .entity
+                    .play_sound(Sound::EntityVillagerTrade)
+                    .await;
             } else {
                 // Failed to open screen, reset trading state
                 self.set_trading_player(-1);
@@ -892,6 +1066,20 @@ impl Mob for VillagerEntity {
             }
 
             true
+        })
+    }
+
+    fn on_damage<'a>(
+        &'a self,
+        _damage_type: pumpkin_data::damage::DamageType,
+        _source: Option<&'a dyn EntityBase>,
+    ) -> crate::entity::EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity
+                .living_entity
+                .entity
+                .play_sound(Sound::EntityVillagerHurt)
+                .await;
         })
     }
 }

@@ -1,3 +1,4 @@
+use pumpkin_data::entity::EntityPose;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -10,6 +11,7 @@ pub struct SleepInBedGoal {
     goal_control: Controls,
     bed_pos: Option<BlockPos>,
     cooldown: i32,
+    sleeping: bool,
 }
 
 impl Default for SleepInBedGoal {
@@ -25,6 +27,7 @@ impl SleepInBedGoal {
             goal_control: Controls::MOVE,
             bed_pos: None,
             cooldown: 0,
+            sleeping: false,
         }
     }
 }
@@ -98,10 +101,51 @@ impl Goal for SleepInBedGoal {
         })
     }
 
-    fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
+            if self.sleeping {
+                return;
+            }
+            if let Some(bed) = self.bed_pos {
+                let entity = &mob.get_mob_entity().living_entity.entity;
+                let pos = entity.pos.load();
+                let dx = pos.x - (bed.0.x as f64 + 0.5);
+                let dz = pos.z - (bed.0.z as f64 + 0.5);
+                let dist_sq = dx * dx + dz * dz;
+
+                if dist_sq <= 2.25 {
+                    // Within ~1.5 blocks of bed → sleep
+                    self.sleeping = true;
+                    // Stop navigation
+                    mob.get_mob_entity().navigator.lock().await.stop();
+                    // Zero velocity
+                    entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
+                    // Snap to bed surface
+                    entity.set_pos(Vector3::new(
+                        bed.0.x as f64 + 0.5,
+                        bed.0.y as f64 + 0.5625,
+                        bed.0.z as f64 + 0.5,
+                    ));
+                    // Set sleeping pose
+                    entity.set_pose(EntityPose::Sleeping).await;
+                }
+            }
+        })
+    }
+
+    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async move {
+            if self.sleeping {
+                let entity = &mob.get_mob_entity().living_entity.entity;
+                entity.set_pose(EntityPose::Standing).await;
+                self.sleeping = false;
+            }
             self.bed_pos = None;
         })
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        true
     }
 
     fn controls(&self) -> Controls {

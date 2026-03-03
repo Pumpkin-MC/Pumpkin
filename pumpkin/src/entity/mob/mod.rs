@@ -319,6 +319,21 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
 
+            // Increment age; negative age means baby, transition at 0
+            let old_age = mob_entity.living_entity.entity.age.fetch_add(1, Relaxed);
+            if old_age == -1 {
+                // Baby just grew up → send metadata to clear baby flag
+                mob_entity
+                    .living_entity
+                    .entity
+                    .send_meta_data(&[Metadata::new(
+                        TrackedData::DATA_BABY,
+                        MetaDataType::BOOLEAN,
+                        false,
+                    )])
+                    .await;
+            }
+
             if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
                 mob_entity.breeding_cooldown.fetch_sub(1, Relaxed);
             }
@@ -329,7 +344,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             self.mob_tick(&caller).await;
 
             // AI runs before physics (vanilla order: goals → navigator → look → physics)
-            let age = mob_entity.living_entity.entity.age.load(Relaxed);
+            // Use post-increment value for AI alternation
+            let age = old_age + 1;
             if (age + mob_entity.living_entity.entity.entity_id) % 2 != 0 && age > 1 {
                 mob_entity
                     .target_selector
