@@ -11,7 +11,7 @@ pub trait Coordinate {
     fn as_vector3(&self) -> Vector3<i32>;
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Node {
     pub pos: BlockPos,
     pub heap_idx: i32,
@@ -21,7 +21,8 @@ pub struct Node {
     pub h: f32,
     // g + h
     pub f: f32,
-    pub came_from: Option<Box<Self>>,
+    /// Position of the predecessor node for path reconstruction.
+    pub came_from: Option<Vector3<i32>>,
     pub closed: bool,
     pub walked_dist: f32,
     pub cost_malus: f32,
@@ -62,21 +63,12 @@ impl Node {
             g: self.g,
             h: self.h,
             f: self.f,
-            came_from: self.came_from.clone(),
+            came_from: self.came_from,
             closed: self.closed,
             walked_dist: self.walked_dist,
             cost_malus: self.cost_malus,
             path_type: self.path_type,
         }
-    }
-
-    #[must_use]
-    pub const fn create_hash(pos: BlockPos) -> i32 {
-        pos.0.y & 0xFF
-            | (pos.0.x & 32767) << 8
-            | (pos.0.z & 32767) << 24
-            | if pos.0.x < 0 { i32::MIN } else { 0 }
-            | if pos.0.z < 0 { 32768 } else { 0 }
     }
 }
 
@@ -118,7 +110,7 @@ impl Coordinate for Node {
 pub struct Target {
     pub node: Node,
     pub best_heuristic: f32,
-    pub best_node: Option<Box<Node>>,
+    pub best_node: Option<Node>,
     pub reached: bool,
 }
 
@@ -135,7 +127,7 @@ impl Target {
     pub fn update_best(&mut self, heuristic: f32, node: &Node) {
         if heuristic < self.best_heuristic {
             self.best_heuristic = heuristic;
-            self.best_node = Some(Box::new(node.clone()));
+            self.best_node = Some(*node);
         }
     }
 }
@@ -248,34 +240,37 @@ impl Coordinate for Vector3<i32> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(u8)]
 pub enum PathType {
-    Blocked,
-    Open,
-    Walkable,
-    WalkableDoor,
-    Trapdoor,
-    PowderSnow,
-    DangerPowderSnow,
-    Fence,
-    Lava,
-    Water,
-    WaterBorder,
-    Rail,
-    UnpassableRail,
-    DangerFire,
-    DamageFire,
-    DangerOther,
-    DamageOther,
-    DoorOpen,
-    DoorWoodClosed,
-    DoorIronClosed,
-    Breach,
-    Leaves,
-    StickyHoney,
-    Cocoa,
-    DamageCautious,
-    DangerTrapdoor,
+    Blocked = 0,
+    Open = 1,
+    Walkable = 2,
+    WalkableDoor = 3,
+    Trapdoor = 4,
+    PowderSnow = 5,
+    DangerPowderSnow = 6,
+    Fence = 7,
+    Lava = 8,
+    Water = 9,
+    WaterBorder = 10,
+    Rail = 11,
+    UnpassableRail = 12,
+    DangerFire = 13,
+    DamageFire = 14,
+    DangerOther = 15,
+    DamageOther = 16,
+    DoorOpen = 17,
+    DoorWoodClosed = 18,
+    DoorIronClosed = 19,
+    Breach = 20,
+    Leaves = 21,
+    StickyHoney = 22,
+    Cocoa = 23,
+    DamageCautious = 24,
+    DangerTrapdoor = 25,
 }
+
+pub const PATH_TYPE_COUNT: usize = 26;
 
 impl PathType {
     #[must_use]

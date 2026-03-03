@@ -15,7 +15,6 @@ const DEFAULT_MOB_JUMP_HEIGHT: f64 = 1.125;
 pub struct WalkNodeEvaluator {
     base: BaseNodeEvaluator,
     path_types_cache: HashMap<Vector3<i32>, PathType>,
-    collision_cache: HashMap<Vector3<i32>, bool>,
     reusable_neighbors: [Option<Node>; 4],
 }
 
@@ -25,7 +24,6 @@ impl WalkNodeEvaluator {
         Self {
             base: BaseNodeEvaluator::new(),
             path_types_cache: HashMap::new(),
-            collision_cache: HashMap::new(),
             reusable_neighbors: [None, None, None, None],
         }
     }
@@ -291,11 +289,10 @@ impl WalkNodeEvaluator {
 
         // Temporarily take the context out to avoid overlapping borrows when calling
         // the async helper which requires `&mut self`
-        // Clone mob_data so we can call helper while `self.base.context` is None.
         let path_type = if let Some(mut ctx) = self.base.context.take()
-            && let Some(mob_clone) = self.base.mob_data.clone()
+            && let Some(mob_data) = self.base.mob_data
         {
-            let res = self.get_path_type_of_mob(&mut ctx, pos, &mob_clone).await;
+            let res = self.get_path_type_of_mob(&mut ctx, pos, &mob_data).await;
             self.base.context = Some(ctx);
             res
         } else {
@@ -307,18 +304,11 @@ impl WalkNodeEvaluator {
     }
 
     async fn has_collisions(&mut self, center: Vector3<i32>) -> bool {
-        if let Some(&cached) = self.collision_cache.get(&center) {
-            return cached;
-        }
-
-        let has_collision = if let Some(ref mut ctx) = self.base.context {
+        if let Some(ref mut ctx) = self.base.context {
             ctx.has_collisions(center).await
         } else {
             false
-        };
-
-        self.collision_cache.insert(center, has_collision);
-        has_collision
+        }
     }
 
     async fn can_start_at(&mut self, pos: Vector3<i32>) -> bool {
@@ -349,14 +339,12 @@ impl NodeEvaluator for WalkNodeEvaluator {
         self.base.context = Some(context);
         self.base.mob_data = Some(mob_data);
         self.path_types_cache.clear();
-        self.collision_cache.clear();
     }
 
     fn done(&mut self) {
         self.base.context = None;
         self.base.mob_data = None;
         self.path_types_cache.clear();
-        self.collision_cache.clear();
     }
 
     async fn get_start(&mut self) -> Option<Node> {
@@ -413,8 +401,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
         Target::new(node)
     }
 
-    async fn get_neighbors(&mut self, current: &Node) -> Vec<Node> {
-        let mut out_neighbors: Vec<Node> = Vec::new();
+    async fn get_neighbors(&mut self, current: &Node, out_neighbors: &mut Vec<Node>) {
 
         let headroom_type = self
             .get_cached_path_type(current.pos.0.add_raw(0, 1, 0))
@@ -489,8 +476,6 @@ impl NodeEvaluator for WalkNodeEvaluator {
                 }
             }
         }
-
-        out_neighbors
     }
 
     async fn get_path_type_of_mob(
