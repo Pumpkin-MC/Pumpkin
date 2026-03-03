@@ -4,7 +4,7 @@ use std::{io::Write, sync::Arc};
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
-use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::java::server::play::{
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
@@ -145,7 +145,7 @@ impl JavaClient {
             outgoing_packet_queue_recv: Some(recv),
             outgoing_packet_priority_send: priority_send,
             outgoing_packet_priority_recv: Some(priority_recv),
-            version: AtomicCell::new(MinecraftVersion::from_protocol(CURRENT_MC_PROTOCOL)),
+            version: AtomicCell::new(CURRENT_MC_VERSION),
             network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
             brand: Mutex::new(None),
@@ -369,10 +369,16 @@ impl JavaClient {
     pub fn write_packet_for_version<P: ClientPacket>(
         packet: &P,
         version: MinecraftVersion,
-        write: impl Write,
+        mut write: impl Write,
     ) -> Result<(), WritingError> {
-        let mut write = write;
-        write.write_var_int(&VarInt(P::PACKET_ID.to_id(version)))?;
+        if P::to_id(version) == -1 {
+            error!(
+                "Packet ID for version {} is invalid ({} at latest)",
+                version,
+                P::to_id(CURRENT_MC_VERSION)
+            );
+        }
+        write.write_var_int(&VarInt(P::to_id(version)))?;
         packet.write_packet_data(write, &version)
     }
 
@@ -442,7 +448,8 @@ impl JavaClient {
         let payload = &packet.payload[..];
         match packet.id {
             0 => {
-                self.handle_handshake(SHandShake::read(payload)?).await;
+                self.handle_handshake(SHandShake::read(payload, &self.version.load())?)
+                    .await;
                 Ok(None)
             }
             _ => Err(ReadingError::Message(format!(
@@ -459,13 +466,15 @@ impl JavaClient {
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling status group");
         let payload = &packet.payload[..];
+        let version = self.version.load();
+
         match packet.id {
-            id if id == SStatusRequest::PACKET_ID => {
+            id if id == SStatusRequest::to_id(version) => {
                 self.handle_status_request(server).await;
                 Ok(None)
             }
-            id if id == SStatusPingRequest::PACKET_ID => {
-                self.handle_ping_request(SStatusPingRequest::read(payload)?)
+            id if id == SStatusPingRequest::to_id(version) => {
+                self.handle_ping_request(SStatusPingRequest::read(payload, &version)?)
                     .await;
                 Ok(None)
             }
@@ -581,24 +590,29 @@ impl JavaClient {
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling login group for id");
         let payload = &packet.payload[..];
+        let version = self.version.load();
+
         match packet.id {
-            id if id == SLoginStart::PACKET_ID => {
-                self.handle_login_start(server, SLoginStart::read(payload)?)
+            id if id == SLoginStart::to_id(version) => {
+                self.handle_login_start(server, SLoginStart::read(payload, &version)?)
                     .await;
             }
-            id if id == SEncryptionResponse::PACKET_ID => {
-                self.handle_encryption_response(server, SEncryptionResponse::read(payload)?)
+            id if id == SEncryptionResponse::to_id(version) => {
+                self.handle_encryption_response(
+                    server,
+                    SEncryptionResponse::read(payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SLoginPluginResponse::to_id(version) => {
+                self.handle_plugin_response(server, SLoginPluginResponse::read(payload, &version)?)
                     .await;
             }
-            id if id == SLoginPluginResponse::PACKET_ID => {
-                self.handle_plugin_response(server, SLoginPluginResponse::read(payload)?)
-                    .await;
-            }
-            id if id == SLoginAcknowledged::PACKET_ID => {
+            id if id == SLoginAcknowledged::to_id(version) => {
                 self.handle_login_acknowledged(server).await;
             }
-            id if id == SLoginCookieResponse::PACKET_ID => {
-                self.handle_login_cookie_response(&SLoginCookieResponse::read(payload)?);
+            id if id == SLoginCookieResponse::to_id(version) => {
+                self.handle_login_cookie_response(&SLoginCookieResponse::read(payload, &version)?);
             }
             _ => {
                 error!(
@@ -617,28 +631,37 @@ impl JavaClient {
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling config group for id {}", packet.id);
         let payload = &packet.payload[..];
+        let version = self.version.load();
 
         match packet.id {
-            id if id == SClientInformationConfig::PACKET_ID => {
-                self.handle_client_information_config(SClientInformationConfig::read(payload)?)
+            id if id == SClientInformationConfig::to_id(version) => {
+                self.handle_client_information_config(SClientInformationConfig::read(
+                    payload, &version,
+                )?)
+                .await;
+            }
+            id if id == SPluginMessage::to_id(version) => {
+                self.handle_plugin_message(SPluginMessage::read(payload, &version)?)
                     .await;
             }
-            id if id == SPluginMessage::PACKET_ID => {
-                self.handle_plugin_message(SPluginMessage::read(payload)?)
-                    .await;
-            }
-            id if id == SAcknowledgeFinishConfig::PACKET_ID => {
+            id if id == SAcknowledgeFinishConfig::to_id(version) => {
                 return Ok(Some(self.handle_config_acknowledged(server).await));
             }
-            id if id == SKnownPacks::PACKET_ID => {
-                self.handle_known_packs(SKnownPacks::read(payload)?).await;
-            }
-            id if id == SConfigCookieResponse::PACKET_ID => {
-                self.handle_config_cookie_response(&SConfigCookieResponse::read(payload)?);
-            }
-            id if id == SConfigResourcePack::PACKET_ID => {
-                self.handle_resource_pack_response(server, SConfigResourcePack::read(payload)?)
+            id if id == SKnownPacks::to_id(version) => {
+                self.handle_known_packs(SKnownPacks::read(payload, &version)?)
                     .await;
+            }
+            id if id == SConfigCookieResponse::to_id(version) => {
+                self.handle_config_cookie_response(&SConfigCookieResponse::read(
+                    payload, &version,
+                )?);
+            }
+            id if id == SConfigResourcePack::to_id(version) => {
+                self.handle_resource_pack_response(
+                    server,
+                    SConfigResourcePack::read(payload, &version)?,
+                )
+                .await;
             }
             _ => {
                 error!(
@@ -658,147 +681,170 @@ impl JavaClient {
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
         let payload = &packet.payload[..];
+        let version = self.version.load();
 
         match packet.id {
-            id if id == SConfirmTeleport::PACKET_ID => {
-                self.handle_confirm_teleport(player, SConfirmTeleport::read(payload)?)
+            id if id == SConfirmTeleport::to_id(version) => {
+                self.handle_confirm_teleport(player, SConfirmTeleport::read(payload, &version)?)
                     .await;
             }
-            id if id == SChangeGameMode::PACKET_ID => {
-                self.handle_change_game_mode(player, SChangeGameMode::read(payload)?)
+            id if id == SChangeGameMode::to_id(version) => {
+                self.handle_change_game_mode(player, SChangeGameMode::read(payload, &version)?)
                     .await;
             }
-            id if id == SChatCommand::PACKET_ID => {
-                self.handle_chat_command(player, server, &(SChatCommand::read(payload)?))
+            id if id == SChatCommand::to_id(version) => {
+                self.handle_chat_command(player, server, &(SChatCommand::read(payload, &version)?))
                     .await;
             }
-            id if id == SChatMessage::PACKET_ID => {
-                self.handle_chat_message(server, player, SChatMessage::read(payload)?)
+            id if id == SChatMessage::to_id(version) => {
+                self.handle_chat_message(server, player, SChatMessage::read(payload, &version)?)
                     .await;
             }
-            id if id == SClientInformationPlay::PACKET_ID => {
-                self.handle_client_information(player, SClientInformationPlay::read(payload)?)
-                    .await;
-            }
-            id if id == SClientCommand::PACKET_ID => {
-                self.handle_client_status(player, SClientCommand::read(payload)?)
-                    .await;
-            }
-            id if id == SPlayerInput::PACKET_ID => {
-                self.handle_player_input(player, SPlayerInput::read(payload)?)
-                    .await;
-            }
-            id if id == SMoveVehicle::PACKET_ID => {
-                self.handle_move_vehicle(player, SMoveVehicle::read(payload)?)
-                    .await;
-            }
-            id if id == SPaddleBoat::PACKET_ID => {
-                self.handle_paddle_boat(player, SPaddleBoat::read(payload)?)
-                    .await;
-            }
-            id if id == SInteract::PACKET_ID => {
-                self.handle_interact(player, SInteract::read(payload)?, server)
-                    .await;
-            }
-            id if id == SKeepAlive::PACKET_ID => {
-                self.handle_keep_alive(player, SKeepAlive::read(payload)?)
-                    .await;
-            }
-            id if id == SClientTickEnd::PACKET_ID => {
-                // TODO
-            }
-            id if id == SPlayerPosition::PACKET_ID => {
-                self.handle_position(player, server, SPlayerPosition::read(payload)?)
-                    .await;
-            }
-            id if id == SPlayerPositionRotation::PACKET_ID => {
-                self.handle_position_rotation(
+            id if id == SClientInformationPlay::to_id(version) => {
+                self.handle_client_information(
                     player,
-                    server,
-                    SPlayerPositionRotation::read(payload)?,
+                    SClientInformationPlay::read(payload, &version)?,
                 )
                 .await;
             }
-            id if id == SPlayerRotation::PACKET_ID => {
-                self.handle_rotation(player, SPlayerRotation::read(payload)?)
+            id if id == SClientCommand::to_id(version) => {
+                self.handle_client_status(player, SClientCommand::read(payload, &version)?)
                     .await;
             }
-            id if id == SSetPlayerGround::PACKET_ID => {
-                self.handle_player_ground(player, &SSetPlayerGround::read(payload)?);
-            }
-            id if id == SPickItemFromBlock::PACKET_ID => {
-                self.handle_pick_item_from_block(player, SPickItemFromBlock::read(payload)?)
+            id if id == SPlayerInput::to_id(version) => {
+                self.handle_player_input(player, SPlayerInput::read(payload, &version)?)
                     .await;
             }
-            id if id == SPlayerAbilities::PACKET_ID => {
-                self.handle_player_abilities(player, SPlayerAbilities::read(payload)?)
+            id if id == SMoveVehicle::to_id(version) => {
+                self.handle_move_vehicle(player, SMoveVehicle::read(payload, &version)?)
                     .await;
             }
-            id if id == SPlayerAction::PACKET_ID => {
-                self.handle_player_action(player, SPlayerAction::read(payload)?, server)
+            id if id == SPaddleBoat::to_id(version) => {
+                self.handle_paddle_boat(player, SPaddleBoat::read(payload, &version)?)
                     .await;
             }
-            id if id == SSetCommandBlock::PACKET_ID => {
-                self.handle_set_command_block(player, SSetCommandBlock::read(payload)?)
+            id if id == SInteract::to_id(version) => {
+                self.handle_interact(player, SInteract::read(payload, &version)?, server)
                     .await;
             }
-            id if id == SPlayerCommand::PACKET_ID => {
-                self.handle_player_command(player, SPlayerCommand::read(payload)?)
+            id if id == SKeepAlive::to_id(version) => {
+                self.handle_keep_alive(player, SKeepAlive::read(payload, &version)?)
                     .await;
             }
-            id if id == SPlayerLoaded::PACKET_ID => Self::handle_player_loaded(player),
-            id if id == SPlayPingRequest::PACKET_ID => {
-                self.handle_play_ping_request(SPlayPingRequest::read(payload)?)
+            id if id == SClientTickEnd::to_id(version) => {
+                // TODO
+            }
+            id if id == SPlayerPosition::to_id(version) => {
+                self.handle_position(player, server, SPlayerPosition::read(payload, &version)?)
                     .await;
             }
-            id if id == SClickSlot::PACKET_ID => {
-                player.on_slot_click(SClickSlot::read(payload)?).await;
+            id if id == SPlayerPositionRotation::to_id(version) => {
+                self.handle_position_rotation(
+                    player,
+                    server,
+                    SPlayerPositionRotation::read(payload, &version)?,
+                )
+                .await;
             }
-            id if id == SSetHeldItem::PACKET_ID => {
-                self.handle_set_held_item(player, SSetHeldItem::read(payload)?)
+            id if id == SPlayerRotation::to_id(version) => {
+                self.handle_rotation(player, SPlayerRotation::read(payload, &version)?)
                     .await;
             }
-            id if id == SSetCreativeSlot::PACKET_ID => {
-                self.handle_set_creative_slot(player, SSetCreativeSlot::read(payload)?)
+            id if id == SSetPlayerGround::to_id(version) => {
+                self.handle_player_ground(player, &SSetPlayerGround::read(payload, &version)?);
+            }
+            id if id == SPickItemFromBlock::to_id(version) => {
+                self.handle_pick_item_from_block(
+                    player,
+                    SPickItemFromBlock::read(payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SPlayerAbilities::to_id(version) => {
+                self.handle_player_abilities(player, SPlayerAbilities::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SPlayerAction::to_id(version) => {
+                self.handle_player_action(player, SPlayerAction::read(payload, &version)?, server)
+                    .await;
+            }
+            id if id == SSetCommandBlock::to_id(version) => {
+                self.handle_set_command_block(player, SSetCommandBlock::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SPlayerCommand::to_id(version) => {
+                self.handle_player_command(player, SPlayerCommand::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SPlayerLoaded::to_id(version) => {
+                Self::handle_player_loaded(player);
+            }
+            id if id == SPlayPingRequest::to_id(version) => {
+                self.handle_play_ping_request(SPlayPingRequest::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SClickSlot::to_id(version) => {
+                player
+                    .on_slot_click(SClickSlot::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SSetHeldItem::to_id(version) => {
+                self.handle_set_held_item(player, SSetHeldItem::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SSetCreativeSlot::to_id(version) => {
+                self.handle_set_creative_slot(player, SSetCreativeSlot::read(payload, &version)?)
                     .await?;
             }
-            id if id == SSwingArm::PACKET_ID => {
-                self.handle_swing_arm(player, SSwingArm::read(payload)?)
+            id if id == SSwingArm::to_id(version) => {
+                self.handle_swing_arm(player, SSwingArm::read(payload, &version)?)
                     .await;
             }
-            id if id == SUpdateSign::PACKET_ID => {
-                self.handle_sign_update(player, SUpdateSign::read(payload)?)
+            id if id == SUpdateSign::to_id(version) => {
+                self.handle_sign_update(player, SUpdateSign::read(payload, &version)?)
                     .await;
             }
-            id if id == SUseItemOn::PACKET_ID => {
-                self.handle_use_item_on(player, SUseItemOn::read(payload)?, server)
+            id if id == SUseItemOn::to_id(version) => {
+                self.handle_use_item_on(player, SUseItemOn::read(payload, &version)?, server)
                     .await?;
             }
-            id if id == SUseItem::PACKET_ID => {
-                self.handle_use_item(player, &SUseItem::read(payload)?, server)
+            id if id == SUseItem::to_id(version) => {
+                self.handle_use_item(player, &SUseItem::read(payload, &version)?, server)
                     .await;
             }
-            id if id == SCommandSuggestion::PACKET_ID => {
-                self.handle_command_suggestion(player, SCommandSuggestion::read(payload)?, server)
+            id if id == SCommandSuggestion::to_id(version) => {
+                self.handle_command_suggestion(
+                    player,
+                    SCommandSuggestion::read(payload, &version)?,
+                    server,
+                )
+                .await;
+            }
+            id if id == SPCookieResponse::to_id(version) => {
+                self.handle_cookie_response(&SPCookieResponse::read(payload, &version)?);
+            }
+            id if id == SCloseContainer::to_id(version) => {
+                self.handle_close_container(
+                    player,
+                    server,
+                    SCloseContainer::read(payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SChunkBatch::to_id(version) => {
+                self.handle_chunk_batch(player, SChunkBatch::read(payload, &version)?)
                     .await;
             }
-            id if id == SPCookieResponse::PACKET_ID => {
-                self.handle_cookie_response(&SPCookieResponse::read(payload)?);
+            id if id == SPlayerSession::to_id(version) => {
+                self.handle_chat_session_update(
+                    player,
+                    server,
+                    SPlayerSession::read(payload, &version)?,
+                )
+                .await;
             }
-            id if id == SCloseContainer::PACKET_ID => {
-                self.handle_close_container(player, server, SCloseContainer::read(payload)?)
-                    .await;
-            }
-            id if id == SChunkBatch::PACKET_ID => {
-                self.handle_chunk_batch(player, SChunkBatch::read(payload)?)
-                    .await;
-            }
-            id if id == SPlayerSession::PACKET_ID => {
-                self.handle_chat_session_update(player, server, SPlayerSession::read(payload)?)
-                    .await;
-            }
-            id if id == SCustomPayload::PACKET_ID => {
-                let payload = SCustomPayload::read(payload)?;
+            id if id == SCustomPayload::to_id(version) => {
+                let payload = SCustomPayload::read(payload, &version)?;
                 let event = PlayerCustomPayloadEvent::new(
                     player.clone(),
                     payload.channel,

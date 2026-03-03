@@ -2,6 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::LOGIN_KEY;
 use pumpkin_macros::java_packet;
+use pumpkin_util::version::MinecraftVersion;
 
 use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
 
@@ -12,9 +13,7 @@ pub struct SEncryptionResponse {
 }
 
 impl ServerPacket for SEncryptionResponse {
-    fn read(read: impl Read) -> Result<Self, ReadingError> {
-        let mut read = read;
-
+    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
         let shared_secret_length = read.get_var_int()?.0 as usize;
         let shared_secret = read.read_boxed_slice(shared_secret_length)?;
         let verify_token_length = read.get_var_int()?.0 as usize;

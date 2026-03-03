@@ -45,7 +45,7 @@ impl CommandExecutor for Executor {
             let pos = BlockPosArgumentConsumer::find_arg(args, ARG_BLOCK_POS)?;
             let mode = self.0;
             let world = match sender {
-                CommandSender::Console | CommandSender::Rcon(_) => {
+                CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
                     let guard = server.worlds.load();
 
                     guard

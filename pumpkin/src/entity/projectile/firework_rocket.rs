@@ -78,7 +78,7 @@ impl FireworkRocketEntity {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_SHOOTER_ENTITY_ID,
-                MetaDataType::OptionalInt,
+                MetaDataType::OPTIONAL_INT,
                 OptionalInt(Some(shooter.entity_id)),
             )])
             .await;

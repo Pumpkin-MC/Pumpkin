@@ -7,14 +7,12 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::BlockRegistryExt;
 
-#[derive(Deserialize)]
 pub struct BambooFeature {
-    probability: f32,
+    pub probability: f32,
 }
 
 impl BambooFeature {

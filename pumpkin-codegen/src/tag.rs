@@ -1,15 +1,14 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fs,
-    path::Path,
 };
 
-use crate::biome::Biome;
 use crate::block::BlockAssets;
 use crate::enchantments::Enchantment;
 use crate::entity_type::EntityType;
 use crate::fluid::Fluid;
 use crate::item::Item;
+use crate::{biome::Biome, version::MinecraftVersion};
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
@@ -17,7 +16,7 @@ use quote::{ToTokens, format_ident, quote};
 // --- EnumCreator with from_string support ---
 pub struct EnumCreator {
     pub name: String,
-    pub values: Vec<String>,
+    pub values: BTreeSet<String>,
 }
 
 impl ToTokens for EnumCreator {
@@ -63,7 +62,30 @@ impl ToTokens for EnumCreator {
     }
 }
 
-pub fn build() -> TokenStream {
+const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
+
+pub(crate) fn build() -> TokenStream {
+    // --- Rerun Triggers ---
+    println!("cargo:rerun-if-changed=../assets/blocks.json");
+    println!("cargo:rerun-if-changed=../assets/items.json");
+    println!("cargo:rerun-if-changed=../assets/biome.json");
+    println!("cargo:rerun-if-changed=../assets/fluids.json");
+    println!("cargo:rerun-if-changed=../assets/entities.json");
+
+    // Watch specific tag versions
+    let assets = [
+        // TODO: upload 1_21_tags.json
+        (MinecraftVersion::V_1_21, "1_21_2_tags.json"),
+        (MinecraftVersion::V_1_21_2, "1_21_2_tags.json"),
+        (MinecraftVersion::V_1_21_4, "1_21_4_tags.json"),
+        (MinecraftVersion::V_1_21_5, "1_21_5_tags.json"),
+        (MinecraftVersion::V_1_21_6, "1_21_6_tags.json"),
+        (MinecraftVersion::V_1_21_7, "1_21_7_tags.json"),
+        (MinecraftVersion::V_1_21_9, "1_21_9_tags.json"),
+        (MinecraftVersion::V_1_21_11, "1_21_11_tags.json"),
+    ];
+
+    // --- Load Global Assets ---
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
@@ -83,6 +105,30 @@ pub fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../assets/entities.json").unwrap())
             .expect("Failed to parse entities.json");
 
+    // build a map of dimension name -> numeric id
+    let dimension_json: BTreeMap<String, serde_json::Value> =
+        serde_json::from_str(&fs::read_to_string("../assets/dimension.json").unwrap())
+            .expect("Failed to parse dimension.json");
+    let mut dimension_id_map: BTreeMap<String, u16> = BTreeMap::new();
+    for (i, name) in dimension_json.keys().enumerate() {
+        dimension_id_map.insert(name.clone(), i as u16);
+    }
+
+    // also build timeline id map from registry file so timeline tags carry numbers
+    let mut timeline_id_map: BTreeMap<String, u16> = BTreeMap::new();
+    if let Ok(registries) = serde_json::from_str::<serde_json::Value>(
+        &fs::read_to_string("../assets/registry/1_21_11_synced_registries.json").unwrap(),
+    ) {
+        if let Some(timelines) = registries.get("timeline") {
+            if let Some(obj) = timelines.as_object() {
+                for (i, name) in obj.keys().enumerate() {
+                    timeline_id_map.insert(name.clone(), i as u16);
+                }
+            }
+        }
+    }
+    // dimension_id_map will be used when resolving dimension_type tag entries below
+
     let block_id_map: BTreeMap<String, u16> = blocks_assets
         .blocks
         .iter()
@@ -91,27 +137,22 @@ pub fn build() -> TokenStream {
     let fluid_id_map: BTreeMap<String, u16> =
         fluids.iter().map(|f| (f.name.clone(), f.id)).collect();
 
-    let latest_version_key = "1_21_11";
-    let legacy_version_key = "1_21_9";
-
     let mut all_registry_keys = HashSet::new();
+    all_registry_keys.insert("dimension_type".to_string());
+    
     let mut latest_modules = Vec::new();
     let mut legacy_modules = Vec::new();
 
     let mut match_get_map = Vec::new();
 
-    let versions = vec![latest_version_key, legacy_version_key];
-
-    for version in versions {
-        let file_path = format!("../assets/tags/{version}_tags.json");
-        if !Path::new(&file_path).exists() {
-            continue;
-        }
+    for (ver, file) in assets {
+        let file_path = format!("../assets/tags/{file}");
+        println!("cargo:rerun-if-changed={file_path}");
 
         let tags: BTreeMap<String, BTreeMap<String, Vec<String>>> =
             serde_json::from_str(&fs::read_to_string(&file_path).unwrap()).unwrap();
 
-        let is_latest = version == latest_version_key;
+        let is_latest = ver == LATEST_VERSION;
         let mut tag_dicts = Vec::new();
         let mut match_local_map = Vec::new();
 
@@ -140,6 +181,8 @@ pub fn build() -> TokenStream {
                             .get(&format!("minecraft:{v}"))
                             .map(|e| u16::from(e.id)),
                         "entity_type" => entities.get(v).map(|e| e.id),
+                        "dimension_type" => dimension_id_map.get(v).copied(),
+                        "timeline" => timeline_id_map.get(v).copied(),
                         _ => None,
                     })
                     .collect();
@@ -178,10 +221,9 @@ pub fn build() -> TokenStream {
                     match key { #(#match_local_map,)* _ => None }
                 }
             });
-            match_get_map
-                .push(quote! { MinecraftVersion::V_1_21_11 => get_latest_map(tag_category) });
+            match_get_map.push(quote! { #LATEST_VERSION => get_latest_map(tag_category) });
         } else {
-            let mod_name = format_ident!("tags_{}", version);
+            let mod_name = format_ident!("tags_{}", ver.to_field_ident());
             legacy_modules.push(quote! {
                 mod #mod_name {
                     use super::RegistryKey;
@@ -191,10 +233,7 @@ pub fn build() -> TokenStream {
                     }
                 }
             });
-            match_get_map
-                .push(quote! { MinecraftVersion::V_1_21_9 => tags_1_21_9::get_map(tag_category) });
-            match_get_map
-                .push(quote! { MinecraftVersion::V_1_21_7 => tags_1_21_9::get_map(tag_category) });
+            match_get_map.push(quote! { #ver => #mod_name::get_map(tag_category) });
         }
     }
 

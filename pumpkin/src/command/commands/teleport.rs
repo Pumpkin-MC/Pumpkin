@@ -111,7 +111,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
             let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
             //todo
             let world = match sender {
-                CommandSender::Rcon(_) | CommandSender::Console => {
+                CommandSender::Rcon(_) | CommandSender::Console | CommandSender::Dummy => {
                     server.worlds.load().first().unwrap().clone()
                 }
                 CommandSender::Player(player) => player.world().clone(),
@@ -228,7 +228,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
             }
             // todo command context
             let world = match sender {
-                CommandSender::Rcon(_) | CommandSender::Console => {
+                CommandSender::Rcon(_) | CommandSender::Console | CommandSender::Dummy => {
                     server.worlds.load().first().unwrap().clone()
                 }
                 CommandSender::Player(player) => player.world().clone(),

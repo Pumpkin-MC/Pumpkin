@@ -317,6 +317,26 @@ impl<'a> StringReader<'a> {
                 .create(self, TextComponent::text(c.to_string())))
         }
     }
+
+    /// Converts this reader into a `'static` form, which
+    /// is useful for snapshotting the reader.
+    #[must_use]
+    pub fn into_owned(self) -> StringReader<'static> {
+        StringReader {
+            string: Cow::Owned(self.string.into_owned()),
+            byte_cursor: self.byte_cursor,
+        }
+    }
+
+    /// Clones this reader into a `'static` form, which
+    /// is useful for snapshotting the reader.
+    #[must_use]
+    pub fn clone_into_owned(&self) -> StringReader<'static> {
+        StringReader {
+            string: Cow::Owned(self.string.to_string()),
+            byte_cursor: self.byte_cursor,
+        }
+    }
 }
 
 impl ContextProvider for StringReader<'_> {
