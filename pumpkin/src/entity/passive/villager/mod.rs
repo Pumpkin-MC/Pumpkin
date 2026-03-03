@@ -614,7 +614,8 @@ impl NBTStorage for VillagerEntity {
             nbt.put_int("Xp", self.get_experience());
 
             // Workstation position
-            if let Some(ws_pos) = *self.workstation_pos.lock().await {
+            let ws_opt = *self.workstation_pos.lock().await;
+            if let Some(ws_pos) = ws_opt {
                 let mut ws_nbt = pumpkin_nbt::compound::NbtCompound::new();
                 ws_nbt.put_int("X", ws_pos.0.x);
                 ws_nbt.put_int("Y", ws_pos.0.y);
@@ -623,7 +624,8 @@ impl NBTStorage for VillagerEntity {
             }
 
             // Bed position
-            if let Some(bed_pos) = *self.bed_pos.lock().await {
+            let bed_opt = *self.bed_pos.lock().await;
+            if let Some(bed_pos) = bed_opt {
                 let mut bed_nbt = pumpkin_nbt::compound::NbtCompound::new();
                 bed_nbt.put_int("X", bed_pos.0.x);
                 bed_nbt.put_int("Y", bed_pos.0.y);
@@ -732,21 +734,19 @@ impl NBTStorage for VillagerEntity {
             }
 
             // Workstation position
-            if let Some(ws) = nbt.get_compound("WorkstationPos") {
-                if let (Some(x), Some(y), Some(z)) =
+            if let Some(ws) = nbt.get_compound("WorkstationPos")
+                && let (Some(x), Some(y), Some(z)) =
                     (ws.get_int("X"), ws.get_int("Y"), ws.get_int("Z"))
-                {
-                    *self.workstation_pos.lock().await = Some(BlockPos(Vector3::new(x, y, z)));
-                }
+            {
+                *self.workstation_pos.lock().await = Some(BlockPos(Vector3::new(x, y, z)));
             }
 
             // Bed position
-            if let Some(bed) = nbt.get_compound("BedPos") {
-                if let (Some(x), Some(y), Some(z)) =
+            if let Some(bed) = nbt.get_compound("BedPos")
+                && let (Some(x), Some(y), Some(z)) =
                     (bed.get_int("X"), bed.get_int("Y"), bed.get_int("Z"))
-                {
-                    *self.bed_pos.lock().await = Some(BlockPos(Vector3::new(x, y, z)));
-                }
+            {
+                *self.bed_pos.lock().await = Some(BlockPos(Vector3::new(x, y, z)));
             }
 
             // Trade offers
@@ -891,14 +891,14 @@ impl Mob for VillagerEntity {
             };
             if !completed_trades.is_empty() {
                 let trading_id = self.trading_player_id.load(Ordering::Relaxed);
-                let player_uuid = if trading_id != -1 {
+                let player_uuid = if trading_id == -1 {
+                    None
+                } else {
                     let entities = world.entities.load();
                     entities
                         .iter()
                         .find(|e| e.get_entity().entity_id == trading_id)
                         .map(|e| e.get_entity().entity_uuid)
-                } else {
-                    None
                 };
                 for trade_idx in completed_trades {
                     self.on_trade_completed(trade_idx, player_uuid).await;
@@ -1239,16 +1239,15 @@ impl Mob for VillagerEntity {
                 .await;
 
             // Add major negative gossip if damaged by a player
-            if let Some(attacker) = source {
-                if attacker.get_entity().entity_type.id
+            if let Some(attacker) = source
+                && attacker.get_entity().entity_type.id
                     == pumpkin_data::entity::EntityType::PLAYER.id
-                {
-                    self.gossips.lock().await.add(
-                        GossipType::MajorNegative,
-                        attacker.get_entity().entity_uuid,
-                        25,
-                    );
-                }
+            {
+                self.gossips.lock().await.add(
+                    GossipType::MajorNegative,
+                    attacker.get_entity().entity_uuid,
+                    25,
+                );
             }
         })
     }

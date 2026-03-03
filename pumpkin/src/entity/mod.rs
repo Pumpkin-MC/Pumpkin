@@ -2453,31 +2453,31 @@ impl NBTStorage for Entity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            if let Some(position) = nbt.get_list("Pos") {
-                if position.len() >= 3 {
-                    let x = position[0].extract_double().unwrap_or(0.0);
-                    let y = position[1].extract_double().unwrap_or(0.0);
-                    let z = position[2].extract_double().unwrap_or(0.0);
-                    let pos = Vector3::new(x, y, z);
-                    self.set_pos(pos);
-                    self.first_loaded_chunk_position.store(Some(pos.to_i32()));
-                }
+            if let Some(position) = nbt.get_list("Pos")
+                && position.len() >= 3
+            {
+                let x = position[0].extract_double().unwrap_or(0.0);
+                let y = position[1].extract_double().unwrap_or(0.0);
+                let z = position[2].extract_double().unwrap_or(0.0);
+                let pos = Vector3::new(x, y, z);
+                self.set_pos(pos);
+                self.first_loaded_chunk_position.store(Some(pos.to_i32()));
             }
-            if let Some(velocity) = nbt.get_list("Motion") {
-                if velocity.len() >= 3 {
-                    let x = velocity[0].extract_double().unwrap_or(0.0);
-                    let y = velocity[1].extract_double().unwrap_or(0.0);
-                    let z = velocity[2].extract_double().unwrap_or(0.0);
-                    self.velocity.store(Vector3::new(x, y, z));
-                }
+            if let Some(velocity) = nbt.get_list("Motion")
+                && velocity.len() >= 3
+            {
+                let x = velocity[0].extract_double().unwrap_or(0.0);
+                let y = velocity[1].extract_double().unwrap_or(0.0);
+                let z = velocity[2].extract_double().unwrap_or(0.0);
+                self.velocity.store(Vector3::new(x, y, z));
             }
-            if let Some(rotation) = nbt.get_list("Rotation") {
-                if rotation.len() >= 2 {
-                    let yaw = rotation[0].extract_float().unwrap_or(0.0);
-                    let pitch = rotation[1].extract_float().unwrap_or(0.0);
-                    self.set_rotation(yaw, pitch);
-                    self.head_yaw.store(yaw);
-                }
+            if let Some(rotation) = nbt.get_list("Rotation")
+                && rotation.len() >= 2
+            {
+                let yaw = rotation[0].extract_float().unwrap_or(0.0);
+                let pitch = rotation[1].extract_float().unwrap_or(0.0);
+                self.set_rotation(yaw, pitch);
+                self.head_yaw.store(yaw);
             }
             self.fire_ticks
                 .store(i32::from(nbt.get_short("Fire").unwrap_or(0)), Relaxed);
