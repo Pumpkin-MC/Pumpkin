@@ -12,12 +12,35 @@ pub struct Biome {
     temperature: f32,
     downfall: f32,
     temperature_modifier: Option<TemperatureModifier>,
-    //carvers: Vec<String>,
+    #[serde(default)]
+    carvers: CarversField,
     features: Vec<Vec<String>>,
     creature_spawn_probability: Option<f32>,
     spawners: SpawnGroups,
     spawn_costs: BTreeMap<String, SpawnCosts>,
     pub id: u8,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum CarversField {
+    Single(String),
+    List(Vec<String>),
+}
+
+impl CarversField {
+    fn to_vec(&self) -> Vec<String> {
+        match self {
+            Self::Single(value) => vec![value.clone()],
+            Self::List(values) => values.clone(),
+        }
+    }
+}
+
+impl Default for CarversField {
+    fn default() -> Self {
+        Self::List(Vec::new())
+    }
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash)]
@@ -175,7 +198,7 @@ pub fn build() -> TokenStream {
         let has_precipitation = biome.has_precipitation;
         let temperature = biome.temperature;
         let downfall = biome.downfall;
-        //  let carvers = &biome.carvers;
+        let carvers = biome.carvers.to_vec();
         let features = &biome.features;
         let creature_spawn_probability = &biome.creature_spawn_probability.unwrap_or(0.1);
 
@@ -268,6 +291,7 @@ pub fn build() -> TokenStream {
                      #temperature_modifier,
                      #downfall
                 ),
+                carvers: &[#(#carvers),*],
                 features: &[#(&[#(#features),*]),*],
                 creature_spawn_probability: #creature_spawn_probability,
                 spawners: #spawners,
@@ -297,7 +321,7 @@ pub fn build() -> TokenStream {
             pub id: u8,
             pub registry_id: &'static str,
             pub weather: Weather,
-            // carvers: &'static [&str],
+            pub carvers: &'static [&'static str],
             pub features: &'static [&'static [&'static str]],
             pub creature_spawn_probability: f32,
             pub spawners: SpawnGroups,

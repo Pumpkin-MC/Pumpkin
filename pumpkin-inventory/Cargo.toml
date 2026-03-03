@@ -6,7 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 pumpkin-protocol.workspace = true
-pumpkin-data.workspace = true
+pumpkin-data = { workspace = true, features = ["default"] }
 
 pumpkin-world.workspace = true
 pumpkin-util.workspace = true

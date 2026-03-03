@@ -1,166 +1,357 @@
-// use pumpkin_macros::block_state;
-// use pumpkin_util::{
-//     math::{float_provider::FloatProvider, vector2::Vector2, vector3::Vector3},
-//     random::RandomGenerator,
-// };
-// use serde::Deserialize;
+// TODO: Vanilla uses Mth.sin/Mth.cos (65536-entry lookup table) while Pumpkin
+// uses standard f32::sin/f32::cos. This causes slight tunnel path divergence.
+use std::collections::HashMap;
 
-// use crate::{
-//     ProtoChunk,
-//     block::{BlockState, registry::get_block},
-//     generation::{
-//         aquifer_sampler::{AquiferSamplerImpl, WorldAquiferSampler},
-//         height_limit::HeightLimitView,
-//         height_provider::HeightProvider,
-//         positions::chunk_pos,
-//         section_coords,
-//         y_offset::YOffset,
-//     },
-// };
+use pumpkin_util::{
+    math::float_provider::FloatProvider,
+    random::{RandomGenerator, RandomImpl},
+};
+use serde::Deserialize;
 
-// use super::mask::CarvingMask;
+use crate::generation::positions::chunk_pos;
 
-// #[derive(Deserialize)]
-// pub struct CaveCraver {
-//     vertical_radius_multiplier: FloatProvider,
-//     horizontal_radius_multiplier: FloatProvider,
-//     floor_level: FloatProvider,
-//     y: HeightProvider,
-//     #[serde(rename = "yScale")]
-//     y_scale: FloatProvider,
-//     lava_level: YOffset,
-//     probability: f32,
-// }
-// const BRANCH_FACTOR: i32 = 4;
-// const MAX_CAVE_COUNT: i32 = 15;
+use super::{Carver, CarverConfig, CarverContext, can_reach, carve_ellipsoid_skip};
 
-// impl CaveCraver {
-//     pub fn should_carve(&self, random: &mut RandomGenerator) -> bool {
-//         random.next_f32() <= self.probability
-//     }
+#[derive(Deserialize)]
+pub struct CaveCarver {
+    #[serde(flatten)]
+    pub config: CarverConfig,
+    #[serde(default)]
+    pub horizontal_radius_multiplier: Option<pumpkin_util::math::float_provider::FloatProvider>,
+    #[serde(default)]
+    pub vertical_radius_multiplier: Option<pumpkin_util::math::float_provider::FloatProvider>,
+    #[serde(default)]
+    pub floor_level: Option<pumpkin_util::math::float_provider::FloatProvider>,
+    #[serde(default, rename = "horizontal_rotation")]
+    pub horizontal_rotation: Option<FloatProvider>,
+    #[serde(default, rename = "vertical_rotation")]
+    pub vertical_rotation: Option<FloatProvider>,
+    #[serde(flatten)]
+    pub extra: HashMap<String, pumpkin_util::serde_json::Value>,
+}
 
-//     pub fn carve(
-//         &self,
-//         random: &mut RandomGenerator,
-//         chunk_pos: &Vector2<i32>,
-//         min_y: i8,
-//         height: u16,
-//     ) {
-//         todo!();
-//         let block_coord = section_coords::section_to_block(BRANCH_FACTOR * 2 - 1);
-//         let first_rnd = random.next_bounded_i32(MAX_CAVE_COUNT);
-//         let sec_rnd = random.next_bounded_i32(first_rnd + 1);
-//         let third_rnd = random.next_bounded_i32(sec_rnd + 1);
-//         let range = third_rnd;
-//         for _ in 0..range {
-//             let x = chunk_pos::start_block_x(chunk_pos) + random.next_bounded_i32(16); // offset
-//             let y = self.y.get(random, min_y, height);
-//             let z = chunk_pos::start_block_z(chunk_pos) + random.next_bounded_i32(16); // offset
-//             let vertical = self.vertical_radius_multiplier.get();
-//             let horizontal = self.horizontal_radius_multiplier.get();
-//             let floor = self.floor_level.get();
-//             let mut pitch;
-//             let mut tries = 0;
-//             if random.next_bounded_i32(4) == 0 {
-//                 let scale = self.y_scale.get();
-//                 pitch = 1.0 + random.next_f32() * 6.0;
-//                 tries += random.next_bounded_i32(4);
-//             }
-//         }
-//     }
+impl Carver for CaveCarver {
+    fn should_carve(&self, random: &mut RandomGenerator) -> bool {
+        random.next_f32() <= self.config.probability
+    }
 
-//     fn carve_cave(&self, chunk_pos: &Vector2<i32>, width: f64, height: f64) {
-//         todo!();
-//       //  let width = 1.5 + 1.5707964f64.sin() * width;
-//      //   let height = width * height;
-//      //   Self::carve_region(chunk_pos, width, height)
-//     }
+    fn carve<T: crate::generation::proto_chunk::GenerationCache>(
+        &self,
+        context: &mut CarverContext<'_, '_, T>,
+    ) {
+        let range = 4;
+        let max_tunnel_length = (range * 2 - 1) * 16;
+        let mut cave_count = context.random.next_bounded_i32(self.get_cave_bound());
+        cave_count = context.random.next_bounded_i32(cave_count + 1);
+        cave_count = context.random.next_bounded_i32(cave_count + 1);
 
-//     fn carve_region(
-//         min_y: i8,
-//         chunk_height: u16,
-//         chunk_pos: &Vector2<i32>,
-//         x: f64,
-//         y: f64,
-//         z: f64,
-//         width: f64,
-//         height: f64,
-//         mask: &mut CarvingMask,
-//         floor_level: f64,
-//     ) {
-//         let start_x = chunk_pos::start_block_x(chunk_pos);
-//         let start_z = chunk_pos::start_block_z(chunk_pos);
+        if cave_count <= 0 {
+            return;
+        }
 
-//         let chunk_center_x = (start_x + 8) as f64;
-//         let chunk_center_z = (start_z + 8) as f64;
+        let start_x = chunk_pos::start_block_x(context.carver_chunk_pos.x);
+        let start_z = chunk_pos::start_block_z(context.carver_chunk_pos.y);
 
-//         let max_width = 16.0 + width * 2.0;
-//         if (x - chunk_center_x).abs() > max_width || (z - chunk_center_z).abs() > max_width {
-//             return;
-//         }
-//         let x_start = (x - width).floor() as i32 - start_x - 1.max(0);
-//         let max_x = (x - width).floor() as i32 - start_x - 1.min(15);
+        for _ in 0..cave_count {
+            let x = start_x + context.random.next_bounded_i32(16);
+            let z = start_z + context.random.next_bounded_i32(16);
+            let y = self
+                .config
+                .y
+                .get(context.random, context.min_y, context.height) as f64;
+            let horizontal_multiplier = self
+                .horizontal_radius_multiplier
+                .as_ref()
+                .map(|provider| provider.get(context.random) as f64)
+                .unwrap_or(1.0);
+            let vertical_multiplier = self
+                .vertical_radius_multiplier
+                .as_ref()
+                .map(|provider| provider.get(context.random) as f64)
+                .unwrap_or(1.0);
+            let floor_level = self
+                .floor_level
+                .as_ref()
+                .map(|provider| provider.get(context.random) as f64)
+                .unwrap_or(-1.0);
+            let horizontal_rotation = self
+                .horizontal_rotation
+                .as_ref()
+                .map(|provider| provider.get(context.random))
+                .unwrap_or(0.0);
+            let vertical_rotation = self
+                .vertical_rotation
+                .as_ref()
+                .map(|provider| provider.get(context.random))
+                .unwrap_or(0.0);
 
-//         let z_start = (z - width).floor() as i32 - start_z - 1.max(0);
-//         let max_z = (z - width).floor() as i32 - start_z - 1.min(15);
+            let mut tunnel_count = 1;
+            if context.random.next_bounded_i32(4) == 0 {
+                let y_scale = self.config.y_scale.get(context.random) as f64;
+                let room_radius = 1.0 + context.random.next_f32() * 6.0;
+                self.create_room(
+                    context,
+                    x as f64,
+                    y,
+                    z as f64,
+                    room_radius,
+                    y_scale,
+                    floor_level,
+                );
+                tunnel_count += context.random.next_bounded_i32(4);
+            }
 
-//         let init_height =
-//             (y + height).floor() as i32 + 1.min(min_y as i32 + chunk_height as i32 - 1 - 7);
+            for _ in 0..tunnel_count {
+                let horizontal_angle =
+                    context.random.next_f32() * std::f32::consts::TAU + horizontal_rotation;
+                let vertical_angle = (context.random.next_f32() - 0.5) / 4.0 + vertical_rotation;
+                let thickness = self.get_thickness(context.random);
+                let tunnel_length = max_tunnel_length
+                    - context
+                        .random
+                        .next_bounded_i32((max_tunnel_length / 4).max(1));
 
-//         let end_height = (y - height).floor() as i32 - 1.max(min_y as i32 + 1);
+                let tunnel_seed = context.random.next_i64();
+                self.create_tunnel(
+                    context,
+                    tunnel_seed,
+                    x as f64,
+                    y,
+                    z as f64,
+                    horizontal_multiplier,
+                    vertical_multiplier,
+                    thickness,
+                    horizontal_angle,
+                    vertical_angle,
+                    0,
+                    tunnel_length,
+                    self.get_y_scale(),
+                    floor_level,
+                );
+            }
+        }
+    }
+}
 
-//         for current_x in max_x..x_start {
-//             let x_offset = chunk_pos::start_block_x(chunk_pos) + current_x;
-//             let x_offwidth = (x_offset as f64 + 0.5 - x) / width;
-//             for current_z in max_z..z_start {
-//                 let z_offset = chunk_pos::start_block_z(chunk_pos) + current_z;
-//                 let z_offwidth = (z_offset as f64 + 0.5 - z) / width;
+struct CaveTunnelState {
+    x: f64,
+    y: f64,
+    z: f64,
+    horizontal_angle: f32,
+    vertical_angle: f32,
+    yaw_delta: f32,
+    pitch_delta: f32,
+}
 
-//                 if x_offwidth * x_offwidth + z_offwidth * z_offwidth >= 1.0 {
-//                     continue;
-//                 }
-//                 for current_y in init_height..end_height {
-//                     let y_offwidth = (current_y as f64 - 0.5 - y) / height;
-//                     if Self::is_pos_excluded(
-//                         Vector3::new(x_offwidth, y_offwidth, z_offwidth),
-//                         floor_level,
-//                     ) {
-//                         continue;
-//                     }
-//                     mask.set(current_x, current_y, current_z);
-//                 }
-//             }
-//         }
-//     }
+impl CaveTunnelState {
+    fn new(x: f64, y: f64, z: f64, horizontal_angle: f32, vertical_angle: f32) -> Self {
+        Self {
+            x,
+            y,
+            z,
+            horizontal_angle,
+            vertical_angle,
+            yaw_delta: 0.0,
+            pitch_delta: 0.0,
+        }
+    }
 
-//     fn carve_at_point(&self, chunk: &ProtoChunk, pos: Vector3<i32>, min_y: i8, height: u16) {
-//         let state = chunk.get_block_state(&pos);
+    fn advance(
+        &mut self,
+        step: i32,
+        end_step: i32,
+        thickness: f32,
+        y_scale: f64,
+        steep: bool,
+        rand: &mut RandomGenerator,
+    ) -> (f64, f64) {
+        let radius =
+            1.5 + (std::f64::consts::PI * step as f64 / end_step as f64).sin() * thickness as f64;
+        let vertical_radius = radius * y_scale;
+        let y_cos = self.vertical_angle.cos();
+        self.x += (self.horizontal_angle.cos() * y_cos) as f64;
+        self.y += self.vertical_angle.sin() as f64;
+        self.z += (self.horizontal_angle.sin() * y_cos) as f64;
+        self.vertical_angle *= if steep { 0.92 } else { 0.7 };
+        self.vertical_angle += self.pitch_delta * 0.1;
+        self.horizontal_angle += self.yaw_delta * 0.1;
+        self.pitch_delta *= 0.9;
+        self.yaw_delta *= 0.75;
+        self.pitch_delta += (rand.next_f32() - rand.next_f32()) * rand.next_f32() * 2.0;
+        self.yaw_delta += (rand.next_f32() - rand.next_f32()) * rand.next_f32() * 4.0;
+        (radius, vertical_radius)
+    }
+}
 
-//         // if state.block_id == block_state!("grass_block").block_id || state.block_id == block_state!("mycelium").block_id {
-//         // TODO
-//         // }
-//         let state = self.get_state(pos, min_y, height);
-//     }
+impl CaveCarver {
+    pub(crate) fn get_cave_bound(&self) -> i32 {
+        if self.config.replaceable.contains("nether") {
+            10
+        } else {
+            15
+        }
+    }
 
-//     fn get_state(&self, pos: Vector3<i32>, min_y: i8, height: u16) -> Option<BlockState> {
-//         if pos.y <= self.lava_level.get_y(min_y, height) as i32 {
-//             return Some(block_state!("lava"));
-//         }
-//         None
-//     }
+    pub(crate) fn get_thickness(&self, random: &mut RandomGenerator) -> f32 {
+        let mut thickness = random.next_f32() * 2.0 + random.next_f32();
+        if self.config.replaceable.contains("nether") {
+            thickness *= 2.0;
+            return thickness;
+        }
+        if random.next_bounded_i32(10) == 0 {
+            thickness *= random.next_f32() * random.next_f32() * 3.0 + 1.0;
+        }
+        thickness
+    }
 
-//     fn is_pos_excluded(scaled: Vector3<f64>, floor_y: f64) -> bool {
-//         if scaled.y <= floor_y {
-//             return true;
-//         }
-//         scaled.x * scaled.x + scaled.y * scaled.y + scaled.z * scaled.z >= 1.0
-//     }
+    pub(crate) fn get_y_scale(&self) -> f64 {
+        if self.config.replaceable.contains("nether") {
+            5.0
+        } else {
+            1.0
+        }
+    }
 
-//     fn get_tunnel_width(random: &mut RandomGenerator) -> f32 {
-//         let mut width = random.next_f32() * 2.0 + random.next_f32();
-//         if random.next_bounded_i32(10) == 0 {
-//             width *= random.next_f32() * random.next_f32() * 3.0 + 1.0;
-//         }
-//         width
-//     }
-// }
+    #[allow(clippy::too_many_arguments)]
+    fn create_room<T: crate::generation::proto_chunk::GenerationCache>(
+        &self,
+        context: &mut CarverContext<'_, '_, T>,
+        center_x: f64,
+        center_y: f64,
+        center_z: f64,
+        radius: f32,
+        y_scale: f64,
+        floor_level: f64,
+    ) {
+        let horizontal_radius = 1.5 + (std::f32::consts::FRAC_PI_2.sin() as f64 * radius as f64);
+        let vertical_radius = horizontal_radius * y_scale;
+        self.carve_ellipsoid(
+            context,
+            center_x + 1.0,
+            center_y,
+            center_z,
+            horizontal_radius,
+            vertical_radius,
+            floor_level,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_tunnel<T: crate::generation::proto_chunk::GenerationCache>(
+        &self,
+        context: &mut CarverContext<'_, '_, T>,
+        seed: i64,
+        x: f64,
+        y: f64,
+        z: f64,
+        horizontal_multiplier: f64,
+        vertical_multiplier: f64,
+        thickness: f32,
+        horizontal_angle: f32,
+        vertical_angle: f32,
+        start_step: i32,
+        end_step: i32,
+        y_scale: f64,
+        floor_level: f64,
+    ) {
+        let mut rand = RandomGenerator::Legacy(
+            pumpkin_util::random::legacy_rand::LegacyRand::from_seed(seed as u64),
+        );
+        let split_step = rand.next_bounded_i32(end_step / 2) + end_step / 4;
+        let steep = rand.next_bounded_i32(6) == 0;
+        let mut state = CaveTunnelState::new(x, y, z, horizontal_angle, vertical_angle);
+
+        for step in start_step..end_step {
+            let (radius, vertical_radius) =
+                state.advance(step, end_step, thickness, y_scale, steep, &mut rand);
+
+            if step == split_step && thickness > 1.0 {
+                self.create_tunnel(
+                    context,
+                    rand.next_i64(),
+                    state.x,
+                    state.y,
+                    state.z,
+                    horizontal_multiplier,
+                    vertical_multiplier,
+                    rand.next_f32() * 0.5 + 0.5,
+                    state.horizontal_angle - std::f32::consts::FRAC_PI_2,
+                    state.vertical_angle / 3.0,
+                    step,
+                    end_step,
+                    1.0,
+                    floor_level,
+                );
+                self.create_tunnel(
+                    context,
+                    rand.next_i64(),
+                    state.x,
+                    state.y,
+                    state.z,
+                    horizontal_multiplier,
+                    vertical_multiplier,
+                    rand.next_f32() * 0.5 + 0.5,
+                    state.horizontal_angle + std::f32::consts::FRAC_PI_2,
+                    state.vertical_angle / 3.0,
+                    step,
+                    end_step,
+                    1.0,
+                    floor_level,
+                );
+                return;
+            }
+
+            if rand.next_bounded_i32(4) != 0 {
+                if !can_reach(
+                    context.chunk_pos,
+                    state.x,
+                    state.z,
+                    step,
+                    end_step,
+                    thickness,
+                ) {
+                    return;
+                }
+                self.carve_ellipsoid(
+                    context,
+                    state.x,
+                    state.y,
+                    state.z,
+                    radius * horizontal_multiplier,
+                    vertical_radius * vertical_multiplier,
+                    floor_level,
+                );
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn carve_ellipsoid<T: crate::generation::proto_chunk::GenerationCache>(
+        &self,
+        context: &mut CarverContext<'_, '_, T>,
+        center_x: f64,
+        center_y: f64,
+        center_z: f64,
+        horizontal_radius: f64,
+        vertical_radius: f64,
+        floor_level: f64,
+    ) {
+        let skip_checker = |dx: f64, dy: f64, dz: f64| -> bool {
+            if dy <= floor_level {
+                true
+            } else {
+                dx * dx + dy * dy + dz * dz >= 1.0
+            }
+        };
+        carve_ellipsoid_skip(
+            context,
+            &self.config.replaceable,
+            center_x,
+            center_y,
+            center_z,
+            horizontal_radius,
+            vertical_radius,
+            skip_checker,
+        );
+    }
+}

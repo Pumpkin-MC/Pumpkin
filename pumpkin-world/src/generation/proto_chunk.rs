@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -10,6 +11,7 @@ use pumpkin_data::structures::{
 };
 use pumpkin_data::tag;
 use pumpkin_data::{Block, BlockState, block_properties::blocks_movement, chunk::Biome};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::random::{RandomImpl, get_carver_seed};
 use pumpkin_util::{
     HeightMap,
@@ -21,6 +23,7 @@ use rustc_hash::FxHashMap;
 use super::{
     GlobalRandomConfig, biome_coords,
     blender::{Blender, BlenderImpl},
+    carver,
     feature::placed_features::PLACED_FEATURES,
     noise::router::{
         multi_noise_sampler::MultiNoiseSampler, proto_noise_router::DoublePerlinNoiseBuilder,
@@ -65,6 +68,7 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState;
     fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState);
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState);
+    fn mark_pos_for_postprocessing(&mut self, pos: &Vector3<i32>);
     fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32;
     fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32;
     fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32;
@@ -75,6 +79,7 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
 }
 
 const AIR_BLOCK: Block = Block::AIR;
+type AdditionalCarvingMask = Arc<dyn Fn(i32, i32, i32) -> bool + Send + Sync>;
 
 pub struct StandardChunkFluidLevelSampler {
     top_fluid: FluidLevel,
@@ -149,18 +154,62 @@ pub struct ProtoChunk {
     pub flat_motion_blocking_height_map: Box<[i16]>,
     pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
     structure_starts: FxHashMap<StructureKeys, StructureInstance>,
+    post_processing_positions: HashSet<BlockPos>,
+    carving_masks: HashMap<carver::CarvingStage, carver::CarvingMask>,
+    carving_mask_storage: HashMap<carver::CarvingStage, Box<[i64]>>,
+    carving_mask_additional: HashMap<carver::CarvingStage, AdditionalCarvingMask>,
+    pub blending_data: Option<NbtCompound>,
+    old_generation_bounds: Option<OldGenerationBounds>,
 
     // Height of the chunk for indexing
     height: u16,
     bottom_y: i8,
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
+    upgrading: bool,
+    old_noise_generation: bool,
+}
+
+#[derive(Clone, Copy)]
+struct OldGenerationBounds {
+    min_section_y: i8,
+    max_section_y: i8,
+}
+
+fn old_generation_bounds_from_nbt(data: &NbtCompound) -> Option<OldGenerationBounds> {
+    let min_section_y = data.get_int("min_section")?;
+    let max_section_y = data.get_int("max_section")?;
+    Some(OldGenerationBounds {
+        min_section_y: min_section_y as i8,
+        max_section_y: max_section_y as i8,
+    })
 }
 
 pub struct TerrainCache {
     pub terrain_builder: SurfaceTerrainBuilder,
     pub surface_noise: DoublePerlinNoiseSampler,
     pub secondary_noise: DoublePerlinNoiseSampler,
+}
+
+struct NoiseCellContext<'a, 'b> {
+    noise_sampler: &'a mut ChunkNoiseGenerator<'b>,
+    random_config: &'a GlobalRandomConfig,
+    surface_height_estimate_sampler: &'a mut SurfaceHeightEstimateSampler<'b>,
+    h_count: i32,
+    v_count: i32,
+    cell_height: u16,
+    minimum_cell_y: i8,
+    delta_y_step: f64,
+    delta_x_z_step: f64,
+}
+
+struct NoiseCellOrigin {
+    sample_start_x: i32,
+    sample_start_z: i32,
+    block_x_base: i32,
+    block_z_base: i32,
+    cell_x: i32,
+    cell_z: i32,
 }
 
 impl TerrainCache {
@@ -210,6 +259,12 @@ impl ProtoChunk {
             flat_motion_blocking_height_map: default_heightmap.clone(),
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
             structure_starts: FxHashMap::default(),
+            post_processing_positions: HashSet::new(),
+            carving_masks: HashMap::new(),
+            carving_mask_storage: HashMap::new(),
+            carving_mask_additional: HashMap::new(),
+            blending_data: None,
+            old_generation_bounds: None,
             height,
             bottom_y: dimension.min_y as i8,
             stage: StagedChunkEnum::Empty,
@@ -232,6 +287,8 @@ impl ProtoChunk {
                     .map(|_| LightContainer::new_filled(0))
                     .collect(),
             },
+            upgrading: false,
+            old_noise_generation: false,
         }
     }
 
@@ -249,6 +306,35 @@ impl ProtoChunk {
             biome_mixer_seed,
         );
         proto_chunk.light = chunk_data.light_engine.lock().unwrap().clone();
+
+        proto_chunk.old_noise_generation = chunk_data
+            .blending_data
+            .as_ref()
+            .and_then(|data| {
+                data.get_bool("old_noise_generation")
+                    .or_else(|| data.get_bool("old_noise"))
+            })
+            .unwrap_or(false);
+        proto_chunk.old_generation_bounds = chunk_data
+            .blending_data
+            .as_ref()
+            .and_then(old_generation_bounds_from_nbt);
+        proto_chunk.blending_data = chunk_data.blending_data.clone();
+
+        proto_chunk.set_carving_mask_data(
+            carver::CarvingStage::Air,
+            chunk_data.carving_mask_air.clone(),
+        );
+        proto_chunk.set_carving_mask_data(
+            carver::CarvingStage::Liquid,
+            chunk_data.carving_mask_liquid.clone(),
+        );
+        if chunk_data.carving_mask_liquid.is_empty() {
+            proto_chunk.set_carving_mask_data(
+                carver::CarvingStage::Liquid,
+                chunk_data.carving_mask_air.clone(),
+            );
+        }
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data.heightmap.lock().unwrap();
@@ -325,6 +411,100 @@ impl ProtoChunk {
 
         proto_chunk
     }
+
+    pub fn set_additional_carving_mask(
+        &mut self,
+        stage: carver::CarvingStage,
+        mask: AdditionalCarvingMask,
+    ) {
+        self.carving_mask_additional
+            .insert(stage, Arc::clone(&mask));
+        if let Some(existing) = self.carving_masks.get_mut(&stage) {
+            let mask = Arc::clone(&mask);
+            existing
+                .set_additional_mask(move |offset_x, y, offset_z| (mask)(offset_x, y, offset_z));
+        }
+    }
+
+    fn apply_additional_mask(&self, stage: carver::CarvingStage, mask: &mut carver::CarvingMask) {
+        let Some(additional) = self.carving_mask_additional.get(&stage) else {
+            return;
+        };
+        let additional = Arc::clone(additional);
+        mask.set_additional_mask(move |offset_x, y, offset_z| (additional)(offset_x, y, offset_z));
+    }
+
+    pub fn take_carving_mask(&mut self, stage: carver::CarvingStage) -> carver::CarvingMask {
+        let mut mask = if let Some(mask_data) = self.carving_mask_storage.remove(&stage) {
+            carver::CarvingMask::from_long_array(self.height, self.bottom_y, &mask_data)
+        } else {
+            self.carving_masks
+                .remove(&stage)
+                .unwrap_or_else(|| carver::CarvingMask::new(self.height, self.bottom_y))
+        };
+        self.apply_additional_mask(stage, &mut mask);
+        mask
+    }
+
+    pub fn get_or_create_carving_mask(
+        &mut self,
+        stage: carver::CarvingStage,
+    ) -> &mut carver::CarvingMask {
+        if let Some(mask_data) = self.carving_mask_storage.remove(&stage) {
+            let mut mask =
+                carver::CarvingMask::from_long_array(self.height, self.bottom_y, &mask_data);
+            self.apply_additional_mask(stage, &mut mask);
+            self.carving_masks.insert(stage, mask);
+        }
+        if !self.carving_masks.contains_key(&stage) {
+            let mut mask = carver::CarvingMask::new(self.height, self.bottom_y);
+            self.apply_additional_mask(stage, &mut mask);
+            self.carving_masks.insert(stage, mask);
+        }
+        let additional = self.carving_mask_additional.get(&stage).cloned();
+        let mask = self
+            .carving_masks
+            .get_mut(&stage)
+            .expect("carving mask exists");
+        if let Some(additional) = additional {
+            let additional = Arc::clone(&additional);
+            mask.set_additional_mask(move |offset_x, y, offset_z| {
+                (additional)(offset_x, y, offset_z)
+            });
+        }
+        mask
+    }
+
+    pub fn store_carving_mask(&mut self, stage: carver::CarvingStage, mask: carver::CarvingMask) {
+        self.carving_masks.insert(stage, mask);
+        self.carving_mask_storage.remove(&stage);
+    }
+
+    #[must_use]
+    pub fn carving_mask_data(&self, stage: carver::CarvingStage) -> Option<Box<[i64]>> {
+        if let Some(mask) = self.carving_masks.get(&stage) {
+            return Some(mask.to_long_array());
+        }
+        self.carving_mask_storage.get(&stage).cloned()
+    }
+
+    pub fn set_carving_mask_data(&mut self, stage: carver::CarvingStage, data: Box<[i64]>) {
+        self.carving_mask_storage.insert(stage, data);
+        self.carving_masks.remove(&stage);
+    }
+
+    pub fn mark_pos_for_postprocessing(&mut self, pos: BlockPos) {
+        self.post_processing_positions.insert(pos);
+    }
+
+    pub fn drain_postprocessing_positions(&mut self) -> Vec<BlockPos> {
+        self.post_processing_positions.drain().collect()
+    }
+
+    #[must_use]
+    pub fn post_processing_positions(&self) -> &HashSet<BlockPos> {
+        &self.post_processing_positions
+    }
     #[inline]
     #[must_use]
     pub const fn stage_id(&self) -> u8 {
@@ -339,6 +519,41 @@ impl ProtoChunk {
     #[must_use]
     pub const fn bottom_y(&self) -> i8 {
         self.bottom_y
+    }
+
+    #[must_use]
+    pub const fn is_upgrading(&self) -> bool {
+        self.upgrading
+    }
+
+    #[must_use]
+    pub const fn is_old_noise_generation(&self) -> bool {
+        self.old_noise_generation
+    }
+
+    #[must_use]
+    pub fn has_blending_data(&self) -> bool {
+        self.blending_data
+            .as_ref()
+            .is_some_and(|data| !data.is_empty())
+    }
+
+    #[must_use]
+    pub fn blending_data_old_generation_bounds(&self) -> Option<(i32, i32)> {
+        self.old_generation_bounds.map(|bounds| {
+            let min_y = section_coords::section_to_block(bounds.min_section_y as i32);
+            let max_section = bounds.max_section_y as i32;
+            let max_y_exclusive = section_coords::section_to_block(max_section);
+            (min_y, max_y_exclusive - min_y)
+        })
+    }
+
+    pub fn set_upgrading(&mut self, upgrading: bool) {
+        self.upgrading = upgrading;
+    }
+
+    pub fn set_old_noise_generation(&mut self, old_noise_generation: bool) {
+        self.old_noise_generation = old_noise_generation;
     }
 
     fn maybe_update_surface_height_map(&mut self, index: usize, y: i16) {
@@ -359,6 +574,58 @@ impl ProtoChunk {
     fn maybe_update_motion_blocking_no_leaves_height_map(&mut self, index: usize, y: i16) {
         let current_height = self.flat_motion_blocking_no_leaves_height_map[index];
         self.flat_motion_blocking_no_leaves_height_map[index] = current_height.max(y) as _;
+    }
+
+    fn recompute_heightmaps_for_column(&mut self, local_x: i32, local_z: i32) {
+        let mut surface: i16 = i16::MIN;
+        let mut ocean_floor: i16 = i16::MIN;
+        let mut motion_blocking: i16 = i16::MIN;
+        let mut motion_blocking_no_leaves: i16 = i16::MIN;
+        let min_y = self.bottom_y() as i32;
+        let max_y = min_y + self.height() as i32 - 1;
+
+        for y in (min_y..=max_y).rev() {
+            let state_id = self.get_block_state_raw(local_x, y - min_y, local_z);
+            if is_air(state_id) {
+                continue;
+            }
+
+            if surface == i16::MIN {
+                surface = y as i16;
+            }
+
+            let block = Block::get_raw_id_from_state_id(state_id);
+            let state = BlockState::from_id(state_id);
+            let blocks_movement = blocks_movement(state, block);
+            if blocks_movement && ocean_floor == i16::MIN {
+                ocean_floor = y as i16;
+            }
+            let is_motion_blocking = blocks_movement || state.is_liquid();
+            if is_motion_blocking {
+                if motion_blocking == i16::MIN {
+                    motion_blocking = y as i16;
+                }
+                if motion_blocking_no_leaves == i16::MIN
+                    && !tag::Block::MINECRAFT_LEAVES.1.contains(&block)
+                {
+                    motion_blocking_no_leaves = y as i16;
+                }
+            }
+
+            if surface != i16::MIN
+                && ocean_floor != i16::MIN
+                && motion_blocking != i16::MIN
+                && motion_blocking_no_leaves != i16::MIN
+            {
+                break;
+            }
+        }
+
+        let index = Self::local_position_to_height_map_index(local_x, local_z);
+        self.flat_surface_height_map[index] = surface;
+        self.flat_ocean_floor_height_map[index] = ocean_floor;
+        self.flat_motion_blocking_height_map[index] = motion_blocking;
+        self.flat_motion_blocking_no_leaves_height_map[index] = motion_blocking_no_leaves;
     }
 
     #[must_use]
@@ -534,8 +801,6 @@ impl ProtoChunk {
         random_config: &GlobalRandomConfig,
         noise_router: &ProtoNoiseRouters,
     ) {
-        //debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
-
         let generation_shape = &settings.shape;
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = start_block_x(self.x);
@@ -561,20 +826,12 @@ impl ProtoChunk {
             settings.ore_veins_enabled,
         );
 
-        let horizontal_biome_end = biome_coords::from_block(
-            horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
-        );
-        let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-            biome_coords::from_block(start_x),
-            biome_coords::from_block(start_z),
-            horizontal_biome_end as usize,
-            generation_shape.min_y as i32,
-            generation_shape.max_y() as i32,
-            generation_shape.vertical_cell_block_count() as usize,
-        );
-        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
-            &noise_router.surface_estimator,
-            &surface_config,
+        let mut surface_height_estimate_sampler = self.build_surface_height_estimate_sampler(
+            settings,
+            noise_router,
+            start_x,
+            start_z,
+            horizontal_cell_count.into(),
         );
         self.populate_noise(
             &mut noise_sampler,
@@ -599,20 +856,12 @@ impl ProtoChunk {
         let generation_shape = &settings.shape;
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
-        let horizontal_biome_end = biome_coords::from_block(
-            horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
-        );
-        let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-            biome_coords::from_block(start_x),
-            biome_coords::from_block(start_z),
-            horizontal_biome_end as usize,
-            generation_shape.min_y as i32,
-            generation_shape.max_y() as i32,
-            generation_shape.vertical_cell_block_count() as usize,
-        );
-        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
-            &noise_router.surface_estimator,
-            &surface_config,
+        let mut surface_height_estimate_sampler = self.build_surface_height_estimate_sampler(
+            settings,
+            noise_router,
+            start_x,
+            start_z,
+            horizontal_cell_count.into(),
         );
 
         self.build_surface(
@@ -622,6 +871,49 @@ impl ProtoChunk {
             &mut surface_height_estimate_sampler,
         );
         self.stage = StagedChunkEnum::Surface;
+    }
+
+    pub fn step_to_carvers<T: GenerationCache>(
+        cache: &mut T,
+        settings: &GenerationSettings,
+        random_config: &GlobalRandomConfig,
+        noise_router: &ProtoNoiseRouters,
+        dimension: Dimension,
+    ) {
+        crate::generation::blender::apply_carving_mask_filter(cache);
+        let (chunk_x, chunk_z) = {
+            let chunk = cache.get_center_chunk();
+            (chunk.x, chunk.z)
+        };
+
+        let carved_columns = if dimension == Dimension::OVERWORLD {
+            carver::carve_overworld(
+                cache,
+                settings,
+                chunk_x,
+                chunk_z,
+                random_config,
+                noise_router,
+            )
+        } else if dimension == Dimension::THE_NETHER {
+            carver::carve_nether(
+                cache,
+                settings,
+                chunk_x,
+                chunk_z,
+                random_config,
+                noise_router,
+            )
+        } else {
+            Vec::new()
+        };
+        if !carved_columns.is_empty() {
+            let chunk = cache.get_center_chunk_mut();
+            for (local_x, local_z) in carved_columns {
+                chunk.recompute_heightmaps_for_column(local_x, local_z);
+            }
+        }
+        cache.get_center_chunk_mut().stage = StagedChunkEnum::Surface;
     }
 
     pub fn populate_biomes(
@@ -678,11 +970,11 @@ impl ProtoChunk {
     }
 
     #[expect(clippy::similar_names)]
-    pub fn populate_noise(
+    pub fn populate_noise<'a, 'b>(
         &mut self,
-        noise_sampler: &mut ChunkNoiseGenerator,
-        random_config: &GlobalRandomConfig,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+        noise_sampler: &'a mut ChunkNoiseGenerator<'b>,
+        random_config: &'a GlobalRandomConfig,
+        surface_height_estimate_sampler: &'a mut SurfaceHeightEstimateSampler<'b>,
     ) {
         let h_count = noise_sampler.horizontal_cell_block_count() as i32;
         let v_count = noise_sampler.vertical_cell_block_count() as i32;
@@ -695,61 +987,137 @@ impl ProtoChunk {
         let delta_y_step = 1.0 / v_count as f64;
         let delta_x_z_step = 1.0 / h_count as f64;
 
-        // TODO: Block state updates when we implement those
-        noise_sampler.sample_start_density();
+        let mut cell_context = NoiseCellContext {
+            noise_sampler,
+            random_config,
+            surface_height_estimate_sampler,
+            h_count,
+            v_count,
+            cell_height,
+            minimum_cell_y,
+            delta_y_step,
+            delta_x_z_step,
+        };
+        cell_context.noise_sampler.sample_start_density();
         for cell_x in 0..horizontal_cells {
-            noise_sampler.sample_end_density(cell_x);
-            let sample_start_x = (self.start_cell_x(h_count) + cell_x) * h_count;
-            let block_x_base = self.start_block_x() + cell_x * h_count;
+            cell_context.noise_sampler.sample_end_density(cell_x);
+            let (sample_start_x, block_x_base) = self.cell_x_bases(h_count, cell_x);
 
             for cell_z in 0..horizontal_cells {
-                let sample_start_z = (self.start_cell_z(h_count) + cell_z) * h_count;
-                let block_z_base = self.start_block_z() + cell_z * h_count;
+                let (sample_start_z, block_z_base) = self.cell_z_bases(h_count, cell_z);
+                let origin = NoiseCellOrigin {
+                    sample_start_x,
+                    sample_start_z,
+                    block_x_base,
+                    block_z_base,
+                    cell_x,
+                    cell_z,
+                };
+                self.populate_noise_cell(&mut cell_context, origin);
+            }
+            cell_context.noise_sampler.swap_buffers();
+        }
+    }
 
-                for cell_y in (0..cell_height).rev() {
-                    noise_sampler.on_sampled_cell_corners(cell_x, cell_y as i32, cell_z);
-                    let sample_start_y = (minimum_cell_y as i32 + cell_y as i32) * v_count;
+    fn cell_x_bases(&self, horizontal_cell_block_count: i32, cell_x: i32) -> (i32, i32) {
+        let sample_start_x =
+            (self.start_cell_x(horizontal_cell_block_count) + cell_x) * horizontal_cell_block_count;
+        let block_x_base = self.start_block_x() + cell_x * horizontal_cell_block_count;
+        (sample_start_x, block_x_base)
+    }
 
-                    for local_y in (0..v_count).rev() {
-                        let block_y = sample_start_y + local_y;
-                        noise_sampler.interpolate_y(local_y as f64 * delta_y_step);
+    fn cell_z_bases(&self, horizontal_cell_block_count: i32, cell_z: i32) -> (i32, i32) {
+        let sample_start_z =
+            (self.start_cell_z(horizontal_cell_block_count) + cell_z) * horizontal_cell_block_count;
+        let block_z_base = self.start_block_z() + cell_z * horizontal_cell_block_count;
+        (sample_start_z, block_z_base)
+    }
 
-                        for local_x in 0..h_count {
-                            noise_sampler.interpolate_x(local_x as f64 * delta_x_z_step);
-                            let block_x = block_x_base + local_x;
+    #[inline]
+    fn cell_offsets(
+        local_x: i32,
+        block_y: i32,
+        sample_start_y: i32,
+        local_z: i32,
+    ) -> (i32, i32, i32) {
+        (local_x, block_y - sample_start_y, local_z)
+    }
 
-                            for local_z in 0..h_count {
-                                noise_sampler.interpolate_z(local_z as f64 * delta_x_z_step);
-                                let block_z = block_z_base + local_z;
+    #[allow(clippy::too_many_arguments)]
+    fn sample_block_state_for_cell<'b>(
+        &self,
+        noise_sampler: &mut ChunkNoiseGenerator<'b>,
+        random_config: &GlobalRandomConfig,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler<'b>,
+        sample_start_x: i32,
+        sample_start_y: i32,
+        sample_start_z: i32,
+        cell_offset_x: i32,
+        cell_offset_y: i32,
+        cell_offset_z: i32,
+    ) -> &'static BlockState {
+        noise_sampler
+            .sample_block_state(
+                random_config,
+                sample_start_x,
+                sample_start_y,
+                sample_start_z,
+                cell_offset_x,
+                cell_offset_y,
+                cell_offset_z,
+                surface_height_estimate_sampler,
+            )
+            .unwrap_or(self.default_block)
+    }
 
-                                // The `cell_offset` calculations are still a good idea for clarity and correctness
-                                // but let's confirm the values.
-                                // block_x = start_block_x + cell_x*H + local_x
-                                // sample_start_x = start_cell_x*H + cell_x*H = (start_cell_x+cell_x)*H
-                                // These can be simplified.
-                                let cell_offset_x = local_x;
-                                let cell_offset_y = block_y - sample_start_y;
-                                let cell_offset_z = local_z;
+    fn populate_noise_cell(
+        &mut self,
+        context: &mut NoiseCellContext<'_, '_>,
+        origin: NoiseCellOrigin,
+    ) {
+        for cell_y in (0..context.cell_height).rev() {
+            context.noise_sampler.on_sampled_cell_corners(
+                origin.cell_x,
+                cell_y as i32,
+                origin.cell_z,
+            );
+            let sample_start_y = (context.minimum_cell_y as i32 + cell_y as i32) * context.v_count;
 
-                                let block_state = noise_sampler
-                                    .sample_block_state(
-                                        random_config,
-                                        sample_start_x,
-                                        sample_start_y,
-                                        sample_start_z,
-                                        cell_offset_x,
-                                        cell_offset_y,
-                                        cell_offset_z,
-                                        surface_height_estimate_sampler,
-                                    )
-                                    .unwrap_or(self.default_block);
-                                self.set_block_state(block_x, block_y, block_z, block_state);
-                            }
-                        }
+            for local_y in (0..context.v_count).rev() {
+                let block_y = sample_start_y + local_y;
+                context
+                    .noise_sampler
+                    .interpolate_y(local_y as f64 * context.delta_y_step);
+
+                for local_x in 0..context.h_count {
+                    context
+                        .noise_sampler
+                        .interpolate_x(local_x as f64 * context.delta_x_z_step);
+                    let block_x = origin.block_x_base + local_x;
+
+                    for local_z in 0..context.h_count {
+                        context
+                            .noise_sampler
+                            .interpolate_z(local_z as f64 * context.delta_x_z_step);
+                        let block_z = origin.block_z_base + local_z;
+
+                        let (cell_offset_x, cell_offset_y, cell_offset_z) =
+                            Self::cell_offsets(local_x, block_y, sample_start_y, local_z);
+                        let block_state = self.sample_block_state_for_cell(
+                            context.noise_sampler,
+                            context.random_config,
+                            context.surface_height_estimate_sampler,
+                            origin.sample_start_x,
+                            sample_start_y,
+                            origin.sample_start_z,
+                            cell_offset_x,
+                            cell_offset_y,
+                            cell_offset_z,
+                        );
+                        self.set_block_state(block_x, block_y, block_z, block_state);
                     }
                 }
             }
-            noise_sampler.swap_buffers();
         }
     }
 
@@ -772,10 +1140,7 @@ impl ProtoChunk {
         Biome::from_id(self.get_terrain_gen_biome_id(x, y, z)).unwrap()
     }
 
-    /// Constructs the terrain surface, although "surface" is a misnomer as it also places underground blocks like bedrock and deepslate.
-    /// This stage also generates larger decorative structures, such as badlands pillars and icebergs.
-    ///
-    /// It is crucial that biome assignments are determined before this process begins.
+    /// Applies surface rules and large surface features after biomes are assigned.
     pub fn build_surface(
         &mut self,
         settings: &GenerationSettings,
@@ -864,11 +1229,9 @@ impl ProtoChunk {
                         }
                     }
 
-                    // let biome_pos = Vector3::new(x, biome_y as i32, z);
                     stone_depth_above += 1;
                     let stone_depth_below = y - min + 1;
                     context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
-                    // panic!("Blending with biome {:?} at: {:?}", biome, biome_pos);
 
                     if state.id == self.default_block.id {
                         context.biome = self.get_terrain_gen_biome(
@@ -907,15 +1270,8 @@ impl ProtoChunk {
         }
     }
 
-    /// This generates "Structure Pieces" and "Features" also known as decorations, which include things like trees, grass, ores, and more.
-    /// Essentially, it encompasses everything above the surface or underground. It's crucial that this step is executed after biomes are generated,
-    /// as the decoration directly depends on the biome. Similarly, running this after the surface is built is logical, as it often involves checking block types.
-    /// For example, flowers are typically placed only on grass blocks.
-    ///
-    /// Features are defined across two separate asset files, each serving a distinct purpose:
-    ///
-    /// 1. First, we determine **whether** to generate a feature and **at which block positions** to place it.
-    /// 2. Then, using the second file, we determine **how** to generate the feature.
+    /// Generates structure pieces and features after biomes/surface are ready.
+    /// Biome feature lists drive what runs per step.
     pub fn generate_features_and_structure<T: GenerationCache>(
         cache: &mut T,
         block_registry: &dyn BlockRegistryExt,
@@ -923,9 +1279,12 @@ impl ProtoChunk {
     ) {
         let (center_x, center_z, min_y, height, biomes_in_chunk) = {
             let chunk = cache.get_center_chunk();
-            let mut unique_biomes = Vec::with_capacity(4); // Usually few biomes per chunk
+            let mut unique_biomes = Vec::with_capacity(4);
+            let mut seen_biomes = [false; u8::MAX as usize + 1];
             for &biome_id in &chunk.flat_biome_map {
-                if !unique_biomes.contains(&biome_id) {
+                let index = biome_id as usize;
+                if !seen_biomes[index] {
+                    seen_biomes[index] = true;
                     unique_biomes.push(biome_id);
                 }
             }
@@ -1233,6 +1592,29 @@ impl ProtoChunk {
 
     const fn start_block_z(&self) -> i32 {
         start_block_z(self.z)
+    }
+
+    fn build_surface_height_estimate_sampler<'a>(
+        &self,
+        settings: &GenerationSettings,
+        noise_router: &'a ProtoNoiseRouters,
+        start_x: i32,
+        start_z: i32,
+        horizontal_cell_count: i32,
+    ) -> SurfaceHeightEstimateSampler<'a> {
+        let generation_shape = &settings.shape;
+        let horizontal_cell_block_count = i32::from(generation_shape.horizontal_cell_block_count());
+        let horizontal_biome_end =
+            biome_coords::from_block(horizontal_cell_count * horizontal_cell_block_count);
+        let surface_config = SurfaceHeightSamplerBuilderOptions::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        SurfaceHeightEstimateSampler::generate(&noise_router.surface_estimator, &surface_config)
     }
 }
 

@@ -28,7 +28,7 @@ use crate::{
     level::LevelFolder,
     tick::{ScheduledTick, scheduler::ChunkTickScheduler},
 };
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -36,6 +36,7 @@ use super::{
     palette::{BiomePalette, BlockPalette},
 };
 use crate::block::BlockStateCodec;
+use serde::Serializer;
 
 pub mod anvil;
 pub mod linear;
@@ -108,7 +109,7 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
+        let mut chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
@@ -158,6 +159,24 @@ impl ChunkData {
             sky_light: sky_lights.into_boxed_slice(),
         };
 
+        let (carving_mask_air, carving_mask_liquid) =
+            if let Some(mask) = chunk_data.carving_mask.take() {
+                let boxed = mask.into_boxed_slice();
+                (boxed.clone(), boxed)
+            } else {
+                (
+                    chunk_data
+                        .carving_mask_air
+                        .take()
+                        .map(|mask| mask.into_boxed_slice())
+                        .unwrap_or_default(),
+                    chunk_data
+                        .carving_mask_liquid
+                        .take()
+                        .map(|mask| mask.into_boxed_slice())
+                        .unwrap_or_default(),
+                )
+            };
         // Assemble the ChunkSections
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
         let section = ChunkSections {
@@ -175,6 +194,14 @@ impl ChunkData {
             dirty: AtomicBool::new(false),
             block_ticks: ChunkTickScheduler::from_iter(chunk_data.block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(chunk_data.fluid_ticks),
+            post_processing_positions: chunk_data
+                .post_processing
+                .into_iter()
+                .map(|pos| BlockPos::new(i32::from(pos.x), i32::from(pos.y), i32::from(pos.z)))
+                .collect(),
+            blending_data: chunk_data.blending_data,
+            carving_mask_air,
+            carving_mask_liquid,
             block_entities: {
                 let mut block_entities = FxHashMap::default();
                 for nbt in chunk_data.block_entities {
@@ -259,7 +286,20 @@ impl ChunkData {
             sections,
             block_ticks: self.block_ticks.to_vec(),
             fluid_ticks: self.fluid_ticks.to_vec(),
+            post_processing: self
+                .post_processing_positions
+                .iter()
+                .map(|pos| ChunkPostProcessPos {
+                    x: pos.0.x as i16,
+                    y: pos.0.y as i16,
+                    z: pos.0.z as i16,
+                })
+                .collect(),
+            carving_mask: Some(self.carving_mask_union()),
+            carving_mask_air: None,
+            carving_mask_liquid: None,
             block_entities: block_entities_nbt,
+            blending_data: self.blending_data.clone(),
             light_correct: is_light_correct,
         };
 
@@ -510,10 +550,59 @@ struct ChunkNbt {
     block_ticks: Vec<ScheduledTick<&'static Block>>,
     #[serde(rename = "fluid_ticks")]
     fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
+    #[serde(rename = "PostProcessing", default)]
+    post_processing: Vec<ChunkPostProcessPos>,
+    #[serde(
+        rename = "carving_mask",
+        default,
+        serialize_with = "serialize_optional_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    carving_mask: Option<Vec<i64>>,
+    #[serde(
+        rename = "CarvingMasks",
+        default,
+        serialize_with = "serialize_optional_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    carving_mask_air: Option<Vec<i64>>,
+    #[serde(
+        rename = "CarvingMasksLiquid",
+        default,
+        serialize_with = "serialize_optional_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    carving_mask_liquid: Option<Vec<i64>>,
+    #[serde(
+        rename = "blending_data",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    blending_data: Option<NbtCompound>,
     #[serde(rename = "block_entities")]
     block_entities: Vec<NbtCompound>,
     #[serde(rename = "isLightOn", default)]
     light_correct: bool,
+}
+
+fn serialize_optional_long_array<S>(
+    value: &Option<Vec<i64>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        Some(values) => nbt_long_array(values, serializer),
+        None => serializer.serialize_unit(),
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct ChunkPostProcessPos {
+    x: i16,
+    y: i16,
+    z: i16,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
