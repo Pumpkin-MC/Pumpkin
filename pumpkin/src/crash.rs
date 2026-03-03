@@ -17,7 +17,7 @@ use sysinfo::{Cpu, System};
 use time::OffsetDateTime;
 use tracing::error;
 
-pub const BYES_PER_MEBIBYTE: u64 = 1024 * 1024;
+pub const BYTES_PER_MEBIBYTE: u64 = 1024 * 1024;
 
 /// Writes to a string which cannot fail.
 macro_rules! writeln_output {
@@ -216,16 +216,16 @@ impl CrashReport {
             writeln_output!(
                 &mut output,
                 "Physical Memory: {} MiB/{} MiB used, {} MiB free",
-                sys.used_memory() / BYES_PER_MEBIBYTE,
-                sys.total_memory() / BYES_PER_MEBIBYTE,
-                sys.free_memory() / BYES_PER_MEBIBYTE
+                sys.used_memory() / BYTES_PER_MEBIBYTE,
+                sys.total_memory() / BYTES_PER_MEBIBYTE,
+                sys.free_memory() / BYTES_PER_MEBIBYTE
             );
             writeln_output!(
                 &mut output,
                 "Swap Memory: {} MiB/{} MiB used, {} MiB free",
-                sys.used_swap() / BYES_PER_MEBIBYTE,
-                sys.total_swap() / BYES_PER_MEBIBYTE,
-                sys.free_swap() / BYES_PER_MEBIBYTE
+                sys.used_swap() / BYTES_PER_MEBIBYTE,
+                sys.total_swap() / BYTES_PER_MEBIBYTE,
+                sys.free_swap() / BYTES_PER_MEBIBYTE
             );
 
             Self::write_cpus(&mut output, &sys);
