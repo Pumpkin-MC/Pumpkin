@@ -85,10 +85,9 @@ impl GenerationSchedule {
 
         // Use a bounded single-producer/single-consumer channel to prevent unbounded memory growth
         // when IO can't keep up. If the queue reaches capacity, producers will block until
-        // the disk catches up. 2000 entries give enough headroom to keep generation threads
-        // from stalling on IO-heavy workloads while still bounding memory.
+        // the disk catches up.
         let (send_write_io, recv_write_io) =
-            crossfire::compat::spsc::bounded_tx_blocking_rx_async(2000);
+            crossfire::compat::spsc::bounded_tx_blocking_rx_async(500);
 
         let (send_gen, recv_gen) = crossfire::compat::mpmc::bounded_blocking(gen_thread_count + 5);
 

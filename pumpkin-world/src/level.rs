@@ -204,13 +204,13 @@ impl Level {
             chunk_listener: listener.clone(),
         });
 
+        // TODO
         let total_cores = num_cpus::get().saturating_sub(2).max(1);
-        let io_read_threads = (total_cores / 4).clamp(2, 8);
         let threads_per_dimension = (total_cores / 2).max(1);
         let entity_threads = (threads_per_dimension / 2).max(1);
 
         GenerationSchedule::create(
-            io_read_threads,
+            2,
             threads_per_dimension,
             level_ref.clone(),
             level_channel,
@@ -519,10 +519,11 @@ impl Level {
             self.chunk_watchers.shrink_to_fit();
         }
 
-        // Shrink loaded chunks map when significantly over-allocated
-        if self.loaded_chunks.capacity() - self.loaded_chunks.len() >= 4096 {
-            self.loaded_chunks.shrink_to_fit();
-        }
+        // if the difference is too big, we can shrink the loaded chunks
+        // (1024 chunks is the equivalent to a 32x32 chunks area)
+        // if self.loaded_chunks.capacity() - self.loaded_chunks.len() >= 4096 {
+        //     self.loaded_chunks.shrink_to_fit();
+        // }
 
         if self.loaded_entity_chunks.capacity() - self.loaded_entity_chunks.len() >= 4096 {
             self.loaded_entity_chunks.shrink_to_fit();
