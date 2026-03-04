@@ -436,7 +436,7 @@ impl ItemStack {
         }
 
         // Store custom data like enchantments, display name, etc. would go here
-        compound.put_component("components", tag);
+        compound.put_compound("components", tag);
     }
 
     #[must_use]
