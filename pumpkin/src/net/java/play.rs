@@ -254,7 +254,8 @@ impl JavaClient {
     }
 
     /// Calculates the maximum allowed squared distance for a single movement packet,
-    /// accounting for the player's current state (flying, sprinting, elytra, speed effects).
+    /// accounting for the player's current state (flying, sprinting, elytra, speed effects)
+    /// and any pending velocity (knockback, explosions, slime blocks, wind charges, etc.).
     async fn max_movement_distance_sq(player: &Player) -> f64 {
         // Base: effective movement speed attribute (includes Speed potion effects)
         let movement_speed = player
@@ -284,9 +285,20 @@ impl JavaClient {
             base + 5.0 // jump-sprint boost margin
         };
 
-        // Allow up to 3x the theoretical max to tolerate lag spikes, knockback,
-        // explosions, pistons, etc. Minimum 10 blocks to avoid false positives.
-        let max_dist = (max_blocks_per_second * 3.0).max(10.0);
+        // Account for pending velocity from knockback, explosions, slime blocks,
+        // wind charges, etc. Velocity is in blocks/tick; multiply by 20 for blocks/sec
+        // and give extra ticks for the velocity to decay over multiple packets.
+        let velocity = entity.velocity.load();
+        let velocity_magnitude = (velocity.x * velocity.x
+            + velocity.y * velocity.y
+            + velocity.z * velocity.z)
+            .sqrt();
+        // Velocity can persist across several ticks as it decays; allow ~10 ticks worth
+        let velocity_allowance = velocity_magnitude * 10.0;
+
+        // Allow up to 3x the theoretical max + velocity allowance.
+        // Minimum 10 blocks to avoid false positives from lag spikes.
+        let max_dist = (max_blocks_per_second * 3.0 + velocity_allowance).max(10.0);
         max_dist * max_dist
     }
 
