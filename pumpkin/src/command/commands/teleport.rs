@@ -74,7 +74,11 @@ impl CommandExecutor for EntitiesToEntityExecutor {
             let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
             let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
-            let pos = destination.get_entity().pos.load();
+            let destination = destination.get_entity();
+            let pos = destination.pos.load();
+            let yaw = destination.yaw.load();
+            let pitch = destination.pitch.load();
+            let world = destination.world.load_full();
             if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
                     "commands.teleport.invalidPosition",
@@ -82,13 +86,9 @@ impl CommandExecutor for EntitiesToEntityExecutor {
                 )));
             }
             for target in targets {
-                let base_entity = target.get_entity();
-                let yaw = base_entity.yaw.load();
-                let pitch = base_entity.pitch.load();
-                let world = base_entity.world.load_full();
                 target
                     .clone()
-                    .teleport(pos, yaw.into(), pitch.into(), world)
+                    .teleport(pos, Some(yaw), Some(pitch), world.clone())
                     .await;
             }
 
@@ -249,13 +249,14 @@ impl CommandExecutor for SelfToEntityExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
-            let pos = destination.get_entity().pos.load();
-            let world = destination.get_entity().world.load_full();
+            let destination = destination.get_entity();
+            let pos = destination.pos.load();
+            let yaw = destination.yaw.load();
+            let pitch = destination.pitch.load();
+            let world = destination.world.load_full();
 
             match sender {
                 CommandSender::Player(player) => {
-                    let yaw = player.living_entity.entity.yaw.load();
-                    let pitch = player.living_entity.entity.pitch.load();
                     if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                         return Err(CommandError::CommandFailed(TextComponent::translate(
                             "commands.teleport.invalidPosition",
