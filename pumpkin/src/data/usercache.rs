@@ -56,8 +56,13 @@ impl UserCache {
         let data_dir = path
             .parent()
             .expect("usercache path should always have a parent directory");
-        if !data_dir.exists() && let Err(error) = fs::create_dir_all(data_dir) {
-            warn!("Failed to create data directory {}: {error}", data_dir.display());
+        if !data_dir.exists()
+            && let Err(error) = fs::create_dir_all(data_dir)
+        {
+            warn!(
+                "Failed to create data directory {}: {error}",
+                data_dir.display()
+            );
             return Self::default();
         }
 
@@ -154,7 +159,10 @@ impl UserCache {
 
     pub fn names(&mut self) -> Vec<String> {
         self.normalize();
-        self.entries.iter().map(|entry| entry.name.clone()).collect()
+        self.entries
+            .iter()
+            .map(|entry| entry.name.clone())
+            .collect()
     }
 
     fn normalize(&mut self) {

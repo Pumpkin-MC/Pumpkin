@@ -47,7 +47,8 @@ pub const MOJANG_BEDROCK_PUBLIC_KEY_BASE64: &str = "MHYwEAYHKoZIzj0CAQYFK4EEACID
 const MOJANG_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
 const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
 const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
-const MOJANG_PROFILE_BY_NAME_URL: &str = "https://api.mojang.com/users/profiles/minecraft/{username}";
+const MOJANG_PROFILE_BY_NAME_URL: &str =
+    "https://api.mojang.com/users/profiles/minecraft/{username}";
 
 /// Sends a GET request to Mojang's authentication servers to verify a client's Minecraft account.
 ///

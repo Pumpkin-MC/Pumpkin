@@ -314,8 +314,7 @@ impl CommandDispatcher {
 
         // try paths until fitting path is found
         for path in tree.iter_paths() {
-            match Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone()).await
-            {
+            match Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone()).await {
                 Ok(true) => return Ok(()),
                 Ok(false) => {}
                 Err(SyntaxError(error)) => {

@@ -150,7 +150,7 @@ pub fn init_command_tree() -> CommandTree {
             ARG_TARGET,
             GameProfilesArgumentConsumer::new(GameProfileSuggestionMode::OnlinePlayers, true),
         )
-            .execute(NoReasonExecutor)
-            .then(argument(ARG_REASON, MsgArgConsumer).execute(ReasonExecutor)),
+        .execute(NoReasonExecutor)
+        .then(argument(ARG_REASON, MsgArgConsumer).execute(ReasonExecutor)),
     )
 }

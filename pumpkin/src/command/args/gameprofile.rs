@@ -12,8 +12,8 @@ use crate::{
         dispatcher::CommandError,
         tree::{RawArg, RawArgs},
     },
-    net::{GameProfile, offline_uuid},
     net::authentication::lookup_profile_by_name,
+    net::{GameProfile, offline_uuid},
     server::Server,
 };
 
@@ -226,7 +226,12 @@ async fn resolve_profiles_from_token(
         return Ok(vec![player.gameprofile.clone()]);
     }
 
-    let cached_entry = server.data.user_cache.write().await.get_by_name(raw_arg.value);
+    let cached_entry = server
+        .data
+        .user_cache
+        .write()
+        .await
+        .get_by_name(raw_arg.value);
     if let Some(entry) = cached_entry {
         return Ok(vec![profile_from_uuid_name(entry.uuid, entry.name)]);
     }

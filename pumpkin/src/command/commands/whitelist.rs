@@ -284,29 +284,27 @@ pub fn init_command_tree() -> CommandTree {
         .then(literal("list").execute(ListExecutor))
         .then(literal("reload").execute(ReloadExecutor))
         .then(
-            literal("add")
-                .then(
-                    argument(
-                        ARG_TARGETS,
-                        GameProfilesArgumentConsumer::new(
-                            GameProfileSuggestionMode::NonWhitelistedOnlinePlayers,
-                            false,
-                        ),
-                    )
-                    .execute(AddExecutor),
-                ),
+            literal("add").then(
+                argument(
+                    ARG_TARGETS,
+                    GameProfilesArgumentConsumer::new(
+                        GameProfileSuggestionMode::NonWhitelistedOnlinePlayers,
+                        false,
+                    ),
+                )
+                .execute(AddExecutor),
+            ),
         )
         .then(
-            literal("remove")
-                .then(
-                    argument(
-                        ARG_TARGETS,
-                        GameProfilesArgumentConsumer::new(
-                            GameProfileSuggestionMode::WhitelistedNames,
-                            false,
-                        ),
-                    )
-                    .execute(RemoveExecutor),
-                ),
+            literal("remove").then(
+                argument(
+                    ARG_TARGETS,
+                    GameProfilesArgumentConsumer::new(
+                        GameProfileSuggestionMode::WhitelistedNames,
+                        false,
+                    ),
+                )
+                .execute(RemoveExecutor),
+            ),
         )
 }

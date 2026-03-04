@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::command::CommandSender;
-use crate::command::args::{ConsumeResult, ConsumeResultWithSyntax};
 use crate::command::args::entities::TargetSelector;
+use crate::command::args::{ConsumeResult, ConsumeResultWithSyntax};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::entity::EntityBase;

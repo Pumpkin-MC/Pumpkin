@@ -805,19 +805,17 @@ impl Server {
         source: Option<&CommandSender>,
     ) -> Vec<Arc<Player>> {
         let mut players = match &target_selector.selector_type {
-            EntitySelectorType::Source => {
-                source.and_then(CommandSender::as_player).map_or_else(Vec::new, |player| {
-                    vec![player]
-                })
-            }
+            EntitySelectorType::Source => source
+                .and_then(CommandSender::as_player)
+                .map_or_else(Vec::new, |player| vec![player]),
             EntitySelectorType::NearestPlayer
             | EntitySelectorType::NearestEntity
             | EntitySelectorType::RandomPlayer
             | EntitySelectorType::AllPlayers
             | EntitySelectorType::AllEntities => self.get_all_players(),
-            EntitySelectorType::NamedPlayer(name) => {
-                self.get_player_by_name(name).map_or_else(Vec::new, |player| vec![player])
-            }
+            EntitySelectorType::NamedPlayer(name) => self
+                .get_player_by_name(name)
+                .map_or_else(Vec::new, |player| vec![player]),
             EntitySelectorType::Uuid(uuid) => self
                 .get_player_by_uuid(*uuid)
                 .map_or_else(Vec::new, |player| vec![player]),
@@ -868,8 +866,9 @@ impl Server {
             }
             EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
                 let center = source.and_then(CommandSender::position).unwrap_or_default();
-                let nearest_first =
-                    target_selector.get_sort().is_none_or(|sort| sort == EntityFilterSort::Nearest);
+                let nearest_first = target_selector
+                    .get_sort()
+                    .is_none_or(|sort| sort == EntityFilterSort::Nearest);
                 players.sort_by(|a, b| {
                     let a_distance = a.get_entity().pos.load().squared_distance_to_vec(&center);
                     let b_distance = b.get_entity().pos.load().squared_distance_to_vec(&center);
@@ -917,21 +916,18 @@ impl Server {
         };
 
         let mut entities = match &target_selector.selector_type {
-            EntitySelectorType::Source => {
-                source.and_then(CommandSender::as_player).map_or_else(Vec::new, |player| {
-                    vec![player as Arc<dyn EntityBase>]
-                })
-            }
+            EntitySelectorType::Source => source
+                .and_then(CommandSender::as_player)
+                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
             EntitySelectorType::NearestPlayer
             | EntitySelectorType::RandomPlayer
             | EntitySelectorType::AllPlayers => all_players_as_entities(),
             EntitySelectorType::NearestEntity | EntitySelectorType::AllEntities => {
                 all_entities_and_players()
             }
-            EntitySelectorType::NamedPlayer(name) => {
-                self.get_player_by_name(name)
-                    .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>])
-            }
+            EntitySelectorType::NamedPlayer(name) => self
+                .get_player_by_name(name)
+                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
             EntitySelectorType::Uuid(uuid) => self
                 .get_player_by_uuid(*uuid)
                 .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
@@ -961,8 +957,7 @@ impl Server {
             .collect::<HashSet<_>>();
         entities.retain(|entity| {
             // Filter by entity type
-            (type_excluded.is_empty()
-                || !type_excluded.contains(&entity.get_entity().entity_type))
+            (type_excluded.is_empty() || !type_excluded.contains(&entity.get_entity().entity_type))
                 && (type_included.is_empty()
                     || type_included.contains(&entity.get_entity().entity_type))
         });
@@ -983,8 +978,9 @@ impl Server {
             }
             EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
                 let center = source.and_then(CommandSender::position).unwrap_or_default();
-                let nearest_first =
-                    target_selector.get_sort().is_none_or(|sort| sort == EntityFilterSort::Nearest);
+                let nearest_first = target_selector
+                    .get_sort()
+                    .is_none_or(|sort| sort == EntityFilterSort::Nearest);
                 entities.sort_by(|a, b| {
                     let a_distance = a.get_entity().pos.load().squared_distance_to_vec(&center);
                     let b_distance = b.get_entity().pos.load().squared_distance_to_vec(&center);
