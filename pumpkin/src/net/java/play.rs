@@ -293,10 +293,8 @@ impl JavaClient {
         // Account for pending velocity from knockback, explosions, slime blocks,
         // wind charges, etc. Velocity is in blocks/tick; give extra ticks for decay.
         let velocity = entity.velocity.load();
-        let velocity_magnitude = (velocity.x * velocity.x
-            + velocity.y * velocity.y
-            + velocity.z * velocity.z)
-            .sqrt();
+        let velocity_magnitude =
+            (velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z).sqrt();
         // Velocity can persist across several ticks as it decays; allow ~15 ticks worth
         // to handle stacked explosions (multiple TNT in one tick compound velocity).
         let velocity_allowance = velocity_magnitude * 15.0;
@@ -936,8 +934,11 @@ impl JavaClient {
     }
 
     pub async fn handle_move_vehicle(&self, player: &Arc<Player>, packet: SMoveVehicle) {
-        if !packet.x.is_finite() || !packet.y.is_finite() || !packet.z.is_finite()
-            || !packet.yaw.is_finite() || !packet.pitch.is_finite()
+        if !packet.x.is_finite()
+            || !packet.y.is_finite()
+            || !packet.z.is_finite()
+            || !packet.yaw.is_finite()
+            || !packet.pitch.is_finite()
         {
             self.kick(TextComponent::text("Invalid vehicle move position"))
                 .await;
