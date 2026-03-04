@@ -40,7 +40,7 @@ impl Click {
         let slot = if slot == SLOT_INDEX_OUTSIDE {
             Slot::OutsideInventory
         } else {
-            let slot = slot.try_into().unwrap_or(0);
+            let slot = slot.try_into().or(Err(InventoryError::InvalidSlot))?;
             Slot::Normal(slot)
         };
         let button = match button {
@@ -81,7 +81,7 @@ impl Click {
         let slot = if slot == SLOT_INDEX_OUTSIDE {
             Slot::OutsideInventory
         } else {
-            let slot = slot.try_into().unwrap_or(0);
+            let slot = slot.try_into().or(Err(InventoryError::InvalidSlot))?;
             Slot::Normal(slot)
         };
         Ok(Self {
