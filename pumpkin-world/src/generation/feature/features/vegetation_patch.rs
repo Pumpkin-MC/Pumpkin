@@ -25,7 +25,7 @@ pub struct VegetationPatchFeature {
 
 impl VegetationPatchFeature {
     /// Returns the block direction that points "into" the surface (down for floor, up for ceiling).
-    fn surface_direction(&self) -> pumpkin_data::BlockDirection {
+    pub(crate) fn surface_direction(&self) -> pumpkin_data::BlockDirection {
         match self.surface {
             VerticalSurfaceType::Floor => pumpkin_data::BlockDirection::Down,
             VerticalSurfaceType::Ceiling => pumpkin_data::BlockDirection::Up,
@@ -33,7 +33,7 @@ impl VegetationPatchFeature {
     }
 
     /// Shortcut for `self.surface_direction().to_offset()`.
-    fn surface_offset(&self) -> Vector3<i32> {
+    pub(crate) fn surface_offset(&self) -> Vector3<i32> {
         self.surface_direction().to_offset()
     }
 
@@ -69,7 +69,7 @@ impl VegetationPatchFeature {
             min_y,
             height,
             feature_name,
-            surface.clone(),
+            &surface,
         );
 
         !surface.is_empty()
@@ -201,11 +201,11 @@ impl VegetationPatchFeature {
         min_y: i8,
         height: u16,
         feature_name: &str,
-        surface: HashSet<BlockPos>,
+        surface: &HashSet<BlockPos>,
     ) {
         let opposite_dir = self.surface_direction().opposite();
 
-        for surface_pos in surface {
+        for &surface_pos in surface {
             if self.vegetation_chance > 0.0 && random.next_f32() < self.vegetation_chance {
                 let placement_pos = surface_pos.offset(opposite_dir.to_offset());
                 let _ = self.vegetation_feature.generate(

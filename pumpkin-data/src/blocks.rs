@@ -135,17 +135,15 @@ impl Block {
                 .map(|(k, v)| (*k, *v))
                 .collect();
 
-            // Only try to change states that actually have the key
-            if props.iter().any(|(k, _)| *k == "waterlogged") {
-                if let Some(idx) = props.iter().position(|(k, _)| *k == "waterlogged") {
-                    props[idx] = ("waterlogged", "true");
-                } else {
-                    props.push(("waterlogged", "true"));
-                }
-
-                let new_state_id = self.from_properties(&props).to_state_id(self);
-                return Some(BlockState::from_id(new_state_id));
+            // Look for an existing waterlogged key or add one
+            if let Some(idx) = props.iter().position(|(k, _)| *k == "waterlogged") {
+                props[idx] = ("waterlogged", "true");
+            } else {
+                props.push(("waterlogged", "true"));
             }
+
+            let new_state_id = self.from_properties(&props).to_state_id(self);
+            return Some(BlockState::from_id(new_state_id));
         }
 
         None

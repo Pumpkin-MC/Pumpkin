@@ -7,6 +7,7 @@ use pumpkin_util::{
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::BlockRegistryExt;
+use pumpkin_data::BlockDirection;
 
 use super::vegetation_patch::VegetationPatchFeature;
 
@@ -29,7 +30,7 @@ impl WaterloggedVegetationPatchFeature {
         let x_radius = self.base.xz_radius.get(random) + 1;
         let z_radius = self.base.xz_radius.get(random) + 1;
 
-        let surface = self.place_ground_patch(
+        let water_surface = self.place_ground_patch(
             chunk,
             block_registry,
             random,
@@ -39,10 +40,12 @@ impl WaterloggedVegetationPatchFeature {
             z_radius,
         );
 
-        for &surface_pos in &surface {
+        // Waterlogged vegetation should occupy the water block itself rather
+        // than sitting above it. We pass the water surface position directly.
+        for &surface_pos in &water_surface {
             if self.base.vegetation_chance > 0.0 && random.next_f32() < self.base.vegetation_chance
             {
-                let _ = self.place_vegetation(
+                self.place_vegetation(
                     chunk,
                     block_registry,
                     min_y,
@@ -54,7 +57,7 @@ impl WaterloggedVegetationPatchFeature {
             }
         }
 
-        !surface.is_empty()
+        !water_surface.is_empty()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -78,13 +81,11 @@ impl WaterloggedVegetationPatchFeature {
             z_radius,
         );
 
-        let mut water_surface = HashSet::new();
-
-        for &surface_pos in &surface {
-            if !is_exposed(chunk, &surface, surface_pos) {
-                water_surface.insert(surface_pos);
-            }
-        }
+        // Filter the surface to only include unexposed positions, turning them into water
+        let water_surface: HashSet<BlockPos> = surface
+            .into_iter()
+            .filter(|&pos| !is_exposed(chunk, pos))
+            .collect();
 
         for pos in &water_surface {
             chunk.set_block_state(&pos.0, pumpkin_data::Block::WATER.default_state);
@@ -115,11 +116,13 @@ impl WaterloggedVegetationPatchFeature {
         ) {
             let placed_raw = GenerationCache::get_block_state(chunk, &placement_pos.0);
             let placed_state = placed_raw.to_state();
+
             if !placed_state.is_waterlogged()
                 && let Some(new_state) = placed_raw.to_block().with_waterlogged(placed_raw.0)
             {
                 chunk.set_block_state(&placement_pos.0, new_state);
             }
+
             true
         } else {
             false
@@ -127,24 +130,24 @@ impl WaterloggedVegetationPatchFeature {
     }
 }
 
-fn is_exposed<T: GenerationCache>(chunk: &T, surface: &HashSet<BlockPos>, pos: BlockPos) -> bool {
-    is_exposed_direction(chunk, surface, pos, pumpkin_data::BlockDirection::North)
-        || is_exposed_direction(chunk, surface, pos, pumpkin_data::BlockDirection::East)
-        || is_exposed_direction(chunk, surface, pos, pumpkin_data::BlockDirection::South)
-        || is_exposed_direction(chunk, surface, pos, pumpkin_data::BlockDirection::West)
-        || is_exposed_direction(chunk, surface, pos, pumpkin_data::BlockDirection::Down)
+fn is_exposed<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
+    [
+        BlockDirection::North,
+        BlockDirection::East,
+        BlockDirection::South,
+        BlockDirection::West,
+        BlockDirection::Down,
+    ]
+    .into_iter()
+    .any(|dir| is_exposed_direction(chunk, pos, dir))
 }
 
 fn is_exposed_direction<T: GenerationCache>(
     chunk: &T,
-    surface: &HashSet<BlockPos>,
     pos: BlockPos,
     direction: pumpkin_data::BlockDirection,
 ) -> bool {
     let test_pos = pos.offset(direction.to_offset());
-    if surface.contains(&test_pos) {
-        return false;
-    }
     !GenerationCache::get_block_state(chunk, &test_pos.0)
         .to_state()
         .is_side_solid(direction.opposite())
