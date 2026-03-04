@@ -36,6 +36,7 @@ use pumpkin_data::block_properties::{
     BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
 };
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -252,6 +253,43 @@ impl JavaClient {
         player.set_client_loaded(true);
     }
 
+    /// Calculates the maximum allowed squared distance for a single movement packet,
+    /// accounting for the player's current state (flying, sprinting, elytra, speed effects).
+    async fn max_movement_distance_sq(player: &Player) -> f64 {
+        // Base: effective movement speed attribute (includes Speed potion effects)
+        let movement_speed = player
+            .living_entity
+            .get_attribute_value(&Attributes::MOVEMENT_SPEED);
+
+        let entity = &player.living_entity.entity;
+        let is_elytra = entity.fall_flying.load(Ordering::Relaxed);
+        let is_sprinting = entity.sprinting.load(Ordering::Relaxed);
+        let abilities = player.abilities.lock().await;
+        let is_flying = abilities.flying;
+
+        // Convert attribute speed to approximate blocks/tick then to blocks/packet.
+        // Packets can span multiple ticks, so we use a per-second rate with tolerance.
+        let max_blocks_per_second = if is_elytra {
+            // Elytra + firework can reach ~67 blocks/sec
+            80.0
+        } else if is_flying {
+            // Creative fly speed: fly_speed * 20 ticks * (2x if sprinting)
+            let fly = f64::from(abilities.fly_speed) * 20.0;
+            if is_sprinting { fly * 2.0 } else { fly } + 5.0
+        } else {
+            // Ground movement: movement_speed * ~43 (empirical blocks/sec per attribute unit)
+            // Speed II (attr ~0.16) → ~6.9 b/s, Sprint adds ~30%
+            let base = movement_speed * 43.0;
+            let base = if is_sprinting { base * 1.3 } else { base };
+            base + 5.0 // jump-sprint boost margin
+        };
+
+        // Allow up to 3x the theoretical max to tolerate lag spikes, knockback,
+        // explosions, pistons, etc. Minimum 10 blocks to avoid false positives.
+        let max_dist = (max_blocks_per_second * 3.0).max(10.0);
+        max_dist * max_dist
+    }
+
     /// Returns whether syncing the position was needed
     #[expect(clippy::too_many_arguments)]
     async fn sync_position(
@@ -317,6 +355,25 @@ impl JavaClient {
             Self::clamp_horizontal(position.z),
         );
 
+        // Movement speed validation: reject impossibly fast movement
+        {
+            let last_pos = player.living_entity.entity.pos.load();
+            let dx = position.x - last_pos.x;
+            let dy = position.y - last_pos.y;
+            let dz = position.z - last_pos.z;
+            let dist_sq = dx * dx + dy * dy + dz * dz;
+            let max_dist_sq = Self::max_movement_distance_sq(player).await;
+            if dist_sq > max_dist_sq {
+                warn!(
+                    "Player '{}' moved too fast ({:.1} blocks), rubber-banding",
+                    player.gameprofile.name,
+                    dist_sq.sqrt()
+                );
+                self.force_tp(player, last_pos).await;
+                return;
+            }
+        }
+
         send_cancellable! {{
             server;
             PlayerMoveEvent {
@@ -339,8 +396,6 @@ impl JavaClient {
 
                 entity.on_ground.store(packet.collision & FLAG_ON_GROUND != 0, Ordering::Relaxed);
                 let world = &player.world();
-
-                // TODO: Warn when player moves to quickly
                 if !self.sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0).await {
                     // Send the new position to all other players.
                     world
@@ -435,6 +490,25 @@ impl JavaClient {
             Self::clamp_horizontal(position.z),
         );
 
+        // Movement speed validation: reject impossibly fast movement
+        {
+            let last_pos = player.living_entity.entity.pos.load();
+            let dx = position.x - last_pos.x;
+            let dy = position.y - last_pos.y;
+            let dz = position.z - last_pos.z;
+            let dist_sq = dx * dx + dy * dy + dz * dz;
+            let max_dist_sq = Self::max_movement_distance_sq(player).await;
+            if dist_sq > max_dist_sq {
+                warn!(
+                    "Player '{}' moved too fast ({:.1} blocks), rubber-banding",
+                    player.gameprofile.name,
+                    dist_sq.sqrt()
+                );
+                self.force_tp(player, last_pos).await;
+                return;
+            }
+        }
+
         send_cancellable! {{
             server;
             PlayerMoveEvent::new(
@@ -469,7 +543,7 @@ impl JavaClient {
                 // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
                 let world = entity.world.load_full();
 
-                // TODO: Warn when player moves to quickly
+
                 if !self
                     .sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
                     .await
