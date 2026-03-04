@@ -64,7 +64,7 @@ impl BlockBehaviour for KelpBlock {
                     .await;
                 args.world
                     .set_block_state(
-                        &args.position,
+                        args.position,
                         Block::WATER.default_state.id,
                         BlockFlags::empty(),
                     )
@@ -84,7 +84,7 @@ impl PlantBlockBase for KelpBlock {
         let support_pos = pos;
         let (replacing_block, replacing_block_state) =
             block_accessor.get_block_and_state(&pos.up()).await;
-        let support_block = block_accessor.get_block(&support_pos).await;
+        let support_block = block_accessor.get_block(support_pos).await;
         if replacing_block == &Block::WATER {
             let water_props =
                 WaterLikeProperties::from_state_id(replacing_block_state.id, replacing_block);
@@ -94,7 +94,7 @@ impl PlantBlockBase for KelpBlock {
                 return false;
             }
         } else {
-            //Replacing block can also be an kelp_plant or kelp in case this is an neighbour update check
+            //Replacing block can also be a kelp_plant or kelp in case this is an neighbour update check
             if replacing_block != &Block::KELP_PLANT && replacing_block != &Block::KELP {
                 return false;
             }
@@ -106,6 +106,6 @@ impl PlantBlockBase for KelpBlock {
         if support_block.default_state.is_full_cube() {
             return true;
         }
-        return false;
+        false
     }
 }
