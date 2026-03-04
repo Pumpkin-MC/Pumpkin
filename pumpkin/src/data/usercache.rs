@@ -1,45 +1,39 @@
 use std::cmp::Reverse;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::{env, fs};
 
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
-use tracing::{debug, warn};
+use time::{Date, Month, OffsetDateTime, UtcOffset};
+use tracing::warn;
 use uuid::Uuid;
 
 const USER_CACHE_PATH: &str = "usercache.json";
-const USER_CACHE_TTL_SECONDS: i64 = 60 * 60 * 24 * 30;
-const USER_CACHE_LIMIT: usize = 1000;
+const USER_CACHE_MRU_LIMIT: usize = 1000;
+const USER_CACHE_DATE_FORMAT: &[time::format_description::FormatItem<'static>] = time::macros::format_description!(
+    "[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour sign:mandatory][offset_minute]"
+);
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug)]
 pub struct UserCacheEntry {
     pub uuid: Uuid,
     pub name: String,
-    pub expires_on: i64,
-    pub last_access: i64,
+    expiration_date: OffsetDateTime,
+    last_access: u64,
 }
 
-impl UserCacheEntry {
-    #[allow(clippy::missing_const_for_fn)]
-    fn new(uuid: Uuid, name: String, now: i64) -> Self {
-        Self {
-            uuid,
-            name,
-            expires_on: now + USER_CACHE_TTL_SECONDS,
-            last_access: now,
-        }
-    }
-
-    const fn is_expired(&self, now: i64) -> bool {
-        self.expires_on < now
-    }
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UserCacheEntryDisk {
+    uuid: Uuid,
+    name: String,
+    expires_on: String,
 }
 
-#[derive(Default, Deserialize, Serialize)]
-#[serde(transparent)]
+#[derive(Default)]
 pub struct UserCache {
-    entries: Vec<UserCacheEntry>,
+    profiles_by_name: HashMap<String, UserCacheEntry>,
+    profiles_by_uuid: HashMap<Uuid, UserCacheEntry>,
+    operation_count: u64,
 }
 
 impl UserCache {
@@ -52,155 +46,236 @@ impl UserCache {
 
     #[must_use]
     pub fn load() -> Self {
-        let path = Self::path();
-        let data_dir = path
-            .parent()
-            .expect("usercache path should always have a parent directory");
-        if !data_dir.exists()
-            && let Err(error) = fs::create_dir_all(data_dir)
-        {
-            warn!(
-                "Failed to create data directory {}: {error}",
-                data_dir.display()
-            );
-            return Self::default();
+        let mut cache = Self::default();
+        let mut loaded = Self::load_entries();
+        loaded.reverse();
+        for entry in loaded {
+            cache.safe_add(entry);
         }
-
-        let mut cache = if path.exists() {
-            fs::read_to_string(&path)
-                .ok()
-                .and_then(|content| serde_json::from_str::<Self>(&content).ok())
-                .unwrap_or_else(|| {
-                    warn!(
-                        "Failed to parse user cache at {}, resetting file",
-                        path.display()
-                    );
-                    Self::default()
-                })
-        } else {
-            Self::default()
-        };
-
-        cache.normalize();
-        cache.save();
         cache
     }
 
     pub fn save(&self) {
         let path = Self::path();
         if let Some(parent) = path.parent()
-            && !parent.exists()
             && let Err(error) = fs::create_dir_all(parent)
         {
-            warn!(
-                "Failed to create usercache parent directory {}: {error}",
-                parent.display()
-            );
+            warn!("Failed to create user cache directory: {error}");
             return;
         }
 
-        let Ok(content) = serde_json::to_string_pretty(self) else {
-            warn!("Failed to serialize user cache");
+        let to_save: Vec<UserCacheEntryDisk> = self
+            .top_mru_profiles(USER_CACHE_MRU_LIMIT)
+            .into_iter()
+            .map(|entry| UserCacheEntryDisk {
+                uuid: entry.uuid,
+                name: entry.name,
+                expires_on: format_cache_date(entry.expiration_date),
+            })
+            .collect();
+
+        let Ok(content) = serde_json::to_string(&to_save) else {
             return;
         };
 
-        if let Err(error) = fs::write(&path, content) {
-            warn!("Failed to save user cache to {}: {error}", path.display());
+        if let Err(error) = fs::write(path, content) {
+            warn!("Failed to save user cache: {error}");
         }
     }
 
     pub fn upsert(&mut self, uuid: Uuid, name: String) {
-        let now = OffsetDateTime::now_utc().unix_timestamp();
-        if let Some(existing) = self.entries.iter_mut().find(|entry| entry.uuid == uuid) {
-            existing.name = name;
-            existing.last_access = now;
-            existing.expires_on = now + USER_CACHE_TTL_SECONDS;
-        } else {
-            self.entries.push(UserCacheEntry::new(uuid, name, now));
-        }
-
-        self.normalize();
-        self.save();
+        self.add_internal(uuid, name);
     }
 
     pub fn get_by_name(&mut self, name: &str) -> Option<UserCacheEntry> {
-        let now = OffsetDateTime::now_utc().unix_timestamp();
-        self.normalize();
+        let lowercase_name = name.to_ascii_lowercase();
+        let mut profile = self.profiles_by_name.get(&lowercase_name).cloned();
+        let mut needs_save = false;
 
-        let idx = self
-            .entries
-            .iter()
-            .position(|entry| entry.name.eq_ignore_ascii_case(name))?;
+        if let Some(entry) = &profile
+            && is_expired(entry.expiration_date)
+        {
+            self.profiles_by_uuid.remove(&entry.uuid);
+            self.profiles_by_name
+                .remove(&entry.name.to_ascii_lowercase());
+            needs_save = true;
+            profile = None;
+        }
 
-        let entry = self.entries.get_mut(idx)?;
-        entry.last_access = now;
-        entry.expires_on = now + USER_CACHE_TTL_SECONDS;
+        if let Some(mut entry) = profile {
+            entry.last_access = self.next_operation();
+            self.profiles_by_name
+                .insert(entry.name.to_ascii_lowercase(), entry.clone());
+            self.profiles_by_uuid.insert(entry.uuid, entry.clone());
+            return Some(entry);
+        }
 
-        let result = entry.clone();
-        self.normalize();
-        self.save();
-        Some(result)
+        if needs_save {
+            self.save();
+        }
+
+        None
     }
 
     pub fn get_by_uuid(&mut self, uuid: Uuid) -> Option<UserCacheEntry> {
-        self.normalize();
-        let now = OffsetDateTime::now_utc().unix_timestamp();
+        let mut entry = self.profiles_by_uuid.get(&uuid).cloned()?;
+        entry.last_access = self.next_operation();
+        self.profiles_by_name
+            .insert(entry.name.to_ascii_lowercase(), entry.clone());
+        self.profiles_by_uuid.insert(entry.uuid, entry.clone());
+        Some(entry)
+    }
 
-        let idx = self.entries.iter().position(|entry| entry.uuid == uuid)?;
-        let entry = self.entries.get_mut(idx)?;
-        entry.last_access = now;
-        entry.expires_on = now + USER_CACHE_TTL_SECONDS;
+    fn add_internal(&mut self, uuid: Uuid, name: String) -> UserCacheEntry {
+        let expiration_date = one_month_from_now();
+        let entry = UserCacheEntry {
+            uuid,
+            name,
+            expiration_date,
+            last_access: 0,
+        };
 
-        let result = entry.clone();
-        self.normalize();
+        self.safe_add(entry.clone());
         self.save();
-        Some(result)
+        entry
     }
 
-    pub fn names(&mut self) -> Vec<String> {
-        self.normalize();
-        self.entries
-            .iter()
-            .map(|entry| entry.name.clone())
-            .collect()
+    fn safe_add(&mut self, mut entry: UserCacheEntry) {
+        entry.last_access = self.next_operation();
+        self.profiles_by_name
+            .insert(entry.name.to_ascii_lowercase(), entry.clone());
+        self.profiles_by_uuid.insert(entry.uuid, entry);
     }
 
-    fn normalize(&mut self) {
-        let now = OffsetDateTime::now_utc().unix_timestamp();
-        self.entries.retain(|entry| !entry.is_expired(now));
+    #[allow(clippy::missing_const_for_fn)]
+    fn next_operation(&mut self) -> u64 {
+        self.operation_count += 1;
+        self.operation_count
+    }
 
-        // Keep most recently accessed entries first and deduplicate by UUID/name.
-        self.entries.sort_by_key(|entry| Reverse(entry.last_access));
-        let mut seen_uuid = HashSet::new();
-        let mut seen_name = HashSet::<String>::new();
-        self.entries.retain(|entry| {
-            let lowercase = entry.name.to_ascii_lowercase();
-            seen_uuid.insert(entry.uuid) && seen_name.insert(lowercase)
-        });
+    fn top_mru_profiles(&self, limit: usize) -> Vec<UserCacheEntry> {
+        let mut entries: Vec<UserCacheEntry> = self.profiles_by_uuid.values().cloned().collect();
+        entries.sort_by_key(|entry| Reverse(entry.last_access));
+        entries.truncate(limit);
+        entries
+    }
 
-        if self.entries.len() > USER_CACHE_LIMIT {
-            debug!(
-                "Truncating usercache from {} to {} entries",
-                self.entries.len(),
-                USER_CACHE_LIMIT
-            );
-            self.entries.truncate(USER_CACHE_LIMIT);
+    fn load_entries() -> Vec<UserCacheEntry> {
+        let path = Self::path();
+        let Ok(raw) = fs::read_to_string(path) else {
+            return Vec::new();
+        };
+
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw) else {
+            return Vec::new();
+        };
+
+        let Some(array) = json.as_array() else {
+            return Vec::new();
+        };
+
+        let mut entries = Vec::new();
+        for element in array {
+            let Some(object) = element.as_object() else {
+                continue;
+            };
+
+            let Some(name) = object.get("name").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let Some(uuid_raw) = object.get("uuid").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let Some(expires_on) = object.get("expiresOn").and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+
+            let Ok(uuid) = Uuid::parse_str(uuid_raw) else {
+                continue;
+            };
+            let Ok(expiration_date) = OffsetDateTime::parse(expires_on, USER_CACHE_DATE_FORMAT)
+            else {
+                continue;
+            };
+
+            entries.push(UserCacheEntry {
+                uuid,
+                name: name.to_string(),
+                expiration_date,
+                last_access: 0,
+            });
         }
 
-        // Preserve deterministic ordering for file diffs after truncation.
-        self.entries.sort_by_key(|entry| Reverse(entry.last_access));
+        entries
     }
+}
 
-    #[must_use]
-    pub fn lookup_tables(&self) -> (HashMap<String, Uuid>, HashMap<Uuid, UserCacheEntry>) {
-        let mut name_to_uuid = HashMap::with_capacity(self.entries.len());
-        let mut uuid_to_entry = HashMap::with_capacity(self.entries.len());
+fn format_cache_date(date: OffsetDateTime) -> String {
+    date.format(USER_CACHE_DATE_FORMAT)
+        .unwrap_or_else(|_| "1970-01-01 00:00:00 +0000".to_string())
+}
 
-        for entry in &self.entries {
-            name_to_uuid.insert(entry.name.to_ascii_lowercase(), entry.uuid);
-            uuid_to_entry.insert(entry.uuid, entry.clone());
+fn is_expired(expiration_date: OffsetDateTime) -> bool {
+    OffsetDateTime::now_utc() >= expiration_date
+}
+
+fn one_month_from_now() -> OffsetDateTime {
+    let now = now_with_local_offset();
+    let date = now.date();
+    let year = date.year();
+    let month = date.month();
+    let day = date.day();
+
+    let (next_year, next_month) = match month {
+        Month::January => (year, Month::February),
+        Month::February => (year, Month::March),
+        Month::March => (year, Month::April),
+        Month::April => (year, Month::May),
+        Month::May => (year, Month::June),
+        Month::June => (year, Month::July),
+        Month::July => (year, Month::August),
+        Month::August => (year, Month::September),
+        Month::September => (year, Month::October),
+        Month::October => (year, Month::November),
+        Month::November => (year, Month::December),
+        Month::December => (year + 1, Month::January),
+    };
+
+    let max_day = days_in_month(next_year, next_month);
+    let clamped_day = day.min(max_day);
+
+    Date::from_calendar_date(next_year, next_month, clamped_day).map_or_else(
+        |_| now + time::Duration::days(30),
+        |next_date| now.replace_date(next_date),
+    )
+}
+
+fn now_with_local_offset() -> OffsetDateTime {
+    let now = OffsetDateTime::now_utc();
+    UtcOffset::current_local_offset().map_or(now, |offset| now.to_offset(offset))
+}
+
+const fn days_in_month(year: i32, month: Month) -> u8 {
+    match month {
+        Month::January
+        | Month::March
+        | Month::May
+        | Month::July
+        | Month::August
+        | Month::October
+        | Month::December => 31,
+        Month::February => {
+            if is_leap_year(year) {
+                29
+            } else {
+                28
+            }
         }
-
-        (name_to_uuid, uuid_to_entry)
+        Month::April | Month::June | Month::September | Month::November => 30,
     }
+}
+
+const fn is_leap_year(year: i32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
 }
