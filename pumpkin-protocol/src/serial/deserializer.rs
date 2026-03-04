@@ -210,10 +210,6 @@ impl PacketRead for Uuid {
 
 impl<T: PacketRead> PacketRead for Option<T> {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        Ok(if bool::read(reader)? {
-            Some(T::read(reader)?)
-        } else {
-            None
-        })
+        bool::read(reader)?.then(|| T::read(reader)).transpose()
     }
 }
