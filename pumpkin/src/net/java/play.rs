@@ -32,11 +32,11 @@ use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractU
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{
     BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
 };
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
-use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
