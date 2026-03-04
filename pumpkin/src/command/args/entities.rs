@@ -2,15 +2,18 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::command::CommandSender;
-use crate::command::args::ConsumeResult;
+use crate::command::args::{ConsumeResult, ConsumeResultWithSyntax};
 use crate::command::dispatcher::CommandError;
-use crate::command::tree::RawArgs;
+use crate::command::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
+use crate::command::errors::error_types;
+use crate::command::tree::{RawArg, RawArgs};
 use crate::entity::EntityBase;
 use crate::server::Server;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::{entity::EntityType, translation};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::GameMode;
+use pumpkin_util::text::TextComponent;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -126,7 +129,6 @@ impl FromStr for EntityFilter {
 pub struct TargetSelector {
     pub selector_type: EntitySelectorType,
     pub conditions: Vec<EntityFilter>,
-    pub player_only: bool,
 }
 
 impl TargetSelector {
@@ -151,16 +153,34 @@ impl TargetSelector {
             _ => {}
         }
         Self {
-            player_only: matches!(
-                selector_type,
-                EntitySelectorType::AllPlayers
-                    | EntitySelectorType::NearestPlayer
-                    | EntitySelectorType::RandomPlayer
-                    | EntitySelectorType::NamedPlayer(_)
-            ),
             selector_type,
             conditions: filter,
         }
+    }
+
+    const fn base_includes_entities(&self) -> bool {
+        matches!(
+            self.selector_type,
+            EntitySelectorType::AllEntities | EntitySelectorType::NearestEntity
+        )
+    }
+
+    #[must_use]
+    pub fn includes_entities(&self) -> bool {
+        let player_type = EntityType::from_name("player").expect("entity type player must exist");
+        let mut includes_entities = self.base_includes_entities();
+
+        for condition in &self.conditions {
+            if let EntityFilter::Type(ValueCondition::Equals(entity_type)) = condition {
+                includes_entities = *entity_type != player_type;
+            } else if let EntityFilter::Type(ValueCondition::NotEquals(entity_type)) = condition
+                && *entity_type == player_type
+            {
+                includes_entities = true;
+            }
+        }
+
+        includes_entities
     }
 
     #[must_use]
@@ -257,7 +277,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
         server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let s_opt: Option<&'a str> = args.pop();
+        let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
         let Some(s) = s_opt else {
             return Box::pin(async move { None });
@@ -279,6 +299,27 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
             Some(Arg::Entities(entities))
         })
     }
+
+    fn consume_with_syntax<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a Server,
+        args: &mut RawArgs<'a>,
+    ) -> ConsumeResultWithSyntax<'a> {
+        let Some(raw_arg) = args.pop() else {
+            return Box::pin(async { Ok(None) });
+        };
+
+        let selector = match parse_target_selector_with_context(raw_arg) {
+            Ok(selector) => selector,
+            Err(error) => return Box::pin(async move { Err(error) }),
+        };
+
+        Box::pin(async move {
+            let entities = server.select_entities(&selector, Some(sender));
+            Ok(Some(Arg::Entities(entities)))
+        })
+    }
 }
 
 impl DefaultNameArgConsumer for EntitiesArgumentConsumer {
@@ -295,5 +336,41 @@ impl<'a> FindArg<'a> for EntitiesArgumentConsumer {
             Some(Arg::Entities(data)) => Ok(data),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
         }
+    }
+}
+
+pub(crate) fn parse_target_selector_with_context(
+    raw_arg: RawArg<'_>,
+) -> Result<TargetSelector, CommandSyntaxError> {
+    raw_arg.value.parse::<TargetSelector>().map_err(|_| {
+        syntax_error_for_arg(
+            raw_arg,
+            TextComponent::translate(translation::ARGUMENT_ENTITY_INVALID, []),
+        )
+    })
+}
+
+pub(crate) fn ensure_player_only_selector(
+    selector: &TargetSelector,
+    raw_arg: RawArg<'_>,
+) -> Result<(), CommandSyntaxError> {
+    if selector.includes_entities() {
+        Err(syntax_error_for_arg(
+            raw_arg,
+            TextComponent::translate(translation::ARGUMENT_PLAYER_ENTITIES, []),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn syntax_error_for_arg(raw_arg: RawArg<'_>, message: TextComponent) -> CommandSyntaxError {
+    CommandSyntaxError {
+        error_type: &error_types::DISPATCHER_UNKNOWN_ARGUMENT,
+        message,
+        context: Some(CommandSyntaxErrorContext {
+            input: raw_arg.input.to_string(),
+            cursor: raw_arg.start,
+        }),
     }
 }

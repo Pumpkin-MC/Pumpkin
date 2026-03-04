@@ -4,12 +4,13 @@ use rustc_hash::FxHashMap;
 use tracing::{debug, error, warn};
 
 use super::args::ConsumedArgs;
+use super::errors::command_syntax_error::CommandSyntaxError;
 
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError::{
-    CommandFailed, InvalidConsumption, InvalidRequirement, PermissionDenied,
+    CommandFailed, InvalidConsumption, InvalidRequirement, PermissionDenied, SyntaxError,
 };
-use crate::command::tree::{Command, CommandTree, NodeType, RawArgs};
+use crate::command::tree::{Command, CommandTree, NodeType, RawArg, RawArgs};
 use crate::server::Server;
 use std::collections::{HashMap, HashSet};
 
@@ -27,6 +28,7 @@ pub enum CommandError {
     /// A general error occurred during command execution that doesn't fit into
     /// more specific `CommandError` variants.
     CommandFailed(TextComponent),
+    SyntaxError(CommandSyntaxError),
 }
 
 impl CommandError {
@@ -52,8 +54,28 @@ impl CommandError {
                 )
             }
             CommandFailed(s) => s,
+            SyntaxError(s) => render_syntax_error(s),
         }
     }
+}
+
+fn render_syntax_error(syntax_error: CommandSyntaxError) -> TextComponent {
+    let Some(context) = syntax_error.context else {
+        return syntax_error.message;
+    };
+
+    let cursor = context.cursor.min(context.input.len());
+    let context_start = cursor.saturating_sub(10);
+    let context_prefix = if context_start > 0 { "..." } else { "" };
+    let context_line = format!(
+        "{context_prefix}{}<--[HERE]",
+        &context.input[context_start..]
+    );
+
+    syntax_error
+        .message
+        .new_line()
+        .add_child(TextComponent::text(context_line))
 }
 
 #[derive(Default)]
@@ -88,7 +110,7 @@ impl CommandDispatcher {
     /// - do not query suggestions for the same consumer multiple times just because they are on different paths through the tree
     pub(crate) async fn find_suggestions<'a>(
         &'a self,
-        src: &CommandSender,
+        src: &'a CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) -> Vec<CommandSuggestion> {
@@ -96,7 +118,15 @@ impl CommandDispatcher {
         let Some(key) = parts.next() else {
             return Vec::new();
         };
-        let mut raw_args: Vec<&str> = parts.rev().collect();
+        let mut raw_args: RawArgs<'a> = parts
+            .rev()
+            .map(|value| RawArg {
+                value,
+                start: 0,
+                end: 0,
+                input: cmd,
+            })
+            .collect();
 
         let Ok(tree) = self.get_tree(key) else {
             return Vec::new();
@@ -130,6 +160,9 @@ impl CommandDispatcher {
                     debug!("Command failed");
                     return Vec::new();
                 }
+                Err(SyntaxError(_)) => {
+                    return Vec::new();
+                }
                 Ok(Some(new_suggestions)) => {
                     suggestions.extend(new_suggestions);
                 }
@@ -144,7 +177,8 @@ impl CommandDispatcher {
         suggestions
     }
 
-    pub(crate) fn split_parts(cmd: &str) -> Result<(&str, Vec<&str>), CommandError> {
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn split_parts(cmd: &str) -> Result<(&str, RawArgs<'_>), CommandError> {
         if cmd.is_empty() {
             return Err(CommandFailed(TextComponent::text("Empty Command")));
         }
@@ -207,7 +241,12 @@ impl CommandDispatcher {
                     && in_brackets == 0 =>
                 {
                     if current_arg_start != i {
-                        args.push(&cmd[current_arg_start..i]);
+                        args.push(RawArg {
+                            value: &cmd[current_arg_start..i],
+                            start: current_arg_start,
+                            end: i,
+                            input: cmd,
+                        });
                     }
                     current_arg_start = i + 1;
                 }
@@ -215,7 +254,12 @@ impl CommandDispatcher {
             }
         }
         if current_arg_start != cmd.len() {
-            args.push(&cmd[current_arg_start..]);
+            args.push(RawArg {
+                value: &cmd[current_arg_start..],
+                start: current_arg_start,
+                end: cmd.len(),
+                input: cmd,
+            });
         }
         if in_single_quotes || in_double_quotes {
             return Err(CommandFailed(TextComponent::text(
@@ -235,7 +279,7 @@ impl CommandDispatcher {
         if args.is_empty() {
             return Err(CommandFailed(TextComponent::text("Empty Command")));
         }
-        let key = args.remove(0);
+        let key = args.remove(0).value;
         Ok((key, args.into_iter().rev().collect()))
     }
 
@@ -266,11 +310,24 @@ impl CommandDispatcher {
 
         let tree = self.get_tree(key)?;
 
+        let mut first_syntax_error = None;
+
         // try paths until fitting path is found
         for path in tree.iter_paths() {
-            if Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone()).await? {
-                return Ok(());
+            match Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone()).await
+            {
+                Ok(true) => return Ok(()),
+                Ok(false) => {}
+                Err(SyntaxError(error)) => {
+                    if first_syntax_error.is_none() {
+                        first_syntax_error = Some(error);
+                    }
+                }
+                Err(error) => return Err(error),
             }
+        }
+        if let Some(error) = first_syntax_error {
+            return Err(SyntaxError(error));
         }
         Err(CommandFailed(TextComponent::text(format!(
             "Invalid Syntax. Usage: {tree}"
@@ -322,19 +379,23 @@ impl CommandDispatcher {
                     };
                 }
                 NodeType::Literal { string, .. } => {
-                    if raw_args.pop() != Some(string) {
+                    if raw_args.pop().map(|arg| arg.value) != Some(string.as_str()) {
                         debug!("Error while parsing command: {raw_args:?}: expected {string}");
                         return Ok(false);
                     }
                 }
                 NodeType::Argument { consumer, name, .. } => {
-                    if let Some(consumed) = consumer.consume(src, server, raw_args).await {
-                        parsed_args.insert(name, consumed);
-                    } else {
-                        debug!(
-                            "Error while parsing command: {raw_args:?}: cannot parse argument {name}"
-                        );
-                        return Ok(false);
+                    match consumer.consume_with_syntax(src, server, raw_args).await {
+                        Ok(Some(consumed)) => {
+                            parsed_args.insert(name, consumed);
+                        }
+                        Ok(None) => {
+                            debug!(
+                                "Error while parsing command: {raw_args:?}: cannot parse argument {name}"
+                            );
+                            return Ok(false);
+                        }
+                        Err(error) => return Err(CommandError::SyntaxError(error)),
                     }
                 }
                 NodeType::Require { predicate, .. } => {
@@ -368,16 +429,16 @@ impl CommandDispatcher {
                     return Ok(None);
                 }
                 NodeType::Literal { string, .. } => {
-                    if raw_args.pop() != Some(string) {
+                    if raw_args.pop().map(|arg| arg.value) != Some(string.as_str()) {
                         return Ok(None);
                     }
                 }
                 NodeType::Argument { consumer, name: _ } => {
-                    match consumer.consume(src, server, raw_args).await {
-                        Some(_consumed) => {
+                    match consumer.consume_with_syntax(src, server, raw_args).await {
+                        Ok(Some(_consumed)) => {
                             //parsed_args.insert(name, consumed);
                         }
-                        None => {
+                        Ok(None) => {
                             return if raw_args.is_empty() {
                                 let suggestions = consumer.suggest(src, server, input).await?;
                                 Ok(suggestions)
@@ -385,6 +446,7 @@ impl CommandDispatcher {
                                 Ok(None)
                             };
                         }
+                        Err(_) => return Ok(None),
                     }
                 }
                 NodeType::Require { predicate, .. } => {

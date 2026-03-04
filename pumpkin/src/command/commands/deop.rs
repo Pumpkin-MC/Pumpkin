@@ -2,7 +2,10 @@ use crate::command::CommandResult;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
-        args::{Arg, ConsumedArgs, gameprofile::GameProfilesArgumentConsumer},
+        args::{
+            Arg, ConsumedArgs,
+            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
+        },
         tree::CommandTree,
         tree::builder::argument,
     },
@@ -73,6 +76,11 @@ impl CommandExecutor for Executor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGETS, GameProfilesArgumentConsumer).execute(Executor))
+    CommandTree::new(NAMES, DESCRIPTION).then(
+        argument(
+            ARG_TARGETS,
+            GameProfilesArgumentConsumer::new(GameProfileSuggestionMode::OpNames, false),
+        )
+        .execute(Executor),
+    )
 }

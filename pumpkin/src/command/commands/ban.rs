@@ -3,7 +3,9 @@ use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
         args::{
-            Arg, ConsumedArgs, gameprofile::GameProfilesArgumentConsumer, message::MsgArgConsumer,
+            Arg, ConsumedArgs,
+            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
+            message::MsgArgConsumer,
         },
         tree::{CommandTree, builder::argument},
     },
@@ -97,7 +99,15 @@ async fn ban_profile(
 
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
 
-    if banned_players.get_entry(profile).is_some() {
+    if let Some(entry) = banned_players
+        .banned_players
+        .iter_mut()
+        .find(|entry| entry.uuid == profile.id)
+    {
+        if entry.name != profile.name {
+            entry.name.clone_from(&profile.name);
+            banned_players.save();
+        }
         return false;
     }
 
@@ -136,7 +146,10 @@ async fn ban_profile(
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_TARGET, GameProfilesArgumentConsumer)
+        argument(
+            ARG_TARGET,
+            GameProfilesArgumentConsumer::new(GameProfileSuggestionMode::OnlinePlayers, true),
+        )
             .execute(NoReasonExecutor)
             .then(argument(ARG_REASON, MsgArgConsumer).execute(ReasonExecutor)),
     )

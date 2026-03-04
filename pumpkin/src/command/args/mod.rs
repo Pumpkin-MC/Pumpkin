@@ -18,6 +18,7 @@ use pumpkin_util::{
 use super::{
     CommandSender,
     dispatcher::CommandError,
+    errors::command_syntax_error::CommandSyntaxError,
     tree::{CommandTree, RawArgs},
 };
 use crate::entity::EntityBase;
@@ -56,6 +57,8 @@ pub mod time;
 
 /// see [`crate::commands::tree::builder::argument`]
 pub type ConsumeResult<'a> = Pin<Box<dyn Future<Output = Option<Arg<'a>>> + Send + 'a>>;
+pub type ConsumeResultWithSyntax<'a> =
+    Pin<Box<dyn Future<Output = Result<Option<Arg<'a>>, CommandSyntaxError>> + Send + 'a>>;
 
 pub type SuggestResult<'a> =
     Pin<Box<dyn Future<Output = Result<Option<Vec<CommandSuggestion>>, CommandError>> + Send + 'a>>;
@@ -67,6 +70,16 @@ pub trait ArgumentConsumer: Sync + Send + GetClientSideArgParser {
         server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a>;
+
+    fn consume_with_syntax<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a Server,
+        args: &mut RawArgs<'a>,
+    ) -> ConsumeResultWithSyntax<'a> {
+        let future = self.consume(sender, server, args);
+        Box::pin(async move { Ok(future.await) })
+    }
 
     /// Used for tab completion (but only if argument suggestion type is "`minecraft:ask_server`"!).
     ///

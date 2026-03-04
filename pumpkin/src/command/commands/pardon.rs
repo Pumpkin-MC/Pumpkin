@@ -1,7 +1,10 @@
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandResult, CommandSender,
-        args::{Arg, ConsumedArgs, gameprofile::GameProfilesArgumentConsumer},
+        args::{
+            Arg, ConsumedArgs,
+            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
+        },
         tree::{CommandTree, builder::argument},
     },
     data::SaveJSONConfiguration,
@@ -62,7 +65,13 @@ impl CommandExecutor for Executor {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGET, GameProfilesArgumentConsumer).execute(Executor))
+    CommandTree::new(NAMES, DESCRIPTION).then(
+        argument(
+            ARG_TARGET,
+            GameProfilesArgumentConsumer::new(GameProfileSuggestionMode::BannedNames, false),
+        )
+        .execute(Executor),
+    )
 }

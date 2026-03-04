@@ -47,6 +47,7 @@ pub const MOJANG_BEDROCK_PUBLIC_KEY_BASE64: &str = "MHYwEAYHKoZIzj0CAQYFK4EEACID
 const MOJANG_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
 const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
 const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
+const MOJANG_PROFILE_BY_NAME_URL: &str = "https://api.mojang.com/users/profiles/minecraft/{username}";
 
 /// Sends a GET request to Mojang's authentication servers to verify a client's Minecraft account.
 ///
@@ -177,6 +178,57 @@ pub fn fetch_mojang_public_keys(
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(as_rsa_keys)
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct MojangProfileByNameResponse {
+    id: String,
+    name: String,
+}
+
+pub fn lookup_profile_by_name(
+    name: &str,
+    _auth_config: &AuthenticationConfig,
+) -> Result<Option<(Uuid, String)>, AuthError> {
+    let url = MOJANG_PROFILE_BY_NAME_URL.replace("{username}", name);
+
+    let mut response = ureq::get(url)
+        .call()
+        .map_err(|_| AuthError::FailedResponse)?;
+
+    match response.status() {
+        StatusCode::OK => {}
+        StatusCode::NO_CONTENT | StatusCode::NOT_FOUND => return Ok(None),
+        other => Err(AuthError::UnknownStatusCode(other))?,
+    }
+
+    let profile: MojangProfileByNameResponse = response
+        .body_mut()
+        .read_json()
+        .map_err(|_| AuthError::FailedParse)?;
+
+    let parsed_uuid = parse_uuid_flexible(&profile.id).ok_or(AuthError::FailedParse)?;
+    Ok(Some((parsed_uuid, profile.name)))
+}
+
+fn parse_uuid_flexible(id: &str) -> Option<Uuid> {
+    if let Ok(uuid) = Uuid::parse_str(id) {
+        return Some(uuid);
+    }
+
+    if id.len() != 32 {
+        return None;
+    }
+
+    let dashed = format!(
+        "{}-{}-{}-{}-{}",
+        &id[0..8],
+        &id[8..12],
+        &id[12..16],
+        &id[16..20],
+        &id[20..32]
+    );
+    Uuid::parse_str(&dashed).ok()
 }
 
 #[derive(Error, Debug)]
