@@ -423,9 +423,17 @@ impl BedrockClient {
         self.send_ack(&Ack::new(vec![frame_set.sequence.0])).await;
         // TODO
         for frame in frame_set.frames {
-            self.handle_frame(server, frame).await.unwrap();
+            if let Err(e) = self.handle_frame(server, frame).await {
+                tracing::error!("Error handling Bedrock frame: {e}");
+                return;
+            }
         }
     }
+
+    /// Maximum allowed split size for fragmented packets.
+    const MAX_SPLIT_SIZE: u32 = 512;
+    /// Maximum number of pending compound reassembly entries.
+    const MAX_PENDING_COMPOUNDS: usize = 64;
 
     async fn handle_frame(
         self: &Arc<Self>,
@@ -433,9 +441,30 @@ impl BedrockClient {
         mut frame: Frame,
     ) -> Result<(), Error> {
         if frame.split_size > 0 {
+            if frame.split_size > Self::MAX_SPLIT_SIZE {
+                return Err(Error::other(format!(
+                    "Split size {} exceeds maximum {}",
+                    frame.split_size,
+                    Self::MAX_SPLIT_SIZE
+                )));
+            }
+
             let fragment_index = frame.split_index as usize;
+            if fragment_index >= frame.split_size as usize {
+                return Err(Error::other(format!(
+                    "Fragment index {fragment_index} out of bounds for split size {}",
+                    frame.split_size
+                )));
+            }
+
             let compound_id = frame.split_id;
             let mut compounds = self.compounds.lock().await;
+
+            if !compounds.contains_key(&compound_id)
+                && compounds.len() >= Self::MAX_PENDING_COMPOUNDS
+            {
+                return Err(Error::other("Too many pending fragment reassembly entries"));
+            }
 
             let entry = compounds.entry(compound_id).or_insert_with(|| {
                 let mut vec = Vec::with_capacity(frame.split_size as usize);
@@ -452,19 +481,26 @@ impl BedrockClient {
 
             let mut frames = compounds.remove(&compound_id).unwrap();
 
-            // Safety: We already checked that all frames are Some at this point
             let len = frames
                 .iter()
-                .map(|frame| unsafe { frame.as_ref().unwrap_unchecked().payload.len() })
+                .map(|frame| {
+                    frame
+                        .as_ref()
+                        .map_or(0, |f| f.payload.len())
+                })
                 .sum();
 
             let mut merged = Vec::with_capacity(len);
 
             for frame in &frames {
-                merged.extend_from_slice(unsafe { &frame.as_ref().unwrap_unchecked().payload });
+                if let Some(f) = frame.as_ref() {
+                    merged.extend_from_slice(&f.payload);
+                }
             }
 
-            frame = unsafe { frames[0].take().unwrap_unchecked() };
+            frame = frames[0]
+                .take()
+                .ok_or_else(|| Error::other("Missing first frame in reassembly"))?;
 
             frame.payload = merged;
             frame.split_size = 0;

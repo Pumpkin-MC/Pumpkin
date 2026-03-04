@@ -510,11 +510,13 @@ impl World {
             );
             recipient.client.enqueue_packet(packet).await;
 
-            recipient
-                .signature_cache
-                .lock()
-                .await
-                .add_seen_signature(&chat_message.signature.clone().unwrap()); // Unwrap is safe because we check for None in validate_chat_message
+            if let Some(signature) = &chat_message.signature {
+                recipient
+                    .signature_cache
+                    .lock()
+                    .await
+                    .add_seen_signature(signature);
+            }
 
             if recipient.gameprofile.id != sender.gameprofile.id {
                 // Sender may update recipient on signatures recipient hasn't seen
