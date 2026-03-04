@@ -111,10 +111,7 @@ impl JavaClient {
         encryption_response: SEncryptionResponse,
     ) {
         debug!("Handling encryption");
-        let shared_secret = match server
-            .decrypt(&encryption_response.shared_secret)
-            .await
-        {
+        let shared_secret = match server.decrypt(&encryption_response.shared_secret).await {
             Ok(secret) => secret,
             Err(e) => {
                 self.kick(TextComponent::text(format!("Decryption failed: {e}")))
