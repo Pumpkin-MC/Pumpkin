@@ -205,6 +205,47 @@ impl_array!(nbt_int_array, NBT_INT_ARRAY_TAG);
 impl_array!(nbt_long_array, NBT_LONG_ARRAY_TAG);
 impl_array!(nbt_byte_array, NBT_BYTE_ARRAY_TAG);
 
+/// Normalizes NBT data by sorting compound tag keys in lexicographical order.
+///
+/// This function takes raw NBT bytes, deserializes them, sorts all compound tag
+/// key-value pairs by key name in lexicographical order (recursively for nested
+/// structures), and then re-serializes the data back to bytes.
+///
+/// # Arguments
+/// * `bytes` - The input NBT data as bytes
+///
+/// # Returns
+/// * `Result<Bytes, Error>` - The normalized NBT data, or an error if deserialization/serialization fails
+///
+/// # Example
+/// ```rust
+/// use pumpkin_nbt::normalize_nbt_bytes;
+/// # let nbt_data: &[u8] = &[0x0A, 0x00, 0x00, 0x00]; // Example NBT bytes
+/// let normalized = normalize_nbt_bytes(&nbt_data).unwrap();
+/// ```
+pub fn normalize_nbt_bytes(bytes: &[u8]) -> Result<Bytes, Error> {
+    use std::io::Cursor;
+
+    // Try to deserialize as named NBT first
+    let cursor = Cursor::new(bytes);
+    let nbt_result = Nbt::read(&mut NbtReadHelper::new(cursor));
+
+    match nbt_result {
+        Ok(nbt) => {
+            // Successfully parsed as named NBT
+            let normalized_nbt = Nbt::new(nbt.name, nbt.root_tag.normalize());
+            Ok(normalized_nbt.write())
+        }
+        Err(_) => {
+            // Try as unnamed NBT
+            let cursor = Cursor::new(bytes);
+            let nbt = Nbt::read_unnamed(&mut NbtReadHelper::new(cursor))?;
+            let normalized_nbt = Nbt::new(nbt.name, nbt.root_tag.normalize());
+            Ok(normalized_nbt.write_unnamed())
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
 
@@ -602,6 +643,130 @@ mod test {
 
         let reconstructed = from_bytes(Cursor::new(bytes)).unwrap();
         assert_eq!(value, reconstructed);
+    }
+
+    #[test]
+    fn test_normalize_nbt_bytes() {
+        use crate::normalize_nbt_bytes;
+        use serde::{Deserialize, Serialize};
+
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct TestStruct {
+            z_field: String,
+            a_field: i32,
+            m_field: bool,
+        }
+
+        let test_data = TestStruct {
+            z_field: "last".to_string(),
+            a_field: 42,
+            m_field: true,
+        };
+
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test_data, &mut bytes).unwrap();
+        let normalized_bytes = normalize_nbt_bytes(&bytes).unwrap();
+        let reconstructed: TestStruct =
+            from_bytes_unnamed(std::io::Cursor::new(normalized_bytes.clone())).unwrap();
+        assert_eq!(test_data, reconstructed);
+
+        let normalized_again = normalize_nbt_bytes(&normalized_bytes).unwrap();
+        assert_eq!(
+            normalized_bytes, normalized_again,
+            "Normalize should be idempotent"
+        );
+
+        let mut bytes2 = Vec::new();
+        to_bytes_unnamed(&test_data, &mut bytes2).unwrap();
+        let normalized_bytes2 = normalize_nbt_bytes(&bytes2).unwrap();
+        assert_eq!(
+            normalized_bytes, normalized_bytes2,
+            "Same data should normalize to same bytes"
+        );
+    }
+
+    #[test]
+    fn test_normalize_nested_compounds() {
+        use crate::normalize_nbt_bytes;
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct Inner {
+            z_inner: i32,
+            a_inner: String,
+        }
+
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct Outer {
+            z_outer: Inner,
+            a_outer: Inner,
+        }
+
+        let test_data = Outer {
+            z_outer: Inner {
+                z_inner: 1,
+                a_inner: "first".to_string(),
+            },
+            a_outer: Inner {
+                z_inner: 2,
+                a_inner: "second".to_string(),
+            },
+        };
+
+        // Serialize to bytes
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test_data, &mut bytes).unwrap();
+
+        // Normalize the bytes
+        let normalized_bytes = normalize_nbt_bytes(&bytes).unwrap();
+
+        // Deserialize back and verify it's the same data
+        let reconstructed: Outer =
+            from_bytes_unnamed(std::io::Cursor::new(normalized_bytes)).unwrap();
+        assert_eq!(test_data, reconstructed);
+    }
+
+    #[test]
+    fn test_normalize_with_lists() {
+        use crate::normalize_nbt_bytes;
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct TestStruct {
+            z_field: String,
+            a_field: i32,
+        }
+
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct TestWithList {
+            z_list: Vec<TestStruct>,
+            a_single: TestStruct,
+        }
+
+        let test_data = TestWithList {
+            z_list: vec![
+                TestStruct {
+                    z_field: "item1".to_string(),
+                    a_field: 1,
+                },
+                TestStruct {
+                    z_field: "item2".to_string(),
+                    a_field: 2,
+                },
+            ],
+            a_single: TestStruct {
+                z_field: "single".to_string(),
+                a_field: 3,
+            },
+        };
+
+        // Serialize to bytes
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test_data, &mut bytes).unwrap();
+
+        // Normalize the bytes
+        let normalized_bytes = normalize_nbt_bytes(&bytes).unwrap();
+
+        // Deserialize back and verify it's the same data
+        let reconstructed: TestWithList =
+            from_bytes_unnamed(std::io::Cursor::new(normalized_bytes)).unwrap();
+        assert_eq!(test_data, reconstructed);
     }
 
     // TODO: More robust tests

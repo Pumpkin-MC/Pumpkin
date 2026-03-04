@@ -439,6 +439,22 @@ impl NbtTag {
             _ => None,
         }
     }
+
+    /// Normalizes the NBT tag by recursively sorting any compound structures
+    /// and their nested elements in lexicographical order by key name.
+    #[must_use]
+    pub fn normalize(self) -> Self {
+        match self {
+            Self::Compound(compound) => Self::Compound(compound.normalize()),
+            Self::List(list) => {
+                let normalized_list: Vec<Self> =
+                    list.into_iter().map(|tag| tag.normalize()).collect();
+                Self::List(normalized_list)
+            }
+            // All other types don't contain nested structures, so return as-is
+            other => other,
+        }
+    }
 }
 
 impl From<&str> for NbtTag {
