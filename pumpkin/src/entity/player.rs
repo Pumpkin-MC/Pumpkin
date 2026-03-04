@@ -1439,19 +1439,10 @@ impl Player {
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             match &self.client {
                 ClientPlatform::Java(java_client) => {
-                    let watched = self.watched_section.load();
-                    // Skip chunks no longer in view (e.g. fast-moving player)
-                    let relevant_chunks: Vec<_> = chunk_of_chunks
-                        .into_iter()
-                        .filter(|c| watched.is_within_distance(c.x, c.z))
-                        .collect();
-                    if relevant_chunks.is_empty() {
-                        return;
-                    }
-                    let chunk_count = relevant_chunks.len();
+                    let chunk_count = chunk_of_chunks.len();
                     java_client.send_packet_now(&CChunkBatchStart).await;
-                    for chunk in &relevant_chunks {
-                        java_client.send_packet_now(&CChunkData(chunk)).await;
+                    for chunk in chunk_of_chunks {
+                        java_client.send_packet_now(&CChunkData(&chunk)).await;
                     }
                     java_client
                         .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))

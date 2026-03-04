@@ -205,7 +205,7 @@ impl Level {
         });
 
         let total_cores = num_cpus::get().saturating_sub(2).max(1);
-        let io_read_threads = (total_cores / 4).clamp(2, 8);
+        let io_read_threads = (total_cores / 6).clamp(2, 4);
         let threads_per_dimension = (total_cores / 2).max(1);
         let entity_threads = (threads_per_dimension / 2).max(1);
 
