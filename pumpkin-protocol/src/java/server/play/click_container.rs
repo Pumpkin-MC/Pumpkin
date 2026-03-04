@@ -48,6 +48,15 @@ impl<'de> Deserialize<'de> for SClickSlot {
                 let length_of_array = seq
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
+                // A player's inventory has at most ~46 slots; cap to prevent DoS
+                // from a malicious client sending a huge length value.
+                const MAX_CHANGED_SLOTS: i32 = 128;
+                if length_of_array.0 < 0 || length_of_array.0 > MAX_CHANGED_SLOTS {
+                    return Err(de::Error::custom(format!(
+                        "Changed slots array length {} out of bounds (max {MAX_CHANGED_SLOTS})",
+                        length_of_array.0
+                    )));
+                }
                 let mut array_of_changed_slots = vec![];
                 for _ in 0..length_of_array.0 {
                     let slot_number = seq
