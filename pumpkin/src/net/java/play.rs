@@ -842,11 +842,24 @@ impl JavaClient {
     }
 
     pub async fn handle_move_vehicle(&self, player: &Arc<Player>, packet: SMoveVehicle) {
+        if !packet.x.is_finite() || !packet.y.is_finite() || !packet.z.is_finite()
+            || !packet.yaw.is_finite() || !packet.pitch.is_finite()
+        {
+            self.kick(TextComponent::text("Invalid vehicle move position"))
+                .await;
+            return;
+        }
+
         let entity = player.get_entity();
         let vehicle = entity.vehicle.lock().await;
         if let Some(vehicle) = vehicle.as_ref() {
             let vehicle_entity = vehicle.get_entity();
-            vehicle_entity.set_pos(Vector3::new(packet.x, packet.y, packet.z));
+            let pos = Vector3::new(
+                Self::clamp_horizontal(packet.x),
+                Self::clamp_vertical(packet.y),
+                Self::clamp_horizontal(packet.z),
+            );
+            vehicle_entity.set_pos(pos);
             vehicle_entity.set_rotation(packet.yaw, packet.pitch);
         }
     }
@@ -1278,6 +1291,22 @@ impl JavaClient {
             .or_else(|| world.get_entity_by_id(entity_id.0));
 
         if let Some(target) = target {
+            // Verify the player is close enough to interact with the target entity.
+            // Vanilla uses 3.0 for survival and 6.0 for creative; add 1.0 margin.
+            let max_range = if player.gamemode.load() == GameMode::Creative {
+                7.0
+            } else {
+                4.0
+            };
+            let player_pos = player.living_entity.entity.pos.load();
+            let target_pos = target.get_entity().pos.load();
+            let dx = player_pos.x - target_pos.x;
+            let dy = player_pos.y - target_pos.y;
+            let dz = player_pos.z - target_pos.z;
+            if dx * dx + dy * dy + dz * dz > max_range * max_range {
+                return;
+            }
+
             send_cancellable! {{
                 server;
                 PlayerInteractEntityEvent::new(
@@ -1775,6 +1804,10 @@ impl JavaClient {
     }
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
+        if !player.can_interact_with_block_at(&sign_data.location, 4.0) {
+            return;
+        }
+
         let world = player.living_entity.entity.world.load_full();
         let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
             return;
