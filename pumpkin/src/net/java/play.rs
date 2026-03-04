@@ -276,7 +276,7 @@ impl JavaClient {
         } else if is_flying {
             // Creative fly speed: fly_speed * 20 ticks * (2x if sprinting)
             let fly = f64::from(abilities.fly_speed) * 20.0;
-            if is_sprinting { fly * 2.0 } else { fly } + 5.0
+            (if is_sprinting { fly * 2.0 } else { fly }) + 5.0
         } else {
             // Ground movement: movement_speed * ~43 (empirical blocks/sec per attribute unit)
             // Speed II (attr ~0.16) → ~6.9 b/s, Sprint adds ~30%
