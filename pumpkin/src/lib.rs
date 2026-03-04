@@ -171,7 +171,7 @@ pub fn stop_server() {
     close_stdin();
 }
 
-/// Close stdin to unblock any blocking readline/read_line call during shutdown.
+/// Close stdin to unblock any blocking `readline`/`read_line` call during shutdown.
 fn close_stdin() {
     use std::sync::Once;
     static ONCE: Once = Once::new();
