@@ -1343,6 +1343,19 @@ impl Player {
         particle_count: i32,
         particle: Particle,
     ) {
+        self.spawn_particle_with_data(position, offset, max_speed, particle_count, particle, &[])
+            .await;
+    }
+
+    pub async fn spawn_particle_with_data(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        particle: Particle,
+        data: &[u8],
+    ) {
         self.client
             .enqueue_packet(&CParticle::new(
                 false,
@@ -1352,7 +1365,7 @@ impl Player {
                 max_speed,
                 particle_count,
                 VarInt(particle as i32),
-                &[],
+                data,
             ))
             .await;
     }
