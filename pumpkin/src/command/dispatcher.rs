@@ -1,10 +1,14 @@
+use pumpkin_data::translation;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::color::NamedColor;
 use rustc_hash::FxHashMap;
 use tracing::{debug, error, warn};
 
 use super::args::ConsumedArgs;
-use super::errors::command_syntax_error::CommandSyntaxError;
+use super::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
+use super::errors::error_types;
 
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError::{
@@ -33,49 +37,191 @@ pub enum CommandError {
 
 impl CommandError {
     #[must_use]
-    pub fn into_component(self, cmd: &str) -> TextComponent {
+    pub fn into_messages(self, cmd: &str) -> Vec<TextComponent> {
         match self {
             InvalidConsumption(s) => {
                 error!(
                     "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
                 );
-                TextComponent::text("Internal error (See logs for details)")
+                vec![TextComponent::text("Internal error (See logs for details)")]
             }
             InvalidRequirement => {
                 error!(
                     "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
                 );
-                TextComponent::text("Internal error (See logs for details)")
+                vec![TextComponent::text("Internal error (See logs for details)")]
             }
             PermissionDenied => {
                 warn!("Permission denied for command \"{cmd}\"");
-                TextComponent::text(
+                vec![TextComponent::text(
                     "I'm sorry, but you do not have permission to perform this command. Please contact the server administrator if you believe this is an error.",
-                )
+                )]
             }
-            CommandFailed(s) => s,
-            SyntaxError(s) => render_syntax_error(s),
+            CommandFailed(s) => vec![s],
+            SyntaxError(s) => render_syntax_error_messages(s),
         }
     }
 }
 
-fn render_syntax_error(syntax_error: CommandSyntaxError) -> TextComponent {
+#[derive(Debug)]
+struct PathParsingFailure {
+    cursor: usize,
+    consumed_tokens: usize,
+    matched_any_node: bool,
+    syntax_error: Option<CommandSyntaxError>,
+}
+
+enum PathResult {
+    Matched,
+    Failed(PathParsingFailure),
+}
+
+fn render_syntax_error_messages(syntax_error: CommandSyntaxError) -> Vec<TextComponent> {
     let Some(context) = syntax_error.context else {
-        return syntax_error.message;
+        return vec![syntax_error.message];
     };
 
-    let cursor = context.cursor.min(context.input.len());
-    let context_start = cursor.saturating_sub(10);
-    let context_prefix = if context_start > 0 { "..." } else { "" };
-    let context_line = format!(
-        "{context_prefix}{}<--[HERE]",
-        &context.input[context_start..]
+    let input = context.input;
+    let cursor = clamp_cursor_to_char_boundary(&input, context.cursor);
+    let context_start = last_n_char_start(&input, cursor, 10);
+    let before_cursor = &input[context_start..cursor];
+    let remaining_input = &input[cursor..];
+
+    let mut context_message = TextComponent::text("")
+        .color_named(NamedColor::Gray)
+        .click_event(ClickEvent::SuggestCommand {
+            command: format!("/{input}").into(),
+        });
+    if context_start > 0 {
+        context_message = context_message.add_child(TextComponent::text("..."));
+    }
+    context_message = context_message.add_child(TextComponent::text(before_cursor.to_string()));
+
+    if !remaining_input.is_empty() {
+        context_message = context_message.add_child(
+            TextComponent::text(remaining_input.to_string())
+                .color_named(NamedColor::Red)
+                .underlined(),
+        );
+    }
+
+    context_message = context_message.add_child(
+        TextComponent::translate(translation::COMMAND_CONTEXT_HERE, [])
+            .color_named(NamedColor::Red)
+            .italic(),
     );
 
-    syntax_error
-        .message
-        .new_line()
-        .add_child(TextComponent::text(context_line))
+    vec![syntax_error.message, context_message]
+}
+
+fn clamp_cursor_to_char_boundary(input: &str, cursor: usize) -> usize {
+    let mut clamped = cursor.min(input.len());
+    while clamped > 0 && !input.is_char_boundary(clamped) {
+        clamped -= 1;
+    }
+    clamped
+}
+
+fn last_n_char_start(input: &str, cursor: usize, char_count: usize) -> usize {
+    let mut start = cursor;
+    let mut seen = 0usize;
+    for (index, _) in input[..cursor].char_indices().rev() {
+        start = index;
+        seen += 1;
+        if seen == char_count {
+            break;
+        }
+    }
+    if seen < char_count { 0 } else { start }
+}
+
+fn unknown_command_syntax_error(input: &str, cursor: usize) -> CommandSyntaxError {
+    let context = CommandSyntaxErrorContext {
+        input: input.to_string(),
+        cursor: clamp_cursor_to_char_boundary(input, cursor),
+    };
+    error_types::DISPATCHER_UNKNOWN_COMMAND.create(&context)
+}
+
+fn unknown_argument_syntax_error(input: &str, cursor: usize) -> CommandSyntaxError {
+    let context = CommandSyntaxErrorContext {
+        input: input.to_string(),
+        cursor: clamp_cursor_to_char_boundary(input, cursor),
+    };
+    error_types::DISPATCHER_UNKNOWN_ARGUMENT.create(&context)
+}
+
+fn select_parse_error(
+    input: &str,
+    failures: &[PathParsingFailure],
+    known_command: bool,
+) -> CommandSyntaxError {
+    if failures.is_empty() {
+        return if known_command {
+            unknown_argument_syntax_error(input, input.len())
+        } else {
+            unknown_command_syntax_error(input, input.len())
+        };
+    }
+
+    let farthest_cursor = failures
+        .iter()
+        .map(|failure| failure.cursor)
+        .max()
+        .unwrap_or(input.len());
+
+    let best_progress = failures
+        .iter()
+        .filter(|failure| failure.cursor == farthest_cursor)
+        .map(|failure| failure.consumed_tokens)
+        .max()
+        .unwrap_or(0);
+
+    let finalists = failures
+        .iter()
+        .filter(|failure| {
+            failure.cursor == farthest_cursor && failure.consumed_tokens == best_progress
+        })
+        .collect::<Vec<_>>();
+
+    let syntax_errors = finalists
+        .iter()
+        .filter_map(|failure| failure.syntax_error.clone())
+        .collect::<Vec<_>>();
+    if syntax_errors.len() == 1 {
+        return syntax_errors[0].clone();
+    }
+
+    let matched_any_node = finalists.iter().any(|failure| failure.matched_any_node);
+    if matched_any_node || known_command {
+        unknown_argument_syntax_error(input, farthest_cursor)
+    } else {
+        unknown_command_syntax_error(input, farthest_cursor)
+    }
+}
+
+fn next_unread_cursor(raw_args: &RawArgs<'_>, input_len: usize) -> usize {
+    raw_args.last().map_or(input_len, |arg| arg.start)
+}
+
+fn path_failure(
+    raw_args: &RawArgs<'_>,
+    total_args: usize,
+    input_len: usize,
+    matched_any_node: bool,
+    syntax_error: Option<CommandSyntaxError>,
+) -> PathParsingFailure {
+    let syntax_error_cursor = syntax_error
+        .as_ref()
+        .and_then(|error| error.context.as_ref().map(|context| context.cursor))
+        .unwrap_or_else(|| next_unread_cursor(raw_args, input_len));
+
+    PathParsingFailure {
+        cursor: syntax_error_cursor,
+        consumed_tokens: total_args.saturating_sub(raw_args.len()),
+        matched_any_node,
+        syntax_error,
+    }
 }
 
 #[derive(Default)]
@@ -96,10 +242,15 @@ impl CommandDispatcher {
         sender.set_success_count(u32::from(result.is_ok()));
 
         if let Err(e) = result {
-            let text = e.into_component(cmd);
-            sender
-                .send_message(text.color_named(pumpkin_util::text::color::NamedColor::Red))
-                .await;
+            for text in e.into_messages(cmd) {
+                sender
+                    .send_message(
+                        TextComponent::text("")
+                            .add_child(text)
+                            .color_named(pumpkin_util::text::color::NamedColor::Red),
+                    )
+                    .await;
+            }
         }
     }
 
@@ -293,9 +444,7 @@ impl CommandDispatcher {
         let (key, raw_args) = Self::split_parts(cmd)?;
 
         if !self.commands.contains_key(key) {
-            return Err(CommandFailed(TextComponent::text(format!(
-                "Command {key} does not exist"
-            ))));
+            return Err(SyntaxError(unknown_command_syntax_error(cmd, 0)));
         }
 
         let Some(permission) = self.permissions.get(key) else {
@@ -310,27 +459,20 @@ impl CommandDispatcher {
 
         let tree = self.get_tree(key)?;
 
-        let mut first_syntax_error = None;
+        let mut path_failures = Vec::new();
 
         // try paths until fitting path is found
         for path in tree.iter_paths() {
-            match Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone()).await {
-                Ok(true) => return Ok(()),
-                Ok(false) => {}
-                Err(SyntaxError(error)) => {
-                    if first_syntax_error.is_none() {
-                        first_syntax_error = Some(error);
-                    }
-                }
+            match Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone(), cmd)
+                .await
+            {
+                Ok(PathResult::Matched) => return Ok(()),
+                Ok(PathResult::Failed(failure)) => path_failures.push(failure),
                 Err(error) => return Err(error),
             }
         }
-        if let Some(error) = first_syntax_error {
-            return Err(SyntaxError(error));
-        }
-        Err(CommandFailed(TextComponent::text(format!(
-            "Invalid Syntax. Usage: {tree}"
-        ))))
+
+        Err(SyntaxError(select_parse_error(cmd, &path_failures, true)))
     }
 
     pub fn get_tree<'a>(&'a self, key: &str) -> Result<&'a CommandTree, CommandError> {
@@ -355,46 +497,89 @@ impl CommandDispatcher {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn try_is_fitting_path<'a>(
         src: &'a CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,
         raw_args: &mut RawArgs<'a>,
-    ) -> Result<bool, CommandError> {
+        input: &str,
+    ) -> Result<PathResult, CommandError> {
         let mut parsed_args: ConsumedArgs = HashMap::new();
+        let total_args = raw_args.len();
+        let mut matched_any_node = false;
+        let input_len = input.len();
 
         for node in path.iter().map(|&i| &tree.nodes[i]) {
             match &node.node_type {
                 NodeType::ExecuteLeaf { executor } => {
                     return if raw_args.is_empty() {
                         executor.execute(src, server, &parsed_args).await?;
-                        Ok(true)
+                        Ok(PathResult::Matched)
                     } else {
                         debug!(
                             "Error while parsing command: {raw_args:?} was not consumed, but should have been"
                         );
-                        Ok(false)
+                        Ok(PathResult::Failed(path_failure(
+                            raw_args,
+                            total_args,
+                            input_len,
+                            matched_any_node,
+                            None,
+                        )))
                     };
                 }
                 NodeType::Literal { string, .. } => {
-                    if raw_args.pop().map(|arg| arg.value) != Some(string.as_str()) {
+                    let Some(raw_arg) = raw_args.last() else {
+                        return Ok(PathResult::Failed(path_failure(
+                            raw_args,
+                            total_args,
+                            input_len,
+                            matched_any_node,
+                            None,
+                        )));
+                    };
+                    if raw_arg.value != string.as_str() {
                         debug!("Error while parsing command: {raw_args:?}: expected {string}");
-                        return Ok(false);
+                        return Ok(PathResult::Failed(path_failure(
+                            raw_args,
+                            total_args,
+                            input_len,
+                            matched_any_node,
+                            None,
+                        )));
                     }
+                    raw_args.pop();
+                    matched_any_node = true;
                 }
                 NodeType::Argument { consumer, name, .. } => {
                     match consumer.consume_with_syntax(src, server, raw_args).await {
                         Ok(Some(consumed)) => {
                             parsed_args.insert(name, consumed);
+                            matched_any_node = true;
                         }
                         Ok(None) => {
                             debug!(
                                 "Error while parsing command: {raw_args:?}: cannot parse argument {name}"
                             );
-                            return Ok(false);
+                            return Ok(PathResult::Failed(path_failure(
+                                raw_args,
+                                total_args,
+                                input_len,
+                                matched_any_node,
+                                None,
+                            )));
                         }
-                        Err(error) => return Err(CommandError::SyntaxError(error)),
+                        Err(error) => {
+                            return Ok(PathResult::Failed(path_failure(
+                                raw_args,
+                                total_args,
+                                input_len,
+                                matched_any_node,
+                                Some(error),
+                            )));
+                        }
                     }
                 }
                 NodeType::Require { predicate, .. } => {
@@ -402,14 +587,27 @@ impl CommandDispatcher {
                         debug!(
                             "Error while parsing command: {raw_args:?} does not meet the requirement"
                         );
-                        return Ok(false);
+                        return Ok(PathResult::Failed(path_failure(
+                            raw_args,
+                            total_args,
+                            input_len,
+                            matched_any_node,
+                            None,
+                        )));
                     }
+                    matched_any_node = true;
                 }
             }
         }
 
         debug!("Error while parsing command: {raw_args:?} was not consumed, but should have been");
-        Ok(false)
+        Ok(PathResult::Failed(path_failure(
+            raw_args,
+            total_args,
+            input_len,
+            matched_any_node,
+            None,
+        )))
     }
 
     async fn try_find_suggestions_on_path<'a>(
@@ -500,10 +698,28 @@ impl CommandDispatcher {
 #[cfg(test)]
 mod test {
     use pumpkin_config::BasicConfiguration;
+    use pumpkin_data::translation;
     use pumpkin_util::permission::PermissionRegistry;
+    use pumpkin_util::text::TextContent;
+    use pumpkin_util::text::click::ClickEvent;
+    use pumpkin_util::text::color::{Color, NamedColor};
     use tokio::sync::RwLock;
 
+    use super::{
+        PathParsingFailure, render_syntax_error_messages, select_parse_error,
+        unknown_argument_syntax_error,
+    };
+    use crate::command::errors::error_types;
     use crate::command::{commands::default_dispatcher, tree::CommandTree};
+
+    fn component_plain_text(component: &pumpkin_util::text::TextComponentBase) -> Option<&str> {
+        if let TextContent::Text { text } = component.content.as_ref() {
+            Some(text.as_ref())
+        } else {
+            None
+        }
+    }
+
     #[tokio::test]
     async fn dynamic_command() {
         let config = BasicConfiguration::default();
@@ -511,5 +727,118 @@ mod test {
         let mut dispatcher = default_dispatcher(&registry, &config).await;
         let tree = CommandTree::new(["test"], "test_desc");
         dispatcher.register(tree, "minecraft:test");
+    }
+
+    #[test]
+    fn syntax_renderer_outputs_two_messages_with_context_styling() {
+        let input = "0123456789abcdefghij";
+        let error = unknown_argument_syntax_error(input, 15);
+        let messages = render_syntax_error_messages(error);
+
+        assert_eq!(messages.len(), 2);
+
+        let context = &messages[1].0;
+        assert_eq!(context.style.color, Some(Color::Named(NamedColor::Gray)));
+        assert_eq!(
+            context.style.click_event,
+            Some(ClickEvent::SuggestCommand {
+                command: format!("/{input}").into()
+            })
+        );
+        assert_eq!(context.extra.len(), 4);
+
+        assert_eq!(component_plain_text(&context.extra[0]), Some("..."));
+        assert_eq!(component_plain_text(&context.extra[1]), Some("56789abcde"));
+        assert_eq!(component_plain_text(&context.extra[2]), Some("fghij"));
+        assert_eq!(
+            context.extra[2].style.color,
+            Some(Color::Named(NamedColor::Red))
+        );
+        assert_eq!(context.extra[2].style.underlined, Some(true));
+
+        let here_component = &context.extra[3];
+        if let TextContent::Translate { translate, .. } = here_component.content.as_ref() {
+            assert_eq!(translate, translation::COMMAND_CONTEXT_HERE);
+        } else {
+            panic!("expected translate component for command.context.here");
+        }
+        assert_eq!(
+            here_component.style.color,
+            Some(Color::Named(NamedColor::Red))
+        );
+        assert_eq!(here_component.style.italic, Some(true));
+    }
+
+    #[test]
+    fn parse_error_selection_prefers_farthest_cursor_then_progress() {
+        let fallback_error = unknown_argument_syntax_error("test one two", 5);
+        let preferred_error = unknown_argument_syntax_error("test one two", 9);
+
+        let selected = select_parse_error(
+            "test one two",
+            &[
+                PathParsingFailure {
+                    cursor: 5,
+                    consumed_tokens: 2,
+                    matched_any_node: true,
+                    syntax_error: Some(fallback_error),
+                },
+                PathParsingFailure {
+                    cursor: 9,
+                    consumed_tokens: 1,
+                    matched_any_node: true,
+                    syntax_error: None,
+                },
+                PathParsingFailure {
+                    cursor: 9,
+                    consumed_tokens: 2,
+                    matched_any_node: true,
+                    syntax_error: Some(preferred_error.clone()),
+                },
+            ],
+            true,
+        );
+
+        assert_eq!(selected.context, preferred_error.context);
+    }
+
+    #[test]
+    fn parse_error_selection_synthesizes_unknown_argument_for_tied_syntax_errors() {
+        let selected = select_parse_error(
+            "alpha beta gamma",
+            &[
+                PathParsingFailure {
+                    cursor: 12,
+                    consumed_tokens: 2,
+                    matched_any_node: true,
+                    syntax_error: Some(unknown_argument_syntax_error("alpha beta gamma", 12)),
+                },
+                PathParsingFailure {
+                    cursor: 12,
+                    consumed_tokens: 2,
+                    matched_any_node: true,
+                    syntax_error: Some(unknown_argument_syntax_error("alpha beta gamma", 12)),
+                },
+            ],
+            true,
+        );
+
+        assert!(selected.is(&error_types::DISPATCHER_UNKNOWN_ARGUMENT));
+    }
+
+    #[test]
+    fn parse_error_selection_can_synthesize_unknown_command_when_not_matched() {
+        let selected = select_parse_error(
+            "abc",
+            &[PathParsingFailure {
+                cursor: 0,
+                consumed_tokens: 0,
+                matched_any_node: false,
+                syntax_error: None,
+            }],
+            false,
+        );
+
+        assert!(selected.is(&error_types::DISPATCHER_UNKNOWN_COMMAND));
     }
 }

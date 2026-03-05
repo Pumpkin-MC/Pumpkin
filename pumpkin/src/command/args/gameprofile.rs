@@ -366,19 +366,57 @@ fn selector_suggestions() -> Vec<CommandSuggestion> {
 }
 
 fn syntax_player_unknown(raw_arg: RawArg<'_>) -> CommandSyntaxError {
-    syntax_error_for_arg(
+    syntax_error_for_arg_with_cursor(
         raw_arg,
         TextComponent::translate(translation::ARGUMENT_PLAYER_UNKNOWN, []),
+        0,
     )
 }
 
-fn syntax_error_for_arg(raw_arg: RawArg<'_>, message: TextComponent) -> CommandSyntaxError {
+fn syntax_error_for_arg_with_cursor(
+    raw_arg: RawArg<'_>,
+    message: TextComponent,
+    local_cursor: usize,
+) -> CommandSyntaxError {
+    let mut clamped_local_cursor = local_cursor.min(raw_arg.value.len());
+    while clamped_local_cursor > 0 && !raw_arg.value.is_char_boundary(clamped_local_cursor) {
+        clamped_local_cursor -= 1;
+    }
+
     CommandSyntaxError {
         error_type: &error_types::DISPATCHER_UNKNOWN_ARGUMENT,
         message,
         context: Some(CommandSyntaxErrorContext {
             input: raw_arg.input.to_string(),
-            cursor: raw_arg.start,
+            cursor: raw_arg.start + clamped_local_cursor,
         }),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use pumpkin_data::translation;
+    use pumpkin_util::text::TextContent;
+
+    use super::syntax_player_unknown;
+    use crate::command::tree::RawArg;
+
+    #[test]
+    fn unknown_player_error_uses_translation_and_arg_start_cursor() {
+        let input = "ban missing_player";
+        let raw_arg = RawArg {
+            value: "missing_player",
+            start: 4,
+            end: input.len(),
+            input,
+        };
+
+        let error = syntax_player_unknown(raw_arg);
+        let translate_key = match error.message.0.content.as_ref() {
+            TextContent::Translate { translate, .. } => translate.as_ref(),
+            _ => "",
+        };
+        assert_eq!(translate_key, translation::ARGUMENT_PLAYER_UNKNOWN);
+        assert_eq!(error.context.unwrap().cursor, 4);
     }
 }
