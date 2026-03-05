@@ -1,6 +1,6 @@
 use crate::{
     commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber,
-    wit::pumpkin::plugin::command::ConsumedArgs,
+    text::TextComponent, wit::pumpkin::plugin::command::ConsumedArgs,
 };
 
 pub mod commands;
@@ -76,10 +76,11 @@ impl wit::Guest for Component {
     ) -> Result<i32, CommandError> {
         let handlers = COMMAND_HANDLERS.lock().unwrap();
         if let Some(handler) = handlers.get(&command_id) {
-            //handler.handle_erased(server, event);
-            todo!()
+            handler.handle_erased(sender, server, args)
         } else {
-            todo!()
+            Err(CommandError::CommandFailed(TextComponent::text(&format!(
+                "no handler registered for command id {command_id}"
+            ))))
         }
     }
 }

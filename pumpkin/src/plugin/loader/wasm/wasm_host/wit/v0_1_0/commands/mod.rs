@@ -1,3 +1,4 @@
+use pumpkin_util::translation::Locale;
 use wasmtime::component::Resource;
 
 use crate::{
@@ -31,7 +32,9 @@ use crate::{
     },
     plugin::loader::wasm::wasm_host::{
         DowncastResourceExt,
-        state::{CommandNodeResource, PluginHostState},
+        state::{
+            CommandNodeResource, CommandSenderResource, PluginHostState, TextComponentResource,
+        },
         wit::v0_1_0::{
             commands::executor::WasmCommandExecutor,
             pumpkin::{
@@ -62,7 +65,11 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<ConsumedArgs>) -> wasmtime::Result<()> {
-        todo!()
+        self.resource_table
+            .delete::<crate::plugin::loader::wasm::wasm_host::state::ConsumedArgsResource>(
+                Resource::new_own(rep.rep()),
+            )?;
+        Ok(())
     }
 }
 
@@ -73,15 +80,55 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
     }
 
     async fn then(&mut self, command: Resource<Command>, node: Resource<CommandNode>) -> () {
-        todo!()
+        let node_resource = node.consume(self);
+        let command_resource = self
+            .resource_table
+            .get_mut::<crate::plugin::loader::wasm::wasm_host::state::CommandResource>(
+                &Resource::new_own(command.rep()),
+            )
+            .expect("invalid command resource handle");
+
+        command_resource.provider = command_resource
+            .provider
+            .clone()
+            .then(node_resource.provider);
     }
 
     async fn execute_with_handler_id(&mut self, command: Resource<Command>, handler_id: u32) -> () {
-        todo!()
+        let plugin = self
+            .plugin
+            .as_ref()
+            .expect("plugin should always be initialized here")
+            .upgrade()
+            .expect("plugin has been dropped");
+
+        let server = self
+            .server
+            .clone()
+            .expect("server should be set before command registration");
+
+        let executor = WasmCommandExecutor {
+            handler_id,
+            plugin,
+            server,
+        };
+
+        let command_resource = self
+            .resource_table
+            .get_mut::<crate::plugin::loader::wasm::wasm_host::state::CommandResource>(
+                &Resource::new_own(command.rep()),
+            )
+            .expect("invalid command resource handle");
+
+        command_resource.provider = command_resource.provider.clone().execute(executor);
     }
 
     async fn drop(&mut self, rep: Resource<Command>) -> wasmtime::Result<()> {
-        todo!()
+        self.resource_table
+            .delete::<crate::plugin::loader::wasm::wasm_host::state::CommandResource>(
+                Resource::new_own(rep.rep()),
+            )?;
+        Ok(())
     }
 }
 
@@ -98,33 +145,83 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         command_sender: Resource<CommandSender>,
         text: Resource<TextComponent>,
     ) -> () {
-        todo!()
+        let text_resource = self
+            .resource_table
+            .get::<TextComponentResource>(&Resource::new_own(text.rep()))
+            .expect("invalid text-component resource handle");
+        let component = text_resource.provider.clone();
+
+        let sender_resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        sender_resource.provider.send_message(component);
     }
 
     async fn set_success_count(&mut self, command_sender: Resource<CommandSender>, count: i32) {
-        todo!()
+        let resource = self
+            .resource_table
+            .get_mut::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        resource.provider.set_success_count(count as u32);
     }
 
     async fn is_player(&mut self, command_sender: Resource<CommandSender>) -> bool {
-        todo!()
+        let resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        matches!(resource.provider, crate::command::CommandSender::Player(_))
     }
 
     async fn is_console(&mut self, command_sender: Resource<CommandSender>) -> bool {
-        todo!()
+        let resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        matches!(
+            resource.provider,
+            crate::command::CommandSender::Console | crate::command::CommandSender::Rcon(_)
+        )
     }
 
     async fn as_player(
         &mut self,
         command_sender: Resource<CommandSender>,
     ) -> Option<Resource<Player>> {
-        todo!()
+        let resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        if let crate::command::CommandSender::Player(player) = &resource.provider {
+            let player = player.clone();
+            Some(self.add_player(player).unwrap())
+        } else {
+            None
+        }
     }
 
     async fn permission_level(
         &mut self,
         command_sender: Resource<CommandSender>,
     ) -> PermissionLevel {
-        todo!()
+        let resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        match resource.provider.permission_lvl() {
+            pumpkin_util::PermissionLvl::Zero => PermissionLevel::Zero,
+            pumpkin_util::PermissionLvl::One => PermissionLevel::One,
+            pumpkin_util::PermissionLvl::Two => PermissionLevel::Two,
+            pumpkin_util::PermissionLvl::Three => PermissionLevel::Three,
+            pumpkin_util::PermissionLvl::Four => PermissionLevel::Four,
+        }
     }
 
     async fn has_permission_level(
@@ -132,7 +229,20 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         command_sender: Resource<CommandSender>,
         level: PermissionLevel,
     ) -> bool {
-        todo!()
+        let resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        let required = match level {
+            PermissionLevel::Zero => pumpkin_util::PermissionLvl::Zero,
+            PermissionLevel::One => pumpkin_util::PermissionLvl::One,
+            PermissionLevel::Two => pumpkin_util::PermissionLvl::Two,
+            PermissionLevel::Three => pumpkin_util::PermissionLvl::Three,
+            PermissionLevel::Four => pumpkin_util::PermissionLvl::Four,
+        };
+
+        resource.provider.permission_lvl() >= required
     }
 
     async fn has_permission(
@@ -141,15 +251,56 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         server: Resource<Server>,
         node: String,
     ) -> bool {
-        todo!()
+        let sender_resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        let server_resource = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                &Resource::new_own(server.rep()),
+            )
+            .expect("invalid server resource handle");
+
+        sender_resource
+            .provider
+            .has_permission(&server_resource.provider, &node)
+            .await
     }
 
     async fn position(&mut self, command_sender: Resource<CommandSender>) -> Option<Position> {
-        todo!()
+        let resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        resource
+            .provider
+            .position()
+            .map(|pos| (pos.x, pos.y, pos.z))
     }
 
     async fn world(&mut self, command_sender: Resource<CommandSender>) -> Option<Resource<World>> {
-        todo!()
+        let resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        if let Some(world) = resource.provider.world() {
+            Some(
+                self.resource_table
+                    .push(
+                        crate::plugin::loader::wasm::wasm_host::state::WasmResource {
+                            provider: world,
+                        },
+                    )
+                    .map(|r| wasmtime::component::Resource::new_own(r.rep()))
+                    .unwrap(),
+            )
+        } else {
+            None
+        }
     }
 
     async fn get_locale(&mut self, command_sender: Resource<CommandSender>) -> String {
@@ -157,22 +308,39 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
     }
 
     async fn should_receive_feedback(&mut self, command_sender: Resource<CommandSender>) -> bool {
-        todo!()
+        let resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        resource.provider.should_receive_feedback()
     }
 
     async fn should_broadcast_console_to_ops(
         &mut self,
         command_sender: Resource<CommandSender>,
     ) -> bool {
-        todo!()
+        let resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        resource.provider.should_broadcast_console_to_ops()
     }
 
     async fn should_track_output(&mut self, command_sender: Resource<CommandSender>) -> bool {
-        todo!()
+        let resource = self
+            .resource_table
+            .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
+            .expect("invalid command-sender resource handle");
+
+        resource.provider.should_track_output()
     }
 
     async fn drop(&mut self, rep: Resource<CommandSender>) -> wasmtime::Result<()> {
-        todo!()
+        self.resource_table
+            .delete::<CommandSenderResource>(Resource::new_own(rep.rep()))?;
+        Ok(())
     }
 }
 
@@ -303,7 +471,10 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
         self_command_node: Resource<CommandNode>,
         node: Resource<CommandNode>,
     ) {
-        todo!()
+        let child_resource = node.consume(self);
+        let parent_resource = self_command_node.downcast_mut(self);
+        let builder = std::mem::replace(&mut parent_resource.provider, literal(""));
+        parent_resource.provider = builder.then(child_resource.provider);
     }
 
     async fn execute_with_handler_id(
@@ -344,6 +515,8 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<CommandNode>) -> wasmtime::Result<()> {
-        todo!()
+        self.resource_table
+            .delete::<CommandNodeResource>(Resource::new_own(rep.rep()))?;
+        Ok(())
     }
 }
