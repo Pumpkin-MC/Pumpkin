@@ -408,13 +408,13 @@ impl<'a> ChunkNoiseGenerator<'a> {
 
     #[inline]
     #[must_use]
-    pub fn horizontal_cell_block_count(&self) -> u8 {
+    pub const fn horizontal_cell_block_count(&self) -> u8 {
         self.generation_shape.horizontal_cell_block_count()
     }
 
     #[inline]
     #[must_use]
-    pub fn vertical_cell_block_count(&self) -> u8 {
+    pub const fn vertical_cell_block_count(&self) -> u8 {
         self.generation_shape.vertical_cell_block_count()
     }
 

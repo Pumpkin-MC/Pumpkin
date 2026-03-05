@@ -47,7 +47,7 @@ impl BlockRotation {
     /// The position is rotated around the Y axis. The `size` parameter defines
     /// the template dimensions, used to calculate the pivot point.
     #[must_use]
-    pub fn transform_pos(&self, pos: Vector3<i32>, size: Vector3<i32>) -> Vector3<i32> {
+    pub const fn transform_pos(&self, pos: Vector3<i32>, size: Vector3<i32>) -> Vector3<i32> {
         match self {
             Self::None => pos,
             Self::Clockwise90 => Vector3::new(size.z - 1 - pos.z, pos.y, pos.x),
@@ -61,7 +61,7 @@ impl BlockRotation {
     /// Unlike `transform_pos` which rotates within template bounds,
     /// this rotates a simple offset (e.g. sub-template positioning).
     #[must_use]
-    pub fn rotate_offset(self, x: i32, z: i32) -> (i32, i32) {
+    pub const fn rotate_offset(self, x: i32, z: i32) -> (i32, i32) {
         match self {
             Self::None => (x, z),
             Self::Clockwise90 => (-z, x),
@@ -169,7 +169,7 @@ impl BlockRotation {
 
     /// Converts rotation to a primary axis for bounding box creation.
     #[must_use]
-    pub fn to_axis(self) -> pumpkin_util::math::vector3::Axis {
+    pub const fn to_axis(self) -> pumpkin_util::math::vector3::Axis {
         match self {
             Self::None | Self::Rotate180 => pumpkin_util::math::vector3::Axis::Z,
             Self::Clockwise90 | Self::CounterClockwise90 => pumpkin_util::math::vector3::Axis::X,
@@ -198,7 +198,7 @@ impl BlockMirror {
 
     /// Transforms a position within the template bounds according to this mirror.
     #[must_use]
-    pub fn transform_pos(&self, pos: Vector3<i32>, size: Vector3<i32>) -> Vector3<i32> {
+    pub const fn transform_pos(&self, pos: Vector3<i32>, size: Vector3<i32>) -> Vector3<i32> {
         match self {
             Self::None => pos,
             Self::LeftRight => Vector3::new(size.x - 1 - pos.x, pos.y, pos.z),

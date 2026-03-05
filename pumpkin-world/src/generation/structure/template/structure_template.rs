@@ -50,7 +50,7 @@ pub struct StructureTemplate {
 /// Each palette entry defines a block type with optional properties.
 #[derive(Debug, Clone)]
 pub struct PaletteEntry {
-    /// The block name (e.g., "minecraft:stone_bricks").
+    /// The block name (e.g., "`minecraft:stone_bricks`").
     pub name: String,
 
     /// Block state properties (e.g., [("facing", "north"), ("lit", "false")]).
@@ -60,7 +60,7 @@ pub struct PaletteEntry {
 impl PaletteEntry {
     /// Creates a new palette entry with no properties.
     #[must_use]
-    pub fn new(name: String) -> Self {
+    pub const fn new(name: String) -> Self {
         Self {
             name,
             properties: Vec::new(),
@@ -69,7 +69,7 @@ impl PaletteEntry {
 
     /// Creates a new palette entry with the given properties.
     #[must_use]
-    pub fn with_properties(name: String, properties: Vec<(String, String)>) -> Self {
+    pub const fn with_properties(name: String, properties: Vec<(String, String)>) -> Self {
         Self { name, properties }
     }
 }
@@ -334,7 +334,7 @@ impl StructureTemplate {
 
     /// Returns the total number of blocks in this template.
     #[must_use]
-    pub fn block_count(&self) -> usize {
+    pub const fn block_count(&self) -> usize {
         self.blocks.len()
     }
 
@@ -346,7 +346,7 @@ impl StructureTemplate {
 
     /// Returns whether this template has any entities.
     #[must_use]
-    pub fn has_entities(&self) -> bool {
+    pub const fn has_entities(&self) -> bool {
         !self.entities.is_empty()
     }
 }

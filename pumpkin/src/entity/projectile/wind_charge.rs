@@ -16,8 +16,6 @@ use crate::{
 };
 
 const EXPLOSION_POWER: f32 = 1.2;
-// square(3.5)
-const MAX_RENDER_DISTANCE_WHEN_NEWLY_SPAWNED: f32 = 3.5 * 3.5;
 const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
 
 pub struct WindChargeEntity {
@@ -48,28 +46,6 @@ impl WindChargeEntity {
             .load()
             .explode(position, EXPLOSION_POWER)
             .await;
-    }
-
-    pub fn should_render(&self, distance: f64) -> bool {
-        if self.get_entity().age.load(Ordering::Relaxed) < 2
-            && distance < f64::from(MAX_RENDER_DISTANCE_WHEN_NEWLY_SPAWNED)
-        {
-            return false;
-        }
-
-        let mut average_side_length = self
-            .get_entity()
-            .bounding_box
-            .load()
-            .get_average_side_length();
-
-        if average_side_length.is_nan() {
-            average_side_length = 1.0;
-        }
-
-        // TODO: IMPLEMENT renderDistanceMultiplier instead of the 1.0
-        average_side_length *= 64.0 * 1.0;
-        distance < average_side_length * average_side_length
     }
 
     pub fn deflect(

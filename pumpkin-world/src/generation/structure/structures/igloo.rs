@@ -45,11 +45,11 @@ const BASEMENT_DEPTH: i32 = 9;
 const PIVOT_OFFSET_X: i32 = 3;
 const PIVOT_OFFSET_Z: i32 = 5;
 
-/// Offset from dome to shaft entrance (vanilla: OFFSETS_FROM_TOP for middle).
+/// Offset from dome to shaft entrance (vanilla: `OFFSETS_FROM_TOP` for middle).
 const SHAFT_OFFSET_X: i32 = 2;
 const SHAFT_OFFSET_Z: i32 = 4;
 
-/// Offset from dome to basement (vanilla: OFFSETS_FROM_TOP for bottom).
+/// Offset from dome to basement (vanilla: `OFFSETS_FROM_TOP` for bottom).
 const BASEMENT_OFFSET_X: i32 = 0;
 const BASEMENT_OFFSET_Z: i32 = -2;
 

@@ -131,13 +131,13 @@ impl TemplatePiece {
             }
 
             // Resolve the block state with rotation/mirror
-            let state = match BlockStateResolver::resolve(palette_entry, self.rotation, self.mirror)
+            let state = if let Some(s) =
+                BlockStateResolver::resolve(palette_entry, self.rotation, self.mirror)
             {
-                Some(s) => s,
-                None => {
-                    debug!("Failed to resolve block: {}", palette_entry.name);
-                    continue;
-                }
+                s
+            } else {
+                debug!("Failed to resolve block: {}", palette_entry.name);
+                continue;
             };
 
             // Transform position to world coordinates

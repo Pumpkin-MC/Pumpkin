@@ -113,8 +113,7 @@ impl SimplexNoiseSampler {
     ///
     /// # Returns
     /// The contribution of this corner to the final noise value.
-    #[expect(clippy::suboptimal_flops)]
-    fn grad(gradient_index: usize, x: f64, y: f64, z: f64, distance: f64) -> f64 {
+    const fn grad(gradient_index: usize, x: f64, y: f64, z: f64, distance: f64) -> f64 {
         let d = distance - x * x - y * y - z * z;
         if d < 0f64 {
             0f64

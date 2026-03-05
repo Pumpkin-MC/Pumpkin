@@ -49,7 +49,7 @@ pub use template_piece::TemplatePiece;
 /// - Block entities are created from template NBT data
 ///
 /// `origin` is the base world position (x, y, z).
-/// `offset` is the un-rotated XZ offset from origin (x_offset, z_offset) - rotation is applied automatically.
+/// `offset` is the un-rotated XZ offset from origin (`x_offset`, `z_offset`) - rotation is applied automatically.
 pub fn place_template(
     chunk: &mut ProtoChunk,
     template: &StructureTemplate,
