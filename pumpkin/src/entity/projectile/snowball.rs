@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::ProjectileHit;
+use crate::entity::projectile::ThrownItemEntityCondition::Owned;
 use crate::{
     entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
     server::Server,
@@ -31,7 +32,7 @@ impl SnowballEntity {
     }
 
     pub async fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, shooter);
+        let thrown = ThrownItemEntity::new(entity, &Owned(shooter));
         thrown
             .entity
             .set_velocity(Vector3::new(0.0, 0.1, 0.0))
@@ -89,5 +90,9 @@ impl EntityBase for SnowballEntity {
                 });
             }
         })
+    }
+
+    fn get_gravity(&self) -> f64 {
+        0.03
     }
 }

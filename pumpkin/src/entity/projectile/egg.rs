@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use crate::entity::projectile::ThrownItemEntityCondition::Owned;
 use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
 use crate::{
     entity::{
@@ -45,7 +46,7 @@ impl EggEntity {
     }
 
     pub async fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, shooter);
+        let thrown = ThrownItemEntity::new(entity, &Owned(shooter));
         // Default slight upward velocity
         thrown
             .entity
@@ -183,5 +184,9 @@ impl EntityBase for EggEntity {
                 });
             }
         })
+    }
+
+    fn get_gravity(&self) -> f64 {
+        0.03
     }
 }
