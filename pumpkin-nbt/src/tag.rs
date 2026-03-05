@@ -447,8 +447,7 @@ impl NbtTag {
         match self {
             Self::Compound(compound) => Self::Compound(compound.normalize()),
             Self::List(list) => {
-                let normalized_list: Vec<Self> =
-                    list.into_iter().map(|tag| tag.normalize()).collect();
+                let normalized_list: Vec<Self> = list.into_iter().map(NbtTag::normalize).collect();
                 Self::List(normalized_list)
             }
             // All other types don't contain nested structures, so return as-is

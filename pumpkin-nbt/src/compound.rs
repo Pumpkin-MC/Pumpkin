@@ -203,7 +203,7 @@ impl NbtCompound {
         self.get(name).and_then(|tag| tag.extract_long_array())
     }
 
-    /// Normalizes the compound by sorting child_tags by key name in lexicographical order
+    /// Normalizes the compound by sorting `child_tags` by key name in lexicographical order
     /// and recursively normalizing any nested compound or list structures.
     #[must_use]
     pub fn normalize(mut self) -> Self {

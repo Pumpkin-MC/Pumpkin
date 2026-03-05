@@ -230,19 +230,16 @@ pub fn normalize_nbt_bytes(bytes: &[u8]) -> Result<Bytes, Error> {
     let cursor = Cursor::new(bytes);
     let nbt_result = Nbt::read(&mut NbtReadHelper::new(cursor));
 
-    match nbt_result {
-        Ok(nbt) => {
-            // Successfully parsed as named NBT
-            let normalized_nbt = Nbt::new(nbt.name, nbt.root_tag.normalize());
-            Ok(normalized_nbt.write())
-        }
-        Err(_) => {
-            // Try as unnamed NBT
-            let cursor = Cursor::new(bytes);
-            let nbt = Nbt::read_unnamed(&mut NbtReadHelper::new(cursor))?;
-            let normalized_nbt = Nbt::new(nbt.name, nbt.root_tag.normalize());
-            Ok(normalized_nbt.write_unnamed())
-        }
+    if let Ok(nbt) = nbt_result {
+        // Successfully parsed as named NBT
+        let normalized_nbt = Nbt::new(nbt.name, nbt.root_tag.normalize());
+        Ok(normalized_nbt.write())
+    } else {
+        // Try as unnamed NBT
+        let cursor = Cursor::new(bytes);
+        let nbt = Nbt::read_unnamed(&mut NbtReadHelper::new(cursor))?;
+        let normalized_nbt = Nbt::new(nbt.name, nbt.root_tag.normalize());
+        Ok(normalized_nbt.write_unnamed())
     }
 }
 
