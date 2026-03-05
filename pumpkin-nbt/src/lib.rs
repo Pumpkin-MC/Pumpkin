@@ -643,7 +643,7 @@ mod test {
     }
 
     #[test]
-    fn test_normalize_nbt_bytes() {
+    fn normalize_nbt_bytes_works() {
         use crate::normalize_nbt_bytes;
         use serde::{Deserialize, Serialize};
 
@@ -683,7 +683,7 @@ mod test {
     }
 
     #[test]
-    fn test_normalize_nested_compounds() {
+    fn normalize_nested_compounds() {
         use crate::normalize_nbt_bytes;
         #[derive(Serialize, Deserialize, Debug, PartialEq)]
         struct Inner {
@@ -722,7 +722,7 @@ mod test {
     }
 
     #[test]
-    fn test_normalize_with_lists() {
+    fn normalize_with_lists() {
         use crate::normalize_nbt_bytes;
         #[derive(Serialize, Deserialize, Debug, PartialEq)]
         struct TestStruct {
