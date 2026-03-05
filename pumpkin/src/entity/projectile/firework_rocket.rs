@@ -1,3 +1,4 @@
+use crate::entity::projectile::ThrownItemEntityCondition::Owned;
 use crate::{
     entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
     server::Server,
@@ -53,7 +54,7 @@ impl FireworkRocketEntity {
 
         // Set random initial velocity
         // Set on the inner entity after constructing ThrownItemEntity
-        let thrown = ThrownItemEntity::new(entity, shooter);
+        let thrown = ThrownItemEntity::new(entity, &Owned(shooter));
         thrown
             .entity
             .set_velocity(Vector3::new(
@@ -158,5 +159,9 @@ impl EntityBase for FireworkRocketEntity {
 
     fn as_nbt_storage(&self) -> &dyn crate::entity::NBTStorage {
         self
+    }
+
+    fn get_gravity(&self) -> f64 {
+        0.03
     }
 }

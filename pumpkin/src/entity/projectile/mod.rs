@@ -29,16 +29,36 @@ pub struct ThrownItemEntity {
     pub has_hit: AtomicBool,
 }
 
+/// The condition of a [`ThrownItemEntity`] when one is created.
+/// It can have an owner or no owner.
+pub enum ThrownItemEntityCondition<'a> {
+    Owned(&'a Entity),
+    Unowned(Vector3<f64>),
+}
+
 impl ThrownItemEntity {
-    pub fn new(entity: Entity, owner: &Entity) -> Self {
-        let mut owner_pos = owner.pos.load();
-        owner_pos.y += owner.get_eye_height() - 0.1;
-        entity.pos.store(owner_pos);
-        Self {
-            entity,
-            owner_id: Some(owner.entity_id),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
+    pub fn new(entity: Entity, condition: &ThrownItemEntityCondition) -> Self {
+        match condition {
+            ThrownItemEntityCondition::Owned(owner) => {
+                let mut owner_pos = owner.pos.load();
+                owner_pos.y += owner.get_eye_height() - 0.1;
+                entity.pos.store(owner_pos);
+                Self {
+                    entity,
+                    owner_id: Some(owner.entity_id),
+                    collides_with_projectiles: false,
+                    has_hit: AtomicBool::new(false),
+                }
+            }
+            ThrownItemEntityCondition::Unowned(pos) => {
+                entity.pos.store(*pos);
+                Self {
+                    entity,
+                    owner_id: None,
+                    collides_with_projectiles: false,
+                    has_hit: AtomicBool::new(false),
+                }
+            }
         }
     }
 
@@ -235,9 +255,9 @@ impl ThrownItemEntity {
     const fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
-    #[allow(clippy::unused_self)]
-    const fn get_gravity(&self) -> f64 {
-        0.03
+
+    fn get_gravity(&self) -> f64 {
+        self.entity.get_gravity()
     }
 }
 
