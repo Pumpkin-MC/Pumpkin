@@ -139,7 +139,6 @@ impl PacketRead for String {
 }
 
 impl PacketRead for Vec<u8> {
-    #[expect(clippy::read_zero_byte_vec)]
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         // Cap at 1 MB to prevent OOM from a malicious length prefix.
         const MAX_VEC_LENGTH: u32 = 1024 * 1024;
