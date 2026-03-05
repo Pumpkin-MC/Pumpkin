@@ -44,8 +44,8 @@ impl ArgumentType for HelpArgumentType {
                     reader.set_cursor(reader_start);
                     Err(INTEGER_TOO_LOW.create(
                         reader,
-                        TextComponent::text(integer.to_string()),
                         TextComponent::text("1"),
+                        TextComponent::text(integer.to_string()),
                     ))
                 } else if let Ok(a) = integer.try_into() {
                     Ok(HelpArgument::Page(a))
@@ -53,8 +53,8 @@ impl ArgumentType for HelpArgumentType {
                     reader.set_cursor(reader_start);
                     Err(INTEGER_TOO_HIGH.create(
                         reader,
-                        TextComponent::text(integer.to_string()),
                         TextComponent::text(usize::MAX.to_string()),
+                        TextComponent::text(integer.to_string()),
                     ))
                 }
             }
