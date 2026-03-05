@@ -420,7 +420,6 @@ impl Server {
             PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone()).await;
-                #[expect(clippy::if_then_some_else_none)]
                 if world
                     .add_player(player.clone())
                     .is_ok() {

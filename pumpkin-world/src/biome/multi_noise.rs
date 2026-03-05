@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[must_use]
-pub fn to_long(float: f32) -> i64 {
+pub const fn to_long(float: f32) -> i64 {
     (float * 10000f32) as i64
 }
 

@@ -158,10 +158,10 @@ impl GenerationSchedule {
             LightingEngineConfig::Full => {
                 let mut engine = chunk.light_engine.lock().unwrap();
 
-                for section in engine.block_light.iter_mut() {
+                for section in &mut engine.block_light {
                     section.fill(15);
                 }
-                for section in engine.sky_light.iter_mut() {
+                for section in &mut engine.sky_light {
                     section.fill(15);
                 }
 
@@ -170,10 +170,10 @@ impl GenerationSchedule {
             LightingEngineConfig::Dark => {
                 let mut engine = chunk.light_engine.lock().unwrap();
 
-                for section in engine.block_light.iter_mut() {
+                for section in &mut engine.block_light {
                     section.fill(0);
                 }
-                for section in engine.sky_light.iter_mut() {
+                for section in &mut engine.sky_light {
                     section.fill(0);
                 }
 
@@ -639,7 +639,18 @@ impl GenerationSchedule {
                                 // Check if this is the first time becoming public
                                 let was_public = holder.public;
 
-                                if !was_public {
+                                if was_public {
+                                    // Was already public but chunk has been regenerated (e.g., after relighting)
+                                    // Update the chunk data and re-notify players
+                                    self.apply_lighting_override(&chunk);
+                                    holder.chunk = Some(Chunk::Level(chunk.clone()));
+                                    self.public_chunk_map.insert(new_pos, chunk.clone());
+                                    info!(
+                                        "Notifying players: regenerated chunk at {:?} (was already public)",
+                                        new_pos
+                                    );
+                                    self.listener.process_new_chunk(new_pos, &chunk);
+                                } else {
                                     self.apply_lighting_override(&chunk);
                                     // Clone once for public_chunk_map (needed for player access)
                                     let public_chunk = chunk.clone();
@@ -665,17 +676,6 @@ impl GenerationSchedule {
                                             new_pos
                                         );
                                     }
-                                } else {
-                                    // Was already public but chunk has been regenerated (e.g., after relighting)
-                                    // Update the chunk data and re-notify players
-                                    self.apply_lighting_override(&chunk);
-                                    holder.chunk = Some(Chunk::Level(chunk.clone()));
-                                    self.public_chunk_map.insert(new_pos, chunk.clone());
-                                    info!(
-                                        "Notifying players: regenerated chunk at {:?} (was already public)",
-                                        new_pos
-                                    );
-                                    self.listener.process_new_chunk(new_pos, &chunk);
                                 }
                             } else {
                                 // Non-center chunk... just restore it to holder without cloning
@@ -968,17 +968,14 @@ impl GenerationSchedule {
             if self.queue.is_empty() {
                 // debug!("the queue is empty. thread sleep");
                 while self.running_task_count > 0 && self.queue.is_empty() {
-                    match self.recv_chunk.try_recv() {
-                        Ok((pos, data)) => {
-                            self.receive_chunk(pos, data);
-                            self.resort_work(self.send_level.get());
+                    if let Ok((pos, data)) = self.recv_chunk.try_recv() {
+                        self.receive_chunk(pos, data);
+                        self.resort_work(self.send_level.get());
+                    } else {
+                        if level.shut_down_chunk_system.load(Relaxed) {
+                            break;
                         }
-                        Err(_) => {
-                            if level.shut_down_chunk_system.load(Relaxed) {
-                                break;
-                            }
-                            thread::sleep(Duration::from_millis(50));
-                        }
+                        thread::sleep(Duration::from_millis(50));
                     }
                 }
                 if self.queue.is_empty() {
@@ -996,22 +993,19 @@ impl GenerationSchedule {
         let mut wait_iterations = 0;
         let max_wait_iterations = 100; // 5 seconds max wait
         while self.running_task_count > 0 && wait_iterations < max_wait_iterations {
-            match self.recv_chunk.try_recv() {
-                Ok((pos, data)) => {
-                    self.receive_chunk(pos, data);
-                    wait_iterations = 0; // Reset counter when we receive data
+            if let Ok((pos, data)) = self.recv_chunk.try_recv() {
+                self.receive_chunk(pos, data);
+                wait_iterations = 0; // Reset counter when we receive data
+            } else {
+                wait_iterations += 1;
+                if wait_iterations % 20 == 0 {
+                    warn!(
+                        "Still waiting for {} tasks to complete (waited {}ms)",
+                        self.running_task_count,
+                        wait_iterations * 50
+                    );
                 }
-                Err(_) => {
-                    wait_iterations += 1;
-                    if wait_iterations % 20 == 0 {
-                        warn!(
-                            "Still waiting for {} tasks to complete (waited {}ms)",
-                            self.running_task_count,
-                            wait_iterations * 50
-                        );
-                    }
-                    thread::sleep(Duration::from_millis(50));
-                }
+                thread::sleep(Duration::from_millis(50));
             }
         }
 

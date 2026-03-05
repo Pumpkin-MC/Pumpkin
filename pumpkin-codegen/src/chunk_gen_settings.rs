@@ -393,11 +393,13 @@ pub fn build() -> TokenStream {
         }
 
         impl GenerationShapeConfig {
-            #[inline] #[must_use]
-            pub fn vertical_cell_block_count(&self) -> u8 { self.size_vertical << 2 }
+            #[inline] 
+            #[must_use]
+            pub const fn vertical_cell_block_count(&self) -> u8 { self.size_vertical << 2 }
 
-            #[inline] #[must_use]
-            pub fn horizontal_cell_block_count(&self) -> u8 { self.size_horizontal << 2 }
+            #[inline] 
+            #[must_use]
+            pub const fn horizontal_cell_block_count(&self) -> u8 { self.size_horizontal << 2 }
 
             #[must_use]
             pub const fn max_y(&self) -> u16 {

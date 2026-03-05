@@ -9,8 +9,9 @@ use crate::{
         biome_coords,
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
-            buried_treasure::BuriedTreasureGenerator, create_chunk_random,
-            stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
+            buried_treasure::BuriedTreasureGenerator, create_chunk_random, igloo::IglooGenerator,
+            nether_fossil::NetherFossilGenerator, stronghold::StrongholdGenerator,
+            swamp_hut::SwampHutGenerator,
         },
     },
 };
@@ -19,6 +20,7 @@ pub mod piece;
 pub mod placement;
 pub mod shiftable_piece;
 pub mod structures;
+pub mod template;
 
 #[must_use]
 pub fn try_generate_structure(
@@ -37,7 +39,6 @@ pub fn try_generate_structure(
         sea_level,
         min_y: chunk.bottom_y() as i32,
     };
-
     let structure_pos = match key {
         StructureKeys::BuriedTreasure => {
             BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
@@ -48,15 +49,27 @@ pub fn try_generate_structure(
         StructureKeys::Stronghold => {
             StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
         }
+        StructureKeys::NetherFossil => {
+            NetherFossilGenerator::get_structure_position(&NetherFossilGenerator, context)
+        }
+        StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
         // TODO: Implement other structure types
         _ => None,
     };
 
     if let Some(pos) = structure_pos {
-        // Get the biome at the structure's starting position
+        // Get the biome at the structure's starting position.
+        // Clamp biome Y to the chunk's valid range — structure start_pos.y may exceed
+        // the chunk's logical height (e.g. nether fossils use full height 256 but
+        // ProtoChunk only covers logical_height 128).
+        let biome_y = biome_coords::from_block(pos.start_pos.0.y);
+        let biome_height = (chunk.height() >> 2) as i32;
+        let biome_bottom = biome_coords::from_block(chunk.bottom_y() as i32);
+        let clamped_biome_y = biome_y.clamp(biome_bottom, biome_bottom + biome_height - 1);
+
         let current_biome = chunk.get_biome_id(
             biome_coords::from_block(pos.start_pos.0.x),
-            biome_coords::from_block(pos.start_pos.0.y),
+            clamped_biome_y,
             biome_coords::from_block(pos.start_pos.0.z),
         ) as u16;
 
@@ -64,7 +77,7 @@ pub fn try_generate_structure(
             RegistryKey::WorldgenBiome,
             structure
                 .biomes
-                .strip_prefix("#")
+                .strip_prefix('#')
                 .unwrap_or(structure.biomes),
         )
         .unwrap();

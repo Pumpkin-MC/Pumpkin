@@ -165,41 +165,29 @@ impl CommandDispatcher {
                 continue;
             }
             match c {
-                '{' => {
-                    if !in_single_quotes && !in_double_quotes {
-                        in_braces += 1;
-                    }
+                '{' if !in_single_quotes && !in_double_quotes => {
+                    in_braces += 1;
                 }
-                '}' => {
-                    if !in_single_quotes && !in_double_quotes {
-                        if in_braces == 0 {
-                            return Err(CommandFailed(TextComponent::text("Unmatched braces")));
-                        }
-                        in_braces -= 1;
+                '}' if !in_single_quotes && !in_double_quotes => {
+                    if in_braces == 0 {
+                        return Err(CommandFailed(TextComponent::text("Unmatched braces")));
                     }
+                    in_braces -= 1;
                 }
-                '[' => {
-                    if !in_single_quotes && !in_double_quotes {
-                        in_brackets += 1;
-                    }
+                '[' if !in_single_quotes && !in_double_quotes => {
+                    in_brackets += 1;
                 }
-                ']' => {
-                    if !in_single_quotes && !in_double_quotes {
-                        if in_brackets == 0 {
-                            return Err(CommandFailed(TextComponent::text("Unmatched brackets")));
-                        }
-                        in_brackets -= 1;
+                ']' if !in_single_quotes && !in_double_quotes => {
+                    if in_brackets == 0 {
+                        return Err(CommandFailed(TextComponent::text("Unmatched brackets")));
                     }
+                    in_brackets -= 1;
                 }
-                '\'' => {
-                    if !in_double_quotes {
-                        in_single_quotes = !in_single_quotes;
-                    }
+                '\'' if !in_double_quotes => {
+                    in_single_quotes = !in_single_quotes;
                 }
-                '"' => {
-                    if !in_single_quotes {
-                        in_double_quotes = !in_double_quotes;
-                    }
+                '"' if !in_single_quotes => {
+                    in_double_quotes = !in_double_quotes;
                 }
                 ' ' if !in_single_quotes
                     && !in_double_quotes

@@ -19,7 +19,11 @@ pub mod color;
 pub mod hover;
 pub mod style;
 
-/// Represents a text component
+/// Represents a Minecraft chat component.
+///
+/// Text components are the building blocks of Minecraft's chat system, allowing for
+/// rich formatted text with colors, styles, click events, hover tooltips, and
+/// translations. They can be nested and combined to create complex messages.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextComponent(pub TextComponentBase);
 
@@ -74,20 +78,26 @@ impl Serialize for TextComponent {
     }
 }
 
+/// The base structure for a text component containing content, style, and children.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct TextComponentBase {
-    /// The actual text
+    /// The actual content of this component (text, translation, etc.).
     #[serde(flatten)]
     pub content: Box<TextContent>,
+    /// The styling applied to this component (color, bold, click events, etc.).
     #[serde(flatten)]
     pub style: Box<Style>,
+    /// Child text components that are appended after this component's content.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    /// Extra text components
     pub extra: Vec<Self>,
 }
 
 impl TextComponentBase {
+    /// Converts this component to a human-readable string for console output.
+    ///
+    /// # Returns
+    /// A formatted string ready for console output.
     #[must_use]
     pub fn to_pretty_console(self) -> String {
         let mut text = match *self.content {
@@ -125,6 +135,13 @@ impl TextComponentBase {
         text
     }
 
+    /// Extracts the raw text content of this component for the given locale.
+    ///
+    /// # Arguments
+    /// - `locale` – The locale to use for translations.
+    ///
+    /// # Returns
+    /// The plain text content of the component.
     #[must_use]
     pub fn get_text(self, locale: Locale) -> String {
         match *self.content {
@@ -141,9 +158,13 @@ impl TextComponentBase {
         }
     }
 
+    /// Converts this component by resolving all translations.
+    ///
+    /// # Returns
+    /// A new component with all translations resolved.
     #[must_use]
     pub fn to_translated(self) -> Self {
-        // Divide the translation into slices and inserts the substitutions
+        // NOTE: Divide the translation into slices and inserts the substitutions.
         let component = match *self.content {
             TextContent::Custom { key, with, locale } => {
                 let translation = get_translation(&key, locale);
@@ -247,6 +268,13 @@ impl TextComponentBase {
 }
 
 impl TextComponent {
+    /// Creates a new text component with plain text content.
+    ///
+    /// # Arguments
+    /// - `plain` – The text content (can be `String`, `&str`, or `Cow <'static, str>`).
+    ///
+    /// # Returns
+    /// A new `TextComponent` containing the given text.
     pub fn text<P: Into<Cow<'static, str>>>(plain: P) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::Text { text: plain.into() }),
@@ -255,6 +283,14 @@ impl TextComponent {
         })
     }
 
+    /// Creates a new text component with a translation key.
+    ///
+    /// # Arguments
+    /// - `key` – The translation key (e.g., "multiplayer.player.joined").
+    /// - `with` – The substitution parameters for the translation.
+    ///
+    /// # Returns
+    /// A new `TextComponent` that will be translated on the client.
     pub fn translate<K: Into<Cow<'static, str>>, W: Into<Vec<Self>>>(key: K, with: W) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::Translate {
@@ -266,6 +302,16 @@ impl TextComponent {
         })
     }
 
+    /// Creates a new text component with a custom translation key.
+    ///
+    /// # Arguments
+    /// - `namespace` – The namespace for the translation (e.g. "pumpkinplus").
+    /// - `key` – The translation key within the namespace.
+    /// - `locale` – The locale to use for translation.
+    /// - `with` – The substitution parameters for the translation.
+    ///
+    /// # Returns
+    /// A new `TextComponent` with custom translation.
     pub fn custom<K: Into<Cow<'static, str>>, W: Into<Vec<Self>>>(
         namespace: K,
         key: K,
@@ -285,6 +331,19 @@ impl TextComponent {
         })
     }
 
+    /// Parses a legacy Minecraft formatted string (using section signs '§') into a text component.
+    ///
+    /// Legacy formatting uses the section sign (§) followed by a formatting code:
+    /// - Colors: 0-9, a-f
+    /// - Styles: l (bold), o (italic), n (underline), m (strikethrough), k (obfuscated)
+    /// - Reset: r
+    /// - RGB hex colors: §x§R§R§G§G§B§B
+    ///
+    /// # Arguments
+    /// - `input` – The legacy formatted string.
+    ///
+    /// # Returns
+    /// A `TextComponent` with the parsed formatting applied.
     #[must_use]
     pub fn from_legacy_string(input: &str) -> Self {
         let mut root = Self::text("");
@@ -388,12 +447,26 @@ impl TextComponent {
         root
     }
 
+    /// Appends a child component to this component.
+    ///
+    /// # Arguments
+    /// - `child` – The component to append.
+    ///
+    /// # Returns
+    /// The component with the child added.
     #[must_use]
     pub fn add_child(mut self, child: Self) -> Self {
         self.0.extra.push(child.0);
         self
     }
 
+    /// Creates a new component from raw content.
+    ///
+    /// # Arguments
+    /// - `content` – The text content.
+    ///
+    /// # Returns
+    /// A new component with the given content.
     #[must_use]
     pub fn from_content(content: TextContent) -> Self {
         Self(TextComponentBase {
@@ -403,6 +476,13 @@ impl TextComponent {
         })
     }
 
+    /// Appends plain text to this component.
+    ///
+    /// # Arguments
+    /// - `text` – The text to append.
+    ///
+    /// # Returns
+    /// The component with the text appended.
     #[must_use]
     pub fn add_text<P: Into<Cow<'static, str>>>(mut self, text: P) -> Self {
         self.0.extra.push(TextComponentBase {
@@ -413,11 +493,29 @@ impl TextComponent {
         self
     }
 
+    /// Extracts the raw text content for English (US).
+    ///
+    /// # Returns
+    /// The plain text content.
     #[must_use]
     pub fn get_text(self) -> String {
         self.0.get_text(Locale::EnUs)
     }
 
+    /// Creates a chat message with formatting placeholders replaced.
+    ///
+    /// Replaces:
+    /// - `&` with `§` for legacy formatting
+    /// - `{DISPLAYNAME}` with the player's name
+    /// - `{MESSAGE}` with the chat message content
+    ///
+    /// # Arguments
+    /// - `format` – The message format string.
+    /// - `player_name` – The player's display name.
+    /// - `content` – The chat message content.
+    ///
+    /// # Returns
+    /// A formatted chat component.
     #[must_use]
     pub fn chat_decorated(format: &str, player_name: &str, content: &str) -> Self {
         // Todo: maybe allow players to use & in chat contingent on permissions
@@ -435,6 +533,10 @@ impl TextComponent {
         })
     }
 
+    /// Converts this component to a pretty console string.
+    ///
+    /// # Returns
+    /// A formatted string ready for console output.
     #[must_use]
     pub fn to_pretty_console(self) -> String {
         self.0.to_pretty_console()
@@ -442,6 +544,10 @@ impl TextComponent {
 }
 
 impl TextComponent {
+    /// Encodes this component into a byte array using NBT serialization.
+    ///
+    /// # Returns
+    /// A boxed byte slice containing the NBT-encoded component.
     #[must_use]
     pub fn encode(&self) -> Box<[u8]> {
         let mut buf = Vec::new();
@@ -456,31 +562,61 @@ impl TextComponent {
         buf.into_boxed_slice()
     }
 
+    /// Sets the text color.
+    ///
+    /// # Arguments
+    /// - `color` – The color to apply.
+    ///
+    /// # Returns
+    /// The component with the color set.
     #[must_use]
     pub fn color(mut self, color: Color) -> Self {
         self.0.style.color = Some(color);
         self
     }
 
+    /// Sets the text color using a named Minecraft color.
+    ///
+    /// # Arguments
+    /// - `color` – The named color to apply.
+    ///
+    /// # Returns
+    /// The component with the color set.
     #[must_use]
     pub fn color_named(mut self, color: color::NamedColor) -> Self {
         self.0.style.color = Some(Color::Named(color));
         self
     }
 
+    /// Sets the text color using an RGB color.
+    ///
+    /// # Arguments
+    /// - `color` – The RGB color to apply.
+    ///
+    /// # Returns
+    /// The component with the color set.
     #[must_use]
     pub fn color_rgb(mut self, color: color::RGBColor) -> Self {
         self.0.style.color = Some(Color::Rgb(color));
         self
     }
 
-    // Appends a new line/line break
+    /// Appends a new line/line break.
+    ///
+    /// # Returns
+    /// The component with a new line appended.
     #[must_use]
     pub fn new_line(self) -> Self {
         self.add_child(Self::text("\n"))
     }
 
-    /// Applies a color gradient to the text
+    /// Applies a color gradient to the text using named colors.
+    ///
+    /// # Arguments
+    /// - `colors` – The gradient colors to apply.
+    ///
+    /// # Returns
+    /// The component with the gradient applied.
     #[must_use]
     pub fn gradient_named(self, colors: &[color::NamedColor]) -> Self {
         let rgb_colors: Vec<color::RGBColor> =
@@ -488,7 +624,13 @@ impl TextComponent {
         self.gradient(&rgb_colors)
     }
 
-    /// Applies a color gradient to the text
+    /// Applies a color gradient to the text using RGB colors.
+    ///
+    /// # Arguments
+    /// - `colors` – The gradient colors to apply.
+    ///
+    /// # Returns
+    /// The component with the gradient applied.
     #[must_use]
     pub fn gradient(self, colors: &[color::RGBColor]) -> Self {
         if colors.len() < 2 {
@@ -520,7 +662,12 @@ impl TextComponent {
         })
     }
 
-    /// Applies a rainbow effect to the text
+    /// Applies a rainbow effect to the text.
+    ///
+    /// Each character gets a different hue, creating a smooth rainbow transition.
+    ///
+    /// # Returns
+    /// The component with the rainbow effect applied.
     #[must_use]
     pub fn rainbow(self) -> Self {
         self.apply_color_effect(|i, len| {
@@ -530,11 +677,20 @@ impl TextComponent {
         })
     }
 
+    /// Applies a per-character color effect to the text content.
+    ///
+    /// # Arguments
+    /// - `color_gen` – A function that takes the character index and total length
+    ///   and returns an RGB color for that character.
+    ///
+    /// # Returns
+    /// A new text component where each character is individually colored according
+    /// to the generator function. The original component's content becomes empty,
+    /// and the colored characters are placed in the `extra` field.
     fn apply_color_effect<F>(mut self, color_gen: F) -> Self
     where
         F: Fn(usize, usize) -> color::RGBColor,
     {
-        // TODO
         let raw_text = self.0.clone().get_text(Locale::EnUs);
         let chars: Vec<char> = raw_text.chars().collect();
         let len = chars.len();
@@ -563,71 +719,130 @@ impl TextComponent {
         self
     }
 
-    /// Makes the text bold
+    /// Makes the text bold.
+    ///
+    /// # Returns
+    /// The component with bold enabled.
     #[must_use]
     pub fn bold(mut self) -> Self {
         self.0.style.bold = Some(true);
         self
     }
 
-    /// Makes the text italic
+    /// Makes the text italic.
+    ///
+    /// # Returns
+    /// The component with italic enabled.
     #[must_use]
     pub fn italic(mut self) -> Self {
         self.0.style.italic = Some(true);
         self
     }
 
-    /// Makes the text underlined
+    /// Makes the text underlined.
+    ///
+    /// # Returns
+    /// The component with underline enabled.
     #[must_use]
     pub fn underlined(mut self) -> Self {
         self.0.style.underlined = Some(true);
         self
     }
 
-    /// Makes the text strikethrough
+    /// Makes the text strikethrough.
+    ///
+    /// # Returns
+    /// The component with strikethrough enabled.
     #[must_use]
     pub fn strikethrough(mut self) -> Self {
         self.0.style.strikethrough = Some(true);
         self
     }
 
-    /// Makes the text obfuscated
+    /// Makes the text obfuscated (random characters).
+    ///
+    /// # Returns
+    /// The component with obfuscation enabled.
     #[must_use]
     pub fn obfuscated(mut self) -> Self {
         self.0.style.obfuscated = Some(true);
         self
     }
 
-    /// When the text is shift-clicked by a player, this string is inserted in their chat input. It does not overwrite any existing text the player was writing. This only works in chat messages.
+    /// Sets text to be inserted into the player's chat input when shift-clicked.
+    ///
+    /// When the text is shift-clicked by a player, this string is inserted in their
+    /// chat input. It does not overwrite any existing text the player was writing.
+    /// This only works in chat messages.
+    ///
+    /// # Arguments
+    /// - `text` – The text to insert when shift-clicked.
+    ///
+    /// # Returns
+    /// The component with the insertion text set.
     #[must_use]
     pub fn insertion(mut self, text: String) -> Self {
         self.0.style.insertion = Some(text);
         self
     }
 
-    /// Allows for events to occur when the player clicks on text. Only works in chat.
+    /// Sets an event to occur when the player clicks on the text.
+    ///
+    /// Allows for actions like running commands, opening URLs, suggesting commands,
+    /// or copying text to clipboard. Only works in chat.
+    ///
+    /// # Arguments
+    /// - `event` – The click event to trigger.
+    ///
+    /// # Returns
+    /// The component with the click event set.
     #[must_use]
     pub fn click_event(mut self, event: ClickEvent) -> Self {
         self.0.style.click_event = Some(event);
         self
     }
 
-    /// Allows for a tooltip to be displayed when the player hovers their mouse over text.
+    /// Sets a tooltip to be displayed when the player hovers over the text.
+    ///
+    /// Can show plain text, item information, or entity details.
+    ///
+    /// # Arguments
+    /// - `event` – The hover event to display.
+    ///
+    /// # Returns
+    /// The component with the hover event set.
     #[must_use]
     pub fn hover_event(mut self, event: HoverEvent) -> Self {
         self.0.style.hover_event = Some(event);
         self
     }
 
-    /// Allows you to change the font of the text.
-    /// Default fonts: `minecraft:default`, `minecraft:uniform`, `minecraft:alt`, `minecraft:illageralt`
+    /// Sets the font resource location for rendering.
+    ///
+    /// Allows changing the font face of the text. Default fonts include:
+    /// - `minecraft:default` - The standard Minecraft font.
+    /// - `minecraft:uniform` - A uniform-width font.
+    /// - `minecraft:alt` - An alternative font style.
+    /// - `minecraft:illageralt` - The illager-themed font.
+    ///
+    /// # Arguments
+    /// - `resource_location` – The font resource location (e.g., "minecraft:uniform").
+    ///
+    /// # Returns
+    /// The component with the font set.
     #[must_use]
     pub fn font(mut self, resource_location: String) -> Self {
         self.0.style.font = Some(resource_location);
         self
     }
 
-    /// Overrides the shadow properties of text.
+    /// Overrides the shadow color of the text.
+    ///
+    /// # Arguments
+    /// - `color` – The ARGB color value for the shadow.
+    ///
+    /// # Returns
+    /// The component with the shadow color set.
     #[must_use]
     pub fn shadow_color(mut self, color: ARGBColor) -> Self {
         self.0.style.shadow_color = Some(color);
@@ -635,35 +850,51 @@ impl TextComponent {
     }
 }
 
+/// The content type of the text component.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum TextContent {
-    /// Raw text
+    /// Raw, untranslated text.
     Text { text: Cow<'static, str> },
-    /// Translated text
+    /// Text that should be translated on the client.
     Translate {
+        /// The translation key (e.g. "multiplayer.player.joined").
         translate: Cow<'static, str>,
+        /// Substitution parameters for the translation.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         with: Vec<TextComponentBase>,
     },
     /// Displays the name of one or more entities found by a selector.
     EntityNames {
+        /// The entity selector string (e.g., "@e[type=pig]").
         selector: Cow<'static, str>,
+        /// Optional separator between multiple entity names.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         separator: Option<Cow<'static, str>>,
     },
-    /// A keybind identifier
-    /// <https://minecraft.wiki/w/Controls#Configurable_controls>
-    Keybind { keybind: Cow<'static, str> },
-    /// A custom translation key
+    /// A keybind identifier for a configurable control.
+    ///
+    /// See <https://minecraft.wiki/w/Controls#Configurable_controls> for available keybinds.
+    Keybind {
+        /// The keybind identifier (e.g., "key.forward").
+        keybind: Cow<'static, str>,
+    },
+    /// A custom translation key for modded content.
+    ///
+    /// This variant is not serialized directly; translations are resolved
+    /// before serialization using `to_translated()`.
     #[serde(skip)]
     Custom {
+        /// The full translation key with namespace (e.g. "pumpkinplus:some.text").
         key: Cow<'static, str>,
+        /// The locale to use for translation.
         locale: Locale,
+        /// Substitution parameters for the translation.
         with: Vec<TextComponentBase>,
     },
 }
 
+/// Tests for the text component implementations.
 #[cfg(test)]
 mod test {
     use pumpkin_nbt::serializer::to_bytes_unnamed;

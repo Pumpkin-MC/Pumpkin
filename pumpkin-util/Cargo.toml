@@ -21,9 +21,7 @@ proc-macro2.workspace = true
 enum_dispatch.workspace = true
 
 uuid.workspace = true
-tokio = { workspace = true, features = [
-    "sync",
-] }
+tokio = { workspace = true, features = ["sync"] }
 base64.workspace = true
 p384 = { workspace = true, features = ["ecdsa"] }
 thiserror.workspace = true
