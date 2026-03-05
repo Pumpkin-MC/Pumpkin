@@ -136,12 +136,9 @@ impl PacketRead for SText {
         let xuid = String::read(reader)?;
         let platform_chat_id = String::read(reader)?;
 
-        let has_filtered = bool::read(reader)?;
-        let filtered_message = if has_filtered {
-            Some(String::read(reader)?)
-        } else {
-            None
-        };
+        let filtered_message = bool::read(reader)?
+            .then(|| String::read(reader))
+            .transpose()?;
 
         Ok(Self {
             needs_translation,

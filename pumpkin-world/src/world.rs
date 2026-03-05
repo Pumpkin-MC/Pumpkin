@@ -2,8 +2,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::block::entities::BlockEntity;
-use crate::{BlockStateId, inventory::Inventory};
+use crate::{BlockStateId, inventory::Inventory, level::Level};
 use bitflags::bitflags;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::world::WorldEvent;
@@ -107,6 +108,12 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
     ) -> WorldFuture<'a, Option<Arc<dyn BlockEntity>>>;
 
     fn get_world_age(&self) -> WorldFuture<'_, i64>;
+
+    fn get_time_of_day(&self) -> WorldFuture<'_, i64>;
+
+    fn get_level(&self) -> WorldFuture<'_, &Arc<Level>>;
+
+    fn get_dimension(&self) -> WorldFuture<'_, &Dimension>;
 
     fn play_sound<'a>(
         &'a self,

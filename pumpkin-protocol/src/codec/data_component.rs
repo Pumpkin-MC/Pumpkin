@@ -145,28 +145,24 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
         let has_potion = seq
             .next_element::<bool>()?
             .ok_or(de::Error::custom("No PotionContents has_potion bool!"))?;
-        let potion_id = if has_potion {
-            Some(
+        let potion_id = has_potion
+            .then(|| {
                 seq.next_element::<VarInt>()?
-                    .ok_or(de::Error::custom("No PotionContents potion_id VarInt!"))?
-                    .0,
-            )
-        } else {
-            None
-        };
+                    .ok_or(de::Error::custom("No PotionContents potion_id VarInt!"))
+                    .map(|value| value.0)
+            })
+            .transpose()?;
 
         // Custom color (optional)
         let has_color = seq
             .next_element::<bool>()?
             .ok_or(de::Error::custom("No PotionContents has_color bool!"))?;
-        let custom_color = if has_color {
-            Some(
+        let custom_color = has_color
+            .then(|| {
                 seq.next_element::<i32>()?
-                    .ok_or(de::Error::custom("No PotionContents custom_color i32!"))?,
-            )
-        } else {
-            None
-        };
+                    .ok_or(de::Error::custom("No PotionContents custom_color i32!"))
+            })
+            .transpose()?;
 
         // Custom effects list
         let effects_len = seq
@@ -225,14 +221,12 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
         let has_name = seq
             .next_element::<bool>()?
             .ok_or(de::Error::custom("No PotionContents has_name bool!"))?;
-        let custom_name = if has_name {
-            Some(
+        let custom_name = has_name
+            .then(|| {
                 seq.next_element::<String>()?
-                    .ok_or(de::Error::custom("No PotionContents custom_name String!"))?,
-            )
-        } else {
-            None
-        };
+                    .ok_or(de::Error::custom("No PotionContents custom_name String!"))
+            })
+            .transpose()?;
 
         Ok(Self {
             potion_id,

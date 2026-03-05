@@ -1911,7 +1911,10 @@ impl JavaClient {
                 .enqueue_equipment_change(equippable.slot, &held)
                 .await;
 
-            let binding = inventory.entity_equipment.lock().await.get(equippable.slot);
+            let binding = {
+                let mut equipment = inventory.entity_equipment.lock().await;
+                equipment.get_or_insert(equippable.slot)
+            };
             let mut equip_item = binding.lock().await;
             if equip_item.is_empty() {
                 *equip_item = held.clone();

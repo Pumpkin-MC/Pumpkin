@@ -10,7 +10,8 @@ use crate::{
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random, igloo::IglooGenerator,
-            stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
+            nether_fossil::NetherFossilGenerator, stronghold::StrongholdGenerator,
+            swamp_hut::SwampHutGenerator,
         },
     },
 };
@@ -38,7 +39,6 @@ pub fn try_generate_structure(
         sea_level,
         min_y: chunk.bottom_y() as i32,
     };
-
     let structure_pos = match key {
         StructureKeys::BuriedTreasure => {
             BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
@@ -48,6 +48,9 @@ pub fn try_generate_structure(
         }
         StructureKeys::Stronghold => {
             StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
+        }
+        StructureKeys::NetherFossil => {
+            NetherFossilGenerator::get_structure_position(&NetherFossilGenerator, context)
         }
         StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
         // TODO: Implement other structure types
@@ -74,7 +77,7 @@ pub fn try_generate_structure(
             RegistryKey::WorldgenBiome,
             structure
                 .biomes
-                .strip_prefix("#")
+                .strip_prefix('#')
                 .unwrap_or(structure.biomes),
         )
         .unwrap();
