@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use crate::entity::EntityBase;
 use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;
+use std::sync::Arc;
 
 /// A source of damage.
 #[derive(Clone)]
@@ -47,11 +47,13 @@ impl DamageSource {
     /// is found.
     #[must_use]
     pub fn source_position(&self) -> Option<Vector3<f64>> {
-        self.damage_source_pos
-            .map_or_else(
-                || self.direct_entity.as_ref()
-                    .map(|e| e.get_entity().pos.load()),
-                Some
-            )
+        self.damage_source_pos.map_or_else(
+            || {
+                self.direct_entity
+                    .as_ref()
+                    .map(|e| e.get_entity().pos.load())
+            },
+            Some,
+        )
     }
 }
