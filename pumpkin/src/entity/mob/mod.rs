@@ -156,7 +156,7 @@ impl MobEntity {
         true
     }
 
-    pub async fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
+    pub async fn try_attack(&self, caller: &dyn EntityBase, target: Arc<dyn EntityBase>) {
         if self.living_entity.dead.load(Relaxed) {
             return;
         }
@@ -167,7 +167,7 @@ impl MobEntity {
 
         let damaged = target
             .damage_with_context(
-                target,
+                &*target,
                 attack_damage,
                 DamageType::MOB_ATTACK,
                 None,

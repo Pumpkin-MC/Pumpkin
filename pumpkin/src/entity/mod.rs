@@ -1,4 +1,5 @@
 use crate::entity::item::ItemEntity;
+use crate::entity::projectile::ThrownItemEntity;
 use crate::net::ClientPlatform;
 use crate::world::World;
 use crate::{
@@ -260,6 +261,9 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+    fn get_thrown_item_entity(&self) -> Option<&ThrownItemEntity> {
+        None
+    }
 
     fn get_item_entity(self: Arc<Self>) -> Option<Arc<ItemEntity>> {
         None

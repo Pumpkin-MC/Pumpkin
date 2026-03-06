@@ -60,6 +60,10 @@ impl EntityBase for SnowballEntity {
         None
     }
 
+    fn get_thrown_item_entity(&self) -> Option<&ThrownItemEntity> {
+        Some(&self.thrown)
+    }
+
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }

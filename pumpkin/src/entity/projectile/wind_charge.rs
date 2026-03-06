@@ -23,7 +23,7 @@ const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
 
 /// An entity for a wind charge.
 pub struct WindChargeEntity {
-    thrown_item_entity: ThrownItemEntity,
+    thrown: ThrownItemEntity,
     kind: WindChargeKind,
 }
 
@@ -38,7 +38,7 @@ enum WindChargeKind {
 impl WindChargeEntity {
     fn new(entity: Entity, kind: WindChargeKind, condition: &ThrownItemEntityCondition) -> Self {
         Self {
-            thrown_item_entity: ThrownItemEntity::new(entity, condition),
+            thrown: ThrownItemEntity::new(entity, condition),
             kind,
         }
     }
@@ -62,7 +62,7 @@ impl WindChargeEntity {
     }
 
     pub const fn get_thrown_item_entity(&self) -> &ThrownItemEntity {
-        &self.thrown_item_entity
+        &self.thrown
     }
 
     pub async fn explode(&self, position: Vector3<f64>) {
@@ -91,7 +91,7 @@ impl WindChargeEntity {
     }
 
     pub const fn get_entity(&self) -> &Entity {
-        self.thrown_item_entity.get_entity()
+        self.thrown.get_entity()
     }
 
     const fn explosion_radius(&self) -> f32 {
@@ -122,7 +122,7 @@ impl EntityBase for WindChargeEntity {
             {
                 self.explode(self.get_entity().pos.load()).await;
             } else {
-                self.thrown_item_entity.process_tick(caller, server).await;
+                self.thrown.process_tick(caller, server).await;
             }
 
             if let WindChargeKind::Normal { deflect_cooldown } = &self.kind {
@@ -135,11 +135,15 @@ impl EntityBase for WindChargeEntity {
     }
 
     fn get_entity(&self) -> &Entity {
-        self.thrown_item_entity.get_entity()
+        self.thrown.get_entity()
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn get_thrown_item_entity(&self) -> Option<&ThrownItemEntity> {
+        Some(&self.thrown)
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
@@ -168,10 +172,7 @@ impl EntityBase for WindChargeEntity {
                 ProjectileHit::Entity {
                     entity: ref target, ..
                 } => {
-                    let mut owner = self
-                        .thrown_item_entity
-                        .owner_id
-                        .and_then(|i| world.get_player_by_id(i));
+                    let mut owner = self.thrown.owner_id.and_then(|i| world.get_player_by_id(i));
 
                     if let Some(owner) = &mut owner {
                         owner
@@ -186,9 +187,7 @@ impl EntityBase for WindChargeEntity {
                             1.0,
                             DamageType::WIND_CHARGE,
                             None,
-                            owner
-                                .as_ref()
-                                .map(|o| o.as_ref() as &dyn EntityBase),
+                            owner.as_ref().map(|o| o.as_ref() as &dyn EntityBase),
                             Some(target.as_ref()),
                         )
                         .await;
