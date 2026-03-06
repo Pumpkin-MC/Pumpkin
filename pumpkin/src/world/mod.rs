@@ -133,6 +133,8 @@ use tokio::sync::Mutex;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
+pub mod damage_source;
+pub mod explosion_damage_calculator;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
@@ -143,6 +145,7 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
 use uuid::Uuid;
 use weather::Weather;
+use crate::world::explosion::BlockInteraction;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
@@ -1975,8 +1978,9 @@ impl World {
     }
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        let explosion = Explosion::new(power, position);
-        let block_count = explosion.explode(self).await;
+        // TODO: return correct block interaction based on explosion type
+        let explosion = Explosion::new(self, None, None, None, power, position, false, BlockInteraction::Destroy);
+        let block_count = explosion.explode().await;
         let particle = if power < 2.0 {
             Particle::Explosion
         } else {
@@ -2417,8 +2421,8 @@ impl World {
         None
     }
 
-    // Gets all entities at a Box
-    pub fn get_all_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
+    // Gets all entities in a box with the provided filter function.
+    pub fn get_all_at_box_where(&self, f: impl FnMut(&Arc<dyn EntityBase>) -> bool) -> Vec<Arc<dyn EntityBase>> {
         let entities_guard = self.entities.load();
         let players_guard = self.players.load();
 
@@ -2430,8 +2434,22 @@ impl World {
                     .iter()
                     .map(|p| p.clone() as Arc<dyn EntityBase>),
             )
-            .filter(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
+            .filter(f)
             .collect()
+    }
+
+    // Gets all entities in a box.
+    pub fn get_all_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
+        self.get_all_at_box_where(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
+    }
+
+    // Gets all entities in a box, except the provided entity.
+    pub fn get_all_at_box_except(
+        &self,
+        aabb: &BoundingBox,
+        except: &dyn EntityBase,
+    ) -> Vec<Arc<dyn EntityBase>> {
+        self.get_all_at_box_where(|entity| entity.get_entity().bounding_box.load().intersects(aabb) && !std::ptr::addr_eq(entity, except))
     }
 
     // Gets all non Player entities at a Box

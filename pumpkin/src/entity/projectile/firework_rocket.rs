@@ -157,6 +157,10 @@ impl EntityBase for FireworkRocketEntity {
         None
     }
 
+    fn get_thrown_item_entity(&self) -> Option<&ThrownItemEntity> {
+        Some(&self.entity)
+    }
+
     fn as_nbt_storage(&self) -> &dyn crate::entity::NBTStorage {
         self
     }
