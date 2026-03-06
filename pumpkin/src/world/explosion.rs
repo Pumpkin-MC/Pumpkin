@@ -13,16 +13,22 @@ use pumpkin_data::{Block, BlockState, entity::EntityType};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use rustc_hash::FxHashMap;
 
+/// A struct representing an *explosion*, which can be triggered
+/// using [`Explosion::explode`].
 pub struct Explosion {
+    /// The world this explosion belongs to.
     world: Arc<World>,
+    /// The explosion radius of this explosion.
     power: f32,
+    /// The position of this explosion.
     pos: Vector3<f64>,
-
+    /// The direct entity that caused this explosion. May not exist.
     source_entity: Option<Arc<dyn EntityBase>>,
-    damage_calculator: Box<dyn ExplosionDamageCalculator>,
-
+    /// A calculator for various values found during the trigger of an `Explosion`.
+    damage_calculator: ExplosionDamageCalculator,
+    /// The damage source of this `Explosion`.
     damage_source: DamageSource,
-
+    /// How this `Explosion` should interact with blocks it affects.
     block_interaction: BlockInteraction,
 
     // TODO
@@ -35,7 +41,7 @@ impl Explosion {
         world: &Arc<World>,
         source_entity: Option<Arc<dyn EntityBase>>,
         damage_source: Option<DamageSource>,
-        damage_calculator: Option<Box<dyn ExplosionDamageCalculator>>,
+        damage_calculator: Option<ExplosionDamageCalculator>,
         power: f32,
         pos: Vector3<f64>,
         fire: bool,
@@ -48,7 +54,8 @@ impl Explosion {
             block_interaction,
             fire,
             source_entity: source_entity.clone(),
-            damage_calculator: damage_calculator.unwrap_or_else(Self::create_damage_calculator),
+            damage_calculator: damage_calculator
+                .unwrap_or_else(|| Self::create_damage_calculator(source_entity.clone())),
             damage_source: damage_source.unwrap_or_else(|| {
                 DamageSource::from_explosion(
                     Self::indirect_source_entity(source_entity.clone(), world.as_ref()),
@@ -80,8 +87,10 @@ impl Explosion {
     }
 
     #[must_use]
-    fn create_damage_calculator() -> Box<dyn ExplosionDamageCalculator> {
-        todo!()
+    fn create_damage_calculator(entity: Option<Arc<dyn EntityBase>>) -> ExplosionDamageCalculator {
+        entity.map_or_else(ExplosionDamageCalculator::default, |e| {
+            ExplosionDamageCalculator::EntityBased { source_entity: e }
+        })
     }
 
     #[must_use]
@@ -123,7 +132,8 @@ impl Explosion {
                     while h > 0.0 {
                         let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
                         let (block, state) = self.world.get_block_and_state(&block_pos).await;
-                        let (_, fluid_state) = self.world.get_fluid_and_fluid_state(&block_pos).await;
+                        let (_, fluid_state) =
+                            self.world.get_fluid_and_fluid_state(&block_pos).await;
 
                         if !self.world.is_in_build_limit(block_pos) {
                             continue 'block2;
@@ -141,9 +151,14 @@ impl Explosion {
                         }
 
                         if h > 0.0
-                            && self
-                                .damage_calculator
-                                .block_should_explode(self, &self.world, block_pos, block, state, h)
+                            && self.damage_calculator.block_should_explode(
+                                self,
+                                &self.world,
+                                block_pos,
+                                block,
+                                state,
+                                h,
+                            )
                         {
                             map.insert(block_pos, (block, state));
                         }
@@ -159,10 +174,12 @@ impl Explosion {
         map
     }
 
-    async fn damage_entities(&self) {
+    async fn damage_entities(&self) -> FxHashMap<i32, Vector3<f64>> {
+        let mut map = FxHashMap::default();
+
         // Explosion is too small
         if self.power < 1.0e-5 {
-            return;
+            return map;
         }
 
         let radius = self.power as f64 * 2.0;
@@ -202,7 +219,8 @@ impl Explosion {
 
             // Calculate the dealt damage.
             let entity_takes_damage = self.damage_calculator.entity_takes_damage(self, entity);
-            let knockback_multiplier = self.damage_calculator.knockback_multiplier(entity) as f64;
+            let knockback_multiplier =
+                self.damage_calculator.knockback_multiplier(entity).await as f64;
             let h = if !entity_takes_damage && knockback_multiplier == 0.0 {
                 0.0
             } else {
@@ -225,9 +243,9 @@ impl Explosion {
             }
 
             // Calculate the knockback velocity.
-            let knockback_resistance = entity
-                .get_living_entity()
-                .map_or(0.0, |e| e.get_attribute_value(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE));
+            let knockback_resistance = entity.get_living_entity().map_or(0.0, |e| {
+                e.get_attribute_value(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE)
+            });
             let scale =
                 (1.0 - distance) * (h as f64) * knockback_multiplier * (1.0 - knockback_resistance);
 
@@ -238,8 +256,13 @@ impl Explosion {
             };
             let knockback_velocity = (dir_pos - self.pos).normalize() * scale;
 
+            if let Some(player) = entity.get_player() {
+                map.insert(player.entity_id(), knockback_velocity);
+            }
             entity.add_velocity(knockback_velocity).await;
         }
+
+        map
     }
 
     async fn calculate_exposure(
@@ -301,12 +324,19 @@ impl Explosion {
         visible_points as f32 / total_points as f32
     }
 
-    /// Returns the removed block count
-    pub async fn explode(&self) -> u32 {
+    /// Calls this [`Explosion`] to explode.
+    ///
+    /// # Returns
+    /// A tuple containing:
+    /// - the removed block count.
+    /// - a map of the affected **players** and their knockback velocities.
+    pub async fn explode(&self) -> (u32, FxHashMap<i32, Vector3<f64>>) {
         let blocks = self.get_blocks_to_destroy().await;
-        self.damage_entities().await;
+        let knockback_map = self.damage_entities().await;
         for (pos, (block, state)) in &blocks {
-            self.world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;
+            self.world
+                .set_block_state(pos, 0, BlockFlags::NOTIFY_ALL)
+                .await;
             self.world.close_container_screens_at(pos).await;
 
             let pumpkin_block = self.world.block_registry.get_pumpkin_block(block.id);
@@ -329,8 +359,8 @@ impl Explosion {
                     .await;
             }
         }
-        // TODO: fire
-        blocks.len() as u32
+
+        (blocks.len() as u32, knockback_map)
     }
 
     pub fn affect_block_like_entities(&self, world: &World) -> bool {

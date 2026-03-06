@@ -139,13 +139,15 @@ pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
 
+use crate::world::damage_source::DamageSource;
+use crate::world::explosion::BlockInteraction;
+use crate::world::explosion_damage_calculator::ExplosionDamageCalculator;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
 use uuid::Uuid;
 use weather::Weather;
-use crate::world::explosion::BlockInteraction;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
@@ -1978,9 +1980,40 @@ impl World {
     }
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        // TODO: return correct block interaction based on explosion type
-        let explosion = Explosion::new(self, None, None, None, power, position, false, BlockInteraction::Destroy);
-        let block_count = explosion.explode().await;
+        self.explode_with(
+            None,
+            None,
+            None,
+            power,
+            position,
+            false,
+            BlockInteraction::Destroy,
+        )
+        .await;
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn explode_with(
+        self: &Arc<Self>,
+        source_entity: Option<Arc<dyn EntityBase>>,
+        damage_source: Option<DamageSource>,
+        damage_calculator: Option<ExplosionDamageCalculator>,
+        power: f32,
+        pos: Vector3<f64>,
+        fire: bool,
+        block_interaction: BlockInteraction,
+    ) {
+        let explosion = Explosion::new(
+            self,
+            source_entity,
+            damage_source,
+            damage_calculator,
+            power,
+            pos,
+            fire,
+            block_interaction,
+        );
+        let (block_count, knockback_map) = explosion.explode().await;
         let particle = if power < 2.0 {
             Particle::Explosion
         } else {
@@ -1988,16 +2021,16 @@ impl World {
         };
         let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
         for player in self.players.load().iter() {
-            if player.position().squared_distance_to_vec(&position) > 4096.0 {
+            if player.position().squared_distance_to_vec(&pos) > 4096.0 {
                 continue;
             }
             player
                 .client
                 .enqueue_packet(&CExplosion::new(
-                    position,
+                    pos,
                     power,
                     block_count as i32,
-                    None,
+                    knockback_map.get(&player.entity_id()).copied(),
                     VarInt(particle as i32),
                     sound.clone(),
                 ))
@@ -2422,7 +2455,10 @@ impl World {
     }
 
     // Gets all entities in a box with the provided filter function.
-    pub fn get_all_at_box_where(&self, f: impl FnMut(&Arc<dyn EntityBase>) -> bool) -> Vec<Arc<dyn EntityBase>> {
+    pub fn get_all_at_box_where(
+        &self,
+        f: impl FnMut(&Arc<dyn EntityBase>) -> bool,
+    ) -> Vec<Arc<dyn EntityBase>> {
         let entities_guard = self.entities.load();
         let players_guard = self.players.load();
 
@@ -2449,7 +2485,10 @@ impl World {
         aabb: &BoundingBox,
         except: &dyn EntityBase,
     ) -> Vec<Arc<dyn EntityBase>> {
-        self.get_all_at_box_where(|entity| entity.get_entity().bounding_box.load().intersects(aabb) && !std::ptr::addr_eq(entity, except))
+        self.get_all_at_box_where(|entity| {
+            entity.get_entity().bounding_box.load().intersects(aabb)
+                && !std::ptr::addr_eq(entity, except)
+        })
     }
 
     // Gets all non Player entities at a Box

@@ -2,6 +2,7 @@ use crate::entity::item::ItemEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::net::ClientPlatform;
 use crate::world::World;
+use crate::world::explosion::Explosion;
 use crate::{
     server::Server,
     world::portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo},
@@ -340,6 +341,31 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     /// Returns itself as the nbt storage for saving and loading data.
     fn as_nbt_storage(&self) -> &dyn NBTStorage;
+
+    /// Gets the blast resistance of a block for this entity when the block should be exploded
+    /// with the provided base resistance.
+    fn block_blast_resistance_with(
+        &self,
+        _explosion: &Explosion,
+        _world: &World,
+        _block: &Block,
+        _block_state: &BlockState,
+        base_blast_resistance: f32,
+    ) -> f32 {
+        base_blast_resistance
+    }
+
+    /// Whether a block should be exploded with the provided base resistance when
+    /// exploded by this entity.
+    fn block_should_explode_with(
+        &self,
+        _explosion: &Explosion,
+        _world: &World,
+        _block: &Block,
+        _block_state: &BlockState,
+    ) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
