@@ -156,7 +156,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .get::<CommandSenderResource>(&Resource::new_own(command_sender.rep()))
             .expect("invalid command-sender resource handle");
 
-        sender_resource.provider.send_message(component);
+        sender_resource.provider.send_message(component).await;
     }
 
     async fn set_success_count(&mut self, command_sender: Resource<CommandSender>, count: i32) {

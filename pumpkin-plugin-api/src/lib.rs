@@ -1,13 +1,17 @@
 use crate::{
-    commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber,
-    text::TextComponent, wit::pumpkin::plugin::command::ConsumedArgs,
+    commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber, text::TextComponent,
 };
 
 pub mod commands;
 pub mod events;
 
+pub mod command {
+    pub use crate::wit::pumpkin::plugin::command::{
+        Command, CommandError, CommandNode, CommandSender, ConsumedArgs,
+    };
+}
+
 pub use wit::pumpkin::plugin::{
-    command::{Command, CommandError, CommandNode, CommandSender},
     context::{Context, Server},
     text,
 };
@@ -70,17 +74,17 @@ impl wit::Guest for Component {
 
     fn handle_command(
         command_id: u32,
-        sender: CommandSender,
+        sender: command::CommandSender,
         server: Server,
-        args: ConsumedArgs,
-    ) -> Result<i32, CommandError> {
+        args: command::ConsumedArgs,
+    ) -> Result<i32, command::CommandError> {
         let handlers = COMMAND_HANDLERS.lock().unwrap();
         if let Some(handler) = handlers.get(&command_id) {
-            handler.handle_erased(sender, server, args)
+            handler.handle(sender, server, args)
         } else {
-            Err(CommandError::CommandFailed(TextComponent::text(&format!(
-                "no handler registered for command id {command_id}"
-            ))))
+            Err(command::CommandError::CommandFailed(TextComponent::text(
+                &format!("no handler registered for command id {command_id}"),
+            )))
         }
     }
 }
