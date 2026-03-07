@@ -1530,6 +1530,23 @@ impl JavaClient {
                     player.drop_held_item(true).await;
                 }
                 Status::ReleaseItemInUse => {
+                    // Check what item was being used
+                    let item_in_use = player.living_entity.item_in_use.lock().await.clone();
+                    if let Some(stack) = item_in_use {
+                        let item_id = stack.item.id;
+
+                        // Handle bow release
+                        if item_id == Item::BOW.id {
+                            use crate::item::items::bow::BowItem;
+                            BowItem::release_bow(player).await;
+                        }
+                        // Handle crossbow release
+                        else if item_id == Item::CROSSBOW.id {
+                            use crate::item::items::crossbow::CrossbowItem;
+                            CrossbowItem::release_crossbow(player).await;
+                        }
+                    }
+
                     player.living_entity.clear_active_hand().await;
                 }
                 Status::SwapItem => {

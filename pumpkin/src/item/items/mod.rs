@@ -1,7 +1,10 @@
 pub mod armor_stand;
+pub mod arrow;
 pub mod axe;
 pub mod boat;
+pub mod bow;
 pub mod bucket;
+pub mod crossbow;
 pub mod dye;
 pub mod egg;
 pub mod end_crystal;
@@ -32,8 +35,11 @@ use crate::item::items::spawn_egg::SpawnEggItem;
 use crate::item::items::wind_charge::WindChargeItem;
 
 use super::registry::ItemRegistry;
+use arrow::ArrowItem;
 use axe::AxeItem;
+use bow::BowItem;
 use bucket::{EmptyBucketItem, FilledBucketItem};
+use crossbow::CrossbowItem;
 use dye::DyeItem;
 use egg::EggItem;
 use ender_eye::EnderEyeItem;
@@ -54,6 +60,9 @@ use trident::TridentItem;
 pub fn default_registry() -> Arc<ItemRegistry> {
     let mut manager = ItemRegistry::default();
 
+    manager.register(ArrowItem);
+    manager.register(BowItem);
+    manager.register(CrossbowItem);
     manager.register(SnowBallItem);
     manager.register(HoeItem);
     manager.register(EggItem);
