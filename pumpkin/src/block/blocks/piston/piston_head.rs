@@ -56,8 +56,7 @@ impl BlockBehaviour for PistonHeadBlock {
                 let (upper_block, _) = args.world.get_block_and_state_id(&up_pos).await;
                 if upper_block != &Block::REDSTONE_BLOCK {
                     //Then somebody probably broke the redstone block, try to check if piston should still be extended.
-                    try_move(args.world, &piston_block, &piston_pos).await;
-                    return;
+                    try_move(args.world, piston_block, &piston_pos).await;
                 }
             }
         })
