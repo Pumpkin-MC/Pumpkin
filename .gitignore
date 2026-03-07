@@ -101,6 +101,7 @@ target/
 plugins/
 world/*
 logs/
+crash-reports/
 
 # docker-compose
 data/*
