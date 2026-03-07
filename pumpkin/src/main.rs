@@ -156,6 +156,10 @@ async fn main() {
             .color_named(NamedColor::Red)
             .to_pretty_console()
     );
+
+    if let Some(console_handle) = pumpkin_server.console_handle {
+        console_handle.join().ok();
+    }
 }
 fn print_support_links_and_warning() {
     warn!(

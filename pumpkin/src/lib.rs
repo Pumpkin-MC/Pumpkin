@@ -20,6 +20,7 @@ use std::io::{Cursor, ErrorKind, IsTerminal, stdin};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
+use std::thread::JoinHandle;
 use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
@@ -185,6 +186,7 @@ pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub tcp_listener: Option<TcpListener>,
     pub udp_socket: Option<Arc<UdpSocket>>,
+    pub console_handle: Option<JoinHandle<()>>,
 }
 
 impl PumpkinServer {
@@ -200,11 +202,12 @@ impl PumpkinServer {
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
+        let mut console_handle = None;
         if server.advanced_config.commands.use_console
             && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
         {
             if let Some(rl) = wrapper.take_readline() {
-                setup_console(rl, server.clone());
+                console_handle = Some(setup_console(rl, server.clone()));
             } else {
                 if server.advanced_config.commands.use_tty {
                     warn!(
@@ -301,6 +304,7 @@ impl PumpkinServer {
             server,
             tcp_listener,
             udp_socket,
+            console_handle,
         }
     }
 
@@ -548,7 +552,10 @@ fn setup_stdin_console(server: Arc<Server>) {
     });
 }
 
-fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: Arc<Server>) {
+fn setup_console(
+    mut rl: Editor<PumpkinCommandCompleter, FileHistory>,
+    server: Arc<Server>,
+) -> JoinHandle<()> {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 
     if let Some(helper) = rl.helper_mut() {
@@ -558,13 +565,14 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
         let _ = helper.rt.set(tokio::runtime::Handle::current());
     }
 
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let readline = rl.readline("$ ");
             match readline {
                 Ok(line) => {
                     let _ = rl.add_history_entry(line.clone());
-                    if tx.blocking_send(line).is_err() {
+                    let is_stop = &line == "stop";
+                    if tx.blocking_send(line).is_err() || is_stop {
                         break;
                     }
                 }
@@ -616,6 +624,8 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
         }
         debug!("Stopped console commands task");
     });
+
+    handle
 }
 
 fn scrub_address(ip: &str) -> String {
