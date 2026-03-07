@@ -1,5 +1,6 @@
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use crate::server::Server;
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
@@ -9,6 +10,7 @@ use std::{
     sync::Arc,
     sync::atomic::{AtomicBool, Ordering},
 };
+
 pub mod egg;
 pub mod firework_rocket;
 pub mod snowball;
@@ -24,7 +26,7 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
 
 pub struct ThrownItemEntity {
     pub entity: Entity,
-    pub owner_id: Option<i32>,
+    pub owner_id: AtomicCell<Option<i32>>,
     pub collides_with_projectiles: bool,
     pub has_hit: AtomicBool,
 }
@@ -33,7 +35,7 @@ pub struct ThrownItemEntity {
 /// It can have an owner or no owner.
 pub enum ThrownItemEntityCondition<'a> {
     Owned(&'a Entity),
-    Unowned(Vector3<f64>),
+    Unowned,
 }
 
 impl ThrownItemEntity {
@@ -45,20 +47,17 @@ impl ThrownItemEntity {
                 entity.pos.store(owner_pos);
                 Self {
                     entity,
-                    owner_id: Some(owner.entity_id),
+                    owner_id: AtomicCell::new(Some(owner.entity_id)),
                     collides_with_projectiles: false,
                     has_hit: AtomicBool::new(false),
                 }
             }
-            ThrownItemEntityCondition::Unowned(pos) => {
-                entity.pos.store(*pos);
-                Self {
-                    entity,
-                    owner_id: None,
-                    collides_with_projectiles: false,
-                    has_hit: AtomicBool::new(false),
-                }
-            }
+            ThrownItemEntityCondition::Unowned => Self {
+                entity,
+                owner_id: AtomicCell::new(None),
+                collides_with_projectiles: false,
+                has_hit: AtomicBool::new(false),
+            },
         }
     }
 
@@ -230,7 +229,9 @@ impl ThrownItemEntity {
         }
 
         // Skip owner for initial frames
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        if Some(other_ent.entity_id) == self.owner_id.load()
+            && self_ent.age.load(Ordering::Relaxed) < 5
+        {
             return true;
         }
 
@@ -248,6 +249,10 @@ impl ThrownItemEntity {
 
     #[allow(dead_code, clippy::unused_self)]
     const fn get_living_entity(&self) -> Option<&LivingEntity> {
+        None
+    }
+
+    pub const fn get_hurting_thrown_item_entity(&self) -> Option<&HurtingThrownItemEntity> {
         None
     }
 
@@ -348,6 +353,38 @@ impl ProjectileHit {
         match self {
             Self::Block { face, .. } => Some(*face),
             Self::Entity { .. } => None,
+        }
+    }
+}
+
+pub struct HurtingThrownItemEntity {
+    pub thrown: ThrownItemEntity,
+    pub acceleration_power: AtomicCell<f64>,
+}
+
+impl HurtingThrownItemEntity {
+    /// Creates a new `HurtingThrownItemEntity`.
+    pub fn new(entity: Entity, condition: &ThrownItemEntityCondition) -> Self {
+        Self {
+            thrown: ThrownItemEntity::new(entity, condition),
+            acceleration_power: AtomicCell::new(1.0),
+        }
+    }
+
+    pub const fn get_thrown_item_entity(&self) -> &ThrownItemEntity {
+        &self.thrown
+    }
+
+    pub const fn get_entity(&self) -> &Entity {
+        self.get_thrown_item_entity().get_entity()
+    }
+
+    pub fn on_deflection(&self, from_attack: bool) {
+        if from_attack {
+            self.acceleration_power.store(0.1);
+        } else {
+            self.acceleration_power
+                .store(self.acceleration_power.load() * 0.5);
         }
     }
 }

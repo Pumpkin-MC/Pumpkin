@@ -75,10 +75,10 @@ pub async fn from_type(
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity).await,
 
         id if id == EntityType::WIND_CHARGE.id => {
-            Arc::new(WindChargeEntity::new_normal(entity, &Unowned(position)))
+            Arc::new(WindChargeEntity::new_normal(entity, &Unowned))
         }
         id if id == EntityType::BREEZE_WIND_CHARGE.id => {
-            Arc::new(WindChargeEntity::new_breeze(entity, &Unowned(position)))
+            Arc::new(WindChargeEntity::new_breeze(entity, &Unowned))
         }
 
         // Fallback Entity

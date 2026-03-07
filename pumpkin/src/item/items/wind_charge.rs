@@ -48,9 +48,14 @@ impl ItemBehaviour for WindChargeItem {
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();
 
-            wind_charge_entity
-                .get_thrown_item_entity()
-                .set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
+            wind_charge_entity.hurting.thrown.set_velocity_from(
+                &player.living_entity.entity,
+                pitch,
+                yaw,
+                0.0,
+                POWER,
+                1.0,
+            );
 
             // TODO: player.incrementStat(Stats.USED)
 

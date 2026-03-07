@@ -4,6 +4,7 @@ use crate::{
     server::Server,
     world::World,
 };
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{entity::EntityStatus, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{codec::optional_int::OptionalInt, java::client::play::Metadata};
 use pumpkin_util::{
@@ -37,7 +38,7 @@ impl FireworkRocketEntity {
         Self {
             entity: ThrownItemEntity {
                 entity,
-                owner_id: None,
+                owner_id: AtomicCell::new(None),
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
             },
