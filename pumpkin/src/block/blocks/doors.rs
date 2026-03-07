@@ -52,16 +52,16 @@ async fn toggle_door(player: Option<&Player>, world: &Arc<World>, block_pos: &Bl
     let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
     other_door_props.open = door_props.open;
 
-    if let Some(player) = player {
-        world
-            .play_block_sound_expect(
-                player,
-                get_sound(block, door_props.open),
-                SoundCategory::Blocks,
-                *block_pos,
-            )
-            .await;
-    }
+    world
+        .play_block_sound_raw_except_option(
+            player,
+            get_sound(block, door_props.open) as u16,
+            SoundCategory::Blocks,
+            *block_pos,
+            1.0,
+            1.0,
+        )
+        .await;
 
     world
         .set_block_state(
@@ -88,11 +88,7 @@ fn can_open_door(block: &Block) -> bool {
 }
 
 fn wind_charge_can_open_door(block: &Block) -> bool {
-    if block == &Block::IRON_DOOR {
-        return false;
-    }
-
-    true
+    can_open_door(block)
 }
 
 // Todo: The sounds should be from BlockSetType

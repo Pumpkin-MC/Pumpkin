@@ -586,14 +586,14 @@ impl World {
             .await;
     }
 
-    pub async fn play_sound_expect(
+    pub async fn play_sound_except(
         &self,
         player: &Player,
         sound: Sound,
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
-        self.play_sound_raw_expect(player, sound as u16, category, position, 1.0, 1.0)
+        self.play_sound_raw_except(player, sound as u16, category, position, 1.0, 1.0)
             .await;
     }
 
@@ -610,7 +610,7 @@ impl World {
         self.broadcast_packet_all(&packet).await;
     }
 
-    pub async fn play_sound_raw_expect(
+    pub async fn play_sound_raw_except(
         &self,
         player: &Player,
         sound_id: u16,
@@ -639,7 +639,7 @@ impl World {
         self.play_sound(sound, category, &new_vec).await;
     }
 
-    pub async fn play_block_sound_expect(
+    pub async fn play_block_sound_except(
         &self,
         player: &Player,
         sound: Sound,
@@ -651,8 +651,31 @@ impl World {
             f64::from(position.0.y) + 0.5,
             f64::from(position.0.z) + 0.5,
         );
-        self.play_sound_expect(player, sound, category, &new_vec)
+        self.play_sound_except(player, sound, category, &new_vec)
             .await;
+    }
+
+    pub async fn play_block_sound_raw_except_option(
+        &self,
+        player: Option<&Player>,
+        sound: u16,
+        category: SoundCategory,
+        position: BlockPos,
+        volume: f32,
+        pitch: f32,
+    ) {
+        let new_vec = Vector3::new(
+            f64::from(position.0.x) + 0.5,
+            f64::from(position.0.y) + 0.5,
+            f64::from(position.0.z) + 0.5,
+        );
+        if let Some(player) = player {
+            self.play_sound_raw_except(player, sound, category, &new_vec, volume, pitch)
+                .await;
+        } else {
+            self.play_sound_raw(sound, category, &new_vec, volume, pitch)
+                .await;
+        }
     }
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {

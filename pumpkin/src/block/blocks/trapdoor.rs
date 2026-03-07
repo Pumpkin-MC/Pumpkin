@@ -1,6 +1,9 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs};
+use crate::block::{
+    BlockBehaviour, BlockFuture, NormalUseArgs, OnExplosionHitArgs, OnNeighborUpdateArgs,
+    OnPlaceArgs,
+};
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
@@ -11,22 +14,25 @@ use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 type TrapDoorProperties = pumpkin_data::block_properties::OakTrapdoorLikeProperties;
 
-async fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
+async fn toggle_trapdoor(player: Option<&Player>, world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_state_id(block_pos).await;
     let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state, block);
     trapdoor_props.open = !trapdoor_props.open;
 
     world
-        .play_block_sound_expect(
+        .play_block_sound_raw_except_option(
             player,
-            get_sound(block, trapdoor_props.open),
+            get_sound(block, trapdoor_props.open) as u16,
             SoundCategory::Blocks,
             *block_pos,
+            1.0,
+            1.0,
         )
         .await;
 
@@ -44,6 +50,10 @@ fn can_open_trapdoor(block: &Block) -> bool {
         return false;
     }
     true
+}
+
+fn wind_charge_can_open_trapdoor(block: &Block) -> bool {
+    can_open_trapdoor(block)
 }
 
 fn get_sound(block: &Block, open: bool) -> Sound {
@@ -74,7 +84,7 @@ impl BlockBehaviour for TrapDoorBlock {
                 return BlockActionResult::Pass;
             }
 
-            toggle_trapdoor(args.player, args.world, args.position).await;
+            toggle_trapdoor(Some(args.player), args.world, args.position).await;
 
             BlockActionResult::Success
         })
@@ -142,6 +152,21 @@ impl BlockBehaviour for TrapDoorBlock {
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
+        })
+    }
+
+    fn on_explosion_hit<'a>(
+        &'a self,
+        args: OnExplosionHitArgs<'a>,
+    ) -> BlockFuture<'a, Option<Vec<ItemStack>>> {
+        Box::pin(async move {
+            if args.explosion.triggers_blocks() {
+                let props = TrapDoorProperties::from_state_id(args.state.id, args.block);
+                if wind_charge_can_open_trapdoor(args.block) && !props.powered {
+                    toggle_trapdoor(None, args.world, args.position).await;
+                }
+            }
+            self.on_explosion_hit_base(args).await
         })
     }
 }
