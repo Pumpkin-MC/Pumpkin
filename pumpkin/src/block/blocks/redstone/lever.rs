@@ -2,17 +2,9 @@ use std::sync::Arc;
 
 use crate::block::{
     BlockFuture, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
-    GetStateForNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs,
+    GetStateForNeighborUpdateArgs, OnExplosionHitArgs, OnPlaceArgs, OnStateReplacedArgs,
     blocks::abstract_wall_mounting::WallMountedBlock,
 };
-use pumpkin_data::{
-    Block, BlockDirection, HorizontalFacingExt,
-    block_properties::{BlockFace, BlockProperties, LeverLikeProperties},
-};
-use pumpkin_macros::pumpkin_block;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
-
 use crate::{
     block::{
         registry::BlockActionResult,
@@ -20,6 +12,14 @@ use crate::{
     },
     world::World,
 };
+use pumpkin_data::{
+    Block, BlockDirection, HorizontalFacingExt,
+    block_properties::{BlockFace, BlockProperties, LeverLikeProperties},
+};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::item::ItemStack;
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, state) = world.get_block_and_state_id(block_pos).await;
@@ -119,6 +119,18 @@ impl BlockBehaviour for LeverBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move { WallMountedBlock::get_state_for_neighbor_update(self, args).await })
+    }
+
+    fn on_explosion_hit<'a>(
+        &'a self,
+        args: OnExplosionHitArgs<'a>,
+    ) -> BlockFuture<'a, Option<Vec<ItemStack>>> {
+        Box::pin(async move {
+            if args.explosion.triggers_blocks() {
+                toggle_lever(args.world, args.position).await;
+            }
+            self.on_explosion_hit_base(args).await
+        })
     }
 }
 
