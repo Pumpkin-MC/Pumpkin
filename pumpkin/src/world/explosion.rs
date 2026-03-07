@@ -364,34 +364,6 @@ impl Explosion {
         if self.interacts_with_blocks() {
             self.interact_with_blocks(&mut blocks).await;
         }
-        /*
-        for (pos, (block, state)) in &blocks {
-            self.world
-                .set_block_state(pos, 0, BlockFlags::NOTIFY_ALL)
-                .await;
-            self.world.close_container_screens_at(pos).await;
-
-            let pumpkin_block = self.world.block_registry.get_pumpkin_block(block.id);
-
-            if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
-                let params = LootContextParameters {
-                    block_state: Some(state),
-                    explosion_radius: Some(self.power),
-                    ..Default::default()
-                };
-                drop_loot(&self.world, block, pos, false, params).await;
-            }
-            if let Some(pumpkin_block) = pumpkin_block {
-                pumpkin_block
-                    .explode(ExplodeArgs {
-                        world: &self.world,
-                        block,
-                        position: pos,
-                    })
-                    .await;
-            }
-        }
-        */
 
         (blocks.len() as u32, knockback_map)
     }
