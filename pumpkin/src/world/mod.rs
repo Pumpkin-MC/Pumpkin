@@ -140,7 +140,7 @@ pub mod scoreboard;
 pub mod weather;
 
 use crate::world::damage_source::DamageSource;
-use crate::world::explosion::BlockInteraction;
+use crate::world::explosion::{BlockInteraction, ExplosionInteraction};
 use crate::world::explosion_damage_calculator::ExplosionDamageCalculator;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -1984,7 +1984,7 @@ impl World {
             power,
             position,
             false,
-            BlockInteraction::Destroy,
+            ExplosionInteraction::Trigger,
         )
         .await;
     }
@@ -1998,11 +1998,31 @@ impl World {
         power: f32,
         pos: Vector3<f64>,
         fire: bool,
-        block_interaction: BlockInteraction,
+        explosion_interaction: ExplosionInteraction,
     ) {
+        let game_rules = &self.level_info.load().game_rules;
+
+        let block_interaction = match explosion_interaction {
+            ExplosionInteraction::None => BlockInteraction::Keep,
+            ExplosionInteraction::Block => {
+                BlockInteraction::from_game_rule(game_rules.block_explosion_drop_decay)
+            }
+            ExplosionInteraction::Mob => {
+                if game_rules.mob_griefing {
+                    BlockInteraction::from_game_rule(game_rules.block_explosion_drop_decay)
+                } else {
+                    BlockInteraction::Keep
+                }
+            }
+            ExplosionInteraction::Tnt => {
+                BlockInteraction::from_game_rule(game_rules.tnt_explosion_drop_decay)
+            }
+            ExplosionInteraction::Trigger => BlockInteraction::TriggerBlock,
+        };
+
         let explosion = Explosion::new(
             self,
-            source_entity,
+            source_entity.as_ref(),
             damage_source,
             damage_calculator,
             power,

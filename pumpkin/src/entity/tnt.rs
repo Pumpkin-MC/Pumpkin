@@ -1,4 +1,6 @@
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
+use super::{ArcEntityBaseFuture, Entity, EntityBase, NBTStorage, living::LivingEntity};
+use crate::world::damage_source::DamageSource;
+use crate::world::explosion::ExplosionInteraction;
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
 use pumpkin_data::{Block, meta_data_type::MetaDataType, tracked_data::TrackedData};
@@ -64,12 +66,14 @@ impl EntityBase for TNTEntity {
 
             if fuse <= 1 {
                 // TNT explodes now
-                self.entity.remove().await;
-                self.entity
+                if let Some(entity) = self
+                    .get_entity()
                     .world
                     .load()
-                    .explode(self.entity.pos.load(), self.power)
-                    .await;
+                    .get_entity_by_id(self.get_entity().entity_id)
+                {
+                    entity.clone().explode(entity.get_entity().pos.load()).await;
+                }
             } else {
                 // Safe decrement
                 self.fuse.store(fuse - 1, Relaxed);
@@ -100,6 +104,27 @@ impl EntityBase for TNTEntity {
                     ),
                 ])
                 .await;
+        })
+    }
+
+    fn explode(self: Arc<Self>, position: Vector3<f64>) -> ArcEntityBaseFuture<()> {
+        Box::pin(async move {
+            let world = self.get_entity().world.load();
+            world
+                .explode_with(
+                    Some(self.clone()),
+                    Some(DamageSource::from_explosion_direct(
+                        &world,
+                        Some(self.clone()),
+                    )),
+                    None,
+                    self.power,
+                    position,
+                    false,
+                    ExplosionInteraction::Tnt,
+                )
+                .await;
+            self.entity.remove().await;
         })
     }
 
