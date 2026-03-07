@@ -2,7 +2,7 @@ interface command {
     use player.{player};
     use %world.{%world};
     use entity.{command-block-entity, entity};
-    use common.{position, block-position};
+    use common.{position, block-position, locale};
     use server.{server, difficulty};
     use text.{text-component};
 
@@ -125,7 +125,7 @@ interface command {
         has-permission: func(server: borrow<server>, node: string) -> bool;
         position: func() -> option<position>;
         %world: func() -> option<%world>;
-        get-locale: func() -> string;
+        get-locale: func() -> locale;
         should-receive-feedback: func() -> bool;
         should-broadcast-console-to-ops: func() -> bool;
         should-track-output: func() -> bool;
