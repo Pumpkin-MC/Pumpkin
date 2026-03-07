@@ -21,6 +21,7 @@ use pumpkin_protocol::bedrock::client::update_abilities::{
 };
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_util::identifier::Identifier;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
@@ -68,7 +69,6 @@ use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
 use pumpkin_util::permission::PermissionLvl;
-use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
@@ -1382,13 +1382,9 @@ impl Player {
     ///
     /// # Arguments
     ///
-    /// * `sound_id`: An optional [`ResourceLocation`] specifying the sound to stop. If [`None`], all sounds in the specified category (if any) will be stopped.
+    /// * `sound_id`: An optional [`Identifier`] specifying the sound to stop. If [`None`], all sounds in the specified category (if any) will be stopped.
     /// * `category`: An optional [`SoundCategory`] specifying the sound category to stop. If [`None`], all sounds with the specified resource location (if any) will be stopped.
-    pub async fn stop_sound(
-        &self,
-        sound_id: Option<ResourceLocation>,
-        category: Option<SoundCategory>,
-    ) {
+    pub async fn stop_sound(&self, sound_id: Option<Identifier>, category: Option<SoundCategory>) {
         self.client
             .enqueue_packet(&CStopSound::new(sound_id, category))
             .await;
@@ -1872,7 +1868,7 @@ impl Player {
                 self.living_entity.entity.set_world(new_world.clone());
 
                 let last_pos = self.living_entity.entity.last_pos.load();
-                let death_dimension = ResourceLocation::from(self.world().dimension.minecraft_name);
+                let death_dimension = Identifier::parse_static(self.world().dimension.minecraft_name);
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
                     last_pos.y.round() as i32,
@@ -1881,7 +1877,7 @@ impl Player {
                 self.client
                     .send_packet_now(&CRespawn::new(
                         (new_world.dimension.id).into(),
-                        new_world.dimension.minecraft_name.to_string(),
+                        Identifier::parse_static(new_world.dimension.minecraft_name),
                         biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,

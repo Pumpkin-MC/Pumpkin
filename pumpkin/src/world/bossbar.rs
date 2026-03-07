@@ -3,7 +3,7 @@ use pumpkin_protocol::java::client::play::{BosseventAction, CBossEvent};
 use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum BossbarColor {
     Pink,
     Blue,
@@ -14,7 +14,7 @@ pub enum BossbarColor {
     White,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum BossbarDivisions {
     NoDivision,
     Notches6,
@@ -23,7 +23,7 @@ pub enum BossbarDivisions {
     Notches20,
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub enum BossbarFlags {
     NoFlags,
     DarkenSky = 0x01,

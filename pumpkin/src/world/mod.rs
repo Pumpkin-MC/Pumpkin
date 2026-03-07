@@ -1,3 +1,4 @@
+use pumpkin_util::identifier::Identifier;
 use std::pin::Pin;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
@@ -2001,7 +2002,7 @@ impl World {
     #[allow(clippy::too_many_lines)]
     pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.entity.last_pos.load();
-        let death_dimension = ResourceLocation::from(player.world().dimension.minecraft_name);
+        let death_dimension = Identifier::parse_static(player.world().dimension.minecraft_name);
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,
@@ -2125,7 +2126,7 @@ impl World {
             .client
             .send_packet_now(&CRespawn::new(
                 (target_world.dimension.id).into(),
-                ResourceLocation::from(target_world.dimension.minecraft_name),
+                Identifier::parse_static(target_world.dimension.minecraft_name),
                 biome::hash_seed(target_world.level.seed.0),
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,

@@ -196,7 +196,7 @@ pub enum ArgumentType<'a> {
     Team,
     ItemSlot,
     ItemSlots,
-    ResourceLocation,
+    Identifier,
     Function,
     EntityAnchor,
     IntRange,

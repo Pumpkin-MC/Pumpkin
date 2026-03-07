@@ -14,7 +14,7 @@ pub struct BossbarColorArgumentConsumer;
 impl GetClientSideArgParser for BossbarColorArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType<'_> {
         // Not sure if this is right...
-        ArgumentType::ResourceLocation
+        ArgumentType::Identifier
     }
 
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {

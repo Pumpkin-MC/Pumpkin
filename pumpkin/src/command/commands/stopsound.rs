@@ -6,8 +6,8 @@ use crate::command::{
     },
     tree::{CommandTree, builder::argument},
 };
-use pumpkin_data::translation;
-use pumpkin_util::text::TextComponent;
+use pumpkin_data::{sound::Sound, translation};
+use pumpkin_util::{identifier::Identifier, text::TextComponent};
 
 const NAMES: [&str; 1] = ["stopsound"];
 const DESCRIPTION: &str = "Stops a currently playing sound.";
@@ -36,8 +36,11 @@ impl CommandExecutor for Executor {
                     .stop_sound(
                         sound
                             .as_ref()
-                            .cloned()
-                            .map(|s| format!("minecraft:{}", s.to_name()))
+                            .map(Sound::to_name)
+                            .map(|sound_name| {
+                                Identifier::parse(sound_name)
+                                    .expect("expected Sound to have a valid identifier")
+                            })
                             .ok(),
                         category.as_ref().map(|s| **s).ok(),
                     )
