@@ -1,6 +1,3 @@
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-
 use crate::entity::ArcEntityBaseFuture;
 use crate::entity::projectile::ThrownItemEntityCondition::Owned;
 use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
@@ -11,6 +8,7 @@ use crate::{
     },
     server::Server,
 };
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -19,6 +17,8 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -35,7 +35,7 @@ impl EggEntity {
         entity.set_velocity(Vector3::new(0.0, 0.1, 0.0)).await;
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner_id: AtomicCell::new(None),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
         };
@@ -139,7 +139,7 @@ impl EntityBase for EggEntity {
             let mut hatching = to_spawn > 0;
             let mut hatching_type: &'static EntityType = &EntityType::CHICKEN;
 
-            if let Some(owner_id) = self.thrown.owner_id
+            if let Some(owner_id) = self.thrown.owner_id.load()
                 && let Some(player) = world.get_player_by_id(owner_id)
                 && let Some(server) = world.server.upgrade()
             {

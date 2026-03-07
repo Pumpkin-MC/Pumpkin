@@ -1,11 +1,13 @@
 use crate::entity::ArcEntityBaseFuture;
-use crate::entity::projectile::{ProjectileHit, ThrownItemEntityCondition};
+use crate::entity::projectile::{
+    HurtingThrownItemEntity, ProjectileHit, ThrownItemEntityCondition,
+};
 use crate::world::explosion::ExplosionInteraction;
 use crate::world::explosion_damage_calculator::ExplosionDamageCalculator;
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity,
-        projectile::ThrownItemEntity, projectile_deflection::ProjectileDeflectionType,
+        projectile::ThrownItemEntity,
     },
     server::Server,
 };
@@ -18,10 +20,7 @@ use std::sync::LazyLock;
 use std::sync::atomic::Ordering::Relaxed;
 use std::{
     f64,
-    sync::{
-        Arc,
-        atomic::{AtomicU8, Ordering},
-    },
+    sync::{Arc, atomic::AtomicU8},
 };
 
 const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
@@ -37,7 +36,7 @@ static EXPLOSION_DAMAGE_CALCULATOR: LazyLock<ExplosionDamageCalculator> =
 
 /// An entity for a wind charge.
 pub struct WindChargeEntity {
-    thrown: ThrownItemEntity,
+    pub hurting: HurtingThrownItemEntity,
     kind: WindChargeKind,
 }
 
@@ -51,10 +50,12 @@ enum WindChargeKind {
 
 impl WindChargeEntity {
     fn new(entity: Entity, kind: WindChargeKind, condition: &ThrownItemEntityCondition) -> Self {
-        Self {
-            thrown: ThrownItemEntity::new(entity, condition),
+        let entity = Self {
+            hurting: HurtingThrownItemEntity::new(entity, condition),
             kind,
-        }
+        };
+        entity.hurting.acceleration_power.store(0.0);
+        entity
     }
 
     /// Creates a normal wind charge (spawned by a player or dispenser.)
@@ -75,10 +76,6 @@ impl WindChargeEntity {
         Self::new(entity, WindChargeKind::Breeze, condition)
     }
 
-    pub const fn get_thrown_item_entity(&self) -> &ThrownItemEntity {
-        &self.thrown
-    }
-
     pub async fn explode(&self, position: Vector3<f64>) {
         self.get_entity()
             .world
@@ -87,25 +84,8 @@ impl WindChargeEntity {
             .await;
     }
 
-    pub fn deflect(
-        &mut self,
-        deflection: &ProjectileDeflectionType,
-        deflector: Option<&dyn EntityBase>,
-        _from_attack: bool,
-    ) -> bool {
-        deflection.deflect(self, deflector);
-
-        /* TODO: Does this need to be implemented?
-        if self.get_entity().world().is_client() {
-            self.set_owner();
-            self.on_Deflected(from_attack);
-        }
-         */
-        true
-    }
-
     pub const fn get_entity(&self) -> &Entity {
-        self.thrown.get_entity()
+        self.hurting.get_entity()
     }
 
     const fn explosion_radius(&self) -> f32 {
@@ -143,7 +123,7 @@ impl EntityBase for WindChargeEntity {
                     entity.clone().explode(entity.get_entity().pos.load()).await;
                 }
             } else {
-                self.thrown.process_tick(caller, server).await;
+                self.hurting.thrown.process_tick(caller, server).await;
             }
 
             if let WindChargeKind::Normal { deflect_cooldown } = &self.kind {
@@ -175,7 +155,7 @@ impl EntityBase for WindChargeEntity {
     }
 
     fn get_entity(&self) -> &Entity {
-        self.thrown.get_entity()
+        self.hurting.get_entity()
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
@@ -183,7 +163,7 @@ impl EntityBase for WindChargeEntity {
     }
 
     fn get_thrown_item_entity(&self) -> Option<&ThrownItemEntity> {
-        Some(&self.thrown)
+        Some(self.hurting.get_thrown_item_entity())
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
@@ -216,7 +196,12 @@ impl EntityBase for WindChargeEntity {
                 ProjectileHit::Entity {
                     entity: ref target, ..
                 } => {
-                    let mut owner = self.thrown.owner_id.and_then(|i| world.get_player_by_id(i));
+                    let mut owner = self
+                        .hurting
+                        .thrown
+                        .owner_id
+                        .load()
+                        .and_then(|i| world.get_player_by_id(i));
 
                     if let Some(owner) = &mut owner {
                         owner

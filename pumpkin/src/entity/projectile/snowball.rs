@@ -1,6 +1,3 @@
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-
 use crate::entity::ArcEntityBaseFuture;
 use crate::entity::projectile::ProjectileHit;
 use crate::entity::projectile::ThrownItemEntityCondition::Owned;
@@ -8,9 +5,12 @@ use crate::{
     entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
     server::Server,
 };
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_util::math::vector3::Vector3;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 pub struct SnowballEntity {
     pub thrown: ThrownItemEntity,
@@ -24,7 +24,7 @@ impl SnowballEntity {
         // Initialize without owner
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner_id: AtomicCell::new(None),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
         };

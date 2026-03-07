@@ -77,7 +77,7 @@ impl DamageSource {
                 return Some(e);
             }
             if let Some(thrown_entity) = e.get_thrown_item_entity()
-                && let Some(i) = thrown_entity.owner_id
+                && let Some(i) = thrown_entity.owner_id.load()
             {
                 return world.get_player_by_id(i).map(|a| a as Arc<dyn EntityBase>);
             }

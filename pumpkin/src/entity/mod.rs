@@ -1,5 +1,6 @@
 use crate::entity::item::ItemEntity;
 use crate::entity::projectile::ThrownItemEntity;
+use crate::entity::projectile_deflection::ProjectileDeflectionType;
 use crate::net::ClientPlatform;
 use crate::world::World;
 use crate::world::explosion::Explosion;
@@ -368,6 +369,28 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     fn explode(self: Arc<Self>, _position: Vector3<f64>) -> ArcEntityBaseFuture<()> {
         Box::pin(async move {})
+    }
+
+    fn deflect<'a>(
+        &'a self,
+        deflection: &'a ProjectileDeflectionType,
+        deflector: Option<&'a (dyn EntityBase + 'a)>,
+        new_owner: i32,
+        from_attack: bool,
+    ) -> EntityBaseFuture<'a, bool>
+    where
+        Self: Sized,
+    {
+        Box::pin(async move {
+            self.get_thrown_item_entity().is_some_and(|entity| {
+                deflection.deflect(self, deflector);
+                entity.owner_id.store(Some(new_owner));
+                if let Some(hurting) = entity.get_hurting_thrown_item_entity() {
+                    hurting.on_deflection(from_attack);
+                }
+                true
+            })
+        })
     }
 }
 
