@@ -1,8 +1,11 @@
 use super::{ArcEntityBaseFuture, Entity, EntityBase, NBTStorage, living::LivingEntity};
+use crate::world::WorldExplosionArgs;
 use crate::world::damage_source::DamageSource;
 use crate::world::explosion::ExplosionInteraction;
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::{Block, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 use pumpkin_util::math::vector3::Vector3;
@@ -111,18 +114,21 @@ impl EntityBase for TNTEntity {
         Box::pin(async move {
             let world = self.get_entity().world.load();
             world
-                .explode_with(
-                    Some(self.clone()),
-                    Some(DamageSource::from_explosion_direct(
+                .explode_with(WorldExplosionArgs {
+                    source_entity: Some(self.clone()),
+                    damage_source: Some(DamageSource::from_explosion_direct(
                         &world,
                         Some(self.clone()),
                     )),
-                    None,
-                    self.power,
-                    position,
-                    false,
-                    ExplosionInteraction::Tnt,
-                )
+                    damage_calculator: None,
+                    power: self.power,
+                    pos: position,
+                    fire: false,
+                    explosion_interaction: ExplosionInteraction::Tnt,
+                    small_particle: Particle::Explosion,
+                    large_particle: Particle::ExplosionEmitter,
+                    sound: Sound::EntityGenericExplode,
+                })
                 .await;
             self.entity.remove().await;
         })

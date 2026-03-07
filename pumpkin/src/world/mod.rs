@@ -140,7 +140,7 @@ pub mod scoreboard;
 pub mod weather;
 
 use crate::world::damage_source::DamageSource;
-use crate::world::explosion::{BlockInteraction, ExplosionInteraction};
+use crate::world::explosion::{BlockInteraction, ExplosionInteraction, NewExplosionArgs};
 use crate::world::explosion_damage_calculator::ExplosionDamageCalculator;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -2003,32 +2003,26 @@ impl World {
     }
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        self.explode_with(
-            None,
-            None,
-            None,
+        self.explode_with(WorldExplosionArgs {
+            source_entity: None,
+            damage_source: None,
+            damage_calculator: None,
             power,
-            position,
-            false,
-            ExplosionInteraction::Trigger,
-        )
+            pos: position,
+            fire: false,
+            explosion_interaction: ExplosionInteraction::Trigger,
+            small_particle: Particle::Explosion,
+            large_particle: Particle::ExplosionEmitter,
+            sound: Sound::EntityGenericExplode,
+        })
         .await;
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn explode_with(
-        self: &Arc<Self>,
-        source_entity: Option<Arc<dyn EntityBase>>,
-        damage_source: Option<DamageSource>,
-        damage_calculator: Option<ExplosionDamageCalculator>,
-        power: f32,
-        pos: Vector3<f64>,
-        fire: bool,
-        explosion_interaction: ExplosionInteraction,
-    ) {
+    pub async fn explode_with(self: &Arc<Self>, args: WorldExplosionArgs) {
         let game_rules = &self.level_info.load().game_rules;
 
-        let block_interaction = match explosion_interaction {
+        let block_interaction = match args.explosion_interaction {
             ExplosionInteraction::None => BlockInteraction::Keep,
             ExplosionInteraction::Block => {
                 BlockInteraction::from_game_rule(game_rules.block_explosion_drop_decay)
@@ -2046,32 +2040,32 @@ impl World {
             ExplosionInteraction::Trigger => BlockInteraction::TriggerBlock,
         };
 
-        let explosion = Explosion::new(
-            self,
-            source_entity.as_ref(),
-            damage_source,
-            damage_calculator,
-            power,
-            pos,
-            fire,
+        let explosion = Explosion::new(NewExplosionArgs {
+            world: self,
+            source_entity: args.source_entity.as_ref(),
+            damage_source: args.damage_source,
+            damage_calculator: args.damage_calculator,
+            power: args.power,
+            pos: args.pos,
+            fire: args.fire,
             block_interaction,
-        );
-        let (block_count, knockback_map) = explosion.explode().await;
-        let particle = if power < 2.0 {
-            Particle::Explosion
+        });
+        let particle = if explosion.is_small() {
+            args.small_particle
         } else {
-            Particle::ExplosionEmitter
+            args.large_particle
         };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
+        let (block_count, knockback_map) = explosion.explode().await;
+        let sound = IdOr::<SoundEvent>::Id(args.sound as u16);
         for player in self.players.load().iter() {
-            if player.position().squared_distance_to_vec(&pos) > 4096.0 {
+            if player.position().squared_distance_to_vec(&args.pos) > 4096.0 {
                 continue;
             }
             player
                 .client
                 .enqueue_packet(&CExplosion::new(
-                    pos,
-                    power,
+                    args.pos,
+                    args.power,
                     block_count as i32,
                     knockback_map.get(&player.entity_id()).copied(),
                     VarInt(particle as i32),
@@ -3702,6 +3696,19 @@ impl World {
 
         None
     }
+}
+
+pub struct WorldExplosionArgs {
+    pub source_entity: Option<Arc<dyn EntityBase>>,
+    pub damage_source: Option<DamageSource>,
+    pub damage_calculator: Option<ExplosionDamageCalculator>,
+    pub power: f32,
+    pub pos: Vector3<f64>,
+    pub fire: bool,
+    pub explosion_interaction: ExplosionInteraction,
+    pub small_particle: Particle,
+    pub large_particle: Particle,
+    pub sound: Sound,
 }
 
 impl pumpkin_world::world::SimpleWorld for World {

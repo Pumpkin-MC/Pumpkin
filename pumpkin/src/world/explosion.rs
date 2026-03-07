@@ -13,6 +13,8 @@ use std::sync::Arc;
 
 /// A struct representing an *explosion*, which can be triggered
 /// using [`Explosion::explode`].
+#[expect(dead_code)]
+#[must_use]
 pub struct Explosion {
     /// The world this explosion belongs to.
     world: Arc<World>,
@@ -33,29 +35,35 @@ pub struct Explosion {
     fire: bool,
 }
 
+pub struct NewExplosionArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub source_entity: Option<&'a Arc<dyn EntityBase>>,
+    pub damage_source: Option<DamageSource>,
+    pub damage_calculator: Option<ExplosionDamageCalculator>,
+    pub power: f32,
+    pub pos: Vector3<f64>,
+    pub fire: bool,
+    pub block_interaction: BlockInteraction,
+}
+
 impl Explosion {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        world: &Arc<World>,
-        source_entity: Option<&Arc<dyn EntityBase>>,
-        damage_source: Option<DamageSource>,
-        damage_calculator: Option<ExplosionDamageCalculator>,
-        power: f32,
-        pos: Vector3<f64>,
-        fire: bool,
-        block_interaction: BlockInteraction,
-    ) -> Self {
+    /// Creates a new `Explosion`.
+    pub fn new(args: NewExplosionArgs) -> Self {
         Self {
-            world: world.clone(),
-            power,
-            pos,
-            block_interaction,
-            fire,
-            source_entity: source_entity.cloned(),
-            damage_calculator: damage_calculator
-                .unwrap_or_else(|| Self::create_damage_calculator(source_entity.cloned())),
-            damage_source: damage_source.unwrap_or_else(|| {
-                DamageSource::from_explosion_direct(world.as_ref(), source_entity.cloned())
+            world: args.world.clone(),
+            power: args.power,
+            pos: args.pos,
+            block_interaction: args.block_interaction,
+            fire: args.fire,
+            source_entity: args.source_entity.cloned(),
+            damage_calculator: args
+                .damage_calculator
+                .unwrap_or_else(|| Self::create_damage_calculator(args.source_entity.cloned())),
+            damage_source: args.damage_source.unwrap_or_else(|| {
+                DamageSource::from_explosion_direct(
+                    args.world.as_ref(),
+                    args.source_entity.cloned(),
+                )
             }),
         }
     }
@@ -411,6 +419,12 @@ impl Explosion {
                     true
                 }
             })
+    }
+
+    /// Whether an explosion is considered to be "small".
+    #[must_use]
+    pub fn is_small(&self) -> bool {
+        self.power < 2.0 || !self.interacts_with_blocks()
     }
 }
 

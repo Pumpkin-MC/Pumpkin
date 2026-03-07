@@ -26,6 +26,7 @@ pub enum ExplosionDamageCalculator {
         /// which this calculator calculates.
         immune_blocks: Option<HashSet<&'static Block>>,
     },
+
     /// An [`ExplosionDamageCalculator`] based on an entity.
     EntityBased { source_entity: Arc<dyn EntityBase> },
 }

@@ -2,6 +2,7 @@ use crate::entity::ArcEntityBaseFuture;
 use crate::entity::projectile::{
     HurtingThrownItemEntity, ProjectileHit, ThrownItemEntityCondition,
 };
+use crate::world::WorldExplosionArgs;
 use crate::world::explosion::ExplosionInteraction;
 use crate::world::explosion_damage_calculator::ExplosionDamageCalculator;
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
 use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityStatus;
+use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::Sound;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::LazyLock;
@@ -140,15 +142,18 @@ impl EntityBase for WindChargeEntity {
             self.get_entity()
                 .world
                 .load()
-                .explode_with(
-                    Some(self.clone()),
-                    None,
-                    Some(EXPLOSION_DAMAGE_CALCULATOR.clone()),
-                    self.explosion_radius(),
-                    position,
-                    false,
-                    ExplosionInteraction::Trigger,
-                )
+                .explode_with(WorldExplosionArgs {
+                    source_entity: Some(self.clone()),
+                    damage_source: None,
+                    damage_calculator: Some(EXPLOSION_DAMAGE_CALCULATOR.clone()),
+                    power: self.explosion_radius(),
+                    pos: position,
+                    fire: false,
+                    explosion_interaction: ExplosionInteraction::Trigger,
+                    small_particle: Particle::GustEmitterSmall,
+                    large_particle: Particle::GustEmitterLarge,
+                    sound: self.explosion_sound(),
+                })
                 .await;
             self.get_entity().remove().await;
         })
