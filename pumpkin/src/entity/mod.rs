@@ -104,8 +104,7 @@ pub const fn equipment_break_status(slot: &EquipmentSlot) -> EntityStatus {
 }
 
 pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-
-pub type TeleportFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+pub type ArcEntityBaseFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
 pub trait EntityBase: Send + Sync + NBTStorage {
     /// Called every tick for this entity.
@@ -155,7 +154,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
-    ) -> TeleportFuture
+    ) -> ArcEntityBaseFuture<()>
     where
         Self: 'static,
     {
@@ -253,7 +252,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         Box::pin(async {})
     }
 
-    fn on_hit(&self, _hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
+    fn on_hit(self: Arc<Self>, _hit: projectile::ProjectileHit) -> ArcEntityBaseFuture<()> {
         Box::pin(async {})
     }
 
@@ -365,6 +364,10 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         _block_state: &BlockState,
     ) -> bool {
         true
+    }
+
+    fn explode(self: Arc<Self>, _position: Vector3<f64>) -> ArcEntityBaseFuture<()> {
+        Box::pin(async move {})
     }
 }
 
@@ -2643,7 +2646,7 @@ impl EntityBase for Entity {
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
-    ) -> TeleportFuture {
+    ) -> ArcEntityBaseFuture<()> {
         // TODO: handle world change
         Box::pin(async move {
             self.get_entity()

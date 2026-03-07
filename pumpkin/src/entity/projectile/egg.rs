@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use crate::entity::ArcEntityBaseFuture;
 use crate::entity::projectile::ThrownItemEntityCondition::Owned;
 use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
 use crate::{
@@ -109,7 +110,10 @@ impl EntityBase for EggEntity {
         self
     }
 
-    fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
+    fn on_hit(
+        self: Arc<Self>,
+        hit: crate::entity::projectile::ProjectileHit,
+    ) -> ArcEntityBaseFuture<()> {
         Box::pin(async move {
             let world = self.get_entity().world.load();
             let hit_pos = hit.hit_pos();

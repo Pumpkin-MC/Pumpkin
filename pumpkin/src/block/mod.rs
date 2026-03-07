@@ -20,6 +20,7 @@ pub mod registry;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::server::Server;
+use crate::world::explosion::{BlockInteraction, Explosion};
 use pumpkin_data::BlockDirection;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -80,12 +81,20 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
-    fn should_drop_items_on_explosion(&self) -> bool {
+    fn should_drop_items_on_explosion(&self, _explosion: &Explosion) -> bool {
         true
     }
 
     fn explode<'a>(&'a self, _args: ExplodeArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
+    }
+
+    /// How a block should react to an explosion.
+    fn on_explosion_hit<'a>(
+        &'a self,
+        args: OnExplosionHitArgs<'a>,
+    ) -> BlockFuture<'a, Option<Vec<ItemStack>>> {
+        Box::pin(on_explosion_hit_default(args))
     }
 
     /// Handles the block event, which is an event specific to a block with an integer ID and data.
@@ -260,6 +269,14 @@ pub struct ExplodeArgs<'a> {
     pub position: &'a BlockPos,
 }
 
+pub struct OnExplosionHitArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'static Block,
+    pub state: &'static BlockState,
+    pub position: &'a BlockPos,
+    pub explosion: &'a Explosion,
+}
+
 pub struct OnSyncedBlockEventArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
@@ -419,6 +436,43 @@ pub struct BlockEvent {
     pub data: u8,
 }
 
+pub async fn on_explosion_hit_default(args: OnExplosionHitArgs<'_>) -> Option<Vec<ItemStack>> {
+    if !args.state.is_air() && args.explosion.block_interaction != BlockInteraction::Keep {
+        args.world
+            .set_block_state(args.position, 0, BlockFlags::NOTIFY_ALL)
+            .await;
+        args.world.close_container_screens_at(args.position).await;
+
+        let pumpkin_block = args.world.block_registry.get_pumpkin_block(args.block.id);
+
+        let result =
+            if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion(args.explosion)) {
+                let params = LootContextParameters {
+                    block_state: Some(args.state),
+                    explosion_radius: Some(args.explosion.power()),
+                    ..Default::default()
+                };
+                create_loot(args.world, args.block, args.position, false, params).await
+            } else {
+                None
+            };
+
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block
+                .explode(ExplodeArgs {
+                    world: args.world,
+                    block: args.block,
+                    position: args.position,
+                })
+                .await;
+        }
+
+        result
+    } else {
+        None
+    }
+}
+
 pub async fn drop_loot(
     world: &Arc<World>,
     block: &Block,
@@ -426,12 +480,20 @@ pub async fn drop_loot(
     experience: bool,
     params: LootContextParameters,
 ) {
-    if let Some(loot_table) = &block.loot_table {
-        for stack in loot_table.get_loot(params) {
+    if let Some(stacks) = create_loot(world, block, pos, experience, params).await {
+        for stack in stacks {
             world.drop_stack(pos, stack).await;
         }
     }
+}
 
+pub async fn create_loot(
+    world: &Arc<World>,
+    block: &Block,
+    pos: &BlockPos,
+    experience: bool,
+    params: LootContextParameters,
+) -> Option<Vec<ItemStack>> {
     if experience && let Some(experience) = &block.experience {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         let amount = experience.experience.get(&mut random);
@@ -440,6 +502,10 @@ pub async fn drop_loot(
             ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
         }
     }
+
+    block
+        .loot_table
+        .map(|loot_table| loot_table.get_loot(params))
 }
 
 pub async fn calc_block_breaking(

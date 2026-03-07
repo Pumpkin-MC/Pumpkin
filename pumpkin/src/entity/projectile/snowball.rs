@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use crate::entity::ArcEntityBaseFuture;
 use crate::entity::projectile::ProjectileHit;
 use crate::entity::projectile::ThrownItemEntityCondition::Owned;
 use crate::{
@@ -68,7 +69,7 @@ impl EntityBase for SnowballEntity {
         self
     }
 
-    fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
+    fn on_hit(self: Arc<Self>, hit: ProjectileHit) -> ArcEntityBaseFuture<()> {
         Box::pin(async move {
             let world = self.get_entity().world.load();
 

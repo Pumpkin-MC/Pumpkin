@@ -1,17 +1,15 @@
-use std::sync::Arc;
-
-use super::{BlockFlags, World};
+use super::World;
+use crate::block::OnExplosionHitArgs;
+use crate::entity::{Entity, EntityBase};
 use crate::world::damage_source::DamageSource;
 use crate::world::explosion_damage_calculator::ExplosionDamageCalculator;
-use crate::{
-    block::{ExplodeArgs, drop_loot},
-    entity::{Entity, EntityBase},
-    world::loot::LootContextParameters,
-};
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::{Block, BlockState, entity::EntityType};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
+use pumpkin_world::item::ItemStack;
+use rand::seq::SliceRandom;
 use rustc_hash::FxHashMap;
+use std::sync::Arc;
 
 /// A struct representing an *explosion*, which can be triggered
 /// using [`Explosion::explode`].
@@ -29,7 +27,7 @@ pub struct Explosion {
     /// The damage source of this `Explosion`.
     damage_source: DamageSource,
     /// How this `Explosion` should interact with blocks it affects.
-    block_interaction: BlockInteraction,
+    pub block_interaction: BlockInteraction,
 
     // TODO
     fire: bool,
@@ -39,7 +37,7 @@ impl Explosion {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         world: &Arc<World>,
-        source_entity: Option<Arc<dyn EntityBase>>,
+        source_entity: Option<&Arc<dyn EntityBase>>,
         damage_source: Option<DamageSource>,
         damage_calculator: Option<ExplosionDamageCalculator>,
         power: f32,
@@ -53,37 +51,13 @@ impl Explosion {
             pos,
             block_interaction,
             fire,
-            source_entity: source_entity.clone(),
+            source_entity: source_entity.cloned(),
             damage_calculator: damage_calculator
-                .unwrap_or_else(|| Self::create_damage_calculator(source_entity.clone())),
+                .unwrap_or_else(|| Self::create_damage_calculator(source_entity.cloned())),
             damage_source: damage_source.unwrap_or_else(|| {
-                DamageSource::from_explosion(
-                    Self::indirect_source_entity(source_entity.clone(), world.as_ref()),
-                    source_entity,
-                )
+                DamageSource::from_explosion_direct(world.as_ref(), source_entity.cloned())
             }),
         }
-    }
-
-    /// Gets the indirect source entity from a direct one.
-    fn indirect_source_entity(
-        source_entity: Option<Arc<dyn EntityBase>>,
-        world: &World,
-    ) -> Option<Arc<dyn EntityBase>> {
-        source_entity.and_then(|e| {
-            if e.get_entity().entity_type == &EntityType::TNT {
-                return None; // TODO: get owner of TNT
-            }
-            if e.get_living_entity().is_some() {
-                return Some(e);
-            }
-            if let Some(thrown_entity) = e.get_thrown_item_entity()
-                && let Some(i) = thrown_entity.owner_id
-            {
-                return world.get_player_by_id(i).map(|a| a as Arc<dyn EntityBase>);
-            }
-            None
-        })
     }
 
     #[must_use]
@@ -103,9 +77,7 @@ impl Explosion {
         self.pos
     }
 
-    async fn get_blocks_to_destroy(
-        &self,
-    ) -> FxHashMap<BlockPos, (&'static Block, &'static BlockState)> {
+    async fn get_blocks_to_destroy(&self) -> Vec<(BlockPos, &'static Block, &'static BlockState)> {
         let mut map = FxHashMap::default();
         let random_val = rand::random::<f32>();
         for x in 0..16 {
@@ -151,6 +123,7 @@ impl Explosion {
                         }
 
                         if h > 0.0
+                            && !state.is_air()
                             && self.damage_calculator.block_should_explode(
                                 self,
                                 &self.world,
@@ -171,7 +144,7 @@ impl Explosion {
                 }
             }
         }
-        map
+        map.into_iter().map(|(p, (b, s))| (p, b, s)).collect()
     }
 
     async fn damage_entities(&self) -> FxHashMap<i32, Vector3<f64>> {
@@ -228,12 +201,13 @@ impl Explosion {
             };
 
             if entity_takes_damage {
+                let damage = self
+                    .damage_calculator
+                    .compute_entity_damage(self, entity, h);
                 entity
-                    .get_entity()
                     .damage_with_context(
-                        entity,
-                        self.damage_calculator
-                            .compute_entity_damage(self, entity, h),
+                        entity_base.as_ref(),
+                        damage,
                         self.damage_source.damage_type,
                         self.damage_source.damage_source_pos,
                         self.damage_source.direct_entity.as_deref(),
@@ -324,15 +298,61 @@ impl Explosion {
         visible_points as f32 / total_points as f32
     }
 
+    fn interacts_with_blocks(&self) -> bool {
+        self.block_interaction != BlockInteraction::Keep
+    }
+
+    async fn interact_with_blocks(
+        &self,
+        blocks: &mut [(BlockPos, &'static Block, &'static BlockState)],
+    ) {
+        let mut collectors: Vec<StackCollector> = Vec::new();
+        blocks.shuffle(&mut rand::rng());
+
+        for (pos, block, state) in blocks {
+            if let Some(pumpkin_block) = self.world.block_registry.get_pumpkin_block(block.id)
+                && let Some(stacks) = pumpkin_block
+                    .on_explosion_hit(OnExplosionHitArgs {
+                        world: &self.world,
+                        block,
+                        state,
+                        position: pos,
+                        explosion: self,
+                    })
+                    .await
+            {
+                for mut stack in stacks {
+                    for collector in &mut collectors {
+                        collector.try_merge(&mut stack);
+                        if stack.is_empty() {
+                            break;
+                        }
+                    }
+                    if !stack.is_empty() {
+                        collectors.push(StackCollector { pos: *pos, stack });
+                    }
+                }
+            }
+        }
+
+        for collector in collectors {
+            self.world.drop_stack(&collector.pos, collector.stack).await;
+        }
+    }
+
     /// Calls this [`Explosion`] to explode.
     ///
     /// # Returns
     /// A tuple containing:
     /// - the removed block count.
     /// - a map of the affected **players** and their knockback velocities.
-    pub async fn explode(&self) -> (u32, FxHashMap<i32, Vector3<f64>>) {
-        let blocks = self.get_blocks_to_destroy().await;
+    pub async fn explode(self) -> (u32, FxHashMap<i32, Vector3<f64>>) {
+        let mut blocks = self.get_blocks_to_destroy().await;
         let knockback_map = self.damage_entities().await;
+        if self.interacts_with_blocks() {
+            self.interact_with_blocks(&mut blocks).await;
+        }
+        /*
         for (pos, (block, state)) in &blocks {
             self.world
                 .set_block_state(pos, 0, BlockFlags::NOTIFY_ALL)
@@ -359,6 +379,7 @@ impl Explosion {
                     .await;
             }
         }
+        */
 
         (blocks.len() as u32, knockback_map)
     }
@@ -378,7 +399,23 @@ impl Explosion {
     }
 }
 
+struct StackCollector {
+    pos: BlockPos,
+    stack: ItemStack,
+}
+
+impl StackCollector {
+    fn try_merge(&mut self, stack: &mut ItemStack) {
+        if self.stack.item_count + stack.item_count <= stack.get_max_stack_size()
+            && self.stack.are_items_and_components_equal(stack)
+        {
+            self.stack.merge(stack, 16);
+        }
+    }
+}
+
 /// The interaction to a block by an explosion.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum BlockInteraction {
     Keep,
     Destroy,
@@ -392,4 +429,23 @@ impl BlockInteraction {
     pub const fn affect_block_like_entities(&self) -> bool {
         matches!(self, Self::Destroy | Self::DestroyWithDecay)
     }
+
+    #[must_use]
+    pub const fn from_game_rule(game_rule: bool) -> Self {
+        if game_rule {
+            Self::DestroyWithDecay
+        } else {
+            Self::Destroy
+        }
+    }
+}
+
+/// The type of interaction of an explosion.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum ExplosionInteraction {
+    None,
+    Block,
+    Mob,
+    Tnt,
+    Trigger,
 }

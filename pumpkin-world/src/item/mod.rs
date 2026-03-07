@@ -445,6 +445,20 @@ impl ItemStack {
         false
     }
 
+    /// Tries to merge this `ItemStack` with another stack, adding the possible count
+    /// to this stack and decreasing the other stack by the same count.
+    ///
+    /// # Parameters
+    ///
+    /// * `stack`: The other stack to take any available count from.
+    /// * `max`: The maximum stack size that will be considered for merging this `ItemStack`.
+    pub fn merge(&mut self, stack: &mut ItemStack, max: u8) {
+        let space = self.get_max_stack_size().min(max) - self.item_count;
+        let extra = space.min(stack.item_count);
+        self.increment(extra);
+        stack.decrement(extra);
+    }
+
     pub fn write_item_stack(&self, compound: &mut NbtCompound) {
         // Minecraft 1.21.4 uses "id" as string with namespaced ID (minecraft:diamond_sword)
         compound.put_string("id", format!("minecraft:{}", self.item.registry_key));
