@@ -1,4 +1,4 @@
-use std::{num::NonZeroU8, sync::Arc};
+use std::{io::Cursor, num::NonZeroU8, sync::Arc};
 
 use crate::{
     entity::player::ChatMode,
@@ -10,6 +10,7 @@ use crate::{
 };
 use core::str;
 use pumpkin_data::registry::Registry;
+use pumpkin_nbt::{compound::NbtCompound, from_bytes_unnamed, tag::NbtTag, to_bytes_unnamed};
 use pumpkin_protocol::{
     ConnectionState,
     java::{
@@ -24,6 +25,32 @@ use pumpkin_util::{Hand, text::TextComponent, version::MinecraftVersion};
 use tracing::{debug, trace, warn};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
+
+fn normalize_dimension_type_registry_entry(data: &[u8]) -> Option<Box<[u8]>> {
+    let mut root: NbtCompound = from_bytes_unnamed(Cursor::new(data)).ok()?;
+    let mut changed = false;
+
+    for (name, tag) in &mut root.child_tags {
+        if (name == "min_y" || name == "height" || name == "logical_height")
+            && let NbtTag::Long(value) = tag
+            && i32::try_from(*value).is_ok()
+        {
+            *tag = NbtTag::Int(*value as i32);
+            changed = true;
+        }
+    }
+
+    if !changed {
+        return Some(data.to_vec().into_boxed_slice());
+    }
+
+    let mut normalized = Vec::new();
+    if to_bytes_unnamed(&root, &mut normalized).is_ok() {
+        Some(normalized.into_boxed_slice())
+    } else {
+        None
+    }
+}
 
 impl JavaClient {
     pub async fn handle_client_information_config(
@@ -156,10 +183,22 @@ impl JavaClient {
         // let mut tags_to_send = Vec::new();
         let registry = Registry::get_synced(self.version.load());
         for registry in registry {
+            let normalize_dimension_type = registry.registry_id == "minecraft:dimension_type";
             let entries: Vec<RegistryEntry> = registry
                 .registry_entries
                 .iter()
-                .map(|r| RegistryEntry::new(r.entry_id.clone(), r.data.clone()))
+                .map(|r| {
+                    let data = if normalize_dimension_type {
+                        r.data.as_ref().and_then(|data| {
+                            normalize_dimension_type_registry_entry(data)
+                                .or_else(|| Some(data.to_vec().into_boxed_slice()))
+                        })
+                    } else {
+                        r.data.clone()
+                    };
+
+                    RegistryEntry::new(r.entry_id.clone(), data)
+                })
                 .collect();
             self.send_packet_now(&CRegistryData::new(&registry.registry_id, &entries))
                 .await;
