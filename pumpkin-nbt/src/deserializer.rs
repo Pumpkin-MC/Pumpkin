@@ -80,10 +80,14 @@ impl<R: Read + Seek> NbtReadHelper<R> {
 pub struct Deserializer<R: Read + Seek> {
     input: NbtReadHelper<R>,
     tag_to_deserialize_stack: Option<u8>,
-    // Yes, this breaks with recursion. Just an attempt at a sanity check
     in_list: bool,
     is_named: bool,
+    depth: usize,
 }
+
+/// Maximum allowed nesting depth for NBT compounds/lists.
+/// A deeply nested structure (~10K+ levels) causes stack overflow.
+const MAX_NBT_DEPTH: usize = 512;
 
 impl<R: Read + Seek> Deserializer<R> {
     pub const fn new(input: R, is_named: bool) -> Self {
@@ -92,6 +96,7 @@ impl<R: Read + Seek> Deserializer<R> {
             tag_to_deserialize_stack: None,
             in_list: false,
             is_named,
+            depth: 0,
         }
     }
 }
@@ -137,6 +142,13 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
                 "Trying to deserialize an END tag!".to_string(),
             )),
             LIST_ID | INT_ARRAY_ID | LONG_ARRAY_ID | BYTE_ARRAY_ID => {
+                self.depth += 1;
+                if self.depth > MAX_NBT_DEPTH {
+                    return Err(Error::SerdeError(format!(
+                        "NBT nesting depth exceeds maximum ({MAX_NBT_DEPTH})"
+                    )));
+                }
+
                 let list_type = match tag_to_deserialize {
                     LIST_ID => self.input.get_u8_be()?,
                     INT_ARRAY_ID => INT_ID,
@@ -158,9 +170,20 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
                     list_type,
                     remaining_values: remaining_values as usize,
                 })?;
+                self.depth -= 1;
                 Ok(result)
             }
-            COMPOUND_ID => visitor.visit_map(CompoundAccess { de: self }),
+            COMPOUND_ID => {
+                self.depth += 1;
+                if self.depth > MAX_NBT_DEPTH {
+                    return Err(Error::SerdeError(format!(
+                        "NBT nesting depth exceeds maximum ({MAX_NBT_DEPTH})"
+                    )));
+                }
+                let result = visitor.visit_map(CompoundAccess { de: self })?;
+                self.depth -= 1;
+                Ok(result)
+            }
             _ => {
                 let result = match NbtTag::deserialize_data(&mut self.input, tag_to_deserialize)? {
                     NbtTag::Byte(value) => visitor.visit_i8::<Error>(value)?,
@@ -248,7 +271,14 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
             }
         }
 
+        self.depth += 1;
+        if self.depth > MAX_NBT_DEPTH {
+            return Err(Error::SerdeError(format!(
+                "NBT nesting depth exceeds maximum ({MAX_NBT_DEPTH})"
+            )));
+        }
         let value = visitor.visit_map(CompoundAccess { de: self })?;
+        self.depth -= 1;
         Ok(value)
     }
 

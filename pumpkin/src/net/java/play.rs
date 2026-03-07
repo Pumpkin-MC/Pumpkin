@@ -32,6 +32,7 @@ use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractU
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{
     BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
 };
@@ -252,6 +253,61 @@ impl JavaClient {
         player.set_client_loaded(true);
     }
 
+    /// Calculates the maximum allowed squared distance for a single movement packet,
+    /// accounting for the player's current state (flying, sprinting, elytra, speed effects)
+    /// and any pending velocity (knockback, explosions, slime blocks, wind charges, etc.).
+    async fn max_movement_distance_sq(player: &Player) -> f64 {
+        // Hard cap: no legitimate single-packet movement should ever exceed this.
+        // Even massive TNT arrays in water launching a player cannot exceed ~200 blocks
+        // in a single packet. This catches teleport hacks while allowing all legit play.
+        const HARD_CAP: f64 = 300.0;
+
+        // Base: effective movement speed attribute (includes Speed potion effects)
+        let movement_speed = player
+            .living_entity
+            .get_attribute_value(&Attributes::MOVEMENT_SPEED);
+
+        let entity = &player.living_entity.entity;
+        let is_elytra = entity.fall_flying.load(Ordering::Relaxed);
+        let is_sprinting = entity.sprinting.load(Ordering::Relaxed);
+        let abilities = player.abilities.lock().await;
+        let is_flying = abilities.flying;
+
+        // Convert attribute speed to approximate blocks/tick then to blocks/packet.
+        // Packets can span multiple ticks, so we use a per-second rate with tolerance.
+        let max_blocks_per_second = if is_elytra {
+            // Elytra + firework can reach ~67 blocks/sec
+            80.0
+        } else if is_flying {
+            // Creative fly speed: fly_speed * 20 ticks * (2x if sprinting)
+            let fly = f64::from(abilities.fly_speed) * 20.0;
+            (if is_sprinting { fly * 2.0 } else { fly }) + 5.0
+        } else {
+            // Ground movement: movement_speed * ~43 (empirical blocks/sec per attribute unit)
+            // Speed II (attr ~0.16) → ~6.9 b/s, Sprint adds ~30%
+            let base = movement_speed * 43.0;
+            let base = if is_sprinting { base * 1.3 } else { base };
+            base + 5.0 // jump-sprint boost margin
+        };
+
+        // Account for pending velocity from knockback, explosions, slime blocks,
+        // wind charges, etc. Velocity is in blocks/tick; give extra ticks for decay.
+        let velocity = entity.velocity.load();
+        let velocity_magnitude =
+            (velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z).sqrt();
+        // Velocity can persist across several ticks as it decays; allow ~15 ticks worth
+        // to handle stacked explosions (multiple TNT in one tick compound velocity).
+        let velocity_allowance = velocity_magnitude * 15.0;
+
+        // Allow up to 3x the theoretical max + velocity allowance.
+        // Minimum 10 blocks to avoid false positives from lag spikes.
+        // Hard cap at 300 blocks to catch teleport hacks even in edge cases.
+        let max_dist = (max_blocks_per_second * 3.0 + velocity_allowance)
+            .max(10.0)
+            .min(HARD_CAP);
+        max_dist * max_dist
+    }
+
     /// Returns whether syncing the position was needed
     #[expect(clippy::too_many_arguments)]
     async fn sync_position(
@@ -317,6 +373,25 @@ impl JavaClient {
             Self::clamp_horizontal(position.z),
         );
 
+        // Movement speed validation: reject impossibly fast movement
+        {
+            let last_pos = player.living_entity.entity.pos.load();
+            let dx = position.x - last_pos.x;
+            let dy = position.y - last_pos.y;
+            let dz = position.z - last_pos.z;
+            let dist_sq = dx * dx + dy * dy + dz * dz;
+            let max_dist_sq = Self::max_movement_distance_sq(player).await;
+            if dist_sq > max_dist_sq {
+                warn!(
+                    "Player '{}' moved too fast ({:.1} blocks), rubber-banding",
+                    player.gameprofile.name,
+                    dist_sq.sqrt()
+                );
+                self.force_tp(player, last_pos).await;
+                return;
+            }
+        }
+
         send_cancellable! {{
             server;
             PlayerMoveEvent {
@@ -339,8 +414,6 @@ impl JavaClient {
 
                 entity.on_ground.store(packet.collision & FLAG_ON_GROUND != 0, Ordering::Relaxed);
                 let world = &player.world();
-
-                // TODO: Warn when player moves to quickly
                 if !self.sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0).await {
                     // Send the new position to all other players.
                     world
@@ -435,6 +508,25 @@ impl JavaClient {
             Self::clamp_horizontal(position.z),
         );
 
+        // Movement speed validation: reject impossibly fast movement
+        {
+            let last_pos = player.living_entity.entity.pos.load();
+            let dx = position.x - last_pos.x;
+            let dy = position.y - last_pos.y;
+            let dz = position.z - last_pos.z;
+            let dist_sq = dx * dx + dy * dy + dz * dz;
+            let max_dist_sq = Self::max_movement_distance_sq(player).await;
+            if dist_sq > max_dist_sq {
+                warn!(
+                    "Player '{}' moved too fast ({:.1} blocks), rubber-banding",
+                    player.gameprofile.name,
+                    dist_sq.sqrt()
+                );
+                self.force_tp(player, last_pos).await;
+                return;
+            }
+        }
+
         send_cancellable! {{
             server;
             PlayerMoveEvent::new(
@@ -469,7 +561,7 @@ impl JavaClient {
                 // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
                 let world = entity.world.load_full();
 
-                // TODO: Warn when player moves to quickly
+
                 if !self
                     .sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
                     .await
@@ -842,11 +934,27 @@ impl JavaClient {
     }
 
     pub async fn handle_move_vehicle(&self, player: &Arc<Player>, packet: SMoveVehicle) {
+        if !packet.x.is_finite()
+            || !packet.y.is_finite()
+            || !packet.z.is_finite()
+            || !packet.yaw.is_finite()
+            || !packet.pitch.is_finite()
+        {
+            self.kick(TextComponent::text("Invalid vehicle move position"))
+                .await;
+            return;
+        }
+
         let entity = player.get_entity();
         let vehicle = entity.vehicle.lock().await;
         if let Some(vehicle) = vehicle.as_ref() {
             let vehicle_entity = vehicle.get_entity();
-            vehicle_entity.set_pos(Vector3::new(packet.x, packet.y, packet.z));
+            let pos = Vector3::new(
+                Self::clamp_horizontal(packet.x),
+                Self::clamp_vertical(packet.y),
+                Self::clamp_horizontal(packet.z),
+            );
+            vehicle_entity.set_pos(pos);
             vehicle_entity.set_rotation(packet.yaw, packet.pitch);
         }
     }
@@ -1278,6 +1386,22 @@ impl JavaClient {
             .or_else(|| world.get_entity_by_id(entity_id.0));
 
         if let Some(target) = target {
+            // Verify the player is close enough to interact with the target entity.
+            // Vanilla uses 3.0 for survival and 6.0 for creative; add 1.0 margin.
+            let max_range = if player.gamemode.load() == GameMode::Creative {
+                7.0
+            } else {
+                4.0
+            };
+            let player_pos = player.living_entity.entity.pos.load();
+            let target_pos = target.get_entity().pos.load();
+            let dx = player_pos.x - target_pos.x;
+            let dy = player_pos.y - target_pos.y;
+            let dz = player_pos.z - target_pos.z;
+            if dx * dx + dy * dy + dz * dz > max_range * max_range {
+                return;
+            }
+
             send_cancellable! {{
                 server;
                 PlayerInteractEntityEvent::new(
@@ -1775,6 +1899,10 @@ impl JavaClient {
     }
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
+        if !player.can_interact_with_block_at(&sign_data.location, 4.0) {
+            return;
+        }
+
         let world = player.living_entity.entity.world.load_full();
         let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
             return;
