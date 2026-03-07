@@ -89,12 +89,20 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
-    /// How a block should react to an explosion.
-    fn on_explosion_hit<'a>(
+    fn on_explosion_hit_base<'a>(
         &'a self,
         args: OnExplosionHitArgs<'a>,
     ) -> BlockFuture<'a, Option<Vec<ItemStack>>> {
         Box::pin(on_explosion_hit_default(args))
+    }
+
+    /// How a block should react to an explosion.
+    /// Some blocks use this to do something when a wind charge hits it.
+    fn on_explosion_hit<'a>(
+        &'a self,
+        args: OnExplosionHitArgs<'a>,
+    ) -> BlockFuture<'a, Option<Vec<ItemStack>>> {
+        self.on_explosion_hit_base(args)
     }
 
     /// Handles the block event, which is an event specific to a block with an integer ID and data.

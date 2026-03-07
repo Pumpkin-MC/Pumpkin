@@ -397,6 +397,21 @@ impl Explosion {
             self.block_interaction.affect_block_like_entities()
         }
     }
+
+    /// Returns whether this `Explosion` triggers blocks.
+    /// For example, if an explosion does trigger a block,
+    /// a button can be pressed temporarily by the explosion.
+    #[must_use]
+    pub fn triggers_blocks(&self) -> bool {
+        self.block_interaction == BlockInteraction::TriggerBlock
+            && self.source_entity.as_ref().is_some_and(|e| {
+                if e.get_entity().entity_type == &EntityType::BREEZE_WIND_CHARGE {
+                    self.world.level_info.load().game_rules.mob_griefing
+                } else {
+                    true
+                }
+            })
+    }
 }
 
 struct StackCollector {

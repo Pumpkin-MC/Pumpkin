@@ -16,7 +16,6 @@ use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
-use crate::block::BlockBehaviour;
 use crate::block::BlockFuture;
 use crate::block::BrokenArgs;
 use crate::block::CanPlaceAtArgs;
@@ -28,15 +27,17 @@ use crate::block::OnStateReplacedArgs;
 use crate::block::PlacedArgs;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
+use crate::block::{BlockBehaviour, OnExplosionHitArgs};
 use crate::entity::player::Player;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 
 use crate::world::World;
 use pumpkin_util::GameMode;
+use pumpkin_world::item::ItemStack;
 
 type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 
-async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
+async fn toggle_door(player: Option<&Player>, world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_state_id(block_pos).await;
     let mut door_props = DoorProperties::from_state_id(block_state, block);
     door_props.open = !door_props.open;
@@ -51,14 +52,16 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
     let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
     other_door_props.open = door_props.open;
 
-    world
-        .play_block_sound_expect(
-            player,
-            get_sound(block, door_props.open),
-            SoundCategory::Blocks,
-            *block_pos,
-        )
-        .await;
+    if let Some(player) = player {
+        world
+            .play_block_sound_expect(
+                player,
+                get_sound(block, door_props.open),
+                SoundCategory::Blocks,
+                *block_pos,
+            )
+            .await;
+    }
 
     world
         .set_block_state(
@@ -77,6 +80,14 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
 }
 
 fn can_open_door(block: &Block) -> bool {
+    if block == &Block::IRON_DOOR {
+        return false;
+    }
+
+    true
+}
+
+fn wind_charge_can_open_door(block: &Block) -> bool {
     if block == &Block::IRON_DOOR {
         return false;
     }
@@ -209,7 +220,7 @@ impl BlockBehaviour for DoorBlock {
                 return BlockActionResult::Pass;
             }
 
-            toggle_door(args.player, args.world, args.position).await;
+            toggle_door(Some(args.player), args.world, args.position).await;
 
             BlockActionResult::Success
         })
@@ -352,6 +363,24 @@ impl BlockBehaviour for DoorBlock {
                     BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL,
                 )
                 .await;
+        })
+    }
+
+    fn on_explosion_hit<'a>(
+        &'a self,
+        args: OnExplosionHitArgs<'a>,
+    ) -> BlockFuture<'a, Option<Vec<ItemStack>>> {
+        Box::pin(async move {
+            if args.explosion.triggers_blocks() {
+                let props = DoorProperties::from_state_id(args.state.id, args.block);
+                if props.half == DoubleBlockHalf::Lower
+                    && wind_charge_can_open_door(args.block)
+                    && !props.powered
+                {
+                    toggle_door(None, args.world, args.position).await;
+                }
+            }
+            self.on_explosion_hit_base(args).await
         })
     }
 }
