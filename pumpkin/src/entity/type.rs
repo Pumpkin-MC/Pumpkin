@@ -5,6 +5,8 @@ use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
 use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
+use crate::entity::projectile::ThrownItemEntityCondition::Unowned;
+use crate::entity::projectile::wind_charge::WindChargeEntity;
 use crate::{
     entity::{
         Entity, EntityBase,
@@ -71,6 +73,14 @@ pub async fn from_type(
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity).await,
+
+        id if id == EntityType::WIND_CHARGE.id => {
+            Arc::new(WindChargeEntity::new_normal(entity, &Unowned))
+        }
+        id if id == EntityType::BREEZE_WIND_CHARGE.id => {
+            Arc::new(WindChargeEntity::new_breeze(entity, &Unowned))
+        }
+
         // Fallback Entity
         _ => {
             if entity_type.max_health.is_some() {

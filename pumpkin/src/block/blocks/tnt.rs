@@ -1,6 +1,7 @@
 use pumpkin_data::item::Item;
 use std::sync::Arc;
 
+use super::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockFuture, ExplodeArgs, OnNeighborUpdateArgs, PlacedArgs, UseWithItemArgs,
@@ -8,6 +9,7 @@ use crate::block::{
 use crate::entity::Entity;
 use crate::entity::tnt::TNTEntity;
 use crate::world::World;
+use crate::world::explosion::Explosion;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_macros::pumpkin_block;
@@ -15,8 +17,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
-
-use super::redstone::block_receives_redstone_power;
 
 #[pumpkin_block("minecraft:tnt")]
 pub struct TNTBlock;
@@ -89,7 +89,7 @@ impl BlockBehaviour for TNTBlock {
         })
     }
 
-    fn should_drop_items_on_explosion(&self) -> bool {
+    fn should_drop_items_on_explosion(&self, _explosion: &Explosion) -> bool {
         false
     }
 }

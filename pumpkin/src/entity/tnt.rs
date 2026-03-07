@@ -1,6 +1,11 @@
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
+use super::{ArcEntityBaseFuture, Entity, EntityBase, NBTStorage, living::LivingEntity};
+use crate::world::WorldExplosionArgs;
+use crate::world::damage_source::DamageSource;
+use crate::world::explosion::ExplosionInteraction;
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::{Block, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 use pumpkin_util::math::vector3::Vector3;
@@ -64,12 +69,14 @@ impl EntityBase for TNTEntity {
 
             if fuse <= 1 {
                 // TNT explodes now
-                self.entity.remove().await;
-                self.entity
+                if let Some(entity) = self
+                    .get_entity()
                     .world
                     .load()
-                    .explode(self.entity.pos.load(), self.power)
-                    .await;
+                    .get_entity_by_id(self.get_entity().entity_id)
+                {
+                    entity.clone().explode(entity.get_entity().pos.load()).await;
+                }
             } else {
                 // Safe decrement
                 self.fuse.store(fuse - 1, Relaxed);
@@ -100,6 +107,30 @@ impl EntityBase for TNTEntity {
                     ),
                 ])
                 .await;
+        })
+    }
+
+    fn explode(self: Arc<Self>, position: Vector3<f64>) -> ArcEntityBaseFuture<()> {
+        Box::pin(async move {
+            let world = self.get_entity().world.load();
+            world
+                .explode_with(WorldExplosionArgs {
+                    source_entity: Some(self.clone()),
+                    damage_source: Some(DamageSource::explosion_from_direct(
+                        &world,
+                        Some(self.clone()),
+                    )),
+                    damage_calculator: None,
+                    power: self.power,
+                    pos: position,
+                    fire: false,
+                    explosion_interaction: ExplosionInteraction::Tnt,
+                    small_particle: Particle::Explosion,
+                    large_particle: Particle::ExplosionEmitter,
+                    sound: Sound::EntityGenericExplode,
+                })
+                .await;
+            self.entity.remove().await;
         })
     }
 

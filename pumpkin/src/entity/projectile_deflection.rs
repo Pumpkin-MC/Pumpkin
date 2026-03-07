@@ -10,7 +10,7 @@ pub enum ProjectileDeflectionType {
 }
 
 impl ProjectileDeflectionType {
-    pub fn deflect(&self, projectile: &mut dyn EntityBase, hit_entity: Option<&dyn EntityBase>) {
+    pub fn deflect(&self, projectile: &dyn EntityBase, hit_entity: Option<&dyn EntityBase>) {
         match self {
             Self::None => {}
             Self::Simple => {

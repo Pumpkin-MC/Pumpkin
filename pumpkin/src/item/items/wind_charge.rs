@@ -1,15 +1,14 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::entity::Entity;
 use crate::entity::player::Player;
+use crate::entity::projectile::ThrownItemEntityCondition::Owned;
+use crate::entity::projectile::wind_charge::WindChargeEntity;
+use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
-
-use crate::entity::Entity;
-use crate::entity::projectile::ThrownItemEntity;
-use crate::entity::projectile::wind_charge::WindChargeEntity;
-use crate::item::{ItemBehaviour, ItemMetadata};
 
 pub struct WindChargeItem;
 
@@ -43,11 +42,13 @@ impl ItemBehaviour for WindChargeItem {
 
             let entity = Entity::new(world.clone(), position, &EntityType::WIND_CHARGE);
 
-            let wind_charge = ThrownItemEntity::new(entity, &player.living_entity.entity);
+            let wind_charge_entity =
+                WindChargeEntity::new_normal(entity, &Owned(&player.living_entity.entity));
+
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();
 
-            wind_charge.set_velocity_from(
+            wind_charge_entity.hurting.thrown.set_velocity_from(
                 &player.living_entity.entity,
                 pitch,
                 yaw,
@@ -55,12 +56,11 @@ impl ItemBehaviour for WindChargeItem {
                 POWER,
                 1.0,
             );
+
             // TODO: player.incrementStat(Stats.USED)
 
             // TODO: Implement that the projectile will explode on impact on ground
-            world
-                .spawn_entity(Arc::new(WindChargeEntity::new(wind_charge)))
-                .await;
+            world.spawn_entity(Arc::new(wind_charge_entity)).await;
         })
     }
 

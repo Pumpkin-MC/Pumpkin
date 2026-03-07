@@ -192,7 +192,7 @@ impl Goal for MeleeAttackGoal {
             {
                 self.cooldown = self.get_max_cooldown();
                 mob.get_mob_entity().living_entity.swing_hand().await;
-                mob.get_mob_entity().try_attack(mob, target.as_ref()).await;
+                mob.get_mob_entity().try_attack(mob, target.clone()).await;
             }
         })
     }

@@ -133,10 +133,15 @@ use tokio::sync::Mutex;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
+pub mod damage_source;
+pub mod explosion_damage_calculator;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
 
+use crate::world::damage_source::DamageSource;
+use crate::world::explosion::{BlockInteraction, ExplosionInteraction, NewExplosionArgs};
+use crate::world::explosion_damage_calculator::ExplosionDamageCalculator;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
@@ -581,14 +586,14 @@ impl World {
             .await;
     }
 
-    pub async fn play_sound_expect(
+    pub async fn play_sound_except(
         &self,
         player: &Player,
         sound: Sound,
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
-        self.play_sound_raw_expect(player, sound as u16, category, position, 1.0, 1.0)
+        self.play_sound_raw_except(player, sound as u16, category, position, 1.0, 1.0)
             .await;
     }
 
@@ -605,7 +610,7 @@ impl World {
         self.broadcast_packet_all(&packet).await;
     }
 
-    pub async fn play_sound_raw_expect(
+    pub async fn play_sound_raw_except(
         &self,
         player: &Player,
         sound_id: u16,
@@ -634,7 +639,7 @@ impl World {
         self.play_sound(sound, category, &new_vec).await;
     }
 
-    pub async fn play_block_sound_expect(
+    pub async fn play_block_sound_except(
         &self,
         player: &Player,
         sound: Sound,
@@ -646,8 +651,31 @@ impl World {
             f64::from(position.0.y) + 0.5,
             f64::from(position.0.z) + 0.5,
         );
-        self.play_sound_expect(player, sound, category, &new_vec)
+        self.play_sound_except(player, sound, category, &new_vec)
             .await;
+    }
+
+    pub async fn play_block_sound_raw_except_option(
+        &self,
+        player: Option<&Player>,
+        sound: u16,
+        category: SoundCategory,
+        position: BlockPos,
+        volume: f32,
+        pitch: f32,
+    ) {
+        let new_vec = Vector3::new(
+            f64::from(position.0.x) + 0.5,
+            f64::from(position.0.y) + 0.5,
+            f64::from(position.0.z) + 0.5,
+        );
+        if let Some(player) = player {
+            self.play_sound_raw_except(player, sound, category, &new_vec, volume, pitch)
+                .await;
+        } else {
+            self.play_sound_raw(sound, category, &new_vec, volume, pitch)
+                .await;
+        }
     }
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
@@ -1972,25 +2000,71 @@ impl World {
     }
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        let explosion = Explosion::new(power, position);
-        let block_count = explosion.explode(self).await;
-        let particle = if power < 2.0 {
-            Particle::Explosion
-        } else {
-            Particle::ExplosionEmitter
+        self.explode_with(WorldExplosionArgs {
+            source_entity: None,
+            damage_source: None,
+            damage_calculator: None,
+            power,
+            pos: position,
+            fire: false,
+            explosion_interaction: ExplosionInteraction::Trigger,
+            small_particle: Particle::Explosion,
+            large_particle: Particle::ExplosionEmitter,
+            sound: Sound::EntityGenericExplode,
+        })
+        .await;
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn explode_with(self: &Arc<Self>, args: WorldExplosionArgs) {
+        let game_rules = &self.level_info.load().game_rules;
+
+        let block_interaction = match args.explosion_interaction {
+            ExplosionInteraction::None => BlockInteraction::Keep,
+            ExplosionInteraction::Block => {
+                BlockInteraction::from_game_rule(game_rules.block_explosion_drop_decay)
+            }
+            ExplosionInteraction::Mob => {
+                if game_rules.mob_griefing {
+                    BlockInteraction::from_game_rule(game_rules.block_explosion_drop_decay)
+                } else {
+                    BlockInteraction::Keep
+                }
+            }
+            ExplosionInteraction::Tnt => {
+                BlockInteraction::from_game_rule(game_rules.tnt_explosion_drop_decay)
+            }
+            ExplosionInteraction::Trigger => BlockInteraction::TriggerBlock,
         };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
+
+        let explosion = Explosion::new(NewExplosionArgs {
+            world: self,
+            source_entity: args.source_entity.as_ref(),
+            damage_source: args.damage_source,
+            damage_calculator: args.damage_calculator,
+            power: args.power,
+            pos: args.pos,
+            fire: args.fire,
+            block_interaction,
+        });
+        let particle = if explosion.is_small() {
+            args.small_particle
+        } else {
+            args.large_particle
+        };
+        let (block_count, knockback_map) = explosion.explode().await;
+        let sound = IdOr::<SoundEvent>::Id(args.sound as u16);
         for player in self.players.load().iter() {
-            if player.position().squared_distance_to_vec(&position) > 4096.0 {
+            if player.position().squared_distance_to_vec(&args.pos) > 4096.0 {
                 continue;
             }
             player
                 .client
                 .enqueue_packet(&CExplosion::new(
-                    position,
-                    power,
+                    args.pos,
+                    args.power,
                     block_count as i32,
-                    None,
+                    knockback_map.get(&player.entity_id()).copied(),
                     VarInt(particle as i32),
                     sound.clone(),
                 ))
@@ -2414,8 +2488,11 @@ impl World {
         None
     }
 
-    // Gets all entities at a Box
-    pub fn get_all_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
+    // Gets all entities in a box with the provided filter function.
+    pub fn get_all_at_box_where(
+        &self,
+        f: impl FnMut(&Arc<dyn EntityBase>) -> bool,
+    ) -> Vec<Arc<dyn EntityBase>> {
         let entities_guard = self.entities.load();
         let players_guard = self.players.load();
 
@@ -2427,8 +2504,25 @@ impl World {
                     .iter()
                     .map(|p| p.clone() as Arc<dyn EntityBase>),
             )
-            .filter(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
+            .filter(f)
             .collect()
+    }
+
+    // Gets all entities in a box.
+    pub fn get_all_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
+        self.get_all_at_box_where(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
+    }
+
+    // Gets all entities in a box, except the provided entity.
+    pub fn get_all_at_box_except(
+        &self,
+        aabb: &BoundingBox,
+        except: &dyn EntityBase,
+    ) -> Vec<Arc<dyn EntityBase>> {
+        self.get_all_at_box_where(|entity| {
+            entity.get_entity().bounding_box.load().intersects(aabb)
+                && !std::ptr::addr_eq(entity, except)
+        })
     }
 
     // Gets all non Player entities at a Box
@@ -3599,6 +3693,19 @@ impl World {
 
         None
     }
+}
+
+pub struct WorldExplosionArgs {
+    pub source_entity: Option<Arc<dyn EntityBase>>,
+    pub damage_source: Option<DamageSource>,
+    pub damage_calculator: Option<ExplosionDamageCalculator>,
+    pub power: f32,
+    pub pos: Vector3<f64>,
+    pub fire: bool,
+    pub explosion_interaction: ExplosionInteraction,
+    pub small_particle: Particle,
+    pub large_particle: Particle,
+    pub sound: Sound,
 }
 
 impl pumpkin_world::world::SimpleWorld for World {
