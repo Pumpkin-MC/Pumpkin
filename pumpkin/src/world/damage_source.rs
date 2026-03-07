@@ -5,15 +5,18 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
 
-/// A source of damage.
+/// A source of damage, which stores damage type, position and entity context.
 #[derive(Clone)]
 pub struct DamageSource {
+    /// The type of damage this source is.
     pub damage_type: DamageType,
     /// The entity that caused the damage in the first place.
     ///
     /// For example, if a skeleton shoots an arrow, this would be the *skeleton*.
+    /// If this is `None`, this can usually be inferred with [`DamageSource::direct_entity`].
     pub causing_entity: Option<Arc<dyn EntityBase>>,
-    /// The entity that directly caused the damage.
+    /// The entity that directly caused the damage. If an entity causes damage,
+    /// this is usually the set entity property.
     ///
     /// For example, if a skeleton shoots an arrow, this would be the *arrow*.
     pub direct_entity: Option<Arc<dyn EntityBase>>,
@@ -37,7 +40,8 @@ impl DamageSource {
     }
 
     #[must_use]
-    pub fn from_explosion(
+    /// Creates a new `DamageSource` with an explosion `DamageType` with two optional entities.
+    pub fn explosion(
         causing_entity: Option<Arc<dyn EntityBase>>,
         direct_entity: Option<Arc<dyn EntityBase>>,
     ) -> Self {
@@ -54,11 +58,14 @@ impl DamageSource {
     }
 
     #[must_use]
-    pub fn from_explosion_direct(
+    /// Creates a new `DamageSource` with an explosion `DamageType` with a world and direct entity.
+    ///
+    /// The causing entity will be inferred.
+    pub fn explosion_from_direct(
         world: &World,
         direct_entity: Option<Arc<dyn EntityBase>>,
     ) -> Self {
-        Self::from_explosion(
+        Self::explosion(
             direct_entity.clone(),
             Self::indirect_source_entity(direct_entity, world),
         )

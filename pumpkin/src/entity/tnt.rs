@@ -116,7 +116,7 @@ impl EntityBase for TNTEntity {
             world
                 .explode_with(WorldExplosionArgs {
                     source_entity: Some(self.clone()),
-                    damage_source: Some(DamageSource::from_explosion_direct(
+                    damage_source: Some(DamageSource::explosion_from_direct(
                         &world,
                         Some(self.clone()),
                     )),
