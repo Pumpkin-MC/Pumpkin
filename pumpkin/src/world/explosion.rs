@@ -1,5 +1,5 @@
 use super::World;
-use crate::block::OnExplosionHitArgs;
+use crate::block::{OnExplosionHitArgs, on_explosion_hit_default};
 use crate::entity::{Entity, EntityBase};
 use crate::world::damage_source::DamageSource;
 use crate::world::explosion_damage_calculator::ExplosionDamageCalculator;
@@ -318,17 +318,21 @@ impl Explosion {
         blocks.shuffle(&mut rand::rng());
 
         for (pos, block, state) in blocks {
-            if let Some(pumpkin_block) = self.world.block_registry.get_pumpkin_block(block.id)
-                && let Some(stacks) = pumpkin_block
-                    .on_explosion_hit(OnExplosionHitArgs {
-                        world: &self.world,
-                        block,
-                        state,
-                        position: pos,
-                        explosion: self,
-                    })
-                    .await
+            let args = OnExplosionHitArgs {
+                world: &self.world,
+                block,
+                state,
+                position: pos,
+                explosion: self,
+            };
+            let stacks = if let Some(pumpkin_block) =
+                self.world.block_registry.get_pumpkin_block(block.id)
             {
+                pumpkin_block.on_explosion_hit(args).await
+            } else {
+                on_explosion_hit_default(args).await
+            };
+            if let Some(stacks) = stacks {
                 for mut stack in stacks {
                     for collector in &mut collectors {
                         collector.try_merge(&mut stack);
