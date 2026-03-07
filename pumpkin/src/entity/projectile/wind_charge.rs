@@ -207,7 +207,11 @@ impl EntityBase for WindChargeEntity {
                 .await;
 
             match hit {
-                ProjectileHit::Block { .. } => {}
+                ProjectileHit::Block { hit_pos, face, .. } => {
+                    let vec = face.to_offset().to_f64() * 0.25;
+                    self.clone().explode(hit_pos.to_f64() + vec).await;
+                    self.get_entity().remove().await;
+                }
 
                 ProjectileHit::Entity {
                     entity: ref target, ..
@@ -233,7 +237,8 @@ impl EntityBase for WindChargeEntity {
                         .await;
 
                     let pos = self.get_entity().pos.load();
-                    self.explode(pos).await;
+                    self.clone().explode(pos).await;
+                    self.get_entity().remove().await;
                 }
             }
         })

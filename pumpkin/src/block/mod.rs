@@ -437,7 +437,7 @@ pub struct BlockEvent {
 }
 
 pub async fn on_explosion_hit_default(args: OnExplosionHitArgs<'_>) -> Option<Vec<ItemStack>> {
-    if !args.state.is_air() && args.explosion.block_interaction != BlockInteraction::Keep {
+    if !args.state.is_air() && args.explosion.block_interaction != BlockInteraction::TriggerBlock {
         args.world
             .set_block_state(args.position, 0, BlockFlags::NOTIFY_ALL)
             .await;
