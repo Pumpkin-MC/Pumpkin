@@ -60,7 +60,7 @@ impl Explosion {
                 .damage_calculator
                 .unwrap_or_else(|| Self::create_damage_calculator(args.source_entity.cloned())),
             damage_source: args.damage_source.unwrap_or_else(|| {
-                DamageSource::from_explosion_direct(
+                DamageSource::explosion_from_direct(
                     args.world.as_ref(),
                     args.source_entity.cloned(),
                 )
