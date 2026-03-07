@@ -1,5 +1,4 @@
-use std::sync::Arc;
-
+use pumpkin_data::block_properties::RedstoneOreLikeProperties;
 use pumpkin_data::{Block, item::Item};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::{GameMode, math::position::BlockPos};
@@ -9,8 +8,11 @@ use pumpkin_world::{
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };
+use std::sync::Arc;
 
+use crate::block::OnExplosionHitArgs;
 use crate::{
+    block::blocks::candles::ExtinguishableBlock,
     block::{
         BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs,
         OnScheduledTickArgs, UseWithItemArgs, blocks::cake::CakeBlock, registry::BlockActionResult,
@@ -143,6 +145,29 @@ impl BlockBehaviour for CandleCakeBlock {
             }
             args.state_id
         })
+    }
+
+    fn on_explosion_hit<'a>(
+        &'a self,
+        args: OnExplosionHitArgs<'a>,
+    ) -> BlockFuture<'a, Option<Vec<ItemStack>>> {
+        Box::pin(async move {
+            Self::extinguish_on_explosion_hit(&args).await;
+
+            self.on_explosion_hit_base(args).await
+        })
+    }
+}
+
+impl ExtinguishableBlock for CandleCakeBlock {
+    type Properties = RedstoneOreLikeProperties;
+
+    fn lit(props: &Self::Properties) -> bool {
+        props.lit
+    }
+
+    fn set_lit(props: &mut Self::Properties, to: bool) {
+        props.lit = to;
     }
 }
 
