@@ -29,7 +29,7 @@ impl CommandExecutor for WasmCommandExecutor {
 
             let sender_resource = store.data_mut().add_command_sender(sender.clone()).unwrap();
             let server_resource = store.data_mut().add_server(self.server.clone()).unwrap();
-            let args_resource = store.data_mut().add_consumed_args(&args).unwrap();
+            let args_resource = store.data_mut().add_consumed_args(args).unwrap();
 
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1_0(ref plugin) => {
@@ -45,8 +45,7 @@ impl CommandExecutor for WasmCommandExecutor {
                         .map_err(|e| {
                             CommandError::CommandFailed(
                                 TextComponent::text(format!(
-                                    "Wasm command failed with following error: {}",
-                                    e
+                                    "Wasm command failed with following error: {e}"
                                 ))
                                 .color(Color::Named(NamedColor::Red)),
                             )

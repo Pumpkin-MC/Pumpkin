@@ -8,11 +8,11 @@ use crate::plugin::loader::wasm::wasm_host::{
 impl pumpkin::plugin::world::Host for PluginHostState {}
 
 impl pumpkin::plugin::world::HostWorld for PluginHostState {
-    async fn get_id(&mut self, world: Resource<World>) -> String {
+    async fn get_id(&mut self, _world: Resource<World>) -> String {
         todo!()
     }
 
-    async fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {
+    async fn drop(&mut self, _rep: Resource<World>) -> wasmtime::Result<()> {
         todo!()
     }
 }

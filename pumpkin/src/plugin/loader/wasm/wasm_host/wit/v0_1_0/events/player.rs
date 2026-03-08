@@ -42,7 +42,7 @@ impl ToFromV0_1_0WasmEvent for PlayerJoinEvent {
                     .delete::<TextComponentResource>(Resource::new_own(data.join_message.rep()))
                     .unwrap();
 
-                PlayerJoinEvent {
+                Self {
                     player: player_resource.provider,
                     join_message: text_component_resource.provider,
                     cancelled: data.cancelled,

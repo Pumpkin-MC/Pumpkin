@@ -302,6 +302,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn get_locale(&mut self, command_sender: Resource<CommandSender>) -> Locale {
         let resource = self
             .resource_table
@@ -639,10 +640,10 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
         resource.provider = builder.execute(executor);
     }
 
-    async fn require_permission(
+    async fn require_with_handler_id(
         &mut self,
         command_node: Resource<CommandNode>,
-        level: PermissionLevel,
+        handler_id: u32,
     ) {
         todo!()
     }
