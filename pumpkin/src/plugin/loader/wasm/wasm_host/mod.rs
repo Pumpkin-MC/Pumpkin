@@ -24,7 +24,7 @@ pub enum PluginInitError {
     FailedToReadPayload(#[from] wasmparser::BinaryReaderError),
     #[error("failed to read plugin bytes")]
     FailedToReadPluginBytes(#[from] std::io::Error),
-    #[error("plugin failed to load")]
+    #[error("plugin failed to load with error: {0}")]
     PluginFailedToLoad(#[from] wasmtime::Error),
 }
 
