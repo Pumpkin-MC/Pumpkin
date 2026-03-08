@@ -369,19 +369,19 @@ impl BoundingBox {
 
     /// Returns the length of the X-Side (width) of the bounding box
     #[must_use]
-    pub fn get_x_length(&self) -> f64{
+    pub fn get_x_length(&self) -> f64 {
         self.max.x - self.min.x
     }
 
     /// Returns the length of the Y-Side (height) of the bounding box
     #[must_use]
-    pub fn get_y_length(&self) -> f64{
+    pub fn get_y_length(&self) -> f64 {
         self.max.y - self.min.y
     }
 
     /// Returns the length of the X-Side (depth) of the bounding box
     #[must_use]
-    pub fn get_z_length(&self) -> f64{
+    pub fn get_z_length(&self) -> f64 {
         self.max.z - self.min.z
     }
 }

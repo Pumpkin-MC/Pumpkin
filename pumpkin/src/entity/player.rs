@@ -718,7 +718,7 @@ impl Player {
         if matches!(attack_type, AttackType::Critical) {
             damage *= 1.5;
         }
-        
+
         // Process attack (actually do damage)
         self.do_attack(&attack_type, damage, &victim).await;
 
@@ -741,25 +741,27 @@ impl Player {
         if config.swing {}
     }
 
-    async fn do_attack(&self, attack_type: &AttackType, damage: f64, victim: &Arc<dyn EntityBase>){
+    async fn do_attack(&self, attack_type: &AttackType, damage: f64, victim: &Arc<dyn EntityBase>) {
         let attacker_entity = &self.living_entity.entity;
         let world = self.world();
         let pos = attacker_entity.pos.load();
-        let did_damage: bool = match attack_type{
-            AttackType::Sweeping => 
-                self.do_sweeping_attack(damage, victim).await,
-            _ =>
-                self.do_simple_attack(victim, attack_type, damage).await
+        let did_damage: bool = match attack_type {
+            AttackType::Sweeping => self.do_sweeping_attack(damage, victim).await,
+            _ => self.do_simple_attack(victim, attack_type, damage).await,
         };
 
         // Spawn particles
         // TODO: Add other particles (e.g. crit)
-        match attack_type{
-            AttackType::Sweeping => combat::spawn_sweep_particle(&self.living_entity.entity, &world, &pos).await,
-            AttackType::Critical => combat::spawn_crit_particle(victim.get_entity(), &self.world()).await,
+        match attack_type {
+            AttackType::Sweeping => {
+                combat::spawn_sweep_particle(&self.living_entity.entity, &world, &pos).await
+            }
+            AttackType::Critical => {
+                combat::spawn_crit_particle(victim.get_entity(), &self.world()).await
+            }
             _ => {}
         }
-        
+
         if !did_damage {
             self.world()
                 .play_sound(
@@ -771,7 +773,7 @@ impl Player {
         }
     }
 
-    async fn do_sweeping_attack(&self, mut damage: f64, victim: &Arc<dyn EntityBase>) -> bool{
+    async fn do_sweeping_attack(&self, mut damage: f64, victim: &Arc<dyn EntityBase>) -> bool {
         let sweeping_damage_ratio = self
             .living_entity
             .get_attribute_value(&Attributes::SWEEPING_DAMAGE_RATIO);
@@ -779,13 +781,17 @@ impl Player {
 
         let victim_dimensions = victim.get_entity().entity_dimension.load();
         let victim_pos = victim.get_entity().pos.load();
-        let bounding_box = BoundingBox::new_from_pos(victim_pos.x, victim_pos.y, victim_pos.z, &victim_dimensions).expand(1.0, 0.25, 1.0);
+        let bounding_box =
+            BoundingBox::new_from_pos(victim_pos.x, victim_pos.y, victim_pos.z, &victim_dimensions)
+                .expand(1.0, 0.25, 1.0);
         let entities = self.world().get_entities_at_box(&bounding_box);
 
         let mut did_damage_at_least_once = false;
 
         for entity_to_damage in entities {
-            let did_damage = self.do_simple_attack(&entity_to_damage, &AttackType::Sweeping, damage).await;
+            let did_damage = self
+                .do_simple_attack(&entity_to_damage, &AttackType::Sweeping, damage)
+                .await;
 
             did_damage_at_least_once = did_damage_at_least_once || did_damage;
         }
@@ -793,24 +799,35 @@ impl Player {
         did_damage_at_least_once
     }
 
-    async fn do_simple_attack(&self, victim: &Arc<dyn EntityBase>, attack_type: &AttackType, damage: f64) -> bool{
+    async fn do_simple_attack(
+        &self,
+        victim: &Arc<dyn EntityBase>,
+        attack_type: &AttackType,
+        damage: f64,
+    ) -> bool {
         let world = self.world();
         let attacker_entity = &self.living_entity.entity;
         let server = world.server.upgrade().unwrap();
         let victim_entity = victim.get_entity();
         let config = &server.advanced_config.pvp;
 
-        let did_damage = victim.damage_with_context(
+        let did_damage = victim
+            .damage_with_context(
                 &**victim,
                 damage as f32,
                 DamageType::PLAYER_ATTACK,
                 None,
                 Some(self),
                 Some(self),
-            ).await;
+            )
+            .await;
 
         if victim.get_living_entity().is_some() {
-            let knockback_strength = if *attack_type == AttackType::Knockback { 2.0 } else { 1.0 };
+            let knockback_strength = if *attack_type == AttackType::Knockback {
+                2.0
+            } else {
+                1.0
+            };
 
             if config.knockback {
                 combat::handle_knockback(attacker_entity, victim_entity, knockback_strength);
