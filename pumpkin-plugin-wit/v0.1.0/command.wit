@@ -177,7 +177,7 @@ interface command {
         argument: static func(name: string, arg-type: argument-type) -> command-node;
         then: func(node: command-node);
         execute-with-handler-id: func(handler-id: u32);
-        require-permission: func(level: permission-level);
+        require-with-handler-id: func(handler-id: u32);
     }
 
     resource command {
