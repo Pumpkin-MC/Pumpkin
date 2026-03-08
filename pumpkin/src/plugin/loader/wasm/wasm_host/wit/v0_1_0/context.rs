@@ -81,6 +81,14 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
                     )
                     .await;
             }
+            EventType::PlayerLeaveEvent => {
+                resource
+                    .provider
+                    .register_event::<crate::plugin::player::player_leave::PlayerLeaveEvent, _>(
+                        handler, priority, blocking,
+                    )
+                    .await;
+            }
         }
     }
 

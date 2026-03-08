@@ -16,11 +16,19 @@ interface event {
         cancelled: bool
     }
 
+    record player-leave-event-data {
+        player: player,
+        leave-message: text-component,
+        cancelled: bool
+    }
+
     enum event-type {
         player-join-event,
+        player-leave-event,
     }
 
     variant event {
-        player-join-event(player-join-event-data)
+        player-join-event(player-join-event-data),
+        player-leave-event(player-leave-event-data),
     }
 }

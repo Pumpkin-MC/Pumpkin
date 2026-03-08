@@ -8,7 +8,9 @@ use std::{
     },
 };
 
-pub use crate::wit::pumpkin::plugin::event::{Event, EventPriority, PlayerJoinEventData};
+pub use crate::wit::pumpkin::plugin::event::{
+    Event, EventPriority, PlayerJoinEventData, PlayerLeaveEventData,
+};
 use crate::{Context, Result, Server, wit::pumpkin::plugin::event::EventType};
 
 pub(crate) static NEXT_HANDLER_ID: AtomicU32 = AtomicU32::new(0);
@@ -28,12 +30,27 @@ impl FromIntoEvent for PlayerJoinEventData {
     fn from_event(event: Event) -> Self {
         match event {
             Event::PlayerJoinEvent(data) => data,
-            // _ => None,
+            _ => panic!("unexpected event"),
         }
     }
 
     fn into_event(self) -> Event {
         Event::PlayerJoinEvent(self)
+    }
+}
+
+impl FromIntoEvent for PlayerLeaveEventData {
+    const EVENT_TYPE: EventType = EventType::PlayerLeaveEvent;
+
+    fn from_event(event: Event) -> Self {
+        match event {
+            Event::PlayerLeaveEvent(data) => data,
+            _ => panic!("unexpected event"),
+        }
+    }
+
+    fn into_event(self) -> Event {
+        Event::PlayerLeaveEvent(self)
     }
 }
 
