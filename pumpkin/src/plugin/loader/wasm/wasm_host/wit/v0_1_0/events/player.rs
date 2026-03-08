@@ -30,6 +30,7 @@ impl ToFromV0_1_0WasmEvent for PlayerJoinEvent {
         event: crate::plugin::loader::wasm::wasm_host::wit::v0_1_0::pumpkin::plugin::event::Event,
         state: &mut PluginHostState,
     ) -> Self {
+        #[allow(clippy::match_wildcard_for_single_variants)]
         match event {
             Event::PlayerJoinEvent(data) => {
                 let player_resource = state
@@ -74,6 +75,7 @@ impl ToFromV0_1_0WasmEvent for PlayerLeaveEvent {
         event: crate::plugin::loader::wasm::wasm_host::wit::v0_1_0::pumpkin::plugin::event::Event,
         state: &mut PluginHostState,
     ) -> Self {
+        #[allow(clippy::match_wildcard_for_single_variants)]
         match event {
             Event::PlayerLeaveEvent(data) => {
                 let player_resource = state

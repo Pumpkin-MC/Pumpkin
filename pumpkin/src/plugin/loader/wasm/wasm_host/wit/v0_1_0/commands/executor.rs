@@ -7,7 +7,10 @@ use pumpkin_util::text::{
 
 use crate::{
     command::{CommandExecutor, dispatcher::CommandError},
-    plugin::loader::wasm::wasm_host::{PluginInstance, WasmPlugin},
+    plugin::loader::wasm::wasm_host::{
+        DowncastResourceExt, PluginInstance, WasmPlugin,
+        wit::v0_1_0::pumpkin::plugin::command::CommandError as CommandErrorWit,
+    },
     server::Server,
 };
 
@@ -50,7 +53,26 @@ impl CommandExecutor for WasmCommandExecutor {
                                 .color(Color::Named(NamedColor::Red)),
                             )
                         })?;
-                    Ok(0)
+
+                    match result {
+                        Ok(value) => Ok(value),
+                        Err(err) => match err {
+                            CommandErrorWit::InvalidConsumption(value) => {
+                                Err(CommandError::InvalidConsumption(value))
+                            }
+                            CommandErrorWit::InvalidRequirement => {
+                                Err(CommandError::InvalidRequirement)
+                            }
+                            CommandErrorWit::PermissionDenied => {
+                                Err(CommandError::PermissionDenied)
+                            }
+                            CommandErrorWit::CommandFailed(resource) => {
+                                Err(CommandError::CommandFailed(
+                                    resource.consume(store.data_mut()).provider,
+                                ))
+                            }
+                        },
+                    }
                 }
             }
         })

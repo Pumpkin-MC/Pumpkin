@@ -59,7 +59,7 @@ pub mod executor;
 impl pumpkin::plugin::command::Host for PluginHostState {}
 
 impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
-    async fn get_value(&mut self, consumed_args: Resource<ConsumedArgs>, key: String) -> Arg {
+    async fn get_value(&mut self, _consumed_args: Resource<ConsumedArgs>, _key: String) -> Arg {
         todo!()
     }
 
@@ -134,7 +134,7 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
 impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
     async fn get_command_sender_type(
         &mut self,
-        command_sender: Resource<CommandSender>,
+        _command_sender: Resource<CommandSender>,
     ) -> CommandSenderType {
         todo!()
     }
@@ -642,8 +642,8 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
 
     async fn require_with_handler_id(
         &mut self,
-        command_node: Resource<CommandNode>,
-        handler_id: u32,
+        _command_node: Resource<CommandNode>,
+        _handler_id: u32,
     ) {
         todo!()
     }
