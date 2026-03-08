@@ -366,6 +366,21 @@ impl BoundingBox {
 
         super::squared_magnitude(d, e, f)
     }
+
+    /// Returns the length of the X-Side (width) of the bounding box
+    pub fn get_x_length(&self) -> f64{
+        self.max.x - self.min.x
+    }
+
+    /// Returns the length of the Y-Side (height) of the bounding box
+    pub fn get_y_length(&self) -> f64{
+        self.max.y - self.min.y
+    }
+
+    /// Returns the length of the X-Side (depth) of the bounding box
+    pub fn get_z_length(&self) -> f64{
+        self.max.z - self.min.z
+    }
 }
 
 /// Represents the dimensions of an entity.

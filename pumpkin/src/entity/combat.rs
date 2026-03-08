@@ -1,11 +1,13 @@
+use core::f64;
 use std::sync::atomic::Ordering;
-
+use pumpkin_util::random::{
+    RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro
+};
 use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_util::math::vector3::Vector3;
-
 use crate::{
     entity::{Entity, player::Player},
     world::World,
@@ -80,6 +82,44 @@ pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: 
         )
         .await;
 }
+
+pub async fn spawn_crit_particle(victim: &Entity, world: &World) {
+    // It's currently more effort to create a global RNG than just creating one here locally
+    // Maybe supply a global, static one in RandomGenerator?
+    let mut rng = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+
+    let pos = &victim.pos.load();
+
+    // In vanilla this is on the Player, but I doubt anyone will need this later
+    fn get_pos_part_with_scale(pos_part: &f64, scale: &f64, bounding_box_dimension: &f64) -> f64{
+        pos_part + bounding_box_dimension * scale
+    }
+
+    for _i in 0..16 {
+        let d0 = rng.next_f64() * 2.0 - 1.0;
+        let d1 = rng.next_f64() * 2.0 - 1.0;
+        let d2 = rng.next_f64() * 2.0 - 1.0;
+
+        if !(d0 * d0 + d1 * d1 + d2 * d2 > 1.0) {
+            let x = get_pos_part_with_scale(&pos.x, &(d0 / 4.0), &victim.bounding_box.load().get_x_length());
+            let y = get_pos_part_with_scale(&pos.y, &(0.5 + d1 / 4.0), &victim.bounding_box.load().get_y_length());
+            let z = get_pos_part_with_scale(&pos.z, &(d2 / 4.0), &victim.bounding_box.load().get_z_length());
+            
+            world
+            .spawn_particle(
+                Vector3::new(x, y, z),
+                Vector3::new(0.0, 0.0, 0.0),
+                // The speed does not seem to be updated somewhere
+                // TODO: Make particles move with velocity
+                100.0,
+                0,
+                Particle::Crit,
+            )
+            .await;
+        }
+    }    
+}
+
 
 pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type: AttackType) {
     match attack_type {
