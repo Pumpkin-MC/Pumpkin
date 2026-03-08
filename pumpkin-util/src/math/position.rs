@@ -427,6 +427,22 @@ impl BlockPos {
         )
     }
 
+    /// Converts this block position to a `Vector3<f64>` directly.
+    ///
+    /// This does not center any position on the block's axes.
+    /// This preserves the original coordinates of this `BlockPos`.
+    ///
+    /// # Returns
+    /// A `Vector3<f64>` representing the converted corner position.
+    #[must_use]
+    pub fn to_lower_cornered_f64(&self) -> Vector3<f64> {
+        Vector3::new(
+            f64::from(self.0.x),
+            f64::from(self.0.y),
+            f64::from(self.0.z),
+        )
+    }
+
     /// Converts this block position to a `Vector3<f64>` with 0.5 added to all axes.
     ///
     /// # Returns

@@ -1,15 +1,3 @@
-use pumpkin_data::block_properties::RedstoneOreLikeProperties;
-use pumpkin_data::{Block, item::Item};
-use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_util::{GameMode, math::position::BlockPos};
-use pumpkin_world::{
-    BlockStateId,
-    item::ItemStack,
-    tick::TickPriority,
-    world::{BlockAccessor, BlockFlags},
-};
-use std::sync::Arc;
-
 use crate::block::OnExplosionHitArgs;
 use crate::{
     block::blocks::candles::ExtinguishableBlock,
@@ -20,6 +8,18 @@ use crate::{
     entity::player::Player,
     world::World,
 };
+use pumpkin_data::block_properties::RedstoneOreLikeProperties;
+use pumpkin_data::{Block, item::Item};
+use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::{GameMode, math::position::BlockPos};
+use pumpkin_world::{
+    BlockStateId,
+    item::ItemStack,
+    tick::TickPriority,
+    world::{BlockAccessor, BlockFlags},
+};
+use std::sync::Arc;
 
 const CANDLE_MAP: [(&Item, &Block); 17] = [
     (&Item::CANDLE, &Block::CANDLE_CAKE),
@@ -40,6 +40,8 @@ const CANDLE_MAP: [(&Item, &Block); 17] = [
     (&Item::RED_CANDLE, &Block::RED_CANDLE_CAKE),
     (&Item::BLACK_CANDLE, &Block::BLACK_CANDLE_CAKE),
 ];
+
+const PARTICLE_OFFSETS: [Vector3<f64>; 1] = [Vector3::new(8.0, 16.0, 8.0)];
 
 #[must_use]
 pub fn cake_from_candle(item: &Item) -> &'static Block {
@@ -168,6 +170,10 @@ impl ExtinguishableBlock for CandleCakeBlock {
 
     fn set_lit(props: &mut Self::Properties, to: bool) {
         props.lit = to;
+    }
+
+    fn particle_offsets(_props: &Self::Properties) -> &[Vector3<f64>] {
+        &PARTICLE_OFFSETS
     }
 }
 

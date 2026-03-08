@@ -34,15 +34,45 @@ use std::sync::Arc;
 #[pumpkin_block_from_tag("minecraft:candles")]
 pub struct CandleBlock;
 
+/// Particle offsets for each number of candles.
+const PARTICLE_OFFSETS: &[&[Vector3<f64>]] = &[
+    &[Vector3::new(8.0, 8.0, 8.0)],
+    &[Vector3::new(6.0, 7.0, 8.0), Vector3::new(10.0, 8.0, 7.0)],
+    &[
+        Vector3::new(8.0, 5.0, 10.0),
+        Vector3::new(6.0, 7.0, 8.0),
+        Vector3::new(9.0, 8.0, 7.0),
+    ],
+    &[
+        Vector3::new(7.0, 5.0, 9.0),
+        Vector3::new(10.0, 7.0, 9.0),
+        Vector3::new(6.0, 7.0, 6.0),
+        Vector3::new(9.0, 8.0, 6.0),
+    ],
+];
+
 /// A trait for a block that can be extinguished.
 pub trait ExtinguishableBlock {
+    /// The type of properties this block has.
     type Properties: BlockProperties + Send;
 
+    /// Gets the 'lit' state of the block.
     #[must_use]
     fn lit(props: &Self::Properties) -> bool;
 
+    /// Sets the 'lit' state of the block to the provided value.
     fn set_lit(props: &mut Self::Properties, to: bool);
 
+    /// Gives an offset of `n` spawned particles (where `n` is the length
+    /// of the returned array slice), scaled by a factor of 16 with the provided properties.
+    /// For example:
+    /// - to specify 1 single particle with an offset half a block up,
+    ///   you would specify `[Vector3::new(0.0, 8.0, 0.0)]`.
+    /// - to specify 2 particles, one at an unmodified position and one at the opposite corner,
+    ///   you would specify `[Vector3::new(0.0, 0.0, 0.0), Vector3::new(16.0, 16.0, 16.0)]`.
+    fn particle_offsets(props: &Self::Properties) -> &[Vector3<f64>];
+
+    /// Extinguishes this block.
     #[must_use]
     fn extinguish(
         _player: Option<&Player>,
@@ -61,18 +91,23 @@ pub trait ExtinguishableBlock {
             world
                 .play_block_sound(Sound::BlockCandleExtinguish, SoundCategory::Blocks, *pos)
                 .await;
-            world
-                .spawn_particle(
-                    pos.to_centered_f64(),
-                    Vector3::new(0.0, 0.5, 0.0),
-                    0.0,
-                    1,
-                    Particle::Smoke,
-                )
-                .await;
+            for offset in Self::particle_offsets(&props) {
+                world
+                    .spawn_particle(
+                        // 0.0625 = 1/16
+                        pos.to_lower_cornered_f64() + (*offset * 0.0625),
+                        Vector3::new(0.0, 0.0, 0.0),
+                        0.0,
+                        1,
+                        Particle::Smoke,
+                    )
+                    .await;
+            }
         }
     }
 
+    /// Provides the actual implementation for when this block
+    /// is hit by a wind charge.
     #[must_use]
     fn extinguish_on_explosion_hit(
         args: &OnExplosionHitArgs<'_>,
@@ -236,6 +271,10 @@ impl ExtinguishableBlock for CandleBlock {
 
     fn set_lit(props: &mut Self::Properties, to: bool) {
         props.lit = to;
+    }
+
+    fn particle_offsets(props: &Self::Properties) -> &[Vector3<f64>] {
+        PARTICLE_OFFSETS[props.candles as usize]
     }
 }
 
