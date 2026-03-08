@@ -754,10 +754,10 @@ impl Player {
         // TODO: Add other particles (e.g. crit)
         match attack_type {
             AttackType::Sweeping => {
-                combat::spawn_sweep_particle(&self.living_entity.entity, &world, &pos).await
+                combat::spawn_sweep_particle(&self.living_entity.entity, &world, &pos).await;
             }
             AttackType::Critical => {
-                combat::spawn_crit_particle(victim.get_entity(), &self.world()).await
+                combat::spawn_crit_particle(victim.get_entity(), &self.world()).await;
             }
             _ => {}
         }
