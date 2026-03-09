@@ -25,14 +25,14 @@ impl CommandExecutor for AddExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(Arg::Simple(_team_name)) = args.get(ARG_TEAM) else {
+            let Some(Arg::Simple(team_name)) = args.get(ARG_TEAM) else {
                 return Err(CommandError::InvalidConsumption(Some(ARG_TEAM.into())));
             };
             // TODO: Implement team storage when team system is built
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_TEAM_ADD_SUCCESS,
-                    [],
+                    [TextComponent::text(team_name.to_string())],
                 ))
                 .await;
             Ok(1)
@@ -50,14 +50,14 @@ impl CommandExecutor for RemoveExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(Arg::Simple(_team_name)) = args.get(ARG_TEAM) else {
+            let Some(Arg::Simple(team_name)) = args.get(ARG_TEAM) else {
                 return Err(CommandError::InvalidConsumption(Some(ARG_TEAM.into())));
             };
             // TODO: Implement team removal when team system is built
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_TEAM_REMOVE_SUCCESS,
-                    [],
+                    [TextComponent::text(team_name.to_string())],
                 ))
                 .await;
             Ok(1)
@@ -97,14 +97,21 @@ impl CommandExecutor for JoinExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(Arg::Simple(_team_name)) = args.get(ARG_TEAM) else {
+            let Some(Arg::Simple(team_name)) = args.get(ARG_TEAM) else {
                 return Err(CommandError::InvalidConsumption(Some(ARG_TEAM.into())));
             };
             // TODO: Join team when team system is built
+            let member_name = match sender {
+                CommandSender::Player(p) => p.gameprofile.name.clone(),
+                _ => "Unknown".to_string(),
+            };
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_TEAM_JOIN_SUCCESS_SINGLE,
-                    [],
+                    [
+                        TextComponent::text(member_name),
+                        TextComponent::text(team_name.to_string()),
+                    ],
                 ))
                 .await;
             Ok(1)
@@ -123,10 +130,14 @@ impl CommandExecutor for LeaveExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Leave team when team system is built
+            let member_name = match sender {
+                CommandSender::Player(p) => p.gameprofile.name.clone(),
+                _ => "Unknown".to_string(),
+            };
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_TEAM_LEAVE_SUCCESS_SINGLE,
-                    [],
+                    [TextComponent::text(member_name)],
                 ))
                 .await;
             Ok(1)
@@ -144,14 +155,17 @@ impl CommandExecutor for EmptyExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(Arg::Simple(_team_name)) = args.get(ARG_TEAM) else {
+            let Some(Arg::Simple(team_name)) = args.get(ARG_TEAM) else {
                 return Err(CommandError::InvalidConsumption(Some(ARG_TEAM.into())));
             };
             // TODO: Empty team when team system is built
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_TEAM_EMPTY_SUCCESS,
-                    [],
+                    [
+                        TextComponent::text("0".to_string()),
+                        TextComponent::text(team_name.to_string()),
+                    ],
                 ))
                 .await;
             Ok(1)
