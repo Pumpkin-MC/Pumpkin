@@ -11,7 +11,7 @@ use crate::entity::ai::pathfinder::node::{Coordinate, Node};
 
 #[derive(Debug, Clone)]
 pub struct BinaryHeap {
-    heap: Vec<Option<Box<Node>>>,
+    heap: Vec<Option<Node>>,
     position_map: HashMap<Vector3<i32>, usize>,
     size: usize,
 }
@@ -68,7 +68,7 @@ impl BinaryHeap {
         node.heap_idx = self.size as i32;
         self.position_map.insert(node.as_vector3(), self.size);
 
-        self.heap[self.size] = Some(Box::new(node));
+        self.heap[self.size] = Some(node);
         self.bubble_up(self.size);
     }
 
@@ -82,7 +82,7 @@ impl BinaryHeap {
 
         if self.size == 1 {
             self.size = 0;
-            return Some(*min_node);
+            return Some(min_node);
         }
 
         if let Some(mut last_node) = self.heap[self.size].take() {
@@ -94,7 +94,7 @@ impl BinaryHeap {
         self.size -= 1;
         self.bubble_down(1);
 
-        Some(*min_node)
+        Some(min_node)
     }
 
     #[must_use]
@@ -102,7 +102,7 @@ impl BinaryHeap {
         if self.is_empty() {
             None
         } else {
-            self.heap[1].as_deref()
+            self.heap[1].as_ref()
         }
     }
 
@@ -129,7 +129,7 @@ impl BinaryHeap {
     pub fn get_node(&self, coords: &dyn Coordinate) -> Option<&Node> {
         self.position_map
             .get(&coords.as_vector3())
-            .and_then(|&index| self.heap[index].as_deref())
+            .and_then(|&index| self.heap[index].as_ref())
     }
 
     /// Updates an existing node's fields and reorders the heap.
@@ -139,9 +139,8 @@ impl BinaryHeap {
             && let Some(ref mut node) = self.heap[index]
         {
             let old_f = node.f;
-            // Preserve heap_idx
             let heap_idx = node.heap_idx;
-            **node = updated;
+            *node = updated;
             node.heap_idx = heap_idx;
 
             if node.f < old_f {
@@ -152,11 +151,21 @@ impl BinaryHeap {
         }
     }
 
+    /// Drain all nodes from the heap, returning them as a Vec.
+    pub fn drain(&mut self) -> Vec<Node> {
+        let nodes: Vec<Node> = self.heap[1..=self.size]
+            .iter()
+            .filter_map(|node_opt| *node_opt)
+            .collect();
+        self.clear();
+        nodes
+    }
+
     #[must_use]
     pub fn get_heap(&self) -> Vec<Node> {
         self.heap[1..=self.size]
             .iter()
-            .filter_map(|node_opt| node_opt.as_ref().map(|n| n.as_ref().clone()))
+            .filter_map(|node_opt| *node_opt)
             .collect()
     }
 
