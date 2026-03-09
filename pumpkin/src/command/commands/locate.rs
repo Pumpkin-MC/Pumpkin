@@ -7,7 +7,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::generation::structure::placement::should_generate_structure;
 
 use crate::command::args::simple::SimpleArgConsumer;
-use crate::command::args::{Arg, ConsumedArgs};
+use crate::command::args::{Arg, ConsumedArgs, FindArg};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
@@ -15,10 +15,11 @@ use crate::command::{CommandExecutor, CommandResult, CommandSender};
 
 const NAMES: [&str; 1] = ["locate"];
 
-const DESCRIPTION: &str = "Locates the closest structure or biome.";
+const DESCRIPTION: &str = "Locates the closest structure, biome, or point of interest.";
 
 const ARG_STRUCTURE: &str = "structure";
 const ARG_BIOME: &str = "biome";
+const ARG_POI: &str = "poi";
 
 const MAX_SEARCH_RADIUS: i32 = 6400;
 
@@ -260,6 +261,27 @@ async fn search_biome(
     None
 }
 
+struct LocatePoiExecutor;
+
+impl CommandExecutor for LocatePoiExecutor {
+    fn execute<'a>(
+        &'a self,
+        _sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let name = SimpleArgConsumer::find_arg(args, ARG_POI)?;
+
+            // TODO: Implement POI location when POI system is available
+            Err(CommandError::CommandFailed(TextComponent::translate(
+                translation::COMMANDS_LOCATE_POI_NOT_FOUND,
+                [TextComponent::text(name.to_string())],
+            )))
+        })
+    }
+}
+
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(
@@ -270,4 +292,5 @@ pub fn init_command_tree() -> CommandTree {
             literal("biome")
                 .then(argument(ARG_BIOME, SimpleArgConsumer).execute(LocateBiomeExecutor)),
         )
+        .then(literal("poi").then(argument(ARG_POI, SimpleArgConsumer).execute(LocatePoiExecutor)))
 }
