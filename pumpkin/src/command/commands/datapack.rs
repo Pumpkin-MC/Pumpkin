@@ -13,6 +13,7 @@ use crate::command::{
 const NAMES: [&str; 1] = ["datapack"];
 const DESCRIPTION: &str = "Controls loaded data packs.";
 const ARG_NAME: &str = "name";
+const ARG_EXISTING: &str = "existing";
 
 struct ListExecutor {
     mode: ListMode,
@@ -76,7 +77,9 @@ impl CommandExecutor for EnableExecutor {
                 ))
                 .await;
 
-            Err(CommandError::InvalidConsumption(Some(name.to_string())))
+            Err(CommandError::CommandFailed(TextComponent::text(format!(
+                "Unknown data pack: {name}"
+            ))))
         })
     }
 }
@@ -101,7 +104,9 @@ impl CommandExecutor for DisableExecutor {
                 ))
                 .await;
 
-            Err(CommandError::InvalidConsumption(Some(name.to_string())))
+            Err(CommandError::CommandFailed(TextComponent::text(format!(
+                "Unknown data pack: {name}"
+            ))))
         })
     }
 }
@@ -120,7 +125,25 @@ pub fn init_command_tree() -> CommandTree {
                     mode: ListMode::Enabled,
                 }),
         )
-        .then(literal("enable").then(argument(ARG_NAME, SimpleArgConsumer).execute(EnableExecutor)))
+        .then(
+            literal("enable").then(
+                argument(ARG_NAME, SimpleArgConsumer)
+                    // /datapack enable <name> [first|last|before <existing>|after <existing>]
+                    .then(literal("first").execute(EnableExecutor))
+                    .then(literal("last").execute(EnableExecutor))
+                    .then(
+                        literal("before").then(
+                            argument(ARG_EXISTING, SimpleArgConsumer).execute(EnableExecutor),
+                        ),
+                    )
+                    .then(
+                        literal("after").then(
+                            argument(ARG_EXISTING, SimpleArgConsumer).execute(EnableExecutor),
+                        ),
+                    )
+                    .execute(EnableExecutor),
+            ),
+        )
         .then(
             literal("disable").then(argument(ARG_NAME, SimpleArgConsumer).execute(DisableExecutor)),
         )

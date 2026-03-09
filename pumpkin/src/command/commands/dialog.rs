@@ -3,7 +3,7 @@ use pumpkin_util::text::TextComponent;
 
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
-    args::{ConsumedArgs, FindArg, entities::EntitiesArgumentConsumer, simple::SimpleArgConsumer},
+    args::{ConsumedArgs, FindArg, players::PlayersArgumentConsumer, simple::SimpleArgConsumer},
     tree::{
         CommandTree,
         builder::{argument, literal},
@@ -25,7 +25,7 @@ impl CommandExecutor for ShowExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+            let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
             let _dialog = SimpleArgConsumer::find_arg(args, ARG_DIALOG)?;
 
             // TODO: Implement dialog show when dialog packet support is available
@@ -34,7 +34,7 @@ impl CommandExecutor for ShowExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_DIALOG_SHOW_SINGLE,
-                        [targets[0].get_name()],
+                        [TextComponent::text(targets[0].gameprofile.name.clone())],
                     ))
                     .await;
             } else {
@@ -61,7 +61,7 @@ impl CommandExecutor for ClearExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+            let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
             // TODO: Implement dialog clear when dialog packet support is available
             let count = targets.len();
@@ -69,7 +69,7 @@ impl CommandExecutor for ClearExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_DIALOG_CLEAR_SINGLE,
-                        [targets[0].get_name()],
+                        [TextComponent::text(targets[0].gameprofile.name.clone())],
                     ))
                     .await;
             } else {
@@ -90,12 +90,12 @@ pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(
             literal("show").then(
-                argument(ARG_TARGETS, EntitiesArgumentConsumer)
+                argument(ARG_TARGETS, PlayersArgumentConsumer)
                     .then(argument(ARG_DIALOG, SimpleArgConsumer).execute(ShowExecutor)),
             ),
         )
         .then(
             literal("clear")
-                .then(argument(ARG_TARGETS, EntitiesArgumentConsumer).execute(ClearExecutor)),
+                .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(ClearExecutor)),
         )
 }
