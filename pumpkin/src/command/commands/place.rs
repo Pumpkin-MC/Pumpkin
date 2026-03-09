@@ -4,7 +4,8 @@ use pumpkin_util::text::TextComponent;
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{
-        ConsumedArgs, FindArg, position_3d::Position3DArgumentConsumer, simple::SimpleArgConsumer,
+        ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
+        position_3d::Position3DArgumentConsumer, simple::SimpleArgConsumer,
     },
     tree::{
         CommandTree,
@@ -16,6 +17,16 @@ const NAMES: [&str; 1] = ["place"];
 const DESCRIPTION: &str = "Places a structure, feature, jigsaw, or template.";
 const ARG_NAME: &str = "name";
 const ARG_POS: &str = "pos";
+const ARG_POOL: &str = "pool";
+const ARG_TARGET: &str = "target";
+const ARG_MAX_DEPTH: &str = "max_depth";
+
+const fn max_depth_consumer() -> BoundedNumArgumentConsumer<i32> {
+    BoundedNumArgumentConsumer::new()
+        .name("max_depth")
+        .min(1)
+        .max(20)
+}
 
 struct StructureExecutor;
 
@@ -28,7 +39,6 @@ impl CommandExecutor for StructureExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let name = SimpleArgConsumer::find_arg(args, ARG_NAME)?;
-            // Position is optional in vanilla; defaults to sender position
             let _pos = Position3DArgumentConsumer::find_arg(args, ARG_POS).ok();
 
             // TODO: Implement structure placement when worldgen adapter is available
@@ -39,7 +49,9 @@ impl CommandExecutor for StructureExecutor {
                 ))
                 .await;
 
-            Err(CommandError::InvalidConsumption(Some(name.to_string())))
+            Err(CommandError::CommandFailed(TextComponent::text(format!(
+                "Failed to place structure {name}"
+            ))))
         })
     }
 }
@@ -65,7 +77,9 @@ impl CommandExecutor for FeatureExecutor {
                 ))
                 .await;
 
-            Err(CommandError::InvalidConsumption(Some(name.to_string())))
+            Err(CommandError::CommandFailed(TextComponent::text(format!(
+                "Failed to place feature {name}"
+            ))))
         })
     }
 }
@@ -80,18 +94,22 @@ impl CommandExecutor for JigsawExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let name = SimpleArgConsumer::find_arg(args, ARG_NAME)?;
+            let pool = SimpleArgConsumer::find_arg(args, ARG_POOL)?;
+            let _target = SimpleArgConsumer::find_arg(args, ARG_TARGET)?;
+            let _max_depth = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_MAX_DEPTH)?;
             let _pos = Position3DArgumentConsumer::find_arg(args, ARG_POS).ok();
 
             // TODO: Implement jigsaw placement when worldgen adapter is available
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_PLACE_JIGSAW_FAILED,
-                    [TextComponent::text(name.to_string())],
+                    [TextComponent::text(pool.to_string())],
                 ))
                 .await;
 
-            Err(CommandError::InvalidConsumption(Some(name.to_string())))
+            Err(CommandError::CommandFailed(TextComponent::text(format!(
+                "Failed to place jigsaw {pool}"
+            ))))
         })
     }
 }
@@ -117,7 +135,9 @@ impl CommandExecutor for TemplateExecutor {
                 ))
                 .await;
 
-            Err(CommandError::InvalidConsumption(Some(name.to_string())))
+            Err(CommandError::CommandFailed(TextComponent::text(format!(
+                "Failed to place template {name}"
+            ))))
         })
     }
 }
@@ -139,13 +159,23 @@ pub fn init_command_tree() -> CommandTree {
             ),
         )
         .then(
+            // /place jigsaw <pool> <target> <max_depth> [<pos>]
             literal("jigsaw").then(
-                argument(ARG_NAME, SimpleArgConsumer)
-                    .then(argument(ARG_POS, Position3DArgumentConsumer).execute(JigsawExecutor))
-                    .execute(JigsawExecutor),
+                argument(ARG_POOL, SimpleArgConsumer).then(
+                    argument(ARG_TARGET, SimpleArgConsumer).then(
+                        argument(ARG_MAX_DEPTH, max_depth_consumer())
+                            .then(
+                                argument(ARG_POS, Position3DArgumentConsumer)
+                                    .execute(JigsawExecutor),
+                            )
+                            .execute(JigsawExecutor),
+                    ),
+                ),
             ),
         )
         .then(
+            // /place template <name> [<pos>] [<rotation>] [<mirror>] [<integrity>] [<seed>]
+            // TODO: Add rotation, mirror, integrity, seed optional arguments
             literal("template").then(
                 argument(ARG_NAME, SimpleArgConsumer)
                     .then(argument(ARG_POS, Position3DArgumentConsumer).execute(TemplateExecutor))
