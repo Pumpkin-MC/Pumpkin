@@ -14,6 +14,7 @@ use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
@@ -83,6 +84,22 @@ pub mod vehicle;
 
 mod combat;
 pub mod predicate;
+
+/// Returns the [`EntityStatus`] that should be broadcast when the given
+/// equipment slot breaks.
+#[must_use]
+pub const fn equipment_break_status(slot: &EquipmentSlot) -> EntityStatus {
+    match slot {
+        EquipmentSlot::MainHand(_) => EntityStatus::BreakMainhand,
+        EquipmentSlot::OffHand(_) => EntityStatus::BreakOffhand,
+        EquipmentSlot::Head(_) => EntityStatus::BreakHead,
+        EquipmentSlot::Chest(_) => EntityStatus::BreakChest,
+        EquipmentSlot::Legs(_) => EntityStatus::BreakLegs,
+        EquipmentSlot::Feet(_) => EntityStatus::BreakFeet,
+        EquipmentSlot::Body(_) => EntityStatus::BreakBody,
+        EquipmentSlot::Saddle(_) => EntityStatus::BreakSaddle,
+    }
+}
 
 pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -2670,4 +2687,45 @@ pub enum Flag {
     Glowing = 6,
     /// Indicates if the entity is flying due to a fall.
     FallFlying = 7,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn equipment_break_status_maps_all_slots() {
+        assert!(matches!(
+            equipment_break_status(&EquipmentSlot::MAIN_HAND),
+            EntityStatus::BreakMainhand
+        ));
+        assert!(matches!(
+            equipment_break_status(&EquipmentSlot::OFF_HAND),
+            EntityStatus::BreakOffhand
+        ));
+        assert!(matches!(
+            equipment_break_status(&EquipmentSlot::HEAD),
+            EntityStatus::BreakHead
+        ));
+        assert!(matches!(
+            equipment_break_status(&EquipmentSlot::CHEST),
+            EntityStatus::BreakChest
+        ));
+        assert!(matches!(
+            equipment_break_status(&EquipmentSlot::LEGS),
+            EntityStatus::BreakLegs
+        ));
+        assert!(matches!(
+            equipment_break_status(&EquipmentSlot::FEET),
+            EntityStatus::BreakFeet
+        ));
+        assert!(matches!(
+            equipment_break_status(&EquipmentSlot::BODY),
+            EntityStatus::BreakBody
+        ));
+        assert!(matches!(
+            equipment_break_status(&EquipmentSlot::SADDLE),
+            EntityStatus::BreakSaddle
+        ));
+    }
 }

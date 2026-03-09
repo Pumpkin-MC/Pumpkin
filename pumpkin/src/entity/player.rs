@@ -791,7 +791,10 @@ impl Player {
         }
     }
 
-    pub async fn damage_held_item(&self, amount: i32) -> bool {
+    /// Damages the item in the given equipment slot by `amount` durability points.
+    /// Broadcasts an [`EntityStatus`] break event when the item is destroyed.
+    /// Returns `true` if the item stack was modified.
+    pub async fn damage_item_in_slot(&self, slot: &EquipmentSlot, amount: i32) -> bool {
         if matches!(
             self.gamemode.load(),
             GameMode::Creative | GameMode::Spectator
@@ -799,8 +802,19 @@ impl Player {
             return false;
         }
 
-        let slot_index = self.inventory.get_selected_slot() as usize;
-        let stack_arc = self.inventory.held_item();
+        // Direct PlayerInventory slot indices (matches build_equipment_slots).
+        let slot_index: usize = match slot {
+            EquipmentSlot::MainHand(_) => self.inventory.get_selected_slot() as usize,
+            EquipmentSlot::OffHand(_) => PlayerInventory::OFF_HAND_SLOT, // 40
+            EquipmentSlot::Feet(_) => 36,
+            EquipmentSlot::Legs(_) => 37,
+            EquipmentSlot::Chest(_) => 38,
+            EquipmentSlot::Head(_) => 39,
+            EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_) => return false,
+        };
+
+        let stack_arc = self.inventory.get_stack(slot_index).await;
+
         let updated = {
             let mut stack = stack_arc.lock().await;
             stack
@@ -809,11 +823,37 @@ impl Player {
         };
 
         if let Some(updated_stack) = updated {
-            self.sync_hand_slot(slot_index, updated_stack).await;
+            // Send the break status before clearing the slot so the client can
+            // use the item texture for break particles.
+            if updated_stack.is_empty() {
+                self.world()
+                    .send_entity_status(
+                        &self.living_entity.entity,
+                        super::equipment_break_status(slot),
+                    )
+                    .await;
+            }
+
+            self.enqueue_slot_set_packet(&CSetPlayerInventory::new(
+                (slot_index as i32).into(),
+                &ItemStackSerializer::from(updated_stack.clone()),
+            ))
+            .await;
+
+            self.living_entity
+                .send_equipment_changes(&[(slot.clone(), updated_stack)])
+                .await;
+
             return true;
         }
 
         false
+    }
+
+    /// Convenience wrapper – damages the currently held (main-hand) item.
+    pub async fn damage_held_item(&self, amount: i32) -> bool {
+        self.damage_item_in_slot(&EquipmentSlot::MAIN_HAND, amount)
+            .await
     }
 
     pub async fn apply_tool_damage_for_block_break(&self, state: &BlockState) {
@@ -2535,36 +2575,24 @@ impl Player {
         let mut candidates: Vec<(usize, EquipmentSlot, Arc<Mutex<ItemStack>>)> = Vec::new();
 
         let selected_slot = self.inventory.get_selected_slot() as usize;
-        let main_hand = self.inventory.get_stack(selected_slot).await;
-        let main_hand_eligible = {
-            let stack = main_hand.lock().await;
-            stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
-        };
-        if main_hand_eligible {
-            candidates.push((selected_slot, EquipmentSlot::MAIN_HAND, main_hand));
-        }
-
-        let offhand_slot = PlayerInventory::OFF_HAND_SLOT;
-        let off_hand = self.inventory.get_stack(offhand_slot).await;
-        let off_hand_eligible = {
-            let stack = off_hand.lock().await;
-            stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
-        };
-        if off_hand_eligible {
-            candidates.push((offhand_slot, EquipmentSlot::OFF_HAND, off_hand));
-        }
-
+        let mut slot_pairs: Vec<(usize, EquipmentSlot)> = vec![
+            (selected_slot, EquipmentSlot::MAIN_HAND),
+            (PlayerInventory::OFF_HAND_SLOT, EquipmentSlot::OFF_HAND),
+        ];
         for (slot_index, slot) in self.inventory.equipment_slots.iter() {
-            if !slot.is_armor_slot() {
-                continue;
+            if slot.is_armor_slot() {
+                slot_pairs.push((*slot_index, slot.clone()));
             }
-            let stack = self.inventory.get_stack(*slot_index).await;
+        }
+
+        for (slot_index, equipment_slot) in slot_pairs {
+            let stack = self.inventory.get_stack(slot_index).await;
             let eligible = {
-                let stack = stack.lock().await;
-                stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
+                let s = stack.lock().await;
+                s.get_enchantment_level(&Enchantment::MENDING) > 0 && s.get_damage() > 0
             };
             if eligible {
-                candidates.push((*slot_index, slot.clone(), stack));
+                candidates.push((slot_index, equipment_slot, stack));
             }
         }
 

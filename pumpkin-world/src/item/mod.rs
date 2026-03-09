@@ -483,3 +483,147 @@ impl From<&RecipeResultStruct> for ItemStack {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::data_component::DataComponent;
+    use pumpkin_data::data_component_impl::{DataComponentImpl, UnbreakableImpl};
+
+    /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
+    fn iron_sword() -> ItemStack {
+        ItemStack::new(1, &Item::IRON_SWORD)
+    }
+
+    // ── damage_item_with_context ──────────────────────────────────────
+
+    #[test]
+    fn damage_zero_amount_is_noop() {
+        let mut stack = iron_sword();
+        assert!(!stack.damage_item_with_context(0, false));
+        assert_eq!(stack.get_damage(), 0);
+    }
+
+    #[test]
+    fn damage_negative_amount_is_noop() {
+        let mut stack = iron_sword();
+        assert!(!stack.damage_item_with_context(-5, false));
+        assert_eq!(stack.get_damage(), 0);
+    }
+
+    #[test]
+    fn damage_non_damageable_item_is_noop() {
+        // AIR has no MaxDamage component.
+        let mut stack = ItemStack::new(1, &Item::AIR);
+        assert!(!stack.damage_item_with_context(1, false));
+    }
+
+    #[test]
+    fn damage_unbreakable_item_is_noop() {
+        let mut stack = iron_sword();
+        stack
+            .patch
+            .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
+        assert!(!stack.damage_item_with_context(10, false));
+        assert_eq!(stack.get_damage(), 0);
+    }
+
+    #[test]
+    fn damage_increases_damage_value() {
+        // Without Unbreaking, every point of damage is applied.
+        let mut stack = iron_sword();
+        assert!(stack.damage_item_with_context(5, false));
+        assert_eq!(stack.get_damage(), 5);
+    }
+
+    #[test]
+    fn damage_accumulates() {
+        let mut stack = iron_sword();
+        stack.damage_item_with_context(100, false);
+        stack.damage_item_with_context(50, false);
+        assert_eq!(stack.get_damage(), 150);
+    }
+
+    #[test]
+    fn damage_breaks_item_when_exceeding_max() {
+        let mut stack = iron_sword();
+        // Iron Sword max_damage = 250. Dealing 250 should destroy it.
+        assert!(stack.damage_item_with_context(250, false));
+        assert!(stack.is_empty(), "item should be destroyed");
+    }
+
+    #[test]
+    fn damage_breaks_single_item_to_empty() {
+        let mut stack = iron_sword();
+        stack.damage_item_with_context(300, false);
+        assert!(stack.is_empty());
+        assert_eq!(stack.item_count, 0);
+    }
+
+    // ── repair_item ──────────────────────────────────────────────────
+
+    #[test]
+    fn repair_zero_amount_is_noop() {
+        let mut stack = iron_sword();
+        stack.set_damage(10);
+        assert_eq!(stack.repair_item(0), 0);
+        assert_eq!(stack.get_damage(), 10);
+    }
+
+    #[test]
+    fn repair_negative_amount_is_noop() {
+        let mut stack = iron_sword();
+        stack.set_damage(10);
+        assert_eq!(stack.repair_item(-5), 0);
+        assert_eq!(stack.get_damage(), 10);
+    }
+
+    #[test]
+    fn repair_undamaged_item_is_noop() {
+        let mut stack = iron_sword();
+        assert_eq!(stack.repair_item(10), 0);
+        assert_eq!(stack.get_damage(), 0);
+    }
+
+    #[test]
+    fn repair_partial() {
+        let mut stack = iron_sword();
+        stack.set_damage(20);
+        let repaired = stack.repair_item(8);
+        assert_eq!(repaired, 8);
+        assert_eq!(stack.get_damage(), 12);
+    }
+
+    #[test]
+    fn repair_capped_at_current_damage() {
+        let mut stack = iron_sword();
+        stack.set_damage(5);
+        let repaired = stack.repair_item(100);
+        assert_eq!(repaired, 5);
+        assert_eq!(stack.get_damage(), 0);
+    }
+
+    #[test]
+    fn repair_fully_clears_damage_component() {
+        let mut stack = iron_sword();
+        stack.set_damage(10);
+        stack.repair_item(10);
+        assert_eq!(stack.get_damage(), 0);
+        // set_damage(0) removes the Damage patch entry.
+        assert!(
+            !stack
+                .patch
+                .iter()
+                .any(|(id, _)| *id == DataComponent::Damage)
+        );
+    }
+
+    // ── set_damage ───────────────────────────────────────────────────
+
+    #[test]
+    fn set_damage_negative_clamps_to_zero() {
+        let mut stack = iron_sword();
+        stack.set_damage(-10);
+        assert_eq!(stack.get_damage(), 0);
+    }
+}
