@@ -17,7 +17,7 @@ const ARG_FROM: &str = "from";
 const ARG_TO: &str = "to";
 
 const fn block_to_chunk(x: f64, z: f64) -> Vector2<i32> {
-    Vector2::new((x as i32) >> 4, (z as i32) >> 4)
+    Vector2::new((x.floor() as i32) >> 4, (z.floor() as i32) >> 4)
 }
 
 fn add_force_chunks(world: &crate::world::World, from: Vector2<i32>, to: Vector2<i32>) -> i32 {
@@ -91,7 +91,10 @@ impl CommandExecutor for AddSingleExecutor {
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_FORCELOAD_ADDED_SINGLE,
-                    [TextComponent::text(format!("[{}, {}]", chunk.x, chunk.y))],
+                    [
+                        TextComponent::text(format!("[{}, {}]", chunk.x, chunk.y)),
+                        TextComponent::text(world.dimension.minecraft_name.to_owned()),
+                    ],
                 ))
                 .await;
             Ok(count)
@@ -115,11 +118,12 @@ impl CommandExecutor for AddRangeExecutor {
             let chunk_from = block_to_chunk(from.x, from.y);
             let chunk_to = block_to_chunk(to.x, to.y);
 
+            let dimension = world.dimension.minecraft_name.to_owned();
             let count = add_force_chunks(&world, chunk_from, chunk_to);
             if count == 0 {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
                     translation::COMMANDS_FORCELOAD_ADDED_NONE,
-                    [],
+                    [TextComponent::text(dimension)],
                 )));
             }
 
@@ -127,10 +131,10 @@ impl CommandExecutor for AddRangeExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_FORCELOAD_ADDED_SINGLE,
-                        [TextComponent::text(format!(
-                            "[{}, {}]",
-                            chunk_from.x, chunk_from.y
-                        ))],
+                        [
+                            TextComponent::text(format!("[{}, {}]", chunk_from.x, chunk_from.y)),
+                            TextComponent::text(dimension),
+                        ],
                     ))
                     .await;
             } else {
@@ -141,6 +145,7 @@ impl CommandExecutor for AddRangeExecutor {
                             TextComponent::text(count.to_string()),
                             TextComponent::text(format!("[{}, {}]", chunk_from.x, chunk_from.y)),
                             TextComponent::text(format!("[{}, {}]", chunk_to.x, chunk_to.y)),
+                            TextComponent::text(dimension),
                         ],
                     ))
                     .await;
@@ -175,7 +180,10 @@ impl CommandExecutor for RemoveSingleExecutor {
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_FORCELOAD_REMOVED_SINGLE,
-                    [TextComponent::text(format!("[{}, {}]", chunk.x, chunk.y))],
+                    [
+                        TextComponent::text(format!("[{}, {}]", chunk.x, chunk.y)),
+                        TextComponent::text(world.dimension.minecraft_name.to_owned()),
+                    ],
                 ))
                 .await;
             Ok(count)
@@ -199,6 +207,7 @@ impl CommandExecutor for RemoveRangeExecutor {
             let chunk_from = block_to_chunk(from.x, from.y);
             let chunk_to = block_to_chunk(to.x, to.y);
 
+            let dimension = world.dimension.minecraft_name.to_owned();
             let count = remove_force_chunks(&world, chunk_from, chunk_to);
             if count == 0 {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
@@ -214,10 +223,10 @@ impl CommandExecutor for RemoveRangeExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_FORCELOAD_REMOVED_SINGLE,
-                        [TextComponent::text(format!(
-                            "[{}, {}]",
-                            chunk_from.x, chunk_from.y
-                        ))],
+                        [
+                            TextComponent::text(format!("[{}, {}]", chunk_from.x, chunk_from.y)),
+                            TextComponent::text(dimension),
+                        ],
                     ))
                     .await;
             } else {
@@ -228,6 +237,7 @@ impl CommandExecutor for RemoveRangeExecutor {
                             TextComponent::text(count.to_string()),
                             TextComponent::text(format!("[{}, {}]", chunk_from.x, chunk_from.y)),
                             TextComponent::text(format!("[{}, {}]", chunk_to.x, chunk_to.y)),
+                            TextComponent::text(dimension),
                         ],
                     ))
                     .await;
@@ -265,7 +275,10 @@ impl CommandExecutor for RemoveAllExecutor {
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_FORCELOAD_REMOVED_ALL,
-                    [TextComponent::text(count.to_string())],
+                    [
+                        TextComponent::text(count.to_string()),
+                        TextComponent::text(world.dimension.minecraft_name.to_owned()),
+                    ],
                 ))
                 .await;
             Ok(count)
@@ -330,11 +343,13 @@ impl CommandExecutor for QueryListExecutor {
                 lock.high_priority.clone()
             };
 
+            let dimension = world.dimension.minecraft_name.to_owned();
+
             if forced.is_empty() {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_FORCELOAD_ADDED_NONE,
-                        [],
+                        [TextComponent::text(dimension)],
                     ))
                     .await;
                 Ok(0)
@@ -349,7 +364,7 @@ impl CommandExecutor for QueryListExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             translation::COMMANDS_FORCELOAD_LIST_SINGLE,
-                            [TextComponent::text(list)],
+                            [TextComponent::text(dimension), TextComponent::text(list)],
                         ))
                         .await;
                 } else {
@@ -358,6 +373,7 @@ impl CommandExecutor for QueryListExecutor {
                             translation::COMMANDS_FORCELOAD_LIST_MULTIPLE,
                             [
                                 TextComponent::text(forced.len().to_string()),
+                                TextComponent::text(dimension),
                                 TextComponent::text(list),
                             ],
                         ))
