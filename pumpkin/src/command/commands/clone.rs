@@ -66,6 +66,38 @@ const fn regions_overlap(src_min: Vector3<i32>, src_max: Vector3<i32>, dst: Vect
         && src_max.z >= dst.z
 }
 
+async fn place_blocks(
+    world: &Arc<World>,
+    blocks: &[StoredBlock],
+    offset: Vector3<i32>,
+    clone_mode: CloneMode,
+) -> i32 {
+    let mut placed = 0i32;
+    for block in blocks {
+        let dst_pos = BlockPos(Vector3::new(
+            block.pos.0.x + offset.x,
+            block.pos.0.y + offset.y,
+            block.pos.0.z + offset.z,
+        ));
+        if world.is_in_build_limit(dst_pos) {
+            world
+                .set_block_state(&dst_pos, block.state_id, BlockFlags::NOTIFY_ALL)
+                .await;
+            placed += 1;
+        }
+    }
+
+    if matches!(clone_mode, CloneMode::Move) {
+        for block in blocks {
+            world
+                .set_block_state(&block.pos, 0, BlockFlags::NOTIFY_ALL)
+                .await;
+        }
+    }
+
+    placed
+}
+
 async fn collect_blocks(
     world: &Arc<World>,
     src_min: Vector3<i32>,
@@ -197,30 +229,7 @@ impl CommandExecutor for CloneExecutor {
                 destination.0.z - src_min.z,
             );
 
-            // Place blocks at destination
-            let mut placed = 0i32;
-            for block in &blocks {
-                let dst_pos = BlockPos(Vector3::new(
-                    block.pos.0.x + offset.x,
-                    block.pos.0.y + offset.y,
-                    block.pos.0.z + offset.z,
-                ));
-                if world.is_in_build_limit(dst_pos) {
-                    world
-                        .set_block_state(&dst_pos, block.state_id, BlockFlags::NOTIFY_ALL)
-                        .await;
-                    placed += 1;
-                }
-            }
-
-            // Move mode: clear source blocks
-            if matches!(clone_mode, CloneMode::Move) {
-                for block in &blocks {
-                    world
-                        .set_block_state(&block.pos, 0, BlockFlags::NOTIFY_ALL)
-                        .await;
-                }
-            }
+            let placed = place_blocks(&world, &blocks, offset, clone_mode).await;
 
             if placed == 0 {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
