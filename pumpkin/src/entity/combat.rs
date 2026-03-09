@@ -56,12 +56,10 @@ pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f6
     let sin = f64::from((yaw.to_radians()).sin());
     let cos = f64::from(-(yaw.to_radians()).cos());
 
-    let adjusted_strength = if let Some(living) = victim.get_living_entity() {
+    let adjusted_strength = victim.get_living_entity().map_or(strength * 0.5, |living| {
         let resistance = living.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
         strength * 0.5 * (1.0 - resistance)
-    } else {
-        strength * 0.5
-    };
+    });
 
     victim.get_entity().apply_knockback(adjusted_strength, sin, cos);
 

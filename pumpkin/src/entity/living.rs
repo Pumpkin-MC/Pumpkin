@@ -75,7 +75,7 @@ static EQUIPMENT_MODIFIER_NAMESPACE: LazyLock<Uuid> =
 fn get_equipment_modifier_uuid(slot: &str, modifier_id: &str) -> Uuid {
     Uuid::new_v3(
         &EQUIPMENT_MODIFIER_NAMESPACE,
-        format!("{}:{}", slot, modifier_id).as_bytes(),
+        format!("{slot}:{modifier_id}").as_bytes(),
     )
 }
 
